@@ -18,10 +18,10 @@ class MobileAppUpdateAndPublicParityTest extends TestCase
         $this->markSystemInstalled();
         $this->activatePlugins([
             'course-management',
-            'exam-assessment',
+            'exam-management',
             'notice-board',
             'certificate-management',
-            'website-cms',
+            'cms-website',
             'mobile-app-api',
         ]);
 
@@ -115,7 +115,7 @@ class MobileAppUpdateAndPublicParityTest extends TestCase
             'course-management',
             'marketing-management',
             'seo-manager',
-            'website-cms',
+            'cms-website',
         ]);
 
         $this->get('/about-us')->assertOk()->assertSee("Alom's English Center");
