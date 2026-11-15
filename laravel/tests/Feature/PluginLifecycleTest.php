@@ -183,7 +183,7 @@ PHP);
 
         try {
             $this->expectException(RuntimeException::class);
-            $this->expectExceptionMessage('traversal');
+            $this->expectExceptionMessage('Unsafe ZIP path rejected');
             $manager->installOrUpdateFromZip($traversalZip);
         } finally {
             @unlink($traversalZip);
