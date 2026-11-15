@@ -267,21 +267,31 @@ class PluginManager
 
             $targetDir = (string) config('plugins.modules_path') . DIRECTORY_SEPARATOR . $manifest->slug;
             $previousRecord = PluginRecord::query()->where('slug', $manifest->slug)->first();
+            $previousAttributes = $previousRecord?->getAttributes();
+            $fromVersion = $previousRecord?->version ?? '0.0.0';
             $alreadyInstalled = (bool) ($previousRecord?->is_installed);
-
-            if (is_dir($targetDir)) {
-                $rollbackDir = storage_path('app/plugin-rollbacks/' . $manifest->slug . '-' . uniqid('', true));
-                File::ensureDirectoryExists(dirname($rollbackDir));
-                File::copyDirectory($targetDir, $rollbackDir);
-            }
-
-            File::ensureDirectoryExists(dirname($targetDir));
-            if (is_dir($targetDir)) {
-                File::deleteDirectory($targetDir);
-            }
-            File::copyDirectory($packageRoot, $targetDir);
+            $targetReplaced = false;
 
             try {
+                if (is_dir($targetDir)) {
+                    $rollbackDir = storage_path('app/plugin-rollbacks/' . $manifest->slug . '-' . uniqid('', true));
+                    File::ensureDirectoryExists(dirname($rollbackDir));
+                    if (!File::copyDirectory($targetDir, $rollbackDir)) {
+                        throw new RuntimeException('Unable to create a complete pre-update plugin snapshot.');
+                    }
+                }
+
+                File::ensureDirectoryExists(dirname($targetDir));
+                if (is_dir($targetDir)) {
+                    File::deleteDirectory($targetDir);
+                    $targetReplaced = true;
+                }
+
+                $targetReplaced = true;
+                if (!File::copyDirectory($packageRoot, $targetDir)) {
+                    throw new RuntimeException('Unable to copy the verified plugin package into its module directory.');
+                }
+
                 $record = $alreadyInstalled
                     ? $this->updatePlugin($manifest->slug, $actorId)
                     : $this->install($manifest->slug, $actorId);
@@ -292,27 +302,36 @@ class PluginManager
 
                 return $record;
             } catch (Throwable $e) {
-                // Automatic rollback after failed install/update
-                if ($targetDir && is_dir($targetDir)) {
+                $rollbackError = null;
+                if ($targetReplaced && $targetDir && is_dir($targetDir)) {
                     File::deleteDirectory($targetDir);
                 }
                 if ($rollbackDir && is_dir($rollbackDir) && $targetDir) {
-                    File::copyDirectory($rollbackDir, $targetDir);
-                    File::deleteDirectory($rollbackDir);
+                    if (!File::copyDirectory($rollbackDir, $targetDir)) {
+                        $rollbackError = ' Previous plugin files could not be restored from the snapshot.';
+                    } else {
+                        File::deleteDirectory($rollbackDir);
+                    }
                 }
-                if ($alreadyInstalled && $previousRecord) {
-                    $previousRecord->save();
+                if ($alreadyInstalled && $previousRecord && is_array($previousAttributes)) {
+                    unset($previousAttributes['id']);
+                    $previousAttributes['updated_at'] = now();
+                    PluginRecord::query()->whereKey($previousRecord->getKey())->update($previousAttributes);
                 }
+
                 $this->logPluginOperation(
                     $manifest->slug,
-                    $previousRecord?->version ?? '0.0.0',
+                    $fromVersion,
                     $manifest->version,
                     'rolled_back',
-                    'Automatic rollback triggered: ' . $e->getMessage(),
+                    'Automatic rollback triggered: ' . $e->getMessage() . $rollbackError,
                     $actorId
                 );
-                $this->audit->log('plugin.rollback', 'plugin', $manifest->slug, ['error' => $e->getMessage()], $actorId);
-                throw new RuntimeException("Plugin operation failed and was automatically rolled back: {$e->getMessage()}", 0, $e);
+                $this->audit->log('plugin.rollback', 'plugin', $manifest->slug, [
+                    'error' => $e->getMessage(),
+                    'rollback_error' => $rollbackError,
+                ], $actorId);
+                throw new RuntimeException("Plugin operation failed and was automatically rolled back: {$e->getMessage()}{$rollbackError}", 0, $e);
             }
         } finally {
             File::deleteDirectory($stagingDir);
@@ -661,11 +680,19 @@ class PluginManager
 
     private function resolvePluginInstance(PluginManifest $manifest): ?PluginInterface
     {
-        if (!$manifest->providerClass || !class_exists($manifest->providerClass)) {
+        if (!$manifest->providerClass) {
             return null;
         }
-        $instance = app()->resolveProvider($manifest->providerClass);
+        $this->registerPluginAutoload($manifest);
+        if (!class_exists($manifest->providerClass)) {
+            throw new RuntimeException("Plugin provider class '{$manifest->providerClass}' could not be autoloaded.");
+        }
 
-        return $instance instanceof PluginInterface ? $instance : null;
+        $instance = app()->resolveProvider($manifest->providerClass);
+        if (!$instance instanceof PluginInterface) {
+            throw new RuntimeException("Plugin provider '{$manifest->providerClass}' must implement PluginInterface.");
+        }
+
+        return $instance;
     }
 }
