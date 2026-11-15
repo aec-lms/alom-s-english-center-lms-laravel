@@ -242,18 +242,20 @@ class UniversalUpdateService
 
     public function saveRemoteFeedUrl(string $url, ?int $actorId = null): void
     {
+        $parts = $this->assertSafeRemoteFeedUrl($url, false);
         SystemSetting::query()->updateOrCreate(
             ['key' => 'lms_update_feed_url'],
             ['value' => trim($url), 'is_encrypted' => false, 'updated_by' => $actorId]
         );
-        $this->audit->log('update.feed_configured', 'system_setting', 'lms_update_feed_url', ['url' => $url], $actorId);
+        $this->audit->log('update.feed_configured', 'system_setting', 'lms_update_feed_url', ['host' => $parts['host']], $actorId);
     }
 
     public function checkRemoteFeed(): array
     {
         $url = $this->getRemoteFeedUrl();
         try {
-            $resp = Http::timeout(6)->acceptJson()->get($url);
+            $this->assertSafeRemoteFeedUrl($url, true);
+            $resp = Http::withOptions(['allow_redirects' => false])->timeout(6)->acceptJson()->get($url);
             if ($resp->successful() && is_array($resp->json())) {
                 return [
                     'reachable' => true,
@@ -274,6 +276,58 @@ class UniversalUpdateService
                 'message' => 'Remote channel unreachable from this environment; upload a signed ZIP release package directly.',
             ];
         }
+    }
+
+
+    /**
+     * Restrict update-feed requests to public HTTPS hosts and prevent redirects to private networks.
+     */
+    private function assertSafeRemoteFeedUrl(string $url, bool $resolveDns): array
+    {
+        $parts = parse_url(trim($url));
+        if (!is_array($parts)
+            || strtolower((string) ($parts['scheme'] ?? '')) !== 'https'
+            || empty($parts['host'])
+            || isset($parts['user'])
+            || isset($parts['pass'])
+            || isset($parts['query'])
+            || isset($parts['fragment'])
+            || (isset($parts['port']) && (int) $parts['port'] !== 443)
+        ) {
+            throw new RuntimeException('Update feed must be a plain HTTPS URL on the standard port, without credentials, query strings or fragments.');
+        }
+
+        $host = strtolower(rtrim((string) $parts['host'], '.'));
+        if (filter_var($host, FILTER_VALIDATE_IP) !== false
+            || $host === 'localhost'
+            || !str_contains($host, '.')
+            || preg_match('/(?:^|\\.)(?:local|internal|test|example|invalid)$/', $host) === 1
+        ) {
+            throw new RuntimeException('Update feed host must be a public DNS hostname.');
+        }
+
+        if ($resolveDns) {
+            $records = dns_get_record($host, DNS_A | DNS_AAAA);
+            $addresses = [];
+            foreach ($records ?: [] as $record) {
+                if (!empty($record['ip'])) {
+                    $addresses[] = $record['ip'];
+                }
+                if (!empty($record['ipv6'])) {
+                    $addresses[] = $record['ipv6'];
+                }
+            }
+            if ($addresses === []) {
+                throw new RuntimeException('Update feed host did not resolve to a public IP address.');
+            }
+            foreach (array_unique($addresses) as $address) {
+                if (filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
+                    throw new RuntimeException('Update feed host resolves to a private or reserved IP address.');
+                }
+            }
+        }
+
+        return ['host' => $host, 'path' => (string) ($parts['path'] ?? '/')];
     }
 
     private function assertSafeZipEntryPath(string $entryName): void
