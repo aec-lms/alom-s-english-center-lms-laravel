@@ -96,7 +96,7 @@ class UniversalUpdateService
     public function applyVerifiedUpdate(string $packagePath, string $expectedSha256, string $signatureHex, ?int $actorId = null): UpdateLog
     {
         $manifest = $this->verifySignedPackage($packagePath, $expectedSha256, $signatureHex);
-        $targetType = (string) ($manifest['target_type'] ?? 'plugin');
+        $targetType = (string) ($manifest['target_type'] ?? '');
         $targetSlug = trim((string) ($manifest['target_slug'] ?? ''));
         $toVersion = trim((string) ($manifest['version'] ?? ''));
         $fromVersion = null;
@@ -104,8 +104,11 @@ class UniversalUpdateService
         if (!in_array($targetType, ['plugin', 'core'], true)) {
             throw new RuntimeException('Update manifest target_type must be either plugin or core.');
         }
-        if ($targetSlug === '' || preg_match('/^[a-z0-9][a-z0-9-]{1,79}$/', $targetSlug) !== 1 || $toVersion === '') {
-            throw new RuntimeException('Update manifest must specify a valid target_slug and version.');
+        if ($targetSlug === ''
+            || preg_match('/^[a-z0-9][a-z0-9-]{1,79}$/', $targetSlug) !== 1
+            || preg_match('/^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$/', $toVersion) !== 1
+        ) {
+            throw new RuntimeException('Update manifest must specify a valid target_slug and semantic version.');
         }
 
         if ($targetType === 'plugin') {
@@ -117,6 +120,9 @@ class UniversalUpdateService
                 throw new RuntimeException("Plugin update target '{$targetSlug}' is not installed.");
             }
             $fromVersion = $plugin->version;
+            if (version_compare($toVersion, (string) $fromVersion, '<=')) {
+                throw new RuntimeException('Plugin update version must be newer than the installed version.');
+            }
             if (!$this->coreVersionMatches((string) ($manifest['core_compatibility'] ?? '^2.0'))) {
                 throw new RuntimeException("Plugin update {$targetSlug} is incompatible with Core.");
             }
@@ -126,6 +132,9 @@ class UniversalUpdateService
                 throw new RuntimeException("Core update target must be '{$coreSlug}'.");
             }
             $fromVersion = (string) config('lms.core_version', '2.0.0');
+            if (version_compare($toVersion, $fromVersion, '<=')) {
+                throw new RuntimeException('Core update version must be newer than the installed version.');
+            }
         }
 
         // Create encrypted pre-update backup
