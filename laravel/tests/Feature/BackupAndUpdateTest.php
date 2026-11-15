@@ -28,6 +28,33 @@ class BackupAndUpdateTest extends TestCase
         @unlink($record->storage_path);
     }
 
+
+    public function test_backup_restore_rejects_paths_outside_the_private_backup_directory(): void
+    {
+        $this->markSystemInstalled();
+
+        $outsidePath = sys_get_temp_dir() . '/aec-outside-' . uniqid('', true) . '.zip.enc';
+        file_put_contents($outsidePath, 'not a backup');
+
+        $record = new BackupRecord([
+            'filename' => basename($outsidePath),
+            'storage_path' => $outsidePath,
+            'checksum_sha256' => hash_file('sha256', $outsidePath),
+            'is_encrypted' => true,
+        ]);
+
+        $backups = app(BackupService::class);
+
+        try {
+            $this->assertFalse($backups->verifyBackupIntegrity($record));
+            $this->expectException(RuntimeException::class);
+            $this->expectExceptionMessage('Backup integrity checksum verification failed');
+            $backups->restoreEncryptedBackup($record);
+        } finally {
+            @unlink($outsidePath);
+        }
+    }
+
     public function test_universal_update_rejects_invalid_hmac_signature(): void
     {
         $this->markSystemInstalled();
