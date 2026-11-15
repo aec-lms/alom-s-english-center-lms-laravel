@@ -43,11 +43,16 @@ class PluginCenterController extends Controller
         ]);
 
         $stored = $request->file('plugin_zip')->store('plugin-uploads');
+        $absolutePath = storage_path('app/' . $stored);
         try {
-            $record = $this->plugins->installOrUpdateFromZip(storage_path('app/' . $stored), auth()->id());
+            $record = $this->plugins->installOrUpdateFromZip($absolutePath, auth()->id());
             return back()->with('status', "Plugin '{$record->name}' (v{$record->version}) installed/updated successfully.");
         } catch (\Throwable $e) {
             return back()->withErrors(['plugin' => $e->getMessage()]);
+        } finally {
+            if (is_file($absolutePath)) {
+                @unlink($absolutePath);
+            }
         }
     }
 
