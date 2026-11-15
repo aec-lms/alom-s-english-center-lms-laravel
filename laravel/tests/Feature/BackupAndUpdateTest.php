@@ -56,6 +56,64 @@ class BackupAndUpdateTest extends TestCase
         }
     }
 
+
+    public function test_signed_update_rejects_windows_absolute_paths_in_zip_entries(): void
+    {
+        $this->markSystemInstalled();
+        config(['lms.plugin_signing_key' => 'test-plugin-signing-key']);
+
+        $zipPath = sys_get_temp_dir() . '/aec_update_path_' . uniqid() . '.zip';
+        $zip = new ZipArchive();
+        $zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE);
+        $zip->addFromString('update-manifest.json', json_encode([
+            'target_type' => 'core',
+            'target_slug' => 'aec-lms-core',
+            'version' => '2.0.1',
+        ]));
+        $zip->addFromString('C:/outside.php', '<?php // not allowed');
+        $zip->close();
+
+        $sha = hash_file('sha256', $zipPath);
+        $signature = hash_hmac('sha256', $sha, 'test-plugin-signing-key');
+        $updates = app(UniversalUpdateService::class);
+
+        try {
+            $this->expectException(RuntimeException::class);
+            $this->expectExceptionMessage('Unsafe ZIP path detected');
+            $updates->verifySignedPackage($zipPath, $sha, $signature);
+        } finally {
+            @unlink($zipPath);
+        }
+    }
+
+    public function test_signed_update_rejects_unknown_target_types(): void
+    {
+        $this->markSystemInstalled();
+        config(['lms.plugin_signing_key' => 'test-plugin-signing-key']);
+
+        $zipPath = sys_get_temp_dir() . '/aec_update_target_' . uniqid() . '.zip';
+        $zip = new ZipArchive();
+        $zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE);
+        $zip->addFromString('update-manifest.json', json_encode([
+            'target_type' => 'arbitrary',
+            'target_slug' => 'some-target',
+            'version' => '2.0.1',
+        ]));
+        $zip->close();
+
+        $sha = hash_file('sha256', $zipPath);
+        $signature = hash_hmac('sha256', $sha, 'test-plugin-signing-key');
+        $updates = app(UniversalUpdateService::class);
+
+        try {
+            $this->expectException(RuntimeException::class);
+            $this->expectExceptionMessage('target_type must be either plugin or core');
+            $updates->applyVerifiedUpdate($zipPath, $sha, $signature);
+        } finally {
+            @unlink($zipPath);
+        }
+    }
+
     public function test_universal_update_rejects_invalid_hmac_signature(): void
     {
         $this->markSystemInstalled();
