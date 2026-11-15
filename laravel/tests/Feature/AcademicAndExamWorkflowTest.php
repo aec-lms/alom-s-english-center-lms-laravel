@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
+use App\Models\Permission;
 use Plugins\Modules\CourseManagement\Models\Course;
+use Plugins\Modules\StudentManagement\Models\Student;
 use Plugins\Modules\ExamManagement\Models\Exam;
 use Plugins\Modules\ExamManagement\Models\ExamAttempt;
 use Plugins\Modules\ExamManagement\Models\ExamQuestion;
@@ -33,6 +35,89 @@ class AcademicAndExamWorkflowTest extends TestCase
             'branch_id' => $branchB,
             'student_code' => 'STU-999',
         ])->assertForbidden();
+    }
+
+
+    public function test_branch_manager_cannot_delete_another_branch_student_or_operate_without_branch(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'student-management']);
+
+        $branchA = DB::table('branches')->insertGetId(['code' => 'DEL-A', 'name' => 'Delete Branch A', 'created_at' => now(), 'updated_at' => now()]);
+        $branchB = DB::table('branches')->insertGetId(['code' => 'DEL-B', 'name' => 'Delete Branch B', 'created_at' => now(), 'updated_at' => now()]);
+
+        $managerA = $this->createUserWithRole('branch_manager', $branchA);
+        $permissionId = Permission::query()->where('slug', 'students.manage')->value('id');
+        $managerA->roles()->first()->permissions()->syncWithoutDetaching([$permissionId]);
+
+        $studentUser = $this->createUserWithRole('student', $branchB);
+        $student = Student::query()->create([
+            'user_id' => $studentUser->id,
+            'branch_id' => $branchB,
+            'student_code' => 'STU-BR-B-01',
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($managerA)
+            ->delete('/admin/students/' . $student->id)
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('students', ['id' => $student->id, 'branch_id' => $branchB]);
+        $this->assertTrue((bool) $studentUser->fresh()->is_active);
+
+        $unassignedManager = $this->createUserWithRole('branch_manager');
+        $unassignedManager->roles()->first()->permissions()->syncWithoutDetaching([$permissionId]);
+        $this->actingAs($unassignedManager)->get('/admin/students')->assertForbidden();
+    }
+
+    public function test_attendance_rejects_student_and_batch_from_different_branches(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'student-management', 'course-management', 'attendance-management']);
+
+        $branchA = DB::table('branches')->insertGetId(['code' => 'ATT-A', 'name' => 'Attendance A', 'created_at' => now(), 'updated_at' => now()]);
+        $branchB = DB::table('branches')->insertGetId(['code' => 'ATT-B', 'name' => 'Attendance B', 'created_at' => now(), 'updated_at' => now()]);
+
+        $managerA = $this->createUserWithRole('branch_manager', $branchA);
+        $permissionId = Permission::query()->where('slug', 'attendance.manage')->value('id');
+        $managerA->roles()->first()->permissions()->syncWithoutDetaching([$permissionId]);
+
+        $studentUser = $this->createUserWithRole('student', $branchA);
+        $student = Student::query()->create([
+            'user_id' => $studentUser->id,
+            'branch_id' => $branchA,
+            'student_code' => 'ATT-STU-A',
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+        ]);
+
+        $course = Course::query()->create([
+            'code' => 'ATT-COURSE-B',
+            'title' => 'Branch B Course',
+            'slug' => 'branch-b-course',
+            'price' => 0,
+            'status' => 'published',
+            'branch_id' => $branchB,
+        ]);
+        $batchId = DB::table('batches')->insertGetId([
+            'course_id' => $course->id,
+            'branch_id' => $branchB,
+            'name' => 'Branch B Batch',
+            'capacity' => 20,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($managerA)->post('/admin/attendance', [
+            'batch_id' => $batchId,
+            'student_id' => $student->id,
+            'branch_id' => $branchA,
+            'attendance_date' => now()->toDateString(),
+            'status' => 'present',
+        ])->assertStatus(422);
+
+        $this->assertDatabaseCount('attendance_records', 0);
     }
 
     public function test_exam_engine_grades_attempts_authoritatively_on_server(): void
