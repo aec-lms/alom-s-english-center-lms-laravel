@@ -126,6 +126,15 @@ class FreshInstallerService
         ]);
     }
 
+
+    private function callArtisanOrFail(string $command, array $parameters, string $description): void
+    {
+        $exitCode = Artisan::call($command, $parameters);
+        if ($exitCode !== 0) {
+            throw new RuntimeException($description . ' failed: ' . trim(Artisan::output()));
+        }
+    }
+
     public function installFresh(array $config): array
     {
         if ($this->isInstalled()) {
@@ -149,8 +158,8 @@ class FreshInstallerService
             'AEC_BACKUP_ENCRYPTION_KEY' => $backupKey,
         ]);
 
-        Artisan::call('migrate', ['--force' => true]);
-        Artisan::call('db:seed', ['--class' => CoreRolesAndPermissionsSeeder::class, '--force' => true]);
+        $this->callArtisanOrFail('migrate', ['--force' => true], 'Core database migrations');
+        $this->callArtisanOrFail('db:seed', ['--class' => CoreRolesAndPermissionsSeeder::class, '--force' => true], 'Core roles and permissions seeding');
 
         $admin = User::query()->create([
             'name' => (string) $config['admin_name'],
@@ -177,21 +186,32 @@ class FreshInstallerService
         ], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
 
         $lockPath = (string) config('lms.install_lock_path');
-        if (!is_dir(dirname($lockPath))) {
-            mkdir(dirname($lockPath), 0750, true);
+        if (!is_dir(dirname($lockPath)) && !mkdir(dirname($lockPath), 0750, true) && !is_dir(dirname($lockPath))) {
+            throw new RuntimeException('Unable to create the installation lock directory.');
         }
-        file_put_contents($lockPath, $lockPayload);
+
+        $temporaryLockPath = tempnam(dirname($lockPath), '.aec-installed-');
+        if ($temporaryLockPath === false) {
+            throw new RuntimeException('Unable to allocate the installation lock file.');
+        }
+        try {
+            if (file_put_contents($temporaryLockPath, $lockPayload, LOCK_EX) === false) {
+                throw new RuntimeException('Unable to write the installation lock file.');
+            }
+            @chmod($temporaryLockPath, 0600);
+            if (!rename($temporaryLockPath, $lockPath)) {
+                throw new RuntimeException('Unable to atomically create the installation lock file.');
+            }
+            @chmod($lockPath, 0600);
+        } finally {
+            if (is_file($temporaryLockPath)) {
+                @unlink($temporaryLockPath);
+            }
+        }
 
         $this->audit->log('core.installed', 'system', 'fresh_install', ['legacy_records_imported' => false], $admin->id);
 
-        return [
-            'admin_id' => $admin->id,
-            'generated_keys' => [
-                'APP_KEY' => $appKey,
-                'AEC_PLUGIN_SIGNING_KEY' => $signingKey,
-                'AEC_BACKUP_ENCRYPTION_KEY' => $backupKey,
-            ],
-            'lock_path' => $lockPath,
-        ];
+        // Never return generated encryption/signing secrets to the installer UI.
+        return ['admin_id' => $admin->id];
     }
 }
