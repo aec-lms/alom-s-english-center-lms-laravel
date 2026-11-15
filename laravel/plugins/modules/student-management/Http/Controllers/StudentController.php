@@ -42,12 +42,15 @@ class StudentController extends Controller
             'email' => ['required', 'email', 'unique:users,email'],
             'phone' => ['nullable', 'string', 'max:32'],
             'password' => ['required', 'string', 'min:8'],
-            'branch_id' => ['nullable', 'integer'],
+            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
             'student_code' => ['nullable', 'string', 'max:40', 'unique:students,student_code'],
             'status' => ['nullable', 'in:active,inactive,graduated'],
         ]);
 
         if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null) {
+            if (isset($validated['branch_id']) && (int) $validated['branch_id'] !== (int) $actor->branch_id) {
+                abort(403, 'Branch isolation violation.');
+            }
             $validated['branch_id'] = $actor->branch_id;
         }
 
@@ -83,6 +86,11 @@ class StudentController extends Controller
 
     public function update(Request $request, Student $student): RedirectResponse
     {
+        $actor = $request->user();
+        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $student->branch_id) {
+            abort(403, 'Branch isolation violation.');
+        }
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:120'],
             'email' => ['required', 'email', 'unique:users,email,' . $student->user_id],
@@ -92,6 +100,13 @@ class StudentController extends Controller
             'status' => ['required', 'in:active,inactive,graduated'],
             'password' => ['nullable', 'string', 'min:8'],
         ]);
+
+        if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null) {
+            if (isset($validated['branch_id']) && (int) $validated['branch_id'] !== (int) $actor->branch_id) {
+                abort(403, 'Branch isolation violation.');
+            }
+            $validated['branch_id'] = $actor->branch_id;
+        }
 
         DB::transaction(function () use ($validated, $student): void {
             if ($student->user) {
