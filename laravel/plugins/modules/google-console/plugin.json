@@ -1,0 +1,20 @@
+{
+    "slug": "google-console",
+    "name": "Google Search Console, GA4 & GTM",
+    "version": "2.1.0",
+    "author": "AEC Core Team",
+    "category": "marketing",
+    "description": "Independent Google Search Console site verification tag, Google Analytics 4 (GA4), and Google Tag Manager integration.",
+    "core_compatibility": "^2.0",
+    "dependencies": [],
+    "provider": "Plugins\\Modules\\GoogleConsole\\Providers\\GoogleConsoleServiceProvider",
+    "permissions": [
+        { "slug": "marketing.google_console.manage", "name": "Manage Google Search Console & Analytics" }
+    ],
+    "settings_schema": [
+        { "key": "gsc_verification_token", "label": "Search Console Verification Meta Token", "type": "text", "secret": false },
+        { "key": "ga4_measurement_id", "label": "Google Analytics 4 Measurement ID (G-...)", "type": "text", "secret": false },
+        { "key": "gtm_container_id", "label": "Google Tag Manager Container ID (GTM-...)", "type": "text", "secret": false },
+        { "key": "auto_inject", "label": "Enable Public Tag Injection (1/0)", "type": "text", "secret": false }
+    ]
+}

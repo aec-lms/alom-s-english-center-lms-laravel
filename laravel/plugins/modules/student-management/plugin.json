@@ -1,0 +1,18 @@
+{
+    "slug": "student-management",
+    "name": "Student Management",
+    "version": "2.0.0",
+    "author": "Alom's English Center",
+    "category": "academic",
+    "description": "Branch-scoped student admissions, registration numbers, and lifecycle management.",
+    "core_compatibility": "^2.0",
+    "dependencies": ["branch-management"],
+    "provider": "Plugins\\Modules\\StudentManagement\\Providers\\StudentManagementServiceProvider",
+    "permissions": [
+        {
+            "slug": "students.manage",
+            "name": "Manage Students"
+        }
+    ],
+    "settings_schema": []
+}

@@ -1,0 +1,25 @@
+{
+    "slug": "slider-builder",
+    "name": "Slider Builder",
+    "version": "2.0.0",
+    "author": "Alom's English Center",
+    "category": "website",
+    "description": "Independent Hero & Promotional Banner Slider Builder with sorting, CTA links, and image uploads.",
+    "core_compatibility": "^2.0",
+    "dependencies": [],
+    "provider": "Plugins\\Modules\\SliderBuilder\\Providers\\SliderBuilderServiceProvider",
+    "permissions": [
+        {
+            "slug": "slider_builder.manage",
+            "name": "Manage Hero & Promotional Sliders"
+        }
+    ],
+    "settings_schema": [
+        {
+            "key": "autoplay_ms",
+            "label": "Hero Slider Autoplay Interval (ms)",
+            "type": "text",
+            "secret": false
+        }
+    ]
+}

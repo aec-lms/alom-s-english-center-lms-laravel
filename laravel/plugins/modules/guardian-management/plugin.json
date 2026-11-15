@@ -1,0 +1,18 @@
+{
+    "slug": "guardian-management",
+    "name": "Guardian & Parent Portal",
+    "version": "2.0.0",
+    "author": "Alom's English Center",
+    "category": "academic",
+    "description": "Guardian profiles and branch-scoped student-guardian relationship management.",
+    "core_compatibility": "^2.0",
+    "dependencies": [],
+    "provider": "Plugins\\Modules\\GuardianManagement\\Providers\\GuardianManagementServiceProvider",
+    "permissions": [
+        {
+            "slug": "guardians.manage",
+            "name": "Manage Guardians & Student Links"
+        }
+    ],
+    "settings_schema": []
+}

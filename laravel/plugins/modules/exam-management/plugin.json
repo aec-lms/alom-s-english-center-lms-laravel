@@ -1,0 +1,22 @@
+{
+    "slug": "exam-management",
+    "name": "Exam, Question Bank & Assessment Engine",
+    "version": "2.0.0",
+    "author": "Alom's English Center",
+    "category": "academic",
+    "description": "Exam schedules, question bank, online exam attempts with strict server-side grading, and results.",
+    "core_compatibility": "^2.0",
+    "dependencies": [],
+    "provider": "Plugins\\Modules\\ExamManagement\\Providers\\ExamManagementServiceProvider",
+    "permissions": [
+        {
+            "slug": "exams.manage",
+            "name": "Manage Exams & Question Bank"
+        },
+        {
+            "slug": "exams.attempt",
+            "name": "Attempt Online Exams"
+        }
+    ],
+    "settings_schema": []
+}

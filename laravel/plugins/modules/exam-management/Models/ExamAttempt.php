@@ -1,0 +1,33 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Plugins\Modules\ExamManagement\Models;
+
+use App\Models\User;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class ExamAttempt extends Model
+{
+    protected $fillable = [
+        'exam_id', 'user_id', 'submitted_answers', 'score_obtained',
+        'total_marks', 'passed', 'submitted_at',
+    ];
+
+    protected $casts = [
+        'submitted_answers' => 'array',
+        'passed' => 'boolean',
+        'submitted_at' => 'datetime',
+    ];
+
+    public function exam(): BelongsTo
+    {
+        return $this->belongsTo(Exam::class);
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+}

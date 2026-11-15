@@ -1,0 +1,25 @@
+{
+    "slug": "page-builder",
+    "name": "Page Builder",
+    "version": "2.0.0",
+    "author": "Alom's English Center",
+    "category": "website",
+    "description": "Independent block-based custom landing page builder with banner uploads, JSON layout blocks, and SEO metadata.",
+    "core_compatibility": "^2.0",
+    "dependencies": [],
+    "provider": "Plugins\\Modules\\PageBuilder\\Providers\\PageBuilderServiceProvider",
+    "permissions": [
+        {
+            "slug": "page_builder.manage",
+            "name": "Manage Custom Pages & Block Layouts"
+        }
+    ],
+    "settings_schema": [
+        {
+            "key": "default_template",
+            "label": "Default Page Layout Template (standard/landing/fullwidth)",
+            "type": "text",
+            "secret": false
+        }
+    ]
+}

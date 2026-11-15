@@ -1,0 +1,18 @@
+{
+    "slug": "mobile-app-api",
+    "name": "Mobile App & Learner REST API",
+    "version": "2.0.0",
+    "author": "Alom's English Center",
+    "category": "integration",
+    "description": "Sanctum token-authenticated REST API endpoints for mobile learners and parent companion apps.",
+    "core_compatibility": "^2.0",
+    "dependencies": [],
+    "provider": "Plugins\\Modules\\MobileAppApi\\Providers\\MobileAppApiServiceProvider",
+    "permissions": [
+        {
+            "slug": "mobile.api.access",
+            "name": "Access Mobile App REST API"
+        }
+    ],
+    "settings_schema": []
+}

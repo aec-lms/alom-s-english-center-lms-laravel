@@ -1,0 +1,87 @@
+{
+    "name": "aec-lms/aec-lms-laravel",
+    "type": "project",
+    "description": "AEC LMS — Laravel 12 Plugin-Driven Learning Management System",
+    "keywords": ["laravel", "lms", "education", "plugins"],
+    "license": "proprietary",
+    "require": {
+        "php": "^8.3",
+        "laravel/framework": "^12.0",
+        "laravel/sanctum": "^4.0",
+        "livewire/livewire": "^3.5"
+    },
+    "require-dev": {
+        "fakerphp/faker": "^1.23",
+        "laravel/pint": "^1.18",
+        "mockery/mockery": "^1.6",
+        "nunomaduro/collision": "^8.5",
+        "phpunit/phpunit": "^11.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/",
+            "Database\\Factories\\": "database/factories/",
+            "Database\\Seeders\\": "database/seeders/",
+            "Plugins\\Modules\\BranchManagement\\": "plugins/modules/branch-management/",
+            "Plugins\\Modules\\StudentManagement\\": "plugins/modules/student-management/",
+            "Plugins\\Modules\\TeacherManagement\\": "plugins/modules/teacher-management/",
+            "Plugins\\Modules\\GuardianManagement\\": "plugins/modules/guardian-management/",
+            "Plugins\\Modules\\CourseManagement\\": "plugins/modules/course-management/",
+            "Plugins\\Modules\\ExamManagement\\": "plugins/modules/exam-management/",
+            "Plugins\\Modules\\AttendanceManagement\\": "plugins/modules/attendance-management/",
+            "Plugins\\Modules\\FeesManagement\\": "plugins/modules/fees-management/",
+            "Plugins\\Modules\\PaymentManagement\\": "plugins/modules/payment-management/",
+            "Plugins\\Modules\\GatewaySslcommerz\\": "plugins/modules/gateway-sslcommerz/",
+            "Plugins\\Modules\\GatewayCard\\": "plugins/modules/gateway-card/",
+            "Plugins\\Modules\\NoticeBoard\\": "plugins/modules/notice-board/",
+            "Plugins\\Modules\\NotificationCenter\\": "plugins/modules/notification-center/",
+            "Plugins\\Modules\\CmsWebsite\\": "plugins/modules/cms-website/",
+            "Plugins\\Modules\\ReportsAnalytics\\": "plugins/modules/reports-analytics/",
+            "Plugins\\Modules\\MobileAppApi\\": "plugins/modules/mobile-app-api/",
+            "Plugins\\Modules\\RoleAiAssistant\\": "plugins/modules/role-ai-assistant/",
+            "Plugins\\Modules\\MetaPixel\\": "plugins/modules/meta-pixel/",
+            "Plugins\\Modules\\GoogleConsole\\": "plugins/modules/google-console/",
+            "Plugins\\Modules\\AdminBoosting\\": "plugins/modules/admin-boosting/",
+            "Plugins\\Modules\\SmsGateway\\": "plugins/modules/sms-gateway/",
+            "Plugins\\Modules\\GmailMarketing\\": "plugins/modules/gmail-marketing/",
+            "Plugins\\Modules\\VisitorPopupAds\\": "plugins/modules/visitor-popup-ads/",
+            "Plugins\\Modules\\SeoManager\\": "plugins/modules/seo-manager/",
+            "Plugins\\Modules\\UniversalPayment\\": "plugins/modules/universal-payment/",
+            "Plugins\\Modules\\StorefrontCatalog\\": "plugins/modules/storefront-catalog/",
+            "Plugins\\Modules\\PageBuilder\\": "plugins/modules/page-builder/",
+            "Plugins\\Modules\\SliderBuilder\\": "plugins/modules/slider-builder/",
+            "Plugins\\Modules\\CarouselBuilder\\": "plugins/modules/carousel-builder/",
+            "Plugins\\Modules\\GatewayStripe\\": "plugins/modules/gateway-stripe/",
+            "Plugins\\Modules\\GatewayPaypal\\": "plugins/modules/gateway-paypal/",
+            "Plugins\\Modules\\ClassManagement\\": "plugins/modules/class-management/",
+            "Plugins\\Modules\\BatchManagement\\": "plugins/modules/batch-management/",
+            "Plugins\\Modules\\AdmissionManagement\\": "plugins/modules/admission-management/",
+            "Plugins\\Modules\\CertificateManagement\\": "plugins/modules/certificate-management/",
+            "Plugins\\Modules\\LibraryManagement\\": "plugins/modules/library-management/",
+            "Plugins\\Modules\\HrStaffManagement\\": "plugins/modules/hr-staff-management/",
+            "Plugins\\Modules\\EmailNotifications\\": "plugins/modules/email-notifications/",
+            "Plugins\\Modules\\MarketingManagement\\": "plugins/modules/marketing-management/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "post-autoload-dump": [
+            "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
+            "@php artisan package:discover --ansi"
+        ],
+        "test": [
+            "@php artisan test"
+        ]
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "preferred-install": "dist",
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

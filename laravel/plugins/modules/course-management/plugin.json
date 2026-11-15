@@ -1,0 +1,22 @@
+{
+    "slug": "course-management",
+    "name": "Course & Academic Management",
+    "version": "2.0.0",
+    "author": "Alom's English Center",
+    "category": "academic",
+    "description": "Courses, academic sessions, classes, subjects, batches, sections, lessons, and enrollments.",
+    "core_compatibility": "^2.0",
+    "dependencies": [],
+    "provider": "Plugins\\Modules\\CourseManagement\\Providers\\CourseManagementServiceProvider",
+    "permissions": [
+        {
+            "slug": "courses.manage",
+            "name": "Manage Courses & Batches"
+        },
+        {
+            "slug": "enrollments.manage",
+            "name": "Manage Enrollments"
+        }
+    ],
+    "settings_schema": []
+}

@@ -1,0 +1,37 @@
+{
+    "slug": "gateway-card",
+    "name": "Visa / Mastercard Tokenized Card Gateway",
+    "version": "2.0.0",
+    "author": "Alom's English Center",
+    "category": "payment-gateway",
+    "description": "Dedicated Visa and Mastercard tokenized checkout plugin. Never accepts or stores raw PAN or CVV.",
+    "core_compatibility": "^2.0",
+    "dependencies": [],
+    "provider": "Plugins\\Modules\\GatewayCard\\Providers\\GatewayCardServiceProvider",
+    "permissions": [
+        {
+            "slug": "gateway.card.use",
+            "name": "Initiate Tokenized Card Checkout"
+        }
+    ],
+    "settings_schema": [
+        {
+            "key": "merchant_id",
+            "label": "Card Merchant ID",
+            "type": "text",
+            "secret": true
+        },
+        {
+            "key": "api_secret",
+            "label": "Card Processor API Secret",
+            "type": "password",
+            "secret": true
+        },
+        {
+            "key": "webhook_secret",
+            "label": "Card Webhook HMAC Secret",
+            "type": "password",
+            "secret": true
+        }
+    ]
+}

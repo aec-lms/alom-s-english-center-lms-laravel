@@ -1,0 +1,31 @@
+{
+    "slug": "carousel-builder",
+    "name": "Carousel Builder",
+    "version": "2.0.0",
+    "author": "Alom's English Center",
+    "category": "website",
+    "description": "Independent Carousel Builder for featured courses, student reviews, and partner showcases with multi-track ordering.",
+    "core_compatibility": "^2.0",
+    "dependencies": [],
+    "provider": "Plugins\\Modules\\CarouselBuilder\\Providers\\CarouselBuilderServiceProvider",
+    "permissions": [
+        {
+            "slug": "carousel_builder.manage",
+            "name": "Manage Featured, Course & Review Carousels"
+        }
+    ],
+    "settings_schema": [
+        {
+            "key": "items_per_view",
+            "label": "Default Cards Per View (3 or 4)",
+            "type": "text",
+            "secret": false
+        },
+        {
+            "key": "autoplay_ms",
+            "label": "Carousel Autoplay Speed (ms)",
+            "type": "text",
+            "secret": false
+        }
+    ]
+}

@@ -1,0 +1,23 @@
+{
+    "slug": "gateway-paypal",
+    "name": "PayPal Payment Gateway",
+    "version": "2.0.0",
+    "author": "Alom's English Center",
+    "category": "finance",
+    "description": "Independent PayPal Orders v2 Checkout, Order Capture, and Webhook HMAC verification with encrypted credentials and idempotency.",
+    "core_compatibility": "^2.0",
+    "dependencies": ["payment-management"],
+    "provider": "Plugins\\Modules\\GatewayPaypal\\Providers\\GatewayPaypalServiceProvider",
+    "permissions": [
+        {
+            "slug": "payments.paypal.manage",
+            "name": "Manage PayPal Orders & Webhooks"
+        }
+    ],
+    "settings_schema": [
+        { "key": "client_id", "label": "PayPal Client ID", "type": "text", "secret": false },
+        { "key": "client_secret", "label": "PayPal Client Secret", "type": "password", "secret": true },
+        { "key": "webhook_id", "label": "PayPal Webhook Signing Secret / ID", "type": "password", "secret": true },
+        { "key": "sandbox_mode", "label": "Sandbox Mode (1 or 0)", "type": "text", "secret": false }
+    ]
+}

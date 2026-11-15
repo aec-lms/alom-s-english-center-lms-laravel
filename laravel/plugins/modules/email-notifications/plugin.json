@@ -1,0 +1,21 @@
+{
+    "slug": "email-notifications",
+    "name": "Email Notifications",
+    "version": "2.0.0",
+    "author": "Alom's English Center",
+    "category": "communications",
+    "description": "Transactional & Academic Email Templates, Encrypted SMTP Gateway Settings, and Delivery Logs.",
+    "core_compatibility": "^2.0",
+    "dependencies": [],
+    "provider": "Plugins\\Modules\\EmailNotifications\\Providers\\EmailNotificationsServiceProvider",
+    "permissions": [
+        { "slug": "email.notifications.manage", "name": "Manage Email Templates & Dispatch Logs" }
+    ],
+    "settings_schema": [
+        { "key": "smtp_host", "label": "SMTP Server Host", "encrypted": false },
+        { "key": "smtp_port", "label": "SMTP Port (587 / 465)", "encrypted": false },
+        { "key": "smtp_username", "label": "SMTP Username", "encrypted": false },
+        { "key": "smtp_password", "label": "SMTP Password / App Token", "encrypted": true },
+        { "key": "from_address", "label": "Sender Email Address", "encrypted": false }
+    ]
+}

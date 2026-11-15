@@ -1,0 +1,20 @@
+{
+    "slug": "sms-gateway",
+    "name": "SMS Marketing & Alerts Gateway",
+    "version": "2.1.0",
+    "author": "AEC Core Team",
+    "category": "communication",
+    "description": "Independent Bulk SMS marketing, OTP verification, fee reminders, and attendance SMS alerts (Greenweb BD, Twilio, SSLWireless, Custom HTTP).",
+    "core_compatibility": "^2.0",
+    "dependencies": [],
+    "provider": "Plugins\\Modules\\SmsGateway\\Providers\\SmsGatewayServiceProvider",
+    "permissions": [
+        { "slug": "communication.sms.manage", "name": "Manage SMS Gateway & Bulk Campaigns" }
+    ],
+    "settings_schema": [
+        { "key": "provider", "label": "SMS Provider (greenweb/twilio/sslwireless/custom)", "type": "text", "secret": false },
+        { "key": "sender_id", "label": "Approved Sender ID", "type": "text", "secret": false },
+        { "key": "api_url", "label": "Custom Gateway Endpoint URL", "type": "text", "secret": false },
+        { "key": "api_token", "label": "API Token / Secret Key", "type": "password", "secret": true }
+    ]
+}

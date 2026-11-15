@@ -1,0 +1,15 @@
+{
+    "slug": "batch-management",
+    "name": "Batch Management",
+    "version": "2.0.0",
+    "author": "Alom's English Center",
+    "category": "academic",
+    "description": "Independent Cohort & Study Batch Management with seat limits, schedules, start/end dates, and branch isolation.",
+    "core_compatibility": "^2.0",
+    "dependencies": [],
+    "provider": "Plugins\\Modules\\BatchManagement\\Providers\\BatchManagementServiceProvider",
+    "permissions": [
+        { "slug": "batches.manage", "name": "Manage Study Batches & Cohorts" }
+    ],
+    "settings_schema": []
+}

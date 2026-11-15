@@ -1,0 +1,18 @@
+{
+    "slug": "notice-board",
+    "name": "Notice Board & Announcements",
+    "version": "2.0.0",
+    "author": "Alom's English Center",
+    "category": "communication",
+    "description": "Branch-aware notice board with role audience targeting, pinning, and scheduled publishing.",
+    "core_compatibility": "^2.0",
+    "dependencies": [],
+    "provider": "Plugins\\Modules\\NoticeBoard\\Providers\\NoticeBoardServiceProvider",
+    "permissions": [
+        {
+            "slug": "notices.manage",
+            "name": "Publish & Manage Notices"
+        }
+    ],
+    "settings_schema": []
+}

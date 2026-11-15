@@ -1,0 +1,21 @@
+<?php
+
+declare(strict_types=1);
+
+use Illuminate\Support\Facades\Route;
+use Plugins\Modules\CmsWebsite\Http\Controllers\CmsController;
+
+Route::middleware(['web', 'installed', 'auth', 'plugin:cms-website', 'permission:cms.manage'])
+    ->prefix('admin/cms')
+    ->name('plugins.cms.')
+    ->group(function (): void {
+        Route::get('/', [CmsController::class, 'index'])->name('index');
+        Route::post('/categories', [CmsController::class, 'storeCategory'])->name('categories.store');
+        Route::put('/categories/{category}', [CmsController::class, 'updateCategory'])->name('categories.update');
+        Route::delete('/categories/{category}', [CmsController::class, 'destroyCategory'])->name('categories.destroy');
+        Route::post('/posts', [CmsController::class, 'storePost'])->name('posts.store');
+        Route::put('/posts/{post}', [CmsController::class, 'updatePost'])->name('posts.update');
+        Route::delete('/posts/{post}', [CmsController::class, 'destroyPost'])->name('posts.destroy');
+        Route::post('/homepage', [CmsController::class, 'saveHomepage'])->name('homepage.save');
+        Route::post('/inquiries/{id}/status', [CmsController::class, 'updateInquiryStatus'])->name('inquiries.status');
+    });

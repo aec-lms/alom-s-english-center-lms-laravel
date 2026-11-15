@@ -1,0 +1,53 @@
+{
+    "slug": "role-ai-assistant",
+    "name": "Optional Role-Based AI Assistant",
+    "version": "2.0.0",
+    "author": "Alom's English Center",
+    "category": "ai",
+    "description": "Optional role-scoped AI assistant with encrypted provider API keys, role allowlists, and prompt audit logging.",
+    "core_compatibility": "^2.0",
+    "dependencies": [],
+    "provider": "Plugins\\Modules\\RoleAiAssistant\\Providers\\RoleAiAssistantServiceProvider",
+    "permissions": [
+        {
+            "slug": "ai.assistant.use",
+            "name": "Use Role-Based AI Assistant"
+        },
+        {
+            "slug": "ai.assistant.configure",
+            "name": "Configure AI Provider & Role Access"
+        }
+    ],
+    "settings_schema": [
+        {
+            "key": "provider",
+            "label": "AI Provider (openai/gemini/anthropic)",
+            "type": "text",
+            "secret": false
+        },
+        {
+            "key": "model",
+            "label": "Model Identifier",
+            "type": "text",
+            "secret": false
+        },
+        {
+            "key": "api_key",
+            "label": "Provider API Key",
+            "type": "password",
+            "secret": true
+        },
+        {
+            "key": "allowed_roles",
+            "label": "Allowed Roles (comma-separated)",
+            "type": "text",
+            "secret": false
+        },
+        {
+            "key": "max_tokens",
+            "label": "Max Output Tokens",
+            "type": "text",
+            "secret": false
+        }
+    ]
+}

@@ -1,0 +1,15 @@
+{
+    "slug": "admin-boosting",
+    "name": "Admin Boosting & Featured Campaigns",
+    "version": "2.1.0",
+    "author": "AEC Core Team",
+    "category": "marketing",
+    "description": "Independent Admin Boost engine to highlight courses, institution offers, or landing promos with priority scheduling and click analytics.",
+    "core_compatibility": "^2.0",
+    "dependencies": [],
+    "provider": "Plugins\\Modules\\AdminBoosting\\Providers\\AdminBoostingServiceProvider",
+    "permissions": [
+        { "slug": "marketing.boost.manage", "name": "Manage Admin Boost Campaigns" }
+    ],
+    "settings_schema": []
+}

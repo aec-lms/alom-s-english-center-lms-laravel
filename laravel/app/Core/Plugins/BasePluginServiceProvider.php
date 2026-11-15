@@ -1,0 +1,51 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Core\Plugins;
+
+use App\Core\Contracts\PluginInterface;
+use Illuminate\Support\ServiceProvider;
+
+abstract class BasePluginServiceProvider extends ServiceProvider implements PluginInterface
+{
+    abstract public function slug(): string;
+
+    abstract protected function pluginPath(string $relative = ''): string;
+
+    public function register(): void
+    {
+        // Optional bindings
+    }
+
+    public function boot(): void
+    {
+        $routes = $this->pluginPath('Routes/web.php');
+        if (is_file($routes)) {
+            $this->loadRoutesFrom($routes);
+        }
+
+        $apiRoutes = $this->pluginPath('Routes/api.php');
+        if (is_file($apiRoutes)) {
+            $this->loadRoutesFrom($apiRoutes);
+        }
+
+        $views = $this->pluginPath('Resources/views');
+        if (is_dir($views)) {
+            $this->loadViewsFrom($views, $this->slug());
+        }
+
+        $migrations = $this->pluginPath('Database/Migrations');
+        if (is_dir($migrations)) {
+            $this->loadMigrationsFrom($migrations);
+        }
+    }
+
+    public function onInstall(): void {}
+
+    public function onEnable(): void {}
+
+    public function onDisable(): void {}
+
+    public function onUninstall(bool $purgePluginData = false): void {}
+}

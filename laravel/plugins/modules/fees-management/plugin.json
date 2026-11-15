@@ -1,0 +1,18 @@
+{
+    "slug": "fees-management",
+    "name": "Fees, Invoices & Scholarships",
+    "version": "2.0.0",
+    "author": "Alom's English Center",
+    "category": "finance",
+    "description": "Fee categories, student invoices, discounts/scholarships, and due balances.",
+    "core_compatibility": "^2.0",
+    "dependencies": [],
+    "provider": "Plugins\\Modules\\FeesManagement\\Providers\\FeesManagementServiceProvider",
+    "permissions": [
+        {
+            "slug": "fees.manage",
+            "name": "Manage Fee Categories & Invoices"
+        }
+    ],
+    "settings_schema": []
+}

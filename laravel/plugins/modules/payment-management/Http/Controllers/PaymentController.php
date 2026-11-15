@@ -1,0 +1,119 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Plugins\Modules\PaymentManagement\Http\Controllers;
+
+use App\Core\Security\AuditLogger;
+use App\Http\Controllers\Controller;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\View\View;
+use Plugins\Modules\FeesManagement\Models\FeeInvoice;
+use Plugins\Modules\PaymentManagement\Models\PaymentRefund;
+use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
+use Plugins\Modules\PaymentManagement\Services\PaymentSettlementService;
+
+class PaymentController extends Controller
+{
+    public function __construct(
+        private readonly PaymentSettlementService $settlement,
+        private readonly AuditLogger $audit,
+    ) {}
+
+    public function index(Request $request): View
+    {
+        $actor = $request->user();
+        $transactions = PaymentTransaction::query()
+            ->with('invoice')
+            ->when($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null, fn ($q) => $q->where('branch_id', $actor->branch_id))
+            ->latest()
+            ->paginate(25);
+
+        return view('payment-management::index', compact('transactions'));
+    }
+
+    public function recordOffline(Request $request): RedirectResponse
+    {
+        $actor = $request->user();
+        $validated = $request->validate([
+            'invoice_id' => ['required', 'integer', 'exists:fee_invoices,id'],
+            'amount' => ['required', 'numeric', 'min:1'],
+            'receipt_note' => ['nullable', 'string', 'max:160'],
+        ]);
+
+        $invoice = FeeInvoice::query()->findOrFail((int) $validated['invoice_id']);
+        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $invoice->branch_id) {
+            abort(403, 'Branch isolation violation.');
+        }
+
+        $tx = PaymentTransaction::query()->create([
+            'transaction_ref' => 'TXN-' . strtoupper(bin2hex(random_bytes(6))),
+            'invoice_id' => $invoice->id,
+            'branch_id' => $invoice->branch_id,
+            'gateway_slug' => 'offline',
+            'amount' => round((float) $validated['amount'], 2),
+            'currency' => $invoice->currency,
+            'status' => 'initiated',
+            'metadata' => ['note' => $validated['receipt_note'] ?? 'Cash/Bank Desk'],
+        ]);
+
+        $this->settlement->settleTransaction($tx, 'OFFLINE-' . $tx->id, [], $actor?->id);
+
+        return back()->with('status', "Offline payment {$tx->transaction_ref} recorded and settled.");
+    }
+
+    public function refund(Request $request, PaymentTransaction $transaction): RedirectResponse
+    {
+        $actor = $request->user();
+        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $transaction->branch_id) {
+            abort(403, 'Branch isolation violation.');
+        }
+
+        $validated = $request->validate([
+            'amount' => ['required', 'numeric', 'min:0.01'],
+            'reason' => ['required', 'string', 'max:255'],
+        ]);
+
+        try {
+            \Illuminate\Support\Facades\DB::transaction(function () use ($transaction, $validated, $actor): void {
+                $lockedTx = PaymentTransaction::query()->where('id', $transaction->id)->lockForUpdate()->firstOrFail();
+                if ($lockedTx->status !== 'settled') {
+                    throw new \RuntimeException('Only settled transactions can be refunded.');
+                }
+
+                $alreadyRefunded = (float) $lockedTx->refunds()->sum('amount');
+                $refundAmount = round((float) $validated['amount'], 2);
+                if ($refundAmount + $alreadyRefunded > (float) $lockedTx->amount + 0.01) {
+                    throw new \RuntimeException('Refund exceeds remaining refundable transaction amount.');
+                }
+
+                PaymentRefund::query()->create([
+                    'payment_transaction_id' => $lockedTx->id,
+                    'amount' => $refundAmount,
+                    'reason' => $validated['reason'],
+                    'approved_by' => $actor?->id,
+                ]);
+
+                $totalRefunded = round($alreadyRefunded + $refundAmount, 2);
+                if ($totalRefunded >= (float) $lockedTx->amount) {
+                    $lockedTx->update(['status' => 'refunded']);
+                }
+
+                if ($invoice = FeeInvoice::query()->where('id', $lockedTx->invoice_id)->lockForUpdate()->first()) {
+                    $newPaid = max(0.0, round((float) $invoice->paid_amount - $refundAmount, 2));
+                    $invoice->update([
+                        'paid_amount' => $newPaid,
+                        'status' => $newPaid <= 0 ? 'unpaid' : ($newPaid >= (float) $invoice->net_amount ? 'paid' : 'partial'),
+                    ]);
+                }
+            });
+        } catch (\Throwable $e) {
+            return back()->withErrors(['refund' => $e->getMessage()]);
+        }
+
+        $this->audit->log('payment.refunded', 'payment_transaction', (string) $transaction->id, ['amount' => $validated['amount']], $actor?->id);
+
+        return back()->with('status', "Refund recorded for {$transaction->transaction_ref}.");
+    }
+}

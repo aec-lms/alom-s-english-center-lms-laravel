@@ -1,0 +1,169 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Feature;
+
+use Illuminate\Support\Facades\DB;
+use Plugins\Modules\AdmissionManagement\Models\AdmissionApplication;
+use Plugins\Modules\CertificateManagement\Models\CertificateRecord;
+use Plugins\Modules\LibraryManagement\Models\LibraryBook;
+use Plugins\Modules\LibraryManagement\Models\LibraryLoan;
+use Tests\TestCase;
+
+class AdditionalModulesWorkflowTest extends TestCase
+{
+    public function test_all_newly_modularized_academic_and_growth_plugins_work_end_to_end(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins([
+            'branch-management',
+            'student-management',
+            'course-management',
+            'class-management',
+            'batch-management',
+            'admission-management',
+            'certificate-management',
+            'library-management',
+            'hr-staff-management',
+            'email-notifications',
+            'marketing-management',
+        ]);
+
+        $admin = $this->createUserWithRole('admin');
+        $branchId = DB::table('branches')->insertGetId([
+            'code' => 'SYL-01',
+            'name' => 'Sylhet Campus',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // 1. Class & Batch independent plugins
+        $this->actingAs($admin)->post('/admin/classes', [
+            'code' => 'CLS-IELTS-1',
+            'name' => 'IELTS Writing Workshop',
+            'section' => 'Section A',
+            'subject' => 'IELTS Academic',
+            'day_of_week' => 'Sunday',
+            'start_time' => '16:00',
+            'end_time' => '17:30',
+            'branch_id' => $branchId,
+        ])->assertSessionHasNoErrors();
+
+        $this->actingAs($admin)->post('/admin/batches', [
+            'code' => 'BATCH-JAN-01',
+            'title' => 'IELTS Evening Batch',
+            'course_name' => 'IELTS Masterclass',
+            'schedule_label' => 'Sun-Tue-Thu 6:00 PM',
+            'capacity' => 30,
+            'start_date' => now()->toDateString(),
+            'branch_id' => $branchId,
+        ])->assertSessionHasNoErrors();
+
+        // 2. Public Admission Application + Admin Approval
+        $this->post('/admission/apply', [
+            'applicant_name' => 'Farhan Sadik',
+            'email' => 'farhan@example.com',
+            'phone' => '+8801712345678',
+            'desired_course' => 'IELTS Complete Masterclass',
+            'branch_id' => $branchId,
+        ])->assertSessionHasNoErrors();
+
+        $app = AdmissionApplication::query()->where('email', 'farhan@example.com')->firstOrFail();
+        $this->actingAs($admin)->post("/admin/admissions/{$app->id}/review", [
+            'status' => 'approved',
+        ])->assertSessionHasNoErrors();
+        $this->assertSame('approved', $app->fresh()->status);
+
+        // 3. Certificate Issuance -> Public Verification -> Revocation Check
+        $this->actingAs($admin)->post('/admin/certificates', [
+            'student_name' => 'Nadia Karim',
+            'student_code' => 'AEC-2026-09',
+            'course_title' => 'IELTS Academic Masterclass',
+            'grade_or_band' => 'Band 8.0',
+            'issued_at' => now()->toDateString(),
+            'branch_id' => $branchId,
+        ])->assertSessionHasNoErrors();
+
+        $cert = CertificateRecord::query()->where('student_code', 'AEC-2026-09')->firstOrFail();
+        $this->get('/result?code=' . urlencode($cert->verification_code))
+            ->assertOk()
+            ->assertSee('Nadia Karim')
+            ->assertSee('Band 8.0');
+
+        $this->actingAs($admin)->post("/admin/certificates/{$cert->id}/revoke")
+            ->assertSessionHasNoErrors();
+        $this->get('/result?code=' . urlencode($cert->verification_code))
+            ->assertOk()
+            ->assertSee('revoked');
+
+        // 4. Library Add Book -> Borrow -> Return Stock Lifecycle
+        $this->actingAs($admin)->post('/admin/library/books', [
+            'isbn' => 'ISBN-AEC-001',
+            'title' => 'AEC Band 8 Essay Handbook',
+            'author' => 'Engr. Mahbubul Alom',
+            'category' => 'IELTS Writing',
+            'total_copies' => 3,
+            'branch_id' => $branchId,
+        ])->assertSessionHasNoErrors();
+
+        $book = LibraryBook::query()->where('isbn', 'ISBN-AEC-001')->firstOrFail();
+        $this->actingAs($admin)->post('/admin/library/loans', [
+            'library_book_id' => $book->id,
+            'borrower_name' => 'Farhan Sadik',
+            'borrower_code' => 'STU-881',
+            'due_at' => now()->addDays(7)->toDateString(),
+        ])->assertSessionHasNoErrors();
+        $this->assertSame(2, $book->fresh()->available_copies);
+
+        $loan = LibraryLoan::query()->where('library_book_id', $book->id)->firstOrFail();
+        $this->actingAs($admin)->post("/admin/library/loans/{$loan->id}/return")
+            ->assertSessionHasNoErrors();
+        $this->assertSame(3, $book->fresh()->available_copies);
+
+        // 5. HR Staff + Payroll
+        $this->actingAs($admin)->post('/admin/hr/staff', [
+            'employee_code' => 'EMP-101',
+            'full_name' => 'Sadia Rahman',
+            'designation' => 'Senior IELTS Instructor',
+            'department' => 'Academic',
+            'base_salary' => 45000,
+            'branch_id' => $branchId,
+        ])->assertSessionHasNoErrors();
+        $staffId = DB::table('staff_profiles')->where('employee_code', 'EMP-101')->value('id');
+        $this->actingAs($admin)->post('/admin/hr/payrolls', [
+            'staff_profile_id' => $staffId,
+            'payroll_month' => '2026-02',
+            'bonus' => 5000,
+            'deductions' => 1000,
+        ])->assertSessionHasNoErrors();
+        $this->assertSame(49000.0, (float) DB::table('staff_payrolls')->where('staff_profile_id', $staffId)->value('net_paid'));
+
+        // 6. Email Notifications & Marketing Coupons
+        $this->actingAs($admin)->post('/admin/email-notifications/templates', [
+            'template_key' => 'welcome_student',
+            'subject' => 'Welcome to AEC LMS',
+            'body_html' => '<p>Hello Student</p>',
+        ])->assertSessionHasNoErrors();
+
+        $this->actingAs($admin)->post('/admin/email-notifications/send', [
+            'recipient_email' => 'student@alomsenglish.com',
+            'subject' => 'Orientation Reminder',
+            'message' => 'Your class starts Sunday at 10 AM.',
+        ])->assertSessionHasNoErrors();
+        $this->assertSame(1, DB::table('email_logs')->count());
+
+        $this->actingAs($admin)->post('/admin/marketing/campaigns', [
+            'name' => 'Spring IELTS Drive',
+            'channel' => 'Facebook & Search',
+            'budget_bdt' => 15000,
+        ])->assertSessionHasNoErrors();
+
+        $this->actingAs($admin)->post('/admin/marketing/coupons', [
+            'code' => 'ALOM20',
+            'discount_percent' => 20,
+            'max_uses' => 50,
+        ])->assertSessionHasNoErrors();
+        $this->assertSame(1, DB::table('promo_coupons')->where('code', 'ALOM20')->count());
+    }
+}

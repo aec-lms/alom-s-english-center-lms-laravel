@@ -1,0 +1,18 @@
+{
+    "slug": "payment-management",
+    "name": "Payment Ledger & Reconciliation",
+    "version": "2.0.0",
+    "author": "Alom's English Center",
+    "category": "finance",
+    "description": "Immutable payment ledger, transaction audit trail, refunds, and invoice reconciliation.",
+    "core_compatibility": "^2.0",
+    "dependencies": [],
+    "provider": "Plugins\\Modules\\PaymentManagement\\Providers\\PaymentManagementServiceProvider",
+    "permissions": [
+        {
+            "slug": "payments.manage",
+            "name": "Manage Payments, Refunds & Ledger"
+        }
+    ],
+    "settings_schema": []
+}

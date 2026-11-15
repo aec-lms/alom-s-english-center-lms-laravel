@@ -1,0 +1,21 @@
+{
+    "slug": "gmail-marketing",
+    "name": "Gmail & Email Marketing",
+    "version": "2.1.0",
+    "author": "AEC Core Team",
+    "category": "communication",
+    "description": "Independent Gmail SMTP / Workspace App Password & Email Marketing suite with audience targeting, templates, and outbox history.",
+    "core_compatibility": "^2.0",
+    "dependencies": [],
+    "provider": "Plugins\\Modules\\GmailMarketing\\Providers\\GmailMarketingServiceProvider",
+    "permissions": [
+        { "slug": "communication.email.manage", "name": "Manage Gmail Marketing & Campaigns" }
+    ],
+    "settings_schema": [
+        { "key": "gmail_address", "label": "Sender Gmail Address", "type": "text", "secret": false },
+        { "key": "sender_name", "label": "Sender Display Name", "type": "text", "secret": false },
+        { "key": "smtp_host", "label": "SMTP Host (smtp.gmail.com)", "type": "text", "secret": false },
+        { "key": "smtp_port", "label": "SMTP Port (587 / 465)", "type": "text", "secret": false },
+        { "key": "app_password", "label": "Gmail App Password / API Secret", "type": "password", "secret": true }
+    ]
+}

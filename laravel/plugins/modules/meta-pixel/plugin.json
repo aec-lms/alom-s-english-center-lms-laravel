@@ -1,0 +1,20 @@
+{
+    "slug": "meta-pixel",
+    "name": "Facebook Meta Pixel & CAPI",
+    "version": "2.1.0",
+    "author": "AEC Core Team",
+    "category": "marketing",
+    "description": "Independent Facebook Meta Pixel, Conversions API (CAPI), and automated PageView/Lead/Purchase event tracking.",
+    "core_compatibility": "^2.0",
+    "dependencies": [],
+    "provider": "Plugins\\Modules\\MetaPixel\\Providers\\MetaPixelServiceProvider",
+    "permissions": [
+        { "slug": "marketing.pixel.manage", "name": "Manage Facebook Meta Pixel & Events" }
+    ],
+    "settings_schema": [
+        { "key": "pixel_id", "label": "Facebook Meta Pixel ID", "type": "text", "secret": false },
+        { "key": "capi_access_token", "label": "Conversions API Access Token", "type": "password", "secret": true },
+        { "key": "test_event_code", "label": "Test Event Code (Optional)", "type": "text", "secret": false },
+        { "key": "track_events", "label": "Enabled Events (PageView,Lead,InitiateCheckout,Purchase)", "type": "text", "secret": false }
+    ]
+}

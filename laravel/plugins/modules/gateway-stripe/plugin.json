@@ -1,0 +1,23 @@
+{
+    "slug": "gateway-stripe",
+    "name": "Stripe Payment Gateway",
+    "version": "2.0.0",
+    "author": "Alom's English Center",
+    "category": "finance",
+    "description": "Independent Stripe PaymentIntent & Checkout Gateway with Stripe-Signature HMAC webhook verification, idempotency, and encrypted credentials.",
+    "core_compatibility": "^2.0",
+    "dependencies": ["payment-management"],
+    "provider": "Plugins\\Modules\\GatewayStripe\\Providers\\GatewayStripeServiceProvider",
+    "permissions": [
+        {
+            "slug": "payments.stripe.manage",
+            "name": "Manage Stripe Checkout & Webhooks"
+        }
+    ],
+    "settings_schema": [
+        { "key": "publishable_key", "label": "Stripe Publishable Key (pk_...)", "type": "text", "secret": false },
+        { "key": "secret_key", "label": "Stripe Secret Key (sk_...)", "type": "password", "secret": true },
+        { "key": "webhook_secret", "label": "Stripe Webhook Signing Secret (whsec_...)", "type": "password", "secret": true },
+        { "key": "sandbox_mode", "label": "Sandbox Test Mode (1 or 0)", "type": "text", "secret": false }
+    ]
+}

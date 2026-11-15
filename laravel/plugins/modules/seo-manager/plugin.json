@@ -1,0 +1,19 @@
+{
+    "slug": "seo-manager",
+    "name": "SEO Engine, Sitemap & Robots.txt",
+    "version": "2.1.0",
+    "author": "AEC Core Team",
+    "category": "seo",
+    "description": "Independent Meta SEO, Open Graph cards, per-route SEO rules, dynamic XML Sitemap (/sitemap.xml), and Robots.txt manager.",
+    "core_compatibility": "^2.0",
+    "dependencies": [],
+    "provider": "Plugins\\Modules\\SeoManager\\Providers\\SeoManagerServiceProvider",
+    "permissions": [
+        { "slug": "seo.manage", "name": "Manage SEO, Sitemap & Robots.txt" }
+    ],
+    "settings_schema": [
+        { "key": "site_title_seo", "label": "Default Site Meta Title", "type": "text", "secret": false },
+        { "key": "site_meta_description", "label": "Default Meta Description", "type": "text", "secret": false },
+        { "key": "canonical_url", "label": "Canonical Base URL", "type": "text", "secret": false }
+    ]
+}
