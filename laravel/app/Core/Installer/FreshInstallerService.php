@@ -34,10 +34,14 @@ class FreshInstallerService
             $extensions[$ext] = extension_loaded($ext);
         }
 
+        $privatePath = (string) config('lms.private_storage_path');
+        $backupPath = (string) config('lms.backup_path');
         $directories = [
             'storage/app' => is_writable(storage_path('app')),
             'storage/framework' => is_writable(storage_path('framework')),
             'storage/logs' => is_writable(storage_path('logs')),
+            'private_storage' => is_dir($privatePath) ? is_writable($privatePath) : is_writable(dirname($privatePath)),
+            'backup_storage' => is_dir($backupPath) ? is_writable($backupPath) : is_writable(dirname($backupPath)),
             'bootstrap/cache' => is_writable(base_path('bootstrap/cache')),
         ];
 
@@ -127,6 +131,47 @@ class FreshInstallerService
     }
 
 
+
+    private function preparePrivateStorageDirectories(): void
+    {
+        $privatePath = rtrim((string) config('lms.private_storage_path'), DIRECTORY_SEPARATOR);
+        $backupPath = rtrim((string) config('lms.backup_path'), DIRECTORY_SEPARATOR);
+        if ($privatePath === '' || $backupPath === '' || is_link($privatePath) || is_link($backupPath)) {
+            throw new RuntimeException('Private storage and backup paths must be configured and must not be symbolic links.');
+        }
+
+        foreach ([$privatePath, $backupPath] as $directory) {
+            if (!is_dir($directory) && !mkdir($directory, 0700, true) && !is_dir($directory)) {
+                throw new RuntimeException("Unable to create private runtime directory: {$directory}");
+            }
+            @chmod($directory, 0700);
+            if (!is_writable($directory)) {
+                throw new RuntimeException("Private runtime directory is not writable: {$directory}");
+            }
+        }
+
+        $realPrivate = realpath($privatePath);
+        $realBackup = realpath($backupPath);
+        $realPublic = realpath(public_path()) ?: rtrim(public_path(), DIRECTORY_SEPARATOR);
+        if ($realPrivate === false || $realBackup === false) {
+            throw new RuntimeException('Unable to resolve private storage and backup directories.');
+        }
+
+        $publicPrefix = rtrim($realPublic, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        foreach ([$realPrivate, $realBackup] as $directory) {
+            if ($directory === $realPublic || str_starts_with($directory, $publicPrefix)) {
+                throw new RuntimeException('Private storage and backups must be outside the public web document root.');
+            }
+        }
+
+        if ($realPrivate === $realBackup
+            || str_starts_with($realPrivate, rtrim($realBackup, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR)
+            || str_starts_with($realBackup, rtrim($realPrivate, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR)
+        ) {
+            throw new RuntimeException('Private uploads and backup archives must use separate directories.');
+        }
+    }
+
     private function callArtisanOrFail(string $command, array $parameters, string $description): void
     {
         $exitCode = Artisan::call($command, $parameters);
@@ -173,6 +218,8 @@ class FreshInstallerService
         $dbName = (string) DB::connection()->getDatabaseName();
 
         $this->assertFreshEmptyDatabase($pdo, $dbName, $driver);
+
+        $this->preparePrivateStorageDirectories();
 
         $appKey = 'base64:' . base64_encode(random_bytes(32));
         $signingKey = bin2hex(random_bytes(32));
