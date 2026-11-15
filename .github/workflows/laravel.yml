@@ -104,3 +104,13 @@ jobs:
               raise SystemExit(f"Release package contains private/runtime data: {sorted(leaked + env_leaks)}")
           print(f"Verified {len(files)} files in {archive}")
           PY
+
+      - name: Upload verified cPanel release package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: aec-lms-cpanel-release
+          path: |
+            dist/aec-lms-cpanel-release.zip
+            dist/aec-lms-cpanel-release.zip.sha256
+          if-no-files-found: error
+          retention-days: 14
