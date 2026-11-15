@@ -60,3 +60,42 @@ jobs:
           QUEUE_CONNECTION: sync
           MAIL_MAILER: array
         run: php artisan test
+
+      - name: Build production cPanel package
+        run: bash scripts/build-cpanel-package.sh
+
+      - name: Verify production package contents
+        run: |
+          python3 - <<'PY'
+          import zipfile
+          archive = "dist/aec-lms-cpanel-release.zip"
+          with zipfile.ZipFile(archive) as package:
+              files = {
+                  name.removeprefix("./").rstrip("/")
+                  for name in package.namelist()
+                  if not name.endswith("/")
+              }
+          required = {".env.example", "composer.lock", "vendor/autoload.php", "artisan", "public/index.php"}
+          missing = required - files
+          if missing:
+              raise SystemExit(f"Release package missing required files: {sorted(missing)}")
+          forbidden = [
+              ".env",
+              "storage/app/installed.lock",
+              "storage/app/backups/",
+              "storage/app/private/",
+              "storage/app/restore-staging/",
+              "storage/app/plugin-staging/",
+              "storage/app/plugin-rollbacks/",
+              "storage/app/update-staging/",
+              "storage/app/update-snapshots/",
+              ".git/",
+          ]
+          leaked = [
+              name for name in files
+              if name in forbidden or any(name.startswith(prefix) for prefix in forbidden if prefix.endswith("/"))
+          ]
+          if leaked:
+              raise SystemExit(f"Release package contains private/runtime data: {sorted(leaked)}")
+          print(f"Verified {len(files)} files in {archive}")
+          PY
