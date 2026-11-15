@@ -269,11 +269,11 @@ class UniversalUpdateService
 
     private function assertSafeZipEntryPath(string $entryName): void
     {
-        $normalized = str_replace('\\\\', '/', $entryName);
+        $normalized = str_replace('\\', '/', $entryName);
         $segments = explode('/', $normalized);
         if ($entryName === ''
             || str_contains($entryName, "\0")
-            || str_contains($entryName, '\\\\')
+            || str_contains($entryName, '\\')
             || str_starts_with($normalized, '/')
             || preg_match('/^[a-zA-Z]:/', $normalized) === 1
             || in_array('..', $segments, true)
