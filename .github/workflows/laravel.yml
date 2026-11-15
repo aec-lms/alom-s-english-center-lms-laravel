@@ -110,7 +110,7 @@ jobs:
         with:
           name: aec-lms-cpanel-release
           path: |
-            dist/aec-lms-cpanel-release.zip
-            dist/aec-lms-cpanel-release.zip.sha256
+            laravel/dist/aec-lms-cpanel-release.zip
+            laravel/dist/aec-lms-cpanel-release.zip.sha256
           if-no-files-found: error
           retention-days: 14
