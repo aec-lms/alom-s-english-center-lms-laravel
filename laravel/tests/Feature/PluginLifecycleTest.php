@@ -226,17 +226,21 @@ PHP;
         $zip->addFromString($slug . '/checksums.json', $checksums);
         $zip->close();
 
+        $caught = null;
         try {
-            $this->expectException(RuntimeException::class);
-            $this->expectExceptionMessage('automatically rolled back');
             app(PluginManager::class)->installOrUpdateFromZip($zipPath);
+        } catch (RuntimeException $exception) {
+            $caught = $exception;
         } finally {
             @unlink($zipPath);
-            File::deleteDirectory($targetDir);
         }
 
+        $this->assertInstanceOf(RuntimeException::class, $caught);
+        $this->assertStringContainsString('automatically rolled back', $caught->getMessage());
+        $this->assertStringContainsString('intentional install hook failure', $caught->getMessage());
         $this->assertDatabaseMissing('plugins', ['slug' => $slug]);
         $this->assertDirectoryDoesNotExist($targetDir);
+        File::deleteDirectory($targetDir);
     }
 
     public function test_zip_uploader_rejects_path_traversal_and_corrupted_checksums(): void
