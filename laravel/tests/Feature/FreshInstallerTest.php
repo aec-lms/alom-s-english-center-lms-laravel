@@ -144,7 +144,7 @@ class FreshInstallerTest extends TestCase
             'lms.install_lock_path' => $this->tempLockPath,
         ]);
 
-        $this->get('/install')->assertOk()->assertSee('Administrator');
+        $this->get('/install')->assertOk()->assertSee('Fresh Database Installer');
     }
 
     public function test_installer_routes_are_locked_after_installation(): void
