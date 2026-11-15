@@ -29,6 +29,14 @@ class FreshInstallCommand extends Command
         $adminEmail = (string) ($this->option('admin-email') ?: $this->ask('Administrator email'));
         $adminPassword = (string) ($this->option('admin-password') ?: $this->secret('Administrator password (min 12 chars)'));
 
+        if (trim($adminName) === '') {
+            $this->error('Administrator name is required.');
+            return self::FAILURE;
+        }
+        if (filter_var($adminEmail, FILTER_VALIDATE_EMAIL) === false) {
+            $this->error('A valid administrator email address is required.');
+            return self::FAILURE;
+        }
         if (strlen($adminPassword) < 12) {
             $this->error('Administrator password must be at least 12 characters.');
             return self::FAILURE;
