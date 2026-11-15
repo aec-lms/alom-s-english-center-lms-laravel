@@ -371,9 +371,9 @@ class BackupService
         if (!is_dir($directory) || is_link($directory)) {
             return;
         }
-        $iterator = new \\RecursiveIteratorIterator(
-            new \\RecursiveDirectoryIterator($directory, \\FilesystemIterator::SKIP_DOTS),
-            \\RecursiveIteratorIterator::CHILD_FIRST
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST
         );
         foreach ($iterator as $item) {
             if ($item->isDir() && !$item->isLink()) {
