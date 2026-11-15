@@ -51,11 +51,12 @@ class AdditionalModulesWorkflowTest extends TestCase
         ])->assertSessionHasNoErrors();
 
         $this->actingAs($admin)->post('/admin/batches', [
-            'code' => 'BATCH-JAN-01',
-            'title' => 'IELTS Evening Batch',
-            'course_name' => 'IELTS Masterclass',
-            'schedule_label' => 'Sun-Tue-Thu 6:00 PM',
-            'capacity' => 30,
+            'batch_code' => 'BATCH-JAN-01',
+            'name' => 'IELTS Evening Batch',
+            'course_title' => 'IELTS Masterclass',
+            'schedule' => 'Sun-Tue-Thu 6:00 PM',
+            'max_capacity' => 30,
+            'status' => 'ongoing',
             'start_date' => now()->toDateString(),
             'branch_id' => $branchId,
         ])->assertSessionHasNoErrors();
