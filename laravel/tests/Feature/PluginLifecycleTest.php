@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Core\Plugins\PluginManager;
+use App\Core\Versioning\VersionConstraint;
 use App\Models\PluginRecord;
 use App\Models\PluginSetting;
 use Illuminate\Support\Facades\DB;
@@ -15,6 +16,18 @@ use ZipArchive;
 
 class PluginLifecycleTest extends TestCase
 {
+
+    public function test_plugin_core_compatibility_checks_minimum_semantic_versions(): void
+    {
+        $this->assertTrue(VersionConstraint::matches('2.0.0', '^2.0'));
+        $this->assertTrue(VersionConstraint::matches('2.4.9', '^2.0'));
+        $this->assertFalse(VersionConstraint::matches('2.0.0', '^2.1'));
+        $this->assertFalse(VersionConstraint::matches('3.0.0', '^2.0'));
+        $this->assertTrue(VersionConstraint::matches('2.1.9', '~2.1'));
+        $this->assertFalse(VersionConstraint::matches('2.2.0', '~2.1.0'));
+        $this->assertTrue(VersionConstraint::matches('2.1.0', '>=2.0'));
+    }
+
     public function test_plugin_dependency_order_is_enforced(): void
     {
         $this->markSystemInstalled();
