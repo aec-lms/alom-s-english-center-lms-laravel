@@ -170,6 +170,75 @@ PHP);
         }
     }
 
+
+    public function test_failed_plugin_install_restores_module_files_and_catalog_state(): void
+    {
+        $this->markSystemInstalled();
+
+        $slug = 'rollback-probe';
+        $zipPath = sys_get_temp_dir() . '/rollback_probe_' . uniqid('', true) . '.zip';
+        $targetDir = (string) config('plugins.modules_path') . DIRECTORY_SEPARATOR . $slug;
+        $manifest = json_encode([
+            'slug' => $slug,
+            'name' => 'Rollback Probe',
+            'version' => '1.0.0',
+            'core_compatibility' => '^2.0',
+            'dependencies' => [],
+            'provider' => 'Plugins\\Modules\\RollbackProbe\\Providers\\RollbackProbeServiceProvider',
+        ], JSON_THROW_ON_ERROR);
+        $provider = <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+namespace Plugins\Modules\RollbackProbe\Providers;
+
+use App\Core\Plugins\BasePluginServiceProvider;
+use RuntimeException;
+
+class RollbackProbeServiceProvider extends BasePluginServiceProvider
+{
+    public function slug(): string
+    {
+        return 'rollback-probe';
+    }
+
+    protected function pluginPath(string $relative = ''): string
+    {
+        return dirname(__DIR__) . ($relative !== '' ? DIRECTORY_SEPARATOR . ltrim($relative, DIRECTORY_SEPARATOR) : '');
+    }
+
+    public function onInstall(): void
+    {
+        throw new RuntimeException('intentional install hook failure');
+    }
+}
+PHP;
+        $checksums = json_encode([
+            'plugin.json' => hash('sha256', $manifest),
+            'Providers/RollbackProbeServiceProvider.php' => hash('sha256', $provider),
+        ], JSON_THROW_ON_ERROR);
+
+        $zip = new ZipArchive();
+        $this->assertTrue($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true);
+        $zip->addFromString($slug . '/plugin.json', $manifest);
+        $zip->addFromString($slug . '/Providers/RollbackProbeServiceProvider.php', $provider);
+        $zip->addFromString($slug . '/checksums.json', $checksums);
+        $zip->close();
+
+        try {
+            $this->expectException(RuntimeException::class);
+            $this->expectExceptionMessage('automatically rolled back');
+            app(PluginManager::class)->installOrUpdateFromZip($zipPath);
+        } finally {
+            @unlink($zipPath);
+            File::deleteDirectory($targetDir);
+        }
+
+        $this->assertDatabaseMissing('plugins', ['slug' => $slug]);
+        $this->assertDirectoryDoesNotExist($targetDir);
+    }
+
     public function test_zip_uploader_rejects_path_traversal_and_corrupted_checksums(): void
     {
         $this->markSystemInstalled();
