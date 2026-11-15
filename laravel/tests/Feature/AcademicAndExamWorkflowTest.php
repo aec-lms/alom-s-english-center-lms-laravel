@@ -9,6 +9,7 @@ use App\Models\Permission;
 use Plugins\Modules\CourseManagement\Models\Course;
 use Plugins\Modules\StudentManagement\Models\Student;
 use Plugins\Modules\TeacherManagement\Models\Teacher;
+use Plugins\Modules\TeacherManagement\Models\Teacher;
 use Plugins\Modules\ExamManagement\Models\Exam;
 use Plugins\Modules\ExamManagement\Models\ExamAttempt;
 use Plugins\Modules\ExamManagement\Models\ExamQuestion;
