@@ -72,6 +72,9 @@ class FreshInstallerTest extends TestCase
         DB::setDefaultConnection('installer_test');
 
         try {
+            config(['session.driver' => 'file', 'cache.default' => 'file']);
+            $this->get('/install')->assertOk()->assertSee('Fresh Database Installer');
+
             $unsafePublicPath = public_path('aec-private-leak-' . uniqid('', true));
             config(['lms.private_storage_path' => $unsafePublicPath]);
             try {
