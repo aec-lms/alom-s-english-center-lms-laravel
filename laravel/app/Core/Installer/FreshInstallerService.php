@@ -212,6 +212,6 @@ class FreshInstallerService
         $this->audit->log('core.installed', 'system', 'fresh_install', ['legacy_records_imported' => false], $admin->id);
 
         // Never return generated encryption/signing secrets to the installer UI.
-        return ['admin_id' => $admin->id];
+        return ['admin_id' => $admin->id, 'lock_path' => $lockPath];
     }
 }
