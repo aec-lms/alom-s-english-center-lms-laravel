@@ -58,7 +58,11 @@ class UpdateCenterController extends Controller
             'feed_url' => ['required', 'url', 'max:255'],
         ]);
 
-        $this->updates->saveRemoteFeedUrl($validated['feed_url'], auth()->id());
+        try {
+            $this->updates->saveRemoteFeedUrl($validated['feed_url'], auth()->id());
+        } catch (\Throwable $e) {
+            return back()->withErrors(['feed_url' => $e->getMessage()])->withInput();
+        }
 
         return back()->with('status', 'Remote LMS release channel URL saved.');
     }
