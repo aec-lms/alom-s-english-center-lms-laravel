@@ -30,7 +30,7 @@ php artisan key:generate
 Configure a **new, empty** MySQL/MariaDB database in `laravel/.env`, then install:
 
 ```bash
-php artisan lms:install --app-name="Alom's English Center" --app-url="https://YOUR-DOMAIN" --admin-name="Administrator" --admin-email="ADMIN@YOUR-DOMAIN" --admin-password="USE-A-UNIQUE-12-CHARACTER-OR-LONGER-SECRET"
+php artisan lms:install --app-name="Alom's English Center" --app-url="https://YOUR-DOMAIN" --admin-name="Administrator" --admin-email="ADMIN@YOUR-DOMAIN"
 php artisan test
 ```
 
