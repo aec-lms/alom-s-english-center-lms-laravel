@@ -186,17 +186,22 @@ class BackupService
         $stagedPrivateFiles = $this->stagePrivateFiles($zip, $manifest);
 
         try {
-            DB::transaction(function () use ($dbSnapshot): void {
-                foreach ((array) ($dbSnapshot['tables'] ?? []) as $table => $rows) {
-                    if (!is_string($table) || !Schema::hasTable($table) || $table === 'migrations') {
-                        continue;
+            Schema::disableForeignKeyConstraints();
+            try {
+                DB::transaction(function () use ($dbSnapshot): void {
+                    foreach ((array) ($dbSnapshot['tables'] ?? []) as $table => $rows) {
+                        if (!is_string($table) || !Schema::hasTable($table) || $table === 'migrations') {
+                            continue;
+                        }
+                        DB::table($table)->delete();
+                        foreach (array_chunk((array) $rows, 200) as $chunk) {
+                            DB::table($table)->insert($chunk);
+                        }
                     }
-                    DB::table($table)->delete();
-                    foreach (array_chunk((array) $rows, 200) as $chunk) {
-                        DB::table($table)->insert($chunk);
-                    }
-                }
-            });
+                });
+            } finally {
+                Schema::enableForeignKeyConstraints();
+            }
 
             if ($stagedPrivateFiles !== null) {
                 // Restore files by merging the snapshot; unrelated files are never deleted.
