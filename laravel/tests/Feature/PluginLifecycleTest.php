@@ -153,15 +153,13 @@ class PluginLifecycleTest extends TestCase
             'dependencies' => [],
         ], JSON_THROW_ON_ERROR));
         $zip->addFromString("{$slug}/checksums.json", json_encode([
-            'files' => [
-                'plugin.json' => str_repeat('0', 64),
-            ],
+            'plugin.json' => str_repeat('0', 64),
         ], JSON_THROW_ON_ERROR));
         $zip->close();
 
         try {
             $this->expectException(RuntimeException::class);
-            $this->expectExceptionMessage('integrity check failed');
+            $this->expectExceptionMessage('SHA-256 mismatch');
             $manager->installOrUpdateFromZip($badChecksumZip);
         } finally {
             @unlink($badChecksumZip);
