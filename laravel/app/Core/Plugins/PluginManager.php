@@ -582,7 +582,7 @@ class PluginManager
         if (!$manifest->providerClass || !class_exists($manifest->providerClass)) {
             return null;
         }
-        $instance = app($manifest->providerClass);
+        $instance = app()->resolveProvider($manifest->providerClass);
 
         return $instance instanceof PluginInterface ? $instance : null;
     }
