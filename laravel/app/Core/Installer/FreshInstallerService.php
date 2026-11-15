@@ -141,6 +141,33 @@ class FreshInstallerService
             throw new RuntimeException('AEC LMS is already installed and locked.');
         }
 
+        $appName = trim((string) ($config['app_name'] ?? 'AEC LMS'));
+        $appUrl = trim((string) ($config['app_url'] ?? ''));
+        $adminName = trim((string) ($config['admin_name'] ?? ''));
+        $adminEmail = strtolower(trim((string) ($config['admin_email'] ?? '')));
+        $adminPassword = (string) ($config['admin_password'] ?? '');
+
+        if ($appName === '' || strlen($appName) > 160) {
+            throw new RuntimeException('Application name is required and must be 160 characters or fewer.');
+        }
+        if ($adminName === '' || strlen($adminName) > 120) {
+            throw new RuntimeException('Administrator name is required and must be 120 characters or fewer.');
+        }
+        if (filter_var($adminEmail, FILTER_VALIDATE_EMAIL) === false || strlen($adminEmail) > 180) {
+            throw new RuntimeException('A valid administrator email address of 180 characters or fewer is required.');
+        }
+        if (strlen($adminPassword) < 12 || strlen($adminPassword) > 255) {
+            throw new RuntimeException('Administrator password must be between 12 and 255 characters.');
+        }
+        $urlParts = parse_url($appUrl);
+        if (filter_var($appUrl, FILTER_VALIDATE_URL) === false
+            || !is_array($urlParts)
+            || !in_array(strtolower((string) ($urlParts['scheme'] ?? '')), ['http', 'https'], true)
+            || empty($urlParts['host'])
+        ) {
+            throw new RuntimeException('A valid HTTP or HTTPS application URL is required.');
+        }
+
         $pdo = DB::connection()->getPdo();
         $driver = DB::connection()->getDriverName();
         $dbName = (string) DB::connection()->getDatabaseName();
@@ -159,24 +186,30 @@ class FreshInstallerService
         ]);
 
         $this->callArtisanOrFail('migrate', ['--force' => true], 'Core database migrations');
-        $this->callArtisanOrFail('db:seed', ['--class' => CoreRolesAndPermissionsSeeder::class, '--force' => true], 'Core roles and permissions seeding');
 
-        $admin = User::query()->create([
-            'name' => (string) $config['admin_name'],
-            'email' => strtolower(trim((string) $config['admin_email'])),
-            'password' => Hash::make((string) $config['admin_password']),
-            'is_active' => true,
-            'email_verified_at' => now(),
-        ]);
+        $admin = DB::transaction(function () use ($adminName, $adminEmail, $adminPassword, $appName, $appUrl): User {
+            $this->callArtisanOrFail('db:seed', ['--class' => CoreRolesAndPermissionsSeeder::class, '--force' => true], 'Core roles and permissions seeding');
 
-        $adminRole = Role::query()->where('slug', 'admin')->first();
-        if ($adminRole) {
+            $admin = User::query()->create([
+                'name' => $adminName,
+                'email' => $adminEmail,
+                'password' => Hash::make($adminPassword),
+                'is_active' => true,
+                'email_verified_at' => now(),
+            ]);
+
+            $adminRole = Role::query()->where('slug', 'admin')->first();
+            if (!$adminRole) {
+                throw new RuntimeException('Core Admin role was not created by the permissions seeder.');
+            }
             $admin->roles()->sync([$adminRole->id]);
-        }
 
-        SystemSetting::query()->updateOrCreate(['key' => 'site_name'], ['value' => (string) ($config['app_name'] ?? 'AEC LMS')]);
-        SystemSetting::query()->updateOrCreate(['key' => 'site_url'], ['value' => (string) ($config['app_url'] ?? 'https://alomsenglishcenter.com')]);
-        SystemSetting::query()->updateOrCreate(['key' => 'legacy_records_imported'], ['value' => 'false']);
+            SystemSetting::query()->updateOrCreate(['key' => 'site_name'], ['value' => $appName]);
+            SystemSetting::query()->updateOrCreate(['key' => 'site_url'], ['value' => $appUrl]);
+            SystemSetting::query()->updateOrCreate(['key' => 'legacy_records_imported'], ['value' => 'false']);
+
+            return $admin;
+        });
 
         $lockPayload = json_encode([
             'installed_at' => now()->toIso8601String(),
