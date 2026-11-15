@@ -140,6 +140,24 @@ class FreshInstallerService
             throw new RuntimeException('Private storage and backup paths must be configured and must not be symbolic links.');
         }
 
+        $realPublic = realpath(public_path()) ?: rtrim(public_path(), DIRECTORY_SEPARATOR);
+        $publicPrefix = rtrim($realPublic, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+
+        foreach ([$privatePath, $backupPath] as $directory) {
+            $ancestor = $directory;
+            while (!file_exists($ancestor) && dirname($ancestor) !== $ancestor) {
+                $ancestor = dirname($ancestor);
+            }
+            $realAncestor = realpath($ancestor);
+            if ($directory === $realPublic
+                || str_starts_with($directory, $publicPrefix)
+                || $realAncestor === $realPublic
+                || ($realAncestor !== false && str_starts_with($realAncestor, $publicPrefix))
+            ) {
+                throw new RuntimeException('Private storage and backups must be outside the public web document root.');
+            }
+        }
+
         foreach ([$privatePath, $backupPath] as $directory) {
             if (!is_dir($directory) && !mkdir($directory, 0700, true) && !is_dir($directory)) {
                 throw new RuntimeException("Unable to create private runtime directory: {$directory}");
@@ -152,12 +170,9 @@ class FreshInstallerService
 
         $realPrivate = realpath($privatePath);
         $realBackup = realpath($backupPath);
-        $realPublic = realpath(public_path()) ?: rtrim(public_path(), DIRECTORY_SEPARATOR);
         if ($realPrivate === false || $realBackup === false) {
             throw new RuntimeException('Unable to resolve private storage and backup directories.');
         }
-
-        $publicPrefix = rtrim($realPublic, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
         foreach ([$realPrivate, $realBackup] as $directory) {
             if ($directory === $realPublic || str_starts_with($directory, $publicPrefix)) {
                 throw new RuntimeException('Private storage and backups must be outside the public web document root.');
