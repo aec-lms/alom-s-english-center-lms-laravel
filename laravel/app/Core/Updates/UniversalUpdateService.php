@@ -6,6 +6,7 @@ namespace App\Core\Updates;
 
 use App\Core\Backup\BackupService;
 use App\Core\Security\AuditLogger;
+use App\Core\Versioning\VersionConstraint;
 use App\Models\BackupRecord;
 use App\Models\PluginRecord;
 use App\Models\SystemSetting;
@@ -472,9 +473,9 @@ class UniversalUpdateService
 
     private function coreVersionMatches(string $constraint): bool
     {
-        $coreMajor = explode('.', (string) config('lms.core_version', '2.0.0'))[0] ?? '2';
-        $reqMajor = explode('.', ltrim($constraint, '^~>= '))[0] ?? $coreMajor;
-
-        return $coreMajor === $reqMajor;
+        return VersionConstraint::matches(
+            (string) config('lms.core_version', '2.0.0'),
+            $constraint
+        );
     }
 }
