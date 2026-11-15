@@ -46,7 +46,7 @@ jobs:
 
       - name: Install Composer dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
-
+\n      - name: Composer security audit\n        run: composer audit --locked --no-interaction\n
       - name: Generate application key
         run: php artisan key:generate
 
