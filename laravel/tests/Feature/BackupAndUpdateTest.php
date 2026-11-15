@@ -30,6 +30,34 @@ class BackupAndUpdateTest extends TestCase
     }
 
 
+
+    public function test_encrypted_backup_restores_included_private_files(): void
+    {
+        $this->markSystemInstalled();
+        $privatePath = storage_path('app/test-private-' . uniqid('', true));
+        config(['lms.private_storage_path' => $privatePath]);
+        mkdir($privatePath, 0700, true);
+        mkdir($privatePath . '/student-documents', 0700, true);
+        file_put_contents($privatePath . '/student-documents/sample.txt', 'private student document');
+
+        $backups = app(BackupService::class);
+        $record = $backups->createEncryptedBackup(null, true);
+
+        unlink($privatePath . '/student-documents/sample.txt');
+        $backups->restoreEncryptedBackup($record);
+
+        $this->assertSame(
+            'private student document',
+            file_get_contents($privatePath . '/student-documents/sample.txt')
+        );
+
+        @unlink($privatePath . '/student-documents/sample.txt');
+        @rmdir($privatePath . '/student-documents');
+        @rmdir($privatePath);
+        @unlink($record->storage_path);
+        $record->delete();
+    }
+
     public function test_backup_restore_rejects_paths_outside_the_private_backup_directory(): void
     {
         $this->markSystemInstalled();
