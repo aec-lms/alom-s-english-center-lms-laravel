@@ -8,8 +8,10 @@ use App\Core\Security\AuditLogger;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use Plugins\Modules\AttendanceManagement\Models\AttendanceRecord;
+use Plugins\Modules\StudentManagement\Models\Student;
 
 class AttendanceController extends Controller
 {
@@ -39,7 +41,7 @@ class AttendanceController extends Controller
         ]);
 
         $student = Student::query()->findOrFail((int) $validated['student_id']);
-        $batch = \\Illuminate\\Support\\Facades\\DB::table('batches')->where('id', (int) $validated['batch_id'])->first();
+        $batch = DB::table('batches')->where('id', (int) $validated['batch_id'])->first();
         if (!$batch || (int) $student->branch_id !== (int) $validated['branch_id'] || (int) $batch->branch_id !== (int) $student->branch_id) {
             abort(422, 'Student, batch and attendance branch must match.');
         }
