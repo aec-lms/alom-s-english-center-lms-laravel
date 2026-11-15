@@ -13,7 +13,7 @@ The intended production application is Laravel 12 under `/laravel`. The root Goo
 - Pull request: [PR #1](https://github.com/aec-lms/alom-s-english-center-lms-laravel/pull/1)
 - PR is open and unmerged; `main` has not been changed by this work.
 - `laravel/composer.lock` has now been generated and committed by a dedicated GitHub Actions workflow.
-- The most recent fully verified Laravel test run before the latest package-builder/documentation changes passed **26 tests / 132 assertions** on commit `ab53792`.
+- The most recent fully verified Laravel test run before the latest package-builder/documentation changes passed **34 tests / 176 assertions** on commit `10e4728`.
 - CI now also builds and inspects the cPanel package; the latest run for the newest commits must finish successfully before its result can be recorded.
 
 A green CI run is evidence only for the automated checks that exist. It is not proof of production deployment readiness.
