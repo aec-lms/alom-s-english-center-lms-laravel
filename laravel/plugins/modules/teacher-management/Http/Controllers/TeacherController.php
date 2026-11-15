@@ -22,9 +22,14 @@ class TeacherController extends Controller
 {
     public function __construct(private readonly AuditLogger $audit) {}
 
-    public function index(): View
+    public function index(Request $request): View
     {
-        $teachers = Teacher::query()->with('user')->latest()->paginate(25);
+        $actor = $request->user();
+        $teachers = Teacher::query()
+            ->with('user')
+            ->when($actor && $actor->hasRole('branch_manager'), fn ($query) => $query->where('branch_id', $actor->branch_id))
+            ->latest()
+            ->paginate(25);
         $branches = Schema::hasTable('branches') ? DB::table('branches')->orderBy('name')->get() : collect();
 
         return view('teacher-management::index', compact('teachers', 'branches'));
@@ -36,7 +41,7 @@ class TeacherController extends Controller
             'name' => ['required', 'string', 'max:150'],
             'email' => ['required', 'email', 'max:190', 'unique:users,email'],
             'password' => ['nullable', 'string', 'min:6'],
-            'branch_id' => ['nullable', 'integer'],
+            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
             'employee_code' => ['required', 'string', 'max:60', 'unique:teachers,employee_code'],
             'specialization' => ['required', 'string', 'max:160'],
             'credentials' => ['nullable', 'string', 'max:255'],
@@ -47,6 +52,14 @@ class TeacherController extends Controller
             'photo_url' => ['nullable', 'string', 'max:255'],
             'is_active' => ['nullable', 'boolean'],
         ]);
+
+        $actor = $request->user();
+        if ($actor && $actor->hasRole('branch_manager')) {
+            if (isset($validated['branch_id']) && (int) $validated['branch_id'] !== (int) $actor->branch_id) {
+                abort(403, 'Branch isolation violation.');
+            }
+            $validated['branch_id'] = $actor->branch_id;
+        }
 
         $photoPath = $request->hasFile('photo')
             ? $this->storePhoto($request->file('photo'))
@@ -87,6 +100,11 @@ class TeacherController extends Controller
 
     public function update(Request $request, Teacher $teacher): RedirectResponse
     {
+        $actor = $request->user();
+        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $teacher->branch_id) {
+            abort(403, 'Branch isolation violation.');
+        }
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:150'],
             'email' => ['nullable', 'email', 'max:190'],
@@ -101,6 +119,13 @@ class TeacherController extends Controller
             'photo_url' => ['nullable', 'string', 'max:255'],
             'is_active' => ['nullable', 'boolean'],
         ]);
+
+        if ($actor && $actor->hasRole('branch_manager')) {
+            if (isset($validated['branch_id']) && (int) $validated['branch_id'] !== (int) $actor->branch_id) {
+                abort(403, 'Branch isolation violation.');
+            }
+            $validated['branch_id'] = $actor->branch_id;
+        }
 
         $photoPath = $teacher->photo_path;
         if ($request->hasFile('photo')) {
@@ -144,8 +169,13 @@ class TeacherController extends Controller
         return back()->with('status', "Instructor '{$validated['name']}' updated.");
     }
 
-    public function destroy(Teacher $teacher): RedirectResponse
+    public function destroy(Request $request, Teacher $teacher): RedirectResponse
     {
+        $actor = $request->user();
+        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $teacher->branch_id) {
+            abort(403, 'Branch isolation violation.');
+        }
+
         $code = $teacher->employee_code;
         $id = (string) $teacher->id;
         $user = $teacher->user;
