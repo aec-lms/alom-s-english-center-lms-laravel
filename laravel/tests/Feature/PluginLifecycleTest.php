@@ -95,9 +95,9 @@ class PluginLifecycleTest extends TestCase
         ]);
         DB::table('cms_carousels')->insert([
             'carousel_group' => 'testimonial_left',
-            'author_name' => 'Tasnim Akter',
-            'badge_label' => 'Band 8.0',
-            'quote' => 'Structured mocks boosted my confidence.',
+            'title' => 'Structured mocks boosted my confidence.',
+            'subtitle' => 'Tasnim Akter · Band 8.0',
+            'rating' => 5,
             'sort_order' => 1,
             'is_active' => true,
             'created_at' => now(),
