@@ -534,7 +534,10 @@ class PluginManager
         }
 
         $relative = str_replace(base_path() . DIRECTORY_SEPARATOR, '', $migrationsDir);
-        Artisan::call('migrate', ['--path' => $relative, '--force' => true]);
+        $exitCode = Artisan::call('migrate', ['--path' => $relative, '--force' => true]);
+        if ($exitCode !== 0) {
+            throw new RuntimeException("Plugin '{$manifest->slug}' migrations failed: " . trim(Artisan::output()));
+        }
 
         return $relative;
     }
