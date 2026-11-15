@@ -20,6 +20,7 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
       - name: Setup PHP 8.3
         uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
         with:
@@ -30,16 +31,16 @@ jobs:
       - name: Copy environment
         run: cp .env.example .env
 
+      - name: Prepare writable directories
+        run: |
+          mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache
+          chmod -R 775 storage bootstrap/cache
+
       - name: Install Composer dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
 
       - name: Generate application key
         run: php artisan key:generate
-
-      - name: Prepare writable directories
-        run: |
-          mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache
-          chmod -R 775 storage bootstrap/cache
 
       - name: Execute Laravel tests
         env:
