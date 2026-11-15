@@ -175,23 +175,207 @@ class BackupService
         }
 
         $dbSnapshot = json_decode($dbRaw, true, 512, JSON_THROW_ON_ERROR);
-        DB::transaction(function () use ($dbSnapshot): void {
-            foreach ((array) ($dbSnapshot['tables'] ?? []) as $table => $rows) {
-                if (!is_string($table) || !Schema::hasTable($table) || $table === 'migrations') {
-                    continue;
-                }
-                DB::table($table)->delete();
-                foreach (array_chunk((array) $rows, 200) as $chunk) {
-                    DB::table($table)->insert($chunk);
-                }
-            }
-        });
+        $stagedPrivateFiles = $this->stagePrivateFiles($zip, $manifest);
 
-        $zip->close();
-        @unlink($tempZip);
+        try {
+            DB::transaction(function () use ($dbSnapshot): void {
+                foreach ((array) ($dbSnapshot['tables'] ?? []) as $table => $rows) {
+                    if (!is_string($table) || !Schema::hasTable($table) || $table === 'migrations') {
+                        continue;
+                    }
+                    DB::table($table)->delete();
+                    foreach (array_chunk((array) $rows, 200) as $chunk) {
+                        DB::table($table)->insert($chunk);
+                    }
+                }
+            });
+
+            if ($stagedPrivateFiles !== null) {
+                // Restore files by merging the snapshot; unrelated files are never deleted.
+                $this->restoreStagedPrivateFiles($stagedPrivateFiles);
+            }
+        } finally {
+            $zip->close();
+            @unlink($tempZip);
+            if ($stagedPrivateFiles !== null) {
+                $this->deleteDirectoryTree($stagedPrivateFiles);
+            }
+        }
+
         $this->audit->log('backup.restored', 'backup', (string) $backup->id, ['filename' => $backup->filename], $actorId);
     }
 
+
+
+    /**
+     * Extract private files into an isolated staging directory after validating every ZIP entry.
+     */
+    private function stagePrivateFiles(ZipArchive $zip, array $manifest): ?string
+    {
+        $includesFiles = (bool) ($manifest['includes_files'] ?? false);
+        $stagingDir = storage_path('app/restore-staging/' . Str::uuid()->toString());
+        $seen = [];
+        $totalBytes = 0;
+        $fileCount = 0;
+
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $name = (string) $zip->getNameIndex($i);
+            if ($name === 'database.json' || $name === 'manifest.json') {
+                continue;
+            }
+            if (!str_starts_with($name, 'private-files/')) {
+                throw new RuntimeException("Unexpected entry in backup archive: {$name}");
+            }
+            if (!$includesFiles) {
+                throw new RuntimeException('Backup archive contains private files but its manifest says files were excluded.');
+            }
+
+            $relative = substr($name, strlen('private-files/'));
+            $normalized = str_replace('\\\\', '/', $relative);
+            $segments = explode('/', $normalized);
+            if ($relative === ''
+                || str_contains($relative, "\0")
+                || str_contains($relative, '\\\\')
+                || str_starts_with($normalized, '/')
+                || preg_match('/^[a-zA-Z]:/', $normalized) === 1
+                || in_array('..', $segments, true)
+                || in_array('.', $segments, true)
+            ) {
+                throw new RuntimeException("Unsafe private file path in backup: {$name}");
+            }
+
+            if (isset($seen[$normalized])) {
+                throw new RuntimeException("Duplicate private file in backup: {$name}");
+            }
+            $seen[$normalized] = true;
+
+            $stat = $zip->statIndex($i);
+            $attributes = (int) ($stat['external_attributes'] ?? 0);
+            if ((($attributes >> 16) & 0xF000) === 0xA000) {
+                throw new RuntimeException("Symlink entry rejected in backup: {$name}");
+            }
+
+            $size = (int) ($stat['size'] ?? 0);
+            $totalBytes += $size;
+            if (++$fileCount > 5000 || $size > 268435456 || $totalBytes > 1073741824) {
+                throw new RuntimeException('Private files in backup exceed the allowed size or file count.');
+            }
+
+            if (str_ends_with($normalized, '/')) {
+                continue;
+            }
+
+            $contents = $zip->getFromIndex($i);
+            if ($contents === false || strlen($contents) !== $size) {
+                throw new RuntimeException("Unable to read private file from backup: {$name}");
+            }
+
+            $destination = $stagingDir . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $normalized);
+            $parent = dirname($destination);
+            if (!is_dir($parent) && !mkdir($parent, 0700, true) && !is_dir($parent)) {
+                throw new RuntimeException('Unable to create private restore staging directory.');
+            }
+            if (file_put_contents($destination, $contents, LOCK_EX) === false) {
+                throw new RuntimeException("Unable to stage private file from backup: {$name}");
+            }
+            @chmod($destination, 0600);
+        }
+
+        if (!$includesFiles) {
+            return null;
+        }
+
+        if (!is_dir($stagingDir) && !mkdir($stagingDir, 0700, true) && !is_dir($stagingDir)) {
+            throw new RuntimeException('Unable to create private restore staging directory.');
+        }
+
+        return $stagingDir;
+    }
+
+    /**
+     * Merge staged private files into the private storage root without following symlinks.
+     */
+    private function restoreStagedPrivateFiles(string $stagingDir): void
+    {
+        $privateDir = (string) config('lms.private_storage_path');
+        if ($privateDir === '' || is_link($privateDir)) {
+            throw new RuntimeException('Private storage path is invalid or is a symbolic link.');
+        }
+        if (!is_dir($privateDir) && !mkdir($privateDir, 0700, true) && !is_dir($privateDir)) {
+            throw new RuntimeException('Unable to create private storage directory.');
+        }
+
+        $realPrivateDir = realpath($privateDir);
+        if ($realPrivateDir === false) {
+            throw new RuntimeException('Unable to resolve private storage directory.');
+        }
+
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($stagingDir, FilesystemIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::SELF_FIRST
+        );
+
+        foreach ($iterator as $item) {
+            $relative = ltrim(str_replace($stagingDir, '', $item->getPathname()), DIRECTORY_SEPARATOR);
+            $segments = explode(DIRECTORY_SEPARATOR, $relative);
+            $current = $realPrivateDir;
+            foreach ($segments as $index => $segment) {
+                $current .= DIRECTORY_SEPARATOR . $segment;
+                if (is_link($current)) {
+                    throw new RuntimeException('Refusing to restore through a symbolic link in private storage.');
+                }
+                if ($index < count($segments) - 1 && file_exists($current) && !is_dir($current)) {
+                    throw new RuntimeException('Private restore path conflicts with an existing file.');
+                }
+            }
+
+            if ($item->isDir()) {
+                if (!is_dir($current) && !mkdir($current, 0700, true) && !is_dir($current)) {
+                    throw new RuntimeException('Unable to create private storage subdirectory.');
+                }
+                continue;
+            }
+
+            $parent = dirname($current);
+            if (!is_dir($parent) && !mkdir($parent, 0700, true) && !is_dir($parent)) {
+                throw new RuntimeException('Unable to create private storage directory.');
+            }
+
+            $temporary = tempnam($parent, '.aec-restore-');
+            if ($temporary === false) {
+                throw new RuntimeException('Unable to allocate temporary private restore file.');
+            }
+            try {
+                if (!copy($item->getPathname(), $temporary) || !rename($temporary, $current)) {
+                    throw new RuntimeException('Unable to atomically restore private file.');
+                }
+                @chmod($current, 0600);
+            } finally {
+                if (is_file($temporary)) {
+                    @unlink($temporary);
+                }
+            }
+        }
+    }
+
+    private function deleteDirectoryTree(string $directory): void
+    {
+        if (!is_dir($directory) || is_link($directory)) {
+            return;
+        }
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($directory, FilesystemIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::CHILD_FIRST
+        );
+        foreach ($iterator as $item) {
+            if ($item->isDir() && !$item->isLink()) {
+                @rmdir($item->getPathname());
+            } else {
+                @unlink($item->getPathname());
+            }
+        }
+        @rmdir($directory);
+    }
 
     /**
      * Resolve backup files only from the configured private backup directory.
