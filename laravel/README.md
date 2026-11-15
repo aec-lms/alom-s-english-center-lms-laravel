@@ -67,6 +67,7 @@ Requirements: PHP 8.3+, Composer 2 and the PHP extensions needed by Laravel and 
 ```bash
 cp .env.example .env
 composer install
+php artisan key:generate
 ```
 
 Configure a **new, empty** MySQL/MariaDB database in `.env`, then run the installer:
@@ -79,7 +80,7 @@ php artisan lms:install \
   --admin-email="ADMIN@YOUR-DOMAIN"
 ```
 
-The command prompts for the administrator password using hidden terminal input. Do not pass passwords on the command line. The installer refuses any database containing existing tables and never drops/truncates a database or imports legacy demo data.
+The command prompts for the administrator password using hidden terminal input. Do not pass passwords on the command line. The initial `key:generate` provides a bootstrap key for Laravel's encrypted browser session; the fresh installer then creates and persists new final encryption/signing keys. The installer refuses any database containing existing tables and never drops/truncates a database or imports legacy demo data.
 
 Synchronize the plugin catalog and run tests:
 
