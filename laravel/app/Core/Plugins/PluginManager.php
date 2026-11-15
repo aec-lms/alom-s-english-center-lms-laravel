@@ -7,6 +7,7 @@ namespace App\Core\Plugins;
 use App\Core\Contracts\PluginInterface;
 use App\Core\Events\PluginLifecycleEvent;
 use App\Core\Security\AuditLogger;
+use App\Core\Versioning\VersionConstraint;
 use App\Models\Permission;
 use App\Models\PluginRecord;
 use App\Models\PluginSetting;
@@ -83,12 +84,10 @@ class PluginManager
 
     public function isCompatible(PluginManifest $manifest): bool
     {
-        $coreVersion = (string) config('lms.core_version', '2.0.0');
-        $major = explode('.', $coreVersion)[0] ?? '2';
-        $constraint = ltrim($manifest->coreCompatibility, '^~>= ');
-        $requiredMajor = explode('.', $constraint)[0] ?? $major;
-
-        return $major === $requiredMajor;
+        return VersionConstraint::matches(
+            (string) config('lms.core_version', '2.0.0'),
+            $manifest->coreCompatibility
+        );
     }
 
     public function assertDependenciesSatisfied(PluginManifest $manifest, bool $requireEnabled = false): void
