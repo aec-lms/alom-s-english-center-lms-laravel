@@ -51,6 +51,7 @@ class FreshInstallerTest extends TestCase
         $hadEnv = is_file($envPath);
         $originalEnv = $hadEnv ? file_get_contents($envPath) : null;
         $originalMode = $hadEnv ? (fileperms($envPath) & 0777) : 0600;
+        $privatePath = sys_get_temp_dir() . '/aec-installer-private-' . uniqid('', true);
 
         if (!$hadEnv) {
             file_put_contents($envPath, "APP_KEY=\n");
@@ -65,6 +66,7 @@ class FreshInstallerTest extends TestCase
             ],
             'database.default' => 'installer_test',
             'lms.install_lock_path' => $this->tempLockPath,
+            'lms.private_storage_path' => $privatePath,
         ]);
         DB::purge('installer_test');
         DB::setDefaultConnection('installer_test');
@@ -80,6 +82,8 @@ class FreshInstallerTest extends TestCase
 
             $this->assertSame(['admin_id', 'lock_path'], array_keys($result));
             $this->assertFileExists($this->tempLockPath);
+            $this->assertDirectoryExists($privatePath);
+            $this->assertTrue(is_writable($privatePath));
             $this->assertTrue(app(FreshInstallerService::class)->isInstalled());
 
             $admin = User::query()->where('email', 'fresh-admin@aec.test')->firstOrFail();
@@ -96,6 +100,7 @@ class FreshInstallerTest extends TestCase
             $this->assertSame(32, strlen((string) base64_decode((string) config('lms.backup_encryption_key'), true)));
         } finally {
             DB::disconnect('installer_test');
+            @rmdir($privatePath);
             DB::setDefaultConnection($originalDefault);
             config([
                 'database.default' => $originalDefault,
