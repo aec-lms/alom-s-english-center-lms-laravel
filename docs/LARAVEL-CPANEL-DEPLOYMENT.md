@@ -79,6 +79,7 @@ mkdir -p storage/framework/cache/data storage/framework/sessions storage/framewo
 mkdir -p storage/logs bootstrap/cache
 chmod -R 775 storage bootstrap/cache
 composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction
+php artisan key:generate
 ```
 
 Edit `.env` with the actual production values:
@@ -93,7 +94,7 @@ Edit `.env` with the actual production values:
 - `SESSION_SECURE_COOKIE=true`
 - `AEC_PRIVATE_STORAGE_PATH` set to an absolute private path outside the public document root (recommended), or keep the Laravel private storage path only if the entire application root is outside the document root.
 
-Keep `.env` mode 0600 and never commit, email, paste or expose it. The installer generates fresh `APP_KEY`, `AEC_PLUGIN_SIGNING_KEY` and `AEC_BACKUP_ENCRYPTION_KEY`, writes them to `.env`, and updates the running Laravel configuration. Preserve a secure off-host copy of the final `.env` as part of disaster recovery; encrypted backups cannot be decrypted if the backup key is lost.
+Keep `.env` mode 0600 and never commit, email, paste or expose it. Run `php artisan key:generate` once before opening the browser installer so Laravel can encrypt its initial session/CSRF cookies. The installer then rotates this bootstrap key and generates fresh final `APP_KEY`, `AEC_PLUGIN_SIGNING_KEY` and `AEC_BACKUP_ENCRYPTION_KEY`, writes them to `.env`, and updates the running Laravel configuration. Preserve a secure off-host copy of the final `.env` as part of disaster recovery; encrypted backups cannot be decrypted if the backup key is lost.
 
 ## 5. Install on a brand-new empty database only
 
