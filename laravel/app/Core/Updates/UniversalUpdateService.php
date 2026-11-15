@@ -52,9 +52,36 @@ class UniversalUpdateService
             throw new RuntimeException('Unable to open update archive.');
         }
 
+        if ($zip->numFiles > 5000) {
+            $zip->close();
+            throw new RuntimeException('Update archive contains too many entries.');
+        }
+
+        $totalUncompressedBytes = 0;
+        $seenEntries = [];
         for ($i = 0; $i < $zip->numFiles; $i++) {
             $entryName = (string) $zip->getNameIndex($i);
             $this->assertSafeZipEntryPath($entryName);
+            if (isset($seenEntries[$entryName])) {
+                $zip->close();
+                throw new RuntimeException("Duplicate ZIP entry rejected: {$entryName}");
+            }
+            $seenEntries[$entryName] = true;
+
+            $stat = $zip->statIndex($i);
+            $entrySize = (int) ($stat['size'] ?? 0);
+            $totalUncompressedBytes += $entrySize;
+            if ($entrySize > 268435456 || $totalUncompressedBytes > 1073741824) {
+                $zip->close();
+                throw new RuntimeException('Update archive exceeds the allowed uncompressed size.');
+            }
+
+            $attributes = (int) ($stat['external_attributes'] ?? 0);
+            $fileType = ($attributes >> 16) & 0xF000;
+            if ($fileType === 0xA000) {
+                $zip->close();
+                throw new RuntimeException("Symlink entry rejected in update ZIP: {$entryName}");
+            }
         }
 
         $manifestRaw = $zip->getFromName('update-manifest.json');
@@ -74,17 +101,30 @@ class UniversalUpdateService
         $toVersion = trim((string) ($manifest['version'] ?? ''));
         $fromVersion = null;
 
-        if ($targetSlug === '' || $toVersion === '') {
-            throw new RuntimeException('Update manifest must specify target_slug and version.');
+        if (!in_array($targetType, ['plugin', 'core'], true)) {
+            throw new RuntimeException('Update manifest target_type must be either plugin or core.');
+        }
+        if ($targetSlug === '' || preg_match('/^[a-z0-9][a-z0-9-]{1,79}$/', $targetSlug) !== 1 || $toVersion === '') {
+            throw new RuntimeException('Update manifest must specify a valid target_slug and version.');
         }
 
         if ($targetType === 'plugin') {
-            $plugin = PluginRecord::query()->where('slug', $targetSlug)->first();
-            $fromVersion = $plugin?->version;
+            $plugin = PluginRecord::query()
+                ->where('slug', $targetSlug)
+                ->where('is_installed', true)
+                ->first();
+            if (!$plugin) {
+                throw new RuntimeException("Plugin update target '{$targetSlug}' is not installed.");
+            }
+            $fromVersion = $plugin->version;
             if (!$this->coreVersionMatches((string) ($manifest['core_compatibility'] ?? '^2.0'))) {
                 throw new RuntimeException("Plugin update {$targetSlug} is incompatible with Core.");
             }
         } else {
+            $coreSlug = (string) config('plugins.core_identifier', 'aec-lms-core');
+            if ($targetSlug !== $coreSlug) {
+                throw new RuntimeException("Core update target must be '{$coreSlug}'.");
+            }
             $fromVersion = (string) config('lms.core_version', '2.0.0');
         }
 
@@ -229,7 +269,16 @@ class UniversalUpdateService
 
     private function assertSafeZipEntryPath(string $entryName): void
     {
-        if ($entryName === '' || str_contains($entryName, "\0") || str_contains($entryName, '..') || str_starts_with($entryName, '/') || str_starts_with($entryName, '\\')) {
+        $normalized = str_replace('\\\\', '/', $entryName);
+        $segments = explode('/', $normalized);
+        if ($entryName === ''
+            || str_contains($entryName, "\0")
+            || str_contains($entryName, '\\\\')
+            || str_starts_with($normalized, '/')
+            || preg_match('/^[a-zA-Z]:/', $normalized) === 1
+            || in_array('..', $segments, true)
+            || in_array('.', $segments, true)
+        ) {
             throw new RuntimeException("Unsafe ZIP path detected: {$entryName}");
         }
     }
