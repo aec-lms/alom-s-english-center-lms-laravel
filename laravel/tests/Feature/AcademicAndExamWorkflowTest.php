@@ -71,6 +71,42 @@ class AcademicAndExamWorkflowTest extends TestCase
         $this->actingAs($unassignedManager)->get('/admin/students')->assertForbidden();
     }
 
+
+    public function test_branch_manager_cannot_create_or_delete_teachers_outside_their_branch(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'teacher-management']);
+
+        $branchA = DB::table('branches')->insertGetId(['code' => 'TCH-A', 'name' => 'Teacher Branch A', 'created_at' => now(), 'updated_at' => now()]);
+        $branchB = DB::table('branches')->insertGetId(['code' => 'TCH-B', 'name' => 'Teacher Branch B', 'created_at' => now(), 'updated_at' => now()]);
+
+        $managerA = $this->createUserWithRole('branch_manager', $branchA);
+        $permissionId = Permission::query()->where('slug', 'teachers.manage')->value('id');
+        $managerA->roles()->first()->permissions()->syncWithoutDetaching([$permissionId]);
+
+        $teacherUser = $this->createUserWithRole('teacher', $branchB);
+        $teacher = Teacher::query()->create([
+            'user_id' => $teacherUser->id,
+            'branch_id' => $branchB,
+            'employee_code' => 'TCH-B-001',
+            'specialization' => 'IELTS',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($managerA)->delete('/admin/teachers/' . $teacher->id)->assertForbidden();
+        $this->actingAs($managerA)->post('/admin/teachers', [
+            'name' => 'Cross Branch Teacher',
+            'email' => 'cross.teacher@aec.test',
+            'password' => 'StrongPassword!2026',
+            'branch_id' => $branchB,
+            'employee_code' => 'TCH-X-001',
+            'specialization' => 'IELTS',
+        ])->assertForbidden();
+
+        $this->assertDatabaseHas('teachers', ['id' => $teacher->id, 'branch_id' => $branchB]);
+        $this->assertDatabaseMissing('users', ['email' => 'cross.teacher@aec.test']);
+    }
+
     public function test_attendance_rejects_student_and_batch_from_different_branches(): void
     {
         $this->markSystemInstalled();
