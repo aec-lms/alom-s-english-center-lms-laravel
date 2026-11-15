@@ -38,7 +38,12 @@ class AttendanceController extends Controller
             'remarks' => ['nullable', 'string', 'max:255'],
         ]);
 
-        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $validated['branch_id']) {
+        $student = Student::query()->findOrFail((int) $validated['student_id']);
+        $batch = \\Illuminate\\Support\\Facades\\DB::table('batches')->where('id', (int) $validated['batch_id'])->first();
+        if (!$batch || (int) $student->branch_id !== (int) $validated['branch_id'] || (int) $batch->branch_id !== (int) $student->branch_id) {
+            abort(422, 'Student, batch and attendance branch must match.');
+        }
+        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $student->branch_id) {
             abort(403, 'Branch isolation violation.');
         }
 
@@ -49,7 +54,7 @@ class AttendanceController extends Controller
                 'attendance_date' => $validated['attendance_date'],
             ],
             [
-                'branch_id' => (int) $validated['branch_id'],
+                'branch_id' => (int) $student->branch_id,
                 'status' => $validated['status'],
                 'remarks' => $validated['remarks'] ?? null,
                 'marked_by' => $actor?->id,
