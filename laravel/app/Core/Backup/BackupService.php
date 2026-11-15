@@ -21,8 +21,11 @@ class BackupService
     public function createEncryptedBackup(?int $actorId = null, bool $includePrivateFiles = true): BackupRecord
     {
         $backupDir = (string) config('lms.backup_path');
-        if (!is_dir($backupDir)) {
-            mkdir($backupDir, 0750, true);
+        if (is_link($backupDir)) {
+            throw new RuntimeException('Backup storage directory must not be a symbolic link.');
+        }
+        if (!is_dir($backupDir) && !mkdir($backupDir, 0750, true) && !is_dir($backupDir)) {
+            throw new RuntimeException('Unable to create private backup storage directory.');
         }
 
         $key = $this->resolveEncryptionKey();
@@ -47,6 +50,11 @@ class BackupService
 
         if ($includePrivateFiles) {
             $privateDir = (string) config('lms.private_storage_path');
+            if (is_link($privateDir)) {
+                $zip->close();
+                @unlink($archivePath);
+                throw new RuntimeException('Private storage directory must not be a symbolic link.');
+            }
             if (is_dir($privateDir)) {
                 $this->addDirectoryToZip($zip, $privateDir, 'private-files');
             }
@@ -449,7 +457,7 @@ class BackupService
             new \RecursiveDirectoryIterator($sourceDir, \FilesystemIterator::SKIP_DOTS)
         );
         foreach ($iterator as $file) {
-            if ($file->isFile()) {
+            if ($file->isFile() && !$file->isLink()) {
                 $relative = ltrim(str_replace($sourceDir, '', $file->getPathname()), DIRECTORY_SEPARATOR);
                 $zip->addFile($file->getPathname(), $zipPrefix . '/' . str_replace('\\', '/', $relative));
             }
