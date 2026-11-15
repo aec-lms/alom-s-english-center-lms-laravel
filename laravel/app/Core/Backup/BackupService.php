@@ -26,7 +26,7 @@ class BackupService
 
         $key = $this->resolveEncryptionKey();
         $timestamp = now()->format('Ymd-His');
-        $archivePath = $backupDir . DIRECTORY_SEPARATOR . "aec-backup-{$timestamp}.zip";
+        $archivePath = $backupDir . DIRECTORY_SEPARATOR . "aec-backup-{$timestamp}-" . Str::lower(Str::random(8)) . '.zip';
         $encryptedPath = $archivePath . '.enc';
 
         $snapshot = $this->exportDatabaseSnapshot();
@@ -64,9 +64,32 @@ class BackupService
             throw new RuntimeException('Backup encryption failed.');
         }
         $hmac = hash_hmac('sha256', $iv . $ciphertext, $key, true);
-        file_put_contents($encryptedPath, $hmac . $iv . $ciphertext);
+        $temporaryEncryptedPath = tempnam($backupDir, '.aec-backup-');
+        if ($temporaryEncryptedPath === false) {
+            throw new RuntimeException('Unable to allocate temporary encrypted backup file.');
+        }
 
-        $checksum = hash_file('sha256', $encryptedPath) ?: '';
+        try {
+            $written = file_put_contents($temporaryEncryptedPath, $hmac . $iv . $ciphertext, LOCK_EX);
+            if ($written === false) {
+                throw new RuntimeException('Unable to write encrypted backup file.');
+            }
+            @chmod($temporaryEncryptedPath, 0600);
+            if (!rename($temporaryEncryptedPath, $encryptedPath)) {
+                throw new RuntimeException('Unable to atomically publish encrypted backup file.');
+            }
+            @chmod($encryptedPath, 0600);
+        } finally {
+            if (is_file($temporaryEncryptedPath)) {
+                @unlink($temporaryEncryptedPath);
+            }
+        }
+
+        $checksum = hash_file('sha256', $encryptedPath);
+        if ($checksum === false) {
+            @unlink($encryptedPath);
+            throw new RuntimeException('Unable to calculate encrypted backup checksum.');
+        }
         $record = BackupRecord::query()->create([
             'filename' => basename($encryptedPath),
             'storage_path' => $encryptedPath,
@@ -86,10 +109,15 @@ class BackupService
 
     public function verifyBackupIntegrity(BackupRecord $backup): bool
     {
-        if (!is_file($backup->storage_path)) {
+        $backupPath = $this->resolveBackupPath($backup);
+        if ($backupPath === null || !is_file($backupPath) || is_link($backupPath)) {
             return false;
         }
-        return hash_equals($backup->checksum_sha256, (string) hash_file('sha256', $backup->storage_path));
+
+        $checksum = hash_file('sha256', $backupPath);
+        return is_string($checksum)
+            && preg_match('/^[a-f0-9]{64}$/i', (string) $backup->checksum_sha256) === 1
+            && hash_equals(strtolower((string) $backup->checksum_sha256), strtolower($checksum));
     }
 
     public function restoreEncryptedBackup(BackupRecord $backup, ?int $actorId = null): void
@@ -99,7 +127,8 @@ class BackupService
         }
 
         $key = $this->resolveEncryptionKey();
-        $blob = file_get_contents($backup->storage_path);
+        $safeBackupPath = $this->resolveBackupPath($backup);
+        $blob = $safeBackupPath === null ? false : file_get_contents($safeBackupPath);
         if ($blob === false || strlen($blob) < 49) {
             throw new RuntimeException('Corrupted or unreadable backup file.');
         }
@@ -160,6 +189,43 @@ class BackupService
         $zip->close();
         @unlink($tempZip);
         $this->audit->log('backup.restored', 'backup', (string) $backup->id, ['filename' => $backup->filename], $actorId);
+    }
+
+
+    /**
+     * Resolve backup files only from the configured private backup directory.
+     * Database-controlled paths must never be allowed to read arbitrary server files.
+     */
+    private function resolveBackupPath(BackupRecord $backup): ?string
+    {
+        $backupDir = (string) config('lms.backup_path');
+        if ($backupDir === '' || !is_dir($backupDir)) {
+            return null;
+        }
+
+        $realBackupDir = realpath($backupDir);
+        $filename = (string) $backup->filename;
+        $storagePath = (string) $backup->storage_path;
+
+        if ($realBackupDir === false
+            || $filename === ''
+            || basename($filename) !== $filename
+            || !str_ends_with($filename, '.zip.enc')
+            || $storagePath === ''
+            || is_link($storagePath)
+        ) {
+            return null;
+        }
+
+        $realFile = realpath($storagePath);
+        if ($realFile === false
+            || dirname($realFile) !== $realBackupDir
+            || basename($realFile) !== $filename
+        ) {
+            return null;
+        }
+
+        return $realFile;
     }
 
     private function resolveEncryptionKey(): string
