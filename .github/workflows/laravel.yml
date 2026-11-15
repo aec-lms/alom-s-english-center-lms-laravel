@@ -80,7 +80,6 @@ jobs:
           if missing:
               raise SystemExit(f"Release package missing required files: {sorted(missing)}")
           forbidden = [
-              ".env",
               "storage/app/installed.lock",
               "storage/app/backups/",
               "storage/app/private/",
@@ -90,12 +89,18 @@ jobs:
               "storage/app/update-staging/",
               "storage/app/update-snapshots/",
               ".git/",
+              "node_modules/",
           ]
           leaked = [
               name for name in files
-              if name in forbidden or any(name.startswith(prefix) for prefix in forbidden if prefix.endswith("/"))
+              if any(name.startswith(prefix) for prefix in forbidden)
           ]
-          if leaked:
-              raise SystemExit(f"Release package contains private/runtime data: {sorted(leaked)}")
+          env_leaks = [
+              name for name in files
+              if name.rsplit("/", 1)[-1].startswith(".env")
+              and name.rsplit("/", 1)[-1] != ".env.example"
+          ]
+          if leaked or env_leaks:
+              raise SystemExit(f"Release package contains private/runtime data: {sorted(leaked + env_leaks)}")
           print(f"Verified {len(files)} files in {archive}")
           PY
