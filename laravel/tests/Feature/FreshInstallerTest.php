@@ -8,6 +8,7 @@ use App\Core\Installer\FreshInstallerService;
 use App\Models\SystemSetting;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use PDO;
 use RuntimeException;
 use Tests\TestCase;
