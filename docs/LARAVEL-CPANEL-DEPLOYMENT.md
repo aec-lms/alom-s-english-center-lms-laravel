@@ -89,6 +89,7 @@ Edit `.env` with the actual production values:
 - `DB_CONNECTION=mysql`
 - `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`
 - SMTP settings under `MAIL_*`
+- `SESSION_DRIVER=file` and `CACHE_STORE=file` for the initial empty-database install (the provided `.env.example` uses these safe pre-install defaults). Switch to database-backed sessions/cache only after the Core migrations have completed.
 - `SESSION_SECURE_COOKIE=true`
 - `AEC_PRIVATE_STORAGE_PATH` set to an absolute private path outside the public document root (recommended), or keep the Laravel private storage path only if the entire application root is outside the document root.
 
