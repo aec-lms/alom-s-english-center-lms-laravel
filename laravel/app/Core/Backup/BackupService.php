@@ -8,6 +8,7 @@ use App\Core\Security\AuditLogger;
 use App\Models\BackupRecord;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use RuntimeException;
 use ZipArchive;
 
