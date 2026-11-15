@@ -135,6 +135,18 @@ class FreshInstallerTest extends TestCase
         }
     }
 
+
+    public function test_browser_installer_page_uses_file_sessions_before_database_installation(): void
+    {
+        config([
+            'session.driver' => 'file',
+            'cache.default' => 'file',
+            'lms.install_lock_path' => $this->tempLockPath,
+        ]);
+
+        $this->get('/install')->assertOk()->assertSee('Administrator');
+    }
+
     public function test_installer_routes_are_locked_after_installation(): void
     {
         $this->markSystemInstalled();
