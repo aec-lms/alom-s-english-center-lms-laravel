@@ -72,6 +72,23 @@ class FreshInstallerTest extends TestCase
         DB::setDefaultConnection('installer_test');
 
         try {
+            $unsafePublicPath = public_path('aec-private-leak-' . uniqid('', true));
+            config(['lms.private_storage_path' => $unsafePublicPath]);
+            try {
+                app(FreshInstallerService::class)->installFresh([
+                    'app_name' => 'AEC Installer Test',
+                    'app_url' => 'https://aec.test',
+                    'admin_name' => 'Fresh Admin',
+                    'admin_email' => 'fresh-admin@aec.test',
+                    'admin_password' => 'FreshStrongPassword!2026',
+                ]);
+                $this->fail('Installer accepted a private storage directory inside the public document root.');
+            } catch (RuntimeException $exception) {
+                $this->assertStringContainsString('outside the public web document root', $exception->getMessage());
+            }
+            $this->assertDirectoryDoesNotExist($unsafePublicPath);
+
+            config(['lms.private_storage_path' => $privatePath]);
             $result = app(FreshInstallerService::class)->installFresh([
                 'app_name' => 'AEC Installer Test',
                 'app_url' => 'https://aec.test',
