@@ -1,0 +1,51 @@
+name: Generate Laravel Composer Lock
+
+on:
+  push:
+    branches: ["fix/laravel-ci-php83"]
+    paths:
+      - "laravel/composer.json"
+      - ".github/workflows/composer-lock.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  lock-dependencies:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: laravel
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: fix/laravel-ci-php83
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup PHP 8.3 and Composer
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962
+        with:
+          php-version: "8.3"
+          tools: composer:v2
+          coverage: none
+
+      - name: Generate deterministic dependency lock
+        run: composer update --no-install --no-interaction --prefer-dist --no-progress
+
+      - name: Commit Composer lock file
+        working-directory: .
+        run: |
+          if [ ! -f laravel/composer.lock ]; then
+            echo "Composer did not generate laravel/composer.lock"
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add laravel/composer.lock
+          if git diff --cached --quiet; then
+            echo "Composer lock file is already current."
+            exit 0
+          fi
+          git commit -m "chore: lock Laravel dependencies [skip ci]"
+          git push origin HEAD:fix/laravel-ci-php83
