@@ -181,45 +181,59 @@ class PluginManager
 
         $record = PluginRecord::query()->where('slug', $slug)->first();
         $fromVersion = $record?->version ?? '0.0.0';
+        if ($record && $record->is_installed && version_compare($manifest->version, $fromVersion, '<=')) {
+            throw new RuntimeException('Plugin update version must be newer than the installed version.');
+        }
 
-        $this->runPluginMigrations($manifest);
+        $migratedRelative = $this->runPluginMigrations($manifest);
 
-        $updated = DB::transaction(function () use ($manifest, $fromVersion, $actorId): PluginRecord {
-            $record = PluginRecord::query()->updateOrCreate(
-                ['slug' => $manifest->slug],
-                [
-                    'name' => $manifest->name,
-                    'version' => $manifest->version,
-                    'author' => $manifest->author,
-                    'category' => $manifest->category,
-                    'description' => $manifest->description,
-                    'core_compatibility' => $manifest->coreCompatibility,
-                    'dependencies' => $manifest->dependencies,
-                    'manifest_snapshot' => $manifest->toArray(),
-                    'is_installed' => true,
-                    'installed_at' => now(),
-                ]
-            );
+        try {
+            $updated = DB::transaction(function () use ($manifest, $fromVersion, $actorId): PluginRecord {
+                $record = PluginRecord::query()->updateOrCreate(
+                    ['slug' => $manifest->slug],
+                    [
+                        'name' => $manifest->name,
+                        'version' => $manifest->version,
+                        'author' => $manifest->author,
+                        'category' => $manifest->category,
+                        'description' => $manifest->description,
+                        'core_compatibility' => $manifest->coreCompatibility,
+                        'dependencies' => $manifest->dependencies,
+                        'manifest_snapshot' => $manifest->toArray(),
+                        'is_installed' => true,
+                        'installed_at' => now(),
+                    ]
+                );
 
-            $this->syncManifestPermissions($manifest);
+                $this->syncManifestPermissions($manifest);
 
-            $this->logPluginOperation(
-                $manifest->slug,
-                $fromVersion,
-                $manifest->version,
-                'applied',
-                'Plugin updated and migrations synchronized from manifest.',
-                $actorId,
-                hash('sha256', json_encode($manifest->toArray(), JSON_THROW_ON_ERROR))
-            );
+                $this->logPluginOperation(
+                    $manifest->slug,
+                    $fromVersion,
+                    $manifest->version,
+                    'applied',
+                    'Plugin updated and migrations synchronized from manifest.',
+                    $actorId,
+                    hash('sha256', json_encode($manifest->toArray(), JSON_THROW_ON_ERROR))
+                );
 
-            $this->audit->log('plugin.updated', 'plugin', $manifest->slug, [
-                'from_version' => $fromVersion,
-                'to_version' => $manifest->version,
-            ], $actorId);
+                $this->audit->log('plugin.updated', 'plugin', $manifest->slug, [
+                    'from_version' => $fromVersion,
+                    'to_version' => $manifest->version,
+                ], $actorId);
 
-            return $record;
-        });
+                return $record;
+            });
+        } catch (Throwable $e) {
+            if ($migratedRelative !== null) {
+                try {
+                    Artisan::call('migrate:rollback', ['--path' => $migratedRelative, '--force' => true]);
+                } catch (Throwable) {
+                    // Preserve the original update exception; MySQL DDL may require manual recovery.
+                }
+            }
+            throw $e;
+        }
 
         event(new PluginLifecycleEvent('updated', $manifest->slug, $manifest->version, $actorId, ['from_version' => $fromVersion]));
 
@@ -635,9 +649,29 @@ class PluginManager
             return null;
         }
 
+        $migrationFiles = glob($migrationsDir . DIRECTORY_SEPARATOR . '*.php') ?: [];
+        if ($migrationFiles === []) {
+            return null;
+        }
+
+        if (Schema::hasTable('migrations')) {
+            $applied = DB::table('migrations')->pluck('migration')->all();
+            $pending = array_filter($migrationFiles, static function (string $file) use ($applied): bool {
+                return !in_array(pathinfo($file, PATHINFO_FILENAME), $applied, true);
+            });
+            if ($pending === []) {
+                return null;
+            }
+        }
+
         $relative = str_replace(base_path() . DIRECTORY_SEPARATOR, '', $migrationsDir);
         $exitCode = Artisan::call('migrate', ['--path' => $relative, '--force' => true]);
         if ($exitCode !== 0) {
+            try {
+                Artisan::call('migrate:rollback', ['--path' => $relative, '--force' => true]);
+            } catch (Throwable) {
+                // The original migration failure is more useful; MySQL DDL may need manual recovery.
+            }
             throw new RuntimeException("Plugin '{$manifest->slug}' migrations failed: " . trim(Artisan::output()));
         }
 
