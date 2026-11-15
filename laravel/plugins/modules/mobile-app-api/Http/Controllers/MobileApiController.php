@@ -74,6 +74,18 @@ class MobileApiController extends Controller
                 ->get(['id', 'type', 'slug', 'title', 'category', 'badge', 'price', 'original_price', 'is_free', 'thumbnail_path', 'pdf_thumbnail_path', 'download_url'])
             : collect();
 
+        $ebooks = Schema::hasTable('storefront_items')
+            ? DB::table('storefront_items')->where('type', 'ebook')->where('is_active', true)->orderByDesc('id')->limit(12)->get()
+            : collect();
+
+        $products = Schema::hasTable('storefront_items')
+            ? DB::table('storefront_items')->where('type', 'product')->where('is_active', true)->orderByDesc('id')->limit(12)->get()
+            : collect();
+
+        $notices = Schema::hasTable('notices')
+            ? DB::table('notices')->orderByDesc('id')->limit(12)->get()
+            : collect();
+
         $stats = [
             'students' => Schema::hasTable('students') ? DB::table('students')->count() : 0,
             'courses' => Schema::hasTable('courses') ? DB::table('courses')->where('status', 'published')->count() : 0,
@@ -85,6 +97,9 @@ class MobileApiController extends Controller
             'brand' => "Alom's English Center",
             'sliders' => $sliders,
             'courses' => $courses,
+            'ebooks' => $ebooks,
+            'products' => $products,
+            'notices' => $notices,
             'digital_carousel' => $carouselItems,
             'stats' => $stats,
             'apps' => [
