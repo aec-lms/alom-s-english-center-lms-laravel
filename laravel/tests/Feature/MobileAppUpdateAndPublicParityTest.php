@@ -95,14 +95,14 @@ class MobileAppUpdateAndPublicParityTest extends TestCase
         $zip->close();
 
         $sha = hash_file('sha256', $zipPath);
-        $hmac = hash_hmac('sha256', $sha . '|core|aec-lms-core|2.1.0', (string) config('lms.plugin_signing_key'));
+        $hmac = hash_hmac('sha256', $sha, (string) config('lms.plugin_signing_key'));
 
         $updates = app(UniversalUpdateService::class);
 
         try {
             $this->expectException(RuntimeException::class);
-            $this->expectExceptionMessage('unsafe path traversal');
-            $updates->applySignedUpdate($zipPath, $sha, $hmac, null);
+            $this->expectExceptionMessage('Unsafe ZIP path detected');
+            $updates->applyVerifiedUpdate($zipPath, $sha, $hmac, null);
         } finally {
             @unlink($zipPath);
         }
