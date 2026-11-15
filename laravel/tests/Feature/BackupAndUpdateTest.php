@@ -142,6 +142,28 @@ class BackupAndUpdateTest extends TestCase
         }
     }
 
+
+    public function test_update_feed_rejects_insecure_and_private_hosts(): void
+    {
+        $this->markSystemInstalled();
+        $updates = app(UniversalUpdateService::class);
+
+        foreach ([
+            'http://updates.example.com/feed.json',
+            'https://127.0.0.1/feed.json',
+            'https://localhost/feed.json',
+            'https://updates.internal/feed.json',
+            'https://updates.example.com/feed.json?token=secret',
+        ] as $unsafeUrl) {
+            try {
+                $updates->saveRemoteFeedUrl($unsafeUrl);
+                $this->fail("Unsafe update feed URL was accepted: {$unsafeUrl}");
+            } catch (RuntimeException $exception) {
+                $this->assertStringContainsString('Update feed', $exception->getMessage());
+            }
+        }
+    }
+
     public function test_universal_update_rejects_invalid_hmac_signature(): void
     {
         $this->markSystemInstalled();
