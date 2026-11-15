@@ -115,6 +115,61 @@ class PluginLifecycleTest extends TestCase
         $this->assertSame(1, DB::table('cms_pages')->count());
     }
 
+
+    public function test_plugin_catalog_dynamically_autoloads_new_module_namespaces(): void
+    {
+        $this->markSystemInstalled();
+
+        $slug = 'runtime-autoload-probe';
+        $pluginDir = (string) config('plugins.modules_path') . DIRECTORY_SEPARATOR . $slug;
+        $providerDir = $pluginDir . DIRECTORY_SEPARATOR . 'Providers';
+        File::ensureDirectoryExists($providerDir);
+
+        file_put_contents($pluginDir . DIRECTORY_SEPARATOR . 'plugin.json', json_encode([
+            'slug' => $slug,
+            'name' => 'Runtime Autoload Probe',
+            'version' => '1.0.0',
+            'core_compatibility' => '^2.0',
+            'dependencies' => [],
+            'provider' => 'Plugins\\\\Modules\\\\RuntimeAutoloadProbe\\\\Providers\\\\RuntimeAutoloadProbeServiceProvider',
+        ], JSON_THROW_ON_ERROR));
+
+        file_put_contents($providerDir . DIRECTORY_SEPARATOR . 'RuntimeAutoloadProbeServiceProvider.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+namespace Plugins\Modules\RuntimeAutoloadProbe\Providers;
+
+use App\Core\Plugins\BasePluginServiceProvider;
+
+class RuntimeAutoloadProbeServiceProvider extends BasePluginServiceProvider
+{
+    public function slug(): string
+    {
+        return 'runtime-autoload-probe';
+    }
+
+    protected function pluginPath(string $relative = ''): string
+    {
+        return dirname(__DIR__) . ($relative !== '' ? DIRECTORY_SEPARATOR . ltrim($relative, DIRECTORY_SEPARATOR) : '');
+    }
+}
+PHP);
+
+        try {
+            $manifest = app(PluginManager::class)->discoverManifests()[$slug] ?? null;
+            $this->assertNotNull($manifest);
+            $this->assertTrue(class_exists($manifest->providerClass));
+            $this->assertInstanceOf(
+                \App\Core\Contracts\PluginInterface::class,
+                app()->resolveProvider($manifest->providerClass)
+            );
+        } finally {
+            File::deleteDirectory($pluginDir);
+        }
+    }
+
     public function test_zip_uploader_rejects_path_traversal_and_corrupted_checksums(): void
     {
         $this->markSystemInstalled();
