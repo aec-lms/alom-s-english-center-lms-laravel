@@ -13,7 +13,7 @@ The intended production application is Laravel 12 under `/laravel`. The root Goo
 - Pull request: [PR #1](https://github.com/aec-lms/alom-s-english-center-lms-laravel/pull/1)
 - PR is open and unmerged; `main` has not been changed by this work.
 - `laravel/composer.lock` has now been generated and committed by a dedicated GitHub Actions workflow.
-- The most recent fully verified Laravel test run before the latest package-builder/documentation changes passed **35 tests / 182 assertions** on commit `2cba573`.
+- The most recent fully verified Laravel test run before the latest package-builder/documentation changes passed **35 tests / 184 assertions** on commit `ad837aa`.
 - CI now also builds and inspects the cPanel package; the latest run for the newest commits must finish successfully before its result can be recorded.
 
 A green CI run is evidence only for the automated checks that exist. It is not proof of production deployment readiness.
@@ -29,7 +29,7 @@ A green CI run is evidence only for the automated checks that exist. It is not p
 - Student branch isolation checks on create/update.
 - Encrypted backup archive creation, SHA-256/HMAC validation, private backup path validation, private-file staging/restore and foreign-key-aware database restore.
 - Signed update manifest validation, semantic-version checks, target allowlisting, ZIP path/symlink/duplicate/size checks.
-- Reproducible Composer dependency lock and a Laravel-only cPanel package builder with private runtime exclusions.
+- Reproducible Composer dependency lock, Composer vulnerability audit and a Laravel-only cPanel package builder with private runtime exclusions; verified package is published as a short-lived CI artifact.
 - Updated deployment and backup/restore documentation.
 
 ## Plugin catalog — 39 entries
