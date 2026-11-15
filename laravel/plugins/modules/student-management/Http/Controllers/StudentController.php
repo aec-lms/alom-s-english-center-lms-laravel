@@ -95,7 +95,7 @@ class StudentController extends Controller
             'name' => ['required', 'string', 'max:120'],
             'email' => ['required', 'email', 'unique:users,email,' . $student->user_id],
             'phone' => ['nullable', 'string', 'max:32'],
-            'branch_id' => ['nullable', 'integer'],
+            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
             'student_code' => ['required', 'string', 'max:40', 'unique:students,student_code,' . $student->id],
             'status' => ['required', 'in:active,inactive,graduated'],
             'password' => ['nullable', 'string', 'min:8'],
@@ -135,8 +135,13 @@ class StudentController extends Controller
         return back()->with('status', "Student '{$validated['name']}' updated.");
     }
 
-    public function destroy(Student $student): RedirectResponse
+    public function destroy(Request $request, Student $student): RedirectResponse
     {
+        $actor = $request->user();
+        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $student->branch_id) {
+            abort(403, 'Branch isolation violation.');
+        }
+
         $code = $student->student_code;
         $id = (string) $student->id;
         DB::transaction(function () use ($student): void {
