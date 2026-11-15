@@ -667,12 +667,13 @@ class PluginManager
         $relative = str_replace(base_path() . DIRECTORY_SEPARATOR, '', $migrationsDir);
         $exitCode = Artisan::call('migrate', ['--path' => $relative, '--force' => true]);
         if ($exitCode !== 0) {
+            $migrationOutput = trim(Artisan::output());
             try {
                 Artisan::call('migrate:rollback', ['--path' => $relative, '--force' => true]);
             } catch (Throwable) {
                 // The original migration failure is more useful; MySQL DDL may need manual recovery.
             }
-            throw new RuntimeException("Plugin '{$manifest->slug}' migrations failed: " . trim(Artisan::output()));
+            throw new RuntimeException("Plugin '{$manifest->slug}' migrations failed: " . $migrationOutput);
         }
 
         return $relative;
