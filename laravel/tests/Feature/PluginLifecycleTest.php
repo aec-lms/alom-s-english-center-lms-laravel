@@ -131,7 +131,7 @@ class PluginLifecycleTest extends TestCase
             'version' => '1.0.0',
             'core_compatibility' => '^2.0',
             'dependencies' => [],
-            'provider' => 'Plugins\\\\Modules\\\\RuntimeAutoloadProbe\\\\Providers\\\\RuntimeAutoloadProbeServiceProvider',
+            'provider' => 'Plugins\\Modules\\RuntimeAutoloadProbe\\Providers\\RuntimeAutoloadProbeServiceProvider',
         ], JSON_THROW_ON_ERROR));
 
         file_put_contents($providerDir . DIRECTORY_SEPARATOR . 'RuntimeAutoloadProbeServiceProvider.php', <<<'PHP'
