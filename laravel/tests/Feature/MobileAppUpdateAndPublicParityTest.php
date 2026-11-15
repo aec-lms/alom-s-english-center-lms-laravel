@@ -20,6 +20,7 @@ class MobileAppUpdateAndPublicParityTest extends TestCase
             'course-management',
             'exam-management',
             'notice-board',
+            'student-management',
             'certificate-management',
             'cms-website',
             'mobile-app-api',
