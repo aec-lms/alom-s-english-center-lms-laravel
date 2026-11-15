@@ -51,7 +51,10 @@ jobs:
 
       - name: Install locked dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
-\n      - name: Audit generated locked dependencies\n        run: composer audit --locked --no-interaction\n
+
+      - name: Audit generated locked dependencies
+        run: composer audit --locked --no-interaction
+
       - name: Generate application key
         run: php artisan key:generate
 
