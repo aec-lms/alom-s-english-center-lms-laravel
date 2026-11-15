@@ -50,6 +50,7 @@ else
   tar -C "${ROOT_DIR}" \
     --exclude='.git' \
     --exclude='.env' \
+    --exclude='.env.*' \
     --exclude='node_modules' \
     --exclude='tests' \
     --exclude='dist' \
@@ -72,6 +73,10 @@ else
     -cf - . | tar -C "${STAGE_DIR}" -xf -
 fi
 
+if [[ -f "${ROOT_DIR}/.env.example" ]]; then
+  cp "${ROOT_DIR}/.env.example" "${STAGE_DIR}/.env.example"
+fi
+
 mkdir -p \
   "${STAGE_DIR}/storage/app/private" \
   "${STAGE_DIR}/storage/app/backups" \
@@ -81,7 +86,12 @@ mkdir -p \
   "${STAGE_DIR}/storage/logs" \
   "${STAGE_DIR}/bootstrap/cache"
 
+if [[ -f "${STAGE_DIR}/.env.example" ]]; then
+  cp "${STAGE_DIR}/.env.example" "${STAGE_DIR}/.env"
+fi
+
 (cd "${STAGE_DIR}" && composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction --no-progress)
+rm -f "${STAGE_DIR}/.env"
 
 if [[ ! -f "${STAGE_DIR}/vendor/autoload.php" ]]; then
   echo "ERROR: Composer did not produce vendor/autoload.php."
