@@ -2,10 +2,15 @@
 
 declare(strict_types=1);
 
+$privateStoragePath = (string) env('AEC_PRIVATE_STORAGE_PATH', 'storage/app/private');
+$privateStoragePath = str_starts_with($privateStoragePath, DIRECTORY_SEPARATOR)
+    ? rtrim($privateStoragePath, DIRECTORY_SEPARATOR)
+    : base_path($privateStoragePath);
+
 return [
     'core_version' => env('APP_VERSION', '2.0.0'),
     'install_lock_path' => storage_path('app/installed.lock'),
-    'private_storage_path' => base_path((string) env('AEC_PRIVATE_STORAGE_PATH', 'storage/app/private')),
+    'private_storage_path' => $privateStoragePath,
     'backup_path' => storage_path('app/backups'),
     'update_staging_path' => storage_path('app/updates'),
     'plugin_signing_key' => env('AEC_PLUGIN_SIGNING_KEY'),
