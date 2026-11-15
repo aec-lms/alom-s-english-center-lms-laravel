@@ -72,6 +72,60 @@ class FreshInstallerService
         }
     }
 
+
+    /**
+     * Atomically persist installer-generated secrets without exposing them in logs or responses.
+     */
+    private function persistGeneratedKeys(array $keys): void
+    {
+        $envPath = base_path('.env');
+        if (!is_file($envPath) || !is_writable($envPath)) {
+            throw new RuntimeException('The Laravel .env file must exist and be writable so fresh encryption keys can be saved securely.');
+        }
+
+        $contents = file_get_contents($envPath);
+        if ($contents === false) {
+            throw new RuntimeException('Unable to read the Laravel .env file.');
+        }
+
+        foreach ($keys as $name => $value) {
+            $escaped = addcslashes((string) $value, "\\\"");
+            $line = $name . '="' . $escaped . '"';
+            $pattern = '/^' . preg_quote($name, '/') . '=.*/m';
+            if (preg_match($pattern, $contents)) {
+                $contents = (string) preg_replace($pattern, $line, $contents, 1);
+            } else {
+                $contents = rtrim($contents) . PHP_EOL . $line . PHP_EOL;
+            }
+        }
+
+        $temporaryPath = tempnam(dirname($envPath), '.env-aec-');
+        if ($temporaryPath === false) {
+            throw new RuntimeException('Unable to allocate a temporary environment file.');
+        }
+
+        try {
+            if (file_put_contents($temporaryPath, $contents, LOCK_EX) === false) {
+                throw new RuntimeException('Unable to write generated encryption keys to the environment file.');
+            }
+            @chmod($temporaryPath, 0600);
+            if (!rename($temporaryPath, $envPath)) {
+                throw new RuntimeException('Unable to atomically replace the Laravel environment file.');
+            }
+            @chmod($envPath, 0600);
+        } finally {
+            if (is_file($temporaryPath)) {
+                @unlink($temporaryPath);
+            }
+        }
+
+        config([
+            'app.key' => $keys['APP_KEY'],
+            'lms.plugin_signing_key' => $keys['AEC_PLUGIN_SIGNING_KEY'],
+            'lms.backup_encryption_key' => $keys['AEC_BACKUP_ENCRYPTION_KEY'],
+        ]);
+    }
+
     public function installFresh(array $config): array
     {
         if ($this->isInstalled()) {
@@ -87,6 +141,13 @@ class FreshInstallerService
         $appKey = 'base64:' . base64_encode(random_bytes(32));
         $signingKey = bin2hex(random_bytes(32));
         $backupKey = base64_encode(random_bytes(32));
+
+        // Persist fresh cryptographic keys before creating encrypted application data.
+        $this->persistGeneratedKeys([
+            'APP_KEY' => $appKey,
+            'AEC_PLUGIN_SIGNING_KEY' => $signingKey,
+            'AEC_BACKUP_ENCRYPTION_KEY' => $backupKey,
+        ]);
 
         Artisan::call('migrate', ['--force' => true]);
         Artisan::call('db:seed', ['--class' => CoreRolesAndPermissionsSeeder::class, '--force' => true]);
