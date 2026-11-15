@@ -13,7 +13,7 @@ The intended production application is Laravel 12 under `/laravel`. The root Goo
 - Pull request: [PR #1](https://github.com/aec-lms/alom-s-english-center-lms-laravel/pull/1)
 - PR is open and unmerged; `main` has not been changed by this work.
 - `laravel/composer.lock` has now been generated and committed by a dedicated GitHub Actions workflow.
-- The most recent fully verified Laravel test run before the latest package-builder/documentation changes passed **34 tests / 176 assertions** on commit `10e4728`.
+- The most recent fully verified Laravel test run before the latest package-builder/documentation changes passed **35 tests / 182 assertions** on commit `2cba573`.
 - CI now also builds and inspects the cPanel package; the latest run for the newest commits must finish successfully before its result can be recorded.
 
 A green CI run is evidence only for the automated checks that exist. It is not proof of production deployment readiness.
@@ -21,8 +21,8 @@ A green CI run is evidence only for the automated checks that exist. It is not p
 ## Implemented foundations on the feature branch
 
 - PHP 8.3 / Laravel 12 CI from the correct `laravel/` application directory.
-- Fresh database installer that rejects non-empty databases and does not drop, truncate or import legacy operational data.
-- Fresh APP_KEY, plugin-signing key and backup-encryption key generation with private `.env` persistence.
+- Fresh database installer that rejects non-empty databases, validates Admin details, refuses public-root private-storage paths and does not drop, truncate or import legacy operational data.
+- Fresh APP_KEY, plugin-signing key and backup-encryption key generation with private `.env` persistence; initial private uploads/backups directories are created outside the public document root.
 - Installation lock creation and installer route lockout.
 - Core plugin provider resolution and explicit failure when plugin migrations fail.
 - Plugin manifest catalog, lifecycle controls, dependency checks, encrypted plugin settings and data-preserving uninstall foundations.
