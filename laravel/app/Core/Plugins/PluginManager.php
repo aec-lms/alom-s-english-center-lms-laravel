@@ -306,9 +306,13 @@ class PluginManager
                 if ($targetReplaced && $targetDir && is_dir($targetDir)) {
                     File::deleteDirectory($targetDir);
                 }
-                if ($rollbackDir && is_dir($rollbackDir) && $targetDir) {
-                    if (!File::copyDirectory($rollbackDir, $targetDir)) {
-                        $rollbackError = ' Previous plugin files could not be restored from the snapshot.';
+                if ($rollbackDir && is_dir($rollbackDir)) {
+                    if ($targetReplaced && $targetDir) {
+                        if (!File::copyDirectory($rollbackDir, $targetDir)) {
+                            $rollbackError = ' Previous plugin files could not be restored from the snapshot.';
+                        } else {
+                            File::deleteDirectory($rollbackDir);
+                        }
                     } else {
                         File::deleteDirectory($rollbackDir);
                     }
