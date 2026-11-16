@@ -416,27 +416,32 @@ class PluginManager
      */
     public function uninstall(string $slug, bool $confirmedPurgePluginData = false, ?int $actorId = null): PluginRecord
     {
-        $record = PluginRecord::query()->where('slug', $slug)->firstOrFail();
-        if ($record->is_core || $slug === config('plugins.core_identifier')) {
-            throw new RuntimeException('Protected Core cannot be uninstalled.');
-        }
+        $record = DB::transaction(function () use ($slug, $confirmedPurgePluginData, $actorId): PluginRecord {
+            $record = PluginRecord::query()->where('slug', $slug)->lockForUpdate()->firstOrFail();
+            if ($record->is_core || $slug === config('plugins.core_identifier')) {
+                throw new RuntimeException('Protected Core cannot be uninstalled.');
+            }
 
-        $this->assertNoActiveDependents($slug, 'uninstall');
+            $this->assertNoActiveDependents($slug, 'uninstall');
 
-        $manifest = $this->discoverManifests()[$slug] ?? null;
-        if ($record->is_enabled && $manifest) {
-            $this->resolvePluginInstance($manifest)?->onDisable();
-        }
+            $manifest = $this->discoverManifests()[$slug] ?? null;
+            if ($record->is_enabled && $manifest) {
+                $this->resolvePluginInstance($manifest)?->onDisable();
+            }
 
-        if ($manifest) {
-            $this->resolvePluginInstance($manifest)?->onUninstall($confirmedPurgePluginData);
-        }
+            if ($manifest) {
+                $this->resolvePluginInstance($manifest)?->onUninstall($confirmedPurgePluginData);
+            }
 
-        $record->update(['is_installed' => false, 'is_enabled' => false]);
-        $this->audit->log('plugin.uninstalled', 'plugin', $slug, ['purge_requested' => $confirmedPurgePluginData], $actorId);
+            $record->update(['is_installed' => false, 'is_enabled' => false]);
+            $this->audit->log('plugin.uninstalled', 'plugin', $slug, ['purge_requested' => $confirmedPurgePluginData], $actorId);
+
+            return $record->fresh();
+        });
+
         event(new PluginLifecycleEvent('uninstalled', $slug, $record->version, $actorId));
 
-        return $record->fresh();
+        return $record;
     }
 
     public function saveSettings(string $slug, array $values, array $secretKeys = [], ?int $actorId = null): void
