@@ -25,7 +25,7 @@ class RecycleBinController extends Controller
     {
         abort_unless($request->user()?->hasRole('admin'), 403);
 
-        $students = collect();
+        $students = new LengthAwarePaginator([], 0, 25);
         if ($this->plugins->isEnabled('student-management')
             && Schema::hasTable('students')
             && Schema::hasColumn('students', 'deleted_at')) {
