@@ -11,6 +11,11 @@ class CreateScheduledBackupCommand extends Command
     protected $description = 'Create an encrypted scheduled LMS backup.';
     public function handle(BackupService $backups): int
     {
+        if (!is_file((string) config('lms.install_lock_path'))) {
+            $this->line('AEC LMS is not installed; scheduled backup skipped.');
+            return self::SUCCESS;
+        }
+        try {
         if (!Schema::hasTable('backups')) {
             $this->warn('Backup table is not installed; scheduled backup skipped.');
             return self::SUCCESS;
