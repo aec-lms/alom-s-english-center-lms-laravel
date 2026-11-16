@@ -228,4 +228,18 @@ class PluginCriticalRegressionTest extends TestCase
         $this->assertStringContainsString('processed_at', $migration);
     }
 
+    public function test_database_queue_configuration_and_tables_exist_for_notification_workers(): void
+    {
+        $queueConfig = file_get_contents(base_path('config/queue.php'));
+        $migration = file_get_contents(base_path('database/migrations/2026_11_16_000005_create_database_queue_tables.php'));
+
+        $this->assertIsString($queueConfig);
+        $this->assertIsString($migration);
+        $this->assertStringContainsString("env('QUEUE_CONNECTION', 'database')", $queueConfig);
+        $this->assertStringContainsString("'driver' => 'database'", $queueConfig);
+        $this->assertStringContainsString("Schema::create('jobs'", $migration);
+        $this->assertStringContainsString("Schema::create('job_batches'", $migration);
+        $this->assertStringContainsString("Schema::create('failed_jobs'", $migration);
+    }
+
 }
