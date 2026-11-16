@@ -7,7 +7,7 @@
             <h1 class="text-2xl font-extrabold text-slate-900">Courses, Categories, Post-Links &amp; Live Classes</h1>
             <p class="text-xs text-slate-500 mt-0.5">Create courses directly or by selecting from CMS Posts &amp; Categories, upload PDFs &amp; PDF thumbnails, and manage live classes.</p>
         </div>
-        <a href="{{ route('public.courses') }}" target="_blank" class="px-4 py-2 rounded-lg bg-white border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-50">
+        <div class="flex flex-wrap gap-2">\n        <a href="{{ route('plugins.courses.content-protection') }}" class="px-4 py-2 rounded-lg bg-slate-900 text-white text-xs font-bold">Content Protection</a>\n        <a href="{{ route('public.courses') }}" target="_blank" class="px-4 py-2 rounded-lg bg-white border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-50">
             View Public Courses &rarr;
         </a>
     </div>
