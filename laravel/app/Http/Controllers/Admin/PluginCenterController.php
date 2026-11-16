@@ -29,7 +29,9 @@ class PluginCenterController extends Controller
             ? \App\Models\UpdateLog::query()->where('target_type', 'plugin')->latest()->limit(100)->get()->groupBy('target_slug')
             : collect();
 
-        $records = PluginRecord::query()->orderBy('category')->orderBy('name')->get()->map(function (PluginRecord $record) use ($manifests, $recentLogs) {
+        $records = PluginRecord::query()->orderBy('category')->orderBy('name')->get()
+            ->filter(fn (PluginRecord $record): bool => isset($manifests[$record->slug]) || $record->is_core)
+            ->map(function (PluginRecord $record) use ($manifests, $recentLogs) {
             $manifest = $manifests[$record->slug] ?? null;
             $record->setAttribute('is_compatible', $manifest ? $this->plugins->isCompatible($manifest) : false);
             $record->setAttribute('has_settings', $manifest && count($manifest->settingsSchema) > 0);
