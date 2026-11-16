@@ -105,6 +105,8 @@ class MobileAppSecurityTest extends TestCase
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.title', 'Public Notice');
 
+        $this->getJson('/api/mobile/courses/' . $course->slug . '/lessons')->assertUnauthorized();
+
         $student = $this->createUserWithRole('student');
         DB::table('enrollments')->insert([
             'user_id' => $student->id,
