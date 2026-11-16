@@ -9,6 +9,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use Illuminate\Support\Facades\Schema;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\GatewayStripe\Services\StripeGatewayService;
 use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
@@ -27,6 +28,7 @@ class StripeController extends Controller
 
     public function checkout(Request $request): JsonResponse
     {
+        $this->assertPaymentIntegrationsReady();
         if ($request->hasAny(['card_number', 'pan', 'cvv', 'cvc', 'security_code'])) {
             abort(422, 'Raw PAN and CVV are strictly prohibited. Use Stripe.js to create a PaymentMethod.');
         }
@@ -35,8 +37,11 @@ class StripeController extends Controller
             'payment_token' => ['required', 'string', 'starts_with:pm_', 'max:180'],
             'idempotency_key' => ['nullable', 'string', 'max:80'],
         ]);
-        $invoice = FeeInvoice::query()->with('student.user')->findOrFail((int) $validated['invoice_id']);
-        $this->assertCanPayInvoice($request, $invoice);
+        $studentIntegration = $this->plugins->isEnabled('student-management') && Schema::hasTable('students');
+        $invoiceQuery = FeeInvoice::query();
+        if ($studentIntegration) { $invoiceQuery->with('student.user'); }
+        $invoice = $invoiceQuery->findOrFail((int) $validated['invoice_id']);
+        $this->assertCanPayInvoice($request, $invoice, $studentIntegration);
         $result = $this->stripe->initiateTokenizedCheckout(
             $invoice,
             $validated['payment_token'],
@@ -59,7 +64,19 @@ class StripeController extends Controller
         return response()->json(['gateway' => 'gateway-stripe', 'status' => $tx->status, 'transaction_ref' => $tx->transaction_ref]);
     }
 
-    private function assertCanPayInvoice(Request $request, FeeInvoice $invoice): void
+    private function assertPaymentIntegrationsReady(): void
+    {
+        abort_unless(
+            $this->plugins->isEnabled('fees-management')
+                && Schema::hasTable('fee_invoices')
+                && $this->plugins->isEnabled('payment-management')
+                && Schema::hasTable('payment_transactions'),
+            409,
+            'Enable Fees and Payment Management before using this gateway.'
+        );
+    }
+
+    private function assertCanPayInvoice(Request $request, FeeInvoice $invoice, bool $studentIntegration): void
     {
         $user = $request->user();
         abort_unless($user, 401);
@@ -68,7 +85,9 @@ class StripeController extends Controller
             || $user->hasRole('accountant')
             || $user->hasPermission('payments.manage')
             || $user->hasPermission('payments.stripe.manage');
-        $isInvoiceOwner = (int) ($invoice->student?->user_id ?? 0) === (int) $user->id;
+        $isInvoiceOwner = $studentIntegration
+            ? (int) ($invoice->student?->user_id ?? 0) === (int) $user->id
+            : strtolower((string) $invoice->payer_email) === strtolower((string) $user->email);
         $isAssignedBranchManager = $user->hasRole('branch_manager')
             && (int) $user->branch_id > 0
             && (int) $invoice->branch_id === (int) $user->branch_id;
