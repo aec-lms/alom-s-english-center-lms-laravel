@@ -9,6 +9,10 @@ class CheckSystemHealthCommand extends Command
     protected $description = 'Check LMS runtime health and optionally attempt safe automatic recovery.';
     public function handle(HealthMonitorService $monitor): int
     {
+        if (!is_file((string) config('lms.install_lock_path'))) {
+            $this->line('AEC LMS is not installed; health monitoring skipped.');
+            return self::SUCCESS;
+        }
         $report = $monitor->report((bool) $this->option('recover'));
         $this->line('AEC LMS status: ' . strtoupper($report['status']));
         foreach ($report['checks'] as $name => $check) $this->line(sprintf('[%s] %s: %s', strtoupper($check['status']), $name, $check['message']));
