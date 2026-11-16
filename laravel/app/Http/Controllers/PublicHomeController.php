@@ -120,7 +120,8 @@ class PublicHomeController extends Controller
     public function courseShow(string $slug): View
     {
         $courses = $this->catalogCourses();
-        $course = $courses->firstWhere('slug', $slug) ?? $courses->first();
+        $course = $courses->firstWhere('slug', $slug);
+        if ($course === null) abort(404);
 
         $lessons = collect();
         if (Schema::hasTable('course_lessons') && !empty($course->id)) {
@@ -205,58 +206,17 @@ class PublicHomeController extends Controller
                     'category' => $post->category ?: 'Article',
                     'duration' => !empty($post->pdf_path) ? 'PDF + Guide' : 'Article',
                     'instructor' => $post->author ?: "Alom's English Center",
-                    'thumbnail' => $post->thumbnail_path ?: ($post->pdf_thumbnail ?: asset('assets/images/hero_educator_studio_1794552233836.jpg')),
+                    'thumbnail' => $post->thumbnail_path ?: ($post->pdf_thumbnail ?: null),
                     'pdf_path' => $post->pdf_path ?? null,
                     'pdf_thumbnail' => $post->pdf_thumbnail ?? null,
                 ];
             }
         }
 
-        if (empty($lessons)) {
-            $lessons = [
-                [
-                    'title' => 'How to Think in English Without Translating',
-                    'category' => 'Spoken Fluency',
-                    'duration' => '18:45',
-                    'instructor' => 'Engr. Mahbubul Alom',
-                    'thumbnail' => asset('assets/images/hero_educator_studio_1794552233836.jpg'),
-                    'pdf_path' => null,
-                    'pdf_thumbnail' => null,
-                ],
-                [
-                    'title' => 'IELTS Writing Task 2: Band 8 Essay Blueprint',
-                    'category' => 'IELTS Writing',
-                    'duration' => '24:10',
-                    'instructor' => 'Nusrat Jahan',
-                    'thumbnail' => asset('assets/images/course_ielts_masterclass_1794552235026.jpg'),
-                    'pdf_path' => null,
-                    'pdf_thumbnail' => null,
-                ],
-                [
-                    'title' => 'IPA Sound Clinic & Pronunciation Clarity',
-                    'category' => 'Phonetics',
-                    'duration' => '15:30',
-                    'instructor' => 'Tanvir Ahmed',
-                    'thumbnail' => asset('assets/images/course_spoken_fluency_1794552235255.jpg'),
-                    'pdf_path' => null,
-                    'pdf_thumbnail' => null,
-                ],
-                [
-                    'title' => 'Complex Sentence Logic & Freehand Translation',
-                    'category' => 'Grammar Lab',
-                    'duration' => '21:15',
-                    'instructor' => 'Rafiqul Islam',
-                    'thumbnail' => asset('assets/images/course_grammar_bundle_1794552235221.jpg'),
-                    'pdf_path' => null,
-                    'pdf_thumbnail' => null,
-                ],
-            ];
-        }
-
         return view('public.learn', compact('lessons'));
     }
 
-    public function instructors(): View
+        public function instructors(): View
     {
         $instructors = $this->catalogInstructors();
 
@@ -266,7 +226,8 @@ class PublicHomeController extends Controller
     public function instructorShow(string $id): View
     {
         $instructors = collect($this->catalogInstructors());
-        $instructor = $instructors->firstWhere('id', (int) $id) ?? $instructors->first();
+        $instructor = $instructors->firstWhere('id', (int) $id);
+        if ($instructor === null) abort(404);
         $courses = $this->catalogCourses()->take(4);
 
         return view('public.instructor-show', compact('instructor', 'courses'));
@@ -274,23 +235,14 @@ class PublicHomeController extends Controller
 
     public function exams(): View
     {
-        $exams = collect();
-        if (Schema::hasTable('exams')) {
-            $exams = DB::table('exams')->orderByDesc('id')->get();
-        }
-
-        if ($exams->isEmpty()) {
-            $exams = collect([
-                (object) ['id' => 1, 'title' => 'IELTS Academic Reading Full Mock Test 01', 'category' => 'IELTS Mock', 'duration_minutes' => 60, 'total_marks' => 40],
-                (object) ['id' => 2, 'title' => 'Spoken English Fluency & Pronunciation Check', 'category' => 'Spoken', 'duration_minutes' => 25, 'total_marks' => 30],
-                (object) ['id' => 3, 'title' => 'Grammar & Freehand Sentence Diagnostic', 'category' => 'Grammar Lab', 'duration_minutes' => 35, 'total_marks' => 50],
-            ]);
-        }
+        $exams = Schema::hasTable('exams')
+            ? DB::table('exams')->where('is_published', true)->orderByDesc('id')->get()
+            : collect();
 
         return view('public.exams', compact('exams'));
     }
 
-    public function products(): View
+        public function products(): View
     {
         $products = $this->catalogProducts();
 
@@ -300,7 +252,8 @@ class PublicHomeController extends Controller
     public function productShow(string $slug): View
     {
         $products = collect($this->catalogProducts());
-        $product = $products->firstWhere('slug', $slug) ?? $products->first();
+        $product = $products->firstWhere('slug', $slug);
+        if ($product === null) abort(404);
 
         return view('public.product-show', compact('product'));
     }
@@ -340,7 +293,8 @@ class PublicHomeController extends Controller
     public function ebookShow(string $slug): View
     {
         $allBooks = $this->catalogEbooks();
-        $ebook = $allBooks->firstWhere('slug', $slug) ?? $allBooks->first();
+        $ebook = $allBooks->firstWhere('slug', $slug);
+        if ($ebook === null) abort(404);
 
         return view('public.ebook-show', compact('ebook'));
     }
@@ -494,418 +448,137 @@ class PublicHomeController extends Controller
 
     private function catalogCourses(): Collection
     {
-        if (Schema::hasTable('courses')) {
-            $query = DB::table('courses')->where('status', 'published')->orderByDesc('id')->get();
-            if ($query->isNotEmpty()) {
-                $catMap = Schema::hasTable('course_categories')
-                    ? DB::table('course_categories')->pluck('name', 'id')
-                    : collect();
+        if (!Schema::hasTable('courses')) return collect();
 
-                return $query->map(function ($c) use ($catMap) {
-                    $c->category = $c->category ?? ($catMap[$c->category_id ?? 0] ?? 'English Course');
-                    $c->duration_weeks = $c->duration_weeks ?? 12;
-                    $c->original_price = $c->original_price ?? ((float) $c->price > 0 ? round((float) $c->price * 1.35) : 0);
-                    return $c;
-                });
-            }
-        }
+        $query = DB::table('courses')->where('status', 'published')->orderByDesc('id')->get();
+        $catMap = Schema::hasTable('course_categories')
+            ? DB::table('course_categories')->pluck('name', 'id')
+            : collect();
 
-        return collect([
-            (object) [
-                'id' => 1,
-                'slug' => 'ielts-academic-gt-masterclass',
-                'title' => 'IELTS Academic & GT Complete Masterclass (Band 7.5+ Target)',
-                'category' => 'IELTS Preparation',
-                'duration_weeks' => 12,
-                'price' => 4500,
-                'original_price' => 6500,
-                'instructor_name' => 'Engr. Mahbubul Alom',
-                'description' => 'Comprehensive 4-module IELTS batch covering Listening traps, Reading skimming, Writing Task 1 & 2, and live 1-on-1 Speaking mocks.',
-                'thumbnail' => asset('assets/images/course_ielts_masterclass_1794552235026.jpg'),
-                'pdf_path' => null,
-                'pdf_thumbnail' => null,
-                'syllabus_json' => json_encode([
-                    'Week 1-3: Listening Speed & Distractor Traps',
-                    'Week 4-6: Academic Reading Passage Mastery',
-                    'Week 7-9: Writing Task 1 & 2 Band 8 Structure',
-                    'Week 10-12: 1-on-1 Speaking Mock & Band Audit',
-                ]),
-            ],
-            (object) [
-                'id' => 2,
-                'slug' => 'spoken-english-fluency-bootcamp',
-                'title' => 'Spoken English & Real-Life Fluency Bootcamp',
-                'category' => 'Spoken English',
-                'duration_weeks' => 8,
-                'price' => 2500,
-                'original_price' => 4000,
-                'instructor_name' => 'Tanvir Ahmed',
-                'description' => 'Overcome speaking hesitation with IPA phonetics, daily partner speaking rooms, workplace scripts, and native collocations.',
-                'thumbnail' => asset('assets/images/course_spoken_fluency_1794552235255.jpg'),
-                'pdf_path' => null,
-                'pdf_thumbnail' => null,
-                'syllabus_json' => json_encode([
-                    'Week 1-2: IPA Phonetics & Intonation Clarity',
-                    'Week 3-4: Daily Conversation Blueprints',
-                    'Week 5-6: Presentation, Debate & Workplace Fluency',
-                    'Week 7-8: Final Speaking Assessment',
-                ]),
-            ],
-            (object) [
-                'id' => 3,
-                'slug' => 'zero-to-pro-english-grammar',
-                'title' => 'Zero-to-Pro English Grammar & Freehand Writing',
-                'category' => 'Grammar Lab',
-                'duration_weeks' => 10,
-                'price' => 2200,
-                'original_price' => 3500,
-                'instructor_name' => 'Rafiqul Islam',
-                'description' => 'Master clause synthesis, tense timelines, newspaper translation, and error-free academic paragraph composition.',
-                'thumbnail' => asset('assets/images/course_grammar_bundle_1794552235221.jpg'),
-                'pdf_path' => null,
-                'pdf_thumbnail' => null,
-                'syllabus_json' => json_encode([
-                    'Module 1: Sentence Architecture & Clause Logic',
-                    'Module 2: Tense Precision & Active/Passive Control',
-                    'Module 3: Newspaper Translation & Vocabulary',
-                    'Module 4: Academic Essay & Paragraph Polishing',
-                ]),
-            ],
-        ]);
+        return $query->map(function ($course) use ($catMap) {
+            $course->category = $course->category ?? ($catMap[$course->category_id ?? 0] ?? 'English Course');
+            $course->duration_weeks = $course->duration_weeks ?? 12;
+            $course->original_price = $course->original_price ?? 0;
+            return $course;
+        });
     }
 
-    private function catalogInstructors(): array
+        private function catalogInstructors(): array
     {
-        if (Schema::hasTable('teachers') && Schema::hasTable('users')) {
-            $rows = DB::table('teachers')
-                ->join('users', 'teachers.user_id', '=', 'users.id')
-                ->where('teachers.is_active', true)
-                ->orderBy('teachers.id')
-                ->get([
-                    'teachers.id',
-                    'users.name',
-                    'teachers.specialization as subject',
-                    'teachers.bio as role',
-                    'teachers.credentials',
-                    'teachers.photo_path as avatar',
-                    'teachers.youtube_url',
-                    'teachers.facebook_url',
-                ]);
+        if (!Schema::hasTable('teachers') || !Schema::hasTable('users')) return [];
 
-            if ($rows->isNotEmpty()) {
-                return $rows->map(fn ($r) => [
-                    'id' => $r->id,
-                    'name' => $r->name,
-                    'subject' => $r->subject ?: 'English Instructor',
-                    'role' => $r->role ?: "Senior Faculty, Alom's English Center",
-                    'credentials' => $r->credentials ?: 'Certified English Mentor',
-                    'avatar' => $r->avatar ?: asset('assets/images/hero_educator_studio_1794552233836.jpg'),
-                    'youtube_url' => $r->youtube_url,
-                    'facebook_url' => $r->facebook_url,
-                ])->all();
-            }
-        }
+        return DB::table('teachers')
+            ->join('users', 'teachers.user_id', '=', 'users.id')
+            ->where('teachers.is_active', true)
+            ->orderBy('teachers.id')
+            ->get([
+                'teachers.id',
+                'users.name',
+                'teachers.specialization as subject',
+                'teachers.bio as role',
+                'teachers.credentials',
+                'teachers.photo_path as avatar',
+                'teachers.youtube_url',
+                'teachers.facebook_url',
+            ])
+            ->map(fn ($row) => [
+                'id' => $row->id,
+                'name' => $row->name,
+                'subject' => $row->subject ?: 'English Instructor',
+                'role' => $row->role ?: "Faculty, Alom's English Center",
+                'credentials' => $row->credentials,
+                'avatar' => $row->avatar,
+                'youtube_url' => $row->youtube_url,
+                'facebook_url' => $row->facebook_url,
+            ])->all();
+    }
 
-        return [
-            [
-                'id' => 1,
-                'name' => 'Engr. Mahbubul Alom',
-                'subject' => 'IELTS & Method Architect',
-                'role' => "Founder & Lead Mentor, Alom's English Center",
-                'credentials' => 'IELTS Band 8.5 · 15+ Years Teaching Excellence',
-                'avatar' => asset('assets/images/hero_educator_studio_1794552233836.jpg'),
-                'youtube_url' => null,
-                'facebook_url' => null,
-            ],
-            [
-                'id' => 2,
-                'name' => 'Tanvir Ahmed',
-                'subject' => 'Spoken & Phonetics',
-                'role' => 'Senior Fluency & Pronunciation Trainer',
-                'credentials' => 'BA & MA in English, DU · CELTA Certified',
-                'avatar' => asset('assets/images/instructor_tanvir_1794552825904.jpg'),
-                'youtube_url' => null,
-                'facebook_url' => null,
-            ],
-            [
-                'id' => 3,
-                'name' => 'Nusrat Jahan',
-                'subject' => 'Academic Writing & Grammar',
-                'role' => 'IELTS Writing Task 1 & 2 Specialist',
-                'credentials' => 'TESOL Specialist · Band 8.0 Writing Mentor',
-                'avatar' => asset('assets/images/instructor_nusrat_1794552825686.jpg'),
-                'youtube_url' => null,
-                'facebook_url' => null,
-            ],
-            [
-                'id' => 4,
-                'name' => 'Shamim Reza',
-                'subject' => 'Business & Career English',
-                'role' => 'Mock Evaluation & Career Skills Lead',
-                'credentials' => 'Corporate Communication & Interview Coach',
-                'avatar' => asset('assets/images/instructor_shamim_1794552825944.jpg'),
-                'youtube_url' => null,
-                'facebook_url' => null,
-            ],
-            [
-                'id' => 5,
-                'name' => 'Farhana Yasmin',
-                'subject' => 'Reading & Listening',
-                'role' => 'IELTS Academic Reading & Trap Strategy Lead',
-                'credentials' => 'MA in Applied Linguistics · Band 8.5 Scorer',
-                'avatar' => asset('assets/images/instructor_nusrat_1794552825686.jpg'),
-                'youtube_url' => null,
-                'facebook_url' => null,
-            ],
-            [
-                'id' => 6,
-                'name' => 'Rafiqul Islam',
-                'subject' => 'Grammar & Freehand Writing',
-                'role' => 'Senior Foundation Grammar & Sentence Craft Mentor',
-                'credentials' => '12+ Years HSC, Admission & BCS English Specialist',
-                'avatar' => asset('assets/images/instructor_tanvir_1794552825904.jpg'),
-                'youtube_url' => null,
-                'facebook_url' => null,
-            ],
+        private function catalogProducts(): array
+    {
+        if (!Schema::hasTable('storefront_items')) return [];
+
+        return DB::table('storefront_items')
+            ->where('type', 'product')
+            ->where('is_active', true)
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn ($row) => [
+                'slug' => $row->slug,
+                'title' => $row->title,
+                'category' => $row->category ?: 'Study Kit',
+                'price' => (float) $row->price,
+                'original_price' => (float) $row->original_price,
+                'badge' => $row->badge,
+                'summary' => $row->summary,
+                'image' => $row->thumbnail_path ?: $row->pdf_thumbnail_path,
+                'pdf_thumbnail_path' => $row->pdf_thumbnail_path,
+                'download_url' => $row->download_url,
+                'stock_count' => $row->stock_count,
+            ])->all();
+    }
+
+        private function catalogEbooks(): Collection
+    {
+        if (!Schema::hasTable('storefront_items')) return collect();
+
+        $gradients = [
+            'from-[#0B5CD5] via-[#0284C7] to-[#032D42]',
+            'from-[#065F46] via-[#0D9488] to-[#022C22]',
+            'from-[#8B5CF6] via-[#C026D3] to-[#581C87]',
+            'from-[#1E3A8A] via-[#4338CA] to-[#172554]',
         ];
-    }
 
-    private function catalogProducts(): array
-    {
-        if (Schema::hasTable('storefront_items')) {
-            $rows = DB::table('storefront_items')
-                ->where('type', 'product')
-                ->where('is_active', true)
-                ->orderByDesc('id')
-                ->get();
-
-            if ($rows->isNotEmpty()) {
-                return $rows->map(fn ($r) => [
-                    'slug' => $r->slug,
-                    'title' => $r->title,
-                    'category' => $r->category ?: 'Study Kit',
-                    'price' => (float) $r->price,
-                    'original_price' => (float) $r->original_price,
-                    'badge' => $r->badge ?: 'Official',
-                    'summary' => $r->summary ?: 'Official study material by Alom\'s English Center.',
-                    'image' => $r->thumbnail_path ?: ($r->pdf_thumbnail_path ?: asset('assets/images/product_ielts_books_kit_1794553908137.jpg')),
-                    'pdf_thumbnail_path' => $r->pdf_thumbnail_path ?? null,
-                    'download_url' => $r->download_url ?? null,
-                    'stock_count' => $r->stock_count ?? 100,
-                ])->all();
-            }
-        }
-
-        return [
-            [
-                'slug' => 'complete-ielts-band-8-printed-books-kit',
-                'title' => 'Complete IELTS Band 8+ Printed Books Kit (Set of 4)',
-                'category' => 'Printed Books',
-                'price' => 850,
-                'original_price' => 1200,
-                'badge' => 'Bestseller',
-                'summary' => '4 printed spiral-bound volumes covering Listening, Reading, Writing Task 1/2, and Speaking Cue Cards.',
-                'image' => asset('assets/images/product_ielts_books_kit_1794553908137.jpg'),
-                'pdf_thumbnail_path' => null,
-                'download_url' => null,
-                'stock_count' => 150,
-            ],
-            [
-                'slug' => 'spoken-english-collocations-flashcard-box',
-                'title' => 'Spoken English & Collocations Flashcard Box',
-                'category' => 'Study Kit',
-                'price' => 490,
-                'original_price' => 690,
-                'badge' => 'Popular',
-                'summary' => '300 color-coded pocket flashcards with phonetic transcription and daily speaking prompts.',
-                'image' => asset('assets/images/product_spoken_flashcards_box_1794553909303.jpg'),
-                'pdf_thumbnail_path' => null,
-                'download_url' => null,
-                'stock_count' => 200,
-            ],
-            [
-                'slug' => 'academy-study-desk-flask-planner-combo',
-                'title' => 'Academy Study Desk Flask & Planner Combo',
-                'category' => 'Merchandise',
-                'price' => 650,
-                'original_price' => 900,
-                'badge' => 'Limited',
-                'summary' => 'Insulated matte stainless flask paired with a 90-day IELTS daily target & vocabulary tracker notebook.',
-                'image' => asset('assets/images/product_academy_flask_combo_1794553909652.jpg'),
-                'pdf_thumbnail_path' => null,
-                'download_url' => null,
-                'stock_count' => 80,
-            ],
-        ];
-    }
-
-    private function catalogEbooks(): Collection
-    {
-        if (Schema::hasTable('storefront_items')) {
-            $rows = DB::table('storefront_items')
-                ->where('type', 'ebook')
-                ->where('is_active', true)
-                ->orderByDesc('id')
-                ->get();
-
-            if ($rows->isNotEmpty()) {
-                $gradients = [
-                    'from-[#0B5CD5] via-[#0284C7] to-[#032D42]',
-                    'from-[#065F46] via-[#0D9488] to-[#022C22]',
-                    'from-[#8B5CF6] via-[#C026D3] to-[#581C87]',
-                    'from-[#1E3A8A] via-[#4338CA] to-[#172554]',
+        return DB::table('storefront_items')
+            ->where('type', 'ebook')
+            ->where('is_active', true)
+            ->orderByDesc('id')
+            ->get()
+            ->values()
+            ->map(function ($row, $index) use ($gradients) {
+                return [
+                    'slug' => $row->slug,
+                    'title' => $row->title,
+                    'category' => $row->category ?: 'Digital E-Book',
+                    'summary' => $row->summary,
+                    'price' => (float) $row->price,
+                    'original_price' => (float) $row->original_price,
+                    'is_free' => (bool) $row->is_free || (float) $row->price <= 0,
+                    'pages' => $row->pages,
+                    'gradient' => $gradients[$index % count($gradients)],
+                    'thumbnail_path' => $row->thumbnail_path,
+                    'pdf_thumbnail_path' => $row->pdf_thumbnail_path,
+                    'download_url' => $row->download_url,
+                    'badge' => $row->badge,
+                    'topics' => [],
                 ];
-
-                return $rows->values()->map(function ($r, $i) use ($gradients) {
-                    return [
-                        'slug' => $r->slug,
-                        'title' => $r->title,
-                        'category' => $r->category ?: 'Digital E-Book',
-                        'summary' => $r->summary ?: "Verified ShortNote PDF study guide by Alom's English Center.",
-                        'price' => (float) $r->price,
-                        'original_price' => (float) $r->original_price,
-                        'is_free' => (bool) $r->is_free || (float) $r->price <= 0,
-                        'pages' => (int) ($r->pages ?: 64),
-                        'gradient' => $gradients[$i % count($gradients)],
-                        'thumbnail_path' => $r->thumbnail_path,
-                        'pdf_thumbnail_path' => $r->pdf_thumbnail_path,
-                        'download_url' => $r->download_url,
-                        'badge' => $r->badge ?: ((bool) $r->is_free ? 'FREE' : 'ShortNote 2.0'),
-                        'topics' => [
-                            'Structured Chapter Breakdown & Examples',
-                            'Printable / Offline PDF Mobile Reader Support',
-                            "Curated by Alom's English Center Faculty",
-                        ],
-                    ];
-                });
-            }
-        }
-
-        return collect([
-            [
-                'slug' => 'ielts-writing-task-2-band-8-blueprint',
-                'title' => 'IELTS Writing Task 2 Band 8.0 Blueprint',
-                'category' => 'IELTS Writing',
-                'summary' => 'Complete essay structures, linking frameworks, and 15 model Band 8+ essays with examiner commentary.',
-                'price' => 0,
-                'original_price' => 0,
-                'is_free' => true,
-                'pages' => 64,
-                'gradient' => 'from-[#0B5CD5] via-[#0284C7] to-[#032D42]',
-                'thumbnail_path' => null,
-                'pdf_thumbnail_path' => null,
-                'download_url' => null,
-                'badge' => 'FREE',
-                'topics' => [
-                    'Opinion & Discussion Essay Templates',
-                    'Cohesion & Lexical Resource Booster',
-                    'Common Band-Lowering Mistakes',
-                ],
-            ],
-            [
-                'slug' => 'spoken-english-daily-fluency-collocations',
-                'title' => 'Spoken English Daily Fluency & Collocations',
-                'category' => 'Spoken English',
-                'summary' => '400+ practical conversation dialogues, native idioms, and workplace speaking scripts for instant fluency.',
-                'price' => 0,
-                'original_price' => 0,
-                'is_free' => true,
-                'pages' => 52,
-                'gradient' => 'from-[#065F46] via-[#0D9488] to-[#022C22]',
-                'thumbnail_path' => null,
-                'pdf_thumbnail_path' => null,
-                'download_url' => null,
-                'badge' => 'FREE',
-                'topics' => [
-                    'Natural Greetings & Small Talk',
-                    'Interview & Presentation Phrases',
-                    'Pronunciation Stress Rules',
-                ],
-            ],
-            [
-                'slug' => 'zero-to-pro-english-grammar-handbook',
-                'title' => 'Zero-to-Pro English Grammar Handbook',
-                'category' => 'Grammar Lab',
-                'summary' => 'Visual charts for all 12 tenses, conditional clauses, modifiers, and free-hand translation mastery.',
-                'price' => 99,
-                'original_price' => 199,
-                'is_free' => false,
-                'pages' => 112,
-                'gradient' => 'from-[#8B5CF6] via-[#C026D3] to-[#581C87]',
-                'thumbnail_path' => null,
-                'pdf_thumbnail_path' => null,
-                'download_url' => null,
-                'badge' => 'ShortNote 2.0',
-                'topics' => [
-                    'Tense Timeline Matrix',
-                    'Active-Passive Transformation',
-                    '100+ Error Correction Exercises',
-                ],
-            ],
-            [
-                'slug' => 'academic-reading-vocabulary-vault',
-                'title' => '1000+ Academic Reading & Vocabulary Vault',
-                'category' => 'Vocabulary',
-                'summary' => 'High-frequency IELTS reading synonyms, paraphrasing tables, and contextual flashcards.',
-                'price' => 129,
-                'original_price' => 249,
-                'is_free' => false,
-                'pages' => 96,
-                'gradient' => 'from-[#1E3A8A] via-[#4338CA] to-[#172554]',
-                'thumbnail_path' => null,
-                'pdf_thumbnail_path' => null,
-                'download_url' => null,
-                'badge' => 'ShortNote 2.0',
-                'topics' => [
-                    'True/False/Not Given Strategy',
-                    'Heading Match Shortcuts',
-                    '800 Academic Word Families',
-                ],
-            ],
-        ]);
+            });
     }
 
-    private function loadDigitalCarouselItems(): Collection
+        private function loadDigitalCarouselItems(): Collection
     {
-        if (Schema::hasTable('storefront_items')) {
-            $rows = DB::table('storefront_items')
-                ->where('is_active', true)
-                ->orderByDesc('is_carousel_featured')
-                ->orderByDesc('id')
-                ->limit(10)
-                ->get();
+        if (!Schema::hasTable('storefront_items')) return collect();
 
-            if ($rows->isNotEmpty()) {
-                return $rows->map(fn ($r) => [
-                    'type' => $r->type,
-                    'slug' => $r->slug,
-                    'title' => $r->title,
-                    'category' => $r->category ?: ($r->type === 'ebook' ? 'PDF E-Book' : 'Study Kit'),
-                    'badge' => $r->badge ?: ((bool) $r->is_free ? 'FREE PDF' : 'DIGITAL'),
-                    'price' => (float) $r->price,
-                    'original_price' => (float) $r->original_price,
-                    'is_free' => (bool) $r->is_free || (float) $r->price <= 0,
-                    'image' => $r->pdf_thumbnail_path ?: ($r->thumbnail_path ?: asset('assets/images/product_ielts_books_kit_1794553908137.jpg')),
-                    'url' => $r->type === 'ebook' ? route('public.ebooks.show', $r->slug) : route('public.products.show', $r->slug),
-                ]);
-            }
-        }
-
-        return $this->catalogEbooks()->map(fn ($eb) => [
-            'type' => 'ebook',
-            'slug' => $eb['slug'],
-            'title' => $eb['title'],
-            'category' => $eb['category'],
-            'badge' => $eb['badge'],
-            'price' => $eb['price'],
-            'original_price' => $eb['original_price'],
-            'is_free' => $eb['is_free'],
-            'image' => $eb['pdf_thumbnail_path'] ?: ($eb['thumbnail_path'] ?: asset('assets/images/course_grammar_bundle_1794552235221.jpg')),
-            'url' => route('public.ebooks.show', $eb['slug']),
-        ]);
+        return DB::table('storefront_items')
+            ->where('is_active', true)
+            ->orderByDesc('is_carousel_featured')
+            ->orderByDesc('id')
+            ->limit(10)
+            ->get()
+            ->map(fn ($row) => [
+                'type' => $row->type,
+                'slug' => $row->slug,
+                'title' => $row->title,
+                'category' => $row->category,
+                'badge' => $row->badge,
+                'price' => (float) $row->price,
+                'original_price' => (float) $row->original_price,
+                'is_free' => (bool) $row->is_free || (float) $row->price <= 0,
+                'image' => $row->pdf_thumbnail_path ?: $row->thumbnail_path,
+                'url' => $row->type === 'ebook' ? route('public.ebooks.show', $row->slug) : route('public.products.show', $row->slug),
+            ]);
     }
 
-    private function loadHomepageConfig(): array
+        private function loadHomepageConfig(): array
     {
         $defaults = [
             'batches_badge' => 'Online Course',
