@@ -5,6 +5,12 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Http\Request;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+use Plugins\Modules\CourseManagement\Http\Controllers\CourseController;
+use Plugins\Modules\CourseManagement\Http\Controllers\EnrollmentController;
+use Plugins\Modules\ExamManagement\Http\Controllers\ExamController;
+use Plugins\Modules\FeesManagement\Http\Controllers\FeeController;
 use Tests\TestCase;
 
 class BranchManagerFailClosedTest extends TestCase
@@ -88,6 +94,31 @@ class BranchManagerFailClosedTest extends TestCase
 
         $this->actingAs($manager)->get('/admin/admissions')->assertForbidden();
         $this->actingAs($manager)->get('/admin/certificates')->assertForbidden();
+    }
+
+    public function test_branch_owned_course_exam_enrollment_and_fee_directories_fail_closed(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management', 'exam-management', 'fees-management']);
+        $manager = $this->createUserWithRole('branch_manager');
+
+        $request = Request::create('/admin/branch-scope-check', 'GET');
+        $request->setUserResolver(static fn () => $manager);
+        $controllers = [
+            app(CourseController::class),
+            app(EnrollmentController::class),
+            app(ExamController::class),
+            app(FeeController::class),
+        ];
+
+        foreach ($controllers as $controller) {
+            try {
+                $controller->index($request);
+                $this->fail('Unassigned branch manager must be denied by ' . $controller::class);
+            } catch (HttpExceptionInterface $exception) {
+                $this->assertSame(403, $exception->getStatusCode());
+            }
+        }
     }
 
 }
