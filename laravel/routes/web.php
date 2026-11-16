@@ -104,6 +104,15 @@ Route::middleware('installed')->group(function (): void {
             Route::post('/exams/{recordId}/restore', [RecycleBinController::class, 'restoreExam'])->name('exams.restore');
             Route::post('/batches/{recordId}/restore', [RecycleBinController::class, 'restoreBatch'])->name('batches.restore');
             Route::post('/classes/{recordId}/restore', [RecycleBinController::class, 'restoreClass'])->name('classes.restore');
+            Route::post('/boost-campaigns/{recordId}/restore', [RecycleBinController::class, 'restoreBoostCampaign'])->name('boost-campaigns.restore');
+            Route::post('/branches/{recordId}/restore', [RecycleBinController::class, 'restoreBranch'])->name('branches.restore');
+            Route::post('/carousel-items/{recordId}/restore', [RecycleBinController::class, 'restoreCarouselItem'])->name('carousel-items.restore');
+            Route::post('/cms-categories/{recordId}/restore', [RecycleBinController::class, 'restoreCmsCategory'])->name('cms-categories.restore');
+            Route::post('/cms-posts/{recordId}/restore', [RecycleBinController::class, 'restoreCmsPost'])->name('cms-posts.restore');
+            Route::post('/builder-pages/{recordId}/restore', [RecycleBinController::class, 'restoreBuilderPage'])->name('builder-pages.restore');
+            Route::post('/hero-sliders/{recordId}/restore', [RecycleBinController::class, 'restoreHeroSlider'])->name('hero-sliders.restore');
+            Route::post('/sms-campaigns/{recordId}/restore', [RecycleBinController::class, 'restoreSmsCampaign'])->name('sms-campaigns.restore');
+            Route::post('/visitor-popups/{recordId}/restore', [RecycleBinController::class, 'restoreVisitorPopup'])->name('visitor-popups.restore');
         });
 
         Route::get('/audit-logs', [AuditLogController::class, 'index'])
