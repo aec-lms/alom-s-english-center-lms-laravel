@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use App\\Core\\Plugins\\PluginManager;
-use Plugins\\Modules\\StudentTracking\\Models\\StudentActivityEvent;
-use Tests\\TestCase;
+use App\Core\Plugins\PluginManager;
+use Plugins\Modules\StudentTracking\Models\StudentActivityEvent;
+use Tests\TestCase;
 
 class StudentTrackingPluginTest extends TestCase
 {
