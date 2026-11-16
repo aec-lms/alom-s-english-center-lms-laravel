@@ -17,7 +17,7 @@
 <div class="space-y-6 max-w-6xl">
     <div>
         <div class="inline-flex items-center px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold">Universal Payment · Manual verification protected</div>
-        <h1 class="text-2xl font-extrabold text-slate-900 mt-1">Universal Payment Gateway & Ledger</h1>
+        <h1 class="text-2xl font-extrabold text-slate-900 mt-1">Universal Payment Gateways & Manual Receipt Register</h1>
         <p class="text-xs text-slate-500">Online checkout is available only through configured SSLCommerz, Stripe and PayPal adapters. bKash, Nagad, Rocket and bank/cash entries are manual receipt records until dedicated online adapters are installed. Manual receipt verification does not settle a Fee Invoice.</p>
     </div>
 
@@ -94,7 +94,7 @@
     </div>
 
     <div class="bg-white rounded-2xl border border-slate-200 p-6 space-y-3">
-        <h2 class="text-sm font-bold text-slate-900">Unified Payment Transactions ({{ $transactions->count() }})</h2>
+        <h2 class="text-sm font-bold text-slate-900">Manual Receipt Records ({{ $transactions->count() }})</h2>
         <div class="overflow-x-auto">
             <table class="w-full text-xs text-left">
                 <thead class="text-slate-500 border-b"><tr><th class="py-2">Ref</th><th>Payer</th><th>Item</th><th>Gateway</th><th>Amount</th><th>Status</th><th>Action</th></tr></thead>
