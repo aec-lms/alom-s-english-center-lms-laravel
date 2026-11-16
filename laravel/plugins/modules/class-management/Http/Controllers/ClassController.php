@@ -19,6 +19,7 @@ class ClassController extends Controller
     public function index(Request $request): View
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $classes = Schema::hasTable('academic_classes')
             ? AcademicClass::query()
                 ->when($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null, fn ($q) => $q->where('branch_id', $actor->branch_id))
@@ -33,6 +34,7 @@ class ClassController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $validated = $request->validate([
             'code' => ['required', 'string', 'max:40', 'unique:academic_classes,code'],
             'name' => ['required', 'string', 'max:160'],
@@ -59,6 +61,7 @@ class ClassController extends Controller
     public function destroy(Request $request, AcademicClass $academicClass): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $academicClass->branch_id) {
             abort(403, 'Branch isolation violation.');
         }
@@ -68,5 +71,12 @@ class ClassController extends Controller
         $this->audit->log('class.deleted', 'academic_class', $id);
 
         return back()->with('status', "Class '{$name}' removed.");
+    }
+
+    private function ensureAssignedBranch($actor): void
+    {
+        if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id === null) {
+            abort(403, 'Branch manager must be assigned to a branch.');
+        }
     }
 }
