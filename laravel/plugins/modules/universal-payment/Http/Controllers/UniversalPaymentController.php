@@ -32,9 +32,16 @@ class UniversalPaymentController extends Controller
             'default_currency' => $this->plugins->getSetting('universal-payment', 'default_currency', 'BDT'),
             'enabled_gateways' => array_filter(array_map('trim', explode(',', (string) $enabledRaw))),
         ];
-        $transactions = Schema::hasTable('universal_payment_transactions')
-            ? UniversalPaymentTransaction::query()->latest()->limit(50)->get()
-            : collect();
+        $transactionQuery = Schema::hasTable('universal_payment_transactions')
+            ? UniversalPaymentTransaction::query()->latest()
+            : null;
+
+        $user = auth()->user();
+        if ($transactionQuery && $user?->hasRole('branch_manager')) {
+            // Branch managers without an assigned branch must never see global records.
+            $transactionQuery->where('branch_id', $user->branch_id ?? 0);
+        }
+        $transactions = $transactionQuery ? $transactionQuery->limit(50)->get() : collect();
 
         return view('universal-payment::index', compact('config', 'transactions'));
     }
@@ -66,7 +73,7 @@ class UniversalPaymentController extends Controller
             'gateway' => ['required', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,bank_cash'],
             'amount' => ['required', 'numeric', 'min:1'],
             'external_trx_id' => ['nullable', 'string', 'max:120'],
-            'status' => ['required', 'in:pending,verified,refunded'],
+            'notes' => ['nullable', 'string', 'max:2000'],
         ]);
 
         $tx = UniversalPaymentTransaction::query()->create([
@@ -78,9 +85,11 @@ class UniversalPaymentController extends Controller
             'currency' => $this->plugins->getSetting('universal-payment', 'default_currency', 'BDT') ?: 'BDT',
             'amount' => $validated['amount'],
             'external_trx_id' => $validated['external_trx_id'] ?? null,
-            'status' => $validated['status'],
-            'verified_by' => $validated['status'] === 'verified' ? auth()->id() : null,
-            'verified_at' => $validated['status'] === 'verified' ? now() : null,
+            // A submitted manual transaction is never trusted as paid. Verification is a
+            // separate, audited action after an operator checks the provider/bank evidence.
+            'status' => 'pending',
+            'notes' => $validated['notes'] ?? null,
+            'branch_id' => auth()->user()?->branch_id,
         ]);
 
         $this->audit->log('universal_payment.recorded', 'universal_payment', $tx->reference, ['amount' => $tx->amount, 'gateway' => $tx->gateway]);
@@ -90,14 +99,24 @@ class UniversalPaymentController extends Controller
 
     public function updateStatus(Request $request, UniversalPaymentTransaction $transaction): RedirectResponse
     {
+        $user = $request->user();
+        if ($user?->hasRole('branch_manager')) {
+            abort_unless($user->branch_id !== null && (int) $transaction->branch_id === (int) $user->branch_id, 404);
+        }
+
         $validated = $request->validate([
-            'status' => ['required', 'in:pending,verified,refunded,rejected'],
+            'status' => ['required', 'in:verified,rejected'],
         ]);
+
+        // Only pending manual records can be reviewed here. Online settlement and refunds
+        // must be performed by signed provider callbacks / dedicated refund workflows.
+        abort_unless($transaction->status === 'pending', 409, 'Only pending transactions can be reviewed.');
+        abort_unless(in_array($transaction->gateway, ['bank_cash', 'bkash', 'nagad', 'rocket'], true), 409, 'Online gateway transactions are settled only by verified provider callbacks.');
 
         $transaction->update([
             'status' => $validated['status'],
-            'verified_by' => auth()->id(),
-            'verified_at' => now(),
+            'verified_by' => $validated['status'] === 'verified' ? $user->id : null,
+            'verified_at' => $validated['status'] === 'verified' ? now() : null,
         ]);
 
         $this->audit->log('universal_payment.status_updated', 'universal_payment', $transaction->reference, ['status' => $validated['status']]);
