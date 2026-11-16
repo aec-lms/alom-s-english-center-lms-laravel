@@ -12,7 +12,7 @@ class LmsNotification extends Model
 {
     protected $table = 'lms_notifications';
 
-    protected $fillable = ['user_id', 'channel', 'title', 'message', 'status', 'read_at'];
+    protected $fillable = ['user_id', 'branch_id', 'channel', 'title', 'message', 'status', 'read_at'];
 
     protected $casts = ['read_at' => 'datetime'];
 
