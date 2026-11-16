@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\StudentTracking\\Services;
+namespace Plugins\Modules\StudentTracking\Services;
 
-use Illuminate\\Support\\Facades\\Schema;
+use Illuminate\Support\Facades\Schema;
 use InvalidArgumentException;
-use Plugins\\Modules\\StudentTracking\\Models\\StudentActivityEvent;
+use Plugins\Modules\StudentTracking\Models\StudentActivityEvent;
 
 class StudentActivityTracker
 {
