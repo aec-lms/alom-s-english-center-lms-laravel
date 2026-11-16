@@ -14,7 +14,7 @@ class StorefrontCatalogAcceptanceTest extends TestCase
         $this->markSystemInstalled();
         $this->activatePlugins(['storefront-catalog']);
         $admin = $this->createUserWithRole('admin');
-        $cmsPermissionId = \\App\\Models\\Permission::query()->where('slug', 'cms.manage')->value('id');
+        $cmsPermissionId = \App\Models\Permission::query()->where('slug', 'cms.manage')->value('id');
         $this->assertNotNull($cmsPermissionId);
         $admin->roles()->first()->permissions()->syncWithoutDetaching([$cmsPermissionId]);
 
