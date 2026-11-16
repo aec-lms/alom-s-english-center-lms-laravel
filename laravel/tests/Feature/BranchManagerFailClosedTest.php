@@ -82,6 +82,51 @@ class BranchManagerFailClosedTest extends TestCase
         }
     }
 
+    public function test_branch_manager_can_only_view_and_update_their_assigned_branch(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management']);
+
+        $branchA = DB::table('branches')->insertGetId([
+            'code' => 'BR-A',
+            'name' => 'Branch A',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $branchB = DB::table('branches')->insertGetId([
+            'code' => 'BR-B',
+            'name' => 'Branch B',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $manager = $this->createUserWithRole('branch_manager', $branchA);
+        $permissionId = DB::table('permissions')->where('slug', 'branches.manage')->value('id');
+        $manager->roles()->first()->permissions()->syncWithoutDetaching([$permissionId]);
+
+        $this->actingAs($manager)->get('/admin/branches')
+            ->assertOk()
+            ->assertSee('Branch A')
+            ->assertDontSee('Branch B');
+
+        $this->actingAs($manager)->put('/admin/branches/' . $branchB, [
+            'code' => 'BR-B-EDIT',
+            'name' => 'Changed Other Branch',
+        ])->assertForbidden();
+
+        $this->actingAs($manager)->post('/admin/branches', [
+            'code' => 'BR-C',
+            'name' => 'New Branch',
+        ])->assertForbidden();
+
+        $this->actingAs($manager)->post('/admin/branches/' . $branchA . '/toggle')
+            ->assertForbidden();
+        $this->actingAs($manager)->delete('/admin/branches/' . $branchA)
+            ->assertForbidden();
+    }
+
     public function test_branch_cannot_be_deleted_while_course_records_reference_it(): void
     {
         $this->markSystemInstalled();
