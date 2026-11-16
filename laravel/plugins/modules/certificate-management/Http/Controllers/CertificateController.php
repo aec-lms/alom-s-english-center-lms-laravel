@@ -20,6 +20,7 @@ class CertificateController extends Controller
     public function index(Request $request): View
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $certificates = Schema::hasTable('certificates')
             ? CertificateRecord::query()
                 ->when($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null, fn ($q) => $q->where('branch_id', $actor->branch_id))
@@ -33,6 +34,7 @@ class CertificateController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $validated = $request->validate([
             'student_name' => ['required', 'string', 'max:160'],
             'student_code' => ['nullable', 'string', 'max:60'],
@@ -63,6 +65,7 @@ class CertificateController extends Controller
     public function revoke(Request $request, CertificateRecord $certificate): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $certificate->branch_id) {
             abort(403, 'Branch isolation violation.');
         }
@@ -70,5 +73,12 @@ class CertificateController extends Controller
         $this->audit->log('certificate.revoked', 'certificate', (string) $certificate->id);
 
         return back()->with('status', "Certificate {$certificate->verification_code} revoked.");
+    }
+
+    private function ensureAssignedBranch($actor): void
+    {
+        if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id === null) {
+            abort(403, 'Branch manager must be assigned to a branch.');
+        }
     }
 }
