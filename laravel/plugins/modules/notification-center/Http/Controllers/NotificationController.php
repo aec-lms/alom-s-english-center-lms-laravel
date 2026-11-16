@@ -9,6 +9,7 @@ use App\Core\Security\AuditLogger;
 use App\Models\User;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Schema;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -187,6 +188,8 @@ class NotificationController extends Controller
         }
 
         if ($actor->branch_id === null
+            || !$this->plugins->isEnabled('branch-management')
+            || !Schema::hasTable('branches')
             || !app('db')->table('branches')->where('id', $actor->branch_id)->where('is_active', true)->exists()) {
             abort(403, 'Branch manager must be assigned to an active branch.');
         }
