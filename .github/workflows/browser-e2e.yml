@@ -1,0 +1,78 @@
+name: Browser E2E
+
+on:
+  push:
+    branches: ["main", "chore/release-audit-and-plugin-matrix"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  browser-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: laravel
+    env:
+      APP_ENV: testing
+      APP_DEBUG: "false"
+      APP_URL: http://127.0.0.1:8000
+      DB_CONNECTION: sqlite
+      DB_DATABASE: database/e2e.sqlite
+      CACHE_STORE: file
+      SESSION_DRIVER: file
+      QUEUE_CONNECTION: sync
+      MAIL_MAILER: array
+      AEC_PLUGIN_SIGNING_KEY: e2e-plugin-signing-key-32-bytes-minimum
+      AEC_BACKUP_ENCRYPTION_KEY: e2e-backup-encryption-key-32-bytes
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
+        with:
+          php-version: "8.3"
+          extensions: mbstring, dom, fileinfo, sqlite3, pdo_sqlite, xml, curl, ctype, tokenizer, bcmath
+          coverage: none
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Prepare Laravel browser-test environment
+        run: |
+          cp .env.example .env
+          mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache
+          touch database/e2e.sqlite
+          chmod -R 775 storage bootstrap/cache
+          composer install --no-interaction --prefer-dist --no-progress
+          php artisan key:generate
+          php artisan migrate:fresh --force
+          php artisan db:seed --class=CoreRolesAndPermissionsSeeder --force
+          php artisan db:seed --class=E2EBrowserUserSeeder --force
+
+      - name: Install Playwright and Chromium
+        run: |
+          npm install --no-save @playwright/test
+          npx playwright install --with-deps chromium
+
+      - name: Run Chromium browser E2E
+        run: npx playwright test --config=tests/e2e/playwright.config.js
+
+      - name: Upload browser report and traces
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: aec-lms-browser-e2e-report
+          path: |
+            laravel/test-results/
+            laravel/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14
