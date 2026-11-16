@@ -16,6 +16,7 @@ use Illuminate\View\View;
 use Plugins\Modules\LibraryManagement\Models\LibraryBook;
 use Plugins\Modules\LibraryManagement\Models\LibraryLoan;
 use RuntimeException;
+use Symfony\Component\HttpKernel\Exception\\HttpExceptionInterface;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 class LibraryController extends Controller
@@ -112,6 +113,8 @@ class LibraryController extends Controller
 
             $this->audit->log('library.loan_issued', 'library_loan', (string) $loan->id);
             return back()->with('status', "Book loaned to {$loan->borrower_name}.");
+        } catch (HttpExceptionInterface $e) {
+            throw $e;
         } catch (HttpExceptionInterface $e) {
             throw $e;
         } catch (RuntimeException $e) {
