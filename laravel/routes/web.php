@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-use App\\Http\\Controllers\\Admin\\AuditLogController;
-use App\\Http\\Controllers\\Admin\\BackupController;
-use App\\Http\\Controllers\\Admin\\DashboardController;
-use App\\Http\\Controllers\\Admin\\PluginCenterController;
-use App\\Http\\Controllers\\Admin\\UpdateCenterController;
-use App\\Http\\Controllers\\Admin\\UserRoleController;
-use App\\Http\\Controllers\\Auth\\LoginController;
-use App\\Http\\Controllers\\InstallerController;
-use App\\Http\\Controllers\\PublicHomeController;
-use Illuminate\\Support\\Facades\\Route;
+use App\Http\Controllers\Admin\AuditLogController;
+use App\Http\Controllers\Admin\BackupController;
+use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\PluginCenterController;
+use App\Http\Controllers\Admin\UpdateCenterController;
+use App\Http\Controllers\Admin\UserRoleController;
+use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\InstallerController;
+use App\Http\Controllers\PublicHomeController;
+use Illuminate\Support\Facades\Route;
 
 // Browser-based Fresh Installer (permanently locked after installation)
 Route::prefix('install')->name('installer.')->middleware('not.installed')->group(function (): void {
