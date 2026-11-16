@@ -2,7 +2,7 @@ name: Laravel
 
 on:
   push:
-    branches: ["main", "fix/laravel-ci-php83"]
+    branches: ["main", "fix/laravel-ci-php83", "chore/release-audit-and-plugin-matrix"]
   pull_request:
     branches: ["main"]
 
