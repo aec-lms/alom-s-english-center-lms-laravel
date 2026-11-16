@@ -19,9 +19,10 @@ class BatchController extends Controller
     public function index(Request $request): View
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $batches = Schema::hasTable('study_batches')
             ? StudyBatch::query()
-                ->when($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null, fn ($q) => $q->where('branch_id', $actor->branch_id))
+                ->when($actor && $actor->hasRole('branch_manager'), fn ($q) => $q->where('branch_id', $actor->branch_id))
                 ->latest()
                 ->get()
             : collect();
@@ -32,6 +33,7 @@ class BatchController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $validated = $request->validate([
             'batch_code' => ['required', 'string', 'max:40', 'unique:study_batches,batch_code'],
             'name' => ['required', 'string', 'max:160'],
@@ -54,9 +56,39 @@ class BatchController extends Controller
         return back()->with('status', "Batch '{$batch->name}' created.");
     }
 
+    public function update(Request $request, StudyBatch $batch): RedirectResponse
+    {
+        $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
+        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $batch->branch_id) {
+            abort(403, 'Branch isolation violation.');
+        }
+
+        $validated = $request->validate([
+            'batch_code' => ['required', 'string', 'max:40', 'unique:study_batches,batch_code,' . $batch->id],
+            'name' => ['required', 'string', 'max:160'],
+            'course_title' => ['nullable', 'string', 'max:180'],
+            'schedule' => ['required', 'string', 'max:160'],
+            'room_number' => ['nullable', 'string', 'max:60'],
+            'max_capacity' => ['required', 'integer', 'min:1', 'max:500'],
+            'start_date' => ['nullable', 'date'],
+            'status' => ['required', 'in:upcoming,ongoing,completed'],
+            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
+        ]);
+        if ($actor && $actor->hasRole('branch_manager')) {
+            $validated['branch_id'] = $actor->branch_id;
+        }
+
+        $batch->update($validated);
+        $this->audit->log('batch.updated', 'study_batch', (string) $batch->id);
+
+        return back()->with('status', "Batch '{$batch->name}' updated.");
+    }
+
     public function destroy(Request $request, StudyBatch $batch): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $batch->branch_id) {
             abort(403, 'Branch isolation violation.');
         }
@@ -66,5 +98,14 @@ class BatchController extends Controller
         $this->audit->log('batch.deleted', 'study_batch', $id);
 
         return back()->with('status', "Batch '{$name}' removed.");
+    }
+    private function ensureAssignedBranch($actor): void
+    {
+        if (!$actor || !$actor->hasRole('branch_manager')) {
+            return;
+        }
+        if ($actor->branch_id === null || !app('db')->table('branches')->where('id', $actor->branch_id)->where('is_active', true)->exists()) {
+            abort(403, 'Branch manager must be assigned to an active branch.');
+        }
     }
 }
