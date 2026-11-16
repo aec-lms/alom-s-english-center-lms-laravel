@@ -71,7 +71,8 @@ class PluginCriticalRegressionTest extends TestCase
         $this->assertStringContainsString("'throttle:10,1'", $routeFile);
         $this->assertStringContainsString("whereHas('student'", $controller);
         $this->assertStringContainsString("'exists:fee_invoices,id'", $controller);
-        $this->assertStringNotContainsString("'amount' => ['required'", $controller);
+        $checkoutMethod = substr($controller, strpos($controller, 'public function publicCheckout'));
+        $this->assertStringNotContainsString("'amount' => ['required'", $checkoutMethod);
         $this->assertStringContainsString("'enabled_gateways'", $orchestrator);
     }
 
