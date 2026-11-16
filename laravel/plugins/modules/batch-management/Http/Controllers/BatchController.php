@@ -116,9 +116,9 @@ class BatchController extends Controller
         $name = $batch->name;
         $id = (string) $batch->id;
         $batch->delete();
-        $this->audit->log('batch.deleted', 'study_batch', $id);
+        $this->audit->log('batch.trashed', 'study_batch', $id);
 
-        return back()->with('status', "Batch '{$name}' removed.");
+        return back()->with('status', "Batch '{$name}' moved to the Admin Recycle Bin.");
     }
 
     private function ensureAssignedBranch($actor): void
