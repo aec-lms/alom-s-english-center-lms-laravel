@@ -6,15 +6,16 @@
     "category": "communication",
     "description": "In-app inbox with SMTP email and Greenweb SMS dispatch through their standalone provider plugins; push delivery remains pending a push provider adapter.",
     "core_compatibility": "^2.0",
-    "dependencies": [
-        "email-notifications",
-        "sms-gateway"
-    ],
+    "dependencies": [],
     "provider": "Plugins\\Modules\\NotificationCenter\\Providers\\NotificationCenterServiceProvider",
     "permissions": [
         {
             "slug": "notifications.manage",
             "name": "Manage & Dispatch Notifications"
         }
+    ],
+    "optional_dependencies": [
+        "email-notifications",
+        "sms-gateway"
     ]
 }
