@@ -54,7 +54,7 @@ class StudentTrackingController extends Controller
     {
         abort_unless($request->user()->hasRole('student'), 403, 'Only student accounts can submit their own learning activity.');
         $validated = $request->validate([
-            'event_type' => ['required', 'string', 'in:' . implode(',', StudentActivityTracker::EVENT_TYPES)],
+            'event_type' => ['required', 'string', 'in:lesson_completed'],
             'subject_type' => ['nullable', 'string', 'max:60'],
             'subject_id' => ['nullable', 'string', 'max:100'],
             'duration_seconds' => ['nullable', 'integer', 'min:0', 'max:86400'],
