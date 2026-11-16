@@ -7,8 +7,10 @@ namespace Plugins\Modules\CourseManagement\Http\Controllers;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use RuntimeException;
@@ -76,9 +78,12 @@ class LessonContentProtectionController extends Controller
         return back()->with('status', 'Lesson protection policy updated.');
     }
 
-    public function adminIndex(): \Illuminate\View\View
+    public function adminIndex(Request $request): \Illuminate\View\View
     {
-        $courses = DB::table('courses')->orderBy('title')->get();
+        $branchId = $this->managedBranchId($request);
+        $courses = DB::table('courses')
+            ->when($branchId !== null, fn ($query) => $query->where('branch_id', $branchId))
+            ->orderBy('title')->get();
         foreach ($courses as $course) {
             $course->lessons = DB::table('course_lessons')
                 ->where('course_id', $course->id)
