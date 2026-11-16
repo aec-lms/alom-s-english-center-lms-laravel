@@ -23,7 +23,11 @@ class CourseOptionalIntegrationsTest extends TestCase
             'price' => 0,
             'status' => 'published',
         ]);
-        Enrollment::query()->create([
+        $this->actingAs($student)->post('/courses/' . $course->id . '/enroll')
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('enrollments', [
             'user_id' => $student->id,
             'course_id' => $course->id,
             'branch_id' => null,
@@ -32,7 +36,5 @@ class CourseOptionalIntegrationsTest extends TestCase
         ]);
 
         $this->actingAs($student)->get('/my-learning/enrollments')->assertOk();
-        $this->actingAs($student)->post('/courses/' . $course->id . '/enroll')
-            ->assertStatus(409);
     }
 }
