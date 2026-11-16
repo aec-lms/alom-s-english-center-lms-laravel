@@ -40,7 +40,11 @@ class PopupController extends Controller
             'delay_seconds' => ['nullable', 'integer', 'min:0', 'max:120'],
             'frequency' => ['required', 'in:once_per_session,once_per_day,always'],
             'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
-            'image_url' => ['nullable', 'string', 'max:255'],
+            'image_url' => ['nullable', 'string', 'max:255', function ($attribute, $value, $fail): void {
+                if ($value === null || $value === '' || (str_starts_with($value, '/') && !str_starts_with($value, '//'))) return;
+                $scheme = strtolower((string) parse_url((string) $value, PHP_URL_SCHEME));
+                if (!filter_var($value, FILTER_VALIDATE_URL) || !in_array($scheme, ['http', 'https'], true)) $fail('The image source must be a relative path or an HTTP/HTTPS URL.');
+            }],
         ]);
 
         $imagePath = $request->hasFile('image')
@@ -126,7 +130,10 @@ class PopupController extends Controller
         if (!is_dir($targetDir)) {
             mkdir($targetDir, 0755, true);
         }
-        $ext = strtolower($file->getClientOriginalExtension() ?: 'jpg');
+        $ext = strtolower($file->guessExtension() ?: 'jpg');
+        if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp'], true)) {
+            throw new \\RuntimeException('Unsupported popup image type.');
+        }
         $name = 'popup_' . date('Ymd_His') . '_' . Str::random(6) . '.' . $ext;
         $file->move($targetDir, $name);
 
