@@ -101,7 +101,7 @@ abstract class TestCase extends BaseTestCase
             foreach (['web.php', 'api.php'] as $routeFile) {
                 $path = base_path('plugins/modules/' . $slug . '/Routes/' . $routeFile);
                 if (is_file($path)) {
-                    require_once $path;
+                    require $path;
                 }
             }
         }
