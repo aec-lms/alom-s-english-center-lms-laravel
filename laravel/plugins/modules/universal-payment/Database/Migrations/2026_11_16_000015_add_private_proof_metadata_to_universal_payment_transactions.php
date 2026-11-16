@@ -28,6 +28,10 @@ return new class extends Migration {
 
     public function down(): void
     {
+        if (!Schema::hasTable('universal_payment_transactions')) {
+            return;
+        }
+
         Schema::table('universal_payment_transactions', function (Blueprint $table): void {
             foreach (['proof_path', 'proof_mime', 'proof_size'] as $column) {
                 if (Schema::hasColumn('universal_payment_transactions', $column)) {
