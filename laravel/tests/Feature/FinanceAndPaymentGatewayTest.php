@@ -378,27 +378,20 @@ class FinanceAndPaymentGatewayTest extends TestCase
 
         $this->assertSame('paid', $paypalInvoice->fresh()->status);
 
-        // Atomic refund & over-refund rejection
-        $tx = PaymentTransaction::query()->where('transaction_ref', $stripeRes1['transaction_ref'])->firstOrFail();
-
-        $this->actingAs($admin)->post("/admin/payments/{$tx->id}/refund", [
-            'amount' => 9999,
-            'reason' => 'Over-refund attempt',
-            'provider_refund_reference' => 're_test_overrefund_001',
-        ])->assertSessionHasErrors('refund');
-
+        // An online refund must not be recorded from a caller-supplied reference alone.
+        // Until a provider refund adapter is implemented, reject without changing the ledger.
         $this->actingAs($admin)->post("/admin/payments/{$tx->id}/refund", [
             'amount' => 1500,
             'reason' => 'Partial fee adjustment',
             'provider_refund_reference' => 're_test_provider_refund_001',
-        ])->assertSessionHasNoErrors();
+        ])->assertSessionHasErrors('refund');
 
-        $this->assertDatabaseHas('payment_refunds', [
+        $this->assertDatabaseMissing('payment_refunds', [
             'payment_transaction_id' => $tx->id,
             'provider_refund_reference' => 're_test_provider_refund_001',
         ]);
+        $this->assertSame('paid', $stripeInvoice->fresh()->status);
+        $this->assertEquals(4500.0, (float) $stripeInvoice->fresh()->paid_amount);
 
-        $this->assertSame('partial', $stripeInvoice->fresh()->status);
-        $this->assertEquals(3000.0, (float) $stripeInvoice->fresh()->paid_amount);
     }
 }
