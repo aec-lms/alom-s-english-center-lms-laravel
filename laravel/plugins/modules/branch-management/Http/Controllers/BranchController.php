@@ -88,34 +88,15 @@ class BranchController extends Controller
         $actor = $request->user();
         abort_if($actor && $actor->hasRole('branch_manager'), 403, 'Branch managers cannot delete branches.');
 
-        $branchTables = [
-            'users',
-            'students',
-            'teachers',
-            'teacher_profiles',
-            'courses',
-            'batches',
-            'study_batches',
-            'enrollments',
-            'attendance_records',
-            'exams',
-            'certificates',
-            'fee_invoices',
-            'payment_transactions',
-            'staff_profiles',
-            'staff_payrolls',
-            'library_books',
-            'library_loans',
-            'notices',
-            'class_sessions',
-            'live_classes',
-        ];
-
         $referencingTables = [];
-        foreach ($branchTables as $table) {
-            if (Schema::hasTable($table)
-                && Schema::hasColumn($table, 'branch_id')
-                && DB::table($table)->where('branch_id', $branch->id)->exists()) {
+        foreach (Schema::getTables() as $tableMetadata) {
+            $table = is_array($tableMetadata)
+                ? ($tableMetadata['name'] ?? null)
+                : ($tableMetadata->name ?? null);
+            if (!$table || $table === 'branches' || !Schema::hasColumn($table, 'branch_id')) {
+                continue;
+            }
+            if (DB::table($table)->where('branch_id', $branch->id)->exists()) {
                 $referencingTables[] = $table;
             }
         }
