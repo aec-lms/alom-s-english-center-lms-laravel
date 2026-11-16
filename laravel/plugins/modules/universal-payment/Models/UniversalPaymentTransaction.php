@@ -23,6 +23,8 @@ class UniversalPaymentTransaction extends Model
         'notes',
         'verified_by',
         'verified_at',
+        'user_id',
+        'storefront_item_id',
     ];
 
     protected $casts = [

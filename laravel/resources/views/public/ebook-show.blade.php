@@ -98,17 +98,31 @@
                         @endif
                     </div>
 
-                    @if ($ebook['is_free'] && !empty($ebook['download_url']))
-                        <a href="{{ $ebook['download_url'] }}" target="_blank" rel="noopener" class="w-full py-3.5 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold flex items-center justify-center gap-2 shadow-sm transition-colors">
-                            <span>Download Free PDF Now</span>
+                    @if (($hasAccess ?? false) && !empty($ebook['download_url']))
+                        <a href="{{ route('public.ebooks.download', $ebook['slug']) }}" class="w-full py-3.5 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold flex items-center justify-center gap-2 shadow-sm transition-colors">
+                            <span>{{ $ebook['is_free'] ? 'Download Free PDF Now' : 'Download Purchased PDF' }}</span>
                         </a>
+                    @elseif (Auth::check() && Route::has('plugins.universal_payment.checkout'))
+                        <form method="POST" action="{{ route('plugins.universal_payment.checkout') }}" class="space-y-3">
+                            @csrf
+                            <input type="hidden" name="storefront_item_id" value="{{ $ebook['id'] }}">
+                            <input type="hidden" name="item_title" value="{{ $ebook['title'] }}">
+                            <input type="hidden" name="amount" value="{{ $ebook['price'] }}">
+                            <input type="hidden" name="payer_name" value="{{ Auth::user()->name }}">
+                            <label class="block text-xs font-semibold text-slate-600">Payment method</label>
+                            <select name="gateway" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                                <option value="bkash">bKash</option><option value="nagad">Nagad</option><option value="rocket">Rocket</option><option value="sslcommerz">Visa / Mastercard / SSLCommerz</option><option value="bank_cash">Bank / Cash</option>
+                            </select>
+                            <input name="payer_contact" required value="{{ Auth::user()->phone ?? Auth::user()->email }}" placeholder="Payment phone / email" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                            <input name="external_trx_id" placeholder="Transaction ID (if already paid)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                            <button type="submit" class="w-full py-3.5 px-5 rounded-xl bg-[#0077CC] hover:bg-[#0060A8] text-white text-sm font-bold">Submit ৳{{ number_format($ebook['price'], 2) }} Payment</button>
+                            <p class="text-[11px] text-slate-500">Access is enabled after the payment is verified by the administrator.</p>
+                        </form>
                     @elseif (Auth::check())
-                        <a href="{{ route('admin.dashboard') }}" class="w-full py-3.5 px-5 rounded-xl bg-[#0077CC] hover:bg-[#0060A8] text-white text-sm font-bold flex items-center justify-center gap-2 shadow-sm transition-colors">
-                            <span>{{ $ebook['is_free'] ? 'Access Download in Portal' : 'Unlock in Portal' }}</span>
-                        </a>
+                        <p class="text-sm text-amber-700">Universal Payment plugin must be enabled to purchase this e-book.</p>
                     @else
                         <a href="{{ route('login') }}" class="w-full py-3.5 px-5 rounded-xl bg-[#0077CC] hover:bg-[#0060A8] text-white text-sm font-bold flex items-center justify-center gap-2 shadow-sm transition-colors">
-                            <span>Sign in to download</span>
+                            <span>Sign in to purchase</span>
                         </a>
                     @endif
 

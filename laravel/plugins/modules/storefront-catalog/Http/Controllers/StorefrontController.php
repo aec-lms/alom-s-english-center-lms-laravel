@@ -10,6 +10,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Plugins\Modules\StorefrontCatalog\Models\StorefrontItem;
@@ -126,6 +127,7 @@ class StorefrontController extends Controller
         }
 
         $downloadUrl = $item->download_url;
+        $previousDownloadUrl = $item->download_url;
         if ($request->hasFile('pdf_file')) {
             $downloadUrl = $this->storeAsset($request->file('pdf_file'), 'storefront/pdfs');
         } elseif (!empty($validated['download_url'])) {
@@ -152,6 +154,10 @@ class StorefrontController extends Controller
             'is_carousel_featured' => $request->boolean('is_carousel_featured'),
         ]);
 
+        if ($previousDownloadUrl && $previousDownloadUrl !== $downloadUrl && str_starts_with($previousDownloadUrl, 'private:')) {
+            Storage::disk('local')->delete(substr($previousDownloadUrl, 8));
+        }
+
         $this->audit->log('storefront.updated', 'storefront_item', (string) $item->id, ['title' => $item->title]);
 
         return back()->with('status', "'{$item->title}' and its PDF/thumbnails updated.");
@@ -159,6 +165,9 @@ class StorefrontController extends Controller
 
     public function destroy(StorefrontItem $item): RedirectResponse
     {
+        if ($item->download_url && str_starts_with((string) $item->download_url, 'private:')) {
+            Storage::disk('local')->delete(substr((string) $item->download_url, 8));
+        }
         $title = $item->title;
         $id = (string) $item->id;
         $item->delete();

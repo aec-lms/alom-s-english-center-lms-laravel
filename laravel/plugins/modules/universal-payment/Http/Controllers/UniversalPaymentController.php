@@ -10,6 +10,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
@@ -113,6 +114,18 @@ class UniversalPaymentController extends Controller
             'verified_at' => now(),
         ]);
 
+        if ($transaction->storefront_item_id && $transaction->user_id && Schema::hasTable('storefront_item_access')) {
+            if ($validated['status'] === 'verified') {
+                DB::table('storefront_item_access')->updateOrInsert(
+                    ['storefront_item_id' => $transaction->storefront_item_id, 'user_id' => $transaction->user_id],
+                    ['payment_transaction_id' => $transaction->id, 'granted_at' => now(), 'created_at' => now(), 'updated_at' => now()]
+                );
+            } elseif (in_array($validated['status'], ['refunded', 'rejected'], true)) {
+                DB::table('storefront_item_access')->where('storefront_item_id', $transaction->storefront_item_id)
+                    ->where('user_id', $transaction->user_id)->delete();
+            }
+        }
+
         $this->audit->log('universal_payment.status_updated', 'universal_payment', $transaction->reference, ['status' => $validated['status']]);
 
         return back()->with('status', "Transaction '{$transaction->reference}' marked {$validated['status']}.");
@@ -127,20 +140,33 @@ class UniversalPaymentController extends Controller
             'gateway' => ['required', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,bank_cash'],
             'amount' => ['required', 'numeric', 'min:1'],
             'external_trx_id' => ['nullable', 'string', 'max:120'],
+            'storefront_item_id' => ['nullable', 'integer'],
         ]);
+
+        $storefrontItem = null;
+        if (!empty($validated['storefront_item_id'])) {
+            abort_unless(auth()->check(), 401, 'Sign in before purchasing a digital e-book.');
+            abort_unless(Schema::hasTable('storefront_items') && Schema::hasTable('storefront_item_access'), 503, 'E-book sales are not currently available.');
+            $storefrontItem = DB::table('storefront_items')->where('id', $validated['storefront_item_id'])
+                ->where('type', 'ebook')->where('is_active', true)->first();
+            abort_if($storefrontItem === null || (bool) $storefrontItem->is_free || (float) $storefrontItem->price <= 0, 422, 'This is not a paid active e-book.');
+            abort_if(empty($storefrontItem->download_url) || !str_starts_with((string) $storefrontItem->download_url, 'private:'), 422, 'The e-book PDF must be privately uploaded before it can be sold.');
+        }
 
         $tx = UniversalPaymentTransaction::query()->create([
             'reference' => 'UPAY-' . strtoupper(Str::random(8)),
             'payer_name' => $validated['payer_name'],
             'payer_contact' => $validated['payer_contact'],
-            'item_title' => $validated['item_title'],
+            'item_title' => $storefrontItem?->title ?? $validated['item_title'],
             'gateway' => $validated['gateway'],
             'currency' => $this->plugins->getSetting('universal-payment', 'default_currency', 'BDT') ?: 'BDT',
-            'amount' => $validated['amount'],
+            'amount' => $storefrontItem ? (float) $storefrontItem->price : $validated['amount'],
             'external_trx_id' => $validated['external_trx_id'] ?? null,
+            'user_id' => $storefrontItem ? auth()->id() : null,
+            'storefront_item_id' => $storefrontItem?->id,
             'status' => 'pending',
         ]);
 
-        return back()->with('status', "Payment submitted! Reference: {$tx->reference}");
+        return back()->with('status', "Payment submitted! Reference: {$tx->reference}. Access will be enabled after verification.");
     }
 }
