@@ -275,7 +275,7 @@ class MobileApiController extends Controller
             return response()->json(['message' => 'Course not found.'], 404);
         }
 
-        return response()->json(['data' => $course]);
+        return response()->json(['data' => $course, 'lessons' => []]);
     }
 
     public function ebooks(): JsonResponse
