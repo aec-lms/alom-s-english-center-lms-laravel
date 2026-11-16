@@ -44,6 +44,9 @@ class NotificationController extends Controller
 
     public function dispatch(Request $request): RedirectResponse
     {
+        $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
+
         $validated = $request->validate([
             'user_id' => ['required', 'integer', 'exists:users,id'],
             'channel' => ['required', 'in:in_app,email,sms,push'],
@@ -51,8 +54,6 @@ class NotificationController extends Controller
             'message' => ['required', 'string', 'max:10000'],
         ]);
 
-        $actor = $request->user();
-        $this->ensureAssignedBranch($actor);
         $recipient = User::query()->findOrFail((int) $validated['user_id']);
         if ($actor && $actor->hasRole('branch_manager')) {
             abort_unless((int) $recipient->branch_id === (int) $actor->branch_id, 404);
