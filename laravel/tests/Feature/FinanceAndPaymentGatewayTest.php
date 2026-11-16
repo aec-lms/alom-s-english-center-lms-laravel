@@ -154,35 +154,16 @@ class FinanceAndPaymentGatewayTest extends TestCase
         $this->assertSame('paid', $sslInvoice->fresh()->status);
         $this->assertSame('settled', $sslTransaction->fresh()->status);
 
-        // Tokenized card checkout succeeds and stores zero PAN/CVV
-        $checkout = $this->actingAs($admin)->postJson('/payments/card/checkout', [
+        // Visa/Mastercard is a card network; never fake authorization without an acquiring PSP adapter.
+        $this->actingAs($admin)->postJson('/payments/card/checkout', [
             'invoice_id' => $invoice->id,
             'payment_token' => 'tok_visa_1234567890',
             'card_brand' => 'visa',
             'last4' => '4242',
-        ])->assertOk()->json();
+        ])->assertStatus(503)->assertJsonPath('message', fn ($message) => str_contains($message, 'acquiring-bank/PSP adapter'));
 
-        $payload = json_encode([
-            'transaction_ref' => $checkout['transaction_ref'],
-            'processor_reference' => 'PROC-998877',
-        ], JSON_THROW_ON_ERROR);
-        $sig = hash_hmac('sha256', $payload, 'whsec_test_123456');
-
-        $this->call(
-            'POST',
-            '/payments/card/webhook',
-            [],
-            [],
-            [],
-            ['HTTP_X_CARD_SIGNATURE' => $sig, 'CONTENT_TYPE' => 'application/json'],
-            $payload
-        )->assertOk();
-
-        $tx = PaymentTransaction::query()->where('transaction_ref', $checkout['transaction_ref'])->firstOrFail();
-        $this->assertSame('settled', $tx->status);
-        $this->assertSame('paid', $invoice->fresh()->status);
-        $this->assertArrayNotHasKey('card_number', $tx->metadata ?? []);
-        $this->assertArrayNotHasKey('cvv', $tx->metadata ?? []);
+        $this->assertSame(0, PaymentTransaction::query()->where('gateway_slug', 'gateway-card')->count());
+        $this->assertSame('unpaid', $invoice->fresh()->status);
     }
 
     public function test_stripe_and_paypal_gateways_and_atomic_refund_workflow(): void
