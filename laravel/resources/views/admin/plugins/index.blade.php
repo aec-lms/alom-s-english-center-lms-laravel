@@ -83,6 +83,14 @@
                             <a href="{{ route('admin.plugins.configure', $plugin->slug) }}" class="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50">Configure</a>
                         @endif
 
+                        @if ($plugin->has_settings)
+                            <form method="POST" action="{{ route('admin.plugins.reset-settings', $plugin->slug) }}" onsubmit="return confirm('Reset all settings for {{ $plugin->name }} to defaults? API credentials and custom configuration will be cleared. Business data will remain unchanged.')">
+                                @csrf
+                                <input type="hidden" name="confirm_reset" value="1">
+                                <button class="px-3 py-1.5 rounded-lg border border-amber-300 text-amber-800 font-semibold hover:bg-amber-50">Reset to Default</button>
+                            </form>
+                        @endif
+
                         <form method="POST" action="{{ route('admin.plugins.uninstall', $plugin->slug) }}" onsubmit="return confirm('Uninstall {{ $plugin->name }}? Shared LMS records will be preserved.')">
                             @csrf
                             <input type="hidden" name="confirm_uninstall" value="1">
