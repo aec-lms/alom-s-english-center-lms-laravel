@@ -136,7 +136,9 @@ class MobileAppUpdateAndPublicParityTest extends TestCase
             ->assertJsonMissing(['title' => 'Branch B Private Notice']);
 
         $studentA = $this->createUserWithRole('student', (int) $branchA);
-        $this->actingAs($studentA)
+        $mobileToken = $studentA->createToken('branch-notice-test')->plainTextToken;
+
+        $this->withHeader('Authorization', 'Bearer ' . $mobileToken)
             ->getJson('/api/mobile/notices')
             ->assertOk()
             ->assertJsonCount(2, 'data')
@@ -144,7 +146,7 @@ class MobileAppUpdateAndPublicParityTest extends TestCase
             ->assertJsonFragment(['title' => 'Branch A Notice'])
             ->assertJsonMissing(['title' => 'Branch B Private Notice']);
 
-        $this->actingAs($studentA)
+        $this->withHeader('Authorization', 'Bearer ' . $mobileToken)
             ->getJson('/api/mobile/home')
             ->assertOk()
             ->assertJsonCount(2, 'notices')
