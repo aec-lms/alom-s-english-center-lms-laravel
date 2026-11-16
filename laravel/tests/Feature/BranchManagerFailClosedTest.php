@@ -82,6 +82,37 @@ class BranchManagerFailClosedTest extends TestCase
         }
     }
 
+    public function test_branch_cannot_be_deleted_while_course_records_reference_it(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'student-management', 'course-management']);
+
+        $admin = $this->createUserWithRole('admin');
+        $branchId = DB::table('branches')->insertGetId([
+            'code' => 'BR-KEEP',
+            'name' => 'Branch With Courses',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $courseId = DB::table('courses')->insertGetId([
+            'branch_id' => $branchId,
+            'code' => 'BR-KEEP-01',
+            'title' => 'Branch-owned Course',
+            'slug' => 'branch-owned-course',
+            'price' => 0,
+            'status' => 'published',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($admin)->delete('/admin/branches/' . $branchId)
+            ->assertSessionHasErrors('branch');
+
+        $this->assertDatabaseHas('branches', ['id' => $branchId]);
+        $this->assertDatabaseHas('courses', ['id' => $courseId, 'branch_id' => $branchId]);
+    }
+
     public function test_unassigned_branch_manager_is_denied_teacher_guardian_and_hr_reads_and_writes(): void
     {
         $this->markSystemInstalled();
