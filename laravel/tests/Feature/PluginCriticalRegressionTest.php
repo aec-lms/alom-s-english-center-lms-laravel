@@ -41,11 +41,13 @@ class PluginCriticalRegressionTest extends TestCase
         $this->assertSame([], $manifest->dependencies);
         $this->assertContains('batch-management', $manifest->optionalDependencies);
         $migration = file_get_contents(base_path('plugins/modules/attendance-management/Database/Migrations/2026_02_07_000001_create_attendance_records_table.php'));
+        $upgradeMigration = file_get_contents(base_path('plugins/modules/attendance-management/Database/Migrations/2026_11_16_000001_repoint_attendance_batch_foreign_key.php'));
         $controller = file_get_contents(base_path('plugins/modules/attendance-management/Http/Controllers/AttendanceController.php'));
 
         $this->assertIsString($migration);
         $this->assertIsString($controller);
-        $this->assertStringContainsString("constrained('study_batches')", $migration);
+        $this->assertStringContainsString("'batch_id'", $migration);
+        $this->assertStringContainsString("on('study_batches')", $upgradeMigration);
         $this->assertStringContainsString("exists:study_batches,id", $controller);
         $this->assertStringNotContainsString("exists:batches,id", $controller);
     }
@@ -80,7 +82,8 @@ class PluginCriticalRegressionTest extends TestCase
         $this->assertIsString($orchestrator);
         $this->assertStringContainsString("'auth'", $routeFile);
         $this->assertStringContainsString("'throttle:10,1'", $routeFile);
-        $this->assertStringContainsString("whereHas('student'", $controller);
+        $this->assertStringContainsString('$isInvoiceOwner', $controller);
+        $this->assertStringContainsString('$invoice->payer_email', $controller);
         $this->assertStringContainsString("'exists:fee_invoices,id'", $controller);
         $checkoutMethod = substr($controller, strpos($controller, 'public function publicCheckout'));
         $this->assertStringNotContainsString("'amount' => ['required'", $checkoutMethod);
@@ -125,7 +128,7 @@ class PluginCriticalRegressionTest extends TestCase
         $branchManager->roles()->first()->permissions()->syncWithoutDetaching([$hrPermission->id]);
 
         $this->actingAs($branchManager)
-            ->post('/admin/hr/payrolls/' . $payroll->id . '/mark-paid')
+            ->post('/admin/hr/payrolls/' . $payroll->id . '/mark-paid', ['payment_reference' => 'BRANCH-REFUSED-001'])
             ->assertForbidden();
 
         $this->actingAs($admin)
@@ -189,7 +192,7 @@ class PluginCriticalRegressionTest extends TestCase
     public function test_universal_payment_manual_records_cannot_self_verify_or_refund_and_are_branch_scoped(): void
     {
         $controller = file_get_contents(base_path('plugins/modules/universal-payment/Http/Controllers/UniversalPaymentController.php'));
-        $migration = file_get_contents(base_path('plugins/modules/universal-payment/Database/Migrations/2026_11_16_000001_add_branch_id_to_universal_payment_transactions.php'));
+        $migration = file_get_contents(base_path('plugins/modules/universal-payment/Database/Migrations/2026_11_16_000006_add_branch_id_to_universal_payment_transactions.php'));
         $paymentController = file_get_contents(base_path('plugins/modules/payment-management/Http/Controllers/PaymentController.php'));
 
         $this->assertIsString($controller);
@@ -215,7 +218,7 @@ class PluginCriticalRegressionTest extends TestCase
 
         $this->assertIsString($controller);
         $this->assertIsString($migration);
-        $this->assertStringContainsString("where('branch_id', \$user->branch_id)", $controller);
+        $this->assertStringContainsString("where('branch_id', \$actor->branch_id)", $controller);
         $this->assertStringContainsString("recipient->branch_id", $controller);
         $this->assertStringContainsString("abort_unless((int) \$recipient->branch_id === (int) \$actor->branch_id, 404)", $controller);
         $this->assertStringContainsString("branch_id", $migration);
