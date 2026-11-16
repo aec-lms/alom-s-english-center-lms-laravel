@@ -37,7 +37,8 @@ class WebsiteBuildersTest extends TestCase
             ->assertOk()
             ->assertSee('Applications are now open.')
             ->assertSee('Explore Courses')
-            ->assertSee('href="/courses"', false);
+            ->assertSee('href="/courses"', false)
+            ->assertSee('<meta name="description" content="Apply to AEC courses.">', false);
     }
 
     public function test_page_builder_rejects_script_and_protocol_relative_cta_urls(): void
