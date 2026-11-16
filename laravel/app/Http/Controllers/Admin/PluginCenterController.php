@@ -113,6 +113,18 @@ class PluginCenterController extends Controller
         }
     }
 
+    public function resetSettings(Request $request, string $slug): RedirectResponse
+    {
+        $request->validate(['confirm_reset' => ['required', 'accepted']]);
+
+        try {
+            $this->plugins->resetSettingsToDefaults($slug, auth()->id());
+            return back()->with('status', "Settings for '{$slug}' were reset to manifest defaults. Plugin business data was preserved.");
+        } catch (\\Throwable $e) {
+            return back()->withErrors(['plugin' => $e->getMessage()]);
+        }
+    }
+
     public function configure(string $slug): View
     {
         $manifest = $this->plugins->discoverManifests()[$slug] ?? abort(404);
