@@ -76,6 +76,11 @@ class MobileAppUpdateAndPublicParityTest extends TestCase
         $this->assertTrue(Schema::hasTable('mobile_device_tokens'));
         $this->assertSame(2, DB::table('mobile_device_tokens')->count());
 
+        $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->getJson('/api/mobile/me')
+            ->assertOk()
+            ->assertJsonStructure(['user' => ['id', 'email'], 'enrollments']);
+
         $this->getJson('/api/mobile/home')
             ->assertOk()
             ->assertJsonStructure(['courses', 'ebooks', 'products', 'notices']);
