@@ -76,4 +76,4 @@ class StripeController extends Controller
         abort_unless($isFinanceOperator || $isInvoiceOwner || $isAssignedBranchManager, 403,
             'You are not authorized to pay this invoice.');
     }
-}\n
+}
