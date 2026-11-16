@@ -14,7 +14,7 @@ class MobileAppSecurityTest extends TestCase
     public function test_public_mobile_api_hides_paid_course_content_and_scopes_notices(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['branch-management', 'course-management', 'student-management', 'notice-board', 'mobile-app-api']);
+        $this->activatePlugins(['branch-management', 'course-management', 'student-management', 'notice-board', 'storefront-catalog', 'mobile-app-api']);
 
         $course = Course::query()->create([
             'code' => 'MOB-SEC-001',
@@ -31,6 +31,40 @@ class MobileAppSecurityTest extends TestCase
             'sort_order' => 1,
             'created_at' => now(),
             'updated_at' => now(),
+        ]);
+
+        DB::table('storefront_items')->insert([
+            [
+                'type' => 'ebook',
+                'slug' => 'premium-ebook-mobile-test',
+                'title' => 'Premium Mobile Ebook',
+                'category' => 'English',
+                'badge' => 'Premium',
+                'price' => 450,
+                'original_price' => 500,
+                'is_free' => false,
+                'pages' => 120,
+                'summary' => 'Public ebook summary',
+                'download_url' => '/storage/storefront/pdfs/premium-mobile-test.pdf',
+                'is_active' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'type' => 'product',
+                'slug' => 'downloadable-product-mobile-test',
+                'title' => 'Downloadable Product',
+                'category' => 'Resource',
+                'badge' => 'Digital',
+                'price' => 300,
+                'original_price' => 300,
+                'is_free' => false,
+                'summary' => 'Public product summary',
+                'download_url' => '/storage/storefront/pdfs/product-mobile-test.pdf',
+                'is_active' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
         ]);
 
         Notice::query()->create([
@@ -54,6 +88,17 @@ class MobileAppSecurityTest extends TestCase
             ->assertOk()
             ->assertJsonMissingPath('data.pdf_path')
             ->assertJsonMissingPath('data.lessons');
+
+        $this->getJson('/api/mobile/ebooks')
+            ->assertOk()
+            ->assertJsonMissingPath('data.0.download_url');
+        $this->getJson('/api/mobile/products')
+            ->assertOk()
+            ->assertJsonMissingPath('data.0.download_url');
+        $this->getJson('/api/mobile/home')
+            ->assertOk()
+            ->assertJsonMissing(['download_url' => '/storage/storefront/pdfs/premium-mobile-test.pdf'])
+            ->assertJsonMissing(['download_url' => '/storage/storefront/pdfs/product-mobile-test.pdf']);
 
         $this->getJson('/api/mobile/notices')
             ->assertOk()
