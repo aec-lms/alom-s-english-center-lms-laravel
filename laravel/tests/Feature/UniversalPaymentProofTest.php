@@ -25,7 +25,7 @@ class UniversalPaymentProofTest extends TestCase
             'gateway' => 'bank_cash',
             'amount' => 1500,
             'external_trx_id' => 'BANK-PROOF-001',
-            'proof' => UploadedFile::fake()->create('bank-receipt.pdf', 120, 'application/pdf'),
+            'proof_file' => UploadedFile::fake()->create('bank-receipt.pdf', 120, 'application/pdf'),
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         $transaction = DB::table('universal_payment_transactions')->where('external_trx_id', 'BANK-PROOF-001')->first();
