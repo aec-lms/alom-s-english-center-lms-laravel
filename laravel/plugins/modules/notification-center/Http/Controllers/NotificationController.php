@@ -24,8 +24,19 @@ class NotificationController extends Controller
 
     public function index(): View
     {
-        $notifications = LmsNotification::query()->with('user')->latest()->paginate(25);
-        $users = User::query()->select('id', 'name', 'email', 'phone')->orderBy('name')->limit(500)->get();
+        $actor = request()->user();
+        $this->ensureAssignedBranch($actor);
+
+        $notificationQuery = LmsNotification::query()->with('user')->latest();
+        $userQuery = User::query()->select('id', 'name', 'email', 'phone')->orderBy('name');
+
+        if ($actor && $actor->hasRole('branch_manager')) {
+            $notificationQuery->where('branch_id', $actor->branch_id);
+            $userQuery->where('branch_id', $actor->branch_id);
+        }
+
+        $notifications = $notificationQuery->paginate(25);
+        $users = $userQuery->limit(500)->get();
 
         return view('notification-center::index', compact('notifications', 'users'));
     }
@@ -39,7 +50,13 @@ class NotificationController extends Controller
             'message' => ['required', 'string', 'max:10000'],
         ]);
 
+        $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $recipient = User::query()->findOrFail((int) $validated['user_id']);
+        if ($actor && $actor->hasRole('branch_manager')) {
+            abort_unless((int) $recipient->branch_id === (int) $actor->branch_id, 404);
+        }
+
         $status = match ($validated['channel']) {
             'in_app' => 'sent',
             'email' => $this->sendEmail($recipient, $validated['title'], $validated['message']),
@@ -49,6 +66,7 @@ class NotificationController extends Controller
 
         $record = LmsNotification::query()->create([
             'user_id' => $recipient->id,
+            'branch_id' => $recipient->branch_id,
             'channel' => $validated['channel'],
             'title' => $validated['title'],
             'message' => $validated['message'],
@@ -160,4 +178,17 @@ class NotificationController extends Controller
             return 'delivery_unknown';
         }
     }
+
+    private function ensureAssignedBranch($actor): void
+    {
+        if (!$actor || !$actor->hasRole('branch_manager')) {
+            return;
+        }
+
+        if ($actor->branch_id === null
+            || !app('db')->table('branches')->where('id', $actor->branch_id)->where('is_active', true)->exists()) {
+            abort(403, 'Branch manager must be assigned to an active branch.');
+        }
+    }
+
 }
