@@ -34,13 +34,21 @@ class NoticeController extends Controller
     {
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
-        $validated = $request->validate([
+                $branchIntegration = app(PluginManager::class)->isEnabled('branch-management') && Schema::hasTable('branches');
+        $branchRule = $branchIntegration
+            ? ['nullable', 'integer', 'exists:branches,id,is_active,1']
+            : ['nullable', 'integer'];
+$validated = $request->validate([
             'title' => ['required', 'string', 'max:180'],
             'body' => ['required', 'string'],
             'audience_role' => ['required', 'in:all,student,teacher,guardian'],
-            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
+            'branch_id' => $branchRule,
             'is_pinned' => ['nullable', 'boolean'],
         ]);
+
+        if (!$branchIntegration) {
+            $validated['branch_id'] = null;
+        }
 
         if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null) {
             $validated['branch_id'] = $actor->branch_id;
