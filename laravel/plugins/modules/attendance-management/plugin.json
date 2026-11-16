@@ -6,7 +6,7 @@
     "category": "academic",
     "description": "Online and offline batch attendance, GPS check-in, short-lived QR attendance, audit history and student/guardian reports.",
     "core_compatibility": "^2.0",
-    "dependencies": ["branch-management", "student-management", "batch-management", "guardian-management", "mobile-app-api"],
+    "dependencies": ["branch-management", "student-management", "batch-management"],
     "provider": "Plugins\\Modules\\AttendanceManagement\\Providers\\AttendanceManagementServiceProvider",
     "permissions": [
         {"slug": "attendance.manage", "name": "Record & View Student Attendance"},
