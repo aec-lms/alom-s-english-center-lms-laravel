@@ -285,6 +285,7 @@ class PluginCriticalRegressionTest extends TestCase
         ]);
 
         $plugins = \Mockery::mock(PluginManager::class);
+        $plugins->shouldReceive('isEnabled')->with('email-notifications')->andReturn(true);
         $plugins->shouldReceive('getSetting')->with('email-notifications', 'smtp_host', '')->andReturn('smtp.example.test');
         $plugins->shouldReceive('getSetting')->with('email-notifications', 'smtp_port', '587')->andReturn(587);
         $plugins->shouldReceive('getSetting')->with('email-notifications', 'smtp_username', '')->andReturn('smtp-user');
