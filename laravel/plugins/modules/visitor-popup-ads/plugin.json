@@ -1,10 +1,10 @@
 {
     "slug": "visitor-popup-ads",
     "name": "Visitor Pop-Up Ads Manager",
-    "version": "2.1.0",
+    "version": "2.1.1",
     "author": "AEC Core Team",
     "category": "marketing",
-    "description": "Independent Visitor Pop-Up Ads & Promo Modal plugin with image upload, delay timer, frequency control, CTA tracking, and scheduling.",
+    "description": "Independent Visitor Pop-Up Ads & Promo Modal plugin with image upload, editable content, delay timer, frequency control, and CTA tracking.",
     "core_compatibility": "^2.0",
     "dependencies": [],
     "provider": "Plugins\\Modules\\VisitorPopupAds\\Providers\\VisitorPopupAdsServiceProvider",
