@@ -8,13 +8,13 @@ use App\Core\Plugins\PluginManager;
 use App\Core\Security\AuditLogger;
 use App\Models\User;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Plugins\Modules\NotificationCenter\Models\LmsNotification;
+use Plugins\Modules\NotificationCenter\Jobs\DeliverNotificationJob;
 
 class NotificationController extends Controller
 {
@@ -61,7 +61,7 @@ class NotificationController extends Controller
 
         $status = match ($validated['channel']) {
             'in_app' => 'sent',
-            'email' => $this->sendEmail($recipient, $validated['title'], $validated['message']),
+            'email' => $this->emailDeliveryConfigured($recipient) ? 'queued' : 'not_configured',
             'sms' => $this->sendSms($recipient, $validated['message']),
             default => 'provider_not_implemented',
         };
@@ -75,6 +75,10 @@ class NotificationController extends Controller
             'status' => $status,
         ]);
 
+        if ($validated['channel'] === 'email' && $status === 'queued') {
+            DeliverNotificationJob::dispatch((int) $record->id)->afterCommit();
+        }
+
         $this->audit->log('notification.dispatched', 'lms_notification', (string) $record->id, [
             'channel' => $record->channel,
             'status' => $status,
@@ -84,6 +88,7 @@ class NotificationController extends Controller
             'sent' => $validated['channel'] === 'in_app'
                 ? 'In-app notification added to the user inbox.'
                 : 'Email accepted by the configured mail transport.',
+            'queued' => 'Email queued for delivery. Final delivery status updates after the SMTP worker processes it.',
             'submitted' => 'SMS submitted to the provider; handset delivery is not confirmed.',
             'not_configured' => ucfirst($validated['channel']) . ' was not sent because its provider is not configured.',
             'provider_not_implemented' => 'Push notifications are not connected yet. The notification was recorded but not sent.',
@@ -103,10 +108,11 @@ class NotificationController extends Controller
         return back()->with('status', 'Notification marked as read.');
     }
 
-    private function sendEmail(User $recipient, string $title, string $message): string
+    private function emailDeliveryConfigured(User $recipient): bool
     {
-        if (!$this->plugins->isEnabled('email-notifications') || empty($recipient->email)) {
-            return 'not_configured';
+        if (!$this->plugins->isEnabled('email-notifications')
+            || !filter_var((string) $recipient->email, FILTER_VALIDATE_EMAIL)) {
+            return false;
         }
 
         $host = trim((string) $this->plugins->getSetting('email-notifications', 'smtp_host', ''));
@@ -115,32 +121,10 @@ class NotificationController extends Controller
         $password = (string) $this->plugins->getSetting('email-notifications', 'smtp_password', '');
         $from = trim((string) $this->plugins->getSetting('email-notifications', 'from_address', config('mail.from.address', '')));
 
-        if ($host === '' || $port < 1 || $port > 65535 || !filter_var($from, FILTER_VALIDATE_EMAIL)
-            || (($username === '') !== ($password === ''))) {
-            return 'not_configured';
-        }
-
-        try {
-            $mailer = Mail::build([
-                'transport' => 'smtp',
-                'scheme' => $port === 465 ? 'smtps' : 'smtp',
-                'host' => $host,
-                'port' => $port,
-                'username' => $username !== '' ? $username : null,
-                'password' => $password !== '' ? $password : null,
-                'timeout' => 10,
-                'local_domain' => config('mail.mailers.smtp.local_domain'),
-            ]);
-            $mailer->html(nl2br(e($message)), function ($mail) use ($recipient, $title, $from): void {
-                $mail->to($recipient->email)
-                    ->from($from, (string) config('mail.from.name', config('app.name')))
-                    ->subject($title);
-            });
-
-            return 'sent';
-        } catch (\Throwable) {
-            return 'failed';
-        }
+        return $host !== ''
+            && $port >= 1 && $port <= 65535
+            && filter_var($from, FILTER_VALIDATE_EMAIL) !== false
+            && (($username === '') === ($password === ''));
     }
 
     private function sendSms(User $recipient, string $message): string
