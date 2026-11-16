@@ -286,6 +286,7 @@ class AdditionalModulesWorkflowTest extends TestCase
             'pass_marks' => 40,
         ])->assertSessionHasNoErrors();
         $examId = DB::table('exams')->where('title', 'Branch B Assessment')->value('id');
+        $this->assertNotNull($examId);
 
         $this->actingAs($admin)->post('/admin/certificates', [
             'student_name' => 'Branch B Learner',
