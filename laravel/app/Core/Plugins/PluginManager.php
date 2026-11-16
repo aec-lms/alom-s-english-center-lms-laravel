@@ -658,10 +658,42 @@ class PluginManager
         }
 
         DB::transaction(function () use ($slug, $manifest, $actorId): void {
+            $existingSettings = PluginSetting::query()->where('plugin_slug', $slug)->get();
+            $secretKeys = [];
+            foreach ($manifest->settingsSchema as $field) {
+                if ((bool) ($field['secret'] ?? $field['encrypted'] ?? false)) {
+                    $secretKeys[] = (string) ($field['key'] ?? '');
+                }
+            }
+
+            // Back up raw settings before reset. Secret values are ciphertext at rest;
+            // encrypt any legacy plaintext secret before writing the private backup.
+            $backupRows = $existingSettings->map(function (PluginSetting $setting) use ($secretKeys): array {
+                $row = $setting->getAttributes();
+                if (in_array((string) $setting->setting_key, $secretKeys, true)
+                    && !(bool) $setting->is_encrypted
+                    && (string) $setting->setting_value !== '') {
+                    $row['setting_value'] = Crypt::encryptString((string) $setting->setting_value);
+                    $row['is_encrypted'] = true;
+                }
+                return $row;
+            })->all();
+
+            $backupId = $slug . '-' . now()->format('YmdHis') . '-' . bin2hex(random_bytes(5));
+            $backupRoot = storage_path('app/plugin-setting-backups');
+            File::ensureDirectoryExists($backupRoot);
+            @chmod($backupRoot, 0700);
+            $backupPath = $backupRoot . DIRECTORY_SEPARATOR . $backupId . '.json';
+            File::put($backupPath, json_encode([
+                'plugin_slug' => $slug,
+                'created_at' => now()->toIso8601String(),
+                'settings' => $backupRows,
+            ], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
+            @chmod($backupPath, 0600);
+
             PluginSetting::query()->where('plugin_slug', $slug)->delete();
 
             $values = [];
-            $secretKeys = [];
             foreach ($manifest->settingsSchema as $field) {
                 $key = (string) ($field['key'] ?? '');
                 if ($key === '') {
@@ -678,6 +710,7 @@ class PluginManager
             $this->saveSettings($slug, $values, $secretKeys, $actorId);
             $this->audit->log('plugin.settings_reset', 'plugin', $slug, [
                 'setting_count' => count($values),
+                'backup_id' => $backupId,
                 'business_data_preserved' => true,
             ], $actorId);
         });
