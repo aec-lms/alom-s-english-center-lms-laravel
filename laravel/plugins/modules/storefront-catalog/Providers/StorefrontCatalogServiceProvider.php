@@ -4,12 +4,18 @@ declare(strict_types=1);
 
 namespace Plugins\Modules\StorefrontCatalog\Providers;
 
-use Illuminate\Support\ServiceProvider;
+use App\Core\Plugins\BasePluginServiceProvider;
 
-class StorefrontCatalogServiceProvider extends ServiceProvider
+class StorefrontCatalogServiceProvider extends BasePluginServiceProvider
 {
-    public function boot(): void
+    public function slug(): string
     {
-        $this->loadViewsFrom(__DIR__ . '/../Resources/views', 'storefront-catalog');
+        return 'storefront-catalog';
+    }
+
+    protected function pluginPath(string $relative = ''): string
+    {
+        $base = dirname(__DIR__);
+        return $relative !== '' ? $base . DIRECTORY_SEPARATOR . ltrim($relative, DIRECTORY_SEPARATOR) : $base;
     }
 }
