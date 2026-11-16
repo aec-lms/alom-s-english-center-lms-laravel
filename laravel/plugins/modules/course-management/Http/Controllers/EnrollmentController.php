@@ -23,11 +23,13 @@ class EnrollmentController extends Controller
 
     public function my(Request $request): View
     {
-        $enrollments = Enrollment::query()
-            ->with(['course', 'invoice'])
-            ->where('user_id', $request->user()->id)
-            ->latest()
-            ->paginate(20);
+        $query = Enrollment::query()
+            ->with('course')
+            ->where('user_id', $request->user()->id);
+        if ($this->feesIntegrationAvailable()) {
+            $query->with('invoice');
+        }
+        $enrollments = $query->latest()->paginate(20);
 
         return view('course-management::my-enrollments', compact('enrollments'));
     }
@@ -36,11 +38,13 @@ class EnrollmentController extends Controller
     {
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
-        $enrollments = Enrollment::query()
-            ->with(['user', 'course', 'invoice'])
-            ->when($actor && $actor->hasRole('branch_manager'), fn ($q) => $q->where('branch_id', $actor->branch_id))
-            ->latest()
-            ->paginate(30);
+        $query = Enrollment::query()
+            ->with(['user', 'course'])
+            ->when($actor && $actor->hasRole('branch_manager'), fn ($q) => $q->where('branch_id', $actor->branch_id));
+        if ($this->feesIntegrationAvailable()) {
+            $query->with('invoice');
+        }
+        $enrollments = $query->latest()->paginate(30);
 
         return view('course-management::enrollments', compact('enrollments'));
     }
@@ -51,6 +55,11 @@ class EnrollmentController extends Controller
         abort_unless($actor && $actor->hasRole('student'), 403, 'Only student accounts can request course enrollment.');
         abort_unless($course->status === 'published', 404, 'This course is not open for enrollment.');
 
+        abort_unless(
+            $this->plugins->isEnabled('student-management') && Schema::hasTable('students'),
+            409,
+            'Student Management must be enabled before student enrollment can be requested.'
+        );
         $student = Student::query()->where('user_id', $actor->id)->first();
         abort_unless($student, 422, 'Your student profile is not ready. Contact the admissions office.');
         if ($course->branch_id !== null && (int) $course->branch_id !== (int) $student->branch_id) {
@@ -115,6 +124,7 @@ class EnrollmentController extends Controller
 
         $validated = $request->validate(['status' => ['required', 'in:pending,active,cancelled,completed']]);
         if ($validated['status'] === 'active' && (float) $enrollment->course?->price > 0) {
+            abort_unless($this->feesIntegrationAvailable(), 503, 'Fees Management must be enabled before activating a paid course enrollment.');
             $invoice = $enrollment->invoice;
             if (!$invoice || $invoice->status !== 'paid' || (float) $invoice->paid_amount + 0.01 < (float) $invoice->net_amount) {
                 abort(422, 'Paid course enrollment cannot be activated until its linked invoice is fully settled.');
@@ -124,6 +134,11 @@ class EnrollmentController extends Controller
         $enrollment->update(['status' => $validated['status']]);
 
         return back()->with('status', 'Enrollment status updated.');
+    }
+
+    private function feesIntegrationAvailable(): bool
+    {
+        return $this->plugins->isEnabled('fees-management') && Schema::hasTable('fee_invoices');
     }
 
     private function ensureAssignedBranch($actor): void
