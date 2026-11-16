@@ -29,6 +29,9 @@
             <a href="{{ route('admin.updates.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Update Center</a>
             <a href="{{ route('admin.backups.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Backup & Restore</a>
             <a href="{{ route('admin.audit.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Audit Logs</a>
+            @if (auth()->user()?->hasPermission('core.recycle_bin.manage'))
+                <a href="{{ route('admin.recycle-bin.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Recycle Bin</a>
+            @endif
 
             <div class="px-3 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Marketing, Growth & SEO</div>
             @if ($pluginManager->isEnabled('meta-pixel') && Route::has('plugins.meta_pixel.index'))
