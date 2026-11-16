@@ -18,7 +18,7 @@
     <div>
         <div class="inline-flex items-center px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold">Universal Payment · Manual verification protected</div>
         <h1 class="text-2xl font-extrabold text-slate-900 mt-1">Universal Payment Gateway & Ledger</h1>
-        <p class="text-xs text-slate-500">Online checkout is available only through configured SSLCommerz, Stripe and PayPal adapters. bKash, Nagad, Rocket and bank/cash entries are manual records until dedicated online adapters are installed.</p>
+        <p class="text-xs text-slate-500">Online checkout is available only through configured SSLCommerz, Stripe and PayPal adapters. bKash, Nagad, Rocket and bank/cash entries are manual receipt records until dedicated online adapters are installed. Manual receipt verification does not settle a Fee Invoice.</p>
     </div>
 
     <div class="grid lg:grid-cols-2 gap-6">
@@ -81,8 +81,8 @@
                     <input type="number" step="0.01" min="1" name="amount" required class="w-full rounded-xl border border-slate-300 px-3 py-2">
                 </div>
                 <div>
-                    <label class="font-semibold text-slate-700 block mb-1">External TrxID (Optional)</label>
-                    <input name="external_trx_id" class="w-full rounded-xl border border-slate-300 px-3 py-2 font-mono">
+                    <label class="font-semibold text-slate-700 block mb-1">Payment / Deposit Reference *</label>
+                    <input name="external_trx_id" required maxlength="120" class="w-full rounded-xl border border-slate-300 px-3 py-2 font-mono">
                 </div>
                 <div>
                     <label class="font-semibold text-slate-700 block mb-1">Verification Policy</label>
