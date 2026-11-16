@@ -2,6 +2,14 @@
 @section('title', 'Recycle Bin — AEC LMS')
 @section('content')
 <div class="max-w-6xl space-y-5">
+    @if (session('status'))
+        <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{{ session('status') }}</div>
+    @endif
+    @if ($errors->any())
+        <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+            <ul class="list-disc pl-5">@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul>
+        </div>
+    @endif
     <div>
         <h1 class="text-2xl font-extrabold text-slate-900">Admin Recycle Bin</h1>
         <p class="text-xs text-slate-500 mt-1">Restore deleted records or permanently remove selected records after confirmation. Linked records may prevent permanent deletion.</p>
