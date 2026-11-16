@@ -303,6 +303,10 @@ class AdditionalModulesWorkflowTest extends TestCase
         $manager->roles()->first()->permissions()->syncWithoutDetaching($permissionIds);
 
         $this->actingAs($manager)->delete('/admin/courses/' . $courseId)->assertForbidden();
+        $examDestroyRoute = app('router')->getRoutes()->getByName('plugins.exams.destroy');
+        $this->assertNotNull($examDestroyRoute, 'Exam destroy route must be registered.');
+        $this->assertContains('DELETE', $examDestroyRoute->methods());
+
         $this->actingAs($manager)->delete('/admin/exams/' . $examId)->assertForbidden();
         $this->actingAs($manager)->post('/admin/certificates/' . $certificateId . '/revoke')->assertForbidden();
 
