@@ -6,7 +6,7 @@
     <main class="max-w-6xl mx-auto px-4 py-10 space-y-8">
         <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
             <div>
-                <p class="text-xs font-bold uppercase tracking-wider text-sky-700">{{ str_replace('_', ' ', $role) }} Portal</p>
+                <p class="text-xs font-bold uppercase tracking-wider text-sky-700">{{ ucwords(str_replace('_', ' ', $role)) }} Portal</p>
                 <h1 class="text-3xl font-extrabold text-slate-900 mt-1">Welcome, {{ $user->name }}</h1>
                 <p class="text-sm text-slate-500 mt-1">{{ $user->email }}</p>
             </div>
