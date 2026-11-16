@@ -77,6 +77,7 @@ class StripeGatewayService
                     'metadata[transaction_ref]' => $tx->transaction_ref,
                     'metadata[invoice_number]' => (string) $invoice->invoice_number,
                     'description' => 'AEC LMS invoice ' . $invoice->invoice_number,
+                    'return_url' => url('/payments/stripe/return'),
                 ]);
 
             if (!$response->successful()) {
