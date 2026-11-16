@@ -24,6 +24,7 @@ class CourseController extends Controller
     public function index(Request $request): View
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $isBranchManager = $actor && $actor->hasRole('branch_manager');
         $courses = Schema::hasTable('courses')
             ? Course::query()->when($isBranchManager, fn ($q) => $q->where('branch_id', $actor->branch_id))->latest()->paginate(20)
@@ -72,6 +73,7 @@ class CourseController extends Controller
         ]);
 
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         if ($actor && $actor->hasRole('branch_manager')) {
             $validated['branch_id'] = $actor->branch_id;
         }
@@ -167,6 +169,7 @@ class CourseController extends Controller
     public function update(Request $request, Course $course): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $course->branch_id) {
             abort(403, 'Branch isolation violation.');
         }
@@ -264,6 +267,7 @@ class CourseController extends Controller
     public function destroy(Request $request, Course $course): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $course->branch_id) {
             abort(403, 'Branch isolation violation.');
         }
@@ -339,6 +343,7 @@ class CourseController extends Controller
     public function storeLiveClass(Request $request): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $validated = $request->validate([
             'course_id' => ['required', 'integer', 'exists:courses,id'],
             'title' => ['required', 'string', 'max:180'],
@@ -371,6 +376,7 @@ class CourseController extends Controller
     public function updateLiveClass(Request $request, LiveClass $liveClass): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $liveClass->course?->branch_id) {
             abort(403, 'Branch isolation violation.');
         }
@@ -394,6 +400,7 @@ class CourseController extends Controller
     public function destroyLiveClass(Request $request, LiveClass $liveClass): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $liveClass->course?->branch_id) {
             abort(403, 'Branch isolation violation.');
         }
@@ -431,5 +438,12 @@ class CourseController extends Controller
         $file->move($dir, $filename);
 
         return '/uploads/' . $folder . '/' . $filename;
+    }
+
+    private function ensureAssignedBranch($actor): void
+    {
+        if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id === null) {
+            abort(403, 'Branch manager must be assigned to a branch.');
+        }
     }
 }
