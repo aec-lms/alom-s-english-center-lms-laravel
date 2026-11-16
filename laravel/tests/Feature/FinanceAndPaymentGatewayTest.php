@@ -372,6 +372,10 @@ class FinanceAndPaymentGatewayTest extends TestCase
             'sandbox_mode' => '1',
         ], ['client_secret', 'webhook_id']);
 
+        $plugins->saveSettings('universal-payment', [
+            'enabled_gateways' => 'sslcommerz,stripe,paypal,card',
+        ]);
+
         $branchId = DB::table('branches')->insertGetId(['code' => 'CTG', 'name' => 'Chattogram', 'created_at' => now(), 'updated_at' => now()]);
         $studentUser = $this->createUserWithRole('student', $branchId);
         $student = Student::query()->create([
