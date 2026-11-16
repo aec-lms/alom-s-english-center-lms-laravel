@@ -131,6 +131,7 @@ class PluginCriticalRegressionTest extends TestCase
         $this->actingAs($branchManager)
             ->post('/admin/hr/payrolls/' . $payroll->id . '/mark-paid', ['payment_reference' => 'BRANCH-REFUSED-001'])
             ->assertForbidden();
+        $this->assertSame('pending', $payroll->fresh()->status);
 
         $this->actingAs($admin)
             ->post('/admin/hr/payrolls/' . $payroll->id . '/mark-paid', ['payment_reference' => 'ADMIN-DISBURSEMENT-001'])
