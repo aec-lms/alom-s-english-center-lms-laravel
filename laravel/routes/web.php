@@ -98,6 +98,10 @@ Route::middleware('installed')->group(function (): void {
             Route::get('/', [RecycleBinController::class, 'index'])->name('index');
             Route::post('/students/{student}/restore', [RecycleBinController::class, 'restoreStudent'])->name('students.restore');
             Route::post('/teachers/{teacher}/restore', [RecycleBinController::class, 'restoreTeacher'])->name('teachers.restore');
+            Route::post('/courses/{recordId}/restore', [RecycleBinController::class, 'restoreCourse'])->name('courses.restore');
+            Route::post('/exams/{recordId}/restore', [RecycleBinController::class, 'restoreExam'])->name('exams.restore');
+            Route::post('/batches/{recordId}/restore', [RecycleBinController::class, 'restoreBatch'])->name('batches.restore');
+            Route::post('/classes/{recordId}/restore', [RecycleBinController::class, 'restoreClass'])->name('classes.restore');
         });
 
         Route::get('/audit-logs', [AuditLogController::class, 'index'])
