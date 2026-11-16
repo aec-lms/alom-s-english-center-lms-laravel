@@ -74,6 +74,8 @@ class AdmissionController extends Controller
             $validated['branch_id'] = $actor->branch_id;
         }
 
+        if (!$this->branchIntegrationAvailable()) { $validated['branch_id'] = null; }
+
         $app = AdmissionApplication::query()->create($validated + [
             'application_code' => 'ADM-' . strtoupper(Str::random(7)),
             'status' => 'pending',
