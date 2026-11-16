@@ -49,10 +49,16 @@ class StudentTrackingPluginTest extends TestCase
             ->assertSee('Student Tracking & Analytics')
             ->assertSee('SSC English Grammar');
 
+        $otherStudent = $this->createUserWithRole('student');
+        app(StudentActivityTracker::class)->record((int) $otherStudent->id, 'lesson_completed', 'lesson', 'other-lesson', 300, [
+            'course_title' => 'Other Student Private Course',
+        ]);
+
         $this->actingAs($student)->get('/student-tracking/mine')
             ->assertOk()
             ->assertSee('My Learning Activity')
-            ->assertSee('SSC English Grammar');
+            ->assertSee('SSC English Grammar')
+            ->assertDontSee('Other Student Private Course');
     }
 
     public function test_student_tracking_rejects_unknown_event_types(): void
