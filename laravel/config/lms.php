@@ -14,6 +14,7 @@ return [
     'backup_path' => storage_path('app/backups'),
     'health_alert_email' => env('AEC_HEALTH_ALERT_EMAIL'),
     'health_min_free_disk_bytes' => (int) env('AEC_HEALTH_MIN_FREE_DISK_BYTES', 268435456),
+    'health_queue_backlog_limit' => (int) env('AEC_HEALTH_QUEUE_BACKLOG_LIMIT', 1000),
     'update_staging_path' => storage_path('app/updates'),
     'plugin_signing_key' => env('AEC_PLUGIN_SIGNING_KEY'),
     'backup_encryption_key' => env('AEC_BACKUP_ENCRYPTION_KEY'),
