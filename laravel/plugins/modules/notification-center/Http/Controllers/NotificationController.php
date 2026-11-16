@@ -81,7 +81,8 @@ class NotificationController extends Controller
         $feedback = match ($status) {
             'sent' => $validated['channel'] === 'in_app'
                 ? 'In-app notification added to the user inbox.'
-                : ucfirst($validated['channel']) . ' accepted by the configured provider.',
+                : 'Email accepted by the configured mail transport.',
+            'submitted' => 'SMS submitted to the provider; handset delivery is not confirmed.',
             'not_configured' => ucfirst($validated['channel']) . ' was not sent because its provider is not configured.',
             'provider_not_implemented' => 'Push notifications are not connected yet. The notification was recorded but not sent.',
             'failed' => ucfirst($validated['channel']) . ' delivery failed. Check the provider settings and recipient details.',
@@ -167,7 +168,7 @@ class NotificationController extends Controller
             $body = trim((string) $response->body());
 
             if (str_starts_with($body, 'Ok:')) {
-                return 'sent';
+                return 'submitted';
             }
             if (str_starts_with($body, 'Error:')) {
                 return 'failed';
