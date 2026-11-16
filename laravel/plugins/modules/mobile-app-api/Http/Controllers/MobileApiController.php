@@ -328,7 +328,7 @@ class MobileApiController extends Controller
 
     public function products(): JsonResponse
     {
-        $items = Schema::hasTable('storefront_items')
+        $items = $this->plugins->isEnabled('storefront-catalog') && Schema::hasTable('storefront_items')
             ? DB::table('storefront_items')->where('type', 'product')->where('is_active', true)->orderByDesc('id')->get(['id', 'type', 'slug', 'title', 'category', 'badge', 'price', 'original_price', 'summary', 'thumbnail_path'])
             : collect();
 
@@ -349,7 +349,7 @@ class MobileApiController extends Controller
         $actor = $this->mobileActor($request);
         $visibleNoticeRoles = $actor ? $actor->roles()->pluck('slug')->all() : [];
         $visibleNoticeRoles[] = 'all';
-        $notices = Schema::hasTable('notices')
+        $notices = $this->plugins->isEnabled('notice-board') && Schema::hasTable('notices')
             ? DB::table('notices')
                 ->where(function ($query) use ($actor): void {
                     $query->whereNull('branch_id');
