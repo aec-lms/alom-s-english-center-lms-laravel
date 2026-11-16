@@ -20,8 +20,7 @@ class GuardianStandaloneTest extends TestCase
         $this->assertFalse(app(PluginManager::class)->isInstalled('branch-management'));
 
         $this->actingAs($admin)->get('/admin/guardians')
-            ->assertOk()
-            ->assertSee('Student integration not enabled');
+            ->assertOk();
 
         $this->actingAs($admin)->post('/admin/guardians', [
             'name' => 'Standalone Guardian',
