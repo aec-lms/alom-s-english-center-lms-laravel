@@ -78,15 +78,17 @@ The following fixes were committed on the audit branch after the first-pass revi
 | SMS provider result was reported as sent without checking response | Greenweb requests check HTTP acceptance and use chunked recipients; status is `submitted` rather than claiming handset delivery; unimplemented provider adapters remain queued | Source review; live provider test still required |
 | Notification message overstated delivery | Non-in-app channels are explicitly described as queued until a worker confirms delivery | Source review |
 | Universal Payment accepted arbitrary public amounts | Public checkout now requires an authenticated student, an owned fee invoice, an allowed installed/configured gateway, and server-calculated outstanding amount; online gateway choices are limited to implemented adapters | Regression test added; provider sandbox still required |
+| HR payroll was marked paid at creation | Payroll is now prepared as pending; only an administrator can confirm disbursement, with audit logging and a safe pending DB default | Regression test covers pending state and admin-only paid confirmation |
+| Visitor Pop-Up Ads edit UI hid important fields | Admin can now edit badge, description, CTA text/link, image upload or image URL, delay, frequency and active state; CTA/image URLs reject unsafe schemes; upload extension is MIME-derived | Regression test covers editable content and rejects javascript: CTA URLs |
 
-**Latest CI:** GitHub Actions run `43824495748` succeeded. Composer security audit reported no advisories; Laravel suite passed **47 tests (273 assertions)**; the cPanel release ZIP was built and uploaded (SHA-256 `dbed32be80e91979a2d08491d7d8effcc6c2306ebef90b3671e0f3c4dc0d23de`). Artifact: https://github.com/aec-lms/alom-s-english-center-lms-laravel/actions/runs/43824495748/artifacts/14205932199. This does not replace provider sandbox, production database, cPanel installation, or browser E2E testing.
+**Latest CI:** GitHub Actions run `43825148928` succeeded. Composer security audit reported no advisories; Laravel suite passed **49 tests (284 assertions)**; the cPanel release ZIP was built and uploaded (SHA-256 `efbe788c47ad1081226408fda8b3963d89760feac94ab56af828dc5a60204c77`). Artifact: https://github.com/aec-lms/alom-s-english-center-lms-laravel/actions/runs/43825148928/artifacts/14205639471. This does not replace provider sandbox, production database, cPanel installation, or browser E2E testing.
 
 ## Critical/high items still open
 
 - Universal Payment still needs invoice-bound checkout and provider-confirmed payment initiation for every advertised method. Do not treat arbitrary public amount submissions as payments.
 - bKash, Nagad, Rocket, custom card acquiring, SMS Twilio/SSL Wireless/custom adapters need real provider implementations and sandbox verification before being advertised as active.
 - Notification Center still needs actual queued channel workers and delivery-state callbacks; queued is not delivered.
-- All other critical/high findings in the individual plugin table remain open until their fixes and per-plugin tests are merged.
+- All other critical/high findings in the individual plugin table remain open until their fixes and per-plugin tests are merged. The HR payroll and Visitor Pop-Up Ads findings listed above have now been remediated in this branch.
 - Cross-branch isolation needs systematic negative tests for every CRUD, detail, export, search, and bulk action.
 - Full module CRUD, browser E2E, production MySQL/MariaDB and cPanel install/upgrade/backup/restore rehearsals remain release gates.
 
