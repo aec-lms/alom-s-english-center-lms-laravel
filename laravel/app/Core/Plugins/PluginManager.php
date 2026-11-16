@@ -179,7 +179,11 @@ class PluginManager
         $this->assertDependenciesSatisfied($manifest, false);
 
         $record = PluginRecord::query()->where('slug', $slug)->first();
-        $fromVersion = $record?->version ?? '0.0.0';
+        if (!$record || !$record->is_installed) {
+            throw new RuntimeException("Plugin {$slug} must be installed before it can be updated.");
+        }
+
+        $fromVersion = $record->version;
         if ($record && $record->is_installed && version_compare($manifest->version, $fromVersion, '<=')) {
             throw new RuntimeException('Plugin update version must be newer than the installed version.');
         }
