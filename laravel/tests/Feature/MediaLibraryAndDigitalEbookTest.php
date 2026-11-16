@@ -78,26 +78,38 @@ class MediaLibraryAndDigitalEbookTest extends TestCase
 
         $this->actingAs($student)->get('/ebooks/protected-guide/download')->assertForbidden();
 
-        Http::fakeSequence()
-            ->push([
-                'status' => 'SUCCESS',
-                'GatewayPageURL' => 'https://sandbox.sslcommerz.com/gwprocess/v4/gateway.php?Q=test',
-                'sessionkey' => 'session-test',
-            ])
-            ->push([
-                'status' => 'FAILED',
-                'tran_id' => 'ignored-by-invalid-status',
-                'amount' => '1.00',
-                'currency' => 'BDT',
-            ])
-            ->push([
+        $validationCalls = 0;
+        Http::fake(function ($request) use (&$validationCalls) {
+            if (str_contains($request->url(), '/gwprocess/v4/api.php')) {
+                return Http::response([
+                    'status' => 'SUCCESS',
+                    'GatewayPageURL' => 'https://sandbox.sslcommerz.com/gwprocess/v4/gateway.php?Q=test',
+                    'sessionkey' => 'session-test',
+                ]);
+            }
+
+            $query = [];
+            parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+            $validationCalls++;
+
+            if ($validationCalls === 1) {
+                return Http::response([
+                    'status' => 'FAILED',
+                    'tran_id' => (string) ($query['tran_id'] ?? ''),
+                    'amount' => '1.00',
+                    'currency' => 'BDT',
+                ]);
+            }
+
+            return Http::response([
                 'status' => 'VALID',
-                'tran_id' => 'UPAY-PLACEHOLDER',
+                'tran_id' => (string) ($query['tran_id'] ?? ''),
                 'amount' => '450.00',
                 'currency' => 'BDT',
                 'risk_level' => '0',
                 'bank_tran_id' => 'BANK-123',
             ]);
+        });
 
         $this->actingAs($student)->post('/universal-checkout', [
             'storefront_item_id' => $itemId,
