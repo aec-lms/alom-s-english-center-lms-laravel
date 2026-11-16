@@ -70,6 +70,9 @@ Route::middleware('installed')->group(function (): void {
             Route::post('/{slug}/enable', [PluginCenterController::class, 'enable'])->name('enable');
             Route::post('/{slug}/disable', [PluginCenterController::class, 'disable'])->name('disable');
             Route::post('/{slug}/reset-settings', [PluginCenterController::class, 'resetSettings'])->name('reset-settings');
+            Route::post('/{slug}/delete', [PluginCenterController::class, 'deleteToRecycleBin'])->name('delete');
+            Route::post('/recycle-bin/{archive}/restore', [PluginCenterController::class, 'restoreFromRecycleBin'])->name('recycle-bin.restore');
+            Route::post('/recycle-bin/{archive}/permanent-delete', [PluginCenterController::class, 'permanentlyDeleteFromRecycleBin'])->name('recycle-bin.permanent-delete');
             Route::post('/{slug}/uninstall', [PluginCenterController::class, 'uninstall'])->name('uninstall');
             Route::get('/{slug}/configure', [PluginCenterController::class, 'configure'])->name('configure');
             Route::post('/{slug}/configure', [PluginCenterController::class, 'saveConfiguration'])->name('configure.save');
