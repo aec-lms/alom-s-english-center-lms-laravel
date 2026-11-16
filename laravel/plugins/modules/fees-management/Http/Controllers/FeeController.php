@@ -40,22 +40,31 @@ class FeeController extends Controller
     {
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
-        abort_unless(
-            app(PluginManager::class)->isEnabled('student-management') && Schema::hasTable('students'),
-            409,
-            'Enable Student Management before issuing student invoices.'
-        );
+        $studentIntegration = app(PluginManager::class)->isEnabled('student-management') && Schema::hasTable('students');
+        $branchRule = Schema::hasTable('branches')
+            ? ['nullable', 'integer', 'exists:branches,id']
+            : ['nullable', 'integer'];
         $validated = $request->validate([
-            'student_id' => ['required', 'integer', 'exists:students,id'],
+            'student_id' => $studentIntegration ? ['nullable', 'integer', 'exists:students,id'] : ['nullable', 'integer'],
+            'payer_name' => ['required_without:student_id', 'nullable', 'string', 'max:160'],
+            'payer_email' => ['nullable', 'email', 'max:180'],
+            'branch_id' => $branchRule,
             'fee_category_id' => ['nullable', 'integer', 'exists:fee_categories,id'],
             'subtotal_amount' => ['required', 'numeric', 'min:1'],
             'discount_amount' => ['nullable', 'numeric', 'min:0'],
             'due_date' => ['nullable', 'date'],
         ]);
 
-        $student = Student::query()->findOrFail((int) $validated['student_id']);
-        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $student->branch_id) {
-            abort(403, 'Branch isolation violation.');
+        $student = $studentIntegration && !empty($validated['student_id'])
+            ? Student::query()->with('user')->findOrFail((int) $validated['student_id'])
+            : null;
+        if ($actor && $actor->hasRole('branch_manager')) {
+            if ($student && (int) $actor->branch_id !== (int) $student->branch_id) {
+                abort(403, 'Branch isolation violation.');
+            }
+            $validated['branch_id'] = $actor->branch_id;
+        } elseif ($student) {
+            $validated['branch_id'] = $student->branch_id;
         }
 
         $subtotal = round((float) $validated['subtotal_amount'], 2);
@@ -64,8 +73,10 @@ class FeeController extends Controller
 
         $invoice = FeeInvoice::query()->create([
             'invoice_number' => 'INV-' . strtoupper(substr(bin2hex(random_bytes(5)), 0, 10)),
-            'student_id' => $student->id,
-            'branch_id' => $student->branch_id,
+            'student_id' => $student?->id,
+            'payer_name' => $student?->user?->name ?? ($validated['payer_name'] ?? null),
+            'payer_email' => $student?->user?->email ?? ($validated['payer_email'] ?? null),
+            'branch_id' => $validated['branch_id'] ?? null,
             'fee_category_id' => $validated['fee_category_id'] ?? null,
             'subtotal_amount' => $subtotal,
             'discount_amount' => $discount,
