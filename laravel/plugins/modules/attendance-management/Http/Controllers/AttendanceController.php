@@ -14,6 +14,7 @@ use Illuminate\View\View;
 use Plugins\Modules\AttendanceManagement\Models\AttendanceRecord;
 use Plugins\Modules\BatchManagement\Models\StudyBatch;
 use Plugins\Modules\StudentManagement\Models\Student;
+use Plugins\Modules\StudentTracking\Services\StudentActivityTracker;
 
 class AttendanceController extends Controller
 {
