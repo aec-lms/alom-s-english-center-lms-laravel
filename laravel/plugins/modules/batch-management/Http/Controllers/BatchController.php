@@ -35,7 +35,11 @@ class BatchController extends Controller
     {
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
-        $validated = $request->validate([
+                $branchIntegration = app(PluginManager::class)->isEnabled('branch-management') && Schema::hasTable('branches');
+        $branchRule = $branchIntegration
+            ? ['nullable', 'integer', 'exists:branches,id,is_active,1']
+            : ['nullable', 'integer'];
+$validated = $request->validate([
             'batch_code' => ['required', 'string', 'max:40', 'unique:study_batches,batch_code'],
             'name' => ['required', 'string', 'max:160'],
             'course_title' => ['nullable', 'string', 'max:180'],
@@ -44,8 +48,12 @@ class BatchController extends Controller
             'max_capacity' => ['required', 'integer', 'min:1', 'max:500'],
             'start_date' => ['nullable', 'date'],
             'status' => ['required', 'in:upcoming,ongoing,completed'],
-            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
+            'branch_id' => $branchRule,
         ]);
+
+        if (!$branchIntegration) {
+            $validated['branch_id'] = null;
+        }
 
         if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null) {
             $validated['branch_id'] = $actor->branch_id;
