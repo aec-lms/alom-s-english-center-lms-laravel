@@ -89,6 +89,9 @@ class BatchController extends Controller
             'branch_id' => $branchRule,
         ]);
 
+        if ((int) $validated['max_capacity'] < (int) $batch->enrolled_count) {
+            abort(422, 'Batch capacity cannot be reduced below the current enrolled learner count.');
+        }
         if (!$branchIntegration) {
             $validated['branch_id'] = null;
         }
