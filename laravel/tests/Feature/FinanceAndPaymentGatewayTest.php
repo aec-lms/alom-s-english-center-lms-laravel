@@ -655,4 +655,21 @@ class FinanceAndPaymentGatewayTest extends TestCase
         ])->assertForbidden();
     }
 
+
+    public function test_paypal_gateway_fails_closed_when_fee_and_payment_integrations_are_disabled(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['gateway-paypal']);
+        $student = $this->createUserWithRole('student');
+
+        $this->actingAs($student)->postJson('/payments/paypal/create-order', [
+            'invoice_id' => 1,
+        ])->assertStatus(409)->assertJsonPath('message', 'Enable Fees and Payment Management before using this gateway.');
+
+        $this->postJson('/payments/paypal/webhook', [
+            'event_type' => 'PAYMENT.CAPTURE.COMPLETED',
+            'resource' => [],
+        ])->assertStatus(409)->assertJsonPath('message', 'Enable Fees and Payment Management before using this gateway.');
+    }
+
 }
