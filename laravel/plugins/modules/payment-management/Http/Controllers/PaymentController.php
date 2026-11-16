@@ -26,6 +26,7 @@ class PaymentController extends Controller
     public function index(Request $request): View
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $transactions = PaymentTransaction::query()
             ->with('invoice')
             ->when($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null, fn ($q) => $q->where('branch_id', $actor->branch_id))
@@ -38,6 +39,7 @@ class PaymentController extends Controller
     public function recordOffline(Request $request): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $validated = $request->validate([
             'invoice_id' => ['required', 'integer', 'exists:fee_invoices,id'],
             'amount' => ['required', 'numeric', 'min:1'],
@@ -77,6 +79,7 @@ class PaymentController extends Controller
     public function refund(Request $request, PaymentTransaction $transaction): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $transaction->branch_id) {
             abort(403, 'Branch isolation violation.');
         }
@@ -137,5 +140,12 @@ class PaymentController extends Controller
         $this->audit->log('payment.refunded', 'payment_transaction', (string) $transaction->id, ['amount' => $validated['amount']], $actor?->id);
 
         return back()->with('status', "Refund recorded for {$transaction->transaction_ref}.");
+    }
+
+    private function ensureAssignedBranch($actor): void
+    {
+        if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id === null) {
+            abort(403, 'Branch manager must be assigned to a branch.');
+        }
     }
 }
