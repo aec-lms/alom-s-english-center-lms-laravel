@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-use App\Http\Controllers\Admin\AuditLogController;
-use App\Http\Controllers\Admin\BackupController;
-use App\Http\Controllers\Admin\DashboardController;
-use App\Http\Controllers\Admin\PluginCenterController;
-use App\Http\Controllers\Admin\UpdateCenterController;
-use App\Http\Controllers\Admin\UserRoleController;
-use App\Http\Controllers\Auth\LoginController;
-use App\Http\Controllers\InstallerController;
-use App\Http\Controllers\PublicHomeController;
-use Illuminate\Support\Facades\Route;
+use App\\Http\\Controllers\\Admin\\AuditLogController;
+use App\\Http\\Controllers\\Admin\\BackupController;
+use App\\Http\\Controllers\\Admin\\DashboardController;
+use App\\Http\\Controllers\\Admin\\PluginCenterController;
+use App\\Http\\Controllers\\Admin\\UpdateCenterController;
+use App\\Http\\Controllers\\Admin\\UserRoleController;
+use App\\Http\\Controllers\\Auth\\LoginController;
+use App\\Http\\Controllers\\InstallerController;
+use App\\Http\\Controllers\\PublicHomeController;
+use Illuminate\\Support\\Facades\\Route;
 
 // Browser-based Fresh Installer (permanently locked after installation)
 Route::prefix('install')->name('installer.')->middleware('not.installed')->group(function (): void {
@@ -50,6 +50,8 @@ Route::middleware('installed')->group(function (): void {
     Route::post('/register', [LoginController::class, 'register'])->name('register.attempt')->middleware('guest');
     Route::get('/forgot-password', [LoginController::class, 'showForgotPassword'])->name('password.request')->middleware('guest');
     Route::post('/forgot-password', [LoginController::class, 'sendResetNotice'])->name('password.email')->middleware('guest');
+    Route::get('/reset-password/{token}', [LoginController::class, 'showResetPassword'])->name('password.reset')->middleware('guest');
+    Route::post('/reset-password', [LoginController::class, 'resetPassword'])->name('password.update')->middleware('guest');
     Route::post('/logout', [LoginController::class, 'logout'])->name('logout')->middleware('auth');
 
     Route::prefix('admin')->name('admin.')->middleware('auth')->group(function (): void {
