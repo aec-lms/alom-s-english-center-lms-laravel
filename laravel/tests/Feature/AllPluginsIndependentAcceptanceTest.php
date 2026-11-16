@@ -10,6 +10,7 @@ use App\Models\PluginRecord;
 use Illuminate\Support\Facades\File;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
+use ZipArchive;
 
 class AllPluginsIndependentAcceptanceTest extends TestCase
 {
