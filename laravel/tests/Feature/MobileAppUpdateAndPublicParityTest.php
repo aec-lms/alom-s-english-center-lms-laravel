@@ -150,6 +150,55 @@ class MobileAppUpdateAndPublicParityTest extends TestCase
             ->assertJsonMissing(['title' => 'Branch B Private Notice']);
     }
 
+    public function test_mobile_notice_endpoints_enforce_audience_and_publication_time(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['notice-board', 'mobile-app-api']);
+
+        foreach ([
+            ['title' => 'Everyone Notice', 'audience_role' => 'all', 'published_at' => now()],
+            ['title' => 'Student Only Notice', 'audience_role' => 'student', 'published_at' => now()],
+            ['title' => 'Teacher Only Notice', 'audience_role' => 'teacher', 'published_at' => now()],
+            ['title' => 'Future Student Notice', 'audience_role' => 'student', 'published_at' => now()->addDay()],
+        ] as $notice) {
+            DB::table('notices')->insert($notice + [
+                'branch_id' => null,
+                'body' => 'Audience restricted content',
+                'is_pinned' => false,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $this->getJson('/api/mobile/notices')
+            ->assertOk()
+            ->assertJsonFragment(['title' => 'Everyone Notice'])
+            ->assertJsonMissing(['title' => 'Student Only Notice'])
+            ->assertJsonMissing(['title' => 'Teacher Only Notice'])
+            ->assertJsonMissing(['title' => 'Future Student Notice']);
+
+        $student = $this->createUserWithRole('student');
+        $this->actingAs($student)->getJson('/api/mobile/notices')
+            ->assertOk()
+            ->assertJsonFragment(['title' => 'Everyone Notice'])
+            ->assertJsonFragment(['title' => 'Student Only Notice'])
+            ->assertJsonMissing(['title' => 'Teacher Only Notice'])
+            ->assertJsonMissing(['title' => 'Future Student Notice']);
+
+        $this->actingAs($student)->getJson('/api/mobile/home')
+            ->assertOk()
+            ->assertJsonFragment(['title' => 'Student Only Notice'])
+            ->assertJsonMissing(['title' => 'Teacher Only Notice'])
+            ->assertJsonMissing(['title' => 'Future Student Notice']);
+
+        $teacher = $this->createUserWithRole('teacher');
+        $this->actingAs($teacher)->getJson('/api/mobile/notices')
+            ->assertOk()
+            ->assertJsonFragment(['title' => 'Everyone Notice'])
+            ->assertJsonFragment(['title' => 'Teacher Only Notice'])
+            ->assertJsonMissing(['title' => 'Student Only Notice']);
+    }
+
     public function test_universal_update_service_blocks_zip_path_traversal_entries(): void
     {
         $this->markSystemInstalled();
