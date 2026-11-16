@@ -146,7 +146,7 @@ class SmsController extends Controller
                             $unknownResponse = true;
                         }
                     }
-                } catch (\\Throwable) {
+                } catch (\Throwable) {
                     // A timeout can happen after provider acceptance; never auto-retry and risk duplicate SMS.
                     $unknownResponse = true;
                 }
