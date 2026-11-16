@@ -125,6 +125,7 @@ class BranchManagerFailClosedTest extends TestCase
         $this->markSystemInstalled();
         $this->activatePlugins([
             'course-management',
+            'exam-management',
             'class-management',
             'batch-management',
             'notice-board',
@@ -135,17 +136,19 @@ class BranchManagerFailClosedTest extends TestCase
         $permissionIds = DB::table('permissions')
             ->whereIn('slug', [
                 'courses.manage',
+                'exams.manage',
                 'classes.manage',
                 'batches.manage',
                 'notices.manage',
                 'reports.view',
             ])
             ->pluck('id');
-        $this->assertCount(5, $permissionIds);
+        $this->assertCount(6, $permissionIds);
         $manager->roles()->first()->permissions()->syncWithoutDetaching($permissionIds);
 
         foreach ([
             '/admin/courses',
+            '/admin/exams',
             '/admin/classes',
             '/admin/batches',
             '/admin/notices',
@@ -156,6 +159,7 @@ class BranchManagerFailClosedTest extends TestCase
 
         foreach ([
             '/admin/courses',
+            '/admin/exams',
             '/admin/classes',
             '/admin/batches',
             '/admin/notices',
