@@ -17,6 +17,8 @@ Add this Cron Job in cPanel (replace the path with the actual account path):
 
 Use the PHP 8.3 CLI binary provided by the hosting company. The exact executable path varies by host. If the host does not allow cron jobs every minute, monitoring will be less frequent. The scheduler cannot run while the hosting account or PHP runtime is unavailable.
 
+The scheduler also creates an encrypted database-only backup daily at 02:00 and an encrypted database-plus-private-files backup weekly on Sunday at 02:30. These jobs require the backup encryption key (or application key fallback), writable private backup storage, enough disk space and sufficient PHP memory. The current backup exporter loads the database snapshot into memory; large production databases need a measured staging rehearsal before enabling full-file backup schedules.
+
 Optional .env settings:
 
     AEC_HEALTH_ALERT_EMAIL=admin@example.com
