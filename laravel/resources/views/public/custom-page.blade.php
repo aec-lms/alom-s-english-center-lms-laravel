@@ -25,6 +25,14 @@
                 <div class="prose max-w-none text-sm text-slate-600 leading-relaxed whitespace-pre-line">
                     {{ $body }}
                 </div>
+
+                @if ($cta)
+                    <div class="pt-3">
+                        <a href="{{ $cta['url'] }}" @if (str_starts_with($cta['url'], 'http://') || str_starts_with($cta['url'], 'https://')) target="_blank" rel="noopener noreferrer" @endif class="inline-flex items-center rounded-xl bg-sky-600 px-5 py-3 text-sm font-bold text-white hover:bg-sky-700">
+                            {{ $cta['label'] }}
+                        </a>
+                    </div>
+                @endif
             </div>
         </article>
     </main>
