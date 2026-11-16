@@ -4,7 +4,7 @@
 <div class="max-w-6xl space-y-5">
     <div>
         <h1 class="text-2xl font-extrabold text-slate-900">Admin Recycle Bin</h1>
-        <p class="text-xs text-slate-500 mt-1">Restore supported records without losing their linked academic history.</p>
+        <p class="text-xs text-slate-500 mt-1">Restore deleted records or permanently remove selected records after confirmation. Linked records may prevent permanent deletion.</p>
     </div>
 
     <section class="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
