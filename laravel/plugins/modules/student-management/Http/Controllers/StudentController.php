@@ -156,16 +156,15 @@ class StudentController extends Controller
         $code = $student->student_code;
         $id = (string) $student->id;
         DB::transaction(function () use ($student): void {
-            $user = $student->user;
-            $student->delete();
-            if ($user) {
-                $user->update(['is_active' => false]);
+            $student->update(['status' => 'inactive']);
+            if ($student->user) {
+                $student->user->update(['is_active' => false]);
             }
         });
 
-        $this->audit->log('student.deleted', 'student', $id, ['code' => $code]);
+        $this->audit->log('student.deactivated', 'student', $id, ['code' => $code]);
 
-        return back()->with('status', "Student '{$code}' removed from active enrollment directory.");
+        return back()->with('status', "Student '{$code}' deactivated. Academic, guardian and invoice history has been preserved.");
     }
 
     private function ensureAssignedBranch($actor): void
