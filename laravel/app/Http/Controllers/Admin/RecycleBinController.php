@@ -238,7 +238,7 @@ class RecycleBinController extends Controller
             ], $request->user()->id);
         });
 
-        return redirect()->route('admin.recycle-bin.index')->with('status', 'StudyBatch restored successfully.');
+        return redirect()->route('admin.recycle-bin.index')->with('status', 'Study batch restored successfully.');
     }
 
     public function restoreClass(Request $request, int $recordId): RedirectResponse
@@ -255,7 +255,7 @@ class RecycleBinController extends Controller
             ], $request->user()->id);
         });
 
-        return redirect()->route('admin.recycle-bin.index')->with('status', 'AcademicClass restored successfully.');
+        return redirect()->route('admin.recycle-bin.index')->with('status', 'Academic class restored successfully.');
     }
 
     public function restoreCourseCategory(Request $request, int $recordId): RedirectResponse
