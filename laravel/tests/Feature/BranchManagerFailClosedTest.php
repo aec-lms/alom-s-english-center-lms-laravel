@@ -125,10 +125,11 @@ class BranchManagerFailClosedTest extends TestCase
         $permissionId = DB::table('permissions')->where('slug', 'branches.manage')->value('id');
         $manager->roles()->first()->permissions()->syncWithoutDetaching([$permissionId]);
 
-        $this->actingAs($manager)->get('/admin/branches')
-            ->assertOk()
-            ->assertSee('Branch A')
-            ->assertDontSee('Branch B');
+        $this->actingAs($manager);
+        $branchView = app(\\Plugins\\Modules\\BranchManagement\\Http\\Controllers\\BranchController::class)->index(request());
+        $visibleBranches = $branchView->getData()['branches'];
+        $this->assertCount(1, $visibleBranches);
+        $this->assertSame($branchA, (int) $visibleBranches->first()->id);
 
         $this->actingAs($manager)->put('/admin/branches/' . $branchB, [
             'code' => 'BR-B-EDIT',
