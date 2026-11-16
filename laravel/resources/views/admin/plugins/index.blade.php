@@ -97,13 +97,13 @@
                             <button class="px-3 py-1.5 rounded-lg border border-rose-300 text-rose-700 font-semibold hover:bg-rose-50">Uninstall</button>
                         </form>
 
-                        @if (!$plugin->is_core)
-                            <form method="POST" action="{{ route('admin.plugins.delete', $plugin->slug) }}" onsubmit="return confirm('Move {{ $plugin->name }} package to Recycle Bin? It will be deactivated and uninstalled. Its data and settings will be preserved.')">
-                                @csrf
-                                <input type="hidden" name="confirm_delete" value="1">
-                                <button class="px-3 py-1.5 rounded-lg border border-rose-400 text-rose-800 font-semibold hover:bg-rose-50">Delete to Recycle Bin</button>
-                            </form>
-                        @endif
+                    @endif
+                    @if (!$plugin->is_core)
+                        <form method="POST" action="{{ route('admin.plugins.delete', $plugin->slug) }}" onsubmit="return confirm('Move {{ $plugin->name }} package to Recycle Bin? It will be deactivated and uninstalled. Its data and settings will be preserved.')">
+                            @csrf
+                            <input type="hidden" name="confirm_delete" value="1">
+                            <button class="px-3 py-1.5 rounded-lg border border-rose-400 text-rose-800 font-semibold hover:bg-rose-50">Delete to Recycle Bin</button>
+                        </form>
                     @endif
                 </div>
             </div>
