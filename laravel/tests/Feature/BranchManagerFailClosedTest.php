@@ -82,6 +82,25 @@ class BranchManagerFailClosedTest extends TestCase
         }
     }
 
+    public function test_branch_manager_access_is_denied_when_assigned_branch_is_inactive(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'student-management']);
+
+        $branchId = DB::table('branches')->insertGetId([
+            'code' => 'BR-INACTIVE',
+            'name' => 'Inactive Branch',
+            'is_active' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $manager = $this->createUserWithRole('branch_manager', $branchId);
+        $permissionId = DB::table('permissions')->where('slug', 'students.manage')->value('id');
+        $manager->roles()->first()->permissions()->syncWithoutDetaching([$permissionId]);
+
+        $this->actingAs($manager)->get('/admin/students')->assertForbidden();
+    }
+
     public function test_branch_manager_can_only_view_and_update_their_assigned_branch(): void
     {
         $this->markSystemInstalled();
