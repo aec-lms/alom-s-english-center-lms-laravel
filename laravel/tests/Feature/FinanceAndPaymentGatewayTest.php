@@ -96,6 +96,15 @@ class FinanceAndPaymentGatewayTest extends TestCase
         ]);
 
         $admin = $this->createUserWithRole('admin');
+        $cardPermissionId = DB::table('permissions')->where('slug', 'gateway.card.use')->value('id');
+        $studentUser->roles()->first()->permissions()->syncWithoutDetaching([$cardPermissionId]);
+
+        $this->actingAs($studentUser)->postJson('/payments/card/checkout', [
+            'invoice_id' => $otherInvoice->id,
+            'payment_token' => 'processor_token_123456789',
+            'card_brand' => 'visa',
+            'last4' => '4242',
+        ])->assertForbidden();
 
         // Offline receipts must not create a dangling initiated transaction when the amount exceeds the invoice.
         $this->actingAs($admin)->post('/admin/payments/offline', [
