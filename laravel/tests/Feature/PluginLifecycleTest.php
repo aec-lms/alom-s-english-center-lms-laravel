@@ -661,9 +661,16 @@ PHP;
 
         $secondDelete = $manager->deleteToRecycleBin('branch-management');
         $manager->permanentlyDeleteFromRecycleBin($secondDelete['archive']);
-        $this->assertDirectoryExists(storage_path('app/plugin-permanent-delete-backups/' . $secondDelete['archive']));
+        $permanentBackup = storage_path('app/plugin-permanent-delete-backups/' . $secondDelete['archive']);
+        $this->assertDirectoryExists($permanentBackup);
         $this->assertSame([], $manager->recycledPlugins());
         $this->assertDatabaseHas('branches', ['code' => 'RB-01']);
+
+        // Restore the source fixture from its verified private backup so later
+        // tests can independently exercise the same plugin package.
+        $sourcePackage = base_path('plugins/modules/branch-management');
+        $this->assertTrue(File::copyDirectory($permanentBackup, $sourcePackage));
+        $this->assertFileExists($sourcePackage . '/plugin.json');
         $this->assertTrue($manager->isEnabled('student-management'));
     }
 
