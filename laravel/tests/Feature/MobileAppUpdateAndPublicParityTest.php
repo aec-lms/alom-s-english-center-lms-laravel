@@ -88,6 +88,68 @@ class MobileAppUpdateAndPublicParityTest extends TestCase
             ->assertJsonStructure(['courses', 'ebooks', 'products', 'notices']);
     }
 
+    public function test_mobile_notices_only_expose_global_and_authenticated_users_own_branch(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins([
+            'branch-management',
+            'notice-board',
+            'mobile-app-api',
+        ]);
+
+        $branchA = DB::table('branches')->insertGetId([
+            'code' => 'DHK-A',
+            'name' => 'Dhaka Branch A',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $branchB = DB::table('branches')->insertGetId([
+            'code' => 'DHK-B',
+            'name' => 'Dhaka Branch B',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        foreach ([
+            ['branch_id' => null, 'title' => 'Global Notice'],
+            ['branch_id' => $branchA, 'title' => 'Branch A Notice'],
+            ['branch_id' => $branchB, 'title' => 'Branch B Private Notice'],
+        ] as $notice) {
+            DB::table('notices')->insert($notice + [
+                'body' => 'Notice content',
+                'audience_role' => 'all',
+                'is_pinned' => false,
+                'published_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $this->getJson('/api/mobile/notices')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonFragment(['title' => 'Global Notice'])
+            ->assertJsonMissing(['title' => 'Branch A Notice'])
+            ->assertJsonMissing(['title' => 'Branch B Private Notice']);
+
+        $studentA = $this->createUserWithRole('student', (int) $branchA);
+        $this->actingAs($studentA)
+            ->getJson('/api/mobile/notices')
+            ->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonFragment(['title' => 'Global Notice'])
+            ->assertJsonFragment(['title' => 'Branch A Notice'])
+            ->assertJsonMissing(['title' => 'Branch B Private Notice']);
+
+        $this->actingAs($studentA)
+            ->getJson('/api/mobile/home')
+            ->assertOk()
+            ->assertJsonCount(2, 'notices')
+            ->assertJsonMissing(['title' => 'Branch B Private Notice']);
+    }
+
     public function test_universal_update_service_blocks_zip_path_traversal_entries(): void
     {
         $this->markSystemInstalled();
