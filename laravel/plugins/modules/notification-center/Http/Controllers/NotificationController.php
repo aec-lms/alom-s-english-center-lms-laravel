@@ -74,6 +74,14 @@ class NotificationController extends Controller
         return back()->with('status', $feedback);
     }
 
+    public function markRead(Request $request, LmsNotification $notification): RedirectResponse
+    {
+        abort_unless((int) $notification->user_id === (int) $request->user()->id, 404);
+        $notification->update(['read_at' => now()]);
+
+        return back()->with('status', 'Notification marked as read.');
+    }
+
     private function sendEmail(User $recipient, string $title, string $message): string
     {
         if (!$this->plugins->isEnabled('email-notifications') || empty($recipient->email)) {
