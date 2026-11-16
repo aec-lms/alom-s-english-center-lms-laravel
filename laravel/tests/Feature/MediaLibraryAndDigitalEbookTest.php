@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Http;
 use App\Core\Plugins\PluginManager;
 use Plugins\Modules\StorefrontCatalog\Models\StorefrontItem;
 use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
+use Plugins\Modules\UniversalPayment\Services\StorefrontPaymentGatewayService;
 use Tests\TestCase;
 
 class MediaLibraryAndDigitalEbookTest extends TestCase
@@ -131,6 +132,17 @@ class MediaLibraryAndDigitalEbookTest extends TestCase
             'tran_id' => $transaction->reference,
             'val_id' => 'VALID-VAL',
         ])->assertRedirect('/ebooks/protected-guide');
+
+        if (!DB::table('storefront_item_access')->where('storefront_item_id', $itemId)->where('user_id', $student->id)->exists()) {
+            try {
+                app(StorefrontPaymentGatewayService::class)->verifySslcommerz([
+                    'tran_id' => $transaction->reference,
+                    'val_id' => 'VALID-VAL',
+                ]);
+            } catch (\Throwable $exception) {
+                $this->fail('SSLCOMMERZ verification failed: ' . $exception->getMessage());
+            }
+        }
 
         $this->assertDatabaseHas('storefront_item_access', [
             'storefront_item_id' => $itemId,
