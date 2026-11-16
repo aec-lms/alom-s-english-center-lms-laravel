@@ -1,12 +1,19 @@
 @extends('layouts.app')
 @section('title', ($page->seo_title ?: $page->title) . " — Alom's English Center")
 @section('meta_description', $page->seo_description ?: '')
+@php
+    $articleClasses = match ($page->template ?? 'standard') {
+        'landing' => 'max-w-[1120px] mx-auto bg-white rounded-3xl border border-white/90 shadow-xl overflow-hidden',
+        'fullwidth' => 'w-full max-w-none mx-auto bg-white rounded-none border-0 shadow-none overflow-hidden',
+        default => 'max-w-[920px] mx-auto bg-white rounded-2xl border border-white/90 shadow-lg overflow-hidden',
+    };
+@endphp
 @section('content')
 <div class="min-h-screen flex flex-col">
     @include('public.partials.navbar')
 
     <main class="flex-1 py-12 sm:py-16 px-4 sm:px-6 w-full" style="background: linear-gradient(135deg, #EAE9FF 0%, #F2F3FF 45%, #E5F4FE 100%)">
-        <article class="max-w-[920px] mx-auto bg-white rounded-2xl border border-white/90 shadow-lg overflow-hidden">
+        <article class="{{ $articleClasses }}">
             @if (!empty($page->banner_image))
                 <div class="h-56 sm:h-72 w-full bg-slate-900 overflow-hidden">
                     <img src="{{ $page->banner_image }}" alt="{{ $page->title }}" class="w-full h-full object-cover">
