@@ -54,6 +54,22 @@
                         <button class="rounded bg-sky-700 text-white px-3 py-1 font-bold">Save changes</button>
                     </form>
                 </details>
+                <form method="POST" action="{{ route('plugins.batches.update', $batch) }}" class="mt-3 grid sm:grid-cols-4 gap-2">
+                    @csrf @method('PUT')
+                    <input name="batch_code" value="{{ $batch->batch_code }}" required aria-label="Batch code" class="rounded-lg border border-slate-300 px-2 py-1">
+                    <input name="name" value="{{ $batch->name }}" required aria-label="Batch name" class="rounded-lg border border-slate-300 px-2 py-1">
+                    <input name="course_title" value="{{ $batch->course_title }}" aria-label="Course title" class="rounded-lg border border-slate-300 px-2 py-1">
+                    <input name="schedule" value="{{ $batch->schedule }}" required aria-label="Schedule" class="rounded-lg border border-slate-300 px-2 py-1">
+                    <input name="room_number" value="{{ $batch->room_number }}" aria-label="Room or link" class="rounded-lg border border-slate-300 px-2 py-1">
+                    <input name="max_capacity" type="number" min="1" max="500" value="{{ $batch->max_capacity }}" required aria-label="Capacity" class="rounded-lg border border-slate-300 px-2 py-1">
+                    <input name="start_date" type="date" value="{{ $batch->start_date?->format('Y-m-d') }}" aria-label="Start date" class="rounded-lg border border-slate-300 px-2 py-1">
+                    <select name="status" class="rounded-lg border border-slate-300 px-2 py-1 bg-white">
+                        @foreach (['upcoming' => 'Upcoming', 'ongoing' => 'Ongoing', 'completed' => 'Completed'] as $value => $label)
+                            <option value="{{ $value }}" @selected($batch->status === $value)>{{ $label }}</option>
+                        @endforeach
+                    </select>
+                    <button type="submit" class="px-3 py-1.5 rounded-lg bg-sky-700 text-white font-bold">Save changes</button>
+                </form>
                 <form method="POST" action="{{ route('plugins.batches.destroy', $batch) }}" onsubmit="return confirm('Remove batch?')">
                     @csrf @method('DELETE')
                     <button type="submit" class="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-700 font-bold">Remove</button>
