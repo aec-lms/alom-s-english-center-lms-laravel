@@ -50,6 +50,15 @@ class HealthMonitorService
             if (is_link($path) || !is_dir($path) || !is_writable($path)) throw new \RuntimeException('Backup storage is missing, linked, or not writable.');
             return 'Backup storage is present and writable.';
         }, null, $recoveries);
+        $checks['queue'] = $this->check(function (): string {
+            $driver = (string) config('queue.default', 'sync');
+            if ($driver !== 'database') return 'Queue driver ' . $driver . ' is configured; database backlog check is not applicable.';
+            if (!\\Illuminate\\Support\\Facades\\Schema::hasTable('jobs')) throw new \\RuntimeException('Database queue table is missing.');
+            $pending = (int) DB::table('jobs')->count();
+            $failed = \\Illuminate\\Support\\Facades\\Schema::hasTable('failed_jobs') ? (int) DB::table('failed_jobs')->count() : 0;
+            if ($pending > (int) config('lms.health_queue_backlog_limit', 1000)) throw new \\RuntimeException('Queue backlog is above the configured safety threshold.');
+            return "Database queue backlog: {$pending}; failed jobs recorded: {$failed}.";
+        }, null, $recoveries);
         $checks['disk_space'] = $this->check(function (): string {
             $free = @disk_free_space(storage_path());
             if ($free === false) throw new \RuntimeException('Disk free space could not be determined.');
@@ -59,6 +68,12 @@ class HealthMonitorService
         $checks['php_runtime'] = $this->check(function (): string {
             if (PHP_VERSION_ID < 80300) throw new \RuntimeException('PHP 8.3 or newer is required.');
             return 'PHP ' . PHP_VERSION . ' is running (memory_limit ' . (string) ini_get('memory_limit') . ').';
+        }, null, $recoveries);
+        $checks['runtime_resources'] = $this->check(function (): string {
+            $limit = $this->memoryLimitBytes((string) ini_get('memory_limit'));
+            $used = memory_get_peak_usage(true);
+            if ($limit > 0 && $used / $limit >= 0.85) throw new \\RuntimeException('PHP memory usage is above 85% of the configured limit.');
+            return 'PHP peak memory usage: ' . number_format($used / 1048576, 1) . ' MB.';
         }, null, $recoveries);
         $failed = array_filter($checks, static fn (array $check): bool => $check['status'] === 'failed');
         $report = ['status' => $failed === [] ? 'healthy' : (count($failed) === count($checks) ? 'critical' : 'degraded'),
@@ -78,15 +93,23 @@ class HealthMonitorService
     }
     private function check(callable $test, ?callable $repair, array &$recoveries): array
     {
-        try { return ['status' => 'ok', 'message' => $test()]; }
+        $started = microtime(true);\n        try { return ['status' => 'ok', 'message' => $test(), 'duration_ms' => (int) round((microtime(true) - $started) * 1000)]; }
         catch (Throwable $e) {
             $message = $this->safeMessage($e);
             if ($repair !== null) {
-                try { $recoveries['safe_runtime'] = $repair(); $verified = $test(); return ['status' => 'recovered', 'message' => $verified . ' Safe recovery verified.']; }
+                try { $recoveries['safe_runtime'] = $repair(); $verified = $test(); return ['status' => 'recovered', 'message' => $verified . ' Safe recovery verified.', 'duration_ms' => (int) round((microtime(true) - $started) * 1000)]; }
                 catch (Throwable $repairException) { $message .= ' Recovery attempt failed: ' . $this->safeMessage($repairException); }
             }
-            return ['status' => 'failed', 'message' => $message];
+            return ['status' => 'failed', 'message' => $message, 'duration_ms' => (int) round((microtime(true) - $started) * 1000)];
         }
+    }
+    private function memoryLimitBytes(string $limit): int
+    {
+        $limit = trim($limit);
+        if ($limit === '' || $limit === '-1') return 0;
+        $unit = strtolower(substr($limit, -1));
+        $value = (float) $limit;
+        return (int) ($value * match ($unit) { 'g' => 1073741824, 'm' => 1048576, 'k' => 1024, default => 1 });
     }
     private function ensurePrivateDirectory(string $path): string
     {
