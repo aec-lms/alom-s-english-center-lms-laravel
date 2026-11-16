@@ -54,6 +54,12 @@ This first pass is a **static file inventory**, not a functional certification. 
 
 `PluginSiblingDependencyAuditTest` scans PHP files under all 39 plugin directories for direct `Plugins\\Modules\\...` namespace references and verifies that each sibling reference is declared in the plugin manifest as required or optional. The current policy keeps all sibling integrations optional. This scan does not prove standalone runtime behavior and does not yet detect every string-based table reference, dynamic service lookup, event coupling or external provider dependency; those remain part of each plugin's functional acceptance.
 
+## Targeted regression coverage (not full plugin acceptance)
+
+The current code candidate `02e3e31b111c62d734575c3816c247ed08d038ae` passed PHP 8.3 CI run [43858321888](https://github.com/aec-lms/alom-s-english-center-lms-laravel/actions/runs/43858321888): **129 tests / 1,011 assertions on SQLite and 129 tests / 1,011 assertions on MySQL 8**. PHP syntax lint, Composer security audit, cPanel package build and package verification also passed.
+
+Targeted automated regressions cover plugin lifecycle and ZIP safety, branch isolation, Batch/Class updates, payroll authorization, mobile API privacy and enrolled-lesson access, standalone Fees/Course enrollment, Universal Payment private receipt evidence, and Stripe/PayPal/SSLCOMMERZ checkout paths. These focused tests do **not** certify every plugin in the 39-plugin inventory; the per-plugin acceptance gate below remains mandatory.
+
 ## Required acceptance gate for every plugin
 
 - [ ] Manifest schema, unique slug, version and dependency constraints validated.
