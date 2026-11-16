@@ -11,11 +11,12 @@ use Illuminate\Support\Facades\Http;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
 use Plugins\Modules\StudentManagement\Models\Student;
+use Plugins\Modules\UniversalPayment\Services\UniversalPaymentOrchestrator;
 use Tests\TestCase;
 
 class FinanceAndPaymentGatewayTest extends TestCase
 {
-    public function test_card_gateway_rejects_raw_pan_and_cvv_and_settles_via_signed_webhook(): void
+    public function test_card_gateway_refuses_checkout_without_acquirer_adapter_and_sslcommerz_works(): void
     {
         $this->markSystemInstalled();
         $this->activatePlugins([
