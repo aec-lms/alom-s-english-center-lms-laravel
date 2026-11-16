@@ -113,6 +113,10 @@ class EnrollmentController extends Controller
             ]);
         });
 
+        if ($this->plugins->isEnabled('student-tracking')) {
+            app(StudentActivityTracker::class)->record((int) $actor->id, 'course_enrolled', 'course', (int) $course->id, null, ['course_title' => $course->title]);
+        }
+
         return back()->with('status', $paidCourse
             ? 'Enrollment requested. Pay the generated invoice to activate course access.'
             : 'You are enrolled in this free course.');
