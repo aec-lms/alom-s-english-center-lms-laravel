@@ -536,4 +536,30 @@ PHP;
         }
     }
 
+
+    public function test_all_plugin_manifests_have_unique_slugs_and_no_required_sibling_dependencies(): void
+    {
+        $this->markSystemInstalled();
+
+        $directories = File::directories(base_path('plugins/modules'));
+        $manifests = [];
+        foreach ($directories as $directory) {
+            $manifestPath = $directory . DIRECTORY_SEPARATOR . 'plugin.json';
+            if (!File::exists($manifestPath)) {
+                continue;
+            }
+
+            $manifest = json_decode(File::get($manifestPath), true, 512, JSON_THROW_ON_ERROR);
+            $this->assertIsArray($manifest, 'Plugin manifest must decode to an object: ' . $manifestPath);
+            $this->assertNotEmpty($manifest['slug'] ?? null, 'Plugin manifest slug is required: ' . $manifestPath);
+            $this->assertSame(basename($directory), $manifest['slug'], 'Manifest slug must match its plugin folder.');
+            $this->assertSame([], $manifest['dependencies'] ?? [], 'Required sibling dependencies are not allowed: ' . $manifestPath);
+            $this->assertIsArray($manifest['optional_dependencies'] ?? [], 'Optional integrations must be an array: ' . $manifestPath);
+            $manifests[] = $manifest['slug'];
+        }
+
+        $this->assertCount(39, $manifests, 'The source audit must cover all 39 plugin manifests.');
+        $this->assertCount(count(array_unique($manifests)), $manifests, 'Plugin slugs must be unique.');
+    }
+
 }
