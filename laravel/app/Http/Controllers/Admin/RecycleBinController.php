@@ -337,6 +337,62 @@ class RecycleBinController extends Controller
         return $this->restoreEntity($request, $recordId, 'visitor-popup-ads', 'visitor_popups', VisitorPopup::class, 'visitor_popup', 'recycle_bin.visitor_popup_restored', 'title', 'Visitor pop-up');
     }
 
+    public function permanentlyDelete(Request $request, string $type, int $recordId): RedirectResponse
+    {
+        abort_unless($request->user()?->hasRole('admin'), 403);
+        $request->validate(['confirm_permanent_delete' => ['required', 'accepted']]);
+
+        $entities = [
+            'students' => [Student::class, 'students', null, 'student'],
+            'teachers' => [Teacher::class, 'teachers', null, 'teacher'],
+            'courses' => [Course::class, 'courses', 'course-management', 'course'],
+            'course-categories' => [CourseCategory::class, 'course_categories', 'course-management', 'course_category'],
+            'live-classes' => [LiveClass::class, 'live_classes', 'course-management', 'live_class'],
+            'exams' => [Exam::class, 'exams', 'exam-management', 'exam'],
+            'batches' => [StudyBatch::class, 'study_batches', 'batch-management', 'batch'],
+            'classes' => [AcademicClass::class, 'academic_classes', 'class-management', 'class'],
+            'boost-campaigns' => [BoostCampaign::class, 'boost_campaigns', 'admin-boosting', 'boost_campaign'],
+            'branches' => [Branch::class, 'branches', 'branch-management', 'branch'],
+            'carousel-items' => [CarouselItem::class, 'cms_carousels', 'carousel-builder', 'carousel_item'],
+            'cms-categories' => [CmsCategory::class, 'cms_categories', 'cms-website', 'cms_category'],
+            'cms-posts' => [CmsPost::class, 'cms_posts', 'cms-website', 'cms_post'],
+            'builder-pages' => [BuilderPage::class, 'cms_pages', 'page-builder', 'builder_page'],
+            'hero-sliders' => [HeroSlider::class, 'cms_sliders', 'slider-builder', 'hero_slider'],
+            'sms-campaigns' => [SmsCampaign::class, 'sms_campaigns', 'sms-gateway', 'sms_campaign'],
+            'visitor-popups' => [VisitorPopup::class, 'visitor_popups', 'visitor-popup-ads', 'visitor_popup'],
+        ];
+
+        abort_unless(isset($entities[$type]), 404);
+        [$modelClass, $table, $plugin, $entityType] = $entities[$type];
+        abort_unless(($plugin === null || $this->plugins->isEnabled($plugin))
+            && Schema::hasTable($table)
+            && Schema::hasColumn($table, 'deleted_at'), 404);
+
+        DB::transaction(function () use ($modelClass, $recordId, $entityType, $type, $request): void {
+            $record = $modelClass::withTrashed()->lockForUpdate()->findOrFail($recordId);
+            abort_unless($record->trashed(), 409, 'This record is not in the Recycle Bin.');
+
+            $recordLabel = $record->getAttribute('name')
+                ?? $record->getAttribute('title')
+                ?? $record->getAttribute('student_code')
+                ?? $record->getAttribute('employee_code')
+                ?? ('#' . $recordId);
+
+            if (!$record->forceDelete()) {
+                throw new \\RuntimeException('The record could not be permanently deleted.');
+            }
+
+            $this->audit->log('recycle_bin.permanently_deleted', $entityType, (string) $recordId, [
+                'recycle_bin_type' => $type,
+                'record_label' => (string) $recordLabel,
+                'permanent' => true,
+            ], $request->user()->id);
+        });
+
+        return redirect()->route('admin.recycle-bin.index')
+            ->with('status', 'The selected record was permanently deleted.');
+    }
+
     private function restoreEntity(
         Request $request,
         int $recordId,
