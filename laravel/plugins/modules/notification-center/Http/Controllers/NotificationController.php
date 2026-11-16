@@ -21,7 +21,7 @@ class NotificationController extends Controller
         $user = request()->user();
         $query = LmsNotification::query()->latest();
         if ($user?->hasRole('branch_manager')) {
-            abort_if($user->branch_id === null, 403, 'Your account is not assigned to a branch.');
+            abort_if($user->branch_id === null || !app('db')->table('branches')->where('id', $user->branch_id)->where('is_active', true)->exists(), 403, 'Branch manager must be assigned to an active branch.');
             $query->where('branch_id', $user->branch_id);
         }
         $notifications = $query->paginate(25);
@@ -40,7 +40,7 @@ class NotificationController extends Controller
         $actor = $request->user();
         $recipient = User::query()->findOrFail((int) $validated['user_id']);
         if ($actor?->hasRole('branch_manager')) {
-            abort_if($actor->branch_id === null, 403, 'Your account is not assigned to a branch.');
+            abort_if($actor->branch_id === null || !app('db')->table('branches')->where('id', $actor->branch_id)->where('is_active', true)->exists(), 403, 'Branch manager must be assigned to an active branch.');
             abort_unless((int) $recipient->branch_id === (int) $actor->branch_id, 404);
         }
 
