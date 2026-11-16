@@ -2,7 +2,7 @@ name: Composer Security Audit
 
 on:
   push:
-    branches: ["main", "audit/39-plugin-source-review"]
+    branches: ["main"]
   pull_request:
     branches: ["main"]
   schedule:
@@ -37,12 +37,8 @@ jobs:
           coverage: none
 
       - name: Validate composer.json and composer.lock
-        run: composer validate --strict --no-check-publish
+        run: composer security-validate
 
       - name: Audit locked production and development dependencies
-        run: composer audit --locked --no-interaction
+        run: composer security-audit
 
-      - name: Confirm project security scripts are available
-        run: |
-          composer run-script --list | grep -F "security-audit"
-          composer run-script --list | grep -F "security-validate"
