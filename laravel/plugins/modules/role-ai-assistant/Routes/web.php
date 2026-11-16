@@ -12,5 +12,7 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:role-ai-assistant'])
         Route::get('/', [AiAssistantController::class, 'index'])
             ->name('index')
             ->middleware('permission:ai.assistant.use');
-        Route::post('/ask', [AiAssistantController::class, 'ask'])->name('ask');
+        Route::post('/ask', [AiAssistantController::class, 'ask'])
+            ->name('ask')
+            ->middleware('permission:ai.assistant.use');
     });
