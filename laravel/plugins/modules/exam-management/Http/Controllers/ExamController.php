@@ -110,6 +110,7 @@ class ExamController extends Controller
     public function destroy(Request $request, Exam $exam): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $exam->branch_id) {
             abort(403, 'Branch isolation violation.');
         }
@@ -125,6 +126,7 @@ class ExamController extends Controller
     public function addQuestion(Request $request, Exam $exam): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $exam->branch_id) {
             abort(403, 'Branch isolation violation.');
         }
