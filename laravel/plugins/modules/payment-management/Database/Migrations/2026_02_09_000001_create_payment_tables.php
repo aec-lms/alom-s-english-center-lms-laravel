@@ -14,7 +14,7 @@ return new class extends Migration {
                 $table->id();
                 $table->string('transaction_ref', 80)->unique();
                 $table->unsignedBigInteger('invoice_id');
-                $table->unsignedBigInteger('branch_id')->index();
+                $table->unsignedBigInteger('branch_id')->nullable()->index();
                 $table->string('gateway_slug', 64); // offline, gateway-sslcommerz, gateway-card
                 $table->decimal('amount', 10, 2);
                 $table->string('currency', 8)->default('BDT');
