@@ -6,7 +6,8 @@
     "category": "academic",
     "description": "Digital Course Certificates, Band Score Credentials, Public Verification Codes, and Revocation Control.",
     "core_compatibility": "^2.0",
-    "dependencies": ["student-management"],
+    "dependencies": [],
+    "optional_dependencies": ["student-management"],
     "provider": "Plugins\\Modules\\CertificateManagement\\Providers\\CertificateManagementServiceProvider",
     "permissions": [
         { "slug": "certificates.manage", "name": "Issue & Revoke Student Certificates" }
