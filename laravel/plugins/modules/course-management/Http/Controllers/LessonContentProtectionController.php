@@ -87,6 +87,19 @@ class LessonContentProtectionController extends Controller
         ]);
     }
 
+    public function adminIndex(): \Illuminate\View\View
+    {
+        $courses = DB::table('courses')->orderBy('title')->get();
+        foreach ($courses as $course) {
+            $course->lessons = DB::table('course_lessons')
+                ->where('course_id', $course->id)
+                ->orderBy('sort_order')
+                ->get(['id', 'title', 'sort_order', 'media_path', 'media_mime', 'protection_enabled', 'is_downloadable']);
+        }
+
+        return view('course-management::content-protection', compact('courses'));
+    }
+
     public function showCourse(Request $request, int $course): \Illuminate\View\View
     {
         $enrolled = DB::table('enrollments')
