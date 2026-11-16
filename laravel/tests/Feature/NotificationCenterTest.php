@@ -186,7 +186,7 @@ class NotificationCenterTest extends TestCase
             'smtp_username' => 'smtp-user',
             'smtp_password' => 'smtp-secret',
             'from_address' => 'noreply@aec.test',
-        ], [], $admin->id);
+        ], ['smtp_password'], $admin->id);
 
         $this->actingAs($admin)->post('/admin/notifications/dispatch', [
             'user_id' => $student->id,
