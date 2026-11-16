@@ -57,14 +57,13 @@ class EnrollmentController extends Controller
         abort_unless($actor && $actor->hasRole('student'), 403, 'Only student accounts can request course enrollment.');
         abort_unless($course->status === 'published', 404, 'This course is not open for enrollment.');
 
-        abort_unless(
-            $this->plugins->isEnabled('student-management') && Schema::hasTable('students'),
-            409,
-            'Student Management must be enabled before student enrollment can be requested.'
-        );
-        $student = Student::query()->where('user_id', $actor->id)->first();
-        abort_unless($student, 422, 'Your student profile is not ready. Contact the admissions office.');
-        if ($course->branch_id !== null && (int) $course->branch_id !== (int) $student->branch_id) {
+        $studentIntegration = $this->plugins->isEnabled('student-management') && Schema::hasTable('students');
+        $student = $studentIntegration ? Student::query()->where('user_id', $actor->id)->first() : null;
+        if ($studentIntegration) {
+            abort_unless($student, 422, 'Your student profile is not ready. Contact the admissions office.');
+        }
+        $learnerBranchId = $student?->branch_id ?? $actor->branch_id;
+        if ($course->branch_id !== null && (int) $course->branch_id !== (int) $learnerBranchId) {
             abort(403, 'This course is not available in your assigned branch.');
         }
 
@@ -82,15 +81,18 @@ class EnrollmentController extends Controller
             abort(503, 'The Fees & Invoicing plugin must be enabled before paid course enrollment can be opened.');
         }
 
-        DB::transaction(function () use ($actor, $student, $course, $price, $paidCourse): void {
+        DB::transaction(function () use ($actor, $student, $learnerBranchId, $course, $price, $paidCourse): void {
             $invoice = null;
             $status = 'active';
 
             if ($paidCourse) {
                 $invoice = FeeInvoice::query()->create([
                     'invoice_number' => 'ENR-' . strtoupper(substr(bin2hex(random_bytes(6)), 0, 10)),
-                    'student_id' => $student->id,
-                    'branch_id' => $student->branch_id,
+                    'student_id' => $student?->id,
+                    'payer_name' => $student ? null : $actor->name,
+                    'payer_email' => $student ? null : $actor->email,
+                    'payer_phone' => $student ? null : $actor->phone,
+                    'branch_id' => $learnerBranchId,
                     'subtotal_amount' => $price,
                     'discount_amount' => 0,
                     'net_amount' => $price,
@@ -105,7 +107,7 @@ class EnrollmentController extends Controller
             Enrollment::query()->create([
                 'user_id' => $actor->id,
                 'course_id' => $course->id,
-                'branch_id' => $student->branch_id,
+                'branch_id' => $learnerBranchId,
                 'invoice_id' => $invoice?->id,
                 'status' => $status,
             ]);
