@@ -102,6 +102,7 @@ abstract class TestCase extends BaseTestCase
                 $path = base_path('plugins/modules/' . $slug . '/Routes/' . $routeFile);
                 if (is_file($path)) {
                     require $path;
+                    app('router')->getRoutes()->refreshNameLookups();
                 }
             }
         }
