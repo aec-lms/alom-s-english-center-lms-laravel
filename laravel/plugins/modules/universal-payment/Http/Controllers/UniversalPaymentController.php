@@ -51,11 +51,13 @@ class UniversalPaymentController extends Controller
             'default_currency' => ['required', 'in:BDT,USD,EUR,GBP'],
             'gateways' => ['nullable', 'array'],
             'gateways.*' => ['required', 'in:sslcommerz,card,paypal,bank_cash'],
+            'allow_offline_payments' => ['required', 'boolean'],
         ]);
 
         $values = [
             'default_currency' => $validated['default_currency'],
             'enabled_gateways' => implode(',', $validated['gateways'] ?? []),
+            'allow_offline_payments' => $validated['allow_offline_payments'] ? '1' : '0',
         ];
 
         $this->plugins->saveSettings('universal-payment', $values, [], auth()->id());
@@ -65,6 +67,7 @@ class UniversalPaymentController extends Controller
 
     public function storeTransaction(Request $request): RedirectResponse
     {
+        abort_unless($this->plugins->getSetting('universal-payment', 'allow_offline_payments', '1') === '1', 403, 'Cash and bank-transfer receipts are disabled by the LMS administrator.');
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
         $validated = $request->validate([
@@ -132,7 +135,12 @@ class UniversalPaymentController extends Controller
 
     public function publicCheckout(Request $request): JsonResponse|RedirectResponse
     {
-        abort_unless($this->plugins->isEnabled('fees-management') && Schema::hasTable('fee_invoices'), 409, 'Enable Fees Management before using invoice checkout.');
+        abort_unless(
+            $this->plugins->isEnabled('fees-management') && Schema::hasTable('fee_invoices')
+                && $this->plugins->isEnabled('payment-management') && Schema::hasTable('payment_transactions'),
+            409,
+            'Enable Fees and Payment Management before using invoice checkout.'
+        );
         $validated = $request->validate([
             'invoice_id' => ['required', 'integer', 'exists:fee_invoices,id'],
             'gateway' => ['required', 'in:sslcommerz,card,paypal'],
