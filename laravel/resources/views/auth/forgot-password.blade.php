@@ -8,7 +8,7 @@
         <section class="w-full max-w-[440px] rounded-2xl bg-white border border-white/90 px-7 sm:px-9 py-9 shadow-[0_20px_50px_-15px_rgba(15,23,42,0.12)] space-y-5">
             <div class="text-center">
                 <h1 class="text-xl font-extrabold text-slate-900">Forgot Password?</h1>
-                <p class="mt-1 text-xs text-slate-500">Enter your registered email address and we will queue recovery instructions.</p>
+                <p class="mt-1 text-xs text-slate-500">Enter your registered email address and we will send a secure password reset link.</p>
             </div>
 
             @if (session('status'))
