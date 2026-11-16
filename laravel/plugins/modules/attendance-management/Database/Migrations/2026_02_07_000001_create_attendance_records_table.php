@@ -14,7 +14,7 @@ return new class extends Migration {
                 $table->id();
                 $table->unsignedBigInteger('batch_id');
                 $table->unsignedBigInteger('student_id');
-                $table->unsignedBigInteger('branch_id')->index();
+                $table->unsignedBigInteger('branch_id')->nullable()->index();
                 $table->date('attendance_date');
                 $table->string('status', 20)->default('present'); // present, absent, late, excused
                 $table->string('remarks', 255)->nullable();
