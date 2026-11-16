@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use App\Core\Plugins\PluginManager;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Support\Facades\Http;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
@@ -88,22 +89,28 @@ class FinanceAndPaymentGatewayTest extends TestCase
         ])->assertStatus(422);
 
         // SSLCOMMERZ must create a server-side session and validate the IPN with the official validation API.
-        Http::fake([
-            'https://sandbox.sslcommerz.com/gwprocess/v4/api.php' => Http::response([
-                'status' => 'SUCCESS',
-                'sessionkey' => 'SSL-SESSION-KEY-001',
-                'GatewayPageURL' => 'https://sandbox.sslcommerz.com/gwprocess/v4/gw.php?SESSIONKEY=SSL-SESSION-KEY-001',
-            ], 200),
-            'https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php*' => Http::response([
+        $sslTransactionRef = '';
+        Http::fake(function (ClientRequest $request) use (&$sslTransactionRef) {
+            if (str_ends_with((string) parse_url($request->url(), PHP_URL_PATH), '/gwprocess/v4/api.php')) {
+                $sslTransactionRef = (string) ($request->data()['tran_id'] ?? '');
+
+                return Http::response([
+                    'status' => 'SUCCESS',
+                    'sessionkey' => 'SSL-SESSION-KEY-001',
+                    'GatewayPageURL' => 'https://sandbox.sslcommerz.com/gwprocess/v4/gw.php?SESSIONKEY=SSL-SESSION-KEY-001',
+                ], 200);
+            }
+
+            return Http::response([
                 'status' => 'VALID',
-                'tran_id' => 'SSL-PLACEHOLDER',
+                'tran_id' => $sslTransactionRef,
                 'val_id' => 'SSL-VALIDATION-001',
                 'amount' => '1200.00',
                 'currency' => 'BDT',
                 'bank_tran_id' => 'BANK-SSL-001',
                 'risk_level' => '0',
-            ], 200),
-        ]);
+            ], 200);
+        });
 
         $sslSession = $this->actingAs($admin)->postJson('/payments/sslcommerz/initiate', [
             'invoice_id' => $sslInvoice->id,
@@ -112,18 +119,6 @@ class FinanceAndPaymentGatewayTest extends TestCase
         $sslTransaction = PaymentTransaction::query()
             ->where('transaction_ref', $sslSession['transaction_ref'])
             ->firstOrFail();
-
-        Http::fake([
-            'https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php*' => Http::response([
-                'status' => 'VALID',
-                'tran_id' => $sslTransaction->transaction_ref,
-                'val_id' => 'SSL-VALIDATION-001',
-                'amount' => '1200.00',
-                'currency' => 'BDT',
-                'bank_tran_id' => 'BANK-SSL-001',
-                'risk_level' => '0',
-            ], 200),
-        ]);
 
         $this->postJson('/payments/sslcommerz/ipn', [
             'tran_id' => $sslTransaction->transaction_ref,
