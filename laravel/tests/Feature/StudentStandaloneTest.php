@@ -43,7 +43,7 @@ class StudentStandaloneTest extends TestCase
         ]);
     }
 
-    public function test_deactivating_student_preserves_student_and_user_history(): void
+    public function test_deleting_student_moves_it_to_recycle_bin_and_admin_can_restore_it(): void
     {
         $this->markSystemInstalled();
         $this->activatePlugins(['student-management']);
