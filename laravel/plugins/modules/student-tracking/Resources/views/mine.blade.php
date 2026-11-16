@@ -1,4 +1,4 @@
-@extends('layouts.student')
+@extends('layouts.admin')
 @section('title', 'My Learning Activity — AEC LMS')
 @section('content')
 <div class="max-w-5xl mx-auto space-y-5">
