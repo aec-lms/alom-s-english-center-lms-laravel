@@ -30,7 +30,7 @@ class StudentStandaloneTest extends TestCase
                 'student_code' => 'GLOBAL-001',
                 'status' => 'active',
             ])
-            ->assertSessionHasNoErrors();
+            ->assertRedirect()->assertSessionHasNoErrors();
 
         $this->assertDatabaseHas('students', [
             'student_code' => 'GLOBAL-001',
