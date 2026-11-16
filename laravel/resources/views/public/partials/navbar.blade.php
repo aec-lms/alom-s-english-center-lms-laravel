@@ -9,6 +9,9 @@
         ['label' => 'E-Books', 'route' => 'public.ebooks*', 'urlRoute' => 'public.ebooks', 'active' => request()->routeIs('public.ebooks*')],
         ['label' => 'Result', 'route' => 'public.result', 'active' => request()->routeIs('public.result')],
     ];
+    @if (auth()->check() && auth()->user()->hasRole('student') && app(\\App\\Core\\Plugins\\PluginManager::class)->isEnabled('student-tracking') && Route::has('plugins.student-tracking.mine'))
+        $navLinks[] = ['label' => 'My Activity', 'route' => 'plugins.student-tracking.mine', 'urlRoute' => 'plugins.student-tracking.mine', 'active' => request()->routeIs('plugins.student-tracking.mine')];
+    @endif
 @endphp
 
 <header class="w-full bg-white border-b border-slate-200/80 sticky top-0 z-40 shadow-2xs">
