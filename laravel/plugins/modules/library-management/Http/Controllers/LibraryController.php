@@ -27,6 +27,7 @@ class LibraryController extends Controller
     public function index(Request $request): View
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $books = Schema::hasTable('library_books')
             ? LibraryBook::query()
                 ->when($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null, fn ($q) => $q->where('branch_id', $actor->branch_id))
@@ -49,6 +50,7 @@ class LibraryController extends Controller
     public function storeBook(Request $request): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $validated = $request->validate([
             'isbn' => ['required', 'string', 'max:40', 'unique:library_books,isbn'],
             'title' => ['required', 'string', 'max:200'],
@@ -75,6 +77,7 @@ class LibraryController extends Controller
     public function issueLoan(Request $request): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $validated = $request->validate([
             'library_book_id' => ['required', 'integer', 'exists:library_books,id'],
             'borrower_name' => ['required', 'string', 'max:160'],
@@ -116,6 +119,7 @@ class LibraryController extends Controller
     public function returnLoan(Request $request, LibraryLoan $loan): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null && (int) $loan->branch_id !== (int) $actor->branch_id) {
             abort(403, 'Branch isolation violation.');
         }
@@ -148,5 +152,12 @@ class LibraryController extends Controller
         $this->audit->log('library.loan_returned', 'library_loan', (string) $loan->id);
 
         return back()->with('status', 'Book return recorded cleanly.');
+    }
+
+    private function ensureAssignedBranch($actor): void
+    {
+        if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id === null) {
+            abort(403, 'Branch manager must be assigned to a branch.');
+        }
     }
 }
