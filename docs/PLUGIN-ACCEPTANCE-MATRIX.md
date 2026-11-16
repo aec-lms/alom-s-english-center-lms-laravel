@@ -91,11 +91,11 @@ Update each row's functional acceptance only after code review and tests have be
 
 ## Verified common lifecycle acceptance (39/39)
 
-At candidate commit `3198bd0d279b661864c42f75bfac4d4cbb313285`, the parameterized `AllPluginsIndependentAcceptanceTest` ran once for each of the 39 plugin slugs. It verifies each manifest and provider autoload, no required sibling dependency, install/enable, disable/re-enable, reset-to-default settings, move-to-Recycle-Bin, and restore to the prior installed/enabled state. Optional integrations are not auto-installed. This establishes common lifecycle behavior for all 39 packages, not full feature acceptance for each plugin.
+At candidate commit `7211fed2dc4aa3e69af3dbecd13c68a9b6334ea4`, the parameterized `AllPluginsIndependentAcceptanceTest` ran once for each of the 39 plugin slugs. It verifies each manifest and provider autoload, no required sibling dependency, install/enable, disable/re-enable, uninstall/reinstall, reset-to-default settings, move-to-Recycle-Bin, and restore to the prior installed/enabled state. Optional integrations are not auto-installed. This establishes common lifecycle behavior for all 39 packages, not full feature acceptance for each plugin.
 
 The exact candidate's GitHub Actions checks completed successfully:
-- Laravel workflow `43867524046`: MySQL tests and Laravel tests passed.
-- Browser E2E workflow `43867524049`: passed.
-- Composer Security Audit workflow `43867524257`: passed.
+- Laravel workflow `43871952327`: SQLite and MySQL 8 suites each passed **183 tests / 2,117 assertions**; PHP syntax, Composer validation/security audit, cPanel production package build and package-content verification passed.
+- Browser E2E workflow `43871952035`: passed.
+- Composer Security Audit workflow `43871952139`: passed.
 
-**Still not covered by the 39-plugin parameterized test:** ZIP-based update for every individual plugin, uninstall/reinstall for every plugin, and permanent deletion for every plugin. Permanent deletion is covered by a focused lifecycle regression test for Branch Management, including a verified private recovery backup and preservation of business records. Generic ZIP update rollback/integrity cases are covered by separate PluginManager tests. Provider sandbox/credential-backed tests, real cPanel installation, and production load tests remain separate release gates. Therefore no plugin is being marked fully feature-accepted or production-certified by these common lifecycle checks.
+**Still not covered by the 39-plugin parameterized test:** ZIP-based update for every individual plugin and permanent deletion for every plugin. Permanent deletion is covered by a focused lifecycle regression test for Branch Management, including a verified private recovery backup and preservation of business records. Generic ZIP update rollback/integrity cases are covered by separate PluginManager tests. Provider sandbox/credential-backed tests, real cPanel installation, and production load tests remain separate release gates. Therefore no plugin is being marked fully feature-accepted or production-certified by these common lifecycle checks.
