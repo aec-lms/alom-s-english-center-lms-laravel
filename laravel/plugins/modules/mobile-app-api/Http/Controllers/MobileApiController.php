@@ -255,6 +255,7 @@ class MobileApiController extends Controller
 
     public function courses(): JsonResponse
     {
+        abort_unless($this->plugins->isEnabled('course-management') && Schema::hasTable('courses'), 409, 'Course Management is disabled.');
         return response()->json([
             'data' => Course::query()
                 ->where('status', 'published')
@@ -270,10 +271,9 @@ class MobileApiController extends Controller
         // Course currently has no Eloquent category/lessons relationships.
         // Return the persisted course record instead of eager-loading undefined relations.
         $course = Course::query()
-            ->select(['id', 'code', 'title', 'slug', 'description', 'price', 'thumbnail', 'pdf_thumbnail', 'instructor_name', 'status'])
+            ->select(['id', 'code', 'title', 'slug', 'description', 'price', 'thumbnail', 'instructor_name', 'status'])
             ->where('slug', $slug)
             ->where('status', 'published')
-            ->select(['id', 'code', 'title', 'slug', 'price', 'description', 'thumbnail', 'instructor_name'])
             ->first();
 
         if (!$course) {
