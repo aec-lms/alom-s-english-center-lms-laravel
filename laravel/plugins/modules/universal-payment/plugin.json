@@ -42,8 +42,11 @@
         }
     ],
     "optional_dependencies": [
-        "payment-management",
+        "branch-management",
         "fees-management",
-        "branch-management"
+        "gateway-paypal",
+        "gateway-sslcommerz",
+        "gateway-stripe",
+        "payment-management"
     ]
 }
