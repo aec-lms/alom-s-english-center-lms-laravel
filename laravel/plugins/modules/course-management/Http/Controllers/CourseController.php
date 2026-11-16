@@ -51,7 +51,11 @@ class CourseController extends Controller
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
 
-        $validated = $request->validate([
+                $branchIntegration = app(PluginManager::class)->isEnabled('branch-management') && Schema::hasTable('branches');
+        $branchRule = $branchIntegration
+            ? ['nullable', 'integer', 'exists:branches,id,is_active,1']
+            : ['nullable', 'integer'];
+$validated = $request->validate([
             'code' => ['required', 'string', 'max:40', 'unique:courses,code'],
             'title' => ['nullable', 'string', 'max:180'],
             'category' => ['nullable', 'string', 'max:100'],
@@ -64,7 +68,7 @@ class CourseController extends Controller
             'price' => ['required', 'numeric', 'min:0'],
             'original_price' => ['nullable', 'numeric', 'min:0'],
             'duration_weeks' => ['nullable', 'integer', 'min:1', 'max:104'],
-            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
+            'branch_id' => $branchRule,
             'status' => ['nullable', 'in:published,draft,archived'],
             'thumbnail' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
             'thumbnail_url' => ['nullable', 'string', 'max:255'],
@@ -75,6 +79,10 @@ class CourseController extends Controller
             'seo_title' => ['nullable', 'string', 'max:180'],
             'seo_description' => ['nullable', 'string', 'max:320'],
         ]);
+
+        if (!$branchIntegration) {
+            $validated['branch_id'] = null;
+        }
 
         if ($actor && $actor->hasRole('branch_manager')) {
             $validated['branch_id'] = $actor->branch_id;
