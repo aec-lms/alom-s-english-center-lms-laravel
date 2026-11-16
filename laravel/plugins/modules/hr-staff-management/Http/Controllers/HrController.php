@@ -116,6 +116,7 @@ class HrController extends Controller
     public function markPayrollPaid(Request $request, StaffPayroll $payroll): RedirectResponse
     {
         $actor = $request->user();
+        abort_unless($actor && $actor->hasRole('admin'), 403, 'Only a central administrator can confirm payroll disbursement.');
         $this->ensureAssignedBranch($actor);
 
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $payroll->branch_id) {
