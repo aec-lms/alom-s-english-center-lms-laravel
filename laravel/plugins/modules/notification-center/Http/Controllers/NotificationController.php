@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace Plugins\Modules\NotificationCenter\Http\Controllers;
 
+use App\Core\Plugins\PluginManager;
 use App\Core\Security\AuditLogger;
+use App\Models\User;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Mail;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
