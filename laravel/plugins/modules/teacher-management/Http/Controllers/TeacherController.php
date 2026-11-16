@@ -197,15 +197,18 @@ class TeacherController extends Controller
         $user = $teacher->user;
 
         DB::transaction(function () use ($teacher, $user): void {
+            $teacher->deleted_user_was_active = (bool) $user?->is_active;
+            $teacher->save();
             $teacher->update(['is_active' => false]);
             if ($user) {
                 $user->update(['is_active' => false]);
             }
+            $teacher->delete();
         });
 
-        $this->audit->log('teacher.deactivated', 'teacher', $id, ['code' => $code]);
+        $this->audit->log('teacher.trashed', 'teacher', $id, ['code' => $code]);
 
-        return back()->with('status', "Instructor '{$code}' deactivated. Account and course history have been preserved.");
+        return back()->with('status', "Instructor '{$code}' moved to the Admin Recycle Bin. Account and course history have been preserved.");
     }
 
     private function storePhoto(UploadedFile $file): string
