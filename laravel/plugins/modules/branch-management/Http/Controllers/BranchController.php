@@ -66,21 +66,52 @@ class BranchController extends Controller
 
     public function destroy(Branch $branch): RedirectResponse
     {
+        $branchTables = [
+            'users',
+            'students',
+            'teachers',
+            'teacher_profiles',
+            'courses',
+            'batches',
+            'study_batches',
+            'enrollments',
+            'attendance_records',
+            'exams',
+            'certificates',
+            'fee_invoices',
+            'payment_transactions',
+            'staff_profiles',
+            'staff_payrolls',
+            'library_books',
+            'library_loans',
+            'notices',
+            'class_sessions',
+            'live_classes',
+        ];
+
+        $referencingTables = [];
+        foreach ($branchTables as $table) {
+            if (Schema::hasTable($table)
+                && Schema::hasColumn($table, 'branch_id')
+                && DB::table($table)->where('branch_id', $branch->id)->exists()) {
+                $referencingTables[] = $table;
+            }
+        }
+
+        if ($referencingTables !== []) {
+            return back()->withErrors([
+                'branch' => 'This branch still owns records in: ' . implode(', ', $referencingTables)
+                    . '. Reassign or archive those records first, then delete the branch.',
+            ]);
+        }
+
         $name = $branch->name;
         $id = (string) $branch->id;
 
-        DB::transaction(function () use ($branch): void {
-            if (Schema::hasTable('users') && Schema::hasColumn('users', 'branch_id')) {
-                DB::table('users')->where('branch_id', $branch->id)->update(['branch_id' => null]);
-            }
-            if (Schema::hasTable('students') && Schema::hasColumn('students', 'branch_id')) {
-                DB::table('students')->where('branch_id', $branch->id)->update(['branch_id' => null]);
-            }
-            $branch->delete();
-        });
+        DB::transaction(fn () => $branch->delete());
 
         $this->audit->log('branch.deleted', 'branch', $id, ['name' => $name]);
 
-        return back()->with('status', "Branch '{$name}' deleted safely (user & student records preserved).");
+        return back()->with('status', "Branch '{$name}' deleted.");
     }
 }
