@@ -68,6 +68,30 @@ class WebsiteBuildersTest extends TestCase
         $this->assertSame(0, DB::table('cms_pages')->where('slug', 'protocol-relative')->count());
     }
 
+    public function test_homepage_ignores_unsafe_legacy_slider_urls(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['slider-builder']);
+
+        DB::table('cms_sliders')->insert([
+            'key_name' => 'hero',
+            'title' => 'Legacy Unsafe Slide',
+            'subtitle' => 'Legacy data must not execute',
+            'image_path' => 'https://evil.example.test/image.jpg',
+            'cta_url' => 'javascript:alert(1)',
+            'sort_order' => 0,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->get('/')
+            ->assertOk()
+            ->assertDontSee('javascript:alert(1)')
+            ->assertDontSee('https://evil.example.test/image.jpg')
+            ->assertSee('hero_educator_studio_1794552233836.jpg');
+    }
+
     public function test_slider_and_carousel_reject_external_media_paths_and_unsafe_ctas(): void
     {
         $this->markSystemInstalled();
