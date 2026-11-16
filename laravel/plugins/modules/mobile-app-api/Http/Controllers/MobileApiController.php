@@ -243,7 +243,7 @@ class MobileApiController extends Controller
         ]);
     }
 
-    public function courseShow(Request $request, string $slug): JsonResponse
+    public function courseShow(string $slug): JsonResponse
     {
         $course = Course::query()
             ->where('slug', $slug)
@@ -253,19 +253,6 @@ class MobileApiController extends Controller
         if (!$course) {
             return response()->json(['message' => 'Course not found.'], 404);
         }
-
-        $hasAccess = $request->user() && Enrollment::query()
-            ->where('user_id', $request->user()->id)
-            ->where('course_id', $course->id)
-            ->where('status', 'active')
-            ->exists();
-
-        $lessons = $hasAccess && Schema::hasTable('course_lessons')
-            ? DB::table('course_lessons')
-                ->where('course_id', $course->id)
-                ->orderBy('sort_order')
-                ->get(['id', 'title', 'content', 'sort_order'])
-            : collect();
 
         return response()->json([
             'data' => [
@@ -281,9 +268,36 @@ class MobileApiController extends Controller
                 'duration_weeks' => $course->duration_weeks,
                 'thumbnail' => $course->thumbnail,
             ],
-            'has_access' => (bool) $hasAccess,
-            'lessons' => $lessons,
+            'lessons' => [],
+            'lessons_endpoint' => url('/api/mobile/courses/' . rawurlencode($course->slug) . '/lessons'),
         ]);
+    }
+
+    public function courseLessons(Request $request, string $slug): JsonResponse
+    {
+        $course = Course::query()
+            ->where('slug', $slug)
+            ->where('status', 'published')
+            ->firstOrFail();
+
+        $hasAccess = Enrollment::query()
+            ->where('user_id', $request->user()->id)
+            ->where('course_id', $course->id)
+            ->where('status', 'active')
+            ->exists();
+
+        if (!$hasAccess) {
+            return response()->json(['message' => 'An active course enrollment is required to access lessons.'], 403);
+        }
+
+        $lessons = Schema::hasTable('course_lessons')
+            ? DB::table('course_lessons')
+                ->where('course_id', $course->id)
+                ->orderBy('sort_order')
+                ->get(['id', 'title', 'content', 'sort_order'])
+            : collect();
+
+        return response()->json(['data' => $lessons]);
     }
 
     public function ebooks(): JsonResponse
@@ -313,34 +327,19 @@ class MobileApiController extends Controller
         return response()->json(['data' => $exams]);
     }
 
-    public function notices(Request $request): JsonResponse
+    public function notices(): JsonResponse
     {
-        if (!Schema::hasTable('notices')) {
-            return response()->json(['data' => []]);
-        }
-
-        $query = DB::table('notices')
-            ->whereNotNull('published_at')
-            ->where('published_at', '<=', now());
-
-        $user = $request->user();
-        if ($user) {
-            $role = (string) ($user->roles()->value('slug') ?? '');
-            $query->whereIn('audience_role', array_values(array_filter(['all', $role])))
-                ->where(function ($scope) use ($user): void {
-                    $scope->whereNull('branch_id');
-                    if ($user->branch_id !== null) {
-                        $scope->orWhere('branch_id', $user->branch_id);
-                    }
-                });
-        } else {
-            $query->where('audience_role', 'all')->whereNull('branch_id');
-        }
-
-        $notices = $query->orderByDesc('is_pinned')
-            ->orderByDesc('published_at')
-            ->limit(30)
-            ->get(['id', 'title', 'body', 'audience_role', 'branch_id', 'is_pinned', 'published_at']);
+        $notices = Schema::hasTable('notices')
+            ? DB::table('notices')
+                ->where('audience_role', 'all')
+                ->whereNull('branch_id')
+                ->whereNotNull('published_at')
+                ->where('published_at', '<=', now())
+                ->orderByDesc('is_pinned')
+                ->orderByDesc('published_at')
+                ->limit(30)
+                ->get(['id', 'title', 'body', 'published_at', 'is_pinned'])
+            : collect();
 
         return response()->json(['data' => $notices]);
     }
