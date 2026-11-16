@@ -64,7 +64,12 @@ class DeliverNotificationJob implements ShouldQueue
             return;
         }
 
-        $smtpHost = (string) $plugins->getSetting('email-notifications', 'smtp_host', '');
+        if (!$plugins->isEnabled('email-notifications')) {
+            $notification->forceFill(['status' => 'failed', 'last_error' => 'Email Notifications integration is disabled.', 'processed_at' => now()])->save();
+            return;
+        }
+
+        $smtpHost = trim((string) $plugins->getSetting('email-notifications', 'smtp_host', ''));
         if ($smtpHost === '') {
             $notification->forceFill([
                 'status' => 'failed',
@@ -77,7 +82,12 @@ class DeliverNotificationJob implements ShouldQueue
         $smtpPort = (int) $plugins->getSetting('email-notifications', 'smtp_port', '587');
         $smtpUsername = (string) $plugins->getSetting('email-notifications', 'smtp_username', '');
         $smtpPassword = (string) $plugins->getSetting('email-notifications', 'smtp_password', '');
-        $fromAddress = (string) $plugins->getSetting('email-notifications', 'from_address', config('mail.from.address'));
+        $fromAddress = trim((string) $plugins->getSetting('email-notifications', 'from_address', config('mail.from.address', '')));
+        if ($smtpPort < 1 || $smtpPort > 65535 || !filter_var($fromAddress, FILTER_VALIDATE_EMAIL)
+            || (($smtpUsername === '') !== ($smtpPassword === ''))) {
+            $notification->forceFill(['status' => 'failed', 'last_error' => 'SMTP settings are incomplete or invalid.', 'processed_at' => now()])->save();
+            return;
+        }
 
         Config::set([
             'mail.default' => 'smtp',
@@ -86,7 +96,8 @@ class DeliverNotificationJob implements ShouldQueue
             'mail.mailers.smtp.port' => $smtpPort,
             'mail.mailers.smtp.username' => $smtpUsername !== '' ? $smtpUsername : null,
             'mail.mailers.smtp.password' => $smtpPassword !== '' ? $smtpPassword : null,
-            'mail.mailers.smtp.encryption' => $smtpPort === 465 ? 'ssl' : 'tls',
+            'mail.mailers.smtp.scheme' => $smtpPort === 465 ? 'smtps' : 'smtp',
+            'mail.mailers.smtp.timeout' => 20,
             'mail.from.address' => $fromAddress,
             'mail.from.name' => config('app.name', 'AEC LMS'),
         ]);
