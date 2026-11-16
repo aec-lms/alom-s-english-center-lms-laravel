@@ -7,6 +7,8 @@ namespace Tests\Feature;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Http;
+use App\Core\Plugins\PluginManager;
 use Plugins\Modules\StorefrontCatalog\Models\StorefrontItem;
 use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
 use Tests\TestCase;
@@ -47,9 +49,13 @@ class MediaLibraryAndDigitalEbookTest extends TestCase
     public function test_paid_ebook_download_is_locked_until_verified_payment_and_uses_server_price(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['storefront-catalog', 'payment-management', 'universal-payment']);
+        $this->activatePlugins(['storefront-catalog', 'payment-management', 'universal-payment', 'gateway-sslcommerz']);
+        app(PluginManager::class)->saveSettings('gateway-sslcommerz', [
+            'store_id' => 'test-store',
+            'store_password' => 'test-secret',
+            'sandbox_mode' => '1',
+        ], ['store_password']);
 
-        $admin = $this->createUserWithRole('admin');
         $student = $this->createUserWithRole('student');
         Storage::fake('local');
         $pdfPath = 'digital-products/private-guide.pdf';
@@ -72,30 +78,66 @@ class MediaLibraryAndDigitalEbookTest extends TestCase
 
         $this->actingAs($student)->get('/ebooks/protected-guide/download')->assertForbidden();
 
+        Http::fake([
+            'https://sandbox.sslcommerz.com/gwprocess/v4/api.php' => Http::response([
+                'status' => 'SUCCESS',
+                'GatewayPageURL' => 'https://sandbox.sslcommerz.com/gwprocess/v4/gateway.php?Q=test',
+                'sessionkey' => 'session-test',
+            ]),
+        ]);
+
         $this->actingAs($student)->post('/universal-checkout', [
             'storefront_item_id' => $itemId,
             'payer_name' => $student->name,
-            'payer_contact' => $student->email,
+            'payer_contact' => '01700000000',
             'item_title' => 'Client supplied fake title',
-            'gateway' => 'bkash',
+            'gateway' => 'sslcommerz',
             'amount' => 1,
-            'external_trx_id' => 'TXN-BOOK-001',
-        ])->assertSessionHasNoErrors();
+        ])->assertRedirect('https://sandbox.sslcommerz.com/gwprocess/v4/gateway.php?Q=test');
 
         $transaction = UniversalPaymentTransaction::query()->where('user_id', $student->id)->firstOrFail();
         $this->assertSame(450.0, (float) $transaction->amount);
         $this->assertSame($itemId, (int) $transaction->storefront_item_id);
         $this->actingAs($student)->get('/ebooks/protected-guide/download')->assertForbidden();
 
-        $this->actingAs($admin)->post("/plugins/universal-payment/transactions/{$transaction->id}/status", [
-            'status' => 'verified',
-        ])->assertSessionHasNoErrors();
+        Http::fake([
+            'https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php*' => Http::response([
+                'status' => 'FAILED',
+                'tran_id' => $transaction->reference,
+                'amount' => '1.00',
+                'currency' => 'BDT',
+            ]),
+        ]);
+        $this->post('/universal-payment/sslcommerz/success', [
+            'tran_id' => $transaction->reference,
+            'val_id' => 'INVALID-VAL',
+        ])->assertRedirect('/ebooks/protected-guide');
+        $this->assertDatabaseMissing('storefront_item_access', [
+            'storefront_item_id' => $itemId,
+            'user_id' => $student->id,
+        ]);
+
+        Http::fake([
+            'https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php*' => Http::response([
+                'status' => 'VALID',
+                'tran_id' => $transaction->reference,
+                'amount' => '450.00',
+                'currency' => 'BDT',
+                'risk_level' => '0',
+                'bank_tran_id' => 'BANK-123',
+            ]),
+        ]);
+        $this->post('/universal-payment/sslcommerz/success', [
+            'tran_id' => $transaction->reference,
+            'val_id' => 'VALID-VAL',
+        ])->assertRedirect('/ebooks/protected-guide');
 
         $this->assertDatabaseHas('storefront_item_access', [
             'storefront_item_id' => $itemId,
             'user_id' => $student->id,
             'payment_transaction_id' => $transaction->id,
         ]);
+        $this->assertSame('verified', $transaction->fresh()->status);
 
         $this->actingAs($student)->get('/ebooks/protected-guide/download')->assertOk();
     }

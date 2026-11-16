@@ -1,0 +1,177 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Plugins\Modules\UniversalPayment\Services;
+
+use App\Core\Plugins\PluginManager;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
+use RuntimeException;
+
+class StorefrontPaymentGatewayService
+{
+    public function __construct(private readonly PluginManager $plugins) {}
+
+    public function initiateSslcommerz(UniversalPaymentTransaction $transaction, object $item, object $user, string $payerContact): string
+    {
+        if (!$this->plugins->isEnabled('gateway-sslcommerz')) {
+            throw new RuntimeException('Enable the dedicated SSLCOMMERZ Gateway plugin before accepting e-book payments.');
+        }
+        $storeId = (string) $this->plugins->getSetting('gateway-sslcommerz', 'store_id', '');
+        $storePassword = (string) $this->plugins->getSetting('gateway-sslcommerz', 'store_password', '');
+        if ($storeId === '' || $storePassword === '') {
+            throw new RuntimeException('Install and configure the SSLCOMMERZ Gateway plugin before accepting online payments.');
+        }
+
+        $phone = preg_replace('/[^0-9+]/', '', $payerContact);
+        if (strlen(preg_replace('/\D/', '', $phone)) < 7 || !filter_var((string) $user->email, FILTER_VALIDATE_EMAIL)) {
+            throw new RuntimeException('A valid payer phone number and account email are required for SSLCOMMERZ.');
+        }
+
+        $sandbox = $this->plugins->getSetting('gateway-sslcommerz', 'sandbox_mode', '1') === '1';
+        $baseUrl = $sandbox ? 'https://sandbox.sslcommerz.com' : 'https://securepay.sslcommerz.com';
+        $payload = [
+            'store_id' => $storeId,
+            'store_passwd' => $storePassword,
+            'total_amount' => number_format((float) $transaction->amount, 2, '.', ''),
+            'currency' => strtoupper((string) $transaction->currency),
+            'tran_id' => $transaction->reference,
+            'success_url' => url('/universal-payment/sslcommerz/success'),
+            'fail_url' => url('/universal-payment/sslcommerz/failed'),
+            'cancel_url' => url('/universal-payment/sslcommerz/cancelled'),
+            'ipn_url' => url('/universal-payment/sslcommerz/ipn'),
+            'cus_name' => mb_substr((string) $user->name, 0, 50),
+            'cus_email' => mb_substr((string) $user->email, 0, 50),
+            'cus_add1' => 'N/A',
+            'cus_city' => 'Dhaka',
+            'cus_postcode' => '1000',
+            'cus_country' => 'Bangladesh',
+            'cus_phone' => mb_substr($phone, 0, 20),
+            'shipping_method' => 'NO',
+            'num_of_item' => '1',
+            'product_name' => mb_substr((string) $item->title, 0, 200),
+            'product_category' => 'Digital Education',
+            'product_profile' => 'non-physical-goods',
+        ];
+
+        $response = Http::asForm()->acceptJson()->timeout(25)->post($baseUrl . '/gwprocess/v4/api.php', $payload);
+        $data = $response->json();
+        $checkoutUrl = is_array($data) ? (string) ($data['GatewayPageURL'] ?? '') : '';
+        $expectedHost = $sandbox ? 'sandbox.sslcommerz.com' : 'securepay.sslcommerz.com';
+
+        if (!$response->successful() || !is_array($data)
+            || strtoupper((string) ($data['status'] ?? '')) !== 'SUCCESS'
+            || strtolower((string) parse_url($checkoutUrl, PHP_URL_SCHEME)) !== 'https'
+            || strtolower((string) parse_url($checkoutUrl, PHP_URL_HOST)) !== $expectedHost) {
+            $transaction->update(['status' => 'failed', 'notes' => 'SSLCOMMERZ session creation failed.']);
+            throw new RuntimeException('SSLCOMMERZ could not create a valid hosted checkout session. Check gateway credentials and sandbox/live mode.');
+        }
+
+        $transaction->update([
+            'notes' => json_encode([
+                'provider' => 'sslcommerz',
+                'session_key' => (string) ($data['sessionkey'] ?? ''),
+                'mode' => $sandbox ? 'sandbox' : 'live',
+            ], JSON_THROW_ON_ERROR),
+        ]);
+
+        return $checkoutUrl;
+    }
+
+    public function verifySslcommerz(array $callback): UniversalPaymentTransaction
+    {
+        $reference = trim((string) ($callback['tran_id'] ?? ''));
+        $validationId = trim((string) ($callback['val_id'] ?? ''));
+        if ($reference === '' || $validationId === '') {
+            throw new RuntimeException('SSLCOMMERZ callback is missing transaction validation details.');
+        }
+
+        $transaction = UniversalPaymentTransaction::query()
+            ->where('reference', $reference)
+            ->where('gateway', 'sslcommerz')
+            ->firstOrFail();
+
+        if ($transaction->status === 'verified') return $transaction;
+
+        $storeId = (string) $this->plugins->getSetting('gateway-sslcommerz', 'store_id', '');
+        $storePassword = (string) $this->plugins->getSetting('gateway-sslcommerz', 'store_password', '');
+        if ($storeId === '' || $storePassword === '') throw new RuntimeException('SSLCOMMERZ validation credentials are unavailable.');
+
+        $sandbox = $this->plugins->getSetting('gateway-sslcommerz', 'sandbox_mode', '1') === '1';
+        $baseUrl = $sandbox ? 'https://sandbox.sslcommerz.com' : 'https://securepay.sslcommerz.com';
+        $response = Http::acceptJson()->timeout(25)->get($baseUrl . '/validator/api/validationserverAPI.php', [
+            'val_id' => $validationId,
+            'store_id' => $storeId,
+            'store_passwd' => $storePassword,
+            'format' => 'json',
+        ]);
+        $data = $response->json();
+
+        if (!$response->successful() || !is_array($data)
+            || !in_array(strtoupper((string) ($data['status'] ?? '')), ['VALID', 'VALIDATED'], true)
+            || !hash_equals($transaction->reference, (string) ($data['tran_id'] ?? ''))
+            || strtoupper((string) ($data['currency'] ?? '')) !== strtoupper((string) $transaction->currency)
+            || abs((float) ($data['amount'] ?? 0) - (float) $transaction->amount) > 0.01) {
+            throw new RuntimeException('SSLCOMMERZ payment validation failed: reference, amount, or currency did not match.');
+        }
+
+        if ((string) ($data['risk_level'] ?? '0') === '1') {
+            $transaction->update(['status' => 'risk_review', 'notes' => json_encode(['provider' => 'sslcommerz', 'risk_review' => true])]);
+            throw new RuntimeException('SSLCOMMERZ flagged this payment for manual risk review. E-book access was not granted.');
+        }
+
+        return $this->grantEbookAccess($transaction, $validationId, [
+            'bank_transaction_id' => (string) ($data['bank_tran_id'] ?? ''),
+            'validation_status' => strtoupper((string) $data['status']),
+        ]);
+    }
+
+    public function markSslcommerzFailed(array $callback, string $status): UniversalPaymentTransaction
+    {
+        $reference = trim((string) ($callback['tran_id'] ?? ''));
+        abort_if($reference === '', 422, 'Missing payment reference.');
+        $transaction = UniversalPaymentTransaction::query()->where('reference', $reference)->where('gateway', 'sslcommerz')->firstOrFail();
+        if ($transaction->status !== 'verified') {
+            $transaction->update(['status' => $status]);
+        }
+        return $transaction->fresh();
+    }
+
+    private function grantEbookAccess(UniversalPaymentTransaction $transaction, string $externalReference, array $providerDetails): UniversalPaymentTransaction
+    {
+        return DB::transaction(function () use ($transaction, $externalReference, $providerDetails): UniversalPaymentTransaction {
+            $locked = UniversalPaymentTransaction::query()->whereKey($transaction->id)->lockForUpdate()->firstOrFail();
+            if ($locked->status === 'verified') return $locked;
+
+            if (!$locked->storefront_item_id || !$locked->user_id) {
+                throw new RuntimeException('This payment is not linked to a registered e-book buyer.');
+            }
+
+            $item = DB::table('storefront_items')->where('id', $locked->storefront_item_id)->where('type', 'ebook')->where('is_active', true)->first();
+            if (!$item || (float) $item->price <= 0 || (float) $item->price - (float) $locked->amount > 0.01) {
+                throw new RuntimeException('The e-book price changed or the item is no longer available. Manual review is required.');
+            }
+
+            DB::table('storefront_item_access')->updateOrInsert(
+                ['storefront_item_id' => $locked->storefront_item_id, 'user_id' => $locked->user_id],
+                [
+                    'payment_transaction_id' => $locked->id,
+                    'granted_at' => now(),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]
+            );
+
+            $locked->update([
+                'status' => 'verified',
+                'external_trx_id' => $externalReference,
+                'verified_at' => now(),
+                'notes' => json_encode(array_merge(['provider' => $locked->gateway], $providerDetails), JSON_THROW_ON_ERROR),
+            ]);
+
+            return $locked->fresh();
+        });
+    }
+}

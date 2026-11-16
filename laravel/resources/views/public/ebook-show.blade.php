@@ -114,12 +114,13 @@
                             <input type="hidden" name="amount" value="{{ $ebook['price'] }}">
                             <input type="hidden" name="payer_name" value="{{ Auth::user()->name }}">
                             <label class="block text-xs font-semibold text-slate-600">Payment method</label>
-                            <select name="gateway" required class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                                <option value="bkash">bKash</option><option value="nagad">Nagad</option><option value="rocket">Rocket</option><option value="sslcommerz">Visa / Mastercard / SSLCommerz</option><option value="bank_cash">Bank / Cash</option>
-                            </select>
-                            <input name="payer_contact" required value="{{ Auth::user()->phone ?? Auth::user()->email }}" placeholder="Payment phone / email" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                            <input name="external_trx_id" placeholder="Transaction ID (if already paid)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-                            <button type="submit" class="w-full py-3.5 px-5 rounded-xl bg-[#0077CC] hover:bg-[#0060A8] text-white text-sm font-bold">Submit ৳{{ number_format($ebook['price'], 2) }} Payment</button>
+                            <input type="hidden" name="gateway" value="sslcommerz">
+                            <div class="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+                                <strong>Secure Hosted Checkout</strong>
+                                <p class="mt-1 text-xs">Pay using Visa, Mastercard, mobile banking or supported channels available through SSLCOMMERZ. Your PDF unlocks automatically after server-side payment validation.</p>
+                            </div>
+                            <input name="payer_contact" required value="{{ Auth::user()->phone ?? '' }}" placeholder="Your mobile number (required)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                            <button type="submit" class="w-full py-3.5 px-5 rounded-xl bg-[#0077CC] hover:bg-[#0060A8] text-white text-sm font-bold">Pay ৳{{ number_format($ebook['price'], 2) }} Securely Payment</button>
                             <p class="text-[11px] text-slate-500">Access is enabled after the payment is verified by the administrator.</p>
                         </form>
                     @elseif (Auth::check())

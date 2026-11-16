@@ -12,7 +12,6 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Plugins\Modules\StorefrontCatalog\Models\StorefrontItem;
@@ -166,10 +165,6 @@ class StorefrontController extends Controller
             'is_carousel_featured' => $request->boolean('is_carousel_featured'),
         ]);
 
-        if ($previousDownloadUrl && $previousDownloadUrl !== $downloadUrl && str_starts_with($previousDownloadUrl, 'private:')) {
-            Storage::disk('local')->delete(substr($previousDownloadUrl, 8));
-        }
-
         foreach ([[$previousThumbnail, $thumb], [$previousPdfThumbnail, $pdfThumb]] as [$oldPath, $newPath]) {
             if ($oldPath && $oldPath !== $newPath) $this->deleteUnusedPublicUpload($oldPath, (int) $item->id);
         }
@@ -189,9 +184,6 @@ class StorefrontController extends Controller
         if ($item->download_url && str_starts_with((string) $item->download_url, 'private:')) {
             Storage::disk('local')->delete(substr((string) $item->download_url, 8));
         }
-        if ($item->download_url && str_starts_with((string) $item->download_url, 'private:')) {
-            Storage::disk('local')->delete(substr((string) $item->download_url, 8));
-        }
         $title = $item->title;
         $id = (string) $item->id;
         $item->delete();
@@ -207,7 +199,7 @@ class StorefrontController extends Controller
         $references = [
             'cms_posts' => ['thumbnail_path', 'pdf_thumbnail', 'pdf_path'],
             'courses' => ['thumbnail', 'pdf_thumbnail', 'pdf_path'],
-            'storefront_items' => ['thumbnail_path', 'pdf_thumbnail_path'],
+            'storefront_items' => ['thumbnail_path', 'pdf_thumbnail_path', 'download_url'],
         ];
         foreach ($references as $table => $columns) {
             if (!Schema::hasTable($table)) continue;

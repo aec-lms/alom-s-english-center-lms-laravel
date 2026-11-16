@@ -14,12 +14,14 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
+use Plugins\Modules\UniversalPayment\Services\StorefrontPaymentGatewayService;
 
 class UniversalPaymentController extends Controller
 {
     public function __construct(
         private readonly PluginManager $plugins,
         private readonly AuditLogger $audit,
+        private readonly StorefrontPaymentGatewayService $storefrontGateway,
     ) {}
 
     public function index(): View
@@ -28,8 +30,6 @@ class UniversalPaymentController extends Controller
         $config = [
             'default_currency' => $this->plugins->getSetting('universal-payment', 'default_currency', 'BDT'),
             'enabled_gateways' => array_filter(array_map('trim', explode(',', (string) $enabledRaw))),
-            'sslcommerz_store_id' => $this->plugins->getSetting('universal-payment', 'sslcommerz_store_id', ''),
-            'nagad_merchant_id' => $this->plugins->getSetting('universal-payment', 'nagad_merchant_id', ''),
         ];
         $transactions = Schema::hasTable('universal_payment_transactions')
             ? UniversalPaymentTransaction::query()->latest()->limit(50)->get()
@@ -43,30 +43,15 @@ class UniversalPaymentController extends Controller
         $validated = $request->validate([
             'default_currency' => ['required', 'in:BDT,USD,EUR,GBP'],
             'gateways' => ['nullable', 'array'],
-            'sslcommerz_store_id' => ['nullable', 'string', 'max:120'],
-            'sslcommerz_store_password' => ['nullable', 'string', 'max:255'],
-            'bkash_app_key' => ['nullable', 'string', 'max:255'],
-            'bkash_app_secret' => ['nullable', 'string', 'max:255'],
-            'nagad_merchant_id' => ['nullable', 'string', 'max:120'],
-            'stripe_secret_key' => ['nullable', 'string', 'max:255'],
+            'gateways.*' => ['string', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,bank_cash'],
         ]);
 
         $values = [
             'default_currency' => $validated['default_currency'],
-            'enabled_gateways' => implode(',', $validated['gateways'] ?? ['sslcommerz', 'bkash', 'nagad', 'bank_cash']),
-            'sslcommerz_store_id' => trim((string) ($validated['sslcommerz_store_id'] ?? '')),
-            'nagad_merchant_id' => trim((string) ($validated['nagad_merchant_id'] ?? '')),
+            'enabled_gateways' => implode(',', $validated['gateways'] ?? []),
         ];
 
-        $secrets = [];
-        foreach (['sslcommerz_store_password', 'bkash_app_key', 'bkash_app_secret', 'stripe_secret_key'] as $secKey) {
-            if (!empty($validated[$secKey])) {
-                $values[$secKey] = trim((string) $validated[$secKey]);
-                $secrets[] = $secKey;
-            }
-        }
-
-        $this->plugins->saveSettings('universal-payment', $values, $secrets, auth()->id());
+        $this->plugins->saveSettings('universal-payment', $values, [], auth()->id());
 
         return back()->with('status', 'Universal Payment Gateway configuration saved securely.');
     }
@@ -82,6 +67,24 @@ class UniversalPaymentController extends Controller
             'external_trx_id' => ['nullable', 'string', 'max:120'],
             'status' => ['required', 'in:pending,verified,refunded'],
         ]);
+
+        if ($storefrontItem !== null && $validated['gateway'] !== 'sslcommerz') {
+            return back()->withErrors(['gateway' => 'Choose SSLCOMMERZ for secure automatic e-book checkout.'])->withInput();
+        }
+
+        if ($storefrontItem !== null && DB::table('storefront_item_access')
+            ->where('storefront_item_id', $storefrontItem->id)->where('user_id', auth()->id())->exists()) {
+            return redirect('/ebooks/' . rawurlencode((string) $storefrontItem->slug))->with('status', 'You already have access to this e-book.');
+        }
+
+        if ($storefrontItem !== null && $validated['gateway'] !== 'sslcommerz') {
+            return back()->withErrors(['gateway' => 'Choose SSLCOMMERZ for secure automatic e-book checkout.'])->withInput();
+        }
+
+        if ($storefrontItem !== null && DB::table('storefront_item_access')
+            ->where('storefront_item_id', $storefrontItem->id)->where('user_id', auth()->id())->exists()) {
+            return redirect('/ebooks/' . rawurlencode((string) $storefrontItem->slug))->with('status', 'You already have access to this e-book.');
+        }
 
         $tx = UniversalPaymentTransaction::query()->create([
             'reference' => 'UPAY-' . strtoupper(Str::random(8)),
@@ -155,7 +158,7 @@ class UniversalPaymentController extends Controller
 
         $tx = UniversalPaymentTransaction::query()->create([
             'reference' => 'UPAY-' . strtoupper(Str::random(8)),
-            'payer_name' => $validated['payer_name'],
+            'payer_name' => $storefrontItem ? auth()->user()->name : $validated['payer_name'],
             'payer_contact' => $validated['payer_contact'],
             'item_title' => $storefrontItem?->title ?? $validated['item_title'],
             'gateway' => $validated['gateway'],
@@ -167,6 +170,60 @@ class UniversalPaymentController extends Controller
             'status' => 'pending',
         ]);
 
+        if ($storefrontItem !== null) {
+            try {
+                $checkoutUrl = $this->storefrontGateway->initiateSslcommerz($tx, $storefrontItem, auth()->user(), $validated['payer_contact']);
+                return redirect()->away($checkoutUrl);
+            } catch (\Throwable $exception) {
+                report($exception);
+                return back()->withErrors(['gateway' => 'Unable to start hosted checkout. Check the SSLCOMMERZ plugin configuration and try again.'])->withInput();
+            }
+        }
+
         return back()->with('status', "Payment submitted! Reference: {$tx->reference}. Access will be enabled after verification.");
     }
+    public function sslcommerzSuccess(Request $request): RedirectResponse
+    {
+        try {
+            $transaction = $this->storefrontGateway->verifySslcommerz($request->all());
+            $slug = DB::table('storefront_items')->where('id', $transaction->storefront_item_id)->value('slug');
+            return redirect('/ebooks/' . rawurlencode((string) $slug))->with('status', 'Payment verified. Your e-book download is now available.');
+        } catch (\Throwable $exception) {
+            report($exception);
+            $reference = trim((string) $request->input('tran_id', ''));
+            $transaction = UniversalPaymentTransaction::query()->where('reference', $reference)->first();
+            $slug = $transaction?->storefront_item_id
+                ? DB::table('storefront_items')->where('id', $transaction->storefront_item_id)->value('slug')
+                : null;
+            return $slug
+                ? redirect('/ebooks/' . rawurlencode((string) $slug))->withErrors(['payment' => 'Payment could not yet be verified. No download access has been granted.'])
+                : redirect('/ebooks')->withErrors(['payment' => 'Payment could not yet be verified.']);
+        }
+    }
+
+    public function sslcommerzIpn(Request $request): \Illuminate\Http\JsonResponse
+    {
+        try {
+            $transaction = $this->storefrontGateway->verifySslcommerz($request->all());
+            return response()->json(['status' => $transaction->status, 'reference' => $transaction->reference]);
+        } catch (\Throwable $exception) {
+            report($exception);
+            return response()->json(['status' => 'pending_validation'], 422);
+        }
+    }
+
+    public function sslcommerzFailed(Request $request): RedirectResponse
+    {
+        $transaction = $this->storefrontGateway->markSslcommerzFailed($request->all(), 'failed');
+        $slug = DB::table('storefront_items')->where('id', $transaction->storefront_item_id)->value('slug');
+        return redirect('/ebooks/' . rawurlencode((string) $slug))->withErrors(['payment' => 'Payment was not completed. You can try again.']);
+    }
+
+    public function sslcommerzCancelled(Request $request): RedirectResponse
+    {
+        $transaction = $this->storefrontGateway->markSslcommerzFailed($request->all(), 'cancelled');
+        $slug = DB::table('storefront_items')->where('id', $transaction->storefront_item_id)->value('slug');
+        return redirect('/ebooks/' . rawurlencode((string) $slug))->with('status', 'Payment was cancelled.');
+    }
+
 }
