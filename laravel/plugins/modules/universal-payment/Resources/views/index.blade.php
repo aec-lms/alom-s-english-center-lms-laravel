@@ -32,6 +32,13 @@
                 </div>
             </div>
             <div>
+                <label class="flex items-center gap-2 font-semibold text-slate-700">
+                    <input type="hidden" name="allow_offline_payments" value="0">
+                    <input type="checkbox" name="allow_offline_payments" value="1" {{ $config['allow_offline_payments'] ? 'checked' : '' }} class="rounded text-blue-600">
+                    Allow cash and bank-transfer receipt submissions
+                </label>
+            </div>
+            <div>
                 <label class="font-semibold text-slate-700 block mb-2">Default Currency</label>
                 <select name="default_currency" class="w-full rounded-xl border border-slate-300 px-3 py-2 bg-white">
                     @foreach (['BDT', 'USD', 'EUR', 'GBP'] as $cur)
