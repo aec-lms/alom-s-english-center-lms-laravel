@@ -99,13 +99,43 @@ class HrController extends Controller
             'bonus' => $bonus,
             'deductions' => $deductions,
             'net_paid' => $netPaid,
-            'status' => 'paid',
-            'paid_at' => now(),
+            'status' => 'pending',
+            'paid_at' => null,
+            'payment_reference' => null,
         ]);
 
         $this->audit->log('hr.payroll_recorded', 'staff_payroll', (string) $payroll->id, ['net_paid' => $netPaid]);
 
-        return back()->with('status', "Payroll disbursed for {$member->full_name} ({$validated['payroll_month']}).");
+        return back()->with('status', "Payroll prepared for {$member->full_name} ({$validated['payroll_month']}); confirm disbursement after payment.");
+    }
+
+    public function markPayrollPaid(Request $request, StaffPayroll $payroll): RedirectResponse
+    {
+        $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
+
+        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $payroll->branch_id) {
+            abort(403, 'Branch isolation violation.');
+        }
+        if ($payroll->status === 'paid') {
+            abort(409, 'This payroll has already been marked as paid.');
+        }
+
+        $validated = $request->validate([
+            'payment_reference' => ['required', 'string', 'max:120'],
+        ]);
+
+        $payroll->update([
+            'status' => 'paid',
+            'paid_at' => now(),
+            'payment_reference' => trim($validated['payment_reference']),
+        ]);
+
+        $this->audit->log('hr.payroll_marked_paid', 'staff_payroll', (string) $payroll->id, [
+            'payment_reference' => $payroll->payment_reference,
+        ]);
+
+        return back()->with('status', 'Payroll marked as paid with the supplied disbursement reference.');
     }
 
     private function ensureAssignedBranch($actor): void
