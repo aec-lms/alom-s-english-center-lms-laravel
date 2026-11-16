@@ -68,6 +68,18 @@ class WebsiteBuildersTest extends TestCase
         $this->assertSame(0, DB::table('cms_pages')->where('slug', 'protocol-relative')->count());
     }
 
+    public function test_homepage_does_not_publish_fabricated_student_reviews(): void
+    {
+        $this->markSystemInstalled();
+
+        $this->get('/')
+            ->assertOk()
+            ->assertDontSee('Mahmud Hasan')
+            ->assertDontSee('Afrina Jahan')
+            ->assertDontSee('Verified Student')
+            ->assertDontSee('What Our Students Say');
+    }
+
     public function test_homepage_ignores_unsafe_legacy_slider_urls(): void
     {
         $this->markSystemInstalled();
