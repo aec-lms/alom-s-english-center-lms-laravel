@@ -69,6 +69,7 @@ Route::middleware('installed')->group(function (): void {
             Route::post('/{slug}/uninstall', [PluginCenterController::class, 'uninstall'])->name('uninstall');
             Route::get('/{slug}/configure', [PluginCenterController::class, 'configure'])->name('configure');
             Route::post('/{slug}/configure', [PluginCenterController::class, 'saveConfiguration'])->name('configure.save');
+            Route::post('/{slug}/test-connection', [PluginCenterController::class, 'testConnection'])->name('test-connection');
         });
 
         Route::prefix('updates')->name('updates.')->middleware('permission:core.updates.manage')->group(function (): void {
