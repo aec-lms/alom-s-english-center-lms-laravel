@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Core\Updates\UniversalUpdateService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Plugins\Modules\CourseManagement\Models\Course;
 use RuntimeException;
 use Tests\TestCase;
 use ZipArchive;
@@ -204,7 +205,7 @@ class MobileAppUpdateAndPublicParityTest extends TestCase
         $this->markSystemInstalled();
         $this->activatePlugins(['course-management', 'mobile-app-api']);
 
-        $course = \Plugins\Modules\CourseManagement\Models\Course::query()->create([
+        $course = Course::query()->create([
             'code' => 'MOBILE-COURSE-01',
             'title' => 'Mobile API Course Detail',
             'slug' => 'mobile-api-course-detail',
