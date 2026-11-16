@@ -35,12 +35,7 @@ class PaypalController extends Controller
             'idempotency_key' => ['nullable', 'string', 'max:80'],
         ]);
         $invoice = FeeInvoice::query()->with('student.user')->findOrFail((int) $validated['invoice_id']);
-        $user = $request->user();
-        if ($user->hasRole('student')) {
-            abort_unless((int) $invoice->student?->user_id === (int) $user->id, 403);
-        } elseif ($user->hasRole('branch_manager')) {
-            abort_unless((int) $user->branch_id > 0 && (int) $invoice->branch_id === (int) $user->branch_id, 403);
-        }
+        $this->assertCanPayInvoice($request, $invoice);
         $result = $this->paypal->createOrder($invoice, $validated['idempotency_key'] ?? $request->header('PayPal-Request-Id'));
         return response()->json([
             'gateway' => 'gateway-paypal',
@@ -56,6 +51,8 @@ class PaypalController extends Controller
         $orderId = (string) $request->query('token', '');
         abort_if($orderId === '', 422, 'PayPal order token is missing.');
         $tx = PaymentTransaction::query()->where('gateway_slug', 'gateway-paypal')->where('external_reference', $orderId)->firstOrFail();
+        $invoice = FeeInvoice::query()->with('student')->findOrFail($tx->invoice_id);
+        $this->assertCanPayInvoice($request, $invoice);
         $settled = $this->paypal->captureOrder($tx->transaction_ref);
         return response()->json(['gateway' => 'gateway-paypal', 'status' => $settled->status, 'transaction_ref' => $settled->transaction_ref]);
     }
@@ -77,4 +74,22 @@ class PaypalController extends Controller
         $tx = $this->paypal->verifyAndSettleWebhook($headers, $request->all());
         return response()->json(['gateway' => 'gateway-paypal', 'status' => $tx->status, 'transaction_ref' => $tx->transaction_ref]);
     }
-}
+
+    private function assertCanPayInvoice(Request $request, FeeInvoice $invoice): void
+    {
+        $user = $request->user();
+        abort_unless($user, 401);
+
+        $isFinanceOperator = $user->hasRole('admin')
+            || $user->hasRole('accountant')
+            || $user->hasPermission('payments.manage')
+            || $user->hasPermission('payments.paypal.manage');
+        $isInvoiceOwner = (int) ($invoice->student?->user_id ?? 0) === (int) $user->id;
+        $isAssignedBranchManager = $user->hasRole('branch_manager')
+            && (int) $user->branch_id > 0
+            && (int) $invoice->branch_id === (int) $user->branch_id;
+
+        abort_unless($isFinanceOperator || $isInvoiceOwner || $isAssignedBranchManager, 403,
+            'You are not authorized to pay this invoice.');
+    }
+}\n
