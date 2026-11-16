@@ -139,7 +139,7 @@ class CourseController extends Controller
             'category_id' => $categoryId,
             'cms_post_id' => $cmsPostId,
             'cms_category_id' => $cmsCategoryId,
-            'instructor_name' => $validated['instructor_name'] ?: ($linkedPost->author ?? 'Engr. Mahbubul Alom'),
+            'instructor_name' => ($validated['instructor_name'] ?? '') ?: ($linkedPost->author ?? 'Engr. Mahbubul Alom'),
             'slug' => Str::slug($title) . '-' . Str::lower(Str::random(4)),
             'description' => $description !== '' ? $description : null,
             'syllabus_json' => !empty($syllabus) ? $syllabus : null,
