@@ -27,13 +27,17 @@ class UniversalPaymentController extends Controller
 
     public function index(): View
     {
+        $actor = auth()->user();
+        $this->ensureAssignedBranch($actor);
         $enabledRaw = $this->plugins->getSetting('universal-payment', 'enabled_gateways', 'sslcommerz,card,paypal,bank_cash');
         $config = [
             'default_currency' => $this->plugins->getSetting('universal-payment', 'default_currency', 'BDT'),
             'enabled_gateways' => array_filter(array_map('trim', explode(',', (string) $enabledRaw))),
         ];
         $transactions = Schema::hasTable('universal_payment_transactions')
-            ? UniversalPaymentTransaction::query()->latest()->limit(50)->get()
+            ? UniversalPaymentTransaction::query()
+                ->when($actor && $actor->hasRole('branch_manager'), fn ($query) => $query->where('branch_id', $actor->branch_id))
+                ->latest()->limit(50)->get()
             : collect();
 
         return view('universal-payment::index', compact('config', 'transactions'));
@@ -59,13 +63,15 @@ class UniversalPaymentController extends Controller
 
     public function storeTransaction(Request $request): RedirectResponse
     {
+        $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $validated = $request->validate([
             'payer_name' => ['required', 'string', 'max:160'],
             'payer_contact' => ['nullable', 'string', 'max:120'],
             'item_title' => ['required', 'string', 'max:200'],
             'gateway' => ['required', 'in:bank_cash'],
             'amount' => ['required', 'numeric', 'min:1'],
-            'external_trx_id' => ['nullable', 'string', 'max:120'],
+            'external_trx_id' => ['required', 'string', 'max:120'],
         ]);
 
         $tx = UniversalPaymentTransaction::query()->create([
@@ -78,6 +84,7 @@ class UniversalPaymentController extends Controller
             'amount' => $validated['amount'],
             'external_trx_id' => $validated['external_trx_id'] ?? null,
             'status' => 'pending',
+            'branch_id' => $actor && $actor->hasRole('branch_manager') ? $actor->branch_id : null,
             'verified_by' => null,
             'verified_at' => null,
         ]);
@@ -89,6 +96,11 @@ class UniversalPaymentController extends Controller
 
     public function updateStatus(Request $request, UniversalPaymentTransaction $transaction): RedirectResponse
     {
+        $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
+        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $transaction->branch_id) {
+            abort(404);
+        }
         $validated = $request->validate([
             'status' => ['required', 'in:verified,rejected'],
         ]);
@@ -159,4 +171,25 @@ class UniversalPaymentController extends Controller
 
         return response()->json($result, 201);
     }
+
+    private function ensureAssignedBranch($actor): void
+    {
+        if (!$actor || !$actor->hasRole('branch_manager')) {
+            return;
+        }
+
+        if ($actor->branch_id === null) {
+            abort(403, 'Branch manager must be assigned to a branch.');
+        }
+
+        $activeBranch = DB::table('branches')
+            ->where('id', $actor->branch_id)
+            ->where('is_active', true)
+            ->exists();
+
+        if (!$activeBranch) {
+            abort(403, 'Branch manager access is disabled because the assigned branch is inactive.');
+        }
+    }
+
 }
