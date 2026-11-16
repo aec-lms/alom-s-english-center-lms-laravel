@@ -53,10 +53,10 @@ class HealthMonitorService
         $checks['queue'] = $this->check(function (): string {
             $driver = (string) config('queue.default', 'sync');
             if ($driver !== 'database') return 'Queue driver ' . $driver . ' is configured; database backlog check is not applicable.';
-            if (!\\Illuminate\\Support\\Facades\\Schema::hasTable('jobs')) throw new \\RuntimeException('Database queue table is missing.');
+            if (!\Illuminate\Support\Facades\Schema::hasTable('jobs')) throw new \RuntimeException('Database queue table is missing.');
             $pending = (int) DB::table('jobs')->count();
-            $failed = \\Illuminate\\Support\\Facades\\Schema::hasTable('failed_jobs') ? (int) DB::table('failed_jobs')->count() : 0;
-            if ($pending > (int) config('lms.health_queue_backlog_limit', 1000)) throw new \\RuntimeException('Queue backlog is above the configured safety threshold.');
+            $failed = \Illuminate\Support\Facades\Schema::hasTable('failed_jobs') ? (int) DB::table('failed_jobs')->count() : 0;
+            if ($pending > (int) config('lms.health_queue_backlog_limit', 1000)) throw new \RuntimeException('Queue backlog is above the configured safety threshold.');
             return "Database queue backlog: {$pending}; failed jobs recorded: {$failed}.";
         }, null, $recoveries);
         $checks['disk_space'] = $this->check(function (): string {
@@ -72,7 +72,7 @@ class HealthMonitorService
         $checks['runtime_resources'] = $this->check(function (): string {
             $limit = $this->memoryLimitBytes((string) ini_get('memory_limit'));
             $used = memory_get_peak_usage(true);
-            if ($limit > 0 && $used / $limit >= 0.85) throw new \\RuntimeException('PHP memory usage is above 85% of the configured limit.');
+            if ($limit > 0 && $used / $limit >= 0.85) throw new \RuntimeException('PHP memory usage is above 85% of the configured limit.');
             return 'PHP peak memory usage: ' . number_format($used / 1048576, 1) . ' MB.';
         }, null, $recoveries);
         $failed = array_filter($checks, static fn (array $check): bool => $check['status'] === 'failed');
@@ -93,7 +93,8 @@ class HealthMonitorService
     }
     private function check(callable $test, ?callable $repair, array &$recoveries): array
     {
-        $started = microtime(true);\n        try { return ['status' => 'ok', 'message' => $test(), 'duration_ms' => (int) round((microtime(true) - $started) * 1000)]; }
+        $started = microtime(true);
+        try { return ['status' => 'ok', 'message' => $test(), 'duration_ms' => (int) round((microtime(true) - $started) * 1000)]; }
         catch (Throwable $e) {
             $message = $this->safeMessage($e);
             if ($repair !== null) {
@@ -113,12 +114,12 @@ class HealthMonitorService
     }
     private function ensurePrivateDirectory(string $path): string
     {
-        if ($path === '' || is_link($path)) throw new \\RuntimeException('Safe recovery refused an empty or symbolic-link private path.');
+        if ($path === '' || is_link($path)) throw new \RuntimeException('Safe recovery refused an empty or symbolic-link private path.');
         if (!is_dir($path)) {
             $parent = dirname($path);
-            if (!is_dir($parent) || !is_writable($parent) || !mkdir($path, 0700, true)) throw new \\RuntimeException('Safe recovery could not create a private storage directory.');
+            if (!is_dir($parent) || !is_writable($parent) || !mkdir($path, 0700, true)) throw new \RuntimeException('Safe recovery could not create a private storage directory.');
         }
-        if (!is_writable($path)) throw new \\RuntimeException('Private directory permissions require hosting-provider review; automatic chmod is disabled.');
+        if (!is_writable($path)) throw new \RuntimeException('Private directory permissions require hosting-provider review; automatic chmod is disabled.');
         return 'Missing private storage directory was created with restrictive permissions.';
     }
     private function safeMessage(Throwable $e): string
