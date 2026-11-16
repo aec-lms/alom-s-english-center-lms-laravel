@@ -24,6 +24,7 @@ class StudentController extends Controller
     public function index(Request $request): View
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $query = Student::query()->with('user')->latest();
         if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null) {
             $query->where('branch_id', $actor->branch_id);
@@ -37,6 +38,7 @@ class StudentController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:120'],
             'email' => ['required', 'email', 'unique:users,email'],
@@ -87,6 +89,7 @@ class StudentController extends Controller
     public function update(Request $request, Student $student): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $student->branch_id) {
             abort(403, 'Branch isolation violation.');
         }
@@ -138,6 +141,7 @@ class StudentController extends Controller
     public function destroy(Request $request, Student $student): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $student->branch_id) {
             abort(403, 'Branch isolation violation.');
         }
@@ -155,5 +159,12 @@ class StudentController extends Controller
         $this->audit->log('student.deleted', 'student', $id, ['code' => $code]);
 
         return back()->with('status', "Student '{$code}' removed from active enrollment directory.");
+    }
+
+    private function ensureAssignedBranch($actor): void
+    {
+        if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id === null) {
+            abort(403, 'Branch manager must be assigned to a branch.');
+        }
     }
 }
