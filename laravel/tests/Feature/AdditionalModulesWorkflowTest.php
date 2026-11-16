@@ -180,6 +180,21 @@ class AdditionalModulesWorkflowTest extends TestCase
             'message' => 'Your class starts Sunday at 10 AM.',
         ])->assertSessionHasNoErrors();
         $this->assertSame(1, DB::table('email_logs')->count());
+        $this->assertDatabaseHas('email_logs', [
+            'recipient_email' => 'student@alomsenglish.com',
+            'status' => 'not_configured',
+        ]);
+
+        $this->actingAs($admin)->post('/admin/email-notifications/send', [
+            'recipient_email' => 'student@alomsenglish.com',
+            'template_key' => 'welcome_student',
+        ])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('email_logs', [
+            'recipient_email' => 'student@alomsenglish.com',
+            'subject' => 'Welcome to AEC LMS',
+            'body_excerpt' => 'Hello Student',
+            'status' => 'not_configured',
+        ]);
 
         $this->actingAs($admin)->post('/admin/marketing/campaigns', [
             'name' => 'Spring IELTS Drive',
