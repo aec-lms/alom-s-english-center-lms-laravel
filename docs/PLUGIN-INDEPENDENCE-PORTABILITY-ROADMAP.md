@@ -24,8 +24,9 @@ The 39 plugin manifests were checked individually on the reviewed branch. All 39
 | certificate-management | student-management, branch-management | Certificate issuance should accept a verified learner identity through a contract. |
 | course-management | branch-management, student-management, fees-management | Course catalogs should support a global/default organization context; learner enrollment and invoicing remain optional adapters. |
 | exam-management | course-management, branch-management | Exams should use optional course/branch adapters and remain usable in standalone mode where supported. |
-| gateway-paypal | payment-management | Gateway should implement a payment-provider contract; it should not require the payment UI module. |
-| gateway-stripe | payment-management | Gateway should implement a payment-provider contract; it should not require the payment UI module. |
+| gateway-paypal | payment-management, fees-management, student-management | Gateway should implement a payment-provider contract and resolve invoice/learner adapters only when enabled. |
+| gateway-stripe | payment-management, fees-management, student-management | Gateway should implement a payment-provider contract and resolve invoice/learner adapters only when enabled. |
+| gateway-sslcommerz | fees-management, payment-management, student-management | Hosted checkout should use the same invoice/provider contracts and keep credentials in its own settings. |
 | hr-staff-management | branch-management | Branch context should be optional and resolved through a branch adapter. |
 | library-management | branch-management | Library should work without multi-branch support. |
 | notification-center | email-notifications, sms-gateway, branch-management | Email delivery should be an optional channel adapter, not a hard requirement for in-app notifications. |
