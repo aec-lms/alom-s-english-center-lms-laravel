@@ -7,6 +7,7 @@ namespace Plugins\Modules\NotificationCenter\Http\Controllers;
 use App\Core\Security\AuditLogger;
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use Plugins\Modules\NotificationCenter\Jobs\DeliverNotificationJob;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -53,8 +54,23 @@ class NotificationController extends Controller
             'status' => $validated['channel'] === 'in_app' ? 'sent' : 'queued',
         ]);
 
-        $this->audit->log('notification.dispatched', 'lms_notification', (string) $record->id, ['channel' => $record->channel]);
+        if ($record->channel !== 'in_app') {
+            DeliverNotificationJob::dispatch($record->id)->afterCommit();
+            $record->refresh();
+        }
 
-        return back()->with('status', $record->channel === 'in_app' ? 'In-app notification created.' : 'Notification queued. Delivery will be reported only after a channel worker confirms the provider response.');
+        $this->audit->log('notification.dispatched', 'lms_notification', (string) $record->id, [
+            'channel' => $record->channel,
+            'status' => $record->status,
+        ]);
+
+        $message = match ($record->status) {
+            'sent' => 'Notification delivered to the configured mail transport.',
+            'queued' => 'Notification queued; delivery is not yet confirmed.',
+            'failed' => 'Notification failed. Check the delivery status and channel configuration.',
+            default => 'Notification status: ' . $record->status,
+        };
+
+        return back()->with('status', $record->channel === 'in_app' ? 'In-app notification created.' : $message);
     }
 }
