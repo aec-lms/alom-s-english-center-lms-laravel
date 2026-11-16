@@ -15,6 +15,7 @@ use Plugins\Modules\CourseManagement\Models\Course;
 use Plugins\Modules\CourseManagement\Models\Enrollment;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\StudentManagement\Models\Student;
+use Plugins\Modules\StudentTracking\Services\StudentActivityTracker;
 use RuntimeException;
 
 class EnrollmentController extends Controller
