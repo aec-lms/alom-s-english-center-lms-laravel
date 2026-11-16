@@ -9,11 +9,12 @@ The sole production application is Laravel 12 under `/laravel`. The production d
 
 ## Current branch / PR state
 
-- Working branch: `fix/laravel-ci-php83`
-- Pull request: [PR #1](https://github.com/aec-lms/alom-s-english-center-lms-laravel/pull/1)
-- PR is open and unmerged; `main` has not been changed by this work.
+- Current base: `main`, latest verified commit `2471a9a929d1b36684aa82f2f9889d4c75ecfb01`.
+- [PR #1](https://github.com/aec-lms/alom-s-english-center-lms-laravel/pull/1) is **merged** (squash merge); it is no longer open.
+- The merged PR's final CI run [43817535568](https://github.com/aec-lms/alom-s-english-center-lms-laravel/actions/runs/43817535568) completed successfully: PHP 8.3 setup, locked Composer install, Composer security audit, Laravel test command, cPanel package build, package-content verification and artifact upload all passed.
 - `laravel/composer.lock` is committed and CI uses it for reproducible dependency installation.
-- The previously verified Laravel test run passed **35 tests / 184 assertions** on commit `845ee73`. Documentation and repository cleanup commits have since advanced the branch; their latest CI result must be checked before merge.
+- The passing workflow proves only the checks currently implemented in CI; it does not establish complete acceptance of all 39 plugins or production readiness.
+- This audit refresh is being prepared on `chore/release-audit-and-plugin-matrix`; it does not change `main` until reviewed and merged.
 
 A green CI run is evidence only for the automated checks that exist. It is not proof of production deployment readiness.
 
@@ -68,3 +69,12 @@ This is automated-test-covered but not yet proven on a production-sized MySQL/cP
 9. Review all failures and only then approve PR merge and controlled production deployment.
 
 Do not point the main domain at an unverified build or import operational data before a verified release and recovery plan exist.
+
+
+## Repository inventory review (2026-11-16)
+
+- The current `main` tree contains 39 plugin directories under `laravel/plugins/modules/`.
+- Static inventory confirms each directory has a `plugin.json`, controller, routes and Blade view. Most also have a model and migration; gateway and integration-style plugins differ by design.
+- This is a file-presence inventory only. It is **not** a pass/fail functional test and must not be represented as module completion.
+- See [PLUGIN-ACCEPTANCE-MATRIX.md](PLUGIN-ACCEPTANCE-MATRIX.md) for the per-plugin inventory and required acceptance evidence.
+- A complete implementation audit must inspect controller/service/model/view behavior, route middleware, policy/permission checks, branch constraints, validation, failure handling and automated positive/negative tests for every module.
