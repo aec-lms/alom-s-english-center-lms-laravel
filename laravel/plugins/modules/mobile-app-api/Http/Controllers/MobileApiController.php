@@ -55,7 +55,7 @@ class MobileApiController extends Controller
 
     public function home(Request $request): JsonResponse
     {
-        $actor = $request->user();
+        $actor = $this->mobileActor($request);
         $cfg = $this->loadMobileConfig();
 
         $sliders = Schema::hasTable('cms_sliders')
@@ -306,7 +306,7 @@ class MobileApiController extends Controller
 
     public function notices(Request $request): JsonResponse
     {
-        $actor = $request->user();
+        $actor = $this->mobileActor($request);
         $visibleNoticeRoles = $actor ? $actor->roles()->pluck('slug')->all() : [];
         $visibleNoticeRoles[] = 'all';
         $notices = Schema::hasTable('notices')
@@ -343,6 +343,14 @@ class MobileApiController extends Controller
         }
 
         return response()->json(['verified' => true, 'data' => $cert]);
+    }
+
+
+    private function mobileActor(Request $request): ?User
+    {
+        // Public mobile endpoints accept optional Sanctum bearer authentication.
+        // The API guard is not required so anonymous app visitors remain supported.
+        return $request->user('sanctum') ?? $request->user();
     }
 
     private function recordDeviceToken(?User $user, array $validated): ?MobileDeviceToken
