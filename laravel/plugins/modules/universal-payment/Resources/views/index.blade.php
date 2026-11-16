@@ -7,7 +7,8 @@
         'card' => 'Visa / Mastercard via Stripe',
         'paypal' => 'PayPal Hosted Checkout',
         'bank_cash' => 'Bank Transfer & Cash Desk',
-    ];@endphp
+    ];
+@endphp
 <div class="space-y-6 max-w-6xl">
     <div>
         <div class="inline-flex items-center px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold">Independent Universal Payment Plugin · Requires Fees & Invoicing</div>
@@ -18,7 +19,7 @@
     <div class="grid lg:grid-cols-2 gap-6">
         <form method="POST" action="{{ route('plugins.universal_payment.gateways') }}" class="bg-white rounded-2xl border border-slate-200 p-6 space-y-4 text-xs">
             @csrf
-            <h2 class="text-sm font-bold text-slate-900">1. Multi-Gateway Providers & Credentials</h2>
+            <h2 class="text-sm font-bold text-slate-900">1. Enabled Providers & Currency</h2>
             <div>
                 <label class="font-semibold text-slate-700 block mb-2">Active Checkout Providers</label>
                 <div class="grid sm:grid-cols-2 gap-2">
