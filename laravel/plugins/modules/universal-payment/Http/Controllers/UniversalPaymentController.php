@@ -154,7 +154,6 @@ class UniversalPaymentController extends Controller
 
         if ($request->expectsJson()) {
             return response()->json([
-                'assistant' => 'AEC LMS Payment',
                 'gateway' => $result['gateway'],
                 'transaction_ref' => $result['transaction_ref'],
                 'payment_intent_id' => $result['payment_intent_id'] ?? null,
