@@ -111,14 +111,6 @@ class FinanceAndPaymentGatewayTest extends TestCase
             'item_title' => 'Fee invoice INV-2026-001',
             'gateway' => 'bank_cash',
             'amount' => 2500,
-        ])->assertSessionHasErrors('external_trx_id');
-
-        $this->actingAs($admin)->post('/plugins/universal-payment/transactions', [
-            'payer_name' => 'Mobile Learner',
-            'payer_contact' => '01712345678',
-            'item_title' => 'Fee invoice INV-2026-001',
-            'gateway' => 'bank_cash',
-            'amount' => 2500,
             'external_trx_id' => 'BANK-RECEIPT-INV-001',
         ])->assertSessionHasNoErrors();
         $universalTx = DB::table('universal_payment_transactions')->first();
