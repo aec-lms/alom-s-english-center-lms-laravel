@@ -348,7 +348,7 @@ class AdditionalModulesWorkflowTest extends TestCase
         $studentRoleId = DB::table('roles')->where('slug', 'student')->value('id');
         $admin->roles()->syncWithoutDetaching([$studentRoleId]);
 
-        app(\\App\\Core\\Plugins\\PluginManager::class)->saveSettings('role-ai-assistant', [
+        app(\App\Core\Plugins\PluginManager::class)->saveSettings('role-ai-assistant', [
             'provider' => 'gemini',
             'allowed_roles' => 'student',
         ]);
@@ -363,7 +363,7 @@ class AdditionalModulesWorkflowTest extends TestCase
 
         $adminOnly = $this->createUserWithRole('admin', null, 'ai-admin-only@example.test');
         $this->assertFalse(app(AiAssistantService::class)->isRoleAllowed($adminOnly));
-        $this->expectException(\\RuntimeException::class);
+        $this->expectException(\RuntimeException::class);
         app(AiAssistantService::class)->queryAssistant($adminOnly, 'Show admin settings.');
     }
 
