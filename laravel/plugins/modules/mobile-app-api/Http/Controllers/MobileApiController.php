@@ -62,7 +62,7 @@ class MobileApiController extends Controller
             : collect();
 
         $courses = Schema::hasTable('courses')
-            ? DB::table('courses')->where('status', 'published')->orderByDesc('id')->limit(12)->get(['id', 'code', 'title', 'slug', 'price', 'thumbnail', 'pdf_path', 'pdf_thumbnail', 'instructor_name'])
+            ? DB::table('courses')->where('status', 'published')->orderByDesc('id')->limit(12)->get(['id', 'code', 'title', 'slug', 'price', 'thumbnail', 'instructor_name'])
             : collect();
 
         $carouselItems = Schema::hasTable('storefront_items')
@@ -71,19 +71,19 @@ class MobileApiController extends Controller
                 ->orderByDesc('is_carousel_featured')
                 ->orderByDesc('id')
                 ->limit(12)
-                ->get(['id', 'type', 'slug', 'title', 'category', 'badge', 'price', 'original_price', 'is_free', 'thumbnail_path', 'pdf_thumbnail_path', 'download_url'])
+                ->get(['id', 'type', 'slug', 'title', 'category', 'badge', 'price', 'original_price', 'is_free', 'thumbnail_path', 'pdf_thumbnail_path'])
             : collect();
 
         $ebooks = Schema::hasTable('storefront_items')
-            ? DB::table('storefront_items')->where('type', 'ebook')->where('is_active', true)->orderByDesc('id')->limit(12)->get()
+            ? DB::table('storefront_items')->where('type', 'ebook')->where('is_active', true)->orderByDesc('id')->limit(12)->get(['id', 'type', 'slug', 'title', 'category', 'badge', 'price', 'original_price', 'is_free', 'thumbnail_path', 'pdf_thumbnail_path'])
             : collect();
 
         $products = Schema::hasTable('storefront_items')
-            ? DB::table('storefront_items')->where('type', 'product')->where('is_active', true)->orderByDesc('id')->limit(12)->get()
+            ? DB::table('storefront_items')->where('type', 'product')->where('is_active', true)->orderByDesc('id')->limit(12)->get(['id', 'type', 'slug', 'title', 'category', 'badge', 'price', 'original_price', 'is_free', 'thumbnail_path'])
             : collect();
 
         $notices = Schema::hasTable('notices')
-            ? DB::table('notices')->orderByDesc('id')->limit(12)->get()
+            ? DB::table('notices')->where('audience_role', 'all')->whereNull('branch_id')->whereNotNull('published_at')->where('published_at', '<=', now())->orderByDesc('is_pinned')->orderByDesc('published_at')->limit(12)->get(['id', 'title', 'body', 'published_at', 'is_pinned'])
             : collect();
 
         $stats = [
@@ -237,31 +237,59 @@ class MobileApiController extends Controller
         return response()->json([
             'data' => Course::query()
                 ->where('status', 'published')
-                ->select(['id', 'code', 'title', 'slug', 'price', 'description', 'thumbnail', 'pdf_path', 'pdf_thumbnail', 'instructor_name'])
+                ->select(['id', 'code', 'title', 'slug', 'price', 'description', 'thumbnail', 'instructor_name'])
                 ->latest()
                 ->paginate(20),
         ]);
     }
 
-    public function courseShow(string $slug): JsonResponse
+    public function courseShow(Request $request, string $slug): JsonResponse
     {
         $course = Course::query()
             ->where('slug', $slug)
             ->where('status', 'published')
-            ->with(['category', 'lessons'])
             ->first();
 
         if (!$course) {
             return response()->json(['message' => 'Course not found.'], 404);
         }
 
-        return response()->json(['data' => $course]);
+        $hasAccess = $request->user() && Enrollment::query()
+            ->where('user_id', $request->user()->id)
+            ->where('course_id', $course->id)
+            ->where('status', 'active')
+            ->exists();
+
+        $lessons = $hasAccess && Schema::hasTable('course_lessons')
+            ? DB::table('course_lessons')
+                ->where('course_id', $course->id)
+                ->orderBy('sort_order')
+                ->get(['id', 'title', 'content', 'sort_order'])
+            : collect();
+
+        return response()->json([
+            'data' => [
+                'id' => $course->id,
+                'code' => $course->code,
+                'title' => $course->title,
+                'slug' => $course->slug,
+                'description' => $course->description,
+                'category' => $course->category,
+                'instructor_name' => $course->instructor_name,
+                'price' => $course->price,
+                'original_price' => $course->original_price,
+                'duration_weeks' => $course->duration_weeks,
+                'thumbnail' => $course->thumbnail,
+            ],
+            'has_access' => (bool) $hasAccess,
+            'lessons' => $lessons,
+        ]);
     }
 
     public function ebooks(): JsonResponse
     {
         $items = Schema::hasTable('storefront_items')
-            ? DB::table('storefront_items')->where('type', 'ebook')->where('is_active', true)->orderByDesc('id')->get()
+            ? DB::table('storefront_items')->where('type', 'ebook')->where('is_active', true)->orderByDesc('id')->get(['id', 'type', 'slug', 'title', 'category', 'badge', 'price', 'original_price', 'is_free', 'thumbnail_path', 'pdf_thumbnail_path'])
             : collect();
 
         return response()->json(['data' => $items]);
@@ -270,7 +298,7 @@ class MobileApiController extends Controller
     public function products(): JsonResponse
     {
         $items = Schema::hasTable('storefront_items')
-            ? DB::table('storefront_items')->where('type', 'product')->where('is_active', true)->orderByDesc('id')->get()
+            ? DB::table('storefront_items')->where('type', 'product')->where('is_active', true)->orderByDesc('id')->get(['id', 'type', 'slug', 'title', 'category', 'badge', 'price', 'original_price', 'is_free', 'thumbnail_path'])
             : collect();
 
         return response()->json(['data' => $items]);
@@ -285,11 +313,34 @@ class MobileApiController extends Controller
         return response()->json(['data' => $exams]);
     }
 
-    public function notices(): JsonResponse
+    public function notices(Request $request): JsonResponse
     {
-        $notices = Schema::hasTable('notices')
-            ? DB::table('notices')->orderByDesc('id')->limit(30)->get()
-            : collect();
+        if (!Schema::hasTable('notices')) {
+            return response()->json(['data' => []]);
+        }
+
+        $query = DB::table('notices')
+            ->whereNotNull('published_at')
+            ->where('published_at', '<=', now());
+
+        $user = $request->user();
+        if ($user) {
+            $role = (string) ($user->roles()->value('slug') ?? '');
+            $query->whereIn('audience_role', array_values(array_filter(['all', $role])))
+                ->where(function ($scope) use ($user): void {
+                    $scope->whereNull('branch_id');
+                    if ($user->branch_id !== null) {
+                        $scope->orWhere('branch_id', $user->branch_id);
+                    }
+                });
+        } else {
+            $query->where('audience_role', 'all')->whereNull('branch_id');
+        }
+
+        $notices = $query->orderByDesc('is_pinned')
+            ->orderByDesc('published_at')
+            ->limit(30)
+            ->get(['id', 'title', 'body', 'audience_role', 'branch_id', 'is_pinned', 'published_at']);
 
         return response()->json(['data' => $notices]);
     }
