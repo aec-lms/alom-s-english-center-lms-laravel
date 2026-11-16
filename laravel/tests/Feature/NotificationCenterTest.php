@@ -32,6 +32,39 @@ class NotificationCenterTest extends TestCase
         ]);
     }
 
+    public function test_notification_center_sends_sms_using_standalone_greenweb_credentials(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['email-notifications', 'sms-gateway', 'notification-center']);
+        $admin = $this->createUserWithRole('admin');
+        $student = $this->createUserWithRole('student');
+        DB::table('users')->where('id', $student->id)->update(['phone' => '01712345678']);
+        Http::fake([
+            'api.greenweb.com.bd/*' => Http::response('Ok: SMS Sent Successfully To +8801712345678', 200),
+        ]);
+
+        $this->actingAs($admin)->post('/plugins/sms/settings', [
+            'provider' => 'greenweb',
+            'api_token' => 'shared-greenweb-token',
+        ])->assertSessionHasNoErrors();
+
+        $this->actingAs($admin)->post('/admin/notifications/dispatch', [
+            'user_id' => $student->id,
+            'channel' => 'sms',
+            'title' => 'Class reminder',
+            'message' => 'Your class starts at 5 PM.',
+        ])->assertSessionHas('status', 'Sms accepted by the configured provider.');
+
+        $this->assertDatabaseHas('lms_notifications', [
+            'user_id' => $student->id,
+            'channel' => 'sms',
+            'status' => 'sent',
+        ]);
+        Http::assertSent(fn ($request) => $request->url() === 'https://api.greenweb.com.bd/api.php'
+            && $request['token'] === 'shared-greenweb-token'
+            && $request['to'] === '+8801712345678');
+    }
+
     public function test_user_portal_only_shows_notifications_belonging_to_signed_in_user(): void
     {
         $this->markSystemInstalled();
