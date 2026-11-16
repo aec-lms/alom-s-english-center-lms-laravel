@@ -134,7 +134,20 @@ class AllPluginsIndependentAcceptanceTest extends TestCase
         $this->assertTrue($manager->isInstalled($slug), "{$slug} did not reinstall after uninstall");
         $this->assertTrue($manager->isEnabled($slug), "{$slug} did not enable after reinstall");
 
+        // Verify reset removes non-default configuration and reapplies every declared default.
+        $manager->saveSettings($slug, ['acceptance_probe' => 'non-default-value']);
         $manager->resetSettingsToDefaults($slug);
+        $this->assertNull($manager->getSetting($slug, 'acceptance_probe'), "{$slug} retained a custom setting after default reset");
+        foreach ($manifest->settingsSchema as $field) {
+            $key = (string) ($field['key'] ?? '');
+            if ($key === '') {
+                continue;
+            }
+            $default = $field['default'] ?? '';
+            $expected = is_scalar($default) ? (string) $default : json_encode($default, JSON_THROW_ON_ERROR);
+            $this->assertSame($expected, $manager->getSetting($slug, $key), "{$slug} did not restore the declared default for {$key}");
+        }
+
         $recycled = $manager->deleteToRecycleBin($slug);
         $this->assertFalse($manager->isInstalled($slug), "{$slug} remained installed after recycle-bin delete");
         $this->assertDirectoryDoesNotExist($directory);
