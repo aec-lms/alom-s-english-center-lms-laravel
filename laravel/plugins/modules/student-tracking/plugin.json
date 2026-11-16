@@ -13,7 +13,5 @@
     {"slug": "student-tracking.view", "name": "View Student Tracking Reports"},
     {"slug": "student-tracking.record", "name": "Record Learning Activity Events"}
   ],
-  "settings_schema": [
-    {"key": "retention_days", "label": "Activity retention (days)", "type": "number", "default": 365, "min": 30, "max": 1095}
-  ]
+  "settings_schema": []
 }
