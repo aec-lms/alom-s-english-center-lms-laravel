@@ -296,4 +296,54 @@ class AdditionalModulesWorkflowTest extends TestCase
 
         $this->actingAs($manager)->get('/admin/students')->assertForbidden();
     }
+
+    public function test_class_schedule_rejects_invalid_weekdays_and_non_positive_time_ranges(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'class-management']);
+
+        $admin = $this->createUserWithRole('admin');
+        $branchId = DB::table('branches')->insertGetId([
+            'code' => 'TIME-01',
+            'name' => 'Schedule Test Branch',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $payload = [
+            'code' => 'TIME-CLASS-01',
+            'name' => 'Schedule Validation Class',
+            'section' => 'A',
+            'subject' => 'English',
+            'day_of_week' => 'Sunday',
+            'start_time' => '10:00',
+            'end_time' => '11:00',
+            'branch_id' => $branchId,
+        ];
+
+        $this->actingAs($admin)->post('/admin/classes', $payload)->assertSessionHasNoErrors();
+        $classId = DB::table('academic_classes')->where('code', 'TIME-CLASS-01')->value('id');
+        $this->assertNotNull($classId);
+
+        $this->actingAs($admin)->put('/admin/classes/' . $classId, array_merge($payload, [
+            'day_of_week' => 'Funday',
+        ]))->assertSessionHasErrors(['day_of_week']);
+
+        $this->actingAs($admin)->put('/admin/classes/' . $classId, array_merge($payload, [
+            'start_time' => '14:00',
+            'end_time' => '13:00',
+        ]))->assertSessionHasErrors(['end_time']);
+
+        $this->actingAs($admin)->put('/admin/classes/' . $classId, array_merge($payload, [
+            'start_time' => 'not-a-time',
+        ]))->assertSessionHasErrors(['start_time']);
+
+        $this->assertDatabaseHas('academic_classes', [
+            'id' => $classId,
+            'day_of_week' => 'Sunday',
+            'start_time' => '10:00',
+            'end_time' => '11:00',
+        ]);
+    }
+
 }
