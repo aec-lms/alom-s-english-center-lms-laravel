@@ -7,6 +7,8 @@ namespace Tests\Feature;
 use App\Core\Backup\BackupService;
 use App\Core\Updates\UniversalUpdateService;
 use App\Models\BackupRecord;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 use Tests\TestCase;
 use ZipArchive;
