@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Plugins\Modules\MobileAppApi\Http\Controllers;
 
+use App\Core\Plugins\PluginManager;
 use App\Http\Controllers\Controller;
 use App\Models\Role;
 use App\Models\SystemSetting;
@@ -20,6 +21,8 @@ use Plugins\Modules\MobileAppApi\Models\MobileDeviceToken;
 
 class MobileApiController extends Controller
 {
+    public function __construct(private readonly PluginManager $plugins) {}
+
     public function config(Request $request): JsonResponse
     {
         $cfg = $this->loadMobileConfig();
@@ -58,15 +61,15 @@ class MobileApiController extends Controller
         $actor = $this->mobileActor($request);
         $cfg = $this->loadMobileConfig();
 
-        $sliders = Schema::hasTable('cms_sliders')
+        $sliders = $this->plugins->isEnabled('slider-builder') && Schema::hasTable('cms_sliders')
             ? DB::table('cms_sliders')->where('is_active', true)->orderBy('sort_order')->get(['id', 'title', 'subtitle', 'image_path', 'cta_url'])
             : collect();
 
-        $courses = Schema::hasTable('courses')
+        $courses = $this->plugins->isEnabled('course-management') && Schema::hasTable('courses')
             ? DB::table('courses')->where('status', 'published')->orderByDesc('id')->limit(12)->get(['id', 'code', 'title', 'slug', 'price', 'thumbnail', 'instructor_name'])
             : collect();
 
-        $carouselItems = Schema::hasTable('storefront_items')
+        $carouselItems = $this->plugins->isEnabled('storefront-catalog') && Schema::hasTable('storefront_items')
             ? DB::table('storefront_items')
                 ->where('is_active', true)
                 ->orderByDesc('is_carousel_featured')
@@ -75,17 +78,17 @@ class MobileApiController extends Controller
                 ->get(['id', 'type', 'slug', 'title', 'category', 'badge', 'price', 'original_price', 'is_free', 'pages', 'summary', 'thumbnail_path', 'pdf_thumbnail_path'])
             : collect();
 
-        $ebooks = Schema::hasTable('storefront_items')
+        $ebooks = $this->plugins->isEnabled('storefront-catalog') && Schema::hasTable('storefront_items')
             ? DB::table('storefront_items')->where('type', 'ebook')->where('is_active', true)->orderByDesc('id')->limit(12)->get(['id', 'type', 'slug', 'title', 'category', 'badge', 'price', 'original_price', 'is_free', 'pages', 'summary', 'thumbnail_path', 'pdf_thumbnail_path'])
             : collect();
 
-        $products = Schema::hasTable('storefront_items')
+        $products = $this->plugins->isEnabled('storefront-catalog') && Schema::hasTable('storefront_items')
             ? DB::table('storefront_items')->where('type', 'product')->where('is_active', true)->orderByDesc('id')->limit(12)->get(['id', 'type', 'slug', 'title', 'category', 'badge', 'price', 'original_price', 'summary', 'thumbnail_path'])
             : collect();
 
         $visibleNoticeRoles = $actor ? $actor->roles()->pluck('slug')->all() : [];
         $visibleNoticeRoles[] = 'all';
-        $notices = Schema::hasTable('notices')
+        $notices = $this->plugins->isEnabled('notice-board') && Schema::hasTable('notices')
             ? DB::table('notices')
                 ->where(function ($query) use ($actor): void {
                     $query->whereNull('branch_id');
@@ -105,10 +108,10 @@ class MobileApiController extends Controller
             : collect();
 
         $stats = [
-            'students' => Schema::hasTable('students') ? DB::table('students')->count() : 0,
-            'courses' => Schema::hasTable('courses') ? DB::table('courses')->where('status', 'published')->count() : 0,
-            'teachers' => Schema::hasTable('teachers') ? DB::table('teachers')->count() : 0,
-            'lessons' => Schema::hasTable('course_lessons') ? DB::table('course_lessons')->count() : 0,
+            'students' => $this->plugins->isEnabled('student-management') && Schema::hasTable('students') ? DB::table('students')->count() : 0,
+            'courses' => $this->plugins->isEnabled('course-management') && Schema::hasTable('courses') ? DB::table('courses')->where('status', 'published')->count() : 0,
+            'teachers' => $this->plugins->isEnabled('teacher-management') && Schema::hasTable('teachers') ? DB::table('teachers')->count() : 0,
+            'lessons' => $this->plugins->isEnabled('course-management') && Schema::hasTable('course_lessons') ? DB::table('course_lessons')->count() : 0,
         ];
 
         return response()->json([
@@ -232,7 +235,7 @@ class MobileApiController extends Controller
     public function me(Request $request): JsonResponse
     {
         $user = $request->user();
-        $enrollments = Schema::hasTable('enrollments')
+        $enrollments = $this->plugins->isEnabled('course-management') && Schema::hasTable('enrollments')
             ? Enrollment::query()
                 ->where('user_id', $user->id)
                 ->with('course:id,code,title,slug,thumbnail,pdf_thumbnail')
@@ -263,6 +266,7 @@ class MobileApiController extends Controller
 
     public function courseShow(string $slug): JsonResponse
     {
+        abort_unless($this->plugins->isEnabled('course-management') && Schema::hasTable('courses'), 404, 'Course Management is disabled.');
         // Course currently has no Eloquent category/lessons relationships.
         // Return the persisted course record instead of eager-loading undefined relations.
         $course = Course::query()
@@ -284,7 +288,8 @@ class MobileApiController extends Controller
         $actor = $request->user();
         abort_unless($actor, 401);
         abort_unless(
-            Schema::hasTable('courses')
+            $this->plugins->isEnabled('course-management')
+                && Schema::hasTable('courses')
                 && Schema::hasTable('course_lessons')
                 && Schema::hasTable('enrollments'),
             409,
@@ -314,7 +319,7 @@ class MobileApiController extends Controller
 
     public function ebooks(): JsonResponse
     {
-        $items = Schema::hasTable('storefront_items')
+        $items = $this->plugins->isEnabled('storefront-catalog') && Schema::hasTable('storefront_items')
             ? DB::table('storefront_items')->where('type', 'ebook')->where('is_active', true)->orderByDesc('id')->get(['id', 'type', 'slug', 'title', 'category', 'badge', 'price', 'original_price', 'is_free', 'pages', 'summary', 'thumbnail_path', 'pdf_thumbnail_path'])
             : collect();
 
@@ -332,7 +337,7 @@ class MobileApiController extends Controller
 
     public function exams(): JsonResponse
     {
-        $exams = Schema::hasTable('exams')
+        $exams = $this->plugins->isEnabled('exam-management') && Schema::hasTable('exams')
             ? DB::table('exams')->where('is_published', true)->orderByDesc('id')->limit(30)->get()
             : collect();
 
@@ -368,7 +373,7 @@ class MobileApiController extends Controller
 
     public function verifyCertificate(string $code): JsonResponse
     {
-        if (!Schema::hasTable('certificates')) {
+        if (!$this->plugins->isEnabled('certificate-management') || !Schema::hasTable('certificates')) {
             return response()->json(['verified' => false, 'message' => 'Certificate verification unavailable.'], 404);
         }
 
