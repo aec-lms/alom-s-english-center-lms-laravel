@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace Plugins\Modules\ExamManagement\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Exam extends Model
 {
+    use SoftDeletes;
+
     protected $fillable = [
         'course_id', 'branch_id', 'title', 'duration_minutes', 'pass_marks',
         'starts_at', 'ends_at', 'is_published',
