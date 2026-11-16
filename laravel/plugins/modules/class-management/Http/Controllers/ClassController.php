@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Plugins\Modules\ClassManagement\Http\Controllers;
 
 use App\Core\Security\AuditLogger;
+use App\Core\Plugins\PluginManager;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -78,7 +79,10 @@ class ClassController extends Controller
         if (!$actor || !$actor->hasRole('branch_manager')) {
             return;
         }
-        if ($actor->branch_id === null) {
+        if ($actor->branch_id === null
+            || !app(PluginManager::class)->isEnabled('branch-management')
+            || !Schema::hasTable('branches')
+        ) {
             abort(403, 'Branch manager must be assigned to a branch.');
         }
         $activeBranch = app('db')->table('branches')
