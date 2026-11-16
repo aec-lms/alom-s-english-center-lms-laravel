@@ -12,7 +12,7 @@ return new class extends Migration {
         if (!Schema::hasTable('attendance_records')) {
             Schema::create('attendance_records', function (Blueprint $table): void {
                 $table->id();
-                $table->foreignId('batch_id')->constrained('study_batches')->cascadeOnDelete();
+                $table->unsignedBigInteger('batch_id');
                 $table->foreignId('student_id')->constrained('students')->cascadeOnDelete();
                 $table->unsignedBigInteger('branch_id')->index();
                 $table->date('attendance_date');
