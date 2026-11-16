@@ -30,6 +30,9 @@ A green CI run is evidence only for the automated checks that exist. It is not p
 - Encrypted backup archive creation, SHA-256/HMAC validation, private backup path validation, private-file staging/restore and foreign-key-aware database restore.
 - Signed update manifest validation, semantic-version checks, target allowlisting, ZIP path/symlink/duplicate/size checks.
 - Reproducible Composer dependency lock, Composer vulnerability audit and a Laravel-only cPanel package builder with private runtime exclusions.
+- Manual Universal Payment receipt evidence accepts validated PDF/JPG/PNG files on private local storage; proof downloads require finance permission and enforce branch ownership, and receipt review uses a row lock.
+- Public Mobile API ebook/product catalog payloads omit private download URLs; paid lesson endpoints require Sanctum authentication and active enrollment.
+- All 39 plugin manifests have empty required-sibling dependency lists; a PHP namespace scan checks direct sibling references against optional integration declarations, and standalone regression tests cover Course Management without optional finance/student modules.
 
 ## Plugin catalog — 39 entries
 
