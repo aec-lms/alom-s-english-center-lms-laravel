@@ -31,16 +31,18 @@ class MobileAppUpdateAndPublicParityTest extends TestCase
 
         $this->actingAs($admin)
             ->post('/admin/mobile-app', [
+                'ios_enabled' => '1',
                 'ios_bundle_id' => 'com.alomsenglishcenter.ios',
-                'ios_app_store_url' => 'https://apps.apple.com/app/aloms-english-center',
+                'ios_store_url' => 'https://apps.apple.com/app/aloms-english-center',
                 'ios_min_version' => '2.0.0',
                 'ios_latest_version' => '2.2.0',
+                'android_enabled' => '1',
                 'android_package_name' => 'com.alomsenglishcenter.app',
-                'android_play_store_url' => 'https://play.google.com/store/apps/details?id=com.alomsenglishcenter.app',
+                'android_store_url' => 'https://play.google.com/store/apps/details?id=com.alomsenglishcenter.app',
                 'android_min_version' => '2.0.0',
                 'android_latest_version' => '2.2.0',
                 'deep_link_scheme' => 'alomsenglishcenter://',
-                'push_notifications_enabled' => '1',
+                'push_enabled' => '1',
             ])
             ->assertSessionHasNoErrors();
 
