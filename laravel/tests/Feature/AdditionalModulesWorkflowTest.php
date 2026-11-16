@@ -139,7 +139,19 @@ class AdditionalModulesWorkflowTest extends TestCase
             'bonus' => 5000,
             'deductions' => 1000,
         ])->assertSessionHasNoErrors();
-        $this->assertSame(49000.0, (float) DB::table('staff_payrolls')->where('staff_profile_id', $staffId)->value('net_paid'));
+        $payroll = DB::table('staff_payrolls')->where('staff_profile_id', $staffId)->first();
+        $this->assertSame(49000.0, (float) $payroll->net_paid);
+        $this->assertSame('pending', $payroll->status);
+        $this->assertNull($payroll->paid_at);
+
+        $this->actingAs($admin)->post("/admin/hr/payrolls/{$payroll->id}/mark-paid", [
+            'payment_reference' => 'BANK-TXN-EMP-101-2026-02',
+        ])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('staff_payrolls', [
+            'id' => $payroll->id,
+            'status' => 'paid',
+            'payment_reference' => 'BANK-TXN-EMP-101-2026-02',
+        ]);
 
         // 6. Email Notifications & Marketing Coupons
         $this->actingAs($admin)->post('/admin/email-notifications/templates', [
