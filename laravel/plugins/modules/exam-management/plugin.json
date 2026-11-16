@@ -20,6 +20,7 @@
     ],
     "settings_schema": [],
     "optional_dependencies": [
-        "course-management"
+        "course-management",
+        "branch-management"
     ]
 }
