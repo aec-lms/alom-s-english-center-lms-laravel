@@ -29,5 +29,28 @@
         @endforelse
         <div>{{ $students->links() }}</div>
     </section>
+
+    <section class="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+        <div class="flex items-center justify-between gap-3">
+            <h2 class="font-bold text-slate-900">Deleted Instructors</h2>
+            <span class="text-xs text-slate-500">{{ $teachers->total() }} item(s)</span>
+        </div>
+        @forelse ($teachers as $teacher)
+            <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                <div class="min-w-0">
+                    <div class="font-semibold text-sm text-slate-900">{{ $teacher->user?->name ?? 'Deleted account' }}</div>
+                    <div class="text-xs text-slate-500">{{ $teacher->employee_code }} · {{ $teacher->user?->email ?? 'No linked email' }}</div>
+                    <div class="text-[11px] text-slate-400">Moved to trash: {{ $teacher->deleted_at?->format('Y-m-d H:i') }}</div>
+                </div>
+                <form method="POST" action="{{ route('admin.recycle-bin.teachers.restore', $teacher->id) }}" onsubmit="return confirm('Restore this instructor and their previous account access?')">
+                    @csrf
+                    <button class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold">Restore</button>
+                </form>
+            </div>
+        @empty
+            <p class="border-t border-slate-100 pt-4 text-xs text-slate-400">No deleted instructors.</p>
+        @endforelse
+        <div>{{ $teachers->links() }}</div>
+    </section>
 </div>
 @endsection
