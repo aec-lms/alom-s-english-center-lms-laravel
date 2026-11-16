@@ -25,6 +25,7 @@ class TeacherController extends Controller
     public function index(Request $request): View
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $teachers = Teacher::query()
             ->with('user')
             ->when($actor && $actor->hasRole('branch_manager'), fn ($query) => $query->where('branch_id', $actor->branch_id))
@@ -54,6 +55,7 @@ class TeacherController extends Controller
         ]);
 
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         if ($actor && $actor->hasRole('branch_manager')) {
             if (isset($validated['branch_id']) && (int) $validated['branch_id'] !== (int) $actor->branch_id) {
                 abort(403, 'Branch isolation violation.');
@@ -101,6 +103,7 @@ class TeacherController extends Controller
     public function update(Request $request, Teacher $teacher): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $teacher->branch_id) {
             abort(403, 'Branch isolation violation.');
         }
@@ -172,6 +175,7 @@ class TeacherController extends Controller
     public function destroy(Request $request, Teacher $teacher): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $teacher->branch_id) {
             abort(403, 'Branch isolation violation.');
         }
@@ -203,5 +207,12 @@ class TeacherController extends Controller
         $file->move($dir, $filename);
 
         return '/uploads/instructors/' . $filename;
+    }
+
+    private function ensureAssignedBranch($actor): void
+    {
+        if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id === null) {
+            abort(403, 'Branch manager must be assigned to a branch.');
+        }
     }
 }
