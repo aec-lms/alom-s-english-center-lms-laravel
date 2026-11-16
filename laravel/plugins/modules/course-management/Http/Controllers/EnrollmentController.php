@@ -26,12 +26,13 @@ class EnrollmentController extends Controller
         $query = Enrollment::query()
             ->with('course')
             ->where('user_id', $request->user()->id);
-        if ($this->feesIntegrationAvailable()) {
+        $feesIntegrationAvailable = $this->feesIntegrationAvailable();
+        if ($feesIntegrationAvailable) {
             $query->with('invoice');
         }
         $enrollments = $query->latest()->paginate(20);
 
-        return view('course-management::my-enrollments', compact('enrollments'));
+        return view('course-management::my-enrollments', compact('enrollments', 'feesIntegrationAvailable'));
     }
 
     public function index(Request $request): View
@@ -41,12 +42,13 @@ class EnrollmentController extends Controller
         $query = Enrollment::query()
             ->with(['user', 'course'])
             ->when($actor && $actor->hasRole('branch_manager'), fn ($q) => $q->where('branch_id', $actor->branch_id));
-        if ($this->feesIntegrationAvailable()) {
+        $feesIntegrationAvailable = $this->feesIntegrationAvailable();
+        if ($feesIntegrationAvailable) {
             $query->with('invoice');
         }
         $enrollments = $query->latest()->paginate(30);
 
-        return view('course-management::enrollments', compact('enrollments'));
+        return view('course-management::enrollments', compact('enrollments', 'feesIntegrationAvailable'));
     }
 
     public function store(Request $request, Course $course): RedirectResponse
