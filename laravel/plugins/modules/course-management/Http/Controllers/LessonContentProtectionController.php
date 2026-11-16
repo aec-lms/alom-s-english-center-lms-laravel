@@ -156,24 +156,25 @@ class LessonContentProtectionController extends Controller
         abort_if($configured === '', 503, 'Private storage is not configured.');
 
         $root = str_starts_with($configured, DIRECTORY_SEPARATOR) ? $configured : base_path($configured);
-        $public = realpath(public_path());
         $normalized = rtrim($root, DIRECTORY_SEPARATOR);
-
-        if ($public !== false && ($normalized === $public || str_starts_with($normalized . DIRECTORY_SEPARATOR, rtrim($public, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR))) {
-            abort(503, 'Private storage must be outside the public web root.');
-        }
 
         if (!is_dir($normalized) && !mkdir($normalized, 0700, true) && !is_dir($normalized)) {
             throw new RuntimeException('Unable to initialize private storage.');
         }
 
-        return realpath($normalized) ?: $normalized;
+        $resolvedRoot = realpath($normalized) ?: $normalized;
+        $public = realpath(public_path());
+        if ($public !== false && ($resolvedRoot === $public || str_starts_with($resolvedRoot . DIRECTORY_SEPARATOR, rtrim($public, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR))) {
+            abort(503, 'Private storage must be outside the public web root.');
+        }
+
+        return $resolvedRoot;
     }
 
     private function resolveMediaPath(string $relativePath): string
     {
         abort_if($relativePath === '' || str_contains($relativePath, "\0") || str_starts_with($relativePath, '/') || preg_match('/^[A-Za-z]:/', $relativePath), 404);
-        $segments = preg_split('#[\\\\/]#', $relativePath) ?: [];
+        $segments = explode('/', str_replace('\\\\', '/', $relativePath));
         abort_if(in_array('..', $segments, true) || in_array('.', $segments, true), 404);
 
         $root = $this->privateRoot();
