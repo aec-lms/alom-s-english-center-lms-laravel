@@ -11,8 +11,8 @@ Route::middleware(['api', 'installed', 'plugin:mobile-app-api'])
     ->group(function (): void {
         Route::get('/config', [MobileApiController::class, 'config'])->name('config');
         Route::get('/home', [MobileApiController::class, 'home'])->name('home');
-        Route::post('/register', [MobileApiController::class, 'register'])->name('register');
-        Route::post('/login', [MobileApiController::class, 'login'])->name('login');
+        Route::post('/register', [MobileApiController::class, 'register'])->middleware('throttle:5,1')->name('register');
+        Route::post('/login', [MobileApiController::class, 'login'])->middleware('throttle:10,1')->name('login');
         Route::get('/courses', [MobileApiController::class, 'courses'])->name('courses');
         Route::get('/courses/{slug}', [MobileApiController::class, 'courseShow'])->name('courses.show');
         Route::get('/ebooks', [MobileApiController::class, 'ebooks'])->name('ebooks');
