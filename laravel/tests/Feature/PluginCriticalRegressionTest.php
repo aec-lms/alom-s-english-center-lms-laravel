@@ -40,7 +40,7 @@ class PluginCriticalRegressionTest extends TestCase
 
         $this->assertSame([], $manifest->dependencies);
         $this->assertContains('batch-management', $manifest->optionalDependencies);
-        $migration = file_get_contents(base_path('plugins/modules/attendance-management/Database/Migrations/2026_11_16_000001_repoint_attendance_batch_foreign_key.php'));
+        $migration = file_get_contents(base_path('plugins/modules/attendance-management/Database/Migrations/2026_02_07_000001_create_attendance_records_table.php'));
         $upgradeMigration = file_get_contents(base_path('plugins/modules/attendance-management/Database/Migrations/2026_11_16_000001_repoint_attendance_batch_foreign_key.php'));
         $controller = file_get_contents(base_path('plugins/modules/attendance-management/Http/Controllers/AttendanceController.php'));
 
