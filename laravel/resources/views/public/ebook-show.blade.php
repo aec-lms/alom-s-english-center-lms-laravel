@@ -102,6 +102,10 @@
                         <a href="{{ route('public.ebooks.download', $ebook['slug']) }}" class="w-full py-3.5 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold flex items-center justify-center gap-2 shadow-sm transition-colors">
                             <span>{{ $ebook['is_free'] ? 'Download Free PDF Now' : 'Download Purchased PDF' }}</span>
                         </a>
+                    @elseif ($ebook['is_free'])
+                        <p class="text-sm text-slate-500">The free PDF has not been uploaded yet.</p>
+                    @elseif (Auth::check() && !($canPurchase ?? false))
+                        <p class="text-sm text-amber-700">A protected PDF must be uploaded before this e-book can be sold.</p>
                     @elseif (Auth::check() && Route::has('plugins.universal_payment.checkout'))
                         <form method="POST" action="{{ route('plugins.universal_payment.checkout') }}" class="space-y-3">
                             @csrf

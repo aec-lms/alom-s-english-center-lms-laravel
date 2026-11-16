@@ -298,7 +298,9 @@ class PublicHomeController extends Controller
                 ->exists();
         }
 
-        return view('public.ebook-show', compact('ebook', 'hasAccess'));
+        $canPurchase = !empty($ebook['download_url']) && str_starts_with((string) $ebook['download_url'], 'private:');
+
+        return view('public.ebook-show', compact('ebook', 'hasAccess', 'canPurchase'));
     }
 
     public function ebookDownload(string $slug)
