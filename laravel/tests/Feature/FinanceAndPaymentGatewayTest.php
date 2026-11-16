@@ -8,6 +8,8 @@ use App\Core\Plugins\PluginManager;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Http\UploadedFile;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
 use Plugins\Modules\StudentManagement\Models\Student;
@@ -690,6 +692,48 @@ class FinanceAndPaymentGatewayTest extends TestCase
         $this->actingAs($student)->postJson('/payments/sslcommerz/initiate', [
             'invoice_id' => 1,
         ])->assertStatus(409)->assertJsonPath('message', 'Enable Fees and Payment Management before using this gateway.');
+    }
+
+
+    public function test_manual_receipt_proof_is_validated_stored_privately_and_served_only_through_authorized_route(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['universal-payment']);
+        Storage::fake('local');
+        $admin = $this->createUserWithRole('admin');
+
+        $this->actingAs($admin)->post('/plugins/universal-payment/transactions', [
+            'payer_name' => 'Proof Upload Learner',
+            'payer_contact' => '01712345678',
+            'item_title' => 'English Course Fee',
+            'gateway' => 'bank_cash',
+            'amount' => 1500,
+            'external_trx_id' => 'BANK-PROOF-001',
+            'proof_file' => UploadedFile::fake()->create('bank-receipt.pdf', 200, 'application/pdf'),
+        ])->assertSessionHasNoErrors()->assertRedirect();
+
+        $transaction = DB::table('universal_payment_transactions')
+            ->where('external_trx_id', 'BANK-PROOF-001')
+            ->first();
+
+        $this->assertNotNull($transaction);
+        $this->assertSame('pending', $transaction->status);
+        $this->assertStringStartsWith('universal-payment-proofs/', $transaction->proof_path);
+        $this->assertSame('application/pdf', $transaction->proof_mime);
+        Storage::disk('local')->assertExists($transaction->proof_path);
+
+        $this->get('/plugins/universal-payment/transactions/' . $transaction->id . '/proof')
+            ->assertOk()
+            ->assertHeader('X-Content-Type-Options', 'nosniff');
+
+        $this->actingAs($admin)->from('/admin')->post('/plugins/universal-payment/transactions', [
+            'payer_name' => 'Invalid Proof Learner',
+            'item_title' => 'English Course Fee',
+            'gateway' => 'bank_cash',
+            'amount' => 100,
+            'external_trx_id' => 'BANK-PROOF-INVALID',
+            'proof_file' => UploadedFile::fake()->create('malware.exe', 20, 'application/x-msdownload'),
+        ])->assertSessionHasErrors('proof_file');
     }
 
 }
