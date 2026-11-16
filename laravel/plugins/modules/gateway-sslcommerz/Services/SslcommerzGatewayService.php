@@ -6,6 +6,7 @@ namespace Plugins\Modules\GatewaySslcommerz\Services;
 
 use App\Core\Plugins\PluginManager;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
 use Plugins\Modules\PaymentManagement\Services\PaymentSettlementService;
@@ -27,12 +28,18 @@ class SslcommerzGatewayService
             throw new RuntimeException('SSLCOMMERZ credentials are not configured.');
         }
 
-        $invoice->loadMissing('student.user');
-        $customer = $invoice->student?->user;
-        if (!$customer || trim((string) $customer->name) === '' || !filter_var($customer->email, FILTER_VALIDATE_EMAIL)) {
-            throw new RuntimeException('The invoice must be linked to a customer with a valid name and email.');
+        $studentIntegration = $this->plugins->isEnabled('student-management') && Schema::hasTable('students');
+        if ($studentIntegration) {
+            $invoice->loadMissing('student.user');
         }
-        $phone = preg_replace('/[^0-9+]/', '', (string) $customer->phone);
+        $customer = $studentIntegration ? $invoice->student?->user : null;
+        $customerName = trim((string) ($customer?->name ?? $invoice->payer_name));
+        $customerEmail = (string) ($customer?->email ?? $invoice->payer_email);
+        $customerPhone = (string) ($customer?->phone ?? $invoice->payer_phone);
+        if ($customerName === '' || !filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
+            throw new RuntimeException('The invoice must include a valid payer name and email (or be linked to a Student profile).');
+        }
+        $phone = preg_replace('/[^0-9+]/', '', $customerPhone);
         if (!$phone || strlen(preg_replace('/\D/', '', $phone)) < 7) {
             throw new RuntimeException('Add a valid customer phone number before starting SSLCOMMERZ checkout.');
         }
