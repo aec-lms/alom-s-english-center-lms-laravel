@@ -35,6 +35,7 @@ class EnrollmentController extends Controller
     public function index(Request $request): View
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $enrollments = Enrollment::query()
             ->with(['user', 'course', 'invoice'])
             ->when($actor && $actor->hasRole('branch_manager'), fn ($q) => $q->where('branch_id', $actor->branch_id))
@@ -107,6 +108,7 @@ class EnrollmentController extends Controller
     public function updateStatus(Request $request, Enrollment $enrollment): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $enrollment->branch_id) {
             abort(403, 'Branch isolation violation.');
         }
@@ -122,5 +124,12 @@ class EnrollmentController extends Controller
         $enrollment->update(['status' => $validated['status']]);
 
         return back()->with('status', 'Enrollment status updated.');
+    }
+
+    private function ensureAssignedBranch($actor): void
+    {
+        if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id === null) {
+            abort(403, 'Branch manager must be assigned to a branch.');
+        }
     }
 }
