@@ -7,7 +7,7 @@
         <p class="text-xs text-slate-500 mt-1">Send in-app notifications, SMTP email, or Greenweb SMS. Push delivery is not yet connected.</p>
     </div>
 
-    <form method="POST" action="{{ route('plugins.notifications.dispatch') }}" class="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+    <form method="POST" action="{{ url('/admin/notifications/dispatch') }}" class="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
         @csrf
         <h2 class="text-sm font-bold text-slate-900">Dispatch Notification</h2>
         <div class="grid sm:grid-cols-2 gap-3 text-xs">
