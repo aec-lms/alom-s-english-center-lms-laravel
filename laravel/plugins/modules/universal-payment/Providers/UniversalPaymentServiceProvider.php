@@ -5,10 +5,16 @@ declare(strict_types=1);
 namespace Plugins\Modules\UniversalPayment\Providers;
 
 use App\Core\Plugins\BasePluginServiceProvider;
+use Plugins\Modules\UniversalPayment\Services\UniversalPaymentOrchestrator;
 
 class UniversalPaymentServiceProvider extends BasePluginServiceProvider
 {
     public function slug(): string { return 'universal-payment'; }
+
+    public function register(): void
+    {
+        $this->app->singleton(UniversalPaymentOrchestrator::class);
+    }
 
     protected function pluginPath(string $relative = ''): string
     {
