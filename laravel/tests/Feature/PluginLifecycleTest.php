@@ -524,4 +524,16 @@ PHP;
             @unlink($zipPath);
         }
     }
+
+    public function test_all_plugin_manifests_use_optional_integrations_not_install_blocking_sibling_dependencies(): void
+    {
+        $directories = \Illuminate\Support\Facades\File::directories(base_path('plugins/modules'));
+        $this->assertCount(39, $directories);
+
+        foreach ($directories as $directory) {
+            $manifest = \App\Core\Plugins\PluginManifest::fromDirectory($directory);
+            $this->assertSame([], $manifest->dependencies, $manifest->slug . ' must not require a sibling plugin to install');
+        }
+    }
+
 }
