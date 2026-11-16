@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\BackupController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\PluginCenterController;
+use App\Http\Controllers\Admin\RecycleBinController;
 use App\Http\Controllers\Admin\UpdateCenterController;
 use App\Http\Controllers\Admin\UserRoleController;
 use App\Http\Controllers\Auth\LoginController;
@@ -91,6 +92,11 @@ Route::middleware('installed')->group(function (): void {
         Route::prefix('users')->name('users.')->middleware('permission:core.users.manage')->group(function (): void {
             Route::get('/', [UserRoleController::class, 'index'])->name('index');
             Route::post('/', [UserRoleController::class, 'store'])->name('store');
+        });
+
+        Route::prefix('recycle-bin')->name('recycle-bin.')->middleware('permission:core.recycle_bin.manage')->group(function (): void {
+            Route::get('/', [RecycleBinController::class, 'index'])->name('index');
+            Route::post('/students/{student}/restore', [RecycleBinController::class, 'restoreStudent'])->name('students.restore');
         });
 
         Route::get('/audit-logs', [AuditLogController::class, 'index'])
