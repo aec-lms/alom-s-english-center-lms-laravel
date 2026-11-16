@@ -101,9 +101,9 @@ class BoostController extends Controller
         $name = $campaign->campaign_name;
         $id = (string) $campaign->id;
         $campaign->delete();
-        $this->audit->log('boost.deleted', 'boost_campaign', $id, ['name' => $name]);
+        $this->audit->log('boost.trashed', 'boost_campaign', $id, ['name' => $name]);
 
-        return back()->with('status', "Boost campaign '{$name}' deleted.");
+        return back()->with('status', "Boost campaign '{$name}' moved to the Admin Recycle Bin.");
     }
 
     public function trackClick(BoostCampaign $campaign): RedirectResponse
