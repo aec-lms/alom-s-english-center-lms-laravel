@@ -47,6 +47,9 @@ class CourseController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
+
         $validated = $request->validate([
             'code' => ['required', 'string', 'max:40', 'unique:courses,code'],
             'title' => ['nullable', 'string', 'max:180'],
@@ -72,8 +75,6 @@ class CourseController extends Controller
             'seo_description' => ['nullable', 'string', 'max:320'],
         ]);
 
-        $actor = $request->user();
-        $this->ensureAssignedBranch($actor);
         if ($actor && $actor->hasRole('branch_manager')) {
             $validated['branch_id'] = $actor->branch_id;
         }
