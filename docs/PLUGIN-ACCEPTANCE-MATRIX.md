@@ -50,6 +50,10 @@ This first pass is a **static file inventory**, not a functional certification. 
 | `universal-payment` | 8 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
 | `visitor-popup-ads` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
 
+## Source-level dependency scan
+
+`PluginSiblingDependencyAuditTest` scans PHP files under all 39 plugin directories for direct `Plugins\\Modules\\...` namespace references and verifies that each sibling reference is declared in the plugin manifest as required or optional. The current policy keeps all sibling integrations optional. This scan does not prove standalone runtime behavior and does not yet detect every string-based table reference, dynamic service lookup, event coupling or external provider dependency; those remain part of each plugin's functional acceptance.
+
 ## Required acceptance gate for every plugin
 
 - [ ] Manifest schema, unique slug, version and dependency constraints validated.
