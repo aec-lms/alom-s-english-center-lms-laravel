@@ -111,7 +111,7 @@
                     <div class="text-xs text-slate-500">{{ $record->batch_code }}</div>
                     <div class="text-[11px] text-slate-400">Moved to trash: {{ $record->deleted_at?->format('Y-m-d H:i') }}</div>
                 </div>
-                <form method="POST" action="{{ route('admin.recycle-bin.batches.restore', $record->id) }}" onsubmit="return confirm('Restore this study batche record?')">
+                <form method="POST" action="{{ route('admin.recycle-bin.batches.restore', $record->id) }}" onsubmit="return confirm('Restore this study batch record?')">
                     @csrf
                     <button class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold">Restore</button>
                 </form>
@@ -134,7 +134,7 @@
                     <div class="text-xs text-slate-500">{{ $record->code }}</div>
                     <div class="text-[11px] text-slate-400">Moved to trash: {{ $record->deleted_at?->format('Y-m-d H:i') }}</div>
                 </div>
-                <form method="POST" action="{{ route('admin.recycle-bin.classes.restore', $record->id) }}" onsubmit="return confirm('Restore this academic classe record?')">
+                <form method="POST" action="{{ route('admin.recycle-bin.classes.restore', $record->id) }}" onsubmit="return confirm('Restore this academic class record?')">
                     @csrf
                     <button class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold">Restore</button>
                 </form>
@@ -157,7 +157,7 @@
                     
                     <div class="text-[11px] text-slate-400">Moved to trash: {{ $record->deleted_at?->format('Y-m-d H:i') }}</div>
                 </div>
-                <form method="POST" action="{{ route('admin.recycle-bin.course-categories.restore', $record->id) }}" onsubmit="return confirm('Restore this course categorie record?')">
+                <form method="POST" action="{{ route('admin.recycle-bin.course-categories.restore', $record->id) }}" onsubmit="return confirm('Restore this course category record?')">
                     @csrf
                     <button class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold">Restore</button>
                 </form>
@@ -180,7 +180,7 @@
                     <div class="text-xs text-slate-500">{{ $record->course?->title ?? 'Course unavailable' }}</div>
                     <div class="text-[11px] text-slate-400">Moved to trash: {{ $record->deleted_at?->format('Y-m-d H:i') }}</div>
                 </div>
-                <form method="POST" action="{{ route('admin.recycle-bin.live-classes.restore', $record->id) }}" onsubmit="return confirm('Restore this live classe record?')">
+                <form method="POST" action="{{ route('admin.recycle-bin.live-classes.restore', $record->id) }}" onsubmit="return confirm('Restore this live class record?')">
                     @csrf
                     <button class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold">Restore</button>
                 </form>
