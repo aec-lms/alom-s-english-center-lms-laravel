@@ -5,7 +5,7 @@
 - php artisan lms:health-check performs a read-only health report.
 - php artisan lms:health-check --recover additionally attempts narrowly scoped recovery: recreate missing Laravel runtime directories (never follow symlinks or change permissions) and reconnect the database once.
 - Admin Health Monitor is available at /admin/health for users with core.dashboard.view.
-- Checks cover database query, cache read/write, Laravel runtime storage, private storage, backup storage, available disk space and PHP runtime.
+- Checks cover database query, cache read/write, Laravel runtime storage, private storage, backup storage, available disk space, database queue backlog, PHP runtime and PHP memory pressure. Each probe records its duration and flags checks that exceed AEC_HEALTH_SLOW_CHECK_MS.
 - Failed checks are written to the protected Laravel log. If AEC_HEALTH_ALERT_EMAIL is configured, one alert per 15-minute cooldown is sent to that address.
 - Health snapshots are cached for ten minutes. The scheduled command runs every minute with overlap protection.
 
