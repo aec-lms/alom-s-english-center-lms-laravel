@@ -200,7 +200,7 @@ class PluginCriticalRegressionTest extends TestCase
         $this->assertIsString($controller);
         $this->assertIsString($paymentController);
         $this->assertStringContainsString('Online refunds are disabled until this gateway has a verified provider refund adapter.', $paymentController);
-        $this->assertStringContainsString('No ledger or invoice balance was changed.', $paymentController);
+        $this->assertStringContainsString('No refund record or invoice balance was changed.', $paymentController);
         $this->assertIsString($migration);
         $this->assertStringContainsString("'status' => 'pending'", $controller);
         $this->assertStringContainsString("'external_trx_id' => ['required', 'string', 'max:120']", $controller);
