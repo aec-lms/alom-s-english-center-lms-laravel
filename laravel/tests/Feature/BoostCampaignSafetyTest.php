@@ -45,6 +45,15 @@ class BoostCampaignSafetyTest extends TestCase
 
         $this->assertDatabaseHas('boost_campaigns', ['campaign_name' => 'Active Campaign']);
         $campaign = BoostCampaign::query()->firstOrFail();
+        $this->actingAs($admin)->put('/plugins/boost/' . $campaign->id, [
+            'campaign_name' => 'Active Campaign',
+            'placement' => 'homepage_featured',
+            'destination_url' => 'javascript:alert(1)',
+            'priority' => 5,
+            'status' => 'active',
+        ])->assertSessionHasErrors('destination_url');
+
+        $this->assertSame('/courses/ielts', $campaign->fresh()->destination_url);
         $this->get('/boost/click/' . $campaign->id)
             ->assertRedirect('/courses/ielts');
         $this->assertSame(1, $campaign->fresh()->clicks);
