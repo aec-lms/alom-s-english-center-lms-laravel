@@ -196,4 +196,17 @@ class PluginCriticalRegressionTest extends TestCase
         $this->assertStringNotContainsString("'in:pending,verified,refunded'", $controller);
     }
 
+    public function test_notification_center_scopes_branch_managers_to_recipient_branch(): void
+    {
+        $controller = file_get_contents(base_path('plugins/modules/notification-center/Http/Controllers/NotificationController.php'));
+        $migration = file_get_contents(base_path('plugins/modules/notification-center/Database/Migrations/2026_11_16_000001_add_branch_id_to_lms_notifications.php'));
+
+        $this->assertIsString($controller);
+        $this->assertIsString($migration);
+        $this->assertStringContainsString("where('branch_id', $user->branch_id)", $controller);
+        $this->assertStringContainsString("recipient->branch_id", $controller);
+        $this->assertStringContainsString("abort_unless((int) $recipient->branch_id === (int) $actor->branch_id, 404)", $controller);
+        $this->assertStringContainsString("branch_id", $migration);
+    }
+
 }
