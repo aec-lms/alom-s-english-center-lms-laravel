@@ -92,15 +92,26 @@ class SmsController extends Controller
 
         if ($token !== '' && count($numbers) > 0 && $provider === 'greenweb') {
             try {
-                Http::timeout(10)->asForm()->post('https://api.greenweb.com.bd/api.php', [
-                    'token' => $token,
-                    'to' => implode(',', array_slice($numbers, 0, 100)),
-                    'message' => $validated['message'],
-                ]);
-                $status = 'sent';
-            } catch (\Throwable) {
+                $allAccepted = true;
+                foreach (array_chunk($numbers, 100) as $chunk) {
+                    $response = Http::timeout(15)->asForm()->post('https://api.greenweb.com.bd/api.php', [
+                        'token' => $token,
+                        'to' => implode(',', $chunk),
+                        'message' => $validated['message'],
+                    ]);
+                    if (!$response->successful()) {
+                        $allAccepted = false;
+                        break;
+                    }
+                }
+                // HTTP acceptance is not proof of handset delivery.
+                $status = $allAccepted ? 'submitted' : 'queued_retry';
+            } catch (\\Throwable) {
                 $status = 'queued_retry';
             }
+        } elseif ($provider !== 'greenweb') {
+            // Provider adapters must be implemented and verified before a campaign is marked submitted.
+            $status = 'queued';
         }
 
         $campaign = SmsCampaign::query()->create([
