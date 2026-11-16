@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\StudentTracking\\Http\\Controllers;
+namespace Plugins\Modules\StudentTracking\Http\Controllers;
 
-use App\\Http\\Controllers\\Controller;
-use Illuminate\\Http\\JsonResponse;
-use Illuminate\\Http\\Request;
-use Illuminate\\Support\\Facades\\Schema;
-use Illuminate\\View\\View;
-use Plugins\\Modules\\StudentTracking\\Models\\StudentActivityEvent;
-use Plugins\\Modules\\StudentTracking\\Services\\StudentActivityTracker;
+use App\Http\Controllers\Controller;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\View\View;
+use Plugins\Modules\StudentTracking\Models\StudentActivityEvent;
+use Plugins\Modules\StudentTracking\Services\StudentActivityTracker;
 
 class StudentTrackingController extends Controller
 {
