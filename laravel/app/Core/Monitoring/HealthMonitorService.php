@@ -75,7 +75,7 @@ class HealthMonitorService
             if ($limit > 0 && $used / $limit >= 0.85) throw new \RuntimeException('PHP memory usage is above 85% of the configured limit.');
             return 'PHP peak memory usage: ' . number_format($used / 1048576, 1) . ' MB.';
         }, null, $recoveries);
-        $failed = array_filter($checks, static fn (array $check): bool => $check['status'] === 'failed');
+        $failed = array_filter($checks, static fn (array $check): bool => in_array($check['status'], ['failed', 'slow'], true));
         $report = ['status' => $failed === [] ? 'healthy' : (count($failed) === count($checks) ? 'critical' : 'degraded'),
             'checked_at' => now()->toIso8601String(), 'checks' => $checks, 'recoveries' => $recoveries, 'failed_count' => count($failed)];
         try { Cache::put(self::SNAPSHOT_KEY, $report, now()->addMinutes(10)); }
@@ -94,7 +94,7 @@ class HealthMonitorService
     private function check(callable $test, ?callable $repair, array &$recoveries): array
     {
         $started = microtime(true);
-        try { return ['status' => 'ok', 'message' => $test(), 'duration_ms' => (int) round((microtime(true) - $started) * 1000)]; }
+        try {\n            $message = $test();\n            $duration = (int) round((microtime(true) - $started) * 1000);\n            $slow = $duration >= (int) config('lms.health_slow_check_ms', 2000);\n            return ['status' => $slow ? 'slow' : 'ok', 'message' => $message . ($slow ? ' Probe exceeded the response-time threshold.' : ''), 'duration_ms' => $duration];\n        }
         catch (Throwable $e) {
             $message = $this->safeMessage($e);
             if ($repair !== null) {
