@@ -15,6 +15,7 @@ class StudentTrackingPluginTest extends TestCase
         $this->markSystemInstalled();
         $this->activatePlugins(['student-tracking']);
         $admin = $this->createUserWithRole('admin');
+        $student = $this->createUserWithRole('student');
 
         $manager = app(PluginManager::class);
         $this->assertTrue($manager->isInstalled('student-tracking'));
@@ -23,7 +24,7 @@ class StudentTrackingPluginTest extends TestCase
         $this->assertFalse($manager->isInstalled('attendance-management'));
         $this->assertFalse($manager->isInstalled('course-management'));
 
-        $this->actingAs($admin)->postJson('/student-tracking/events', [
+        $this->actingAs($student)->postJson('/student-tracking/events', [
             'event_type' => 'lesson_completed',
             'subject_type' => 'lesson',
             'subject_id' => 'lesson-42',
@@ -48,7 +49,7 @@ class StudentTrackingPluginTest extends TestCase
             ->assertSee('Student Tracking & Analytics')
             ->assertSee('SSC English Grammar');
 
-        $this->actingAs($admin)->get('/student-tracking/mine')
+        $this->actingAs($student)->get('/student-tracking/mine')
             ->assertOk()
             ->assertSee('My Learning Activity')
             ->assertSee('SSC English Grammar');
@@ -58,9 +59,9 @@ class StudentTrackingPluginTest extends TestCase
     {
         $this->markSystemInstalled();
         $this->activatePlugins(['student-tracking']);
-        $admin = $this->createUserWithRole('admin');
+        $student = $this->createUserWithRole('student');
 
-        $this->actingAs($admin)->postJson('/student-tracking/events', [
+        $this->actingAs($student)->postJson('/student-tracking/events', [
             'event_type' => 'screen_recording',
         ])->assertUnprocessable();
 
