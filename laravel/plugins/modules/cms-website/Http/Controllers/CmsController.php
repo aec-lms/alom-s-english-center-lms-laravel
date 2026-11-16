@@ -383,7 +383,12 @@ class CmsController extends Controller
             mkdir($dir, 0755, true);
         }
 
-        $filename = Str::uuid()->toString() . '.' . $file->getClientOriginalExtension();
+        $extension = strtolower((string) ($file->guessExtension() ?: ''));
+        if (!in_array($extension, ['jpg', 'jpeg', 'png', 'webp', 'pdf'], true)) {
+            throw new \RuntimeException('Unsupported CMS upload type.');
+        }
+
+        $filename = Str::uuid()->toString() . '.' . $extension;
         $file->move($dir, $filename);
 
         return '/uploads/' . $folder . '/' . $filename;
