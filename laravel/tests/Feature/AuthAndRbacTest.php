@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use Illuminate\\Auth\\Notifications\\ResetPassword;
-use Illuminate\\Support\\Facades\\Notification;
-use Tests\\TestCase;
+use Illuminate\Auth\Notifications\ResetPassword;
+use Illuminate\Support\Facades\Notification;
+use Tests\TestCase;
 
 class AuthAndRbacTest extends TestCase
 {
