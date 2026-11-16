@@ -120,7 +120,7 @@ class UniversalPaymentController extends Controller
                     ['storefront_item_id' => $transaction->storefront_item_id, 'user_id' => $transaction->user_id],
                     ['payment_transaction_id' => $transaction->id, 'granted_at' => now(), 'created_at' => now(), 'updated_at' => now()]
                 );
-            } elseif (in_array($validated['status'], ['refunded', 'rejected'], true)) {
+            } else {
                 DB::table('storefront_item_access')->where('storefront_item_id', $transaction->storefront_item_id)
                     ->where('user_id', $transaction->user_id)->delete();
             }
@@ -138,7 +138,7 @@ class UniversalPaymentController extends Controller
             'payer_contact' => ['required', 'string', 'max:120'],
             'item_title' => ['required', 'string', 'max:200'],
             'gateway' => ['required', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,bank_cash'],
-            'amount' => ['required', 'numeric', 'min:1'],
+            'amount' => ['required', 'numeric', 'min:0.01'],
             'external_trx_id' => ['nullable', 'string', 'max:120'],
             'storefront_item_id' => ['nullable', 'integer'],
         ]);
