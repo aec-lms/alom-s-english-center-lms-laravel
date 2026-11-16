@@ -380,9 +380,9 @@ class AdditionalModulesWorkflowTest extends TestCase
         $this->assertDatabaseHas('library_books', ['id' => $foreignBookId, 'branch_id' => $branchB]);
         $this->assertSame(0, DB::table('library_books')->where('branch_id', $branchA)->count());
 
-        $libraryResponse = $this->actingAs($manager)->get('/admin/library');
-        $this->assertSame(200, $libraryResponse->status(), substr(strip_tags($libraryResponse->getContent()), 0, 2500));
-        $libraryResponse->assertDontSee('Foreign Branch Book');
+        $this->actingAs($manager)->get('/admin/library')
+            ->assertOk()
+            ->assertViewHas('books', fn ($books) => $books->where('title', 'Foreign Branch Book')->isEmpty());
         $this->actingAs($manager)->post('/admin/library/books', [
             'isbn' => 'LIB-OWN-001',
             'title' => 'Own Branch Book',
