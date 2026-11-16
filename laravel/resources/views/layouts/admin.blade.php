@@ -102,6 +102,12 @@
             @if ($pluginManager->isEnabled('attendance-management') && Route::has('plugins.attendance.index'))
                 <a href="{{ route('plugins.attendance.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Attendance</a>
             @endif
+            @if ($pluginManager->isEnabled('student-tracking') && Route::has('plugins.student-tracking.admin.index'))
+                <a href="{{ route('plugins.student-tracking.admin.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Student Tracking &amp; Analytics</a>
+            @endif
+            @if ($pluginManager->isEnabled('student-tracking') && auth()->user()?->hasRole('student') && Route::has('plugins.student-tracking.mine'))
+                <a href="{{ route('plugins.student-tracking.mine') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">My Learning Activity</a>
+            @endif
             @if ($pluginManager->isEnabled('certificate-management') && Route::has('plugins.certificates.index'))
                 <a href="{{ route('plugins.certificates.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Certificates</a>
             @endif
