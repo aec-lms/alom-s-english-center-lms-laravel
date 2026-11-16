@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
 use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
+use Plugins\Modules\NotificationCenter\Models\LmsNotification;
 use Tests\TestCase;
 
 class BranchManagerFailClosedTest extends TestCase
@@ -315,6 +316,88 @@ class BranchManagerFailClosedTest extends TestCase
                 'external_trx_id' => 'NO-BRANCH-TRX',
             ])
             ->assertForbidden();
+    }
+
+
+    public function test_notification_center_is_branch_scoped_for_lists_recipients_and_dispatch(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'email-notifications', 'sms-gateway', 'notification-center']);
+
+        $ownBranch = DB::table('branches')->insertGetId([
+            'code' => 'NOTIF-OWN',
+            'name' => 'Notification Own Branch',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $otherBranch = DB::table('branches')->insertGetId([
+            'code' => 'NOTIF-OTHER',
+            'name' => 'Notification Other Branch',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $manager = $this->createUserWithRole('branch_manager', $ownBranch);
+        $permission = DB::table('permissions')->where('slug', 'notifications.manage')->firstOrFail();
+        $manager->roles()->first()->permissions()->syncWithoutDetaching([$permission->id]);
+        $ownRecipient = $this->createUserWithRole('student', $ownBranch, 'notice-own@aec.test');
+        $otherRecipient = $this->createUserWithRole('student', $otherBranch, 'notice-other@aec.test');
+
+        LmsNotification::query()->create([
+            'user_id' => $ownRecipient->id,
+            'branch_id' => $ownBranch,
+            'channel' => 'in_app',
+            'title' => 'Own Branch Notification',
+            'message' => 'Own branch content',
+            'status' => 'sent',
+        ]);
+        LmsNotification::query()->create([
+            'user_id' => $otherRecipient->id,
+            'branch_id' => $otherBranch,
+            'channel' => 'in_app',
+            'title' => 'Other Branch Notification',
+            'message' => 'Private other branch content',
+            'status' => 'sent',
+        ]);
+
+        $this->actingAs($manager)
+            ->get('/admin/notifications')
+            ->assertOk()
+            ->assertSee('Own Branch Notification')
+            ->assertSee('notice-own@aec.test')
+            ->assertDontSee('Other Branch Notification')
+            ->assertDontSee('notice-other@aec.test');
+
+        $this->actingAs($manager)
+            ->post('/admin/notifications/dispatch', [
+                'user_id' => $otherRecipient->id,
+                'channel' => 'in_app',
+                'title' => 'Cross Branch Attempt',
+                'message' => 'Must be denied',
+            ])
+            ->assertNotFound();
+
+        $this->assertDatabaseMissing('lms_notifications', [
+            'title' => 'Cross Branch Attempt',
+        ]);
+
+        $this->actingAs($manager)
+            ->post('/admin/notifications/dispatch', [
+                'user_id' => $ownRecipient->id,
+                'channel' => 'in_app',
+                'title' => 'Own Branch Dispatch',
+                'message' => 'Allowed within branch',
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('lms_notifications', [
+            'user_id' => $ownRecipient->id,
+            'branch_id' => $ownBranch,
+            'title' => 'Own Branch Dispatch',
+            'status' => 'sent',
+        ]);
     }
 
 }
