@@ -113,9 +113,9 @@ class BranchController extends Controller
 
         DB::transaction(fn () => $branch->delete());
 
-        $this->audit->log('branch.deleted', 'branch', $id, ['name' => $name]);
+        $this->audit->log('branch.trashed', 'branch', $id, ['name' => $name]);
 
-        return back()->with('status', "Branch '{$name}' deleted.");
+        return back()->with('status', "Branch '{$name}' moved to the Admin Recycle Bin.");
     }
     private function ensureAssignedBranch($actor): void
     {
