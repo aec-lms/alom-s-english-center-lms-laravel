@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class PaymentRefund extends Model
 {
-    protected $fillable = ['payment_transaction_id', 'amount', 'reason', 'approved_by'];
+    protected $fillable = ['payment_transaction_id', 'amount', 'reason', 'provider_refund_reference', 'approved_by'];
 
     protected $casts = ['amount' => 'decimal:2'];
 }
