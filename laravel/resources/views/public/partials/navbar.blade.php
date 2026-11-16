@@ -9,7 +9,7 @@
         ['label' => 'E-Books', 'route' => 'public.ebooks*', 'urlRoute' => 'public.ebooks', 'active' => request()->routeIs('public.ebooks*')],
         ['label' => 'Result', 'route' => 'public.result', 'active' => request()->routeIs('public.result')],
     ];
-    @if (auth()->check() && auth()->user()->hasRole('student') && app(\\App\\Core\\Plugins\\PluginManager::class)->isEnabled('student-tracking') && Route::has('plugins.student-tracking.mine'))
+    if (auth()->check() && auth()->user()->hasRole('student') && app(\App\Core\Plugins\PluginManager::class)->isEnabled('student-tracking') && Route::has('plugins.student-tracking.mine')) {
         $navLinks[] = ['label' => 'My Activity', 'route' => 'plugins.student-tracking.mine', 'urlRoute' => 'plugins.student-tracking.mine', 'active' => request()->routeIs('plugins.student-tracking.mine')];
     }
 @endphp
