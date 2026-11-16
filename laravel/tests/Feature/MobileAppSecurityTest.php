@@ -59,6 +59,7 @@ class MobileAppSecurityTest extends TestCase
                 'price' => 300,
                 'original_price' => 300,
                 'is_free' => false,
+                'pages' => 0,
                 'summary' => 'Public product summary',
                 'download_url' => '/storage/storefront/pdfs/product-mobile-test.pdf',
                 'is_active' => true,
