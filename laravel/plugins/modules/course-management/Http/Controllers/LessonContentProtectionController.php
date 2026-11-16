@@ -42,6 +42,9 @@ class LessonContentProtectionController extends Controller
         if (!is_dir($directory) && !mkdir($directory, 0700, true) && !is_dir($directory)) {
             throw new RuntimeException('Unable to create private lesson media directory.');
         }
+        $resolvedDirectory = realpath($directory);
+        abort_unless($resolvedDirectory && str_starts_with($resolvedDirectory, rtrim($root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR), 503, 'Lesson media directory must remain inside private storage.');
+        $directory = $resolvedDirectory;
 
         $extension = strtolower($file->getClientOriginalExtension() ?: 'bin');
         $filename = Str::uuid()->toString() . '.' . $extension;
