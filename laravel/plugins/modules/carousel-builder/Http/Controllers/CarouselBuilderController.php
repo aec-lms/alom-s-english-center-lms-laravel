@@ -100,9 +100,9 @@ class CarouselBuilderController extends Controller
         $title = $item->title;
         $id = (string) $item->id;
         $item->delete();
-        $this->audit->log('carousel_builder.deleted', 'carousel_item', $id);
+        $this->audit->log('carousel_builder.trashed', 'carousel_item', $id);
 
-        return back()->with('status', "Carousel item '{$title}' deleted.");
+        return back()->with('status', "Carousel item '{$title}' moved to the Admin Recycle Bin.");
     }
 
     private function storeImage(UploadedFile $file): string
