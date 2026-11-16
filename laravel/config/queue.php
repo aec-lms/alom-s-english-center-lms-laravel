@@ -1,0 +1,32 @@
+<?php
+
+declare(strict_types=1);
+
+return [
+    'default' => env('QUEUE_CONNECTION', 'database'),
+
+    'connections' => [
+        'sync' => [
+            'driver' => 'sync',
+        ],
+        'database' => [
+            'driver' => 'database',
+            'connection' => env('DB_QUEUE_CONNECTION'),
+            'table' => env('DB_QUEUE_TABLE', 'jobs'),
+            'queue' => env('DB_QUEUE', 'default'),
+            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 120),
+            'after_commit' => true,
+        ],
+    ],
+
+    'batching' => [
+        'database' => env('DB_CONNECTION', 'mysql'),
+        'table' => 'job_batches',
+    ],
+
+    'failed' => [
+        'driver' => 'database-uuids',
+        'database' => env('DB_QUEUE_FAILED_DATABASE', env('DB_CONNECTION', 'mysql')),
+        'table' => 'failed_jobs',
+    ],
+];
