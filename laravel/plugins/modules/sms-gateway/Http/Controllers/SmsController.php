@@ -106,7 +106,7 @@ class SmsController extends Controller
                 }
                 // HTTP acceptance is not proof of handset delivery.
                 $status = $allAccepted ? 'submitted' : 'queued_retry';
-            } catch (\\Throwable) {
+            } catch (\Throwable) {
                 $status = 'queued_retry';
             }
         } elseif ($provider !== 'greenweb') {
