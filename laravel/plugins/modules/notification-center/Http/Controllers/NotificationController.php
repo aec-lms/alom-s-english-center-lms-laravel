@@ -40,6 +40,6 @@ class NotificationController extends Controller
 
         $this->audit->log('notification.dispatched', 'lms_notification', (string) $record->id, ['channel' => $record->channel]);
 
-        return back()->with('status', 'Notification queued/dispatched.');
+        return back()->with('status', $record->channel === 'in_app' ? 'In-app notification created.' : 'Notification queued. Delivery will be reported only after a channel worker confirms the provider response.');
     }
 }
