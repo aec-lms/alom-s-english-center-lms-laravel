@@ -75,5 +75,17 @@ class AllPluginsIndependentAcceptanceTest extends TestCase
             File::exists($directory . '/plugin.json'),
             "{$slug} manifest disappeared during lifecycle operations"
         );
+
+        $manager->resetSettingsToDefaults($slug);
+        $recycled = $manager->deleteToRecycleBin($slug);
+        $this->assertFalse($manager->isInstalled($slug), "{$slug} remained installed after recycle-bin delete");
+        $this->assertDirectoryDoesNotExist($directory);
+        $this->assertDatabaseHas('plugins', ['slug' => $slug, 'is_installed' => false]);
+
+        $restored = $manager->restoreFromRecycleBin($recycled['archive']);
+        $this->assertNotNull($restored, "{$slug} did not restore its previous installed state");
+        $this->assertTrue($manager->isInstalled($slug), "{$slug} was not installed after restore");
+        $this->assertTrue($manager->isEnabled($slug), "{$slug} did not restore its active state");
+        $this->assertFileExists($directory . '/plugin.json');
     }
 }
