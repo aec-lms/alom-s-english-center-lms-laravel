@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-use App\\Models\\Role;
-use App\\Models\\User;
-use Illuminate\\Support\\Facades\\Hash;
+use App\Models\Role;
+use App\Models\User;
+use Illuminate\Support\Facades\Hash;
 
 require __DIR__ . '/../../vendor/autoload.php';
 $app = require __DIR__ . '/../../bootstrap/app.php';
-$app->make(Illuminate\\Contracts\\Console\\Kernel::class)->bootstrap();
+$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 
 $role = Role::query()->where('slug', 'admin')->firstOrFail();
 $user = User::query()->updateOrCreate(
@@ -32,4 +32,4 @@ file_put_contents($lock, json_encode([
     'installed_at' => now()->toIso8601String(),
 ], JSON_THROW_ON_ERROR));
 
-echo "E2E admin and installed lock prepared.\\n";
+echo "E2E admin and installed lock prepared.\n";
