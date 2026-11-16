@@ -523,27 +523,22 @@ class FinanceAndPaymentGatewayTest extends TestCase
 
         $this->assertSame('paid', $paypalInvoice->fresh()->status);
 
-        // Atomic refund & over-refund rejection
+        // Caller-supplied references are not proof of a provider refund.
+        // Online refunds must fail closed until a verified provider refund adapter exists.
         $tx = PaymentTransaction::query()->where('transaction_ref', $stripeRes1['transaction_ref'])->firstOrFail();
 
         $this->actingAs($admin)->post("/admin/payments/{$tx->id}/refund", [
-            'amount' => 9999,
-            'reason' => 'Over-refund attempt',
-            'provider_refund_reference' => 're_test_overrefund_001',
+            'amount' => 1500,
+            'reason' => 'Unverified online refund attempt',
+            'provider_refund_reference' => 're_forged_reference_001',
         ])->assertSessionHasErrors('refund');
 
-        $this->actingAs($admin)->post("/admin/payments/{$tx->id}/refund", [
-            'amount' => 1500,
-            'reason' => 'Partial fee adjustment',
-            'provider_refund_reference' => 're_test_provider_refund_001',
-        ])->assertSessionHasNoErrors();
-
-        $this->assertDatabaseHas('payment_refunds', [
+        $this->assertDatabaseMissing('payment_refunds', [
             'payment_transaction_id' => $tx->id,
-            'provider_refund_reference' => 're_test_provider_refund_001',
+            'provider_refund_reference' => 're_forged_reference_001',
         ]);
-
-        $this->assertSame('partial', $stripeInvoice->fresh()->status);
-        $this->assertEquals(3000.0, (float) $stripeInvoice->fresh()->paid_amount);
+        $this->assertSame('settled', $tx->fresh()->status);
+        $this->assertSame('paid', $stripeInvoice->fresh()->status);
+        $this->assertEquals(4500.0, (float) $stripeInvoice->fresh()->paid_amount);
     }
 }
