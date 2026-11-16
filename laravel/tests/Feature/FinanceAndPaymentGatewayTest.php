@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use App\Core\Plugins\PluginManager;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
 use Plugins\Modules\StudentManagement\Models\Student;
@@ -31,9 +32,15 @@ class FinanceAndPaymentGatewayTest extends TestCase
             'api_secret' => 'sec_live_test',
             'webhook_secret' => 'whsec_test_123456',
         ], ['merchant_id', 'api_secret', 'webhook_secret']);
+        $plugins->saveSettings('gateway-sslcommerz', [
+            'store_id' => 'aec_sandbox_store',
+            'store_password' => 'ssl_sandbox_password',
+            'sandbox_mode' => '1',
+        ], ['store_password']);
 
         $branchId = DB::table('branches')->insertGetId(['code' => 'DHK', 'name' => 'Dhaka', 'created_at' => now(), 'updated_at' => now()]);
         $studentUser = $this->createUserWithRole('student', $branchId);
+        $studentUser->update(['phone' => '01712345678']);
         $student = Student::query()->create([
             'user_id' => $studentUser->id,
             'branch_id' => $branchId,
@@ -54,6 +61,18 @@ class FinanceAndPaymentGatewayTest extends TestCase
             'status' => 'unpaid',
         ]);
 
+        $sslInvoice = FeeInvoice::query()->create([
+            'invoice_number' => 'INV-SSL-001',
+            'student_id' => $student->id,
+            'branch_id' => $branchId,
+            'subtotal_amount' => 1200,
+            'discount_amount' => 0,
+            'net_amount' => 1200,
+            'paid_amount' => 0,
+            'currency' => 'BDT',
+            'status' => 'unpaid',
+        ]);
+
         $admin = $this->createUserWithRole('admin');
 
         // Raw PAN/CVV must be rejected with 422 on both gateways
@@ -67,6 +86,53 @@ class FinanceAndPaymentGatewayTest extends TestCase
             'invoice_id' => $invoice->id,
             'pan' => '4111111111111111',
         ])->assertStatus(422);
+
+        // SSLCOMMERZ must create a server-side session and validate the IPN with the official validation API.
+        Http::fake([
+            'https://sandbox.sslcommerz.com/gwprocess/v4/api.php' => Http::response([
+                'status' => 'SUCCESS',
+                'sessionkey' => 'SSL-SESSION-KEY-001',
+                'GatewayPageURL' => 'https://sandbox.sslcommerz.com/gwprocess/v4/gw.php?SESSIONKEY=SSL-SESSION-KEY-001',
+            ], 200),
+            'https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php*' => Http::response([
+                'status' => 'VALID',
+                'tran_id' => 'SSL-PLACEHOLDER',
+                'val_id' => 'SSL-VALIDATION-001',
+                'amount' => '1200.00',
+                'currency' => 'BDT',
+                'bank_tran_id' => 'BANK-SSL-001',
+                'risk_level' => '0',
+            ], 200),
+        ]);
+
+        $sslSession = $this->actingAs($admin)->postJson('/payments/sslcommerz/initiate', [
+            'invoice_id' => $sslInvoice->id,
+        ])->assertOk()->json();
+
+        $sslTransaction = PaymentTransaction::query()
+            ->where('transaction_ref', $sslSession['transaction_ref'])
+            ->firstOrFail();
+
+        Http::fake([
+            'https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php*' => Http::response([
+                'status' => 'VALID',
+                'tran_id' => $sslTransaction->transaction_ref,
+                'val_id' => 'SSL-VALIDATION-001',
+                'amount' => '1200.00',
+                'currency' => 'BDT',
+                'bank_tran_id' => 'BANK-SSL-001',
+                'risk_level' => '0',
+            ], 200),
+        ]);
+
+        $this->postJson('/payments/sslcommerz/ipn', [
+            'tran_id' => $sslTransaction->transaction_ref,
+            'val_id' => 'SSL-VALIDATION-001',
+            'status' => 'VALID',
+        ])->assertOk()->assertJson(['status' => 'settled']);
+
+        $this->assertSame('paid', $sslInvoice->fresh()->status);
+        $this->assertSame('settled', $sslTransaction->fresh()->status);
 
         // Tokenized card checkout succeeds and stores zero PAN/CVV
         $checkout = $this->actingAs($admin)->postJson('/payments/card/checkout', [
