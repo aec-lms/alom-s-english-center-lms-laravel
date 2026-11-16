@@ -6,6 +6,9 @@ namespace Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
+use App\Core\Plugins\PluginManager;
+use Plugins\Modules\NotificationCenter\Jobs\DeliverNotificationJob;
 use Tests\TestCase;
 
 class NotificationCenterTest extends TestCase
@@ -168,4 +171,38 @@ class NotificationCenterTest extends TestCase
         $this->assertDatabaseHas('lms_notifications', ['channel' => 'push', 'status' => 'provider_not_implemented']);
         Http::assertNothingSent();
     }
+
+    public function test_configured_email_notification_is_queued_until_smtp_worker_confirms_delivery(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['email-notifications', 'notification-center']);
+        $admin = $this->createUserWithRole('admin');
+        $student = $this->createUserWithRole('student');
+        Queue::fake();
+
+        app(PluginManager::class)->saveSettings('email-notifications', [
+            'smtp_host' => 'smtp.aec.test',
+            'smtp_port' => '587',
+            'smtp_username' => 'smtp-user',
+            'smtp_password' => 'smtp-secret',
+            'from_address' => 'noreply@aec.test',
+        ], [], $admin->id);
+
+        $this->actingAs($admin)->post('/admin/notifications/dispatch', [
+            'user_id' => $student->id,
+            'channel' => 'email',
+            'title' => 'Welcome to AEC',
+            'message' => 'Your course access is ready.',
+        ])->assertSessionHas('status', 'Email queued for delivery. Final delivery status updates after the SMTP worker processes it.');
+
+        $notification = DB::table('lms_notifications')
+            ->where('user_id', $student->id)
+            ->where('channel', 'email')
+            ->first();
+
+        $this->assertNotNull($notification);
+        $this->assertSame('queued', $notification->status);
+        Queue::assertPushed(DeliverNotificationJob::class, fn ($job) => $job->notificationId === (int) $notification->id);
+    }
+
 }
