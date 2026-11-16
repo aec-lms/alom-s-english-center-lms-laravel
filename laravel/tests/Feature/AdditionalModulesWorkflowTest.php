@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use Illuminate\Support\Facades\DB;
 use Plugins\Modules\RoleAiAssistant\Services\AiAssistantService;
 use Plugins\Modules\AdmissionManagement\Models\AdmissionApplication;
+use Plugins\Modules\BranchManagement\Models\Branch;
 use Plugins\Modules\CertificateManagement\Models\CertificateRecord;
 use Plugins\Modules\LibraryManagement\Models\LibraryBook;
 use Plugins\Modules\LibraryManagement\Models\LibraryLoan;
@@ -366,6 +367,28 @@ class AdditionalModulesWorkflowTest extends TestCase
         $this->assertFalse(app(AiAssistantService::class)->isRoleAllowed($adminOnly));
         $this->expectException(\RuntimeException::class);
         app(AiAssistantService::class)->queryAssistant($adminOnly, 'Show admin settings.');
+    }
+
+
+    public function test_public_admission_rejects_inactive_branch_selection(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'admission-management']);
+        $inactiveBranch = Branch::query()->create([
+            'code' => 'INACTIVE-ADMISSION',
+            'name' => 'Inactive Admission Branch',
+            'is_active' => false,
+        ]);
+
+        $this->post('/admission/apply', [
+            'applicant_name' => 'Test Applicant',
+            'email' => 'admission-test@aec.test',
+            'phone' => '01712345678',
+            'desired_course' => 'IELTS',
+            'branch_id' => $inactiveBranch->id,
+        ])->assertSessionHasErrors('branch_id');
+
+        $this->assertDatabaseCount('admission_applications', 0);
     }
 
 }
