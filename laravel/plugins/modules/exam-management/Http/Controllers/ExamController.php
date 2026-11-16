@@ -157,6 +157,7 @@ class ExamController extends Controller
             abort(403, 'Exam is not published for attempts.');
         }
         $actor = $request->user();
+        abort_unless($actor && $actor->hasRole('student'), 403, 'Only student accounts can submit exam attempts.');
         if (\Illuminate\Support\Facades\Schema::hasColumn('exams', 'learn_earn_type') && $exam->learn_earn_type === 'paid') {
             abort_unless(\Illuminate\Support\Facades\Schema::hasTable('learn_earn_exam_access') && DB::table('learn_earn_exam_access')->where('exam_id', $exam->id)->where('user_id', $actor?->id)->where('status', 'granted')->exists(), 403, 'Payment is required before attempting this exam.');
         }

@@ -9,3 +9,8 @@ Route::middleware(['web','installed','auth','plugin:learn-and-earn','permission:
  Route::post('/exams',[LearnAndEarnController::class,'storeExam'])->name('exams.store');
  Route::post('/exams/{exam}/grant-access',[LearnAndEarnController::class,'grantAccess'])->name('exams.grant');
 });
+Route::middleware(['web','installed','auth','plugin:learn-and-earn'])->prefix('learn-and-earn/exams')->name('plugins.learn_earn.student.')->group(function(){
+ Route::get('/',[LearnAndEarnController::class,'publicExams'])->name('index');
+ Route::get('/{exam}',[LearnAndEarnController::class,'showExam'])->name('show');
+ Route::post('/{exam}/attempt',[\\Plugins\\Modules\\ExamManagement\\Http\\Controllers\\ExamController::class,'submitAttempt'])->name('attempt');
+});

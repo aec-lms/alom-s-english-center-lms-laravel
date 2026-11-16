@@ -31,6 +31,18 @@ class LearnAndEarnController extends Controller {
    foreach($qs as $q)ExamQuestion::create(['exam_id'=>$exam->id,'prompt'=>$q->question,'options'=>$q->options,'correct_option_index'=>$q->correct_option_index,'marks'=>$q->positive_marks,'negative_marks'=>$q->negative_marks]);
   });return back()->with('status','Exam created. Paid exams remain locked until verified payment access is granted.');
  }
+ public function publicExams(Request $r):View {
+  abort_unless($r->user() && $r->user()->hasRole('student'),403,'Student account required.');
+  $exams=Exam::where('is_published',true)->latest()->paginate(20);
+  return view('learn-and-earn::exams',['exams'=>$exams]);
+ }
+ public function showExam(Request $r,Exam $exam):View {
+  abort_unless($r->user() && $r->user()->hasRole('student'),403,'Student account required.');
+  abort_unless($exam->is_published,404);
+  if($exam->learn_earn_type==='paid') abort_unless(DB::table('learn_earn_exam_access')->where('exam_id',$exam->id)->where('user_id',$r->user()->id)->where('status','granted')->exists(),403,'Verified payment access is required for this exam.');
+  $exam->load('questions');
+  return view('learn-and-earn::take-exam',['exam'=>$exam]);
+ }
  public function grantAccess(Request $r,Exam $exam):RedirectResponse {
   $v=$r->validate(['user_id'=>['required','integer','exists:users,id'],'payment_reference'=>['nullable','string','max:190']]);abort_unless($exam->learn_earn_type==='paid',422,'This is not a paid exam.');
   DB::table('learn_earn_exam_access')->updateOrInsert(['exam_id'=>$exam->id,'user_id'=>$v['user_id']],['status'=>'granted','payment_reference'=>$v['payment_reference']??null,'granted_at'=>now(),'created_at'=>now(),'updated_at'=>now()]);return back()->with('status','Verified access granted.');

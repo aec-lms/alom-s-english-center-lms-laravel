@@ -1,0 +1,4 @@
+@extends('layouts.app')
+@section('content')
+<div class="container py-4"><h1>Available Exams</h1>@forelse($exams as $exam)<div class="card mb-3"><div class="card-body"><h4>{{ $exam->title }}</h4><p>{{ ucfirst($exam->learn_earn_type ?? 'free') }} exam · {{ $exam->duration_minutes }} minutes · Pass marks {{ $exam->pass_marks }} @if(($exam->learn_earn_type??'free')==='paid') · ৳{{ number_format((float)$exam->access_price,2) }} @endif</p><a class="btn btn-primary" href="{{ route('plugins.learn_earn.student.show',$exam) }}">Open Exam</a></div></div>@empty<p>No published exams available.</p>@endforelse{{ $exams->links() }}</div>
+@endsection
