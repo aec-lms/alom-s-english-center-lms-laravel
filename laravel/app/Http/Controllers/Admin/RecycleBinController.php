@@ -100,7 +100,6 @@ class RecycleBinController extends Controller
             $teacher->restore();
             $teacher->deleted_user_was_active = null;
             $teacher->save();
-            $teacher->update(['is_active' => $wasActive]);
 
             if ($teacher->user) {
                 $teacher->user->update(['is_active' => $wasActive]);
