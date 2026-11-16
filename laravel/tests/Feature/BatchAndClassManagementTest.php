@@ -32,7 +32,7 @@ class BatchAndClassManagementTest extends TestCase
             'schedule' => 'Mon-Wed 11:00',
             'max_capacity' => 25,
             'status' => 'ongoing',
-        ])->assertSessionHasNoErrors();
+        ])->assertSessionHasNoErrors()->assertRedirect();
         $this->assertDatabaseHas('study_batches', ['id' => $batchId, 'batch_code' => 'BATCH-NEW', 'name' => 'Updated Batch']);
 
         $this->actingAs($admin)->post('/admin/classes', [
@@ -54,7 +54,7 @@ class BatchAndClassManagementTest extends TestCase
             'day_of_week' => 'Monday',
             'start_time' => '12:00',
             'end_time' => '13:00',
-        ])->assertSessionHasNoErrors();
+        ])->assertSessionHasNoErrors()->assertRedirect();
         $this->assertDatabaseHas('academic_classes', ['id' => $classId, 'code' => 'CLASS-NEW', 'name' => 'Updated Class']);
     }
 
