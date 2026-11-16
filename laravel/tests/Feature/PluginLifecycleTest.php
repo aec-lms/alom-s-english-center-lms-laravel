@@ -72,6 +72,33 @@ class PluginLifecycleTest extends TestCase
         ]);
     }
 
+    public function test_legacy_encrypted_manifest_settings_are_encrypted_by_plugin_center(): void
+    {
+        $this->markSystemInstalled();
+
+        $request = \\Illuminate\\Http\\Request::create('/admin/plugins/email-notifications/configure', 'POST', [
+            'settings' => [
+                'smtp_host' => 'smtp.example.test',
+                'smtp_password' => 'smtp-app-secret-123',
+            ],
+        ]);
+
+        app(\\App\\Http\\Controllers\\Admin\\PluginCenterController::class)
+            ->saveConfiguration($request, 'email-notifications');
+
+        $setting = PluginSetting::query()
+            ->where('plugin_slug', 'email-notifications')
+            ->where('setting_key', 'smtp_password')
+            ->firstOrFail();
+
+        $this->assertTrue($setting->is_encrypted);
+        $this->assertNotSame('smtp-app-secret-123', $setting->setting_value);
+        $this->assertSame('smtp-app-secret-123', app(PluginManager::class)->getSetting(
+            'email-notifications',
+            'smtp_password'
+        ));
+    }
+
     public function test_plugin_configuration_rejects_unknown_setting_keys(): void
     {
         $this->markSystemInstalled();
