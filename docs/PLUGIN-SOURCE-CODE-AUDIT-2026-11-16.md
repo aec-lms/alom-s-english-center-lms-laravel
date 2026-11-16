@@ -79,7 +79,7 @@ The following fixes were committed on the audit branch after the first-pass revi
 | Notification message overstated delivery | Non-in-app channels are explicitly described as queued until a worker confirms delivery | Source review |
 | Universal Payment accepted arbitrary public amounts | Public checkout now requires an authenticated student, an owned fee invoice, an allowed installed/configured gateway, and server-calculated outstanding amount; online gateway choices are limited to implemented adapters | Regression test added; provider sandbox still required |
 
-**Latest CI:** GitHub Actions run `43823687313` succeeded. Composer security audit reported no advisories; Laravel suite passed **46 tests (264 assertions)**; the cPanel release ZIP was built and uploaded. This does not replace provider sandbox, production database, cPanel installation, or browser E2E testing.
+**Latest CI:** GitHub Actions run `43824495748` succeeded. Composer security audit reported no advisories; Laravel suite passed **47 tests (273 assertions)**; the cPanel release ZIP was built and uploaded (SHA-256 `dbed32be80e91979a2d08491d7d8effcc6c2306ebef90b3671e0f3c4dc0d23de`). Artifact: https://github.com/aec-lms/alom-s-english-center-lms-laravel/actions/runs/43824495748/artifacts/14205932199. This does not replace provider sandbox, production database, cPanel installation, or browser E2E testing.
 
 ## Critical/high items still open
 
