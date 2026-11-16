@@ -16,5 +16,6 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:universal-payment', 'perm
         Route::get('/', [UniversalPaymentController::class, 'index'])->name('index');
         Route::post('/gateways', [UniversalPaymentController::class, 'saveGateways'])->name('gateways');
         Route::post('/transactions', [UniversalPaymentController::class, 'storeTransaction'])->name('store');
+        Route::get('/transactions/{transaction}/proof', [UniversalPaymentController::class, 'downloadProof'])->name('proof');
         Route::post('/transactions/{transaction}/status', [UniversalPaymentController::class, 'updateStatus'])->name('status');
     });
