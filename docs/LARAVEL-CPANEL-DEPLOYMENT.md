@@ -51,6 +51,7 @@ Enter the administrator password only when prompted. Never put passwords in shel
 - Verify `.env`, source, storage, backups and private uploads cannot be downloaded over HTTP.
 - Test authentication, authorization, branch isolation and one complete workflow in every enabled module.
 - Verify HTTPS, secure cookies, SMTP, queues/cron and private file authorization.
+- For database queues, configure a cPanel Cron Job to run every minute: `cd /home/CPANEL-USER/private-app && /usr/local/bin/php artisan queue:work database --stop-when-empty --tries=3 --timeout=90 >> storage/logs/queue-worker.log 2>&1`. Replace the path and PHP binary with the values shown by the hosting provider. Confirm the `jobs`, `job_batches` and `failed_jobs` tables exist and monitor failed jobs. Do not expose the log publicly.
 - Take a backup and rehearse restore into a separate disposable database and private directory.
 
 ## 6. Upgrade and recovery policy
