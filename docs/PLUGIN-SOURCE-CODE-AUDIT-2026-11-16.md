@@ -61,6 +61,34 @@ Reviewed the plugin inventory, each `plugin.json`, route definitions, primary co
 | 38 | `universal-payment` | Public checkout accepts client-supplied item title/amount/gateway and only creates a pending record; it does not initiate a real provider checkout. Admin record flow accepts a caller-supplied verified status. This must not be treated as payment processing or settlement. | Critical |
 | 39 | `visitor-popup-ads` | Create form supports image upload, but edit form omits image input and exposes badge/description/CTA text only as hidden fields, so Admin cannot properly edit them. Update validation also omits image_url. Scheduling is described but start/end scheduling fields are absent. | High |
 
+
+## Remediation progress — 2026-11-16
+
+The following fixes were committed on the audit branch after the first-pass review:
+
+| Finding | Change made | Verification |
+|---|---|---|
+| Attendance used the wrong batch table | Controller and fresh-install migration now use `study_batches`; Attendance declares Batch Management as a required dependency; a forward migration repairs the legacy foreign key | Regression test plus full CI |
+| Attendance branch manager could be unassigned | Index and write actions now fail closed for branch managers without a branch; submitted branch_id is no longer trusted | Existing branch workflow test updated and full CI |
+| Storefront provider did not match the plugin contract | Manifest uses the runtime-recognized `provider` key; provider extends `BasePluginServiceProvider` and supplies its slug/path | Provider-interface regression test |
+| AI ask route lacked permission middleware | Ask route now requires `ai.assistant.use` | Route definition regression test |
+| AI role allowlist empty value granted access | Empty allowlist now denies access | Service regression test |
+| AI prompt excerpts were stored in logs | Prompt content is withheld in the activity log; non-admin activity view is user-scoped | Source review and regression test |
+| AI provider/brand mismatch | Only implemented OpenAI/Gemini integrations are accepted; unsupported provider configuration fails safely; user-facing identity is AEC LMS AI Assistant | Source review |
+| SMS provider result was reported as sent without checking response | Greenweb requests check HTTP acceptance and use chunked recipients; status is `submitted` rather than claiming handset delivery; unimplemented provider adapters remain queued | Source review; live provider test still required |
+| Notification message overstated delivery | Non-in-app channels are explicitly described as queued until a worker confirms delivery | Source review |
+
+**Latest CI:** GitHub Actions run `43823687313` succeeded. Composer security audit reported no advisories; Laravel suite passed **46 tests (264 assertions)**; the cPanel release ZIP was built and uploaded. This does not replace provider sandbox, production database, cPanel installation, or browser E2E testing.
+
+## Critical/high items still open
+
+- Universal Payment still needs invoice-bound checkout and provider-confirmed payment initiation for every advertised method. Do not treat arbitrary public amount submissions as payments.
+- bKash, Nagad, Rocket, custom card acquiring, SMS Twilio/SSL Wireless/custom adapters need real provider implementations and sandbox verification before being advertised as active.
+- Notification Center still needs actual queued channel workers and delivery-state callbacks; queued is not delivered.
+- All other critical/high findings in the individual plugin table remain open until their fixes and per-plugin tests are merged.
+- Cross-branch isolation needs systematic negative tests for every CRUD, detail, export, search, and bulk action.
+- Full module CRUD, browser E2E, production MySQL/MariaDB and cPanel install/upgrade/backup/restore rehearsals remain release gates.
+
 ## Confirmed implementation mismatches to fix first
 
 1. Attendance references the wrong batch table (`batches` vs `study_batches`).
