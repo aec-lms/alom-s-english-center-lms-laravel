@@ -127,6 +127,51 @@ class SslcommerzGatewayService
         }
     }
 
+    public function testCredentials(): array
+    {
+        $storeId = (string) $this->plugins->getSetting('gateway-sslcommerz', 'store_id', '');
+        $storePass = (string) $this->plugins->getSetting('gateway-sslcommerz', 'store_password', '');
+        if ($storeId === '' || $storePass === '') {
+            throw new RuntimeException('SSLCOMMERZ Store ID and Store Password are not configured.');
+        }
+
+        $sandbox = $this->plugins->getSetting('gateway-sslcommerz', 'sandbox_mode', '1') === '1';
+        $baseUrl = $sandbox ? 'https://sandbox.sslcommerz.com' : 'https://securepay.sslcommerz.com';
+        $response = Http::asForm()->acceptJson()->timeout(20)->post($baseUrl . '/gwprocess/v4/api.php', [
+            'store_id' => $storeId,
+            'store_passwd' => $storePass,
+            'total_amount' => '10.00',
+            'currency' => 'BDT',
+            'tran_id' => 'AEC-TEST-' . strtoupper(bin2hex(random_bytes(5))),
+            'success_url' => url('/payments/sslcommerz/success'),
+            'fail_url' => url('/payments/sslcommerz/failed'),
+            'cancel_url' => url('/payments/sslcommerz/cancelled'),
+            'ipn_url' => url('/payments/sslcommerz/ipn'),
+            'cus_name' => "AEC LMS Connection Test",
+            'cus_email' => 'integration-test@example.com',
+            'cus_add1' => 'N/A',
+            'cus_city' => 'Dhaka',
+            'cus_postcode' => '1000',
+            'cus_country' => 'Bangladesh',
+            'cus_phone' => '01700000000',
+            'shipping_method' => 'NO',
+            'num_of_item' => '1',
+            'product_name' => 'Gateway connection test',
+            'product_category' => 'Education',
+            'product_profile' => 'non-physical-goods',
+        ]);
+
+        $url = (string) $response->json('GatewayPageURL', '');
+        $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+        $expectedHost = $sandbox ? 'sandbox.sslcommerz.com' : 'securepay.sslcommerz.com';
+        if (!$response->successful() || strtoupper((string) $response->json('status')) !== 'SUCCESS'
+            || parse_url($url, PHP_URL_SCHEME) !== 'https' || $host !== $expectedHost) {
+            throw new RuntimeException('SSLCOMMERZ connection test failed. Check Store ID, Store Password and selected mode.');
+        }
+
+        return ['connected' => true, 'mode' => $sandbox ? 'sandbox' : 'live'];
+    }
+
     public function verifyAndSettleIpn(array $payload): PaymentTransaction
     {
         $storeId = (string) $this->plugins->getSetting('gateway-sslcommerz', 'store_id', '');
