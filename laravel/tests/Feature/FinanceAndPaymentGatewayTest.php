@@ -104,7 +104,16 @@ class FinanceAndPaymentGatewayTest extends TestCase
             'gateway' => 'sslcommerz',
         ])->assertForbidden();
 
-        // The Universal Payment ledger accepts only offline records; they remain pending until a receipt reference is confirmed.
+        // Manual receipt registration requires an external bank/cash receipt reference.
+        $this->actingAs($admin)->postJson('/plugins/universal-payment/transactions', [
+            'payer_name' => 'Mobile Learner',
+            'payer_contact' => '01712345678',
+            'item_title' => 'Fee invoice INV-2026-001',
+            'gateway' => 'bank_cash',
+            'amount' => 2500,
+        ])->assertUnprocessable()->assertJsonValidationErrors('external_trx_id');
+
+        // The Universal Payment ledger accepts only offline records; they remain pending until reviewed.
         $this->actingAs($admin)->post('/plugins/universal-payment/transactions', [
             'payer_name' => 'Mobile Learner',
             'payer_contact' => '01712345678',
