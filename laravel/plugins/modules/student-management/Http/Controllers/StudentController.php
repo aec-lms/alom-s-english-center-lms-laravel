@@ -100,8 +100,9 @@ class StudentController extends Controller
             abort(403, 'Branch isolation violation.');
         }
 
-        $branchRule = Schema::hasTable('branches')
-            ? ['nullable', 'integer', 'exists:branches,id']
+        $branchIntegration = app(PluginManager::class)->isEnabled('branch-management') && Schema::hasTable('branches');
+        $branchRule = $branchIntegration
+            ? ['nullable', 'integer', 'exists:branches,id,is_active,1']
             : ['nullable', 'integer'];
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:120'],
@@ -113,6 +114,7 @@ class StudentController extends Controller
             'password' => ['nullable', 'string', 'min:8'],
         ]);
 
+        if (!$branchIntegration) { $validated['branch_id'] = null; }
         if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null) {
             if (isset($validated['branch_id']) && (int) $validated['branch_id'] !== (int) $actor->branch_id) {
                 abort(403, 'Branch isolation violation.');
