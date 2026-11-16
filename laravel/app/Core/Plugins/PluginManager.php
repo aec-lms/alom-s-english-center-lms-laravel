@@ -488,6 +488,18 @@ class PluginManager
             ->exists();
     }
 
+    public function isInstalled(string $slug): bool
+    {
+        if (!Schema::hasTable('plugins')) {
+            return false;
+        }
+
+        return PluginRecord::query()
+            ->where('slug', $slug)
+            ->where('is_installed', true)
+            ->exists();
+    }
+
     private function registerPluginAutoload(PluginManifest $manifest): void
     {
         $providerClass = $manifest->providerClass;
