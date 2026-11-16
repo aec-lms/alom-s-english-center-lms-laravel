@@ -132,6 +132,7 @@ class UniversalPaymentController extends Controller
 
     public function publicCheckout(Request $request): JsonResponse|RedirectResponse
     {
+        abort_unless($this->plugins->isEnabled('fees-management') && Schema::hasTable('fee_invoices'), 409, 'Enable Fees Management before using invoice checkout.');
         $validated = $request->validate([
             'invoice_id' => ['required', 'integer', 'exists:fee_invoices,id'],
             'gateway' => ['required', 'in:sslcommerz,card,paypal'],
@@ -142,9 +143,14 @@ class UniversalPaymentController extends Controller
         $actor = $request->user();
         abort_unless($actor, 401);
 
-        $invoice = FeeInvoice::query()->with('student')->findOrFail((int) $validated['invoice_id']);
+        $studentIntegration = $this->plugins->isEnabled('student-management') && Schema::hasTable('students');
+        $invoiceQuery = FeeInvoice::query();
+        if ($studentIntegration) { $invoiceQuery->with('student'); }
+        $invoice = $invoiceQuery->findOrFail((int) $validated['invoice_id']);
         $isFinanceOperator = $actor->hasRole('admin') || $actor->hasRole('accountant');
-        $isInvoiceOwner = (int) ($invoice->student?->user_id ?? 0) === (int) $actor->id;
+        $isInvoiceOwner = $studentIntegration
+            ? (int) ($invoice->student?->user_id ?? 0) === (int) $actor->id
+            : strtolower((string) $invoice->payer_email) === strtolower((string) $actor->email);
         abort_unless($isFinanceOperator || $isInvoiceOwner, 403, 'You are not authorized to pay this invoice.');
 
         $enabledRaw = (string) $this->plugins->getSetting('universal-payment', 'enabled_gateways', 'sslcommerz,card,paypal,bank_cash');
@@ -183,7 +189,7 @@ class UniversalPaymentController extends Controller
             return;
         }
 
-        if ($actor->branch_id === null) {
+        if ($actor->branch_id === null || !$this->plugins->isEnabled('branch-management') || !Schema::hasTable('branches')) {
             abort(403, 'Branch manager must be assigned to a branch.');
         }
 
