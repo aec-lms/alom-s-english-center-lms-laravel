@@ -285,9 +285,9 @@ $validated = $request->validate([
         $id = (string) $course->id;
         $course->delete();
 
-        $this->audit->log('course.deleted', 'course', $id, ['title' => $title]);
+        $this->audit->log('course.trashed', 'course', $id, ['title' => $title]);
 
-        return back()->with('status', "Course '{$title}' deleted.");
+        return back()->with('status', "Course '{$title}' moved to the Admin Recycle Bin.");
     }
 
     public function storeCategory(Request $request): RedirectResponse
