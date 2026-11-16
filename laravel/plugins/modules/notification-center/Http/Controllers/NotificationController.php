@@ -109,7 +109,7 @@ class NotificationController extends Controller
             });
 
             return 'sent';
-        } catch (\\Throwable) {
+        } catch (\Throwable) {
             return 'failed';
         }
     }
@@ -148,7 +148,7 @@ class NotificationController extends Controller
             }
 
             return 'delivery_unknown';
-        } catch (\\Throwable) {
+        } catch (\Throwable) {
             return 'delivery_unknown';
         }
     }
