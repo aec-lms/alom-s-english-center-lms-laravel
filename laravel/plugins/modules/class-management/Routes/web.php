@@ -12,5 +12,5 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:class-management', 'permi
         Route::get('/', [ClassController::class, 'index'])->name('index');
         Route::post('/', [ClassController::class, 'store'])->name('store');
         Route::put('/{academicClass}', [ClassController::class, 'update'])->name('update');
-        Route::delete('/{academicClass}'        Route::delete('/{academicClass}', [ClassController::class, 'destroy'])->name('destroy');
+        Route::delete('/{academicClass}', [ClassController::class, 'destroy'])->name('destroy');
     });
