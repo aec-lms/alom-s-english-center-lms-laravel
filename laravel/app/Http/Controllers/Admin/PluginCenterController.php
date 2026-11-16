@@ -120,7 +120,7 @@ class PluginCenterController extends Controller
         try {
             $this->plugins->resetSettingsToDefaults($slug, auth()->id());
             return back()->with('status', "Settings for '{$slug}' were reset to manifest defaults. Plugin business data was preserved.");
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             return back()->withErrors(['plugin' => $e->getMessage()]);
         }
     }
