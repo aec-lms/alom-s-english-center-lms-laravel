@@ -26,6 +26,7 @@ class FinanceAndPaymentGatewayTest extends TestCase
             'payment-management',
             'gateway-card',
             'gateway-sslcommerz',
+            'universal-payment',
         ]);
 
         $plugins = app(PluginManager::class);
@@ -96,6 +97,38 @@ class FinanceAndPaymentGatewayTest extends TestCase
         ]);
 
         $admin = $this->createUserWithRole('admin');
+
+        // Universal checkout must bind the payment to a real invoice and its owner.
+        $this->actingAs($studentUser)->postJson('/universal-checkout', [
+            'invoice_id' => $otherInvoice->id,
+            'gateway' => 'sslcommerz',
+        ])->assertForbidden();
+
+        // The Universal Payment ledger accepts only offline records; they remain pending until a receipt reference is confirmed.
+        $this->actingAs($admin)->post('/plugins/universal-payment/transactions', [
+            'payer_name' => 'Mobile Learner',
+            'payer_contact' => '01712345678',
+            'item_title' => 'Fee invoice INV-2026-001',
+            'gateway' => 'bank_cash',
+            'amount' => 2500,
+        ])->assertSessionHasNoErrors();
+        $universalTx = DB::table('universal_payment_transactions')->first();
+        $this->assertSame('pending', $universalTx->status);
+        $this->actingAs($admin)->post("/plugins/universal-payment/transactions/{$universalTx->id}/status", [
+            'status' => 'verified',
+        ])->assertStatus(422);
+        DB::table('universal_payment_transactions')->where('id', $universalTx->id)->update([
+            'external_trx_id' => 'BANK-RECEIPT-INV-001',
+        ]);
+        $this->actingAs($admin)->post("/plugins/universal-payment/transactions/{$universalTx->id}/status", [
+            'status' => 'verified',
+        ])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('universal_payment_transactions', [
+            'id' => $universalTx->id,
+            'status' => 'verified',
+            'external_trx_id' => 'BANK-RECEIPT-INV-001',
+        ]);
+
         $cardPermissionId = DB::table('permissions')->where('slug', 'gateway.card.use')->value('id');
         $studentUser->roles()->first()->permissions()->syncWithoutDetaching([$cardPermissionId]);
 
