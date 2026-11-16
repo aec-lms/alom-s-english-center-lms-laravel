@@ -45,8 +45,8 @@
 
         <div class="flex items-center gap-2.5 shrink-0">
             @auth
-                <a href="{{ route('admin.dashboard') }}" class="px-6 py-2 rounded-full bg-[#EEF2FF] hover:bg-[#E0E7FF] border border-[#E0E7FF]/80 text-[#3B82F6] text-xs sm:text-[13px] font-semibold whitespace-nowrap transition-colors">
-                    Portal
+                <a href="{{ route('portal.dashboard') }}" class="px-6 py-2 rounded-full bg-[#EEF2FF] hover:bg-[#E0E7FF] border border-[#E0E7FF]/80 text-[#3B82F6] text-xs sm:text-[13px] font-semibold whitespace-nowrap transition-colors">
+                    My Dashboard
                 </a>
             @else
                 <a href="{{ route('login') }}" class="px-6 py-2 rounded-full bg-[#EEF2FF] hover:bg-[#E0E7FF] border border-[#E0E7FF]/80 text-[#3B82F6] text-xs sm:text-[13px] font-semibold whitespace-nowrap transition-colors">

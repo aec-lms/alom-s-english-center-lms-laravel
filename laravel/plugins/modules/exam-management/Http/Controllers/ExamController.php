@@ -27,7 +27,7 @@ class ExamController extends Controller
             ->when($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null, fn ($q) => $q->where('branch_id', $actor->branch_id))
             ->latest()
             ->paginate(20);
-        $courses = Schema::hasTable('courses') ? DB::table('courses')->orderBy('title')->get() : collect();
+        $courses = Schema::hasTable('courses') ? DB::table('courses')->when($actor && $actor->hasRole('branch_manager'), fn ($q) => $q->where('branch_id', $actor->branch_id))->orderBy('title')->get() : collect();
 
         return view('exam-management::index', compact('exams', 'courses'));
     }
@@ -36,20 +36,29 @@ class ExamController extends Controller
     {
         $actor = $request->user();
         $validated = $request->validate([
-            'course_id' => ['nullable', 'integer'],
-            'branch_id' => ['nullable', 'integer'],
+            'course_id' => ['required', 'integer', 'exists:courses,id'],
+            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
             'title' => ['required', 'string', 'max:180'],
             'duration_minutes' => ['required', 'integer', 'min:5', 'max:360'],
             'pass_marks' => ['required', 'integer', 'min:1'],
             'is_published' => ['nullable', 'boolean'],
         ]);
 
-        if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null) {
-            $validated['branch_id'] = $actor->branch_id;
+        $course = DB::table('courses')->where('id', (int) $validated['course_id'])->first();
+        if (!$course) abort(422, 'Selected course does not exist.');
+        if ($actor && $actor->hasRole('branch_manager') && (int) $course->branch_id !== (int) $actor->branch_id) {
+            abort(403, 'Course is outside your assigned branch.');
         }
+        $resolvedBranchId = $actor && $actor->hasRole('branch_manager')
+            ? (int) $actor->branch_id
+            : (isset($validated['branch_id']) ? (int) $validated['branch_id'] : ($course->branch_id !== null ? (int) $course->branch_id : null));
+        if ((int) ($course->branch_id ?? 0) !== (int) ($resolvedBranchId ?? 0)) {
+            abort(422, 'Exam and course must belong to the same branch.');
+        }
+        $validated['branch_id'] = $resolvedBranchId;
 
         $exam = Exam::query()->create([
-            'course_id' => (int) ($validated['course_id'] ?? 0),
+            'course_id' => (int) $validated['course_id'],
             'branch_id' => $validated['branch_id'] ?? null,
             'title' => $validated['title'],
             'duration_minutes' => (int) $validated['duration_minutes'],
@@ -64,16 +73,26 @@ class ExamController extends Controller
 
     public function update(Request $request, Exam $exam): RedirectResponse
     {
+        $actor = $request->user();
+        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $exam->branch_id) {
+            abort(403, 'Branch isolation violation.');
+        }
         $validated = $request->validate([
-            'course_id' => ['nullable', 'integer'],
+            'course_id' => ['nullable', 'integer', 'exists:courses,id'],
             'title' => ['required', 'string', 'max:180'],
             'duration_minutes' => ['required', 'integer', 'min:5', 'max:360'],
             'pass_marks' => ['required', 'integer', 'min:1'],
             'is_published' => ['nullable', 'boolean'],
         ]);
 
+        $courseId = (int) ($validated['course_id'] ?? $exam->course_id);
+        $course = DB::table('courses')->where('id', $courseId)->first();
+        if (!$course || (int) $course->branch_id !== (int) $exam->branch_id) {
+            abort(422, 'Exam and course must belong to the same branch.');
+        }
+
         $exam->update([
-            'course_id' => (int) ($validated['course_id'] ?? $exam->course_id),
+            'course_id' => $courseId,
             'title' => $validated['title'],
             'duration_minutes' => (int) $validated['duration_minutes'],
             'pass_marks' => (int) $validated['pass_marks'],
@@ -85,8 +104,12 @@ class ExamController extends Controller
         return back()->with('status', "Exam '{$exam->title}' updated.");
     }
 
-    public function destroy(Exam $exam): RedirectResponse
+    public function destroy(Request $request, Exam $exam): RedirectResponse
     {
+        $actor = $request->user();
+        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $exam->branch_id) {
+            abort(403, 'Branch isolation violation.');
+        }
         $title = $exam->title;
         $id = (string) $exam->id;
         $exam->delete();
@@ -98,6 +121,10 @@ class ExamController extends Controller
 
     public function addQuestion(Request $request, Exam $exam): RedirectResponse
     {
+        $actor = $request->user();
+        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $exam->branch_id) {
+            abort(403, 'Branch isolation violation.');
+        }
         $validated = $request->validate([
             'prompt' => ['required', 'string'],
             'options' => ['required', 'array', 'min:2'],
@@ -128,6 +155,10 @@ class ExamController extends Controller
     {
         if (!$exam->is_published) {
             abort(403, 'Exam is not published for attempts.');
+        }
+        $actor = $request->user();
+        if ($actor && $actor->hasRole('student') && (int) $actor->branch_id !== (int) $exam->branch_id) {
+            abort(403, 'Exam is outside your assigned branch.');
         }
 
         $validated = $request->validate([

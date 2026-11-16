@@ -33,9 +33,10 @@ class UpdateCenterController extends Controller
         ]);
 
         $path = $request->file('package')->store('updates');
+        $absolutePath = storage_path('app/' . $path);
         try {
             $log = $this->updates->applyVerifiedUpdate(
-                storage_path('app/' . $path),
+                $absolutePath,
                 $validated['sha256'],
                 $validated['signature'],
                 auth()->id()
@@ -44,6 +45,10 @@ class UpdateCenterController extends Controller
             return back()->with('status', "Signed update staged & applied for {$log->target_slug} -> {$log->to_version}.");
         } catch (\Throwable $e) {
             return back()->withErrors(['update' => $e->getMessage()]);
+        } finally {
+            if (is_file($absolutePath)) {
+                @unlink($absolutePath);
+            }
         }
     }
 
@@ -53,7 +58,11 @@ class UpdateCenterController extends Controller
             'feed_url' => ['required', 'url', 'max:255'],
         ]);
 
-        $this->updates->saveRemoteFeedUrl($validated['feed_url'], auth()->id());
+        try {
+            $this->updates->saveRemoteFeedUrl($validated['feed_url'], auth()->id());
+        } catch (\Throwable $e) {
+            return back()->withErrors(['feed_url' => $e->getMessage()])->withInput();
+        }
 
         return back()->with('status', 'Remote LMS release channel URL saved.');
     }

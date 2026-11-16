@@ -24,6 +24,7 @@ class StudentController extends Controller
     public function index(Request $request): View
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $query = Student::query()->with('user')->latest();
         if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null) {
             $query->where('branch_id', $actor->branch_id);
@@ -37,17 +38,21 @@ class StudentController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:120'],
             'email' => ['required', 'email', 'unique:users,email'],
             'phone' => ['nullable', 'string', 'max:32'],
             'password' => ['required', 'string', 'min:8'],
-            'branch_id' => ['nullable', 'integer'],
+            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
             'student_code' => ['nullable', 'string', 'max:40', 'unique:students,student_code'],
             'status' => ['nullable', 'in:active,inactive,graduated'],
         ]);
 
         if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null) {
+            if (isset($validated['branch_id']) && (int) $validated['branch_id'] !== (int) $actor->branch_id) {
+                abort(403, 'Branch isolation violation.');
+            }
             $validated['branch_id'] = $actor->branch_id;
         }
 
@@ -83,15 +88,28 @@ class StudentController extends Controller
 
     public function update(Request $request, Student $student): RedirectResponse
     {
+        $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
+        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $student->branch_id) {
+            abort(403, 'Branch isolation violation.');
+        }
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:120'],
             'email' => ['required', 'email', 'unique:users,email,' . $student->user_id],
             'phone' => ['nullable', 'string', 'max:32'],
-            'branch_id' => ['nullable', 'integer'],
+            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
             'student_code' => ['required', 'string', 'max:40', 'unique:students,student_code,' . $student->id],
             'status' => ['required', 'in:active,inactive,graduated'],
             'password' => ['nullable', 'string', 'min:8'],
         ]);
+
+        if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null) {
+            if (isset($validated['branch_id']) && (int) $validated['branch_id'] !== (int) $actor->branch_id) {
+                abort(403, 'Branch isolation violation.');
+            }
+            $validated['branch_id'] = $actor->branch_id;
+        }
 
         DB::transaction(function () use ($validated, $student): void {
             if ($student->user) {
@@ -120,8 +138,14 @@ class StudentController extends Controller
         return back()->with('status', "Student '{$validated['name']}' updated.");
     }
 
-    public function destroy(Student $student): RedirectResponse
+    public function destroy(Request $request, Student $student): RedirectResponse
     {
+        $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
+        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $student->branch_id) {
+            abort(403, 'Branch isolation violation.');
+        }
+
         $code = $student->student_code;
         $id = (string) $student->id;
         DB::transaction(function () use ($student): void {
@@ -135,5 +159,12 @@ class StudentController extends Controller
         $this->audit->log('student.deleted', 'student', $id, ['code' => $code]);
 
         return back()->with('status', "Student '{$code}' removed from active enrollment directory.");
+    }
+
+    private function ensureAssignedBranch($actor): void
+    {
+        if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id === null) {
+            abort(403, 'Branch manager must be assigned to a branch.');
+        }
     }
 }

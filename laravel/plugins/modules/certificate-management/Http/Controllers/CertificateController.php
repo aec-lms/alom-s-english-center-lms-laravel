@@ -40,7 +40,7 @@ class CertificateController extends Controller
             'grade_or_band' => ['required', 'string', 'max:60'],
             'remarks' => ['nullable', 'string', 'max:240'],
             'issued_at' => ['required', 'date'],
-            'branch_id' => ['nullable', 'integer'],
+            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
         ]);
 
         if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null) {
@@ -60,8 +60,12 @@ class CertificateController extends Controller
         return back()->with('status', "Certificate issued! Verification Code: {$cert->verification_code}");
     }
 
-    public function revoke(CertificateRecord $certificate): RedirectResponse
+    public function revoke(Request $request, CertificateRecord $certificate): RedirectResponse
     {
+        $actor = $request->user();
+        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $certificate->branch_id) {
+            abort(403, 'Branch isolation violation.');
+        }
         $certificate->update(['status' => 'revoked']);
         $this->audit->log('certificate.revoked', 'certificate', (string) $certificate->id);
 

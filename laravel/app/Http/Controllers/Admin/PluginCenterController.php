@@ -7,6 +7,9 @@ namespace App\Http\Controllers\Admin;
 use App\Core\Plugins\PluginManager;
 use App\Http\Controllers\Controller;
 use App\Models\PluginRecord;
+use Plugins\Modules\GatewayStripe\Services\StripeGatewayService;
+use Plugins\Modules\GatewayPaypal\Services\PaypalGatewayService;
+use Plugins\Modules\GatewaySslcommerz\Services\SslcommerzGatewayService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -43,11 +46,16 @@ class PluginCenterController extends Controller
         ]);
 
         $stored = $request->file('plugin_zip')->store('plugin-uploads');
+        $absolutePath = storage_path('app/' . $stored);
         try {
-            $record = $this->plugins->installOrUpdateFromZip(storage_path('app/' . $stored), auth()->id());
+            $record = $this->plugins->installOrUpdateFromZip($absolutePath, auth()->id());
             return back()->with('status', "Plugin '{$record->name}' (v{$record->version}) installed/updated successfully.");
         } catch (\Throwable $e) {
             return back()->withErrors(['plugin' => $e->getMessage()]);
+        } finally {
+            if (is_file($absolutePath)) {
+                @unlink($absolutePath);
+            }
         }
     }
 
@@ -107,13 +115,35 @@ class PluginCenterController extends Controller
         $manifest = $this->plugins->discoverManifests()[$slug] ?? abort(404);
         $record = PluginRecord::query()->where('slug', $slug)->firstOrFail();
         $values = [];
+        $configuredSecrets = [];
         foreach ($manifest->settingsSchema as $field) {
             $key = (string) ($field['key'] ?? '');
             $isSecret = (bool) ($field['secret'] ?? false);
-            $values[$key] = $isSecret ? '' : ($this->plugins->getSetting($slug, $key) ?? '');
+            $stored = $this->plugins->getSetting($slug, $key);
+            $values[$key] = $isSecret ? '' : ($stored ?? '');
+            if ($isSecret) $configuredSecrets[$key] = $stored !== null && $stored !== '';
         }
 
-        return view('admin.plugins.configure', compact('manifest', 'record', 'values'));
+        return view('admin.plugins.configure', compact('manifest', 'record', 'values', 'configuredSecrets'));
+    }
+
+
+    public function testConnection(string $slug): RedirectResponse
+    {
+        try {
+            $result = match ($slug) {
+                'gateway-stripe' => app(StripeGatewayService::class)->testCredentials(),
+                'gateway-paypal' => app(PaypalGatewayService::class)->testCredentials(),
+                'gateway-sslcommerz' => app(SslcommerzGatewayService::class)->testCredentials(),
+                'gateway-card' => throw new \RuntimeException('Visa/Mastercard is a card network, not a processor. Connect an acquiring bank/PSP adapter or use the Stripe plugin for Visa/Mastercard processing.'),
+                default => throw new \RuntimeException('This plugin does not provide an automated payment credential test.'),
+            };
+
+            $mode = isset($result['mode']) ? ' (' . $result['mode'] . ')' : '';
+            return back()->with('status', strtoupper(str_replace('gateway-', '', $slug)) . ' connection verified' . $mode . '.');
+        } catch (\Throwable $e) {
+            return back()->withErrors(['gateway_connection' => $e->getMessage()]);
+        }
     }
 
     public function saveConfiguration(Request $request, string $slug): RedirectResponse

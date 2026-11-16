@@ -1,24 +1,46 @@
 {
     "slug": "universal-payment",
     "name": "Universal Payment Gateway Plugin",
-    "version": "2.2.0",
+    "version": "2.3.0",
     "author": "AEC Core Team",
     "category": "finance",
-    "description": "All-in-one independent payment plugin supporting SSLCommerz, bKash, Nagad, Rocket, Visa/Mastercard (Stripe), PayPal, Bank Transfer & Cash Desk with unified ledger and refunds.",
+    "description": "Credential-free payment orchestrator that discovers independently installed and configured gateway plugins, provides a unified gateway status and checkout selection layer, and leaves cash/bank-transfer reconciliation in the LMS ledger. Provider credentials belong only to their dedicated plugins.",
     "core_compatibility": "^2.0",
-    "dependencies": [],
+    "dependencies": [
+        "payment-management"
+    ],
     "provider": "Plugins\\Modules\\UniversalPayment\\Providers\\UniversalPaymentServiceProvider",
     "permissions": [
-        { "slug": "payments.universal.manage", "name": "Manage Universal Payment Gateways & Transactions" }
+        {
+            "slug": "payments.universal.manage",
+            "name": "Manage Universal Payment Gateways & Transactions"
+        }
     ],
     "settings_schema": [
-        { "key": "default_currency", "label": "Default Currency (BDT / USD)", "type": "text", "secret": false },
-        { "key": "enabled_gateways", "label": "Enabled Gateways (sslcommerz,bkash,nagad,rocket,card,paypal,bank_cash)", "type": "text", "secret": false },
-        { "key": "sslcommerz_store_id", "label": "SSLCommerz Store ID", "type": "text", "secret": false },
-        { "key": "sslcommerz_store_password", "label": "SSLCommerz Store Password", "type": "password", "secret": true },
-        { "key": "bkash_app_key", "label": "bKash App Key", "type": "password", "secret": true },
-        { "key": "bkash_app_secret", "label": "bKash App Secret", "type": "password", "secret": true },
-        { "key": "nagad_merchant_id", "label": "Nagad Merchant ID", "type": "text", "secret": false },
-        { "key": "stripe_secret_key", "label": "Stripe / Card Secret Key", "type": "password", "secret": true }
+        {
+            "key": "default_currency",
+            "label": "Default Currency (e.g. BDT)",
+            "type": "text",
+            "secret": false,
+            "default": "BDT"
+        },
+        {
+            "key": "enabled_gateways",
+            "label": "Allowed installed gateway slugs (comma separated)",
+            "type": "text",
+            "secret": false,
+            "help": "Only enabled, credential-configured gateway plugins can be offered. Provider secrets must be saved in each gateway plugin."
+        },
+        {
+            "key": "allow_offline_payments",
+            "label": "Allow Cash / Bank Transfer (1/0)",
+            "type": "select",
+            "secret": false,
+            "default": "1",
+            "options": {
+                "0": "Disabled",
+                "1": "Enabled"
+            }
+        }
     ]
 }

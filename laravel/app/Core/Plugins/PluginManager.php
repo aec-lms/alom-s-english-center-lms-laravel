@@ -7,11 +7,13 @@ namespace App\Core\Plugins;
 use App\Core\Contracts\PluginInterface;
 use App\Core\Events\PluginLifecycleEvent;
 use App\Core\Security\AuditLogger;
+use App\Core\Versioning\VersionConstraint;
 use App\Models\Permission;
 use App\Models\PluginRecord;
 use App\Models\PluginSetting;
 use App\Models\Role;
 use App\Models\UpdateLog;
+use Composer\Autoload\ClassLoader;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
@@ -45,6 +47,7 @@ class PluginManager
             $dir = $modulesPath . DIRECTORY_SEPARATOR . $entry;
             if (is_dir($dir) && is_file($dir . DIRECTORY_SEPARATOR . 'plugin.json')) {
                 $manifest = PluginManifest::fromDirectory($dir);
+                $this->registerPluginAutoload($manifest);
                 $manifests[$manifest->slug] = $manifest;
             }
         }
@@ -81,12 +84,10 @@ class PluginManager
 
     public function isCompatible(PluginManifest $manifest): bool
     {
-        $coreVersion = (string) config('lms.core_version', '2.0.0');
-        $major = explode('.', $coreVersion)[0] ?? '2';
-        $constraint = ltrim($manifest->coreCompatibility, '^~>= ');
-        $requiredMajor = explode('.', $constraint)[0] ?? $major;
-
-        return $major === $requiredMajor;
+        return VersionConstraint::matches(
+            (string) config('lms.core_version', '2.0.0'),
+            $manifest->coreCompatibility
+        );
     }
 
     public function assertDependenciesSatisfied(PluginManifest $manifest, bool $requireEnabled = false): void
@@ -179,45 +180,59 @@ class PluginManager
 
         $record = PluginRecord::query()->where('slug', $slug)->first();
         $fromVersion = $record?->version ?? '0.0.0';
+        if ($record && $record->is_installed && version_compare($manifest->version, $fromVersion, '<=')) {
+            throw new RuntimeException('Plugin update version must be newer than the installed version.');
+        }
 
-        $this->runPluginMigrations($manifest);
+        $migratedRelative = $this->runPluginMigrations($manifest);
 
-        $updated = DB::transaction(function () use ($manifest, $fromVersion, $actorId): PluginRecord {
-            $record = PluginRecord::query()->updateOrCreate(
-                ['slug' => $manifest->slug],
-                [
-                    'name' => $manifest->name,
-                    'version' => $manifest->version,
-                    'author' => $manifest->author,
-                    'category' => $manifest->category,
-                    'description' => $manifest->description,
-                    'core_compatibility' => $manifest->coreCompatibility,
-                    'dependencies' => $manifest->dependencies,
-                    'manifest_snapshot' => $manifest->toArray(),
-                    'is_installed' => true,
-                    'installed_at' => now(),
-                ]
-            );
+        try {
+            $updated = DB::transaction(function () use ($manifest, $fromVersion, $actorId): PluginRecord {
+                $record = PluginRecord::query()->updateOrCreate(
+                    ['slug' => $manifest->slug],
+                    [
+                        'name' => $manifest->name,
+                        'version' => $manifest->version,
+                        'author' => $manifest->author,
+                        'category' => $manifest->category,
+                        'description' => $manifest->description,
+                        'core_compatibility' => $manifest->coreCompatibility,
+                        'dependencies' => $manifest->dependencies,
+                        'manifest_snapshot' => $manifest->toArray(),
+                        'is_installed' => true,
+                        'installed_at' => now(),
+                    ]
+                );
 
-            $this->syncManifestPermissions($manifest);
+                $this->syncManifestPermissions($manifest);
 
-            $this->logPluginOperation(
-                $manifest->slug,
-                $fromVersion,
-                $manifest->version,
-                'applied',
-                'Plugin updated and migrations synchronized from manifest.',
-                $actorId,
-                hash('sha256', json_encode($manifest->toArray(), JSON_THROW_ON_ERROR))
-            );
+                $this->logPluginOperation(
+                    $manifest->slug,
+                    $fromVersion,
+                    $manifest->version,
+                    'applied',
+                    'Plugin updated and migrations synchronized from manifest.',
+                    $actorId,
+                    hash('sha256', json_encode($manifest->toArray(), JSON_THROW_ON_ERROR))
+                );
 
-            $this->audit->log('plugin.updated', 'plugin', $manifest->slug, [
-                'from_version' => $fromVersion,
-                'to_version' => $manifest->version,
-            ], $actorId);
+                $this->audit->log('plugin.updated', 'plugin', $manifest->slug, [
+                    'from_version' => $fromVersion,
+                    'to_version' => $manifest->version,
+                ], $actorId);
 
-            return $record;
-        });
+                return $record;
+            });
+        } catch (Throwable $e) {
+            if ($migratedRelative !== null) {
+                try {
+                    Artisan::call('migrate:rollback', ['--path' => $migratedRelative, '--force' => true]);
+                } catch (Throwable) {
+                    // Preserve the original update exception; MySQL DDL may require manual recovery.
+                }
+            }
+            throw $e;
+        }
 
         event(new PluginLifecycleEvent('updated', $manifest->slug, $manifest->version, $actorId, ['from_version' => $fromVersion]));
 
@@ -255,6 +270,9 @@ class PluginManager
             $this->verifyPackageIntegrity($packageRoot);
 
             $manifest = PluginManifest::fromDirectory($packageRoot);
+            if ($manifest->isCore || $manifest->slug === config('plugins.core_identifier')) {
+                throw new RuntimeException('Core cannot be replaced through the plugin ZIP uploader.');
+            }
             if (!$this->isCompatible($manifest)) {
                 throw new RuntimeException("Plugin {$manifest->slug} is incompatible with Core " . config('lms.core_version'));
             }
@@ -262,21 +280,31 @@ class PluginManager
 
             $targetDir = (string) config('plugins.modules_path') . DIRECTORY_SEPARATOR . $manifest->slug;
             $previousRecord = PluginRecord::query()->where('slug', $manifest->slug)->first();
+            $previousAttributes = $previousRecord?->getAttributes();
+            $fromVersion = $previousRecord?->version ?? '0.0.0';
             $alreadyInstalled = (bool) ($previousRecord?->is_installed);
-
-            if (is_dir($targetDir)) {
-                $rollbackDir = storage_path('app/plugin-rollbacks/' . $manifest->slug . '-' . uniqid('', true));
-                File::ensureDirectoryExists(dirname($rollbackDir));
-                File::copyDirectory($targetDir, $rollbackDir);
-            }
-
-            File::ensureDirectoryExists(dirname($targetDir));
-            if (is_dir($targetDir)) {
-                File::deleteDirectory($targetDir);
-            }
-            File::copyDirectory($packageRoot, $targetDir);
+            $targetReplaced = false;
 
             try {
+                if (is_dir($targetDir)) {
+                    $rollbackDir = storage_path('app/plugin-rollbacks/' . $manifest->slug . '-' . uniqid('', true));
+                    File::ensureDirectoryExists(dirname($rollbackDir));
+                    if (!File::copyDirectory($targetDir, $rollbackDir)) {
+                        throw new RuntimeException('Unable to create a complete pre-update plugin snapshot.');
+                    }
+                }
+
+                File::ensureDirectoryExists(dirname($targetDir));
+                if (is_dir($targetDir)) {
+                    File::deleteDirectory($targetDir);
+                    $targetReplaced = true;
+                }
+
+                $targetReplaced = true;
+                if (!File::copyDirectory($packageRoot, $targetDir)) {
+                    throw new RuntimeException('Unable to copy the verified plugin package into its module directory.');
+                }
+
                 $record = $alreadyInstalled
                     ? $this->updatePlugin($manifest->slug, $actorId)
                     : $this->install($manifest->slug, $actorId);
@@ -287,27 +315,40 @@ class PluginManager
 
                 return $record;
             } catch (Throwable $e) {
-                // Automatic rollback after failed install/update
-                if ($targetDir && is_dir($targetDir)) {
+                $rollbackError = null;
+                if ($targetReplaced && $targetDir && is_dir($targetDir)) {
                     File::deleteDirectory($targetDir);
                 }
-                if ($rollbackDir && is_dir($rollbackDir) && $targetDir) {
-                    File::copyDirectory($rollbackDir, $targetDir);
-                    File::deleteDirectory($rollbackDir);
+                if ($rollbackDir && is_dir($rollbackDir)) {
+                    if ($targetReplaced && $targetDir) {
+                        if (!File::copyDirectory($rollbackDir, $targetDir)) {
+                            $rollbackError = ' Previous plugin files could not be restored from the snapshot.';
+                        } else {
+                            File::deleteDirectory($rollbackDir);
+                        }
+                    } else {
+                        File::deleteDirectory($rollbackDir);
+                    }
                 }
-                if ($alreadyInstalled && $previousRecord) {
-                    $previousRecord->save();
+                if ($alreadyInstalled && $previousRecord && is_array($previousAttributes)) {
+                    unset($previousAttributes['id']);
+                    $previousAttributes['updated_at'] = now();
+                    PluginRecord::query()->whereKey($previousRecord->getKey())->update($previousAttributes);
                 }
+
                 $this->logPluginOperation(
                     $manifest->slug,
-                    $previousRecord?->version ?? '0.0.0',
+                    $fromVersion,
                     $manifest->version,
                     'rolled_back',
-                    'Automatic rollback triggered: ' . $e->getMessage(),
+                    'Automatic rollback triggered: ' . $e->getMessage() . $rollbackError,
                     $actorId
                 );
-                $this->audit->log('plugin.rollback', 'plugin', $manifest->slug, ['error' => $e->getMessage()], $actorId);
-                throw new RuntimeException("Plugin operation failed and was automatically rolled back: {$e->getMessage()}", 0, $e);
+                $this->audit->log('plugin.rollback', 'plugin', $manifest->slug, [
+                    'error' => $e->getMessage(),
+                    'rollback_error' => $rollbackError,
+                ], $actorId);
+                throw new RuntimeException("Plugin operation failed and was automatically rolled back: {$e->getMessage()}{$rollbackError}", 0, $e);
             }
         } finally {
             File::deleteDirectory($stagingDir);
@@ -428,21 +469,65 @@ class PluginManager
             ->exists();
     }
 
+    private function registerPluginAutoload(PluginManifest $manifest): void
+    {
+        $providerClass = $manifest->providerClass;
+        if (!$providerClass) {
+            return;
+        }
+
+        $providerMarker = '\\Providers\\';
+        $position = strpos($providerClass, $providerMarker);
+        if ($position === false) {
+            return;
+        }
+
+        $namespacePrefix = substr($providerClass, 0, $position + 1);
+        $loaders = ClassLoader::getRegisteredLoaders();
+        $loader = reset($loaders);
+        if (!$loader instanceof ClassLoader) {
+            return;
+        }
+
+        $existingPaths = $loader->getPrefixesPsr4()[$namespacePrefix] ?? [];
+        if (!in_array($manifest->basePath, $existingPaths, true)) {
+            $loader->addPsr4($namespacePrefix, $manifest->basePath);
+        }
+    }
+
     private function assertSafeZipArchive(ZipArchive $zip): void
     {
+        if ($zip->numFiles > 5000) {
+            throw new RuntimeException('Plugin archive contains too many entries.');
+        }
+
+        $seen = [];
+        $totalBytes = 0;
         for ($i = 0; $i < $zip->numFiles; $i++) {
             $name = (string) $zip->getNameIndex($i);
             $stat = $zip->statIndex($i);
+            $normalized = str_replace('\\', '/', $name);
+            $segments = explode('/', $normalized);
 
-            if ($name === '' || str_contains($name, "\0") || str_contains($name, '\\')) {
+            if ($name === ''
+                || str_contains($name, "\0")
+                || str_contains($name, '\\')
+                || str_starts_with($normalized, '/')
+                || preg_match('#^[A-Za-z]:#', $normalized) === 1
+                || in_array('..', $segments, true)
+                || in_array('.', $segments, true)
+            ) {
                 throw new RuntimeException("Unsafe ZIP path rejected: {$name}");
             }
-            if (str_starts_with($name, '/') || preg_match('#^[A-Za-z]:#', $name)) {
-                throw new RuntimeException("Absolute path rejected in ZIP: {$name}");
+            if (isset($seen[$name])) {
+                throw new RuntimeException("Duplicate ZIP entry rejected: {$name}");
             }
-            $segments = explode('/', $name);
-            if (in_array('..', $segments, true)) {
-                throw new RuntimeException("ZIP path traversal detected and blocked: {$name}");
+            $seen[$name] = true;
+
+            $size = (int) ($stat['size'] ?? 0);
+            $totalBytes += $size;
+            if ($size > 268435456 || $totalBytes > 1073741824) {
+                throw new RuntimeException('Plugin archive exceeds the allowed uncompressed size.');
             }
 
             if (is_array($stat) && isset($stat['external_attributes'])) {
@@ -463,24 +548,54 @@ class PluginManager
     {
         $checksumFile = $packageRoot . DIRECTORY_SEPARATOR . 'checksums.json';
         if (!is_file($checksumFile)) {
-            return;
+            throw new RuntimeException('Plugin package must include checksums.json.');
         }
 
         $checksums = json_decode((string) file_get_contents($checksumFile), true, 512, JSON_THROW_ON_ERROR);
-        if (!is_array($checksums)) {
-            throw new RuntimeException('Invalid checksums.json format inside plugin package.');
+        if (!is_array($checksums) || !isset($checksums['plugin.json'])) {
+            throw new RuntimeException('checksums.json must include the plugin.json SHA-256.');
         }
 
+        $verified = [];
         foreach ($checksums as $relativePath => $expectedSha) {
-            if (!is_string($relativePath) || !is_string($expectedSha) || str_contains($relativePath, '..')) {
-                throw new RuntimeException('Unsafe path inside checksums.json manifest.');
+            if (!is_string($relativePath)
+                || !is_string($expectedSha)
+                || preg_match('/^[a-f0-9]{64}$/i', $expectedSha) !== 1
+                || str_contains($relativePath, "\0")
+                || str_contains($relativePath, '\\')
+                || str_starts_with($relativePath, '/')
+                || preg_match('#^[A-Za-z]:#', $relativePath) === 1
+                || in_array('..', explode('/', $relativePath), true)
+                || in_array('.', explode('/', $relativePath), true)
+                || $relativePath === 'checksums.json'
+            ) {
+                throw new RuntimeException('Unsafe path or checksum inside checksums.json manifest.');
             }
-            $full = $packageRoot . DIRECTORY_SEPARATOR . ltrim(str_replace('/', DIRECTORY_SEPARATOR, $relativePath), DIRECTORY_SEPARATOR);
-            if (!is_file($full)) {
-                throw new RuntimeException("File integrity check failed: missing {$relativePath}");
+
+            $full = $packageRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relativePath);
+            if (!is_file($full) || is_link($full)) {
+                throw new RuntimeException("File integrity check failed: missing or unsafe {$relativePath}");
             }
-            if (!hash_equals(strtolower($expectedSha), (string) hash_file('sha256', $full))) {
+            $actualSha = hash_file('sha256', $full);
+            if (!is_string($actualSha) || !hash_equals(strtolower($expectedSha), strtolower($actualSha))) {
                 throw new RuntimeException("File integrity SHA-256 mismatch on {$relativePath}");
+            }
+            $verified[$relativePath] = true;
+        }
+
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($packageRoot, \FilesystemIterator::SKIP_DOTS)
+        );
+        foreach ($iterator as $file) {
+            if (!$file->isFile()) {
+                continue;
+            }
+            $relativePath = ltrim(str_replace($packageRoot, '', $file->getPathname()), DIRECTORY_SEPARATOR);
+            if ($relativePath === 'checksums.json') {
+                continue;
+            }
+            if (!isset($verified[str_replace(DIRECTORY_SEPARATOR, '/', $relativePath)])) {
+                throw new RuntimeException("Plugin package contains an unverified file: {$relativePath}");
             }
         }
     }
@@ -533,8 +648,32 @@ class PluginManager
             return null;
         }
 
+        $migrationFiles = glob($migrationsDir . DIRECTORY_SEPARATOR . '*.php') ?: [];
+        if ($migrationFiles === []) {
+            return null;
+        }
+
+        if (Schema::hasTable('migrations')) {
+            $applied = DB::table('migrations')->pluck('migration')->all();
+            $pending = array_filter($migrationFiles, static function (string $file) use ($applied): bool {
+                return !in_array(pathinfo($file, PATHINFO_FILENAME), $applied, true);
+            });
+            if ($pending === []) {
+                return null;
+            }
+        }
+
         $relative = str_replace(base_path() . DIRECTORY_SEPARATOR, '', $migrationsDir);
-        Artisan::call('migrate', ['--path' => $relative, '--force' => true]);
+        $exitCode = Artisan::call('migrate', ['--path' => $relative, '--force' => true]);
+        if ($exitCode !== 0) {
+            $migrationOutput = trim(Artisan::output());
+            try {
+                Artisan::call('migrate:rollback', ['--path' => $relative, '--force' => true]);
+            } catch (Throwable) {
+                // The original migration failure is more useful; MySQL DDL may need manual recovery.
+            }
+            throw new RuntimeException("Plugin '{$manifest->slug}' migrations failed: " . $migrationOutput);
+        }
 
         return $relative;
     }
@@ -579,11 +718,19 @@ class PluginManager
 
     private function resolvePluginInstance(PluginManifest $manifest): ?PluginInterface
     {
-        if (!$manifest->providerClass || !class_exists($manifest->providerClass)) {
+        if (!$manifest->providerClass) {
             return null;
         }
-        $instance = app($manifest->providerClass);
+        $this->registerPluginAutoload($manifest);
+        if (!class_exists($manifest->providerClass)) {
+            throw new RuntimeException("Plugin provider class '{$manifest->providerClass}' could not be autoloaded.");
+        }
 
-        return $instance instanceof PluginInterface ? $instance : null;
+        $instance = app()->resolveProvider($manifest->providerClass);
+        if (!$instance instanceof PluginInterface) {
+            throw new RuntimeException("Plugin provider '{$manifest->providerClass}' must implement PluginInterface.");
+        }
+
+        return $instance;
     }
 }

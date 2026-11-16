@@ -18,10 +18,12 @@ class MobileAppUpdateAndPublicParityTest extends TestCase
         $this->markSystemInstalled();
         $this->activatePlugins([
             'course-management',
-            'exam-assessment',
+            'exam-management',
             'notice-board',
+            'branch-management',
+            'student-management',
             'certificate-management',
-            'website-cms',
+            'cms-website',
             'mobile-app-api',
         ]);
 
@@ -29,16 +31,18 @@ class MobileAppUpdateAndPublicParityTest extends TestCase
 
         $this->actingAs($admin)
             ->post('/admin/mobile-app', [
+                'ios_enabled' => '1',
                 'ios_bundle_id' => 'com.alomsenglishcenter.ios',
-                'ios_app_store_url' => 'https://apps.apple.com/app/aloms-english-center',
+                'ios_store_url' => 'https://apps.apple.com/app/aloms-english-center',
                 'ios_min_version' => '2.0.0',
                 'ios_latest_version' => '2.2.0',
+                'android_enabled' => '1',
                 'android_package_name' => 'com.alomsenglishcenter.app',
-                'android_play_store_url' => 'https://play.google.com/store/apps/details?id=com.alomsenglishcenter.app',
+                'android_store_url' => 'https://play.google.com/store/apps/details?id=com.alomsenglishcenter.app',
                 'android_min_version' => '2.0.0',
                 'android_latest_version' => '2.2.0',
                 'deep_link_scheme' => 'alomsenglishcenter://',
-                'push_notifications_enabled' => '1',
+                'push_enabled' => '1',
             ])
             ->assertSessionHasNoErrors();
 
@@ -74,6 +78,11 @@ class MobileAppUpdateAndPublicParityTest extends TestCase
         $this->assertTrue(Schema::hasTable('mobile_device_tokens'));
         $this->assertSame(2, DB::table('mobile_device_tokens')->count());
 
+        $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->getJson('/api/mobile/me')
+            ->assertOk()
+            ->assertJsonStructure(['user' => ['id', 'email'], 'enrollments']);
+
         $this->getJson('/api/mobile/home')
             ->assertOk()
             ->assertJsonStructure(['courses', 'ebooks', 'products', 'notices']);
@@ -95,14 +104,14 @@ class MobileAppUpdateAndPublicParityTest extends TestCase
         $zip->close();
 
         $sha = hash_file('sha256', $zipPath);
-        $hmac = hash_hmac('sha256', $sha . '|core|aec-lms-core|2.1.0', (string) config('lms.plugin_signing_key'));
+        $hmac = hash_hmac('sha256', $sha, (string) config('lms.plugin_signing_key'));
 
         $updates = app(UniversalUpdateService::class);
 
         try {
             $this->expectException(RuntimeException::class);
-            $this->expectExceptionMessage('unsafe path traversal');
-            $updates->applySignedUpdate($zipPath, $sha, $hmac, null);
+            $this->expectExceptionMessage('Unsafe ZIP path detected');
+            $updates->applyVerifiedUpdate($zipPath, $sha, $hmac, null);
         } finally {
             @unlink($zipPath);
         }
@@ -115,7 +124,7 @@ class MobileAppUpdateAndPublicParityTest extends TestCase
             'course-management',
             'marketing-management',
             'seo-manager',
-            'website-cms',
+            'cms-website',
         ]);
 
         $this->get('/about-us')->assertOk()->assertSee("Alom's English Center");

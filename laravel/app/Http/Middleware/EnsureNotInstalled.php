@@ -16,7 +16,7 @@ class EnsureNotInstalled
     public function handle(Request $request, Closure $next): Response
     {
         if ($this->installer->isInstalled()) {
-            abort(403, 'AEC LMS is already installed and locked.');
+            abort(404);
         }
         return $next($request);
     }

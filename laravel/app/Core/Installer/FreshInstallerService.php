@@ -34,10 +34,14 @@ class FreshInstallerService
             $extensions[$ext] = extension_loaded($ext);
         }
 
+        $privatePath = (string) config('lms.private_storage_path');
+        $backupPath = (string) config('lms.backup_path');
         $directories = [
             'storage/app' => is_writable(storage_path('app')),
             'storage/framework' => is_writable(storage_path('framework')),
             'storage/logs' => is_writable(storage_path('logs')),
+            'private_storage' => is_dir($privatePath) ? is_writable($privatePath) : is_writable(dirname($privatePath)),
+            'backup_storage' => is_dir($backupPath) ? is_writable($backupPath) : is_writable(dirname($backupPath)),
             'bootstrap/cache' => is_writable(base_path('bootstrap/cache')),
         ];
 
@@ -72,10 +76,156 @@ class FreshInstallerService
         }
     }
 
+
+    /**
+     * Atomically persist installer-generated secrets without exposing them in logs or responses.
+     */
+    private function persistGeneratedKeys(array $keys): void
+    {
+        $envPath = base_path('.env');
+        if (!is_file($envPath) || !is_writable($envPath)) {
+            throw new RuntimeException('The Laravel .env file must exist and be writable so fresh encryption keys can be saved securely.');
+        }
+
+        $contents = file_get_contents($envPath);
+        if ($contents === false) {
+            throw new RuntimeException('Unable to read the Laravel .env file.');
+        }
+
+        foreach ($keys as $name => $value) {
+            $escaped = addcslashes((string) $value, "\\\"");
+            $line = $name . '="' . $escaped . '"';
+            $pattern = '/^' . preg_quote($name, '/') . '=.*/m';
+            if (preg_match($pattern, $contents)) {
+                $contents = (string) preg_replace($pattern, $line, $contents, 1);
+            } else {
+                $contents = rtrim($contents) . PHP_EOL . $line . PHP_EOL;
+            }
+        }
+
+        $temporaryPath = tempnam(dirname($envPath), '.env-aec-');
+        if ($temporaryPath === false) {
+            throw new RuntimeException('Unable to allocate a temporary environment file.');
+        }
+
+        try {
+            if (file_put_contents($temporaryPath, $contents, LOCK_EX) === false) {
+                throw new RuntimeException('Unable to write generated encryption keys to the environment file.');
+            }
+            @chmod($temporaryPath, 0600);
+            if (!rename($temporaryPath, $envPath)) {
+                throw new RuntimeException('Unable to atomically replace the Laravel environment file.');
+            }
+            @chmod($envPath, 0600);
+        } finally {
+            if (is_file($temporaryPath)) {
+                @unlink($temporaryPath);
+            }
+        }
+
+        config([
+            'app.key' => $keys['APP_KEY'],
+            'lms.plugin_signing_key' => $keys['AEC_PLUGIN_SIGNING_KEY'],
+            'lms.backup_encryption_key' => $keys['AEC_BACKUP_ENCRYPTION_KEY'],
+        ]);
+    }
+
+
+
+    private function preparePrivateStorageDirectories(): void
+    {
+        $privatePath = rtrim((string) config('lms.private_storage_path'), DIRECTORY_SEPARATOR);
+        $backupPath = rtrim((string) config('lms.backup_path'), DIRECTORY_SEPARATOR);
+        if ($privatePath === '' || $backupPath === '' || is_link($privatePath) || is_link($backupPath)) {
+            throw new RuntimeException('Private storage and backup paths must be configured and must not be symbolic links.');
+        }
+
+        $realPublic = realpath(public_path()) ?: rtrim(public_path(), DIRECTORY_SEPARATOR);
+        $publicPrefix = rtrim($realPublic, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+
+        foreach ([$privatePath, $backupPath] as $directory) {
+            $ancestor = $directory;
+            while (!file_exists($ancestor) && dirname($ancestor) !== $ancestor) {
+                $ancestor = dirname($ancestor);
+            }
+            $realAncestor = realpath($ancestor);
+            if ($directory === $realPublic
+                || str_starts_with($directory, $publicPrefix)
+                || $realAncestor === $realPublic
+                || ($realAncestor !== false && str_starts_with($realAncestor, $publicPrefix))
+            ) {
+                throw new RuntimeException('Private storage and backups must be outside the public web document root.');
+            }
+        }
+
+        foreach ([$privatePath, $backupPath] as $directory) {
+            if (!is_dir($directory) && !mkdir($directory, 0700, true) && !is_dir($directory)) {
+                throw new RuntimeException("Unable to create private runtime directory: {$directory}");
+            }
+            @chmod($directory, 0700);
+            if (!is_writable($directory)) {
+                throw new RuntimeException("Private runtime directory is not writable: {$directory}");
+            }
+        }
+
+        $realPrivate = realpath($privatePath);
+        $realBackup = realpath($backupPath);
+        if ($realPrivate === false || $realBackup === false) {
+            throw new RuntimeException('Unable to resolve private storage and backup directories.');
+        }
+        foreach ([$realPrivate, $realBackup] as $directory) {
+            if ($directory === $realPublic || str_starts_with($directory, $publicPrefix)) {
+                throw new RuntimeException('Private storage and backups must be outside the public web document root.');
+            }
+        }
+
+        if ($realPrivate === $realBackup
+            || str_starts_with($realPrivate, rtrim($realBackup, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR)
+            || str_starts_with($realBackup, rtrim($realPrivate, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR)
+        ) {
+            throw new RuntimeException('Private uploads and backup archives must use separate directories.');
+        }
+    }
+
+    private function callArtisanOrFail(string $command, array $parameters, string $description): void
+    {
+        $exitCode = Artisan::call($command, $parameters);
+        if ($exitCode !== 0) {
+            throw new RuntimeException($description . ' failed: ' . trim(Artisan::output()));
+        }
+    }
+
     public function installFresh(array $config): array
     {
         if ($this->isInstalled()) {
             throw new RuntimeException('AEC LMS is already installed and locked.');
+        }
+
+        $appName = trim((string) ($config['app_name'] ?? 'AEC LMS'));
+        $appUrl = trim((string) ($config['app_url'] ?? ''));
+        $adminName = trim((string) ($config['admin_name'] ?? ''));
+        $adminEmail = strtolower(trim((string) ($config['admin_email'] ?? '')));
+        $adminPassword = (string) ($config['admin_password'] ?? '');
+
+        if ($appName === '' || strlen($appName) > 160) {
+            throw new RuntimeException('Application name is required and must be 160 characters or fewer.');
+        }
+        if ($adminName === '' || strlen($adminName) > 120) {
+            throw new RuntimeException('Administrator name is required and must be 120 characters or fewer.');
+        }
+        if (filter_var($adminEmail, FILTER_VALIDATE_EMAIL) === false || strlen($adminEmail) > 180) {
+            throw new RuntimeException('A valid administrator email address of 180 characters or fewer is required.');
+        }
+        if (strlen($adminPassword) < 12 || strlen($adminPassword) > 255) {
+            throw new RuntimeException('Administrator password must be between 12 and 255 characters.');
+        }
+        $urlParts = parse_url($appUrl);
+        if (filter_var($appUrl, FILTER_VALIDATE_URL) === false
+            || !is_array($urlParts)
+            || !in_array(strtolower((string) ($urlParts['scheme'] ?? '')), ['http', 'https'], true)
+            || empty($urlParts['host'])
+        ) {
+            throw new RuntimeException('A valid HTTP or HTTPS application URL is required.');
         }
 
         $pdo = DB::connection()->getPdo();
@@ -84,29 +234,44 @@ class FreshInstallerService
 
         $this->assertFreshEmptyDatabase($pdo, $dbName, $driver);
 
+        $this->preparePrivateStorageDirectories();
+
         $appKey = 'base64:' . base64_encode(random_bytes(32));
         $signingKey = bin2hex(random_bytes(32));
         $backupKey = base64_encode(random_bytes(32));
 
-        Artisan::call('migrate', ['--force' => true]);
-        Artisan::call('db:seed', ['--class' => CoreRolesAndPermissionsSeeder::class, '--force' => true]);
-
-        $admin = User::query()->create([
-            'name' => (string) $config['admin_name'],
-            'email' => strtolower(trim((string) $config['admin_email'])),
-            'password' => Hash::make((string) $config['admin_password']),
-            'is_active' => true,
-            'email_verified_at' => now(),
+        // Persist fresh cryptographic keys before creating encrypted application data.
+        $this->persistGeneratedKeys([
+            'APP_KEY' => $appKey,
+            'AEC_PLUGIN_SIGNING_KEY' => $signingKey,
+            'AEC_BACKUP_ENCRYPTION_KEY' => $backupKey,
         ]);
 
-        $adminRole = Role::query()->where('slug', 'admin')->first();
-        if ($adminRole) {
-            $admin->roles()->sync([$adminRole->id]);
-        }
+        $this->callArtisanOrFail('migrate', ['--force' => true], 'Core database migrations');
 
-        SystemSetting::query()->updateOrCreate(['key' => 'site_name'], ['value' => (string) ($config['app_name'] ?? 'AEC LMS')]);
-        SystemSetting::query()->updateOrCreate(['key' => 'site_url'], ['value' => (string) ($config['app_url'] ?? 'https://alomsenglishcenter.com')]);
-        SystemSetting::query()->updateOrCreate(['key' => 'legacy_records_imported'], ['value' => 'false']);
+        $admin = DB::transaction(function () use ($adminName, $adminEmail, $adminPassword, $appName, $appUrl): User {
+            $this->callArtisanOrFail('db:seed', ['--class' => CoreRolesAndPermissionsSeeder::class, '--force' => true], 'Core roles and permissions seeding');
+
+            $admin = User::query()->create([
+                'name' => $adminName,
+                'email' => $adminEmail,
+                'password' => Hash::make($adminPassword),
+                'is_active' => true,
+                'email_verified_at' => now(),
+            ]);
+
+            $adminRole = Role::query()->where('slug', 'admin')->first();
+            if (!$adminRole) {
+                throw new RuntimeException('Core Admin role was not created by the permissions seeder.');
+            }
+            $admin->roles()->sync([$adminRole->id]);
+
+            SystemSetting::query()->updateOrCreate(['key' => 'site_name'], ['value' => $appName]);
+            SystemSetting::query()->updateOrCreate(['key' => 'site_url'], ['value' => $appUrl]);
+            SystemSetting::query()->updateOrCreate(['key' => 'legacy_records_imported'], ['value' => 'false']);
+
+            return $admin;
+        });
 
         $lockPayload = json_encode([
             'installed_at' => now()->toIso8601String(),
@@ -116,21 +281,32 @@ class FreshInstallerService
         ], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
 
         $lockPath = (string) config('lms.install_lock_path');
-        if (!is_dir(dirname($lockPath))) {
-            mkdir(dirname($lockPath), 0750, true);
+        if (!is_dir(dirname($lockPath)) && !mkdir(dirname($lockPath), 0750, true) && !is_dir(dirname($lockPath))) {
+            throw new RuntimeException('Unable to create the installation lock directory.');
         }
-        file_put_contents($lockPath, $lockPayload);
+
+        $temporaryLockPath = tempnam(dirname($lockPath), '.aec-installed-');
+        if ($temporaryLockPath === false) {
+            throw new RuntimeException('Unable to allocate the installation lock file.');
+        }
+        try {
+            if (file_put_contents($temporaryLockPath, $lockPayload, LOCK_EX) === false) {
+                throw new RuntimeException('Unable to write the installation lock file.');
+            }
+            @chmod($temporaryLockPath, 0600);
+            if (!rename($temporaryLockPath, $lockPath)) {
+                throw new RuntimeException('Unable to atomically create the installation lock file.');
+            }
+            @chmod($lockPath, 0600);
+        } finally {
+            if (is_file($temporaryLockPath)) {
+                @unlink($temporaryLockPath);
+            }
+        }
 
         $this->audit->log('core.installed', 'system', 'fresh_install', ['legacy_records_imported' => false], $admin->id);
 
-        return [
-            'admin_id' => $admin->id,
-            'generated_keys' => [
-                'APP_KEY' => $appKey,
-                'AEC_PLUGIN_SIGNING_KEY' => $signingKey,
-                'AEC_BACKUP_ENCRYPTION_KEY' => $backupKey,
-            ],
-            'lock_path' => $lockPath,
-        ];
+        // Never return generated encryption/signing secrets to the installer UI.
+        return ['admin_id' => $admin->id, 'lock_path' => $lockPath];
     }
 }

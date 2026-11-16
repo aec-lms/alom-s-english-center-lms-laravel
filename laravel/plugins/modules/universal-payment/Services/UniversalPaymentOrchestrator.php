@@ -1,0 +1,87 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Plugins\Modules\UniversalPayment\Services;
+
+use App\Core\Plugins\PluginManager;
+use Plugins\Modules\FeesManagement\Models\FeeInvoice;
+use Plugins\Modules\GatewayPaypal\Services\PaypalGatewayService;
+use Plugins\Modules\GatewaySslcommerz\Services\SslcommerzGatewayService;
+use Plugins\Modules\GatewayStripe\Services\StripeGatewayService;
+use RuntimeException;
+
+class UniversalPaymentOrchestrator
+{
+    private const GATEWAYS = [
+        'gateway-sslcommerz' => ['label' => 'SSLCOMMERZ', 'credentials' => ['store_id', 'store_password']],
+        'gateway-stripe' => ['label' => 'Stripe', 'credentials' => ['publishable_key', 'secret_key', 'webhook_secret']],
+        'gateway-paypal' => ['label' => 'PayPal', 'credentials' => ['client_id', 'client_secret', 'webhook_id']],
+        'gateway-card' => ['label' => 'Visa / Mastercard Acquirer Adapter', 'credentials' => ['merchant_id', 'api_secret', 'webhook_secret'], 'adapter_required' => true],
+    ];
+
+    public function __construct(private readonly PluginManager $plugins) {}
+
+    /** @return array<string, array{label:string,available:bool,status:string,missing_credentials:array<int,string>}> */
+    public function gatewayStatus(): array
+    {
+        $statuses = [];
+        foreach (self::GATEWAYS as $slug => $definition) {
+            $enabled = $this->plugins->isEnabled($slug);
+            $missing = [];
+            foreach ($definition['credentials'] as $key) {
+                if (($this->plugins->getSetting($slug, $key, '') ?? '') === '') $missing[] = $key;
+            }
+
+            $adapterRequired = (bool) ($definition['adapter_required'] ?? false);
+            $available = $enabled && $missing === [] && !$adapterRequired;
+            $status = !$enabled ? 'disabled' : ($adapterRequired ? 'processor_adapter_required' : ($missing !== [] ? 'not_configured' : 'ready'));
+
+            $statuses[$slug] = [
+                'label' => $definition['label'],
+                'available' => $available,
+                'status' => $status,
+                'missing_credentials' => $missing,
+            ];
+        }
+        return $statuses;
+    }
+
+    public function assertGatewayReady(string $slug): void
+    {
+        $status = $this->gatewayStatus()[$slug] ?? throw new RuntimeException('Unsupported payment gateway.');
+        if (!$status['available']) {
+            $reason = match ($status['status']) {
+                'disabled' => 'Gateway plugin is not enabled.',
+                'processor_adapter_required' => 'Visa/Mastercard requires a compatible acquiring-bank or PSP adapter. Use Stripe for supported card processing until that adapter is installed.',
+                default => 'Missing credentials: ' . implode(', ', $status['missing_credentials']),
+            };
+            throw new RuntimeException($status['label'] . ' is unavailable. ' . $reason);
+        }
+    }
+
+    public function initiate(string $slug, FeeInvoice $invoice, array $input = []): array
+    {
+        $this->assertGatewayReady($slug);
+
+        return match ($slug) {
+            'gateway-sslcommerz' => (function () use ($invoice): array {
+                $session = app(SslcommerzGatewayService::class)->initiateHostedCheckout($invoice);
+                return ['gateway' => 'gateway-sslcommerz', 'transaction_ref' => $session['transaction']->transaction_ref, 'redirect_url' => $session['hosted_endpoint']];
+            })(),
+            'gateway-stripe' => (function () use ($invoice, $input): array {
+                $result = app(StripeGatewayService::class)->initiateTokenizedCheckout(
+                    $invoice,
+                    (string) ($input['payment_method_id'] ?? ''),
+                    $input['idempotency_key'] ?? null
+                );
+                return ['gateway' => 'gateway-stripe', 'transaction_ref' => $result['transaction']->transaction_ref, 'payment_intent_id' => $result['payment_intent_id'], 'client_secret' => $result['client_secret']];
+            })(),
+            'gateway-paypal' => (function () use ($invoice, $input): array {
+                $result = app(PaypalGatewayService::class)->createOrder($invoice, $input['idempotency_key'] ?? null);
+                return ['gateway' => 'gateway-paypal', 'transaction_ref' => $result['transaction']->transaction_ref, 'paypal_order_id' => $result['paypal_order_id'], 'redirect_url' => $result['approval_url']];
+            })(),
+            default => throw new RuntimeException('This payment gateway has no active processor adapter.'),
+        };
+    }
+}

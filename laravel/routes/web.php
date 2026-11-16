@@ -11,6 +11,7 @@ use App\Http\Controllers\Admin\UserRoleController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\InstallerController;
 use App\Http\Controllers\PublicHomeController;
+use App\Http\Controllers\PortalController;
 use Illuminate\Support\Facades\Route;
 
 // Browser-based Fresh Installer (permanently locked after installation)
@@ -42,7 +43,8 @@ Route::middleware('installed')->group(function (): void {
     Route::get('/terms-and-conditions', [PublicHomeController::class, 'legalPage'])->defaults('slug', 'terms-and-conditions')->name('public.terms');
     Route::get('/privacy-policy', [PublicHomeController::class, 'legalPage'])->defaults('slug', 'privacy-policy')->name('public.privacy');
     Route::get('/refund-policy', [PublicHomeController::class, 'legalPage'])->defaults('slug', 'refund-policy')->name('public.refund');
-    Route::get('/profile', [PublicHomeController::class, 'profile'])->name('public.profile');
+    Route::get('/profile', [PublicHomeController::class, 'profile'])->name('public.profile' );
+    Route::get('/dashboard', [PortalController::class, 'index'])->middleware('auth')->name('portal.dashboard');
 
     Route::get('/login', [LoginController::class, 'show'])->name('login')->middleware('guest');
     Route::post('/login', [LoginController::class, 'authenticate'])->name('login.attempt')->middleware('guest');
@@ -50,6 +52,8 @@ Route::middleware('installed')->group(function (): void {
     Route::post('/register', [LoginController::class, 'register'])->name('register.attempt')->middleware('guest');
     Route::get('/forgot-password', [LoginController::class, 'showForgotPassword'])->name('password.request')->middleware('guest');
     Route::post('/forgot-password', [LoginController::class, 'sendResetNotice'])->name('password.email')->middleware('guest');
+    Route::get('/reset-password/{token}', [LoginController::class, 'showResetPassword'])->name('password.reset')->middleware('guest');
+    Route::post('/reset-password', [LoginController::class, 'resetPassword'])->name('password.update')->middleware('guest');
     Route::post('/logout', [LoginController::class, 'logout'])->name('logout')->middleware('auth');
 
     Route::prefix('admin')->name('admin.')->middleware('auth')->group(function (): void {
@@ -67,6 +71,7 @@ Route::middleware('installed')->group(function (): void {
             Route::post('/{slug}/uninstall', [PluginCenterController::class, 'uninstall'])->name('uninstall');
             Route::get('/{slug}/configure', [PluginCenterController::class, 'configure'])->name('configure');
             Route::post('/{slug}/configure', [PluginCenterController::class, 'saveConfiguration'])->name('configure.save');
+            Route::post('/{slug}/test-connection', [PluginCenterController::class, 'testConnection'])->name('test-connection');
         });
 
         Route::prefix('updates')->name('updates.')->middleware('permission:core.updates.manage')->group(function (): void {

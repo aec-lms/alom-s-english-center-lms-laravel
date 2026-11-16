@@ -98,9 +98,25 @@
                     </div>
 
                     @auth
-                        <a href="{{ route('admin.dashboard') }}" class="w-full py-3.5 px-5 rounded-xl bg-[#0057FF] hover:bg-[#0046CC] text-white text-sm font-bold flex items-center justify-center shadow-sm transition-colors">
-                            Continue Enrollment in Portal
-                        </a>
+                        @if (auth()->user()->hasRole('student') && Route::has('plugins.enrollments.store'))
+                            <form method="POST" action="{{ route('plugins.enrollments.store', $course) }}">
+                                @csrf
+                                <button type="submit" class="w-full py-3.5 px-5 rounded-xl bg-[#0057FF] hover:bg-[#0046CC] text-white text-sm font-bold flex items-center justify-center shadow-sm transition-colors">
+                                    {{ $price > 0 ? 'Request Enrollment & Create Invoice' : 'Enroll in Free Course' }}
+                                </button>
+                            </form>
+                            @if (session('status'))
+                                <p class="text-xs text-emerald-700 mt-2">{{ session('status') }}</p>
+                            @endif
+                            @if ($errors->any())
+                                <p class="text-xs text-rose-600 mt-2">{{ $errors->first() }}</p>
+                            @endif
+                            <a href="{{ route('plugins.enrollments.my') }}" class="block text-center text-xs text-sky-700 font-bold mt-3">View My Enrollments</a>
+                        @else
+                            <p class="text-xs text-center text-slate-500">
+                                {{ auth()->user()->hasRole('student') ? 'Enrollment is currently unavailable.' : 'Sign in with a student account to enroll in this course.' }}
+                            </p>
+                        @endif
                     @else
                         <a href="{{ route('login') }}" class="w-full py-3.5 px-5 rounded-xl bg-[#0057FF] hover:bg-[#0046CC] text-white text-sm font-bold flex items-center justify-center shadow-sm transition-colors">
                             Login to Enroll

@@ -1,10 +1,10 @@
 {
     "slug": "gateway-sslcommerz",
     "name": "SSLCOMMERZ Hosted Checkout Gateway",
-    "version": "2.0.0",
+    "version": "2.0.2",
     "author": "Alom's English Center",
     "category": "payment-gateway",
-    "description": "Dedicated SSLCOMMERZ Hosted Checkout plugin with encrypted store credentials and IPN signature verification.",
+    "description": "Dedicated SSLCOMMERZ Hosted Checkout with Session API, Order Validation API, amount/currency matching, risk review and encrypted Store credentials.",
     "core_compatibility": "^2.0",
     "dependencies": [],
     "provider": "Plugins\\Modules\\GatewaySslcommerz\\Providers\\GatewaySslcommerzServiceProvider",
@@ -29,9 +29,14 @@
         },
         {
             "key": "sandbox_mode",
-            "label": "Sandbox Mode (1/0)",
-            "type": "text",
-            "secret": false
+            "label": "SSLCOMMERZ Environment",
+            "type": "select",
+            "secret": false,
+            "default": "1",
+            "options": {
+                "0": "Live",
+                "1": "Sandbox"
+            }
         }
     ]
 }

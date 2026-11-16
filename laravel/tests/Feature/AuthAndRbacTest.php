@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use Illuminate\Auth\Notifications\ResetPassword;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 class AuthAndRbacTest extends TestCase
@@ -44,4 +46,66 @@ class AuthAndRbacTest extends TestCase
         $response = $this->post('/login', ['email' => 'locked@aec.test', 'password' => 'wrong-password']);
         $response->assertSessionHasErrors('email');
     }
+
+    public function test_password_recovery_sends_a_real_reset_notification_without_account_enumeration(): void
+    {
+        $this->markSystemInstalled();
+        Notification::fake();
+        $user = $this->createUserWithRole('student', null, 'learner@aec.test');
+
+        $this->post('/forgot-password', ['email' => 'learner@aec.test'])
+            ->assertRedirect()
+            ->assertSessionHas('status', 'If an account matches that email, password recovery instructions will be sent shortly.');
+
+        Notification::assertSentTo($user, ResetPassword::class);
+
+        $this->post('/forgot-password', ['email' => 'unknown@aec.test'])
+            ->assertRedirect()
+            ->assertSessionHas('status', 'If an account matches that email, password recovery instructions will be sent shortly.');
+    }
+
+    public function test_password_reset_token_changes_password_and_is_single_use(): void
+    {
+        $this->markSystemInstalled();
+        Notification::fake();
+        $user = $this->createUserWithRole('student', null, 'reset@aec.test');
+
+        $this->post('/forgot-password', ['email' => $user->email])->assertRedirect();
+
+        $token = null;
+        Notification::assertSentTo($user, ResetPassword::class, function (ResetPassword $notification) use (&$token): bool {
+            $token = $notification->token;
+            return true;
+        });
+        $this->assertNotEmpty($token);
+
+        $payload = [
+            'token' => $token,
+            'email' => $user->email,
+            'password' => 'NewSecurePassword!2026',
+            'password_confirmation' => 'NewSecurePassword!2026',
+        ];
+
+        $this->post('/reset-password', $payload)
+            ->assertRedirect('/login')
+            ->assertSessionHas('status', 'Your password has been reset. You can now sign in.');
+
+        $this->assertTrue(password_verify('NewSecurePassword!2026', $user->fresh()->password));
+
+        $this->from('/reset-password/' . $token)
+            ->post('/reset-password', $payload)
+            ->assertSessionHasErrors('email');
+    }
+    public function test_student_lands_on_student_portal_and_unassigned_branch_manager_is_blocked(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management']);
+
+        $student = $this->createUserWithRole('student', null, 'portal.student@aec.test');
+        $this->actingAs($student)->get('/dashboard')->assertOk()->assertSee('Student Portal');
+
+        $unassignedManager = $this->createUserWithRole('branch_manager');
+        $this->actingAs($unassignedManager)->get('/dashboard')->assertForbidden();
+    }
+
 }

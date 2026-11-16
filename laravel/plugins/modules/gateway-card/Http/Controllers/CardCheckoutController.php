@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\GatewayCard\Services\CardGatewayService;
+use RuntimeException;
 
 class CardCheckoutController extends Controller
 {
@@ -29,12 +30,16 @@ class CardCheckoutController extends Controller
         ]);
 
         $invoice = FeeInvoice::query()->findOrFail((int) $validated['invoice_id']);
-        $tx = $this->gateway->authorizeTokenizedCheckout(
-            $invoice,
-            $validated['payment_token'],
-            $validated['card_brand'],
-            $validated['last4']
-        );
+        try {
+            $tx = $this->gateway->authorizeTokenizedCheckout(
+                $invoice,
+                $validated['payment_token'],
+                $validated['card_brand'],
+                $validated['last4']
+            );
+        } catch (RuntimeException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 503);
+        }
 
         return response()->json([
             'gateway' => 'gateway-card',
@@ -48,7 +53,11 @@ class CardCheckoutController extends Controller
     public function webhook(Request $request): JsonResponse
     {
         $signature = (string) $request->header('X-Card-Signature', '');
-        $tx = $this->gateway->verifyAndSettleWebhook($request->getContent(), $signature, $request->all());
+        try {
+            $tx = $this->gateway->verifyAndSettleWebhook($request->getContent(), $signature, $request->all());
+        } catch (RuntimeException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 503);
+        }
 
         return response()->json([
             'status' => $tx->status,

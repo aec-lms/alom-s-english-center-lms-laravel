@@ -50,6 +50,9 @@ final class PluginManifest
         if (!preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/', $data['slug'])) {
             throw new InvalidArgumentException("Invalid plugin slug: {$data['slug']}");
         }
+        if (preg_match('/^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$/', $data['version']) !== 1) {
+            throw new InvalidArgumentException("Plugin version must use semantic versioning: {$data['version']}");
+        }
 
         return new self(
             slug: $data['slug'],

@@ -9,6 +9,7 @@ use Plugins\Modules\AdmissionManagement\Models\AdmissionApplication;
 use Plugins\Modules\CertificateManagement\Models\CertificateRecord;
 use Plugins\Modules\LibraryManagement\Models\LibraryBook;
 use Plugins\Modules\LibraryManagement\Models\LibraryLoan;
+use Plugins\Modules\StudentManagement\Models\Student;
 use Tests\TestCase;
 
 class AdditionalModulesWorkflowTest extends TestCase
@@ -51,11 +52,12 @@ class AdditionalModulesWorkflowTest extends TestCase
         ])->assertSessionHasNoErrors();
 
         $this->actingAs($admin)->post('/admin/batches', [
-            'code' => 'BATCH-JAN-01',
-            'title' => 'IELTS Evening Batch',
-            'course_name' => 'IELTS Masterclass',
-            'schedule_label' => 'Sun-Tue-Thu 6:00 PM',
-            'capacity' => 30,
+            'batch_code' => 'BATCH-JAN-01',
+            'name' => 'IELTS Evening Batch',
+            'course_title' => 'IELTS Masterclass',
+            'schedule' => 'Sun-Tue-Thu 6:00 PM',
+            'max_capacity' => 30,
+            'status' => 'ongoing',
             'start_date' => now()->toDateString(),
             'branch_id' => $branchId,
         ])->assertSessionHasNoErrors();
@@ -165,5 +167,133 @@ class AdditionalModulesWorkflowTest extends TestCase
             'max_uses' => 50,
         ])->assertSessionHasNoErrors();
         $this->assertSame(1, DB::table('promo_coupons')->where('code', 'ALOM20')->count());
+    }
+    public function test_branch_manager_cannot_delete_other_branch_classes_or_batches_or_link_foreign_students(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins([
+            'branch-management',
+            'student-management',
+            'guardian-management',
+            'class-management',
+            'batch-management',
+            'course-management',
+            'exam-management',
+            'certificate-management',
+        ]);
+
+        $branchA = DB::table('branches')->insertGetId([
+            'code' => 'BR-A', 'name' => 'Branch A', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $branchB = DB::table('branches')->insertGetId([
+            'code' => 'BR-B', 'name' => 'Branch B', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $admin = $this->createUserWithRole('admin');
+        $manager = $this->createUserWithRole('branch_manager', $branchA);
+
+        $this->actingAs($admin)->post('/admin/batches', [
+            'batch_code' => 'B-BR-B',
+            'name' => 'Branch B Batch',
+            'schedule' => 'Sun-Tue 5 PM',
+            'max_capacity' => 20,
+            'status' => 'ongoing',
+            'branch_id' => $branchB,
+        ])->assertSessionHasNoErrors();
+        $batchId = DB::table('study_batches')->where('batch_code', 'B-BR-B')->value('id');
+
+        $this->actingAs($admin)->post('/admin/classes', [
+            'code' => 'C-BR-B',
+            'name' => 'Branch B Class',
+            'section' => 'A',
+            'subject' => 'English',
+            'day_of_week' => 'Sunday',
+            'start_time' => '10:00',
+            'end_time' => '11:00',
+            'branch_id' => $branchB,
+        ])->assertSessionHasNoErrors();
+        $classId = DB::table('academic_classes')->where('code', 'C-BR-B')->value('id');
+
+        $this->actingAs($manager)->delete('/admin/batches/' . $batchId)->assertForbidden();
+        $this->actingAs($manager)->delete('/admin/classes/' . $classId)->assertForbidden();
+        $this->assertDatabaseHas('study_batches', ['id' => $batchId]);
+        $this->assertDatabaseHas('academic_classes', ['id' => $classId]);
+
+        $studentUser = $this->createUserWithRole('student', $branchB);
+        $student = Student::query()->create([
+            'user_id' => $studentUser->id,
+            'branch_id' => $branchB,
+            'student_code' => 'STU-BR-B',
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($admin)->post('/admin/courses', [
+            'code' => 'COURSE-BR-B',
+            'title' => 'Branch B English Course',
+            'price' => 2500,
+            'branch_id' => $branchB,
+            'status' => 'published',
+        ])->assertSessionHasNoErrors();
+        $courseId = DB::table('courses')->where('code', 'COURSE-BR-B')->value('id');
+
+        $this->actingAs($admin)->post('/admin/exams', [
+            'course_id' => $courseId,
+            'title' => 'Branch B Assessment',
+            'duration_minutes' => 60,
+            'pass_marks' => 40,
+        ])->assertSessionHasNoErrors();
+        $examId = DB::table('exams')->where('title', 'Branch B Assessment')->value('id');
+
+        $this->actingAs($admin)->post('/admin/certificates', [
+            'student_name' => 'Branch B Learner',
+            'course_title' => 'Branch B English Course',
+            'grade_or_band' => 'A',
+            'issued_at' => now()->toDateString(),
+            'branch_id' => $branchB,
+        ])->assertSessionHasNoErrors();
+        $certificateId = DB::table('certificates')->where('student_name', 'Branch B Learner')->value('id');
+
+        $permissionIds = DB::table('permissions')
+            ->whereIn('slug', ['courses.manage', 'exams.manage', 'certificates.manage'])
+            ->pluck('id');
+        $manager->roles()->first()->permissions()->syncWithoutDetaching($permissionIds);
+
+        $this->actingAs($manager)->delete('/admin/courses/' . $courseId)->assertForbidden();
+        $this->actingAs($manager)->delete('/admin/exams/' . $examId)->assertForbidden();
+        $this->actingAs($manager)->post('/admin/certificates/' . $certificateId . '/revoke')->assertForbidden();
+
+        $this->assertDatabaseHas('courses', ['id' => $courseId]);
+        $this->assertDatabaseHas('exams', ['id' => $examId]);
+        $this->assertDatabaseHas('certificates', ['id' => $certificateId, 'status' => 'issued']);
+
+        $guardianPermission = DB::table('permissions')->where('slug', 'guardians.manage')->first();
+        if ($guardianPermission) {
+            $manager->roles()->first()->permissions()->syncWithoutDetaching([$guardianPermission->id]);
+        }
+
+        $this->actingAs($manager)->post('/admin/guardians', [
+            'name' => 'Guardian Branch A',
+            'email' => 'guardian.branch.a@example.test',
+            'phone' => '01700000000',
+            'password' => 'StrongGuardianPass!2026',
+            'branch_id' => $branchA,
+            'relationship' => 'parent',
+            'student_id' => $student->id,
+        ])->assertStatus(422);
+    }
+
+
+    public function test_unassigned_branch_manager_is_denied_student_directory_access(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'student-management']);
+
+        $manager = $this->createUserWithRole('branch_manager');
+        $permission = DB::table('permissions')->where('slug', 'students.manage')->first();
+        $this->assertNotNull($permission);
+        $manager->roles()->first()->permissions()->syncWithoutDetaching([$permission->id]);
+
+        $this->actingAs($manager)->get('/admin/students')->assertForbidden();
     }
 }

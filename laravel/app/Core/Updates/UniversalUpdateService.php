@@ -6,6 +6,7 @@ namespace App\Core\Updates;
 
 use App\Core\Backup\BackupService;
 use App\Core\Security\AuditLogger;
+use App\Core\Versioning\VersionConstraint;
 use App\Models\BackupRecord;
 use App\Models\PluginRecord;
 use App\Models\SystemSetting;
@@ -52,9 +53,36 @@ class UniversalUpdateService
             throw new RuntimeException('Unable to open update archive.');
         }
 
+        if ($zip->numFiles > 5000) {
+            $zip->close();
+            throw new RuntimeException('Update archive contains too many entries.');
+        }
+
+        $totalUncompressedBytes = 0;
+        $seenEntries = [];
         for ($i = 0; $i < $zip->numFiles; $i++) {
             $entryName = (string) $zip->getNameIndex($i);
             $this->assertSafeZipEntryPath($entryName);
+            if (isset($seenEntries[$entryName])) {
+                $zip->close();
+                throw new RuntimeException("Duplicate ZIP entry rejected: {$entryName}");
+            }
+            $seenEntries[$entryName] = true;
+
+            $stat = $zip->statIndex($i);
+            $entrySize = (int) ($stat['size'] ?? 0);
+            $totalUncompressedBytes += $entrySize;
+            if ($entrySize > 268435456 || $totalUncompressedBytes > 1073741824) {
+                $zip->close();
+                throw new RuntimeException('Update archive exceeds the allowed uncompressed size.');
+            }
+
+            $attributes = (int) ($stat['external_attributes'] ?? 0);
+            $fileType = ($attributes >> 16) & 0xF000;
+            if ($fileType === 0xA000) {
+                $zip->close();
+                throw new RuntimeException("Symlink entry rejected in update ZIP: {$entryName}");
+            }
         }
 
         $manifestRaw = $zip->getFromName('update-manifest.json');
@@ -69,23 +97,45 @@ class UniversalUpdateService
     public function applyVerifiedUpdate(string $packagePath, string $expectedSha256, string $signatureHex, ?int $actorId = null): UpdateLog
     {
         $manifest = $this->verifySignedPackage($packagePath, $expectedSha256, $signatureHex);
-        $targetType = (string) ($manifest['target_type'] ?? 'plugin');
+        $targetType = (string) ($manifest['target_type'] ?? '');
         $targetSlug = trim((string) ($manifest['target_slug'] ?? ''));
         $toVersion = trim((string) ($manifest['version'] ?? ''));
         $fromVersion = null;
 
-        if ($targetSlug === '' || $toVersion === '') {
-            throw new RuntimeException('Update manifest must specify target_slug and version.');
+        if (!in_array($targetType, ['plugin', 'core'], true)) {
+            throw new RuntimeException('Update manifest target_type must be either plugin or core.');
+        }
+        if ($targetSlug === ''
+            || preg_match('/^[a-z0-9][a-z0-9-]{1,79}$/', $targetSlug) !== 1
+            || preg_match('/^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$/', $toVersion) !== 1
+        ) {
+            throw new RuntimeException('Update manifest must specify a valid target_slug and semantic version.');
         }
 
         if ($targetType === 'plugin') {
-            $plugin = PluginRecord::query()->where('slug', $targetSlug)->first();
-            $fromVersion = $plugin?->version;
+            $plugin = PluginRecord::query()
+                ->where('slug', $targetSlug)
+                ->where('is_installed', true)
+                ->first();
+            if (!$plugin) {
+                throw new RuntimeException("Plugin update target '{$targetSlug}' is not installed.");
+            }
+            $fromVersion = $plugin->version;
+            if (version_compare($toVersion, (string) $fromVersion, '<=')) {
+                throw new RuntimeException('Plugin update version must be newer than the installed version.');
+            }
             if (!$this->coreVersionMatches((string) ($manifest['core_compatibility'] ?? '^2.0'))) {
                 throw new RuntimeException("Plugin update {$targetSlug} is incompatible with Core.");
             }
         } else {
+            $coreSlug = (string) config('plugins.core_identifier', 'aec-lms-core');
+            if ($targetSlug !== $coreSlug) {
+                throw new RuntimeException("Core update target must be '{$coreSlug}'.");
+            }
             $fromVersion = (string) config('lms.core_version', '2.0.0');
+            if (version_compare($toVersion, $fromVersion, '<=')) {
+                throw new RuntimeException('Core update version must be newer than the installed version.');
+            }
         }
 
         // Create encrypted pre-update backup
@@ -193,18 +243,20 @@ class UniversalUpdateService
 
     public function saveRemoteFeedUrl(string $url, ?int $actorId = null): void
     {
+        $parts = $this->assertSafeRemoteFeedUrl($url, false);
         SystemSetting::query()->updateOrCreate(
             ['key' => 'lms_update_feed_url'],
             ['value' => trim($url), 'is_encrypted' => false, 'updated_by' => $actorId]
         );
-        $this->audit->log('update.feed_configured', 'system_setting', 'lms_update_feed_url', ['url' => $url], $actorId);
+        $this->audit->log('update.feed_configured', 'system_setting', 'lms_update_feed_url', ['host' => $parts['host']], $actorId);
     }
 
     public function checkRemoteFeed(): array
     {
         $url = $this->getRemoteFeedUrl();
         try {
-            $resp = Http::timeout(6)->acceptJson()->get($url);
+            $this->assertSafeRemoteFeedUrl($url, true);
+            $resp = Http::withOptions(['allow_redirects' => false])->timeout(6)->acceptJson()->get($url);
             if ($resp->successful() && is_array($resp->json())) {
                 return [
                     'reachable' => true,
@@ -227,9 +279,70 @@ class UniversalUpdateService
         }
     }
 
+
+    /**
+     * Restrict update-feed requests to public HTTPS hosts and prevent redirects to private networks.
+     */
+    private function assertSafeRemoteFeedUrl(string $url, bool $resolveDns): array
+    {
+        $parts = parse_url(trim($url));
+        if (!is_array($parts)
+            || strtolower((string) ($parts['scheme'] ?? '')) !== 'https'
+            || empty($parts['host'])
+            || isset($parts['user'])
+            || isset($parts['pass'])
+            || isset($parts['query'])
+            || isset($parts['fragment'])
+            || (isset($parts['port']) && (int) $parts['port'] !== 443)
+        ) {
+            throw new RuntimeException('Update feed must be a plain HTTPS URL on the standard port, without credentials, query strings or fragments.');
+        }
+
+        $host = strtolower(rtrim((string) $parts['host'], '.'));
+        if (filter_var($host, FILTER_VALIDATE_IP) !== false
+            || $host === 'localhost'
+            || !str_contains($host, '.')
+            || preg_match('/(?:^|\\.)(?:local|internal|test|example|invalid)$/', $host) === 1
+        ) {
+            throw new RuntimeException('Update feed host must be a public DNS hostname.');
+        }
+
+        if ($resolveDns) {
+            $records = dns_get_record($host, DNS_A | DNS_AAAA);
+            $addresses = [];
+            foreach ($records ?: [] as $record) {
+                if (!empty($record['ip'])) {
+                    $addresses[] = $record['ip'];
+                }
+                if (!empty($record['ipv6'])) {
+                    $addresses[] = $record['ipv6'];
+                }
+            }
+            if ($addresses === []) {
+                throw new RuntimeException('Update feed host did not resolve to a public IP address.');
+            }
+            foreach (array_unique($addresses) as $address) {
+                if (filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
+                    throw new RuntimeException('Update feed host resolves to a private or reserved IP address.');
+                }
+            }
+        }
+
+        return ['host' => $host, 'path' => (string) ($parts['path'] ?? '/')];
+    }
+
     private function assertSafeZipEntryPath(string $entryName): void
     {
-        if ($entryName === '' || str_contains($entryName, "\0") || str_contains($entryName, '..') || str_starts_with($entryName, '/') || str_starts_with($entryName, '\\')) {
+        $normalized = str_replace('\\', '/', $entryName);
+        $segments = explode('/', $normalized);
+        if ($entryName === ''
+            || str_contains($entryName, "\0")
+            || str_contains($entryName, '\\')
+            || str_starts_with($normalized, '/')
+            || preg_match('/^[a-zA-Z]:/', $normalized) === 1
+            || in_array('..', $segments, true)
+            || in_array('.', $segments, true)
+        ) {
             throw new RuntimeException("Unsafe ZIP path detected: {$entryName}");
         }
     }
@@ -360,9 +473,9 @@ class UniversalUpdateService
 
     private function coreVersionMatches(string $constraint): bool
     {
-        $coreMajor = explode('.', (string) config('lms.core_version', '2.0.0'))[0] ?? '2';
-        $reqMajor = explode('.', ltrim($constraint, '^~>= '))[0] ?? $coreMajor;
-
-        return $coreMajor === $reqMajor;
+        return VersionConstraint::matches(
+            (string) config('lms.core_version', '2.0.0'),
+            $constraint
+        );
     }
 }

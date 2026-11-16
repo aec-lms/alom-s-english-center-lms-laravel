@@ -43,7 +43,7 @@ class ClassController extends Controller
             'start_time' => ['required', 'string', 'max:20'],
             'end_time' => ['required', 'string', 'max:20'],
             'instructor_name' => ['nullable', 'string', 'max:120'],
-            'branch_id' => ['nullable', 'integer'],
+            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
         ]);
 
         if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null) {
@@ -56,8 +56,12 @@ class ClassController extends Controller
         return back()->with('status', "Class '{$item->name} ({$item->section})' scheduled.");
     }
 
-    public function destroy(AcademicClass $academicClass): RedirectResponse
+    public function destroy(Request $request, AcademicClass $academicClass): RedirectResponse
     {
+        $actor = $request->user();
+        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $academicClass->branch_id) {
+            abort(403, 'Branch isolation violation.');
+        }
         $name = $academicClass->name;
         $id = (string) $academicClass->id;
         $academicClass->delete();

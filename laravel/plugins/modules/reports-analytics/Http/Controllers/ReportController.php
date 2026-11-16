@@ -9,20 +9,39 @@ use App\Models\AuditLog;
 use App\Models\PluginRecord;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ReportController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
+        $actor = $request->user();
+        $isBranchManager = $actor && $actor->hasRole('branch_manager');
+        $branchId = $isBranchManager ? (int) $actor->branch_id : null;
+        $branchUserIds = $isBranchManager
+            ? User::query()->where('branch_id', $branchId)->pluck('id')
+            : collect();
+
         $metrics = [
-            'users_count' => User::query()->count(),
+            'users_count' => User::query()->when($isBranchManager, fn ($q) => $q->where('branch_id', $branchId))->count(),
             'enabled_plugins' => PluginRecord::query()->where('is_enabled', true)->count(),
-            'audit_events' => AuditLog::query()->count(),
-            'branches_count' => Schema::hasTable('branches') ? \DB::table('branches')->count() : 0,
-            'students_count' => Schema::hasTable('students') ? \DB::table('students')->count() : 0,
+            'audit_events' => AuditLog::query()->when($isBranchManager, fn ($q) => $q->whereIn('user_id', $branchUserIds))->count(),
+            'branches_count' => $isBranchManager ? 1 : (Schema::hasTable('branches') ? DB::table('branches')->count() : 0),
+            'students_count' => Schema::hasTable('students')
+                ? DB::table('students')->when($isBranchManager, fn ($q) => $q->where('branch_id', $branchId))->count()
+                : 0,
+            'courses_count' => Schema::hasTable('courses')
+                ? DB::table('courses')->when($isBranchManager, fn ($q) => $q->where('branch_id', $branchId))->count()
+                : 0,
+            'attendance_records' => Schema::hasTable('attendance_records')
+                ? DB::table('attendance_records')->when($isBranchManager, fn ($q) => $q->where('branch_id', $branchId))->count()
+                : 0,
+            'fee_invoices' => Schema::hasTable('fee_invoices')
+                ? DB::table('fee_invoices')->when($isBranchManager, fn ($q) => $q->where('branch_id', $branchId))->count()
+                : 0,
         ];
 
         return view('reports-analytics::index', compact('metrics'));
@@ -30,15 +49,24 @@ class ReportController extends Controller
 
     public function exportAuditCsv(Request $request): StreamedResponse
     {
-        $logs = AuditLog::query()->latest('id')->limit(500)->get();
+        $actor = $request->user();
+        $isBranchManager = $actor && $actor->hasRole('branch_manager');
+        $branchUserIds = $isBranchManager
+            ? User::query()->where('branch_id', (int) $actor->branch_id)->pluck('id')
+            : collect();
+        $logs = AuditLog::query()
+            ->when($isBranchManager, fn ($q) => $q->whereIn('user_id', $branchUserIds))
+            ->latest('id')
+            ->limit(500)
+            ->get();
 
         return response()->streamDownload(function () use ($logs): void {
             $handle = fopen('php://output', 'w');
-            fputcsv($handle, ['ID', 'Actor ID', 'Action', 'Entity Type', 'Entity ID', 'IP', 'Created At']);
+            fputcsv($handle, ['ID', 'User ID', 'Action', 'Entity Type', 'Entity ID', 'IP', 'Created At']);
             foreach ($logs as $log) {
                 fputcsv($handle, [
                     $log->id,
-                    $log->actor_id,
+                    $log->user_id,
                     $log->action,
                     $log->entity_type,
                     $log->entity_id,

@@ -1,72 +1,108 @@
-# AEC LMS — Alom's English Center (Laravel 12 Modular Plugin Platform)
+# AEC LMS — Laravel 12 modular plugin platform
 
-Complete Laravel 12 (`PHP 8.3+`) modular Learning Management System located under `/laravel/`.
+**Development status: not yet production-ready.** This is the sole application for ALOMS ENGLISH CENTER. The production backend, frontend, authentication, database, business workflows, plugin lifecycle, installation and administration are implemented in Laravel.
 
-## Architecture Overview
+## Application layout
 
-### Protected Core (`/laravel/app/Core/`)
-The Core is permanently protected against plugin disabling or uninstallation:
-- **Authentication & RBAC**: `User`, `Role`, `Permission`, `RolePermissionMiddleware`, Sanctum API tokens (`personal_access_tokens`).
-- **Fresh Empty-Database Installer**: `FreshInstallerService`, `/install` wizard, and `php artisan aec:install-fresh`. Refuses installation if the database already contains any tables, never drops/truncates databases, and never imports legacy records (`legacy_records_imported = false`).
-- **Universal Plugin Lifecycle Engine**: `PluginManager`, `PluginManifest`, `BasePluginServiceProvider`, `EnsurePluginEnabled` middleware, ZIP path-traversal guard, `checksums.json` SHA-256 package integrity verification, dependency & active-dependent enforcement, pre-update snapshot & automatic rollback (`plugin-rollbacks`), `PluginLifecycleEvent` broadcasts, encrypted settings via Laravel `Crypt`, and data-preserving uninstall (`onUninstall`).
-- **Security & Governance**: `AuditLogger`, encrypted ZIP+AES-256-CBC+HMAC-SHA256 `BackupService`, and SHA-256 + HMAC-SHA256 signed `UniversalUpdateService`.
+- `app/Core/` — protected Laravel Core, authentication, RBAC, installer, plugin lifecycle, audit, backup and update services.
+- `plugins/modules/` — independent plugin modules.
+- `routes/` — Core web/API routes.
+- `database/migrations/` and `database/seeders/` — Core schema and initial permissions.
+- `resources/views/` — Laravel Blade UI.
+- `tests/Feature/` — automated feature/regression tests.
+- `scripts/build-cpanel-package.sh` — creates a Laravel-only cPanel package.
 
-### Independent Modular Plugins (`/laravel/plugins/modules/` — 33 Modules)
-1. `branch-management` — Campus branches & branch isolation foundation
-2. `student-management` — Branch-scoped admissions & student profiles
-3. `teacher-management` — Instructor profiles & specializations
-4. `guardian-management` — Guardian profiles & student-guardian links
-5. `admission-management` — Online & campus admission applications + approval workflow
-6. `course-management` — Academic sessions, courses, lessons, batches, enrollments
-7. `class-management` — Independent academic classes, sections, classrooms & weekly routines
-8. `batch-management` — Independent intake batches, seat capacities & schedules
-9. `exam-management` — Exams, question bank, server-side graded attempts
-10. `attendance-management` — Daily batch attendance registers
-11. `certificate-management` — Digital certificates, `/result` verification codes & revocation
-12. `library-management` — Printed catalog inventory, borrow/return & overdue fine ledger
-13. `hr-staff-management` — Staff directory, leave status & monthly payroll runs
-14. `fees-management` — Fee categories, student invoices, discounts
-15. `payment-management` — Immutable ledger, offline desk settlements, atomic over-refund-safe refunds
-16. `gateway-sslcommerz` — Dedicated SSLCOMMERZ Hosted Checkout + IPN hash verification
-17. `gateway-card` — Dedicated Visa/Mastercard Tokenized Checkout + HMAC webhook (rejects raw PAN/CVV)
-18. `gateway-stripe` — Dedicated Stripe Tokenized Checkout + `Stripe-Signature` timestamped HMAC webhook
-19. `gateway-paypal` — Dedicated PayPal Hosted Order + `X-PayPal-Signature` HMAC webhook
-20. `universal-payment` — Unified multi-gateway routing & fee checkout orchestrator
-21. `sms-gateway` — SMS notifications & encrypted gateway settings
-22. `email-notifications` — Reusable email templates, encrypted SMTP config & dispatch logs
-23. `notice-board` — Role-targeted & pinned notices
-24. `notification-center` — In-app notifications & dispatch hub
-25. `reports-analytics` — Operational metrics & CSV audit exports
-26. `seo-manager` — Sitemap, meta tags, OpenGraph & schema configuration
-27. `marketing-management` — Campaigns, UTM tracking & promo coupon codes
-28. `gmail-marketing` — Gmail campaign workflows
-29. `meta-pixel` — Facebook Meta Pixel event tracking
-30. `google-console` — Google Search Console & GA4 telemetry configuration
-31. `admin-boosting` — Promotional ad boost tracking
-32. `visitor-popup-ads` — Conversion pop-up banner builder
-33. `cms-website` — Blog posts, homepage customizer & contact inquiries (separated cleanly from Builders)
-34. `page-builder` — Standalone custom landing page block builder (`/page/{slug}`)
-35. `slider-builder` — Standalone homepage hero slider manager
-36. `carousel-builder` — Standalone testimonial & showcase carousel manager
-37. `storefront-catalog` — Physical books, flashcards & merchandise storefront
-38. `mobile-app-api` — Sanctum-authenticated learner API endpoints (`/api/mobile/*`)
-39. `role-ai-assistant` — Optional server-side Role-Based AI Assistant with encrypted keys & role allowlists
+## Plugin catalog
 
-## Local Setup & Verification (PHP 8.3+ & Composer Required)
+There are currently **39 plugin manifests** in the repository. A manifest/catalog entry does not mean the module is fully implemented or production accepted; some workflows are foundations or partial implementations and still need full business logic, UI, authorization, branch scoping, integration and end-to-end tests.
+
+The modules are independently identified under `plugins/modules/`:
+
+1. Branch Management
+2. Student Management
+3. Teacher Management
+4. Guardian Management
+5. Admission Management
+6. Course Management
+7. Class Management
+8. Batch Management
+9. Exam Management
+10. Attendance Management
+11. Certificate Management
+12. Library Management
+13. HR & Staff Management
+14. Fees Management
+15. Payment Management
+16. Visa/Mastercard Gateway
+17. SSLCOMMERZ Gateway
+18. Stripe Gateway
+19. PayPal Gateway
+20. Universal Payment Orchestrator
+21. SMS Gateway
+22. Email Notifications
+23. Notice Board
+24. Notification Center
+25. Reports & Analytics
+26. SEO Manager
+27. Marketing Management
+28. Gmail Marketing
+29. Meta Pixel
+30. Google Search Console
+31. Admin Boosting
+32. Visitor Popup Ads
+33. Website CMS
+34. Page Builder
+35. Slider Builder
+36. Carousel Builder
+37. Storefront Catalog
+38. Mobile App API
+39. Role-based AI Assistant
+
+Page Builder, Slider Builder, Carousel Builder and each payment gateway are separate plugins; gateway credentials and provider callbacks must remain isolated in their own plugin settings/services.
+
+## Local setup
+
+Requirements: PHP 8.3+, Composer 2 and the PHP extensions needed by Laravel and the selected database driver.
 
 ```bash
-cd laravel
-composer install
 cp .env.example .env
+composer install
 php artisan key:generate
-php artisan aec:install-fresh --name="Admin" --email="admin@alomsenglish.com" --password="StrongPassword!2026"
-php artisan aec:sync-plugins
+```
+
+Configure a **new, empty** MySQL/MariaDB database in `.env`, then run the installer:
+
+```bash
+php artisan lms:install \\
+  --app-name="Alom's English Center" \\
+  --app-url="https://YOUR-DOMAIN" \\
+  --admin-name="Administrator" \\
+  --admin-email="ADMIN@YOUR-DOMAIN"
+```
+
+The command prompts for the administrator password using hidden terminal input. Do not pass passwords on the command line. The initial `key:generate` provides a bootstrap key for Laravel's encrypted browser session; the fresh installer then creates and persists new final encryption/signing keys. The installer refuses any database containing existing tables and never drops/truncates a database or imports legacy demo data.
+
+Synchronize the plugin catalog and run tests:
+
+```bash
+php artisan lms:plugins:sync
 php artisan test
 ```
 
-## cPanel Clean Production Package
+## cPanel package
+
+From this Laravel application directory:
 
 ```bash
 bash scripts/build-cpanel-package.sh
-# Outputs clean production archive: laravel/dist/aec-lms-cpanel-release.zip
 ```
+
+Output: `dist/aec-lms-cpanel-release.zip` and its SHA-256 sidecar. The production document root must point to this application's `public/` directory. Keep `.env`, `storage/`, backups and private uploads outside the web document root.
+
+See [../docs/LARAVEL-CPANEL-DEPLOYMENT.md](../docs/LARAVEL-CPANEL-DEPLOYMENT.md) and [../docs/LARAVEL-BACKUP-RESTORE.md](../docs/LARAVEL-BACKUP-RESTORE.md).
+
+## CI and release gates
+
+GitHub Actions runs the current Laravel feature suite on PHP 8.3 and builds/verifies the cPanel package. The test suite is not yet complete acceptance coverage for all 39 plugins. Provider sandbox callbacks, branch-isolation coverage across every module, large MySQL backup/restore, browser E2E, security review and a clean cPanel installation/restore rehearsal remain release blockers.
+
+Do not merge or deploy as a production LMS until the release-readiness audit is closed.

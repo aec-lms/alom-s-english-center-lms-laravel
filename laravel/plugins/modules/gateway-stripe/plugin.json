@@ -1,12 +1,14 @@
 {
     "slug": "gateway-stripe",
     "name": "Stripe Payment Gateway",
-    "version": "2.0.0",
+    "version": "2.0.1",
     "author": "Alom's English Center",
-    "category": "finance",
-    "description": "Independent Stripe PaymentIntent & Checkout Gateway with Stripe-Signature HMAC webhook verification, idempotency, and encrypted credentials.",
+    "category": "payment-gateway",
+    "description": "Live Stripe PaymentIntents integration with Stripe.js PaymentMethod tokens, idempotency, signed webhook verification and encrypted credentials.",
     "core_compatibility": "^2.0",
-    "dependencies": ["payment-management"],
+    "dependencies": [
+        "payment-management"
+    ],
     "provider": "Plugins\\Modules\\GatewayStripe\\Providers\\GatewayStripeServiceProvider",
     "permissions": [
         {
@@ -15,9 +17,37 @@
         }
     ],
     "settings_schema": [
-        { "key": "publishable_key", "label": "Stripe Publishable Key (pk_...)", "type": "text", "secret": false },
-        { "key": "secret_key", "label": "Stripe Secret Key (sk_...)", "type": "password", "secret": true },
-        { "key": "webhook_secret", "label": "Stripe Webhook Signing Secret (whsec_...)", "type": "password", "secret": true },
-        { "key": "sandbox_mode", "label": "Sandbox Test Mode (1 or 0)", "type": "text", "secret": false }
+        {
+            "key": "publishable_key",
+            "label": "Stripe Publishable Key (pk_test_... / pk_live_...)",
+            "type": "text",
+            "secret": false,
+            "help": "Used by Stripe.js in the browser. Never put the Secret Key here."
+        },
+        {
+            "key": "secret_key",
+            "label": "Stripe Secret Key (sk_test_... / sk_live_...)",
+            "type": "password",
+            "secret": true,
+            "help": "Encrypted on save and used only server-side."
+        },
+        {
+            "key": "webhook_secret",
+            "label": "Stripe Webhook Signing Secret (whsec_...)",
+            "type": "password",
+            "secret": true,
+            "help": "Create a webhook endpoint for payment_intent.succeeded and copy its signing secret."
+        },
+        {
+            "key": "sandbox_mode",
+            "label": "Stripe Environment",
+            "type": "select",
+            "secret": false,
+            "default": "1",
+            "options": {
+                "0": "Live",
+                "1": "Test / Sandbox"
+            }
+        }
     ]
 }

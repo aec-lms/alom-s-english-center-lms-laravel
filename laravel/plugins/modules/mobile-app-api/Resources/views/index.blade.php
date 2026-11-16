@@ -5,7 +5,7 @@
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
             <h1 class="text-2xl font-extrabold text-slate-900">Mobile App Management (Apple iOS &amp; Android)</h1>
-            <p class="text-xs text-slate-500">Control store links, version gates, deep links, and Sanctum REST endpoints for <span class="font-mono">https://www.alomsenglishcenter.com/api/mobile/*</span>.</p>
+            <p class="text-xs text-slate-500">Control store links, version gates, deep links, and Sanctum REST endpoints for <span class="font-mono">/api/mobile/*</span>.</p>
         </div>
         <div class="flex items-center gap-2 text-xs">
             <span class="px-3 py-1 rounded-full bg-slate-900 text-white font-bold">iOS Devices: {{ $iosCount }}</span>
@@ -13,6 +13,7 @@
         </div>
     </div>
 
+            <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">This plugin provides the Laravel mobile REST API and version controls. Native iOS and Android app binaries are not included in this backend repository. Keep both stores disabled until the real apps are published and their verified store URLs, bundle IDs and release versions are available.</p>
     <form method="POST" action="{{ route('plugins.mobile_app.save') }}" class="grid md:grid-cols-2 gap-6 text-xs">
         @csrf
         <div class="bg-white rounded-2xl border border-slate-200 p-6 space-y-4">
@@ -21,20 +22,20 @@
                     <h2 class="text-sm font-extrabold text-slate-900">Apple iOS App Store</h2>
                     <p class="text-[11px] text-slate-500">iPhone &amp; iPad native client settings</p>
                 </div>
-                <label class="inline-flex items-center gap-1.5 font-semibold"><input type="checkbox" name="ios_enabled" value="1" @checked($config['ios_enabled'] ?? true)> Enabled</label>
+                <label class="inline-flex items-center gap-1.5 font-semibold"><input type="checkbox" name="ios_enabled" value="1" @checked($config['ios_enabled'] ?? false)> Enabled</label>
             </div>
             <label class="block font-semibold">Apple Bundle Identifier
-                <input name="ios_bundle_id" required value="{{ $config['ios_bundle_id'] }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono">
+                <input name="ios_bundle_id" value="{{ $config['ios_bundle_id'] }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono">
             </label>
             <label class="block font-semibold">Apple App Store URL
                 <input name="ios_store_url" value="{{ $config['ios_store_url'] }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono">
             </label>
             <div class="grid grid-cols-2 gap-3">
                 <label class="block font-semibold">Min Supported Version
-                    <input name="ios_min_version" required value="{{ $config['ios_min_version'] }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono">
+                    <input name="ios_min_version" value="{{ $config['ios_min_version'] }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono">
                 </label>
                 <label class="block font-semibold">Latest App Store Version
-                    <input name="ios_latest_version" required value="{{ $config['ios_latest_version'] }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono">
+                    <input name="ios_latest_version" value="{{ $config['ios_latest_version'] }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono">
                 </label>
             </div>
             <label class="inline-flex items-center gap-2 font-semibold text-rose-700"><input type="checkbox" name="ios_force_update" value="1" @checked($config['ios_force_update'] ?? false)> Force iOS Update Below Min Version</label>
@@ -46,20 +47,20 @@
                     <h2 class="text-sm font-extrabold text-slate-900">Google Android Play Store</h2>
                     <p class="text-[11px] text-slate-500">Android smartphone &amp; tablet native client</p>
                 </div>
-                <label class="inline-flex items-center gap-1.5 font-semibold"><input type="checkbox" name="android_enabled" value="1" @checked($config['android_enabled'] ?? true)> Enabled</label>
+                <label class="inline-flex items-center gap-1.5 font-semibold"><input type="checkbox" name="android_enabled" value="1" @checked($config['android_enabled'] ?? false)> Enabled</label>
             </div>
             <label class="block font-semibold">Android Application Package ID
-                <input name="android_package_name" required value="{{ $config['android_package_name'] }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono">
+                <input name="android_package_name" value="{{ $config['android_package_name'] }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono">
             </label>
             <label class="block font-semibold">Google Play Store URL
                 <input name="android_store_url" value="{{ $config['android_store_url'] }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono">
             </label>
             <div class="grid grid-cols-2 gap-3">
                 <label class="block font-semibold">Min Supported Version
-                    <input name="android_min_version" required value="{{ $config['android_min_version'] }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono">
+                    <input name="android_min_version" value="{{ $config['android_min_version'] }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono">
                 </label>
                 <label class="block font-semibold">Latest Play Store Version
-                    <input name="android_latest_version" required value="{{ $config['android_latest_version'] }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono">
+                    <input name="android_latest_version" value="{{ $config['android_latest_version'] }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono">
                 </label>
             </div>
             <label class="inline-flex items-center gap-2 font-semibold text-rose-700"><input type="checkbox" name="android_force_update" value="1" @checked($config['android_force_update'] ?? false)> Force Android Update Below Min Version</label>
@@ -69,14 +70,14 @@
             <h2 class="text-sm font-extrabold text-slate-900">Global Mobile API &amp; Deep Linking</h2>
             <div class="grid md:grid-cols-3 gap-4">
                 <label class="block font-semibold">Custom Deep Link URI Scheme
-                    <input name="deep_link_scheme" required value="{{ $config['deep_link_scheme'] }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono">
+                    <input name="deep_link_scheme" value="{{ $config['deep_link_scheme'] }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono">
                 </label>
                 <label class="block font-semibold md:col-span-2">Maintenance Mode Banner Message
                     <input name="maintenance_message" value="{{ $config['maintenance_message'] }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
                 </label>
             </div>
             <div class="flex flex-wrap items-center gap-6">
-                <label class="inline-flex items-center gap-2 font-semibold"><input type="checkbox" name="push_enabled" value="1" @checked($config['push_enabled'] ?? true)> Enable APNs (Apple) &amp; FCM (Android) Push Tokens</label>
+                <label class="inline-flex items-center gap-2 font-semibold"><input type="checkbox" name="push_enabled" value="1" @checked($config['push_enabled'] ?? false)> Enable APNs (Apple) &amp; FCM (Android) Push Tokens</label>
                 <label class="inline-flex items-center gap-2 font-semibold text-amber-700"><input type="checkbox" name="maintenance_mode" value="1" @checked($config['maintenance_mode'] ?? false)> Enable Mobile Maintenance Mode</label>
             </div>
             <div class="pt-2 flex flex-wrap items-center justify-between gap-3">

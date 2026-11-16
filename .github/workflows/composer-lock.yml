@@ -1,0 +1,97 @@
+name: Generate Laravel Composer Lock
+
+on:
+  push:
+    branches: ["fix/laravel-ci-php83"]
+    paths:
+      - "laravel/composer.json"
+      - ".github/workflows/composer-lock.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  lock-dependencies:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      APP_ENV: testing
+      DB_CONNECTION: sqlite
+      DB_DATABASE: ":memory:"
+      CACHE_STORE: array
+      SESSION_DRIVER: array
+      QUEUE_CONNECTION: sync
+      MAIL_MAILER: array
+    defaults:
+      run:
+        working-directory: laravel
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: fix/laravel-ci-php83
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup PHP 8.3 and Composer
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962
+        with:
+          php-version: "8.3"
+          tools: composer:v2
+          extensions: mbstring, dom, fileinfo, sqlite3, pdo_sqlite, pdo_mysql, xml, curl, ctype, tokenizer, bcmath, zip
+          coverage: none
+
+      - name: Generate deterministic dependency lock
+        run: composer update --no-install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare Laravel environment
+        run: |
+          cp .env.example .env
+          mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache
+          chmod -R 775 storage bootstrap/cache
+
+      - name: Install locked dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Audit generated locked dependencies
+        run: composer audit --locked --no-interaction
+
+      - name: Generate application key
+        run: php artisan key:generate
+
+      - name: Run Laravel regression tests against the generated lock
+        run: php artisan test
+
+      - name: Build and verify the cPanel package
+        run: |
+          bash scripts/build-cpanel-package.sh
+          python3 - <<'PY'
+          import zipfile
+          archive = "dist/aec-lms-cpanel-release.zip"
+          with zipfile.ZipFile(archive) as package:
+              files = {name.removeprefix("./").rstrip("/") for name in package.namelist() if not name.endswith("/")}
+          required = {".env.example", "composer.lock", "vendor/autoload.php", "artisan", "public/index.php"}
+          missing = required - files
+          if missing:
+              raise SystemExit(f"Release package missing required files: {sorted(missing)}")
+          leaks = [name for name in files if name.rsplit("/", 1)[-1].startswith(".env") and name.rsplit("/", 1)[-1] != ".env.example"]
+          if leaks:
+              raise SystemExit(f"Environment secrets found in package: {sorted(leaks)}")
+          print(f"Verified {len(files)} release files")
+          PY
+
+      - name: Commit Composer lock file
+        working-directory: .
+        run: |
+          if [ ! -f laravel/composer.lock ]; then
+            echo "Composer did not generate laravel/composer.lock"
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add laravel/composer.lock
+          if git diff --cached --quiet; then
+            echo "Composer lock file is already current."
+            exit 0
+          fi
+          git commit -m "chore: lock Laravel dependencies [skip ci]"
+          git push origin HEAD:fix/laravel-ci-php83

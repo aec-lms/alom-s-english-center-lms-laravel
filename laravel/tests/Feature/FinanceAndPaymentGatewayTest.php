@@ -6,14 +6,17 @@ namespace Tests\Feature;
 
 use App\Core\Plugins\PluginManager;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Http\Client\Request as ClientRequest;
+use Illuminate\Support\Facades\Http;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
 use Plugins\Modules\StudentManagement\Models\Student;
+use Plugins\Modules\UniversalPayment\Services\UniversalPaymentOrchestrator;
 use Tests\TestCase;
 
 class FinanceAndPaymentGatewayTest extends TestCase
 {
-    public function test_card_gateway_rejects_raw_pan_and_cvv_and_settles_via_signed_webhook(): void
+    public function test_card_gateway_refuses_checkout_without_acquirer_adapter_and_sslcommerz_works(): void
     {
         $this->markSystemInstalled();
         $this->activatePlugins([
@@ -31,9 +34,15 @@ class FinanceAndPaymentGatewayTest extends TestCase
             'api_secret' => 'sec_live_test',
             'webhook_secret' => 'whsec_test_123456',
         ], ['merchant_id', 'api_secret', 'webhook_secret']);
+        $plugins->saveSettings('gateway-sslcommerz', [
+            'store_id' => 'aec_sandbox_store',
+            'store_password' => 'ssl_sandbox_password',
+            'sandbox_mode' => '1',
+        ], ['store_password']);
 
         $branchId = DB::table('branches')->insertGetId(['code' => 'DHK', 'name' => 'Dhaka', 'created_at' => now(), 'updated_at' => now()]);
         $studentUser = $this->createUserWithRole('student', $branchId);
+        $studentUser->update(['phone' => '01712345678']);
         $student = Student::query()->create([
             'user_id' => $studentUser->id,
             'branch_id' => $branchId,
@@ -54,7 +63,50 @@ class FinanceAndPaymentGatewayTest extends TestCase
             'status' => 'unpaid',
         ]);
 
+        $sslInvoice = FeeInvoice::query()->create([
+            'invoice_number' => 'INV-SSL-001',
+            'student_id' => $student->id,
+            'branch_id' => $branchId,
+            'subtotal_amount' => 1200,
+            'discount_amount' => 0,
+            'net_amount' => 1200,
+            'paid_amount' => 0,
+            'currency' => 'BDT',
+            'status' => 'unpaid',
+        ]);
+
+        $otherStudentUser = $this->createUserWithRole('student', $branchId, 'other-student@aec.test');
+        $otherStudent = Student::query()->create([
+            'user_id' => $otherStudentUser->id,
+            'branch_id' => $branchId,
+            'student_code' => 'STU-102',
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+        ]);
+        $otherInvoice = FeeInvoice::query()->create([
+            'invoice_number' => 'INV-SSL-OTHER',
+            'student_id' => $otherStudent->id,
+            'branch_id' => $branchId,
+            'subtotal_amount' => 800,
+            'discount_amount' => 0,
+            'net_amount' => 800,
+            'paid_amount' => 0,
+            'currency' => 'BDT',
+            'status' => 'unpaid',
+        ]);
+
         $admin = $this->createUserWithRole('admin');
+
+        // Offline receipts must not create a dangling initiated transaction when the amount exceeds the invoice.
+        $this->actingAs($admin)->post('/admin/payments/offline', [
+            'invoice_id' => $invoice->id,
+            'amount' => 2501,
+            'receipt_note' => 'Overpayment test',
+        ])->assertStatus(422);
+        $this->assertDatabaseMissing('payment_transactions', [
+            'invoice_id' => $invoice->id,
+            'gateway_slug' => 'offline',
+        ]);
 
         // Raw PAN/CVV must be rejected with 422 on both gateways
         $this->actingAs($admin)->postJson('/payments/card/checkout', [
@@ -68,35 +120,66 @@ class FinanceAndPaymentGatewayTest extends TestCase
             'pan' => '4111111111111111',
         ])->assertStatus(422);
 
-        // Tokenized card checkout succeeds and stores zero PAN/CVV
-        $checkout = $this->actingAs($admin)->postJson('/payments/card/checkout', [
+        // A student may pay their own invoice, but cannot initiate checkout for another student's invoice.
+        $this->actingAs($studentUser)->postJson('/payments/sslcommerz/initiate', [
+            'invoice_id' => $otherInvoice->id,
+        ])->assertForbidden();
+
+        // SSLCOMMERZ must create a server-side session and validate the IPN with the official validation API.
+        $sslTransactionRef = '';
+        Http::fake(function (ClientRequest $request) use (&$sslTransactionRef) {
+            if (str_ends_with((string) parse_url($request->url(), PHP_URL_PATH), '/gwprocess/v4/api.php')) {
+                $sslTransactionRef = (string) ($request->data()['tran_id'] ?? '');
+
+                return Http::response([
+                    'status' => 'SUCCESS',
+                    'sessionkey' => 'SSL-SESSION-KEY-001',
+                    'GatewayPageURL' => 'https://sandbox.sslcommerz.com/gwprocess/v4/gw.php?SESSIONKEY=SSL-SESSION-KEY-001',
+                ], 200);
+            }
+
+            return Http::response([
+                'status' => 'VALID',
+                'tran_id' => $sslTransactionRef,
+                'val_id' => 'SSL-VALIDATION-001',
+                'amount' => '1200.00',
+                'currency' => 'BDT',
+                'bank_tran_id' => 'BANK-SSL-001',
+                'risk_level' => '0',
+            ], 200);
+        });
+
+        $this->actingAs($admin)->post('/admin/plugins/gateway-sslcommerz/test-connection')
+            ->assertSessionHas('status');
+
+        $sslSession = $this->actingAs($studentUser)->postJson('/payments/sslcommerz/initiate', [
+            'invoice_id' => $sslInvoice->id,
+        ])->assertOk()->json();
+
+        $sslTransaction = PaymentTransaction::query()
+            ->where('transaction_ref', $sslSession['transaction_ref'])
+            ->firstOrFail();
+
+        $this->postJson('/payments/sslcommerz/ipn', [
+            'tran_id' => $sslTransaction->transaction_ref,
+            'val_id' => 'SSL-VALIDATION-001',
+            'status' => 'VALID',
+        ])->assertOk()->assertJson(['status' => 'settled']);
+
+        $this->assertSame('paid', $sslInvoice->fresh()->status);
+        $this->assertSame('settled', $sslTransaction->fresh()->status);
+
+        // Visa/Mastercard is a card network; never fake authorization without an acquiring PSP adapter.
+        $cardResponse = $this->actingAs($admin)->postJson('/payments/card/checkout', [
             'invoice_id' => $invoice->id,
             'payment_token' => 'tok_visa_1234567890',
             'card_brand' => 'visa',
             'last4' => '4242',
-        ])->assertOk()->json();
+        ])->assertStatus(503);
+        $this->assertStringContainsString('acquiring-bank/PSP adapter', $cardResponse->json('message'));
 
-        $payload = json_encode([
-            'transaction_ref' => $checkout['transaction_ref'],
-            'processor_reference' => 'PROC-998877',
-        ], JSON_THROW_ON_ERROR);
-        $sig = hash_hmac('sha256', $payload, 'whsec_test_123456');
-
-        $this->call(
-            'POST',
-            '/payments/card/webhook',
-            [],
-            [],
-            [],
-            ['HTTP_X_CARD_SIGNATURE' => $sig, 'CONTENT_TYPE' => 'application/json'],
-            $payload
-        )->assertOk();
-
-        $tx = PaymentTransaction::query()->where('transaction_ref', $checkout['transaction_ref'])->firstOrFail();
-        $this->assertSame('settled', $tx->status);
-        $this->assertSame('paid', $invoice->fresh()->status);
-        $this->assertArrayNotHasKey('card_number', $tx->metadata ?? []);
-        $this->assertArrayNotHasKey('cvv', $tx->metadata ?? []);
+        $this->assertSame(0, PaymentTransaction::query()->where('gateway_slug', 'gateway-card')->count());
+        $this->assertSame('unpaid', $invoice->fresh()->status);
     }
 
     public function test_stripe_and_paypal_gateways_and_atomic_refund_workflow(): void
@@ -109,6 +192,8 @@ class FinanceAndPaymentGatewayTest extends TestCase
             'payment-management',
             'gateway-stripe',
             'gateway-paypal',
+            'gateway-card',
+            'universal-payment',
         ]);
 
         $plugins = app(PluginManager::class);
@@ -173,6 +258,44 @@ class FinanceAndPaymentGatewayTest extends TestCase
             'cvv' => '999',
         ])->assertStatus(422);
 
+        Http::fake(function (ClientRequest $request) {
+            $url = $request->url();
+            if (str_contains($url, '/v1/account')) {
+                return Http::response(['id' => 'acct_test_123', 'country' => 'US'], 200);
+            }
+            if (str_contains($url, '/v1/payment_intents')) {
+                return Http::response([
+                    'id' => 'pi_test_settled_1',
+                    'status' => 'requires_action',
+                    'client_secret' => 'pi_test_settled_1_secret_test',
+                ], 200);
+            }
+            if (str_contains($url, '/v1/oauth2/token')) {
+                return Http::response(['access_token' => 'paypal-test-access-token', 'token_type' => 'Bearer', 'expires_in' => 300], 200);
+            }
+            if (str_contains($url, '/v2/checkout/orders')) {
+                return Http::response([
+                    'id' => 'ORDER-TEST-001',
+                    'status' => 'CREATED',
+                    'links' => [['rel' => 'approve', 'href' => 'https://www.sandbox.paypal.com/checkoutnow?token=ORDER-TEST-001']],
+                ], 201);
+            }
+            if (str_contains($url, '/v1/notifications/verify-webhook-signature')) {
+                return Http::response(['verification_status' => 'SUCCESS'], 200);
+            }
+            return Http::response(['message' => 'Unexpected fake payment endpoint'], 404);
+        });
+
+        $this->actingAs($admin)->post('/admin/plugins/gateway-stripe/test-connection')
+            ->assertSessionHas('status');
+        $this->actingAs($admin)->post('/admin/plugins/gateway-paypal/test-connection')
+            ->assertSessionHas('status');
+
+        $gatewayStatuses = app(UniversalPaymentOrchestrator::class)->gatewayStatus();
+        $this->assertTrue($gatewayStatuses['gateway-stripe']['available']);
+        $this->assertTrue($gatewayStatuses['gateway-paypal']['available']);
+        $this->assertSame('processor_adapter_required', $gatewayStatuses['gateway-card']['status']);
+
         // Stripe tokenized checkout + idempotency + signed webhook
         $stripeRes1 = $this->actingAs($admin)->postJson('/payments/stripe/checkout', [
             'invoice_id' => $stripeInvoice->id,
@@ -188,8 +311,17 @@ class FinanceAndPaymentGatewayTest extends TestCase
         $this->assertSame($stripeRes1['transaction_ref'], $stripeRes2['transaction_ref']);
 
         $stripePayload = json_encode([
-            'transaction_ref' => $stripeRes1['transaction_ref'],
-            'payment_intent_id' => 'pi_test_settled_1',
+            'id' => 'evt_test_payment_intent_succeeded',
+            'type' => 'payment_intent.succeeded',
+            'data' => ['object' => [
+                'id' => 'pi_test_settled_1',
+                'object' => 'payment_intent',
+                'status' => 'succeeded',
+                'amount' => 450000,
+                'amount_received' => 450000,
+                'currency' => 'bdt',
+                'metadata' => ['transaction_ref' => $stripeRes1['transaction_ref']],
+            ]],
         ], JSON_THROW_ON_ERROR);
         $ts = (string) time();
         $stripeSig = 't=' . $ts . ',v1=' . hash_hmac('sha256', $ts . '.' . $stripePayload, 'whsec_stripe_abc');
@@ -213,10 +345,15 @@ class FinanceAndPaymentGatewayTest extends TestCase
         ])->assertOk()->json();
 
         $paypalPayload = json_encode([
-            'transaction_ref' => $paypalRes['transaction_ref'],
-            'capture_id' => 'CAP-998811',
+            'id' => 'WH-TEST-CAPTURE-001',
+            'event_type' => 'PAYMENT.CAPTURE.COMPLETED',
+            'resource' => [
+                'id' => 'CAP-998811',
+                'status' => 'COMPLETED',
+                'custom_id' => $paypalRes['transaction_ref'],
+                'amount' => ['currency_code' => 'BDT', 'value' => '2500.00'],
+            ],
         ], JSON_THROW_ON_ERROR);
-        $paypalSig = hash_hmac('sha256', $paypalPayload, 'whsec_paypal_xyz');
 
         $this->call(
             'POST',
@@ -224,7 +361,14 @@ class FinanceAndPaymentGatewayTest extends TestCase
             [],
             [],
             [],
-            ['HTTP_X_PAYPAL_SIGNATURE' => $paypalSig, 'CONTENT_TYPE' => 'application/json'],
+            [
+                'HTTP_PAYPAL_AUTH_ALGO' => 'SHA256withRSA',
+                'HTTP_PAYPAL_CERT_URL' => 'https://api-m.sandbox.paypal.com/cert',
+                'HTTP_PAYPAL_TRANSMISSION_ID' => 'transmission-test-001',
+                'HTTP_PAYPAL_TRANSMISSION_SIG' => 'signature-test',
+                'HTTP_PAYPAL_TRANSMISSION_TIME' => now()->toIso8601String(),
+                'CONTENT_TYPE' => 'application/json',
+            ],
             $paypalPayload
         )->assertOk();
 
@@ -236,12 +380,19 @@ class FinanceAndPaymentGatewayTest extends TestCase
         $this->actingAs($admin)->post("/admin/payments/{$tx->id}/refund", [
             'amount' => 9999,
             'reason' => 'Over-refund attempt',
+            'provider_refund_reference' => 're_test_overrefund_001',
         ])->assertSessionHasErrors('refund');
 
         $this->actingAs($admin)->post("/admin/payments/{$tx->id}/refund", [
             'amount' => 1500,
             'reason' => 'Partial fee adjustment',
+            'provider_refund_reference' => 're_test_provider_refund_001',
         ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('payment_refunds', [
+            'payment_transaction_id' => $tx->id,
+            'provider_refund_reference' => 're_test_provider_refund_001',
+        ]);
 
         $this->assertSame('partial', $stripeInvoice->fresh()->status);
         $this->assertEquals(3000.0, (float) $stripeInvoice->fresh()->paid_amount);

@@ -6,6 +6,7 @@ namespace Plugins\Modules\PaymentManagement\Services;
 
 use App\Core\Security\AuditLogger;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
 use RuntimeException;
@@ -48,6 +49,15 @@ class PaymentSettlementService
                 'paid_amount' => $newPaid,
                 'status' => $newPaid >= (float) $invoice->net_amount ? 'paid' : 'partial',
             ]);
+
+            if ($newPaid >= (float) $invoice->net_amount
+                && Schema::hasTable('enrollments')
+                && Schema::hasColumn('enrollments', 'invoice_id')) {
+                DB::table('enrollments')
+                    ->where('invoice_id', $invoice->id)
+                    ->where('status', 'pending')
+                    ->update(['status' => 'active', 'updated_at' => now()]);
+            }
 
             $this->audit->log('payment.settled', 'payment_transaction', (string) $lockedTx->id, [
                 'gateway' => $lockedTx->gateway_slug,

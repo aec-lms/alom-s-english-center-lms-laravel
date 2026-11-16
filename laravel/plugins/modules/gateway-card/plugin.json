@@ -1,10 +1,10 @@
 {
     "slug": "gateway-card",
     "name": "Visa / Mastercard Tokenized Card Gateway",
-    "version": "2.0.0",
+    "version": "2.0.1",
     "author": "Alom's English Center",
     "category": "payment-gateway",
-    "description": "Dedicated Visa and Mastercard tokenized checkout plugin. Never accepts or stores raw PAN or CVV.",
+    "description": "PCI-safe tokenized Visa/Mastercard integration interface. Requires an acquiring-bank or payment-service-provider-specific adapter; Visa/Mastercard are card networks, not merchant payment processors. Stripe can accept supported Visa/Mastercard payments through its independent gateway plugin.",
     "core_compatibility": "^2.0",
     "dependencies": [],
     "provider": "Plugins\\Modules\\GatewayCard\\Providers\\GatewayCardServiceProvider",
@@ -19,19 +19,22 @@
             "key": "merchant_id",
             "label": "Card Merchant ID",
             "type": "text",
-            "secret": true
+            "secret": true,
+            "help": "Merchant/acquirer identifier supplied by your bank or PSP adapter."
         },
         {
             "key": "api_secret",
             "label": "Card Processor API Secret",
             "type": "password",
-            "secret": true
+            "secret": true,
+            "help": "Encrypted server-side credential for the selected acquirer adapter. The generic interface is not live until a compatible adapter is installed."
         },
         {
             "key": "webhook_secret",
             "label": "Card Webhook HMAC Secret",
             "type": "password",
-            "secret": true
+            "secret": true,
+            "help": "HMAC secret issued by the selected acquirer adapter."
         }
     ]
 }
