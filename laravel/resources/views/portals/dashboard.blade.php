@@ -112,6 +112,22 @@
             </section>
         @endif
 
+        @if ($notifications->isNotEmpty())
+            <section class="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+                <h2 class="font-extrabold">My Notifications</h2>
+                @foreach ($notifications as $notification)
+                    <article class="border-t border-slate-100 pt-3">
+                        <div class="flex items-center justify-between gap-3">
+                            <h3 class="font-semibold text-sm">{{ $notification->title }}</h3>
+                            <span class="text-[10px] font-bold uppercase text-sky-700">{{ $notification->channel }}</span>
+                        </div>
+                        <p class="text-xs text-slate-600 mt-1 whitespace-pre-line">{{ $notification->message }}</p>
+                        <p class="text-[10px] text-slate-400 mt-1">{{ $notification->created_at }} · {{ $notification->status }}</p>
+                    </article>
+                @endforeach
+            </section>
+        @endif
+
         @if ($notices->isNotEmpty())
             <section class="bg-white rounded-2xl border border-slate-200 p-5">
                 <h2 class="font-extrabold mb-3">Notices</h2>
