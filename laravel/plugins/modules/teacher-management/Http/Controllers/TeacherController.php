@@ -199,7 +199,6 @@ class TeacherController extends Controller
         DB::transaction(function () use ($teacher, $user): void {
             $teacher->deleted_user_was_active = (bool) $user?->is_active;
             $teacher->save();
-            $teacher->update(['is_active' => false]);
             if ($user) {
                 $user->update(['is_active' => false]);
             }
