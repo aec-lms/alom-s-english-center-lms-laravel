@@ -47,8 +47,11 @@ jobs:
       - name: Install Composer dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
 
+      - name: Validate Composer manifest and lockfile
+        run: composer security-validate
+
       - name: Composer security audit
-        run: composer audit --locked --no-interaction
+        run: composer security-audit
 
       - name: Generate application key
         run: php artisan key:generate
