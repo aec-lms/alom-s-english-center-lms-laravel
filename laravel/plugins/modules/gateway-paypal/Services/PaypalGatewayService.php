@@ -166,7 +166,6 @@ class PaypalGatewayService
             ->post($this->apiBase() . '/v1/notifications/verify-webhook-signature', [
                 'auth_algo' => $headers['auth_algo'] ?? '',
                 'cert_url' => $headers['cert_url'] ?? '',
-                ' transmission_id' => $headers['transmission_id'] ?? '',
                 'transmission_id' => $headers['transmission_id'] ?? '',
                 'transmission_sig' => $headers['transmission_sig'] ?? '',
                 'transmission_time' => $headers['transmission_time'] ?? '',
