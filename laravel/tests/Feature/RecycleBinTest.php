@@ -19,6 +19,7 @@ class RecycleBinTest extends TestCase
         $student = Student::query()->create([
             'user_id' => $learner->id,
             'student_code' => 'RECYCLE-001',
+            'admission_date' => now()->toDateString(),
             'status' => 'active',
         ]);
 
