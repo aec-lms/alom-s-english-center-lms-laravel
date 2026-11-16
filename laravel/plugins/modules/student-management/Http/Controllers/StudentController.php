@@ -160,15 +160,17 @@ class StudentController extends Controller
         $code = $student->student_code;
         $id = (string) $student->id;
         DB::transaction(function () use ($student): void {
-            $student->update(['status' => 'inactive']);
+            $student->deleted_user_was_active = (bool) $student->user?->is_active;
+            $student->save();
             if ($student->user) {
                 $student->user->update(['is_active' => false]);
             }
+            $student->delete();
         });
 
-        $this->audit->log('student.deactivated', 'student', $id, ['code' => $code]);
+        $this->audit->log('student.trashed', 'student', $id, ['code' => $code]);
 
-        return back()->with('status', "Student '{$code}' deactivated. Academic, guardian and invoice history has been preserved.");
+        return back()->with('status', "Student '{$code}' moved to the Admin Recycle Bin. Linked academic, guardian and invoice history has been preserved.");
     }
 
     private function ensureAssignedBranch($actor): void
