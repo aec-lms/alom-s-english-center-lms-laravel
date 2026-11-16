@@ -378,6 +378,8 @@ class FinanceAndPaymentGatewayTest extends TestCase
 
         $this->assertSame('paid', $paypalInvoice->fresh()->status);
 
+        $tx = PaymentTransaction::query()->where('transaction_ref', $stripeRes1['transaction_ref'])->firstOrFail();
+
         // An online refund must not be recorded from a caller-supplied reference alone.
         // Until a provider refund adapter is implemented, reject without changing the ledger.
         $this->actingAs($admin)->post("/admin/payments/{$tx->id}/refund", [
