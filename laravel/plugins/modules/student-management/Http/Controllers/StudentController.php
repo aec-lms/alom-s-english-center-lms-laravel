@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Plugins\Modules\StudentManagement\Http\Controllers;
 
 use App\Core\Security\AuditLogger;
+use App\Core\Plugins\PluginManager;
 use App\Http\Controllers\Controller;
 use App\Models\Role;
 use App\Models\User;
@@ -172,8 +173,11 @@ class StudentController extends Controller
         if (!$actor || !$actor->hasRole('branch_manager')) {
             return;
         }
-        if ($actor->branch_id === null) {
-            abort(403, 'Branch manager must be assigned to a branch.');
+        if ($actor->branch_id === null
+            || !app(PluginManager::class)->isEnabled('branch-management')
+            || !Schema::hasTable('branches')
+        ) {
+            abort(403, 'Branch manager must be assigned to an active branch.');
         }
         $activeBranch = \Illuminate\Support\Facades\DB::table('branches')
             ->where('id', $actor->branch_id)
