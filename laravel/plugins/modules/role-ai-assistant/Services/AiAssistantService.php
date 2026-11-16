@@ -14,6 +14,8 @@ use RuntimeException;
 
 class AiAssistantService
 {
+    private const SUPPORTED_PROVIDERS = ['openai', 'gemini'];
+
     public function __construct(
         private readonly PluginManager $plugins,
         private readonly AuditLogger $audit,
@@ -26,69 +28,75 @@ class AiAssistantService
             'allowed_roles',
             'admin,branch_manager,teacher,assistant_teacher,student,accountant,guardian,support_staff'
         );
-        $allowed = array_filter(array_map('trim', explode(',', strtolower($raw))));
-        if (empty($allowed)) {
-            return true;
+        $allowed = array_values(array_filter(array_map('trim', explode(',', strtolower($raw)))));
+        if ($allowed === []) {
+            return false;
         }
+
         foreach ($allowed as $roleSlug) {
             if ($user->hasRole($roleSlug)) {
                 return true;
             }
         }
+
         return false;
     }
 
     public function queryAssistant(User $user, string $prompt): array
     {
         if (!$this->isRoleAllowed($user)) {
-            throw new RuntimeException('Your panel role is not enabled for the AI Assistant.');
+            throw new RuntimeException('Your panel role is not enabled for the AEC LMS AI Assistant.');
+        }
+
+        $provider = strtolower((string) $this->plugins->getSetting('role-ai-assistant', 'provider', 'gemini'));
+        if (!in_array($provider, self::SUPPORTED_PROVIDERS, true)) {
+            throw new RuntimeException('The selected AI integration is not supported. Choose a supported integration in Admin Settings.');
         }
 
         $apiKey = (string) $this->plugins->getSetting('role-ai-assistant', 'api_key', '');
         if ($apiKey === '') {
-            $apiKey = (string) env('GEMINI_API_KEY', '');
+            $environmentKey = $provider === 'openai' ? env('OPENAI_API_KEY', '') : env('GEMINI_API_KEY', '');
+            $apiKey = is_string($environmentKey) ? $environmentKey : '';
         }
 
-        $provider = strtolower((string) $this->plugins->getSetting('role-ai-assistant', 'provider', 'gemini'));
-        $model = (string) $this->plugins->getSetting('role-ai-assistant', 'model', 'gemini-4-hydrogen');
-        $maxTokens = max(64, (int) $this->plugins->getSetting('role-ai-assistant', 'max_tokens', '1024'));
+        $defaultModel = $provider === 'openai' ? 'gpt-4o-mini' : 'gemini-2.5-flash';
+        $configuredModel = trim((string) $this->plugins->getSetting('role-ai-assistant', 'model', $defaultModel));
+        $model = $configuredModel !== '' ? $configuredModel : $defaultModel;
+        $maxTokens = min(8192, max(64, (int) $this->plugins->getSetting('role-ai-assistant', 'max_tokens', '1024')));
         $roleSlug = (string) ($user->roles()->first()?->slug ?? 'user');
-
         $systemInstruction = $this->systemPromptForRole($roleSlug);
 
-        if ($apiKey === '') {
-            $reply = $this->offlineRoleGuidance($roleSlug, $prompt);
-        } else {
-            $reply = $this->dispatchProviderRequest($provider, $model, $apiKey, $systemInstruction, $prompt, $maxTokens);
-        }
+        $reply = $apiKey === ''
+            ? $this->offlineRoleGuidance($roleSlug, $prompt)
+            : $this->dispatchProviderRequest($provider, $model, $apiKey, $systemInstruction, $prompt, $maxTokens);
 
         if (Schema::hasTable('ai_assistant_logs')) {
             AiAssistantLog::query()->create([
                 'user_id' => $user->id,
                 'role_slug' => $roleSlug,
-                'provider' => $apiKey === '' ? 'panel-advisor' : $provider,
+                'provider' => $apiKey === '' ? 'built-in' : $provider,
                 'model' => $apiKey === '' ? 'built-in' : $model,
-                'prompt_excerpt' => mb_substr($prompt, 0, 240),
+                'prompt_excerpt' => '[content withheld]',
                 'tokens_estimated' => (int) ceil((strlen($prompt) + strlen($reply)) / 4),
                 'status' => 'completed',
             ]);
         }
 
         $this->audit->log('ai.assistant_queried', 'ai_assistant', (string) $user->id, [
-            'provider' => $apiKey === '' ? 'panel-advisor' : $provider,
+            'provider' => $apiKey === '' ? 'built-in' : $provider,
             'model' => $model,
             'role' => $roleSlug,
         ], $user->id);
 
-        return ['provider' => $provider, 'model' => $model, 'role' => $roleSlug, 'reply' => $reply];
+        return ['assistant' => 'AEC LMS AI Assistant', 'role' => $roleSlug, 'reply' => $reply];
     }
 
     private function systemPromptForRole(string $role): string
     {
         return match ($role) {
-            'admin' => 'You are the AEC LMS Admin Panel AI Assistant. Help with plugin setup, SEO, Meta Pixel, Google Search Console, Boost campaigns, SMS/Gmail marketing, and institutional governance.',
-            'teacher', 'assistant_teacher' => 'You are the AEC LMS Teacher Panel AI Assistant. Help draft lesson outlines, IELTS/grammar explanations, MCQ quiz questions, and rubric-based student feedback.',
-            'student' => 'You are the AEC LMS Student Panel AI Tutor. Help learners practice English grammar, IELTS Reading/Writing/Speaking tips, vocabulary, and study planning in English or Bengali.',
+            'admin' => 'You are the AEC LMS Admin Panel AI Assistant. Help with plugin setup, SEO, marketing integrations, campaigns, and institutional governance.',
+            'teacher', 'assistant_teacher' => 'You are the AEC LMS Teacher Panel AI Assistant. Help draft lesson outlines, English grammar explanations, MCQ quiz questions, and rubric-based student feedback.',
+            'student' => 'You are the AEC LMS Student Panel AI Tutor. Help learners practice English grammar, IELTS skills, vocabulary, and study planning in English or Bengali.',
             'accountant' => 'You are the AEC LMS Accountant Panel AI Assistant. Help summarize fee reconciliation, refund policies, commission payouts, and ledger audit checklists.',
             'guardian' => 'You are the AEC LMS Guardian Panel AI Assistant. Help parents understand ward attendance alerts, exam progress, and payment schedules.',
             'branch_manager' => 'You are the AEC LMS Branch Manager AI Assistant. Help coordinate branch batches, classroom schedules, student onboarding, and local notices.',
@@ -99,7 +107,7 @@ class AiAssistantService
     private function offlineRoleGuidance(string $role, string $prompt): string
     {
         $label = ucfirst(str_replace('_', ' ', $role));
-        return "[{$label} Panel AI Ready] আপনার প্রশ্ন: \"{$prompt}\"।\nলাইভ AI উত্তর পেতে Admin → Plugin Center → Role-Based AI Assistant থেকে Gemini/OpenAI Key অথবা সার্ভার এনভায়রনমেন্টে GEMINI_API_KEY সেট করুন। এই প্যানেলে আপনি {$label} সংক্রান্ত যেকোনো ড্রাফট, প্ল্যান বা বিশ্লেষণ সহায়তা পাবেন।";
+        return "আপনার {$label} প্যানেলের AEC LMS AI Assistant বর্তমানে অফলাইন মোডে আছে। Admin Settings থেকে AI integration configure করলে পূর্ণ AI সহায়তা চালু হবে। আপনার প্রশ্নটি আবার চেষ্টা করুন অথবা Admin-এর সঙ্গে যোগাযোগ করুন।";
     }
 
     private function dispatchProviderRequest(string $provider, string $model, string $apiKey, string $systemInstruction, string $prompt, int $maxTokens): string
@@ -114,21 +122,28 @@ class AiAssistantService
                 ],
             ]);
             if (!$resp->successful()) {
-                throw new RuntimeException('OpenAI upstream error: HTTP ' . $resp->status());
+                throw new RuntimeException('AI service request failed. Please check the Admin integration settings.');
             }
-            return (string) data_get($resp->json(), 'choices.0.message.content', '');
+            $reply = (string) data_get($resp->json(), 'choices.0.message.content', '');
+            if ($reply === '') {
+                throw new RuntimeException('AI service returned an empty response.');
+            }
+            return $reply;
         }
 
-        $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent";
+        $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model) . ':generateContent';
         $resp = Http::withHeaders(['x-goog-api-key' => $apiKey])->timeout(20)->post($url, [
             'systemInstruction' => ['parts' => [['text' => $systemInstruction]]],
             'contents' => [['parts' => [['text' => $prompt]]]],
             'generationConfig' => ['maxOutputTokens' => $maxTokens],
         ]);
         if (!$resp->successful()) {
-            throw new RuntimeException('Gemini upstream error: HTTP ' . $resp->status());
+            throw new RuntimeException('AI service request failed. Please check the Admin integration settings.');
         }
-
-        return (string) data_get($resp->json(), 'candidates.0.content.parts.0.text', '');
+        $reply = (string) data_get($resp->json(), 'candidates.0.content.parts.0.text', '');
+        if ($reply === '') {
+            throw new RuntimeException('AI service returned an empty response.');
+        }
+        return $reply;
     }
 }
