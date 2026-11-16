@@ -364,7 +364,8 @@ class AttendanceController extends Controller
 
     public function guardianAttendance(Request $request, int $studentId): JsonResponse
     {
-        abort_unless(Schema::hasTable('guardians') && Schema::hasTable('guardian_student'), 403, 'Guardian access is not enabled.');\n        $guardian = DB::table('guardians')->where('user_id', $request->user()->id)->first();
+        abort_unless(Schema::hasTable('guardians') && Schema::hasTable('guardian_student'), 403, 'Guardian access is not enabled.');
+        $guardian = DB::table('guardians')->where('user_id', $request->user()->id)->first();
         abort_unless($guardian && DB::table('guardian_student')->where('guardian_id', $guardian->id)->where('student_id', $studentId)->exists(), 403);
         return response()->json(AttendanceRecord::query()->where('student_id', $studentId)->latest('attendance_date')->paginate(50));
     }
