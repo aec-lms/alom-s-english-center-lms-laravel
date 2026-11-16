@@ -90,23 +90,30 @@ class UniversalPaymentController extends Controller
             abort(500, 'Unable to securely store the uploaded receipt proof.');
         }
 
-        $tx = UniversalPaymentTransaction::query()->create([
-            'reference' => $reference,
-            'payer_name' => $validated['payer_name'],
-            'payer_contact' => $validated['payer_contact'] ?? null,
-            'item_title' => $validated['item_title'],
-            'gateway' => $validated['gateway'],
-            'currency' => $this->plugins->getSetting('universal-payment', 'default_currency', 'BDT') ?: 'BDT',
-            'amount' => $validated['amount'],
-            'external_trx_id' => $validated['external_trx_id'] ?? null,
-            'proof_path' => $proofPath,
-            'proof_mime' => $proofFile?->getMimeType(),
-            'proof_size' => $proofFile?->getSize(),
-            'status' => 'pending',
-            'branch_id' => $actor && $actor->hasRole('branch_manager') ? $actor->branch_id : null,
-            'verified_by' => null,
-            'verified_at' => null,
-        ]);
+        try {
+            $tx = UniversalPaymentTransaction::query()->create([
+                'reference' => $reference,
+                'payer_name' => $validated['payer_name'],
+                'payer_contact' => $validated['payer_contact'] ?? null,
+                'item_title' => $validated['item_title'],
+                'gateway' => $validated['gateway'],
+                'currency' => $this->plugins->getSetting('universal-payment', 'default_currency', 'BDT') ?: 'BDT',
+                'amount' => $validated['amount'],
+                'external_trx_id' => $validated['external_trx_id'] ?? null,
+                'proof_path' => $proofPath,
+                'proof_mime' => $proofFile?->getMimeType(),
+                'proof_size' => $proofFile?->getSize(),
+                'status' => 'pending',
+                'branch_id' => $actor && $actor->hasRole('branch_manager') ? $actor->branch_id : null,
+                'verified_by' => null,
+                'verified_at' => null,
+            ]);
+        } catch (\Throwable $exception) {
+            if ($proofPath !== null) {
+                Storage::disk('local')->delete($proofPath);
+            }
+            throw $exception;
+        }
 
         $this->audit->log('universal_payment.recorded', 'universal_payment', $tx->reference, ['amount' => $tx->amount, 'gateway' => $tx->gateway, 'has_proof' => $proofPath !== null]);
 
