@@ -37,6 +37,7 @@ class UniversalPaymentController extends Controller
             : null;
 
         $user = auth()->user();
+        $this->ensureAssignedBranch($user);
         if ($transactionQuery && $user?->hasRole('branch_manager')) {
             // Branch managers without an assigned branch must never see global records.
             $transactionQuery->where('branch_id', $user->branch_id ?? 0);
@@ -77,7 +78,7 @@ class UniversalPaymentController extends Controller
         ]);
 
         $user = $request->user();
-        abort_if($user?->hasRole('branch_manager') && $user->branch_id === null, 403, 'Your account is not assigned to a branch.');
+        $this->ensureAssignedBranch($user);
 
         $tx = UniversalPaymentTransaction::query()->create([
             'reference' => 'UPAY-' . strtoupper(Str::random(8)),
@@ -103,6 +104,7 @@ class UniversalPaymentController extends Controller
     public function updateStatus(Request $request, UniversalPaymentTransaction $transaction): RedirectResponse
     {
         $user = $request->user();
+        $this->ensureAssignedBranch($user);
         if ($user?->hasRole('branch_manager')) {
             abort_unless($user->branch_id !== null && (int) $transaction->branch_id === (int) $user->branch_id, 404);
         }
@@ -170,5 +172,14 @@ class UniversalPaymentController extends Controller
         }
 
         return back()->with('status', 'Payment intent created. Complete the secure payment step to settle your invoice.');
+    }
+    private function ensureAssignedBranch($actor): void
+    {
+        if (!$actor || !$actor->hasRole('branch_manager')) {
+            return;
+        }
+        if ($actor->branch_id === null || !app('db')->table('branches')->where('id', $actor->branch_id)->where('is_active', true)->exists()) {
+            abort(403, 'Branch manager must be assigned to an active branch.');
+        }
     }
 }
