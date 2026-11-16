@@ -482,7 +482,20 @@ class PluginManager
         $archiveName = $slug . '-' . $token;
         $destination = $trashRoot . DIRECTORY_SEPARATOR . $archiveName;
         if (!File::moveDirectory($source, $destination)) {
-            throw new RuntimeException('Could not move plugin package into the recycle bin. Its database records remain preserved.');
+            if ($wasInstalled) {
+                try {
+                    $this->install($slug, $actorId);
+                    if (!$wasEnabled) {
+                        $this->disable($slug, $actorId);
+                    }
+                } catch (Throwable) {
+                    PluginRecord::query()->where('slug', $slug)->update([
+                        'is_installed' => false,
+                        'is_enabled' => false,
+                    ]);
+                }
+            }
+            throw new RuntimeException('Could not move plugin package into the recycle bin. The previous installation state was restored where possible; database records remain preserved.');
         }
 
         $metadata = [
