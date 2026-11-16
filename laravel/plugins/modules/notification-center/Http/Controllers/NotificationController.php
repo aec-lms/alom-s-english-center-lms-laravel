@@ -6,6 +6,7 @@ namespace Plugins\Modules\NotificationCenter\Http\Controllers;
 
 use App\Core\Security\AuditLogger;
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
