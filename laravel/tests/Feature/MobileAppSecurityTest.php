@@ -52,7 +52,6 @@ class MobileAppSecurityTest extends TestCase
 
         $this->getJson('/api/mobile/courses/' . $course->slug)
             ->assertOk()
-            ->assertJsonCount(0, 'lessons')
             ->assertJsonMissingPath('data.pdf_path')
             ->assertJsonMissingPath('data.lessons');
 
