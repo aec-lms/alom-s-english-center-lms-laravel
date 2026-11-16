@@ -59,8 +59,18 @@ class StudentStandaloneTest extends TestCase
         $student = Student::query()->where('student_code', 'SAFE-RET-001')->firstOrFail();
         $this->actingAs($admin)->delete('/admin/students/' . $student->id)->assertRedirect();
 
-        $this->assertDatabaseHas('students', ['id' => $student->id, 'status' => 'inactive']);
+        $this->assertTrue(Student::withTrashed()->findOrFail($student->id)->trashed());
         $this->assertDatabaseHas('users', ['id' => $student->user_id, 'is_active' => false]);
+
+        $this->actingAs($admin)->get('/admin/recycle-bin')->assertOk()->assertSee('SAFE-RET-001');
+        $this->actingAs($admin)
+            ->post('/admin/recycle-bin/students/' . $student->id . '/restore')
+            ->assertRedirect('/admin/recycle-bin')
+            ->assertSessionHasNoErrors();
+
+        $this->assertFalse(Student::query()->findOrFail($student->id)->trashed());
+        $this->assertDatabaseHas('students', ['id' => $student->id, 'student_code' => 'SAFE-RET-001']);
+        $this->assertDatabaseHas('users', ['id' => $student->user_id, 'is_active' => true]);
     }
 
 }
