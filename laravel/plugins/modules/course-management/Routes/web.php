@@ -24,3 +24,19 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:course-management', 'perm
         Route::put('/live-classes/{liveClass}', [CourseController::class, 'updateLiveClass'])->name('live.update');
         Route::delete('/live-classes/{liveClass}', [CourseController::class, 'destroyLiveClass'])->name('live.destroy');
     });
+
+
+Route::middleware(['web', 'installed', 'auth', 'plugin:course-management'])->group(function (): void {
+    Route::get('/my-learning/enrollments', [\Plugins\Modules\CourseManagement\Http\Controllers\EnrollmentController::class, 'my'])
+        ->name('plugins.enrollments.my');
+    Route::post('/courses/{course}/enroll', [\Plugins\Modules\CourseManagement\Http\Controllers\EnrollmentController::class, 'store'])
+        ->name('plugins.enrollments.store');
+});
+
+Route::middleware(['web', 'installed', 'auth', 'plugin:course-management', 'permission:enrollments.manage'])
+    ->prefix('admin/enrollments')
+    ->name('plugins.enrollments.')
+    ->group(function (): void {
+        Route::get('/', [\Plugins\Modules\CourseManagement\Http\Controllers\EnrollmentController::class, 'index'])->name('index');
+        Route::patch('/{enrollment}/status', [\Plugins\Modules\CourseManagement\Http\Controllers\EnrollmentController::class, 'updateStatus'])->name('status');
+    });
