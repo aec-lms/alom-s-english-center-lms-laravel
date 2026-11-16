@@ -61,7 +61,10 @@ class GrowthAndMarketingPluginsAcceptanceTest extends TestCase
         ]);
 
         $this->actingAs($admin)->delete('/admin/carousel-builder/' . $item->id)->assertSessionHasNoErrors();
-        $this->assertDatabaseMissing('cms_carousels', ['id' => $item->id]);
+        $this->assertSoftDeleted('cms_carousels', ['id' => $item->id]);
+
+        $this->actingAs($admin)->post('/admin/recycle-bin/carousel-items/' . $item->id . '/restore')->assertRedirect();
+        $this->assertDatabaseHas('cms_carousels', ['id' => $item->id, 'deleted_at' => null]);
     }
 
     public function test_carousel_builder_rejects_unsafe_cta_and_image_paths(): void
