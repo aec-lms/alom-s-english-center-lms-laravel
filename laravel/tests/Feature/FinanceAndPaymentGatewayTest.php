@@ -380,6 +380,7 @@ class FinanceAndPaymentGatewayTest extends TestCase
         $this->actingAs($admin)->post("/admin/payments/{$tx->id}/refund", [
             'amount' => 9999,
             'reason' => 'Over-refund attempt',
+            'provider_refund_reference' => 're_test_overrefund_001',
         ])->assertSessionHasErrors('refund');
 
         $this->actingAs($admin)->post("/admin/payments/{$tx->id}/refund", [
