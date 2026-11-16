@@ -11,7 +11,6 @@ use Illuminate\Support\Facades\Http;
 use App\Core\Plugins\PluginManager;
 use Plugins\Modules\StorefrontCatalog\Models\StorefrontItem;
 use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
-use Plugins\Modules\UniversalPayment\Services\StorefrontPaymentGatewayService;
 use Tests\TestCase;
 
 class MediaLibraryAndDigitalEbookTest extends TestCase
@@ -79,13 +78,26 @@ class MediaLibraryAndDigitalEbookTest extends TestCase
 
         $this->actingAs($student)->get('/ebooks/protected-guide/download')->assertForbidden();
 
-        Http::fake([
-            'https://sandbox.sslcommerz.com/gwprocess/v4/api.php' => Http::response([
+        Http::fakeSequence()
+            ->push([
                 'status' => 'SUCCESS',
                 'GatewayPageURL' => 'https://sandbox.sslcommerz.com/gwprocess/v4/gateway.php?Q=test',
                 'sessionkey' => 'session-test',
-            ]),
-        ]);
+            ])
+            ->push([
+                'status' => 'FAILED',
+                'tran_id' => 'ignored-by-invalid-status',
+                'amount' => '1.00',
+                'currency' => 'BDT',
+            ])
+            ->push([
+                'status' => 'VALID',
+                'tran_id' => 'UPAY-PLACEHOLDER',
+                'amount' => '450.00',
+                'currency' => 'BDT',
+                'risk_level' => '0',
+                'bank_tran_id' => 'BANK-123',
+            ]);
 
         $this->actingAs($student)->post('/universal-checkout', [
             'storefront_item_id' => $itemId,
@@ -101,14 +113,6 @@ class MediaLibraryAndDigitalEbookTest extends TestCase
         $this->assertSame($itemId, (int) $transaction->storefront_item_id);
         $this->actingAs($student)->get('/ebooks/protected-guide/download')->assertForbidden();
 
-        Http::fake([
-            '*' => Http::response([
-                'status' => 'FAILED',
-                'tran_id' => $transaction->reference,
-                'amount' => '1.00',
-                'currency' => 'BDT',
-            ]),
-        ]);
         $this->post('/universal-payment/sslcommerz/success', [
             'tran_id' => $transaction->reference,
             'val_id' => 'INVALID-VAL',
@@ -118,31 +122,10 @@ class MediaLibraryAndDigitalEbookTest extends TestCase
             'user_id' => $student->id,
         ]);
 
-        Http::fake([
-            'https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php*' => Http::response([
-                'status' => 'VALID',
-                'tran_id' => $transaction->reference,
-                'amount' => '450.00',
-                'currency' => 'BDT',
-                'risk_level' => '0',
-                'bank_tran_id' => 'BANK-123',
-            ]),
-        ]);
         $this->post('/universal-payment/sslcommerz/success', [
             'tran_id' => $transaction->reference,
             'val_id' => 'VALID-VAL',
         ])->assertRedirect('/ebooks/protected-guide');
-
-        if (!DB::table('storefront_item_access')->where('storefront_item_id', $itemId)->where('user_id', $student->id)->exists()) {
-            try {
-                app(StorefrontPaymentGatewayService::class)->verifySslcommerz([
-                    'tran_id' => $transaction->reference,
-                    'val_id' => 'VALID-VAL',
-                ]);
-            } catch (\Throwable $exception) {
-                $this->fail('SSLCOMMERZ verification failed: ' . $exception->getMessage());
-            }
-        }
 
         $this->assertDatabaseHas('storefront_item_access', [
             'storefront_item_id' => $itemId,
