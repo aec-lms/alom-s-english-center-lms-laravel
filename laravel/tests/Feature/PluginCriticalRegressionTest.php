@@ -132,7 +132,7 @@ class PluginCriticalRegressionTest extends TestCase
             ->assertForbidden();
 
         $this->actingAs($admin)
-            ->post('/admin/hr/payrolls/' . $payroll->id . '/mark-paid')
+            ->post('/admin/hr/payrolls/' . $payroll->id . '/mark-paid', ['payment_reference' => 'ADMIN-DISBURSEMENT-001'])
             ->assertSessionHas('status');
 
         $this->assertSame('paid', $payroll->fresh()->status);
@@ -206,7 +206,7 @@ class PluginCriticalRegressionTest extends TestCase
         $this->assertStringContainsString("'in:verified,rejected'", $controller);
         $this->assertStringContainsString("Only pending transactions can be reviewed.", $controller);
         $this->assertStringContainsString("verified provider callbacks", $controller);
-        $this->assertStringContainsString("where('branch_id', \$user->branch_id ?? 0)", $controller);
+        $this->assertStringContainsString("where('branch_id', \$actor->branch_id ?? 0)", $controller);
         $this->assertStringContainsString("branch_id", $migration);
         $this->assertStringNotContainsString("'in:pending,verified,refunded'", $controller);
     }
