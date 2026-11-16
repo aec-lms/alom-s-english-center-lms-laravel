@@ -161,15 +161,22 @@ class ExamController extends Controller
         if (\Illuminate\Support\Facades\Schema::hasColumn('exams', 'learn_earn_type') && $exam->learn_earn_type === 'paid') {
             abort_unless(\Illuminate\Support\Facades\Schema::hasTable('learn_earn_exam_access') && DB::table('learn_earn_exam_access')->where('exam_id', $exam->id)->where('user_id', $actor?->id)->where('status', 'granted')->exists(), 403, 'Payment is required before attempting this exam.');
         }
-        if ($actor && $actor->hasRole('student') && (int) $actor->branch_id !== (int) $exam->branch_id) {
+        if ($exam->branch_id !== null && (int) $actor->branch_id !== (int) $exam->branch_id) {
             abort(403, 'Exam is outside your assigned branch.');
         }
 
+        if ($exam->starts_at && now()->lt($exam->starts_at)) abort(403, 'This exam has not started yet.');
+        if ($exam->ends_at && now()->gt($exam->ends_at)) abort(403, 'The exam submission window has closed.');
         $validated = $request->validate([
             'answers' => ['required', 'array'],
+            'answers.*' => ['nullable', 'integer', 'min:0'],
         ]);
 
         $questions = $exam->questions()->get();
+        abort_if($questions->isEmpty(), 422, 'This exam has no questions.');
+        $allowedIds = $questions->pluck('id')->map(static fn ($id): string => (string) $id)->all();
+        $submittedIds = array_map('strval', array_keys($validated['answers']));
+        abort_if(array_diff($submittedIds, $allowedIds) !== [], 422, 'An answer references a question outside this exam.');
         $score = 0;
         $total = 0;
         $sanitizedAnswers = [];
@@ -177,6 +184,8 @@ class ExamController extends Controller
         foreach ($questions as $question) {
             $total += (float) $question->marks;
             $selected = $validated['answers'][(string) $question->id] ?? null;
+            $options = (array) $question->options;
+            if ($selected !== null && (int) $selected >= count($options)) abort(422, 'An answer option is outside the allowed range.');
             if ($selected !== null && (int) $selected === (int) $question->correct_option_index) {
                 $score += (float) $question->marks;
             } elseif ($selected !== null) {
