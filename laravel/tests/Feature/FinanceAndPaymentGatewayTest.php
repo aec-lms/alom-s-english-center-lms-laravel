@@ -259,6 +259,31 @@ class FinanceAndPaymentGatewayTest extends TestCase
             'cvv' => '999',
         ])->assertStatus(422);
 
+        Http::fake(function (ClientRequest $request) {
+            $url = $request->url();
+            if (str_contains($url, '/v1/payment_intents')) {
+                return Http::response([
+                    'id' => 'pi_test_settled_1',
+                    'status' => 'requires_action',
+                    'client_secret' => 'pi_test_settled_1_secret_test',
+                ], 200);
+            }
+            if (str_contains($url, '/v1/oauth2/token')) {
+                return Http::response(['access_token' => 'paypal-test-access-token', 'token_type' => 'Bearer', 'expires_in' => 300], 200);
+            }
+            if (str_contains($url, '/v2/checkout/orders')) {
+                return Http::response([
+                    'id' => 'ORDER-TEST-001',
+                    'status' => 'CREATED',
+                    'links' => [['rel' => 'approve', 'href' => 'https://www.sandbox.paypal.com/checkoutnow?token=ORDER-TEST-001']],
+                ], 201);
+            }
+            if (str_contains($url, '/v1/notifications/verify-webhook-signature')) {
+                return Http::response(['verification_status' => 'SUCCESS'], 200);
+            }
+            return Http::response(['message' => 'Unexpected fake payment endpoint'], 404);
+        });
+
         // Stripe tokenized checkout + idempotency + signed webhook
         $stripeRes1 = $this->actingAs($admin)->postJson('/payments/stripe/checkout', [
             'invoice_id' => $stripeInvoice->id,
@@ -274,8 +299,17 @@ class FinanceAndPaymentGatewayTest extends TestCase
         $this->assertSame($stripeRes1['transaction_ref'], $stripeRes2['transaction_ref']);
 
         $stripePayload = json_encode([
-            'transaction_ref' => $stripeRes1['transaction_ref'],
-            'payment_intent_id' => 'pi_test_settled_1',
+            'id' => 'evt_test_payment_intent_succeeded',
+            'type' => 'payment_intent.succeeded',
+            'data' => ['object' => [
+                'id' => 'pi_test_settled_1',
+                'object' => 'payment_intent',
+                'status' => 'succeeded',
+                'amount' => 450000,
+                'amount_received' => 450000,
+                'currency' => 'bdt',
+                'metadata' => ['transaction_ref' => $stripeRes1['transaction_ref']],
+            ]],
         ], JSON_THROW_ON_ERROR);
         $ts = (string) time();
         $stripeSig = 't=' . $ts . ',v1=' . hash_hmac('sha256', $ts . '.' . $stripePayload, 'whsec_stripe_abc');
@@ -299,10 +333,15 @@ class FinanceAndPaymentGatewayTest extends TestCase
         ])->assertOk()->json();
 
         $paypalPayload = json_encode([
-            'transaction_ref' => $paypalRes['transaction_ref'],
-            'capture_id' => 'CAP-998811',
+            'id' => 'WH-TEST-CAPTURE-001',
+            'event_type' => 'PAYMENT.CAPTURE.COMPLETED',
+            'resource' => [
+                'id' => 'CAP-998811',
+                'status' => 'COMPLETED',
+                'custom_id' => $paypalRes['transaction_ref'],
+                'amount' => ['currency_code' => 'BDT', 'value' => '2500.00'],
+            ],
         ], JSON_THROW_ON_ERROR);
-        $paypalSig = hash_hmac('sha256', $paypalPayload, 'whsec_paypal_xyz');
 
         $this->call(
             'POST',
@@ -310,7 +349,14 @@ class FinanceAndPaymentGatewayTest extends TestCase
             [],
             [],
             [],
-            ['HTTP_X_PAYPAL_SIGNATURE' => $paypalSig, 'CONTENT_TYPE' => 'application/json'],
+            [
+                'HTTP_PAYPAL_AUTH_ALGO' => 'SHA256withRSA',
+                'HTTP_PAYPAL_CERT_URL' => 'https://api-m.sandbox.paypal.com/cert',
+                'HTTP_PAYPAL_TRANSMISSION_ID' => 'transmission-test-001',
+                'HTTP_PAYPAL_TRANSMISSION_SIG' => 'signature-test',
+                'HTTP_PAYPAL_TRANSMISSION_TIME' => now()->toIso8601String(),
+                'CONTENT_TYPE' => 'application/json',
+            ],
             $paypalPayload
         )->assertOk();
 
