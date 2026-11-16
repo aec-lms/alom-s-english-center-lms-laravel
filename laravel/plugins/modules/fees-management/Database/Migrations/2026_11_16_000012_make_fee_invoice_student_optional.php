@@ -26,7 +26,7 @@ return new class extends Migration {
 
             if ($foreignKey && !empty($foreignKey->CONSTRAINT_NAME)) {
                 $constraint = preg_replace('/[^A-Za-z0-9_]/', '', (string) $foreignKey->CONSTRAINT_NAME);
-                DB::statement('ALTER TABLE fee_invoices DROP FOREIGN KEY `' . $constraint . '`');
+                DB::statement('ALTER TABLE fee_invoices DROP FOREIGN KEY ' . $constraint);
             }
 
             DB::statement('ALTER TABLE fee_invoices MODIFY student_id BIGINT UNSIGNED NULL, MODIFY branch_id BIGINT UNSIGNED NULL');
