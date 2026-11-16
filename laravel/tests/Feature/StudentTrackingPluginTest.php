@@ -62,7 +62,7 @@ class StudentTrackingPluginTest extends TestCase
         $student = $this->createUserWithRole('student');
 
         $this->actingAs($student)->postJson('/student-tracking/events', [
-            'event_type' => 'screen_recording',
+            'event_type' => 'quiz_submitted',
         ])->assertUnprocessable();
 
         $this->assertDatabaseCount('student_activity_events', 0);
