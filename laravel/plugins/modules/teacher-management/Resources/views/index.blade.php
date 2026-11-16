@@ -5,7 +5,7 @@
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
             <h1 class="text-2xl font-extrabold text-slate-900">Our Expert Instructors &amp; Teachers</h1>
-            <p class="text-xs text-slate-500 mt-0.5">Add, edit, upload portraits, toggle status, or remove instructors shown on the public Instructors page.</p>
+            <p class="text-xs text-slate-500 mt-0.5">Add, edit, upload portraits, toggle status, or move instructors to the Admin Recycle Bin on the public Instructors page.</p>
         </div>
         <a href="/instructors" target="_blank" class="px-4 py-2 rounded-lg bg-white border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-50">
             Preview Instructors Page &rarr;
@@ -64,10 +64,10 @@
                                 <div class="text-[11px] font-mono text-slate-400">{{ $teacher->employee_code }} &middot; {{ $teacher->user?->email }} &middot; {{ $teacher->is_active ? 'Active' : 'Inactive' }}</div>
                             </div>
                         </div>
-                        <form method="POST" action="/admin/teachers/{{ $teacher->id }}" onsubmit="return confirm('Deactivate this instructor? Account and course history will be preserved.')">
+                        <form method="POST" action="/admin/teachers/{{ $teacher->id }}" onsubmit="return confirm('Move this instructor to the Admin Recycle Bin? You can restore them later.')">
                             @csrf
                             @method('DELETE')
-                            <button type="submit" class="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-700 font-bold hover:bg-rose-50">Deactivate</button>
+                            <button type="submit" class="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-700 font-bold hover:bg-rose-50">Move to Recycle Bin</button>
                         </form>
                     </div>
 
