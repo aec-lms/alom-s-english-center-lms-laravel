@@ -101,5 +101,34 @@
             </div>
         @endforeach
     </div>
+
+    <section class="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+        <div>
+            <h2 class="text-lg font-extrabold text-slate-900">Plugin Recycle Bin</h2>
+            <p class="text-xs text-slate-500">Restore deleted plugin packages or permanently remove archived package files. LMS business records and settings are preserved.</p>
+        </div>
+        @forelse ($recycledPlugins as $item)
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 border border-slate-100 rounded-xl p-3">
+                <div>
+                    <div class="text-sm font-bold text-slate-800">{{ $item['name'] ?? $item['slug'] }}</div>
+                    <div class="text-xs text-slate-500">v{{ $item['version'] ?? '—' }} · Deleted {{ $item['deleted_at'] ?? '—' }} · Previously {{ !empty($item['was_installed']) ? (!empty($item['was_enabled']) ? 'Active' : 'Installed / Disabled') : 'Not installed' }}</div>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <form method="POST" action="{{ route('admin.plugins.recycle-bin.restore', $item['archive']) }}" onsubmit="return confirm('Restore this plugin package?')">
+                        @csrf
+                        <input type="hidden" name="confirm_restore" value="1">
+                        <button class="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold">Restore</button>
+                    </form>
+                    <form method="POST" action="{{ route('admin.plugins.recycle-bin.permanent-delete', $item['archive']) }}" onsubmit="return confirm('Permanently delete the archived plugin package files? This cannot be undone. Database records remain preserved.')">
+                        @csrf
+                        <input type="hidden" name="confirm_permanent_delete" value="1">
+                        <button class="px-3 py-1.5 rounded-lg border border-rose-300 text-rose-700 text-xs font-semibold">Permanent Delete</button>
+                    </form>
+                </div>
+            </div>
+        @empty
+            <p class="text-xs text-slate-500">Recycle Bin is empty.</p>
+        @endforelse
+    </section>
 </div>
 @endsection
