@@ -709,7 +709,7 @@ class FinanceAndPaymentGatewayTest extends TestCase
             'gateway' => 'bank_cash',
             'amount' => 1500,
             'external_trx_id' => 'BANK-PROOF-001',
-            'proof' => UploadedFile::fake()->create('bank-receipt.pdf', 200, 'application/pdf'),
+            'proof_file' => UploadedFile::fake()->create('bank-receipt.pdf', 200, 'application/pdf'),
         ])->assertSessionHasNoErrors()->assertRedirect();
 
         $transaction = DB::table('universal_payment_transactions')
@@ -732,8 +732,8 @@ class FinanceAndPaymentGatewayTest extends TestCase
             'gateway' => 'bank_cash',
             'amount' => 100,
             'external_trx_id' => 'BANK-PROOF-INVALID',
-            'proof' => UploadedFile::fake()->create('malware.exe', 20, 'application/x-msdownload'),
-        ])->assertSessionHasErrors('proof');
+            'proof_file' => UploadedFile::fake()->create('malware.exe', 20, 'application/x-msdownload'),
+        ])->assertSessionHasErrors('proof_file');
     }
 
 }
