@@ -20,6 +20,8 @@
     ],
     "settings_schema": [],
     "optional_dependencies": [
-        "branch-management"
+        "branch-management",
+        "fees-management",
+        "student-management"
     ]
 }
