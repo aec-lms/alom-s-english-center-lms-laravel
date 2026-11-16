@@ -36,5 +36,9 @@
             "secret": true,
             "help": "HMAC secret issued by the selected acquirer adapter."
         }
+    ],
+    "optional_dependencies": [
+        "fees-management",
+        "payment-management"
     ]
 }
