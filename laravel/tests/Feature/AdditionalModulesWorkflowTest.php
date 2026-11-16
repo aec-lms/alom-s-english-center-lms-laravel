@@ -375,6 +375,10 @@ class AdditionalModulesWorkflowTest extends TestCase
         ])->assertSessionHasNoErrors();
         $foreignBookId = DB::table('library_books')->where('isbn', 'LIB-FOREIGN-001')->value('id');
         $this->assertNotNull($foreignBookId);
+        $this->assertSame($branchA, (int) $manager->fresh()->branch_id);
+        $this->assertTrue($manager->fresh()->hasRole('branch_manager'));
+        $this->assertDatabaseHas('library_books', ['id' => $foreignBookId, 'branch_id' => $branchB]);
+        $this->assertSame(0, DB::table('library_books')->where('branch_id', $branchA)->count());
 
         $libraryResponse = $this->actingAs($manager)->get('/admin/library');
         $this->assertSame(200, $libraryResponse->status(), substr(strip_tags($libraryResponse->getContent()), 0, 2500));
