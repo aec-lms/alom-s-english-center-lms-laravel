@@ -85,7 +85,7 @@
                     <input name="external_trx_id" class="w-full rounded-xl border border-slate-300 px-3 py-2 font-mono">
                 </div>
                 <div>
-                    <label class="font-semibold text-slate-700 block mb-1">Initial Status</label>
+                    <label class="font-semibold text-slate-700 block mb-1">Verification Policy</label>
                     <p class="rounded-lg bg-amber-50 border border-amber-200 p-2 text-amber-800">New manual entries are always saved as Pending. An authorized reviewer must verify payment evidence.</p>
                 </div>
             </div>
@@ -112,10 +112,8 @@
                                 <form method="POST" action="{{ route('plugins.universal_payment.status', $tx) }}" class="inline-flex items-center gap-1.5">
                                     @csrf
                                     <select name="status" required class="rounded border border-slate-300 px-1.5 py-1 text-[11px]">
-                                        @if ($tx->status === 'pending' && in_array($tx->gateway, ['bank_cash', 'bkash', 'nagad', 'rocket'], true))
-                                            <option value="verified">Verify evidence</option>
-                                            <option value="rejected">Reject</option>
-                                        @endif
+                                        <option value="verified">Verify evidence</option>
+                                        <option value="rejected">Reject</option>
                                     </select>
                                     <button class="px-2 py-1 rounded bg-slate-900 text-white text-[11px] font-semibold">Apply</button>
                                 </form>
