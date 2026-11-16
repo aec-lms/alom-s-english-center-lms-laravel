@@ -23,6 +23,7 @@
                     @csrf
                     <button class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold">Restore</button>
                 </form>
+                @include('admin.recycle-bin.partials.permanent-delete-form', ['type' => 'students', 'recordId' => $student->id])
             </div>
         @empty
             <p class="border-t border-slate-100 pt-4 text-xs text-slate-400">No deleted students.</p>
@@ -46,6 +47,7 @@
                     @csrf
                     <button class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold">Restore</button>
                 </form>
+                @include('admin.recycle-bin.partials.permanent-delete-form', ['type' => 'teachers', 'recordId' => $teacher->id])
             </div>
         @empty
             <p class="border-t border-slate-100 pt-4 text-xs text-slate-400">No deleted instructors.</p>
@@ -69,6 +71,7 @@
                     @csrf
                     <button class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold">Restore</button>
                 </form>
+                @include('admin.recycle-bin.partials.permanent-delete-form', ['type' => 'courses', 'recordId' => $record->id])
             </div>
         @empty
             <p class="border-t border-slate-100 pt-4 text-xs text-slate-400">No deleted courses.</p>
@@ -92,6 +95,7 @@
                     @csrf
                     <button class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold">Restore</button>
                 </form>
+                @include('admin.recycle-bin.partials.permanent-delete-form', ['type' => 'exams', 'recordId' => $record->id])
             </div>
         @empty
             <p class="border-t border-slate-100 pt-4 text-xs text-slate-400">No deleted exams.</p>
@@ -115,6 +119,7 @@
                     @csrf
                     <button class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold">Restore</button>
                 </form>
+                @include('admin.recycle-bin.partials.permanent-delete-form', ['type' => 'batches', 'recordId' => $record->id])
             </div>
         @empty
             <p class="border-t border-slate-100 pt-4 text-xs text-slate-400">No deleted study batches.</p>
@@ -138,6 +143,7 @@
                     @csrf
                     <button class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold">Restore</button>
                 </form>
+                @include('admin.recycle-bin.partials.permanent-delete-form', ['type' => 'classes', 'recordId' => $record->id])
             </div>
         @empty
             <p class="border-t border-slate-100 pt-4 text-xs text-slate-400">No deleted academic classes.</p>
@@ -161,6 +167,7 @@
                     @csrf
                     <button class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold">Restore</button>
                 </form>
+                @include('admin.recycle-bin.partials.permanent-delete-form', ['type' => 'course-categories', 'recordId' => $record->id])
             </div>
         @empty
             <p class="border-t border-slate-100 pt-4 text-xs text-slate-400">No deleted course categories.</p>
@@ -184,6 +191,7 @@
                     @csrf
                     <button class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold">Restore</button>
                 </form>
+                @include('admin.recycle-bin.partials.permanent-delete-form', ['type' => 'live-classes', 'recordId' => $record->id])
             </div>
         @empty
             <p class="border-t border-slate-100 pt-4 text-xs text-slate-400">No deleted live classes.</p>
@@ -206,6 +214,7 @@
                     @csrf
                     <button class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold">Restore</button>
                 </form>
+                @include('admin.recycle-bin.partials.permanent-delete-form', ['type' => 'boost-campaigns', 'recordId' => $record->id])
             </div>
         @empty
             <p class="border-t border-slate-100 pt-4 text-xs text-slate-400">No deleted boost campaigns.</p>
@@ -228,6 +237,7 @@
                     @csrf
                     <button class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold">Restore</button>
                 </form>
+                @include('admin.recycle-bin.partials.permanent-delete-form', ['type' => 'branches', 'recordId' => $record->id])
             </div>
         @empty
             <p class="border-t border-slate-100 pt-4 text-xs text-slate-400">No deleted branches.</p>
@@ -250,6 +260,7 @@
                     @csrf
                     <button class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold">Restore</button>
                 </form>
+                @include('admin.recycle-bin.partials.permanent-delete-form', ['type' => 'carousel-items', 'recordId' => $record->id])
             </div>
         @empty
             <p class="border-t border-slate-100 pt-4 text-xs text-slate-400">No deleted carousel items.</p>
@@ -272,6 +283,7 @@
                     @csrf
                     <button class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold">Restore</button>
                 </form>
+                @include('admin.recycle-bin.partials.permanent-delete-form', ['type' => 'cms-categories', 'recordId' => $record->id])
             </div>
         @empty
             <p class="border-t border-slate-100 pt-4 text-xs text-slate-400">No deleted cms categories.</p>
@@ -294,6 +306,7 @@
                     @csrf
                     <button class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold">Restore</button>
                 </form>
+                @include('admin.recycle-bin.partials.permanent-delete-form', ['type' => 'cms-posts', 'recordId' => $record->id])
             </div>
         @empty
             <p class="border-t border-slate-100 pt-4 text-xs text-slate-400">No deleted cms posts.</p>
@@ -316,6 +329,7 @@
                     @csrf
                     <button class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold">Restore</button>
                 </form>
+                @include('admin.recycle-bin.partials.permanent-delete-form', ['type' => 'builder-pages', 'recordId' => $record->id])
             </div>
         @empty
             <p class="border-t border-slate-100 pt-4 text-xs text-slate-400">No deleted builder pages.</p>
@@ -338,6 +352,7 @@
                     @csrf
                     <button class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold">Restore</button>
                 </form>
+                @include('admin.recycle-bin.partials.permanent-delete-form', ['type' => 'hero-sliders', 'recordId' => $record->id])
             </div>
         @empty
             <p class="border-t border-slate-100 pt-4 text-xs text-slate-400">No deleted hero sliders.</p>
@@ -360,6 +375,7 @@
                     @csrf
                     <button class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold">Restore</button>
                 </form>
+                @include('admin.recycle-bin.partials.permanent-delete-form', ['type' => 'sms-campaigns', 'recordId' => $record->id])
             </div>
         @empty
             <p class="border-t border-slate-100 pt-4 text-xs text-slate-400">No deleted sms campaigns.</p>
@@ -382,6 +398,7 @@
                     @csrf
                     <button class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold">Restore</button>
                 </form>
+                @include('admin.recycle-bin.partials.permanent-delete-form', ['type' => 'visitor-popups', 'recordId' => $record->id])
             </div>
         @empty
             <p class="border-t border-slate-100 pt-4 text-xs text-slate-400">No deleted visitor pop-ups.</p>
