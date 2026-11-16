@@ -18,6 +18,17 @@ return new class extends Migration {
                 $table->softDeletes();
             }
         });
+
+        foreach (['course_categories', 'live_classes'] as $tableName) {
+            if (!Schema::hasTable($tableName)) {
+                continue;
+            }
+            Schema::table($tableName, function (Blueprint $table) use ($tableName): void {
+                if (!Schema::hasColumn($tableName, 'deleted_at')) {
+                    $table->softDeletes();
+                }
+            });
+        }
     }
 
     public function down(): void
@@ -29,5 +40,13 @@ return new class extends Migration {
         Schema::table('courses', function (Blueprint $table): void {
             $table->dropSoftDeletes();
         });
+
+        foreach (['course_categories', 'live_classes'] as $tableName) {
+            if (Schema::hasTable($tableName) && Schema::hasColumn($tableName, 'deleted_at')) {
+                Schema::table($tableName, function (Blueprint $table): void {
+                    $table->dropSoftDeletes();
+                });
+            }
+        }
     }
 };
