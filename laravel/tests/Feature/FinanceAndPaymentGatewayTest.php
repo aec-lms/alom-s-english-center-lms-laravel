@@ -208,6 +208,12 @@ class FinanceAndPaymentGatewayTest extends TestCase
             ->where('transaction_ref', $sslSession['transaction_ref'])
             ->firstOrFail();
 
+        // Public browser failure/cancel return URLs are forgeable and must not mutate payment state.
+        $this->postJson('/payments/sslcommerz/failed', [
+            'tran_id' => $sslTransaction->transaction_ref,
+        ])->assertOk();
+        $this->assertSame('initiated', $sslTransaction->fresh()->status);
+
         $this->postJson('/payments/sslcommerz/ipn', [
             'tran_id' => $sslTransaction->transaction_ref,
             'val_id' => 'SSL-VALIDATION-001',
