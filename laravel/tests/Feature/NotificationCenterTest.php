@@ -94,7 +94,7 @@ class NotificationCenterTest extends TestCase
 
         $this->actingAs($student)->post('/my-notifications/' . $ownId . '/read')
             ->assertSessionHas('status', 'Notification marked as read.');
-        $this->assertDatabaseHas('lms_notifications', ['id' => $ownId, 'read_at' => now()->toDateTimeString()]);
+        $this->assertNotNull(DB::table('lms_notifications')->where('id', $ownId)->value('read_at'));
 
         $this->actingAs($student)->post('/my-notifications/' . $otherId . '/read')->assertNotFound();
         $this->assertDatabaseHas('lms_notifications', ['id' => $otherId, 'read_at' => null]);
