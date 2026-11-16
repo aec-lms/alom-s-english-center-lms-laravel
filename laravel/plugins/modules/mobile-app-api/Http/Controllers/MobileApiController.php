@@ -53,8 +53,9 @@ class MobileApiController extends Controller
         ]);
     }
 
-    public function home(): JsonResponse
+    public function home(Request $request): JsonResponse
     {
+        $actor = $request->user();
         $cfg = $this->loadMobileConfig();
 
         $sliders = Schema::hasTable('cms_sliders')
@@ -83,7 +84,16 @@ class MobileApiController extends Controller
             : collect();
 
         $notices = Schema::hasTable('notices')
-            ? DB::table('notices')->orderByDesc('id')->limit(12)->get()
+            ? DB::table('notices')
+                ->where(function ($query) use ($actor): void {
+                    $query->whereNull('branch_id');
+                    if ($actor && $actor->branch_id !== null) {
+                        $query->orWhere('branch_id', $actor->branch_id);
+                    }
+                })
+                ->orderByDesc('id')
+                ->limit(12)
+                ->get()
             : collect();
 
         $stats = [
@@ -285,10 +295,20 @@ class MobileApiController extends Controller
         return response()->json(['data' => $exams]);
     }
 
-    public function notices(): JsonResponse
+    public function notices(Request $request): JsonResponse
     {
+        $actor = $request->user();
         $notices = Schema::hasTable('notices')
-            ? DB::table('notices')->orderByDesc('id')->limit(30)->get()
+            ? DB::table('notices')
+                ->where(function ($query) use ($actor): void {
+                    $query->whereNull('branch_id');
+                    if ($actor && $actor->branch_id !== null) {
+                        $query->orWhere('branch_id', $actor->branch_id);
+                    }
+                })
+                ->orderByDesc('id')
+                ->limit(30)
+                ->get()
             : collect();
 
         return response()->json(['data' => $notices]);
