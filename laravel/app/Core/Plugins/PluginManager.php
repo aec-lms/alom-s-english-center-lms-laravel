@@ -361,43 +361,53 @@ class PluginManager
 
     public function enable(string $slug, ?int $actorId = null): PluginRecord
     {
-        $record = PluginRecord::query()->where('slug', $slug)->firstOrFail();
-        if (!$record->is_installed) {
-            throw new RuntimeException("Plugin {$slug} must be installed before enabling.");
-        }
+        $record = DB::transaction(function () use ($slug, $actorId): PluginRecord {
+            $record = PluginRecord::query()->where('slug', $slug)->lockForUpdate()->firstOrFail();
+            if (!$record->is_installed) {
+                throw new RuntimeException("Plugin {$slug} must be installed before enabling.");
+            }
 
-        $manifest = $this->discoverManifests()[$slug] ?? throw new RuntimeException("Plugin manifest {$slug} missing.");
-        $this->assertDependenciesSatisfied($manifest, true);
+            $manifest = $this->discoverManifests()[$slug] ?? throw new RuntimeException("Plugin manifest {$slug} missing.");
+            $this->assertDependenciesSatisfied($manifest, true);
 
-        $record->update(['is_enabled' => true]);
-        $provider = $this->resolvePluginInstance($manifest);
-        if ($provider) {
-            app()->register($provider);
-            $provider->onEnable();
-        }
-        $this->audit->log('plugin.enabled', 'plugin', $slug, [], $actorId);
+            $record->update(['is_enabled' => true]);
+            $provider = $this->resolvePluginInstance($manifest);
+            if ($provider) {
+                app()->register($provider);
+                $provider->onEnable();
+            }
+            $this->audit->log('plugin.enabled', 'plugin', $slug, [], $actorId);
+
+            return $record->fresh();
+        });
+
         event(new PluginLifecycleEvent('enabled', $slug, $record->version, $actorId));
 
-        return $record->fresh();
+        return $record;
     }
 
     public function disable(string $slug, ?int $actorId = null): PluginRecord
     {
-        $record = PluginRecord::query()->where('slug', $slug)->firstOrFail();
-        if ($record->is_core || $slug === config('plugins.core_identifier')) {
-            throw new RuntimeException('Protected Core cannot be disabled.');
-        }
+        $record = DB::transaction(function () use ($slug, $actorId): PluginRecord {
+            $record = PluginRecord::query()->where('slug', $slug)->lockForUpdate()->firstOrFail();
+            if ($record->is_core || $slug === config('plugins.core_identifier')) {
+                throw new RuntimeException('Protected Core cannot be disabled.');
+            }
 
-        $this->assertNoActiveDependents($slug, 'disable');
+            $this->assertNoActiveDependents($slug, 'disable');
 
-        $record->update(['is_enabled' => false]);
-        if (isset($this->discoverManifests()[$slug])) {
-            $this->resolvePluginInstance($this->discoverManifests()[$slug])?->onDisable();
-        }
-        $this->audit->log('plugin.disabled', 'plugin', $slug, [], $actorId);
+            if (isset($this->discoverManifests()[$slug])) {
+                $this->resolvePluginInstance($this->discoverManifests()[$slug])?->onDisable();
+            }
+            $record->update(['is_enabled' => false]);
+            $this->audit->log('plugin.disabled', 'plugin', $slug, [], $actorId);
+
+            return $record->fresh();
+        });
+
         event(new PluginLifecycleEvent('disabled', $slug, $record->version, $actorId));
 
-        return $record->fresh();
+        return $record;
     }
 
     /**
