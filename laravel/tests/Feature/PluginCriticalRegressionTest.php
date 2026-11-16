@@ -193,6 +193,8 @@ class PluginCriticalRegressionTest extends TestCase
         $this->assertIsString($controller);
         $this->assertIsString($migration);
         $this->assertStringContainsString("'status' => 'pending'", $controller);
+        $this->assertStringContainsString("'external_trx_id' => ['required', 'string', 'max:120']", $controller);
+        $this->assertStringContainsString("A payment/deposit reference is required before manual verification.", $controller);
         $this->assertStringContainsString("'in:verified,rejected'", $controller);
         $this->assertStringContainsString("Only pending transactions can be reviewed.", $controller);
         $this->assertStringContainsString("verified provider callbacks", $controller);
