@@ -11,5 +11,6 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:batch-management', 'permi
     ->group(function (): void {
         Route::get('/', [BatchController::class, 'index'])->name('index');
         Route::post('/', [BatchController::class, 'store'])->name('store');
-        Route::delete('/{batch}', [BatchController::class, 'destroy'])->name('destroy');
+        Route::put('/{batch}', [BatchController::class, 'update'])->name('update');
+        Route::delete('/{batch}'        Route::delete('/{batch}', [BatchController::class, 'destroy'])->name('destroy');
     });
