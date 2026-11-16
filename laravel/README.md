@@ -1,6 +1,6 @@
 # AEC LMS — Laravel 12 modular plugin platform
 
-**Development status: not yet production-ready.** The Laravel application is located in this directory and is the intended production backend/frontend. The root-level Google AI Studio/React prototype is retained for reference and is not the LMS runtime.
+**Development status: not yet production-ready.** This is the sole application for ALOMS ENGLISH CENTER. The production backend, frontend, authentication, database, business workflows, plugin lifecycle, installation and administration are implemented in Laravel.
 
 ## Application layout
 
@@ -73,10 +73,10 @@ php artisan key:generate
 Configure a **new, empty** MySQL/MariaDB database in `.env`, then run the installer:
 
 ```bash
-php artisan lms:install \
-  --app-name="Alom's English Center" \
-  --app-url="https://YOUR-DOMAIN" \
-  --admin-name="Administrator" \
+php artisan lms:install \\
+  --app-name="Alom's English Center" \\
+  --app-url="https://YOUR-DOMAIN" \\
+  --admin-name="Administrator" \\
   --admin-email="ADMIN@YOUR-DOMAIN"
 ```
 
