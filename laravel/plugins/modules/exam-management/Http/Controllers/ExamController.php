@@ -272,6 +272,11 @@ class ExamController extends Controller
             'submitted_at' => now(),
         ]);
 
+        if (app(PluginManager::class)->isEnabled('student-tracking')) {
+            $percent = $total > 0 ? round(($score / $total) * 100, 2) : 0;
+            app(StudentActivityTracker::class)->record((int) $actor->id, 'quiz_submitted', 'exam', (int) $exam->id, null, ['result_percent' => $percent, 'source' => 'exam-submit']);
+        }
+
         $this->audit->log('exam.attempted', 'exam_attempt', (string) $attempt->id, [
             'exam_id' => $exam->id,
             'score' => $score,
