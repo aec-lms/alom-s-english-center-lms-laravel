@@ -24,7 +24,7 @@ return new class extends Migration {
                 $table->id();
                 $table->string('invoice_number', 50)->unique();
                 $table->unsignedBigInteger('student_id');
-                $table->unsignedBigInteger('branch_id')->index();
+                $table->unsignedBigInteger('branch_id')->nullable()->index();
                 $table->foreignId('fee_category_id')->nullable()->constrained('fee_categories')->nullOnDelete();
                 $table->decimal('subtotal_amount', 10, 2);
                 $table->decimal('discount_amount', 10, 2)->default(0);
