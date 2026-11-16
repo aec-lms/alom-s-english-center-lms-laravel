@@ -17,7 +17,7 @@
     </div>
 
     <div class="grid lg:grid-cols-2 gap-6">
-        <form method="POST" action="{{ route('plugins.universal_payment.gateways') }}" class="bg-white rounded-2xl border border-slate-200 p-6 space-y-4 text-xs">
+        <form method="POST" action="{{ url('/plugins/universal-payment/gateways') }}" class="bg-white rounded-2xl border border-slate-200 p-6 space-y-4 text-xs">
             @csrf
             <h2 class="text-sm font-bold text-slate-900">1. Enabled Providers & Currency</h2>
             <div>
@@ -43,7 +43,7 @@
             <button class="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold">Save Gateway Settings</button>
         </form>
 
-        <form method="POST" action="{{ route('plugins.universal_payment.store') }}" class="bg-white rounded-2xl border border-slate-200 p-6 space-y-4 text-xs">
+        <form method="POST" action="{{ url('/plugins/universal-payment/transactions') }}" class="bg-white rounded-2xl border border-slate-200 p-6 space-y-4 text-xs">
             @csrf
             <h2 class="text-sm font-bold text-slate-900">2. Record Offline Bank / Cash Payment</h2>
             <p class="text-[11px] text-slate-500">Offline entries start as Pending. Add a receipt or voucher reference before confirming payment. Online checkout uses the dedicated provider plugins.</p>
@@ -71,8 +71,8 @@
                     <input type="number" step="0.01" min="1" name="amount" required class="w-full rounded-xl border border-slate-300 px-3 py-2">
                 </div>
                 <div>
-                    <label class="font-semibold text-slate-700 block mb-1">External TrxID (Optional)</label>
-                    <input name="external_trx_id" class="w-full rounded-xl border border-slate-300 px-3 py-2 font-mono">
+                    <label class="font-semibold text-slate-700 block mb-1">Payment / Deposit Reference *</label>
+                    <input name="external_trx_id" required class="w-full rounded-xl border border-slate-300 px-3 py-2 font-mono">
                 </div>
 
             </div>
@@ -95,12 +95,10 @@
                             <td class="font-bold">{{ $tx->currency }} {{ number_format((float) $tx->amount, 2) }}</td>
                             <td><span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase {{ $tx->status === 'verified' ? 'bg-emerald-100 text-emerald-800' : ($tx->status === 'refunded' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800') }}">{{ $tx->status }}</span></td>
                             <td>
-                                <form method="POST" action="{{ route('plugins.universal_payment.status', $tx) }}" class="inline-flex items-center gap-1.5">
+                                <form method="POST" action="{{ url('/plugins/universal-payment/transactions/' . $tx->id . '/status') }}" class="inline-flex items-center gap-1.5">
                                     @csrf
                                     <select name="status" class="rounded border border-slate-300 px-1.5 py-1 text-[11px]">
                                         <option value="verified" {{ $tx->status === 'verified' ? 'selected' : '' }}>Verify</option>
-                                        <option value="pending" {{ $tx->status === 'pending' ? 'selected' : '' }}>Pending</option>
-                                        <option value="refunded" {{ $tx->status === 'refunded' ? 'selected' : '' }}>Refund</option>
                                         <option value="rejected" {{ $tx->status === 'rejected' ? 'selected' : '' }}>Reject</option>
                                     </select>
                                     <button class="px-2 py-1 rounded bg-slate-900 text-white text-[11px] font-semibold">Apply</button>
