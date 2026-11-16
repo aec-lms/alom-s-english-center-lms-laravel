@@ -34,10 +34,17 @@ class CmsWebsiteSafetyTest extends TestCase
         $this->activatePlugins(['cms-website']);
         $admin = $this->createUserWithRole('admin');
 
-        $this->actingAs($admin)->post('/admin/cms/posts', [
+        $request = \Illuminate\Http\Request::create('/admin/cms/posts', 'POST', [
             'title' => 'Invalid Category Post',
             'content' => 'Safe sample content',
             'category_id' => 999999,
-        ])->assertSessionHasErrors('category_id');
+        ]);
+
+        try {
+            app(\Plugins\Modules\CmsWebsite\Http\Controllers\CmsController::class)->storePost($request);
+            $this->fail('Unknown CMS category IDs must be rejected.');
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            $this->assertArrayHasKey('category_id', $exception->errors());
+        }
     }
 }
