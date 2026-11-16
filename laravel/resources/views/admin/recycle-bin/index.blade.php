@@ -190,5 +190,203 @@
         @endforelse
         <div>{{ $liveClasses->links() }}</div>
     </section>
+
+    <section class="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+        <div class="flex items-center justify-between gap-3">
+            <h2 class="font-bold text-slate-900">Deleted Boost Campaigns</h2>
+            <span class="text-xs text-slate-500">{{ $boostCampaigns->total() }} item(s)</span>
+        </div>
+        @forelse ($boostCampaigns as $record)
+            <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                <div class="min-w-0">
+                    <div class="font-semibold text-sm text-slate-900">{{ $record->campaign_name }}</div>
+                    <div class="text-[11px] text-slate-400">Moved to trash: {{ $record->deleted_at?->format('Y-m-d H:i') }}</div>
+                </div>
+                <form method="POST" action="{{ route('admin.recycle-bin.boost-campaigns.restore', $record->id) }}" onsubmit="return confirm('Restore this boost campaign?')">
+                    @csrf
+                    <button class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold">Restore</button>
+                </form>
+            </div>
+        @empty
+            <p class="border-t border-slate-100 pt-4 text-xs text-slate-400">No deleted boost campaigns.</p>
+        @endforelse
+        <div>{{ $boostCampaigns->links() }}</div>
+    </section>
+
+    <section class="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+        <div class="flex items-center justify-between gap-3">
+            <h2 class="font-bold text-slate-900">Deleted Branches</h2>
+            <span class="text-xs text-slate-500">{{ $branches->total() }} item(s)</span>
+        </div>
+        @forelse ($branches as $record)
+            <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                <div class="min-w-0">
+                    <div class="font-semibold text-sm text-slate-900">{{ $record->name }}</div>
+                    <div class="text-[11px] text-slate-400">Moved to trash: {{ $record->deleted_at?->format('Y-m-d H:i') }}</div>
+                </div>
+                <form method="POST" action="{{ route('admin.recycle-bin.branches.restore', $record->id) }}" onsubmit="return confirm('Restore this branch?')">
+                    @csrf
+                    <button class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold">Restore</button>
+                </form>
+            </div>
+        @empty
+            <p class="border-t border-slate-100 pt-4 text-xs text-slate-400">No deleted branches.</p>
+        @endforelse
+        <div>{{ $branches->links() }}</div>
+    </section>
+
+    <section class="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+        <div class="flex items-center justify-between gap-3">
+            <h2 class="font-bold text-slate-900">Deleted Carousel Items</h2>
+            <span class="text-xs text-slate-500">{{ $carouselItems->total() }} item(s)</span>
+        </div>
+        @forelse ($carouselItems as $record)
+            <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                <div class="min-w-0">
+                    <div class="font-semibold text-sm text-slate-900">{{ $record->title }}</div>
+                    <div class="text-[11px] text-slate-400">Moved to trash: {{ $record->deleted_at?->format('Y-m-d H:i') }}</div>
+                </div>
+                <form method="POST" action="{{ route('admin.recycle-bin.carousel-items.restore', $record->id) }}" onsubmit="return confirm('Restore this carousel item?')">
+                    @csrf
+                    <button class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold">Restore</button>
+                </form>
+            </div>
+        @empty
+            <p class="border-t border-slate-100 pt-4 text-xs text-slate-400">No deleted carousel items.</p>
+        @endforelse
+        <div>{{ $carouselItems->links() }}</div>
+    </section>
+
+    <section class="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+        <div class="flex items-center justify-between gap-3">
+            <h2 class="font-bold text-slate-900">Deleted CMS Categories</h2>
+            <span class="text-xs text-slate-500">{{ $cmsCategories->total() }} item(s)</span>
+        </div>
+        @forelse ($cmsCategories as $record)
+            <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                <div class="min-w-0">
+                    <div class="font-semibold text-sm text-slate-900">{{ $record->name }}</div>
+                    <div class="text-[11px] text-slate-400">Moved to trash: {{ $record->deleted_at?->format('Y-m-d H:i') }}</div>
+                </div>
+                <form method="POST" action="{{ route('admin.recycle-bin.cms-categories.restore', $record->id) }}" onsubmit="return confirm('Restore this CMS category?')">
+                    @csrf
+                    <button class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold">Restore</button>
+                </form>
+            </div>
+        @empty
+            <p class="border-t border-slate-100 pt-4 text-xs text-slate-400">No deleted cms categories.</p>
+        @endforelse
+        <div>{{ $cmsCategories->links() }}</div>
+    </section>
+
+    <section class="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+        <div class="flex items-center justify-between gap-3">
+            <h2 class="font-bold text-slate-900">Deleted CMS Posts</h2>
+            <span class="text-xs text-slate-500">{{ $cmsPosts->total() }} item(s)</span>
+        </div>
+        @forelse ($cmsPosts as $record)
+            <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                <div class="min-w-0">
+                    <div class="font-semibold text-sm text-slate-900">{{ $record->title }}</div>
+                    <div class="text-[11px] text-slate-400">Moved to trash: {{ $record->deleted_at?->format('Y-m-d H:i') }}</div>
+                </div>
+                <form method="POST" action="{{ route('admin.recycle-bin.cms-posts.restore', $record->id) }}" onsubmit="return confirm('Restore this CMS post?')">
+                    @csrf
+                    <button class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold">Restore</button>
+                </form>
+            </div>
+        @empty
+            <p class="border-t border-slate-100 pt-4 text-xs text-slate-400">No deleted cms posts.</p>
+        @endforelse
+        <div>{{ $cmsPosts->links() }}</div>
+    </section>
+
+    <section class="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+        <div class="flex items-center justify-between gap-3">
+            <h2 class="font-bold text-slate-900">Deleted Builder Pages</h2>
+            <span class="text-xs text-slate-500">{{ $builderPages->total() }} item(s)</span>
+        </div>
+        @forelse ($builderPages as $record)
+            <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                <div class="min-w-0">
+                    <div class="font-semibold text-sm text-slate-900">{{ $record->title }}</div>
+                    <div class="text-[11px] text-slate-400">Moved to trash: {{ $record->deleted_at?->format('Y-m-d H:i') }}</div>
+                </div>
+                <form method="POST" action="{{ route('admin.recycle-bin.builder-pages.restore', $record->id) }}" onsubmit="return confirm('Restore this page?')">
+                    @csrf
+                    <button class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold">Restore</button>
+                </form>
+            </div>
+        @empty
+            <p class="border-t border-slate-100 pt-4 text-xs text-slate-400">No deleted builder pages.</p>
+        @endforelse
+        <div>{{ $builderPages->links() }}</div>
+    </section>
+
+    <section class="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+        <div class="flex items-center justify-between gap-3">
+            <h2 class="font-bold text-slate-900">Deleted Hero Sliders</h2>
+            <span class="text-xs text-slate-500">{{ $heroSliders->total() }} item(s)</span>
+        </div>
+        @forelse ($heroSliders as $record)
+            <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                <div class="min-w-0">
+                    <div class="font-semibold text-sm text-slate-900">{{ $record->title }}</div>
+                    <div class="text-[11px] text-slate-400">Moved to trash: {{ $record->deleted_at?->format('Y-m-d H:i') }}</div>
+                </div>
+                <form method="POST" action="{{ route('admin.recycle-bin.hero-sliders.restore', $record->id) }}" onsubmit="return confirm('Restore this slider?')">
+                    @csrf
+                    <button class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold">Restore</button>
+                </form>
+            </div>
+        @empty
+            <p class="border-t border-slate-100 pt-4 text-xs text-slate-400">No deleted hero sliders.</p>
+        @endforelse
+        <div>{{ $heroSliders->links() }}</div>
+    </section>
+
+    <section class="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+        <div class="flex items-center justify-between gap-3">
+            <h2 class="font-bold text-slate-900">Deleted SMS Campaigns</h2>
+            <span class="text-xs text-slate-500">{{ $smsCampaigns->total() }} item(s)</span>
+        </div>
+        @forelse ($smsCampaigns as $record)
+            <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                <div class="min-w-0">
+                    <div class="font-semibold text-sm text-slate-900">{{ $record->title }}</div>
+                    <div class="text-[11px] text-slate-400">Moved to trash: {{ $record->deleted_at?->format('Y-m-d H:i') }}</div>
+                </div>
+                <form method="POST" action="{{ route('admin.recycle-bin.sms-campaigns.restore', $record->id) }}" onsubmit="return confirm('Restore this SMS campaign?')">
+                    @csrf
+                    <button class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold">Restore</button>
+                </form>
+            </div>
+        @empty
+            <p class="border-t border-slate-100 pt-4 text-xs text-slate-400">No deleted sms campaigns.</p>
+        @endforelse
+        <div>{{ $smsCampaigns->links() }}</div>
+    </section>
+
+    <section class="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+        <div class="flex items-center justify-between gap-3">
+            <h2 class="font-bold text-slate-900">Deleted Visitor Pop-ups</h2>
+            <span class="text-xs text-slate-500">{{ $visitorPopups->total() }} item(s)</span>
+        </div>
+        @forelse ($visitorPopups as $record)
+            <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                <div class="min-w-0">
+                    <div class="font-semibold text-sm text-slate-900">{{ $record->title }}</div>
+                    <div class="text-[11px] text-slate-400">Moved to trash: {{ $record->deleted_at?->format('Y-m-d H:i') }}</div>
+                </div>
+                <form method="POST" action="{{ route('admin.recycle-bin.visitor-popups.restore', $record->id) }}" onsubmit="return confirm('Restore this visitor pop-up?')">
+                    @csrf
+                    <button class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold">Restore</button>
+                </form>
+            </div>
+        @empty
+            <p class="border-t border-slate-100 pt-4 text-xs text-slate-400">No deleted visitor pop-ups.</p>
+        @endforelse
+        <div>{{ $visitorPopups->links() }}</div>
+    </section>
 </div>
 @endsection
