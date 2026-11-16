@@ -52,9 +52,9 @@ class UniversalPaymentController extends Controller
             'enabled_gateways' => implode(',', array_unique($validated['gateways'] ?? [])),
         ];
 
-        $this->plugins->saveSettings('universal-payment', $values, $secrets, auth()->id());
+        $this->plugins->saveSettings('universal-payment', $values, [], auth()->id());
 
-        return back()->with('status', 'Universal Payment Gateway configuration saved securely.');
+        return back()->with('status', 'Universal Payment settings saved.');
     }
 
     public function storeTransaction(Request $request): RedirectResponse
