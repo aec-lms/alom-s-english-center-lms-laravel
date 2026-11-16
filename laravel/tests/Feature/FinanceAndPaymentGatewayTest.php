@@ -133,6 +133,14 @@ class FinanceAndPaymentGatewayTest extends TestCase
             'external_trx_id' => 'BANK-RECEIPT-INV-001',
         ]);
 
+        $this->actingAs($admin)->post("/plugins/universal-payment/transactions/{$universalTx->id}/status", [
+            'status' => 'rejected',
+        ])->assertStatus(422);
+        $this->assertDatabaseHas('universal_payment_transactions', [
+            'id' => $universalTx->id,
+            'status' => 'verified',
+        ]);
+
         $cardPermissionId = DB::table('permissions')->where('slug', 'gateway.card.use')->value('id');
         $studentUser->roles()->first()->permissions()->syncWithoutDetaching([$cardPermissionId]);
 
