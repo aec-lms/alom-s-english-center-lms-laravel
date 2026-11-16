@@ -16,6 +16,8 @@ This repository contains the complete production application for ALOMS ENGLISH C
 
 The Core owns authentication, RBAC, plugin lifecycle, installation locks, audit logging, backup and update services. Optional modules are independently registered plugins. Page Builder, Slider Builder, Carousel Builder, Visa/Mastercard, SSLCOMMERZ, Stripe and PayPal have separate plugin identities.
 
+**Mandatory future-change policy:** all future features, integrations, business workflows, reports, automations and optional UI modules must be implemented as independently manageable plugins wherever technically reasonable. Core changes are reserved for foundational runtime, security and extension contracts with a documented exception review. See [`docs/PLUGIN-FIRST-UPDATE-POLICY.md`](docs/PLUGIN-FIRST-UPDATE-POLICY.md).
+
 ## Local setup
 
 Requirements: PHP 8.3+, Composer 2, and the PHP extensions required by Laravel and the selected database driver.
