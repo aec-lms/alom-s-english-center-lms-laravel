@@ -14,7 +14,17 @@ return new class extends Migration {
             return;
         }
 
-        if (in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true)) {
+        $driver = DB::connection()->getDriverName();
+
+        if ($driver === 'sqlite' && Schema::hasColumn('fee_invoices', 'student_id')) {
+            // Existing SQLite installations need the same nullable relationship
+            // as fresh installs; Laravel rebuilds the table for SQLite column changes.
+            Schema::table('fee_invoices', function (Blueprint $table): void {
+                $table->unsignedBigInteger('student_id')->nullable()->change();
+            });
+        }
+
+        if (in_array($driver, ['mysql', 'mariadb'], true)) {
             $foreignKey = DB::selectOne(
                 "SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE
                  WHERE TABLE_SCHEMA = DATABASE()
