@@ -1,7 +1,7 @@
 {
     "slug": "role-ai-assistant",
     "name": "AEC LMS AI Assistant",
-    "version": "2.0.1",
+    "version": "2.0.2",
     "author": "Alom's English Center",
     "category": "ai",
     "description": "AEC LMS role-based AI assistant with encrypted integration credentials, role allowlists, and privacy-aware audit logs.",
@@ -21,9 +21,13 @@
     "settings_schema": [
         {
             "key": "provider",
-            "label": "AI Integration Provider (OpenAI/Gemini)",
-            "type": "text",
-            "secret": false
+            "label": "AI Integration Provider",
+            "type": "select",
+            "secret": false,
+            "options": {
+                "openai": "OpenAI API",
+                "gemini": "Gemini API"
+            }
         },
         {
             "key": "model",
