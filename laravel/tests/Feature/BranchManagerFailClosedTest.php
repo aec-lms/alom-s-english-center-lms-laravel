@@ -101,6 +101,25 @@ class BranchManagerFailClosedTest extends TestCase
         $this->actingAs($manager)->post('/admin/teachers', [])->assertForbidden();
     }
 
+    public function test_notification_center_fails_closed_when_optional_branch_integration_is_disabled(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['notification-center']);
+
+        $manager = $this->createUserWithRole('branch_manager', 999999);
+        $permissionId = DB::table('permissions')->where('slug', 'notifications.manage')->value('id');
+        $this->assertNotNull($permissionId);
+        $manager->roles()->first()->permissions()->syncWithoutDetaching([$permissionId]);
+
+        $this->actingAs($manager)->get('/admin/notifications')->assertForbidden();
+        $this->actingAs($manager)->post('/admin/notifications/dispatch', [
+            'user_id' => 1,
+            'channel' => 'in_app',
+            'title' => 'Denied notification',
+            'message' => 'This must be denied before validation or dispatch.',
+        ])->assertForbidden();
+    }
+
     public function test_branch_manager_access_is_denied_when_assigned_branch_is_inactive(): void
     {
         $this->markSystemInstalled();
