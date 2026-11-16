@@ -84,6 +84,23 @@ class BranchManagerFailClosedTest extends TestCase
         }
     }
 
+    public function test_student_and_teacher_plugins_fail_closed_when_branch_integration_is_disabled(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['student-management', 'teacher-management']);
+
+        $manager = $this->createUserWithRole('branch_manager', 999999);
+        $permissionIds = DB::table('permissions')
+            ->whereIn('slug', ['students.manage', 'teachers.manage'])
+            ->pluck('id');
+        $manager->roles()->first()->permissions()->syncWithoutDetaching($permissionIds);
+
+        $this->actingAs($manager)->get('/admin/students')->assertForbidden();
+        $this->actingAs($manager)->post('/admin/students', [])->assertForbidden();
+        $this->actingAs($manager)->get('/admin/teachers')->assertForbidden();
+        $this->actingAs($manager)->post('/admin/teachers', [])->assertForbidden();
+    }
+
     public function test_branch_manager_access_is_denied_when_assigned_branch_is_inactive(): void
     {
         $this->markSystemInstalled();
