@@ -67,6 +67,43 @@ $validated = $request->validate([
         return back()->with('status', "Class '{$item->name} ({$item->section})' scheduled.");
     }
 
+    public function update(Request $request, AcademicClass $academicClass): RedirectResponse
+    {
+        $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
+        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $academicClass->branch_id) {
+            abort(403, 'Branch isolation violation.');
+        }
+
+        $branchIntegration = app(PluginManager::class)->isEnabled('branch-management') && Schema::hasTable('branches');
+        $branchRule = $branchIntegration
+            ? ['nullable', 'integer', 'exists:branches,id,is_active,1']
+            : ['nullable', 'integer'];
+        $validated = $request->validate([
+            'code' => ['required', 'string', 'max:40', 'unique:academic_classes,code,' . $academicClass->id],
+            'name' => ['required', 'string', 'max:160'],
+            'section' => ['required', 'string', 'max:60'],
+            'subject' => ['required', 'string', 'max:120'],
+            'room_number' => ['nullable', 'string', 'max:60'],
+            'day_of_week' => ['required', 'string', 'max:24'],
+            'start_time' => ['required', 'string', 'max:20'],
+            'end_time' => ['required', 'string', 'max:20'],
+            'instructor_name' => ['nullable', 'string', 'max:120'],
+            'branch_id' => $branchRule,
+        ]);
+
+        if (!$branchIntegration) {
+            $validated['branch_id'] = null;
+        }
+        if ($actor && $actor->hasRole('branch_manager')) {
+            $validated['branch_id'] = (int) $actor->branch_id;
+        }
+
+        $academicClass->update($validated);
+        $this->audit->log('class.updated', 'academic_class', (string) $academicClass->id);
+        return back()->with('status', "Class '{$academicClass->name} ({$academicClass->section})' updated.");
+    }
+
     public function destroy(Request $request, AcademicClass $academicClass): RedirectResponse
     {
         $actor = $request->user();
