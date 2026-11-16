@@ -31,6 +31,8 @@ The script creates `dist/aec-lms-cpanel-release.zip` and its SHA-256 sidecar. It
 4. Edit `.env` with the cPanel MySQL host, database name, database username and password, plus the HTTPS application URL. Do not send database passwords or keys in chat.
 5. Ensure `storage/` and `bootstrap/cache/` are writable by the PHP process. Keep backups and private uploads outside the public document root.
 
+Manual Universal Payment receipt proofs are stored on Laravel's private `local` disk under `storage/app/private/universal-payment-proofs/` (not in `public/storage`). Do not create a public symlink for this directory. The authenticated proof-download route checks finance permission and branch ownership. Include this private directory in encrypted backups and verify restore access during the cPanel rehearsal; the release ZIP intentionally excludes uploaded proofs.
+
 The release ZIP includes the locked Composer dependencies, so a Composer install command is not needed for the packaged build. The initial setup is available through the browser installer; cPanel Terminal/SSH is not required for this initial installation.
 
 ## 4. Install on a new empty database
