@@ -25,7 +25,7 @@ return new class extends Migration {
             Schema::create('guardian_student', function (Blueprint $table): void {
                 $table->id();
                 $table->foreignId('guardian_id')->constrained('guardians')->cascadeOnDelete();
-                $table->foreignId('student_id')->constrained('students')->cascadeOnDelete();
+                $table->unsignedBigInteger('student_id');
                 $table->boolean('is_primary')->default(true);
                 $table->timestamps();
                 $table->unique(['guardian_id', 'student_id']);
