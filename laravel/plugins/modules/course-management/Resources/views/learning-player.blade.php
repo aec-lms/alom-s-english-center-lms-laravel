@@ -43,7 +43,7 @@
                             class="protected-lesson-open shrink-0 px-4 py-2.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-sm font-bold"
                             data-access-url="{{ route('plugins.lesson-media.access', $lesson->id) }}"
                             data-mime="{{ $lesson->media_mime }}"
-                            data-title="{{ $lesson->title }}">
+                            data-title="{{ $lesson->title }}"\n                            data-lesson-id="{{ $lesson->id }}"\n                            data-course-title="{{ $course->title }}">
                             Open Lesson
                         </button>
                     @else
@@ -77,6 +77,42 @@
     const title = document.getElementById('protected-player-title');
     const download = document.getElementById('protected-download');
     const noDownload = document.getElementById('protected-no-download');
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    const recordLessonCompletion = async (button, player) => {
+        if (!window.fetch || !csrfToken) return;
+        try {
+            await fetch('/student-tracking/events', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken
+                },
+                body: JSON.stringify({
+                    event_type: 'lesson_completed',
+                    subject_type: 'lesson',
+                    subject_id: button.dataset.lessonId,
+                    duration_seconds: Math.max(0, Math.min(86400, Math.round(player.currentTime || 0))),
+                    metadata: {
+                        lesson_title: button.dataset.title || 'Lesson',
+                        course_title: button.dataset.courseTitle || '',
+                        source: 'learning-player-ended'
+                    }
+                })
+            });
+        } catch (_) {
+            // Learning playback must not fail if optional tracking is disabled or unavailable.
+        }
+    };
+    video.addEventListener('ended', () => {
+        const active = document.querySelector('.protected-lesson-open[data-lesson-id="' + title.dataset.lessonId + '"]');
+        if (active) recordLessonCompletion(active, video);
+    });
+    audio.addEventListener('ended', () => {
+        const active = document.querySelector('.protected-lesson-open[data-lesson-id="' + title.dataset.lessonId + '"]');
+        if (active) recordLessonCompletion(active, audio);
+    });
 
     const stopPlayers = () => {
         video.pause(); video.removeAttribute('src'); video.load(); video.classList.add('hidden');
@@ -98,6 +134,7 @@
             stopPlayers();
             panel.classList.remove('hidden');
             title.textContent = button.dataset.title || 'Protected lesson';
+            title.dataset.lessonId = button.dataset.lessonId || '';
             watermark.textContent = access.watermark || 'Alom’s English Center';
             download.classList.add('hidden');
             noDownload.classList.remove('hidden');
