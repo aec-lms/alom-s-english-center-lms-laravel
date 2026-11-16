@@ -157,6 +157,9 @@ class ExamController extends Controller
             abort(403, 'Exam is not published for attempts.');
         }
         $actor = $request->user();
+        if (\Illuminate\Support\Facades\Schema::hasColumn('exams', 'learn_earn_type') && $exam->learn_earn_type === 'paid') {
+            abort_unless(\Illuminate\Support\Facades\Schema::hasTable('learn_earn_exam_access') && DB::table('learn_earn_exam_access')->where('exam_id', $exam->id)->where('user_id', $actor?->id)->where('status', 'granted')->exists(), 403, 'Payment is required before attempting this exam.');
+        }
         if ($actor && $actor->hasRole('student') && (int) $actor->branch_id !== (int) $exam->branch_id) {
             abort(403, 'Exam is outside your assigned branch.');
         }
@@ -171,10 +174,12 @@ class ExamController extends Controller
         $sanitizedAnswers = [];
 
         foreach ($questions as $question) {
-            $total += (int) $question->marks;
+            $total += (float) $question->marks;
             $selected = $validated['answers'][(string) $question->id] ?? null;
             if ($selected !== null && (int) $selected === (int) $question->correct_option_index) {
-                $score += (int) $question->marks;
+                $score += (float) $question->marks;
+            } elseif ($selected !== null) {
+                $score -= (float) ($question->negative_marks ?? 0);
             }
             $sanitizedAnswers[(string) $question->id] = $selected !== null ? (int) $selected : null;
         }
@@ -185,7 +190,7 @@ class ExamController extends Controller
             'submitted_answers' => $sanitizedAnswers,
             'score_obtained' => $score,
             'total_marks' => $total,
-            'passed' => $score >= (int) $exam->pass_marks,
+            'passed' => $score >= (float) $exam->pass_marks,
             'submitted_at' => now(),
         ]);
 
