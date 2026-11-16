@@ -73,7 +73,7 @@ class UniversalPaymentController extends Controller
             'item_title' => ['required', 'string', 'max:200'],
             'gateway' => ['required', 'in:bkash,nagad,rocket,bank_cash'],
             'amount' => ['required', 'numeric', 'min:1'],
-            'external_trx_id' => ['nullable', 'string', 'max:120'],
+            'external_trx_id' => ['required', 'string', 'max:120'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
 
@@ -112,6 +112,10 @@ class UniversalPaymentController extends Controller
         $validated = $request->validate([
             'status' => ['required', 'in:verified,rejected'],
         ]);
+
+        // A reviewer must have a bank/provider reference to inspect before marking a
+        // manual receipt as verified. This remains a receipt review, not an online settlement.
+        abort_unless(filled($transaction->external_trx_id), 422, 'A payment/deposit reference is required before manual verification.');
 
         // Only pending manual records can be reviewed here. Online settlement and refunds
         // must be performed by signed provider callbacks / dedicated refund workflows.
