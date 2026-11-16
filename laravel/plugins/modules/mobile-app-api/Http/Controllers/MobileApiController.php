@@ -263,10 +263,11 @@ class MobileApiController extends Controller
 
     public function courseShow(string $slug): JsonResponse
     {
+        // Course currently has no Eloquent category/lessons relationships.
+        // Return the persisted course record instead of eager-loading undefined relations.
         $course = Course::query()
             ->where('slug', $slug)
             ->where('status', 'published')
-            ->with(['category', 'lessons'])
             ->first();
 
         if (!$course) {
