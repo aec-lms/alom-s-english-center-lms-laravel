@@ -43,6 +43,11 @@ class BatchAndClassManagementTest extends TestCase
             'max_capacity' => 2,
             'status' => 'ongoing',
         ])->assertSessionHasErrors('max_capacity');
+        $this->assertDatabaseHas('study_batches', [
+            'id' => $batchId,
+            'max_capacity' => 25,
+            'enrolled_count' => 3,
+        ]);
 
         $this->actingAs($admin)->post('/admin/classes', [
             'code' => 'CLASS-OLD',
@@ -84,36 +89,5 @@ class BatchAndClassManagementTest extends TestCase
         $this->actingAs($manager)->get('/admin/classes')->assertForbidden();
     }
 
-    public function test_batch_capacity_cannot_be_reduced_below_current_enrollment_count(): void
-    {
-        $this->markSystemInstalled();
-        $this->activatePlugins(['batch-management']);
-        $admin = $this->createUserWithRole('admin');
-
-        $this->actingAs($admin)->post('/admin/batches', [
-            'batch_code' => 'CAPACITY-GUARD-01',
-            'name' => 'Capacity Guard Batch',
-            'schedule' => 'Sun-Tue 10:00',
-            'max_capacity' => 10,
-            'status' => 'upcoming',
-        ])->assertRedirect()->assertSessionHasNoErrors();
-
-        $batchId = DB::table('study_batches')->where('batch_code', 'CAPACITY-GUARD-01')->value('id');
-        DB::table('study_batches')->where('id', $batchId)->update(['enrolled_count' => 5]);
-
-        $this->actingAs($admin)->put('/admin/batches/' . $batchId, [
-            'batch_code' => 'CAPACITY-GUARD-01',
-            'name' => 'Capacity Guard Batch',
-            'schedule' => 'Sun-Tue 10:00',
-            'max_capacity' => 4,
-            'status' => 'upcoming',
-        ])->assertStatus(422);
-
-        $this->assertDatabaseHas('study_batches', [
-            'id' => $batchId,
-            'max_capacity' => 10,
-            'enrolled_count' => 5,
-        ]);
-    }
 
 }
