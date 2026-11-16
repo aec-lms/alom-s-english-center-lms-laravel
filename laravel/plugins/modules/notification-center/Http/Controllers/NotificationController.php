@@ -17,7 +17,13 @@ class NotificationController extends Controller
 
     public function index(): View
     {
-        $notifications = LmsNotification::query()->latest()->paginate(25);
+        $user = request()->user();
+        $query = LmsNotification::query()->latest();
+        if ($user?->hasRole('branch_manager')) {
+            abort_if($user->branch_id === null, 403, 'Your account is not assigned to a branch.');
+            $query->where('branch_id', $user->branch_id);
+        }
+        $notifications = $query->paginate(25);
         return view('notification-center::index', compact('notifications'));
     }
 
@@ -30,8 +36,16 @@ class NotificationController extends Controller
             'message' => ['required', 'string'],
         ]);
 
+        $actor = $request->user();
+        $recipient = User::query()->findOrFail((int) $validated['user_id']);
+        if ($actor?->hasRole('branch_manager')) {
+            abort_if($actor->branch_id === null, 403, 'Your account is not assigned to a branch.');
+            abort_unless((int) $recipient->branch_id === (int) $actor->branch_id, 404);
+        }
+
         $record = LmsNotification::query()->create([
-            'user_id' => (int) $validated['user_id'],
+            'user_id' => (int) $recipient->id,
+            'branch_id' => $recipient->branch_id,
             'channel' => $validated['channel'],
             'title' => $validated['title'],
             'message' => $validated['message'],
