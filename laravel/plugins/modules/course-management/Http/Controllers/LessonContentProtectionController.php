@@ -127,11 +127,25 @@ class LessonContentProtectionController extends Controller
 
         return response()->json([
             'url' => $url,
+            'download_url' => (bool) $lessonRow->is_downloadable ? URL::temporarySignedRoute('plugins.lesson-media.download', $expiresAt, ['lesson' => $lesson, 'user' => $request->user()->id]) : null,
             'expires_at' => $expiresAt->toIso8601String(),
             'watermark' => $watermark,
             'download_allowed' => (bool) $lessonRow->is_downloadable,
             'notice' => 'Temporary access. Do not share this link.',
         ])->header('Cache-Control', 'no-store, private');
+    }
+
+    public function download(Request $request, int $lesson, int $user): BinaryFileResponse
+    {
+        abort_unless((int) $request->user()->id === $user, 403, 'This download link belongs to another account.');
+        $lessonRow = $this->authorizedLesson($request, $lesson);
+        abort_unless((bool) $lessonRow->protection_enabled && (bool) $lessonRow->is_downloadable, 403, 'Downloads are disabled for this lesson.');
+
+        $path = $this->resolveMediaPath((string) ($lessonRow->media_path ?? ''));
+        return response()->download($path, 'lesson-' . $lesson . '.' . pathinfo($path, PATHINFO_EXTENSION), [
+            'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'private, no-store, no-cache, must-revalidate',
+        ]);
     }
 
     public function stream(Request $request, int $lesson, int $user): BinaryFileResponse
