@@ -54,15 +54,15 @@ class PluginLifecycleTest extends TestCase
     {
         $this->markSystemInstalled();
 
-        $request = \\Illuminate\\Http\\Request::create('/admin/plugins/gateway-stripe/configure', 'POST', [
+        $request = \Illuminate\\Http\\Request::create('/admin/plugins/gateway-stripe/configure', 'POST', [
             'settings' => ['sandbox_mode' => 'production-ish'],
         ]);
 
         try {
-            app(\\App\\Http\\Controllers\\Admin\\PluginCenterController::class)
+            app(\App\\Http\\Controllers\\Admin\\PluginCenterController::class)
                 ->saveConfiguration($request, 'gateway-stripe');
             $this->fail('Invalid select option should be rejected.');
-        } catch (\\Illuminate\\Validation\\ValidationException $exception) {
+        } catch (\Illuminate\\Validation\\ValidationException $exception) {
             $this->assertArrayHasKey('settings.sandbox_mode', $exception->errors());
         }
 
@@ -76,15 +76,15 @@ class PluginLifecycleTest extends TestCase
     {
         $this->markSystemInstalled();
 
-        $request = \\Illuminate\\Http\\Request::create('/admin/plugins/gateway-stripe/configure', 'POST', [
+        $request = \Illuminate\\Http\\Request::create('/admin/plugins/gateway-stripe/configure', 'POST', [
             'settings' => [
                 'sandbox_mode' => '1',
                 'secret_key_override' => 'untrusted',
             ],
         ]);
 
-        $this->expectException(\\Illuminate\\Validation\\ValidationException::class);
-        app(\\App\\Http\\Controllers\\Admin\\PluginCenterController::class)
+        $this->expectException(\Illuminate\\Validation\\ValidationException::class);
+        app(\App\\Http\\Controllers\\Admin\\PluginCenterController::class)
             ->saveConfiguration($request, 'gateway-stripe');
     }
 
