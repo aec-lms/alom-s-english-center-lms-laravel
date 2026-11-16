@@ -14,7 +14,7 @@ class CmsWebsiteSafetyTest extends TestCase
         $this->activatePlugins(['cms-website']);
         $admin = $this->createUserWithRole('admin');
 
-        $controller = app(\\Plugins\\Modules\\CmsWebsite\\Http\\Controllers\\CmsController::class);
+        $controller = app(\Plugins\Modules\CmsWebsite\Http\Controllers\CmsController::class);
         $view = $controller->index();
         $homepage = $view->getData()['homepage'];
 
