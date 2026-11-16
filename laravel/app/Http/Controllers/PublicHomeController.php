@@ -410,7 +410,7 @@ class PublicHomeController extends Controller
     public function profile(): RedirectResponse
     {
         if (Auth::check()) {
-            return redirect()->route('admin.dashboard');
+            return redirect()->route('portal.dashboard');
         }
 
         return redirect()->route('login');
