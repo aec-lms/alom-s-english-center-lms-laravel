@@ -65,6 +65,53 @@ class AllPluginsIndependentAcceptanceTest extends TestCase
             );
         }
 
+        // Exercise a real checksum-verified ZIP update for every plugin package.
+        $originalManifest = File::get($directory . '/plugin.json');
+        $packageRoot = storage_path('app/plugin-acceptance-packages/' . $slug . '-' . uniqid('', true));
+        $zipPath = sys_get_temp_dir() . '/aec-plugin-update-' . $slug . '-' . uniqid('', true) . '.zip';
+        File::ensureDirectoryExists(dirname($packageRoot));
+        $this->assertTrue(File::copyDirectory($directory, $packageRoot), "{$slug} update fixture could not be staged");
+        $manifestData = json_decode($originalManifest, true, 512, JSON_THROW_ON_ERROR);
+        $currentVersion = (string) ($manifestData['version'] ?? '1.0.0');
+        if (preg_match('/^(.*\\.)(\\d+)$/', $currentVersion, $versionMatch) === 1) {
+            $updatedVersion = $versionMatch[1] . ((int) $versionMatch[2] + 1);
+        } else {
+            $updatedVersion = $currentVersion . '.1';
+        }
+        $manifestData['version'] = $updatedVersion;
+        File::put($packageRoot . '/plugin.json', json_encode($manifestData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
+        if (File::exists($packageRoot . '/checksums.json')) {
+            File::delete($packageRoot . '/checksums.json');
+        }
+
+        $checksums = [];
+        foreach (File::allFiles($packageRoot) as $packageFile) {
+            $relativePath = str_replace(DIRECTORY_SEPARATOR, '/', ltrim(str_replace($packageRoot, '', $packageFile->getPathname()), DIRECTORY_SEPARATOR));
+            $checksums[$relativePath] = hash_file('sha256', $packageFile->getPathname());
+        }
+        File::put($packageRoot . '/checksums.json', json_encode($checksums, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
+
+        $zip = new ZipArchive();
+        $this->assertTrue($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true, "{$slug} update ZIP could not be created");
+        foreach (File::allFiles($packageRoot) as $packageFile) {
+            $relativePath = str_replace(DIRECTORY_SEPARATOR, '/', ltrim(str_replace($packageRoot, '', $packageFile->getPathname()), DIRECTORY_SEPARATOR));
+            $this->assertTrue($zip->addFile($packageFile->getPathname(), $slug . '/' . $relativePath), "{$slug} update ZIP could not include {$relativePath}");
+        }
+        $zip->close();
+
+        try {
+            $updatedRecord = $manager->installOrUpdateFromZip($zipPath);
+            $this->assertSame($updatedVersion, $updatedRecord->fresh()->version, "{$slug} ZIP update did not apply its newer version");
+        } finally {
+            @unlink($zipPath);
+            File::deleteDirectory($packageRoot);
+            // Keep the repository fixture version stable for the remaining tests.
+            File::put($directory . '/plugin.json', $originalManifest);
+            if (File::exists($directory . '/checksums.json')) {
+                File::delete($directory . '/checksums.json');
+            }
+        }
+
         $manager->disable($slug);
         $this->assertFalse($record->fresh()->is_enabled, "{$slug} did not disable cleanly");
 
