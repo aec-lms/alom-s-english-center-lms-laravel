@@ -74,7 +74,7 @@ class TeacherController extends Controller
             $user = User::query()->create([
                 'name' => $validated['name'],
                 'email' => strtolower($validated['email']),
-                'password' => Hash::make($validated['password'] ?: Str::random(12)),
+                'password' => Hash::make(($validated['password'] ?? null) ?: Str::random(12)),
                 'branch_id' => $validated['branch_id'] ?? null,
                 'is_active' => $request->boolean('is_active', true),
             ]);
