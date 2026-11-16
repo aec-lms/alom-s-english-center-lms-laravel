@@ -7,13 +7,27 @@
     "description": "Digital Course Certificates, Band Score Credentials, Public Verification Codes, and Revocation Control.",
     "core_compatibility": "^2.0",
     "dependencies": [],
-    "optional_dependencies": ["student-management"],
+    "optional_dependencies": [
+        "student-management",
+        "branch-management"
+    ],
     "provider": "Plugins\\Modules\\CertificateManagement\\Providers\\CertificateManagementServiceProvider",
     "permissions": [
-        { "slug": "certificates.manage", "name": "Issue & Revoke Student Certificates" }
+        {
+            "slug": "certificates.manage",
+            "name": "Issue & Revoke Student Certificates"
+        }
     ],
     "settings_schema": [
-        { "key": "signatory_name", "label": "Authorized Certificate Signatory Name", "encrypted": false },
-        { "key": "signatory_title", "label": "Signatory Title", "encrypted": false }
+        {
+            "key": "signatory_name",
+            "label": "Authorized Certificate Signatory Name",
+            "encrypted": false
+        },
+        {
+            "key": "signatory_title",
+            "label": "Signatory Title",
+            "encrypted": false
+        }
     ]
 }
