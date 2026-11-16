@@ -20,9 +20,10 @@ class CertificateController extends Controller
     public function index(Request $request): View
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $certificates = Schema::hasTable('certificates')
             ? CertificateRecord::query()
-                ->when($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null, fn ($q) => $q->where('branch_id', $actor->branch_id))
+                ->when($actor && $actor->hasRole('branch_manager'), fn ($q) => $q->where('branch_id', $actor->branch_id))
                 ->orderByDesc('id')
                 ->get()
             : collect();
@@ -33,6 +34,7 @@ class CertificateController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $validated = $request->validate([
             'student_name' => ['required', 'string', 'max:160'],
             'student_code' => ['nullable', 'string', 'max:60'],
@@ -43,7 +45,7 @@ class CertificateController extends Controller
             'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
         ]);
 
-        if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null) {
+        if ($actor && $actor->hasRole('branch_manager')) {
             $validated['branch_id'] = $actor->branch_id;
         }
 
@@ -63,6 +65,7 @@ class CertificateController extends Controller
     public function revoke(Request $request, CertificateRecord $certificate): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $certificate->branch_id) {
             abort(403, 'Branch isolation violation.');
         }
@@ -70,5 +73,14 @@ class CertificateController extends Controller
         $this->audit->log('certificate.revoked', 'certificate', (string) $certificate->id);
 
         return back()->with('status', "Certificate {$certificate->verification_code} revoked.");
+    }
+    private function ensureAssignedBranch($actor): void
+    {
+        if (!$actor || !$actor->hasRole('branch_manager')) {
+            return;
+        }
+        if ($actor->branch_id === null || !app('db')->table('branches')->where('id', $actor->branch_id)->where('is_active', true)->exists()) {
+            abort(403, 'Branch manager must be assigned to an active branch.');
+        }
     }
 }
