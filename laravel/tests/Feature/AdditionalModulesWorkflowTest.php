@@ -144,6 +144,20 @@ class AdditionalModulesWorkflowTest extends TestCase
         $this->assertSame('pending', $payroll->status);
         $this->assertNull($payroll->paid_at);
 
+        $otherBranchId = DB::table('branches')->insertGetId([
+            'code' => 'HR-OTHER',
+            'name' => 'HR Other Branch',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $otherBranchManager = $this->createUserWithRole('branch_manager', $otherBranchId);
+        $hrPermissionId = DB::table('permissions')->where('slug', 'hr.manage')->value('id');
+        $otherBranchManager->roles()->first()->permissions()->syncWithoutDetaching([$hrPermissionId]);
+        $this->actingAs($otherBranchManager)->post("/admin/hr/payrolls/{$payroll->id}/mark-paid", [
+            'payment_reference' => 'UNAUTHORIZED-REFERENCE',
+        ])->assertForbidden();
+
         $this->actingAs($admin)->post("/admin/hr/payrolls/{$payroll->id}/mark-paid", [
             'payment_reference' => 'BANK-TXN-EMP-101-2026-02',
         ])->assertSessionHasNoErrors();
