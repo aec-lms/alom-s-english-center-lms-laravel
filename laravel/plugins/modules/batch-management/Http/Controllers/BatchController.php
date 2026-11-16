@@ -41,7 +41,7 @@ class BatchController extends Controller
             'max_capacity' => ['required', 'integer', 'min:1', 'max:500'],
             'start_date' => ['nullable', 'date'],
             'status' => ['required', 'in:upcoming,ongoing,completed'],
-            'branch_id' => ['nullable', 'integer'],
+            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
         ]);
 
         if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null) {
@@ -54,8 +54,12 @@ class BatchController extends Controller
         return back()->with('status', "Batch '{$batch->name}' created.");
     }
 
-    public function destroy(StudyBatch $batch): RedirectResponse
+    public function destroy(Request $request, StudyBatch $batch): RedirectResponse
     {
+        $actor = $request->user();
+        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $batch->branch_id) {
+            abort(403, 'Branch isolation violation.');
+        }
         $name = $batch->name;
         $id = (string) $batch->id;
         $batch->delete();
