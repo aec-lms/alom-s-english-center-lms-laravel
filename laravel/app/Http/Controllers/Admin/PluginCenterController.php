@@ -39,7 +39,9 @@ class PluginCenterController extends Controller
             return $record;
         });
 
-        return view('admin.plugins.index', compact('records'));
+        $recycledPlugins = $this->plugins->recycledPlugins();
+
+        return view('admin.plugins.index', compact('records', 'recycledPlugins'));
     }
 
     public function upload(Request $request): RedirectResponse
@@ -109,6 +111,39 @@ class PluginCenterController extends Controller
             $this->plugins->uninstall($slug, false, auth()->id());
             return back()->with('status', "Plugin '{$slug}' uninstalled cleanly. Shared LMS records remain intact.");
         } catch (\Throwable $e) {
+            return back()->withErrors(['plugin' => $e->getMessage()]);
+        }
+    }
+
+    public function deleteToRecycleBin(Request $request, string $slug): RedirectResponse
+    {
+        $request->validate(['confirm_delete' => ['required', 'accepted']]);
+        try {
+            $item = $this->plugins->deleteToRecycleBin($slug, auth()->id());
+            return back()->with('status', "Plugin '{$item['name']}' moved to Recycle Bin. Its database records and settings were preserved.");
+        } catch (\\Throwable $e) {
+            return back()->withErrors(['plugin' => $e->getMessage()]);
+        }
+    }
+
+    public function restoreFromRecycleBin(Request $request, string $archive): RedirectResponse
+    {
+        $request->validate(['confirm_restore' => ['required', 'accepted']]);
+        try {
+            $this->plugins->restoreFromRecycleBin($archive, auth()->id());
+            return back()->with('status', 'Plugin package restored. Previous installation state was recovered where possible.');
+        } catch (\\Throwable $e) {
+            return back()->withErrors(['plugin' => $e->getMessage()]);
+        }
+    }
+
+    public function permanentlyDeleteFromRecycleBin(Request $request, string $archive): RedirectResponse
+    {
+        $request->validate(['confirm_permanent_delete' => ['required', 'accepted']]);
+        try {
+            $this->plugins->permanentlyDeleteFromRecycleBin($archive, auth()->id());
+            return back()->with('status', 'Plugin package permanently removed from Recycle Bin. Database records were preserved.');
+        } catch (\\Throwable $e) {
             return back()->withErrors(['plugin' => $e->getMessage()]);
         }
     }
