@@ -10,7 +10,7 @@ class HealthMonitorTest extends TestCase
     {
         $this->markSystemInstalled();
         $report = app(HealthMonitorService::class)->report(false);
-        foreach (['database', 'cache', 'storage', 'private_storage', 'backup_storage', 'disk_space', 'php_runtime'] as $check) $this->assertArrayHasKey($check, $report['checks']);
+        foreach (['database', 'cache', 'storage', 'private_storage', 'backup_storage', 'queue', 'disk_space', 'php_runtime', 'runtime_resources'] as $check) $this->assertArrayHasKey($check, $report['checks']);
         $this->assertSame([], $report['recoveries']);
         $this->assertSame($report, Cache::get('aec:health:last-report'));
     }
