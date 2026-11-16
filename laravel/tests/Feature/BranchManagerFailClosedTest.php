@@ -186,6 +186,7 @@ class BranchManagerFailClosedTest extends TestCase
         $this->markSystemInstalled();
         $this->activatePlugins([
             'branch-management',
+            'student-management',
             'teacher-management',
             'guardian-management',
             'hr-staff-management',
@@ -226,7 +227,7 @@ class BranchManagerFailClosedTest extends TestCase
     public function test_universal_payment_branch_manager_can_only_view_and_verify_own_branch_receipts(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['branch-management', 'payment-management', 'fees-management', 'universal-payment']);
+        $this->activatePlugins(['branch-management', 'student-management', 'fees-management', 'payment-management', 'universal-payment']);
 
         $ownBranch = DB::table('branches')->insertGetId([
             'code' => 'UP-OWN',
@@ -300,7 +301,7 @@ class BranchManagerFailClosedTest extends TestCase
     public function test_unassigned_branch_manager_cannot_access_universal_payment_receipts(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['branch-management', 'payment-management', 'fees-management', 'universal-payment']);
+        $this->activatePlugins(['branch-management', 'student-management', 'fees-management', 'payment-management', 'universal-payment']);
 
         $manager = $this->createUserWithRole('branch_manager');
         $permission = DB::table('permissions')->where('slug', 'payments.universal.manage')->firstOrFail();
