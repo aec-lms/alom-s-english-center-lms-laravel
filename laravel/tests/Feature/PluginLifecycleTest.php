@@ -616,6 +616,9 @@ PHP;
                 ->where('setting_key', 'api_token')
                 ->firstOrFail();
             $this->assertFalse($secretRow->is_encrypted, 'An empty reset credential must not be marked as ciphertext.');
+            $backups = glob(storage_path('app/plugin-setting-backups/' . $slug . '-*.json')) ?: [];
+            $this->assertNotEmpty($backups, 'Reset must create a private settings backup before changing values.');
+            $this->assertStringNotContainsString('sensitive-token', (string) file_get_contents($backups[0]));
             $this->assertSame($userCountBefore, DB::table('users')->count());
             $this->assertDatabaseHas('audit_logs', [
                 'action' => 'plugin.settings_reset',
