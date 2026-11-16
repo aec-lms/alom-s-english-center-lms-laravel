@@ -155,7 +155,7 @@ class RecycleBinTest extends TestCase
         ];
 
         foreach ($models as $model) {
-            $this->assertContains(\\Illuminate\\Database\\Eloquent\\SoftDeletes::class, class_uses_recursive($model), $model . ' must support soft deletes.');
+            $this->assertContains(\Illuminate\Database\Eloquent\SoftDeletes::class, class_uses_recursive($model), $model . ' must support soft deletes.');
         }
     }
 
