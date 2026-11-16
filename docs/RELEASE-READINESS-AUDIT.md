@@ -52,6 +52,8 @@ The repository currently contains 39 plugin manifests: Branch, Student, Teacher,
 | cPanel packaging | Build exact release ZIP from a clean checkout; verify Composer dependencies, no secrets/private files, correct public document root and protected HTTP paths |
 | Browser/security | Complete browser E2E, CSRF/session/RBAC tests, upload/download authorization, ZIP abuse tests, dependency audit, static analysis and security review |
 | Operations | Verify SMTP, queues/cron, SMS, provider credentials, backups off-host, logs, restore procedure and real-host monitoring |
+| Admin Recycle Bin | No verified cross-module recycle-bin/restore workflow is present in the current source tree; implement per-module archive/restore/permanent-purge contracts, permission and branch scoping, and private-file retention tests before acceptance |
+| Live-class capacity | A basic LiveClass model stores meeting URLs, but 300+ participant capacity is not enforced or provider-verified; require a selected provider adapter, sandbox/API validation and load test before promising 300+ concurrent attendees |
 
 ## Backup/restore safety notes
 
