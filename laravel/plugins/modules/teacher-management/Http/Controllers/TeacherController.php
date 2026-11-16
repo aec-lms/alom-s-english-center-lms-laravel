@@ -38,11 +38,14 @@ class TeacherController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $branchRule = Schema::hasTable('branches')
+            ? ['nullable', 'integer', 'exists:branches,id']
+            : ['nullable', 'integer'];
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:150'],
             'email' => ['required', 'email', 'max:190', 'unique:users,email'],
             'password' => ['nullable', 'string', 'min:6'],
-            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
+            'branch_id' => $branchRule,
             'employee_code' => ['required', 'string', 'max:60', 'unique:teachers,employee_code'],
             'specialization' => ['required', 'string', 'max:160'],
             'credentials' => ['nullable', 'string', 'max:255'],
