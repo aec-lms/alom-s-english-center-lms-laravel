@@ -3,7 +3,7 @@
 @section('content')
 <div class="space-y-6 max-w-6xl">
     <div>
-        <h1 class="text-2xl font-extrabold text-slate-900">Student Management (Manual Add, Edit, Delete)</h1>
+        <h1 class="text-2xl font-extrabold text-slate-900">Student Management (Manual Add, Edit, Deactivate)</h1>
         <p class="text-xs text-slate-500">Enroll students manually, update branch/contact/status, reset passwords, or remove students safely.</p>
     </div>
 
@@ -35,9 +35,9 @@
                         <strong class="text-sm text-slate-900">{{ $student->user?->name }}</strong>
                         <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase {{ $student->status === 'active' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600' }}">{{ $student->status }}</span>
                     </div>
-                    <form method="POST" action="/admin/students/{{ $student->id }}" onsubmit="return confirm('Remove student {{ $student->student_code }}?')">
+                    <form method="POST" action="/admin/students/{{ $student->id }}" onsubmit="return confirm('Deactivate student {{ $student->student_code }}? Historical records will be preserved.')">
                         @csrf @method('DELETE')
-                        <button class="px-3 py-1 rounded-lg border border-rose-200 text-rose-700 font-semibold hover:bg-rose-50">Delete</button>
+                        <button class="px-3 py-1 rounded-lg border border-rose-200 text-rose-700 font-semibold hover:bg-rose-50">Deactivate</button>
                     </form>
                 </div>
 
