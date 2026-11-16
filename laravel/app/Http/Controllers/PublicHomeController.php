@@ -135,15 +135,8 @@ class PublicHomeController extends Controller
                 $syllabus = $decoded;
             }
         }
-        if (empty($syllabus)) {
-            $syllabus = $lessons->isNotEmpty()
-                ? $lessons->pluck('title')->all()
-                : [
-                    'Module 01: Core Foundation & Diagnostic Assessment',
-                    'Module 02: Intensive Live Practice & Guided Worksheets',
-                    'Module 03: Weekly Mock Evaluation & Examiner Feedback',
-                    'Module 04: Final Readiness Mock & Certification',
-                ];
+        if (empty($syllabus) && $lessons->isNotEmpty()) {
+            $syllabus = $lessons->pluck('title')->all();
         }
 
         $linkedPost = null;
@@ -216,7 +209,7 @@ class PublicHomeController extends Controller
         return view('public.learn', compact('lessons'));
     }
 
-        public function instructors(): View
+    public function instructors(): View
     {
         $instructors = $this->catalogInstructors();
 
