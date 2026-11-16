@@ -24,7 +24,17 @@ class SslcommerzController extends Controller
             'invoice_id' => ['required', 'integer', 'exists:fee_invoices,id'],
         ]);
 
-        $invoice = FeeInvoice::query()->findOrFail((int) $validated['invoice_id']);
+        $invoice = FeeInvoice::query()->with('student.user')->findOrFail((int) $validated['invoice_id']);
+        $user = $request->user();
+
+        if ($user->hasRole('student')) {
+            abort_unless((int) $invoice->student?->user_id === (int) $user->id, 403, 'Students can only pay their own invoices.');
+        } elseif ($user->hasRole('branch_manager')) {
+            abort_unless((int) $user->branch_id > 0 && (int) $invoice->branch_id === (int) $user->branch_id, 403, 'Invoice is outside your assigned branch.');
+        } elseif (!$user->hasPermission('gateway.sslcommerz.use') && !$user->hasPermission('payments.manage')) {
+            abort(403, 'You are not allowed to initiate SSLCOMMERZ payments.');
+        }
+
         $session = $this->gateway->initiateHostedCheckout($invoice);
 
         return response()->json([
