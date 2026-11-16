@@ -22,7 +22,7 @@
     </div>
 
     <div class="grid lg:grid-cols-2 gap-6">
-        <form method="POST" action="{{ route('plugins.universal_payment.gateways') }}" class="bg-white rounded-2xl border border-slate-200 p-6 space-y-4 text-xs">
+        <form method="POST" action="{{ url('/plugins/universal-payment/gateways') }}" class="bg-white rounded-2xl border border-slate-200 p-6 space-y-4 text-xs">
             @csrf
             <h2 class="text-sm font-bold text-slate-900">1. Multi-Gateway Providers & Credentials</h2>
             <div>
@@ -52,7 +52,7 @@
             <button class="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold">Save Gateway Settings</button>
         </form>
 
-        <form method="POST" action="{{ route('plugins.universal_payment.store') }}" class="bg-white rounded-2xl border border-slate-200 p-6 space-y-4 text-xs">
+        <form method="POST" action="{{ url('/plugins/universal-payment/transactions') }}" class="bg-white rounded-2xl border border-slate-200 p-6 space-y-4 text-xs">
             @csrf
             <h2 class="text-sm font-bold text-slate-900">2. Record / Collect Payment</h2>
             <div class="grid grid-cols-2 gap-3">
@@ -109,7 +109,7 @@
                             <td><span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase {{ $tx->status === 'verified' ? 'bg-emerald-100 text-emerald-800' : ($tx->status === 'refunded' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800') }}">{{ $tx->status }}</span></td>
                             <td>
                                 @if ($tx->status === 'pending' && in_array($tx->gateway, ['bank_cash', 'bkash', 'nagad', 'rocket'], true))
-                                <form method="POST" action="{{ route('plugins.universal_payment.status', $tx) }}" class="inline-flex items-center gap-1.5">
+                                <form method="POST" action="{{ url('/plugins/universal-payment/transactions/' . $tx->id . '/status') }}" class="inline-flex items-center gap-1.5">
                                     @csrf
                                     <select name="status" required class="rounded border border-slate-300 px-1.5 py-1 text-[11px]">
                                         <option value="verified">Verify evidence</option>
