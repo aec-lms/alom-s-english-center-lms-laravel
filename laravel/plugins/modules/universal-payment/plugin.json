@@ -4,10 +4,11 @@
     "version": "2.3.0",
     "author": "AEC Core Team",
     "category": "finance",
-    "description": "Credential-free payment orchestrator that discovers independently installed and configured gateway plugins, provides a unified gateway status and checkout selection layer, and leaves cash/bank-transfer reconciliation in the LMS ledger. Provider credentials belong only to their dedicated plugins.",
+    "description": "Invoice-bound payment orchestration with independently configurable gateway adapters; offline records require audited manual verification.",
     "core_compatibility": "^2.0",
     "dependencies": [
-        "payment-management"
+        "payment-management",
+        "fees-management"
     ],
     "provider": "Plugins\\Modules\\UniversalPayment\\Providers\\UniversalPaymentServiceProvider",
     "permissions": [
