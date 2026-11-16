@@ -24,7 +24,7 @@ class FeesStandaloneTest extends TestCase
             'subtotal_amount' => 2500,
             'discount_amount' => 250,
             'due_date' => now()->addDays(7)->toDateString(),
-        ])->assertSessionHasNoErrors();
+        ])->assertRedirect()->assertSessionHasNoErrors();
 
         $this->assertDatabaseHas('fee_invoices', [
             'student_id' => null,
