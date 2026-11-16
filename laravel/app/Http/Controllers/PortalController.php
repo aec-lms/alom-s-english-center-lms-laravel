@@ -5,13 +5,14 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class PortalController extends Controller
 {
-    public function index(Request $request): View
+    public function index(Request $request): View|RedirectResponse
     {
         $user = $request->user();
         abort_unless($user, 401);
@@ -23,6 +24,7 @@ class PortalController extends Controller
         $role = collect(['student', 'teacher', 'guardian', 'branch_manager', 'accountant'])
             ->first(fn (string $candidate) => $user->hasRole($candidate)) ?? 'user';
         $branchId = $user->branch_id;
+        if ($role === 'branch_manager' && $branchId === null) abort(403, 'Branch manager account has no assigned branch.');
         $student = null;
         $teacher = null;
         $guardian = null;
