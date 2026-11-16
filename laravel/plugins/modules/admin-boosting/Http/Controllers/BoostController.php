@@ -33,10 +33,22 @@ class BoostController extends Controller
             'placement' => ['required', 'in:homepage_featured,course_listing,notice_banner'],
             'badge_text' => ['nullable', 'string', 'max:60'],
             'cta_text' => ['nullable', 'string', 'max:60'],
-            'destination_url' => ['nullable', 'string', 'max:255'],
+            'destination_url' => ['nullable', 'string', 'max:255', function (string $attribute, mixed $value, \Closure $fail): void {
+                if ($value === null || $value === '') {
+                    return;
+                }
+                $scheme = parse_url((string) $value, PHP_URL_SCHEME);
+                $relative = str_starts_with((string) $value, '/') && !str_starts_with((string) $value, '//');
+                $external = is_string($scheme)
+                    && in_array(strtolower($scheme), ['http', 'https'], true)
+                    && filter_var((string) $value, FILTER_VALIDATE_URL);
+                if (!$relative && !$external) {
+                    $fail('The destination must be a relative site path or an HTTP(S) URL.');
+                }
+            }],
             'priority' => ['nullable', 'integer', 'min:1', 'max:10'],
             'starts_at' => ['nullable', 'date'],
-            'ends_at' => ['nullable', 'date'],
+            'ends_at' => ['nullable', 'date', 'after_or_equal:starts_at'],
         ]);
 
         $campaign = BoostCampaign::query()->create([
@@ -64,9 +76,18 @@ class BoostController extends Controller
             'placement' => ['required', 'in:homepage_featured,course_listing,notice_banner'],
             'badge_text' => ['nullable', 'string', 'max:60'],
             'cta_text' => ['nullable', 'string', 'max:60'],
-            'destination_url' => ['nullable', 'string', 'max:255'],
+            'destination_url' => ['nullable', 'string', 'max:255', function (string $attribute, mixed $value, \Closure $fail): void {
+                if ($value === null || $value === '') return;
+                $scheme = parse_url((string) $value, PHP_URL_SCHEME);
+                $relative = str_starts_with((string) $value, '/') && !str_starts_with((string) $value, '//');
+                $external = is_string($scheme) && in_array(strtolower($scheme), ['http', 'https'], true)
+                    && filter_var((string) $value, FILTER_VALIDATE_URL);
+                if (!$relative && !$external) $fail('The destination must be a relative site path or an HTTP(S) URL.');
+            }],
             'priority' => ['required', 'integer', 'min:1', 'max:10'],
             'status' => ['required', 'in:active,paused,completed'],
+            'starts_at' => ['nullable', 'date'],
+            'ends_at' => ['nullable', 'date', 'after_or_equal:starts_at'],
         ]);
 
         $campaign->update($validated);
@@ -87,7 +108,23 @@ class BoostController extends Controller
 
     public function trackClick(BoostCampaign $campaign): RedirectResponse
     {
+        $now = now();
+        $isEligible = $campaign->status === 'active'
+            && (!$campaign->starts_at || $campaign->starts_at <= $now)
+            && (!$campaign->ends_at || $campaign->ends_at >= $now);
+        $destination = (string) ($campaign->destination_url ?: '/courses');
+        $scheme = parse_url($destination, PHP_URL_SCHEME);
+        $relative = str_starts_with($destination, '/') && !str_starts_with($destination, '//');
+        $external = is_string($scheme)
+            && in_array(strtolower($scheme), ['http', 'https'], true)
+            && filter_var($destination, FILTER_VALIDATE_URL);
+
+        if (!$isEligible || (!$relative && !$external)) {
+            return redirect('/courses');
+        }
+
         $campaign->increment('clicks');
-        return redirect()->to($campaign->destination_url ?: '/courses');
+
+        return redirect()->to($destination);
     }
 }
