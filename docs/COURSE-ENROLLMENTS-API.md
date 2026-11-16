@@ -1,12 +1,38 @@
-# Course enrollment API
+# Laravel Course Enrollment Workflow
 
-Apply migrations in numeric order through `004_user_management_permissions.sql`, then `005_course_enrollments.sql`.
+Course enrollment is implemented inside the Laravel course-management plugin. There are no legacy standalone PHP enrollment endpoints.
 
-- `GET /api/enrollments.php?action=my`: authenticated user can see only their own enrollments.
-- `GET /api/enrollments.php?action=list&limit=100&status=pending`: requires `enrollments.manage`.
-- `POST /api/enrollments.php?action=create`: requires `enrollments.manage`; accepts `user_id`, `course_id`, optional `status` (defaults to pending), `branch_id`, and `notes`.
-- `POST /api/enrollments.php?action=update&id=123`: requires `enrollments.manage`; accepts status, starts_at, ends_at, and notes.
+## Student endpoints
 
-Only active student accounts and published courses can be enrolled. A unique user/course constraint prevents duplicate enrollment records. Existing enrollments are reactivated by updating their status, not by creating duplicate rows. Mutations are audit logged. Students cannot list other students' enrollments or activate their own access.
+- POST /courses/{course}/enroll — authenticated student requests enrollment in a published course.
+- GET /my-learning/enrollments — authenticated student sees only their own enrollment records, linked course and invoice.
+- GET /api/mobile/me — authenticated mobile user receives their own enrollments and course summaries.
 
-**Important boundary:** This is manual enrollment management, not payment processing. A privileged administrator can explicitly create an active enrollment; this endpoint does not verify bKash/Nagad/bank/cash payments. Branch-manager access is disabled until row-level branch scoping is implemented. The endpoint does not yet provide public registration, payment-gated enrollment, refunds, or enrollment UI.
+## Admin endpoints
+
+- GET /admin/enrollments — requires the enrollments.manage permission; branch managers see only their own branch.
+- PATCH /admin/enrollments/{enrollment}/status — requires enrollments.manage and enforces branch scope.
+
+## Payment gating
+
+- Free published courses activate immediately after a valid student profile and branch match.
+- Paid courses create a pending enrollment and a fee invoice linked by invoice_id.
+- A paid enrollment cannot be manually activated while its invoice is unpaid or partially paid.
+- PaymentSettlementService activates the pending enrollment only after a verified payment transaction settles the linked invoice in full.
+- If a refund reduces the invoice below its full amount, the LMS moves the enrollment back to pending until the balance is resolved.
+- Duplicate user/course enrollments are prevented by the unique database constraint; an existing pending or active enrollment is not duplicated.
+
+## Security
+
+- Students can request enrollment only for themselves and only when a Student profile exists.
+- A student cannot enroll in a course assigned to another branch.
+- Branch managers can list and update only enrollments in their assigned branch.
+- Course and invoice ownership is checked server-side; client-supplied prices, payment statuses or scores are not trusted.
+- This workflow does not treat a browser redirect as proof of payment. Payment activation comes from the verified gateway settlement service.
+
+## Operational requirements
+
+- Course Management must be enabled.
+- Paid course enrollment also requires Fees & Invoicing and Payment Management.
+- To accept online payment, enable and configure a standalone payment gateway plugin, register its provider callbacks and complete sandbox verification.
+- The Universal Payment plugin only orchestrates independently configured gateways; it does not store merchant credentials.
