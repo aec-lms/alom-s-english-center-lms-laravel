@@ -97,6 +97,7 @@ Route::middleware('installed')->group(function (): void {
         Route::prefix('recycle-bin')->name('recycle-bin.')->middleware('permission:core.recycle_bin.manage')->group(function (): void {
             Route::get('/', [RecycleBinController::class, 'index'])->name('index');
             Route::post('/students/{student}/restore', [RecycleBinController::class, 'restoreStudent'])->name('students.restore');
+            Route::post('/teachers/{teacher}/restore', [RecycleBinController::class, 'restoreTeacher'])->name('teachers.restore');
         });
 
         Route::get('/audit-logs', [AuditLogController::class, 'index'])
