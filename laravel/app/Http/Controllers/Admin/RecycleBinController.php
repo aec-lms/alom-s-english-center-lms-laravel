@@ -16,6 +16,8 @@ use Illuminate\View\View;
 use Plugins\Modules\StudentManagement\Models\Student;
 use Plugins\Modules\TeacherManagement\Models\Teacher;
 use Plugins\Modules\CourseManagement\Models\Course;
+use Plugins\Modules\CourseManagement\Models\CourseCategory;
+use Plugins\Modules\CourseManagement\Models\LiveClass;
 use Plugins\Modules\ExamManagement\Models\Exam;
 use Plugins\Modules\BatchManagement\Models\StudyBatch;
 use Plugins\Modules\ClassManagement\Models\AcademicClass;
@@ -34,6 +36,8 @@ class RecycleBinController extends Controller
         $students = new LengthAwarePaginator([], 0, 25);
         $teachers = new LengthAwarePaginator([], 0, 25);
         $courses = new LengthAwarePaginator([], 0, 25);
+        $courseCategories = new LengthAwarePaginator([], 0, 25);
+        $liveClasses = new LengthAwarePaginator([], 0, 25);
         $exams = new LengthAwarePaginator([], 0, 25);
         $batches = new LengthAwarePaginator([], 0, 25);
         $classes = new LengthAwarePaginator([], 0, 25);
@@ -60,6 +64,12 @@ class RecycleBinController extends Controller
         if ($this->plugins->isEnabled('course-management') && Schema::hasTable('courses') && Schema::hasColumn('courses', 'deleted_at')) {
             $courses = Course::withTrashed()->whereNotNull('deleted_at')->latest('deleted_at')->paginate(25, ['*'], 'courses_page');
         }
+        if ($this->plugins->isEnabled('course-management') && Schema::hasTable('course_categories') && Schema::hasColumn('course_categories', 'deleted_at')) {
+            $courseCategories = CourseCategory::withTrashed()->whereNotNull('deleted_at')->latest('deleted_at')->paginate(25, ['*'], 'course_categories_page');
+        }
+        if ($this->plugins->isEnabled('course-management') && Schema::hasTable('live_classes') && Schema::hasColumn('live_classes', 'deleted_at')) {
+            $liveClasses = LiveClass::withTrashed()->with('course')->whereNotNull('deleted_at')->latest('deleted_at')->paginate(25, ['*'], 'live_classes_page');
+        }
         if ($this->plugins->isEnabled('exam-management') && Schema::hasTable('exams') && Schema::hasColumn('exams', 'deleted_at')) {
             $exams = Exam::withTrashed()->whereNotNull('deleted_at')->latest('deleted_at')->paginate(25, ['*'], 'exams_page');
         }
@@ -70,7 +80,7 @@ class RecycleBinController extends Controller
             $classes = AcademicClass::withTrashed()->whereNotNull('deleted_at')->latest('deleted_at')->paginate(25, ['*'], 'classes_page');
         }
 
-        return view('admin.recycle-bin.index', compact('students', 'teachers', 'courses', 'exams', 'batches', 'classes'));
+        return view('admin.recycle-bin.index', compact('students', 'teachers', 'courses', 'courseCategories', 'liveClasses', 'exams', 'batches', 'classes'));
     }
 
     public function restoreStudent(Request $request, int $studentId): RedirectResponse
@@ -200,6 +210,40 @@ class RecycleBinController extends Controller
         });
 
         return redirect()->route('admin.recycle-bin.index')->with('status', 'AcademicClass restored successfully.');
+    }
+
+    public function restoreCourseCategory(Request $request, int $recordId): RedirectResponse
+    {
+        abort_unless($request->user()?->hasRole('admin'), 403);
+        abort_unless($this->plugins->isEnabled('course-management') && Schema::hasTable('course_categories') && Schema::hasColumn('course_categories', 'deleted_at'), 404);
+
+        DB::transaction(function () use ($recordId, $request): void {
+            $record = CourseCategory::withTrashed()->lockForUpdate()->findOrFail($recordId);
+            abort_unless($record->trashed(), 409, 'This category is not in the Recycle Bin.');
+            $record->restore();
+            $this->audit->log('recycle_bin.course_category_restored', 'course_category', (string) $record->id, [
+                'name' => $record->name,
+            ], $request->user()->id);
+        });
+
+        return redirect()->route('admin.recycle-bin.index')->with('status', 'Course category restored successfully.');
+    }
+
+    public function restoreLiveClass(Request $request, int $recordId): RedirectResponse
+    {
+        abort_unless($request->user()?->hasRole('admin'), 403);
+        abort_unless($this->plugins->isEnabled('course-management') && Schema::hasTable('live_classes') && Schema::hasColumn('live_classes', 'deleted_at'), 404);
+
+        DB::transaction(function () use ($recordId, $request): void {
+            $record = LiveClass::withTrashed()->lockForUpdate()->findOrFail($recordId);
+            abort_unless($record->trashed(), 409, 'This live class is not in the Recycle Bin.');
+            $record->restore();
+            $this->audit->log('recycle_bin.live_class_restored', 'live_class', (string) $record->id, [
+                'title' => $record->title,
+            ], $request->user()->id);
+        });
+
+        return redirect()->route('admin.recycle-bin.index')->with('status', 'Live class restored successfully.');
     }
 
 }
