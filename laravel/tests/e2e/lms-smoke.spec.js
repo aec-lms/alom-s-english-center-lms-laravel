@@ -28,6 +28,10 @@ test('admin can sign in and open Recycle Bin', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Admin Recycle Bin' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Deleted Students' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Deleted Instructors' })).toBeVisible();
+  const plugins = await page.goto('/admin/plugins');
+  expect(plugins.status()).toBe(200);
+  await expect(page.getByRole('heading', { name: /Plugin Center/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Plugin Recycle Bin' })).toBeVisible();
 });
 
 test('guest cannot open the Admin Recycle Bin', async ({ page }) => {
