@@ -10,9 +10,9 @@
                 <h1 class="text-3xl font-extrabold text-slate-900 mt-1">Welcome, {{ $user->name }}</h1>
                 <p class="text-sm text-slate-500 mt-1">{{ $user->email }}</p>
             </div>
-            @if ($role === 'student')
+            @if ($role === 'student' && Route::has('plugins.enrollments.my'))
                 <a href="{{ route('plugins.enrollments.my') }}" class="rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-bold text-white">My Enrollments</a>
-            @elseif (in_array($role, ['branch_manager', 'accountant']))
+            @elseif (in_array($role, ['branch_manager', 'accountant']) && Route::has('plugins.enrollments.index'))
                 <a href="{{ route('plugins.enrollments.index') }}" class="rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-bold text-white">Course Enrollments</a>
             @endif
         </div>
