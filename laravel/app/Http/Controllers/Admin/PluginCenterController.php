@@ -132,13 +132,13 @@ class PluginCenterController extends Controller
                 'gateway-stripe' => app(StripeGatewayService::class)->testCredentials(),
                 'gateway-paypal' => app(PaypalGatewayService::class)->testCredentials(),
                 'gateway-sslcommerz' => app(SslcommerzGatewayService::class)->testCredentials(),
-                'gateway-card' => throw new \\RuntimeException('Visa/Mastercard is a card network, not a processor. Connect an acquiring bank/PSP adapter or use the Stripe plugin for Visa/Mastercard processing.'),
-                default => throw new \\RuntimeException('This plugin does not provide an automated payment credential test.'),
+                'gateway-card' => throw new \RuntimeException('Visa/Mastercard is a card network, not a processor. Connect an acquiring bank/PSP adapter or use the Stripe plugin for Visa/Mastercard processing.'),
+                default => throw new \RuntimeException('This plugin does not provide an automated payment credential test.'),
             };
 
             $mode = isset($result['mode']) ? ' (' . $result['mode'] . ')' : '';
             return back()->with('status', strtoupper(str_replace('gateway-', '', $slug)) . ' connection verified' . $mode . '.');
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             return back()->withErrors(['gateway_connection' => $e->getMessage()]);
         }
     }
