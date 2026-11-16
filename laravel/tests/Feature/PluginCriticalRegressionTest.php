@@ -189,8 +189,12 @@ class PluginCriticalRegressionTest extends TestCase
     {
         $controller = file_get_contents(base_path('plugins/modules/universal-payment/Http/Controllers/UniversalPaymentController.php'));
         $migration = file_get_contents(base_path('plugins/modules/universal-payment/Database/Migrations/2026_11_16_000001_add_branch_id_to_universal_payment_transactions.php'));
+        $paymentController = file_get_contents(base_path('plugins/modules/payment-management/Http/Controllers/PaymentController.php'));
 
         $this->assertIsString($controller);
+        $this->assertIsString($paymentController);
+        $this->assertStringContainsString('Online refunds are disabled until this gateway has a verified provider refund adapter.', $paymentController);
+        $this->assertStringContainsString('No ledger or invoice balance was changed.', $paymentController);
         $this->assertIsString($migration);
         $this->assertStringContainsString("'status' => 'pending'", $controller);
         $this->assertStringContainsString("'external_trx_id' => ['required', 'string', 'max:120']", $controller);
