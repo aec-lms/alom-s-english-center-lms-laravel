@@ -13,13 +13,17 @@ The stronger requirement—running the same plugin package on an arbitrary, non-
 
 ## Manifest dependency inventory
 
-The 39 plugin manifests were checked individually on the reviewed branch. All 39 now declare an empty required-sibling `dependencies` list; the following 14 declare optional sibling integrations. This removes manifest-level install blocking, but code-level optionality still requires runtime tests:
+The 39 plugin manifests were checked individually on the reviewed branch. All 39 now declare an empty required-sibling `dependencies` list; the following 20 declare optional sibling integrations. This removes manifest-level install blocking, but code-level optionality still requires runtime tests:
 
 | Plugin | Optional integrations | Portability concern |
 |---|---|---|
 | admission-management | branch-management | Admission should support an optional branch context and a default/global mode. |
 | attendance-management | branch-management, student-management, course-management, batch-management | Attendance needs stable student/course/batch interfaces; integrations should be adapters, not hard-coded model imports. |
+| batch-management | branch-management | Batch ownership should be optional; global batches must remain available without branches. |
+| class-management | branch-management | Class scheduling should work in global mode without branch context. |
 | certificate-management | student-management, branch-management | Certificate issuance should accept a verified learner identity through a contract. |
+| course-management | branch-management | Course catalogs should support a global/default organization context. |
+| exam-management | course-management, branch-management | Exams should use optional course/branch adapters and remain usable in standalone mode where supported. |
 | gateway-paypal | payment-management | Gateway should implement a payment-provider contract; it should not require the payment UI module. |
 | gateway-stripe | payment-management | Gateway should implement a payment-provider contract; it should not require the payment UI module. |
 | hr-staff-management | branch-management | Branch context should be optional and resolved through a branch adapter. |
@@ -27,9 +31,11 @@ The 39 plugin manifests were checked individually on the reviewed branch. All 39
 | notification-center | email-notifications, sms-gateway, branch-management | Email delivery should be an optional channel adapter, not a hard requirement for in-app notifications. |
 | student-management | branch-management | Student records should support a nullable/default organization context. |
 | teacher-management | branch-management | Teacher records should support a nullable/default organization context. |
+| reports-analytics | branch-management | Reports should degrade to global scope without branch integration. |
+| notice-board | branch-management | Notices should support global audience when branch integration is absent. |
 | universal-payment | payment-management, fees-management, branch-management | Payment orchestration should depend on invoice/payment contracts, not sibling Eloquent models. |
 
-Three further plugins also declare optional integrations: `guardian-management` → `student-management, branch-management`, `fees-management` → `student-management, branch-management`, and `payment-management` → `fees-management, branch-management`. `universal-payment`, `notification-center`, and `certificate-management` also include branch context in their optional integration lists. The remaining manifests declare no optional sibling integration. This does **not** prove they are independent: source files may still import sibling models, tables, routes or services without declaring those dependencies. Source-level import and runtime dependency scans remain required for all 39 modules.
+Additional plugins also declare optional integrations: `guardian-management` → `student-management, branch-management`, `fees-management` → `student-management, branch-management`, and `payment-management` → `fees-management, branch-management`. `universal-payment`, `notification-center`, and `certificate-management` also include branch context in their optional integration lists. The remaining 19 manifests declare no optional sibling integration. This does **not** prove they are independent: source files may still import sibling models, tables, routes or services without declaring those dependencies. Source-level import and runtime dependency scans remain required for all 39 modules.
 
 ## Target architecture
 
@@ -58,4 +64,4 @@ Three further plugins also declare optional integrations: `guardian-management` 
 
 ## Release policy
 
-Until the second host adapter and cross-host contract suite exist, describe these modules as **AEC LMS Laravel plugins**, not universal plugins compatible with every LMS. All 39 manifests currently have no required sibling-plugin dependencies. Fourteen manifests declare optional integrations. This permits the lifecycle manager to install each plugin without first installing sibling plugins, but it does not prove every workflow gracefully degrades when an optional module is absent. The source-level audit and standalone feature tests remain mandatory. Do not remove dependencies from manifests until the corresponding source imports and workflows have been replaced by tested adapters.
+Until the second host adapter and cross-host contract suite exist, describe these modules as **AEC LMS Laravel plugins**, not universal plugins compatible with every LMS. All 39 manifests currently have no required sibling-plugin dependencies. Twenty manifests declare optional integrations. This permits the lifecycle manager to install each plugin without first installing sibling plugins, but it does not prove every workflow gracefully degrades when an optional module is absent. The source-level audit and standalone feature tests remain mandatory. Do not remove dependencies from manifests until the corresponding source imports and workflows have been replaced by tested adapters.
