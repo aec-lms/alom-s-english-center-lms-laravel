@@ -63,7 +63,7 @@ class MobileApiController extends Controller
             : collect();
 
         $courses = Schema::hasTable('courses')
-            ? DB::table('courses')->where('status', 'published')->orderByDesc('id')->limit(12)->get(['id', 'code', 'title', 'slug', 'price', 'thumbnail', 'pdf_path', 'pdf_thumbnail', 'instructor_name'])
+            ? DB::table('courses')->where('status', 'published')->orderByDesc('id')->limit(12)->get(['id', 'code', 'title', 'slug', 'price', 'thumbnail', 'instructor_name'])
             : collect();
 
         $carouselItems = Schema::hasTable('storefront_items')
@@ -255,7 +255,7 @@ class MobileApiController extends Controller
         return response()->json([
             'data' => Course::query()
                 ->where('status', 'published')
-                ->select(['id', 'code', 'title', 'slug', 'price', 'description', 'thumbnail', 'pdf_path', 'pdf_thumbnail', 'instructor_name'])
+                ->select(['id', 'code', 'title', 'slug', 'price', 'description', 'thumbnail', 'instructor_name'])
                 ->latest()
                 ->paginate(20),
         ]);
@@ -268,6 +268,7 @@ class MobileApiController extends Controller
         $course = Course::query()
             ->where('slug', $slug)
             ->where('status', 'published')
+            ->select(['id', 'code', 'title', 'slug', 'price', 'description', 'thumbnail', 'instructor_name'])
             ->first();
 
         if (!$course) {
