@@ -389,7 +389,7 @@ class RecycleBinController extends Controller
                 'permanent' => true,
             ], $request->user()->id);
             });
-        } catch (\\Illuminate\\Database\\QueryException $exception) {
+        } catch (\Illuminate\Database\QueryException $exception) {
             report($exception);
 
             return back()->withErrors([
