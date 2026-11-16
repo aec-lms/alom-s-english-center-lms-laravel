@@ -17,7 +17,7 @@
                     <div>
                         <h2 class="font-bold text-slate-900">{{ $enrollment->course?->title ?? 'Course unavailable' }}</h2>
                         <p class="text-xs text-slate-500 mt-1">Enrolled {{ $enrollment->created_at?->toDateString() }} · {{ strtoupper($enrollment->status) }}</p>
-                        @if ($enrollment->invoice)
+                        @if ($feesIntegrationAvailable && $enrollment->invoice)
                             <p class="text-sm mt-2">Invoice {{ $enrollment->invoice->invoice_number }} · {{ $enrollment->invoice->currency }} {{ number_format((float) $enrollment->invoice->net_amount, 2) }} · {{ strtoupper($enrollment->invoice->status) }}</p>
                         @endif
                     </div>
