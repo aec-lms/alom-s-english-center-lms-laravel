@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Plugins\Modules\HrStaffManagement\Http\Controllers;
 
 use App\Core\Security\AuditLogger;
+use App\Core\Plugins\PluginManager;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use Plugins\Modules\HrStaffManagement\Models\StaffPayroll;
 use Plugins\Modules\HrStaffManagement\Models\StaffProfile;
@@ -53,12 +55,14 @@ class HrController extends Controller
             'email' => ['nullable', 'email', 'max:160'],
             'base_salary' => ['required', 'numeric', 'min:0'],
             'status' => ['nullable', 'in:active,on_leave,inactive'],
-            'branch_id' => ['nullable', 'integer'],
+            'branch_id' => $this->branchRule(),
         ]);
 
         if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null) {
             $validated['branch_id'] = $actor->branch_id;
         }
+
+        if (!$this->branchIntegrationAvailable()) { $validated['branch_id'] = null; }
 
         $member = StaffProfile::query()->create($validated + [
             'status' => $validated['status'] ?? 'active',
@@ -138,12 +142,24 @@ class HrController extends Controller
         return back()->with('status', 'Payroll marked as paid with the supplied disbursement reference.');
     }
 
+    private function branchIntegrationAvailable(): bool
+    {
+        return app(PluginManager::class)->isEnabled('branch-management') && Schema::hasTable('branches');
+    }
+
+    private function branchRule(): array
+    {
+        return $this->branchIntegrationAvailable()
+            ? ['nullable', 'integer', 'exists:branches,id']
+            : ['nullable', 'integer'];
+    }
+
     private function ensureAssignedBranch($actor): void
     {
         if (!$actor || !$actor->hasRole('branch_manager')) {
             return;
         }
-        if ($actor->branch_id === null) {
+        if ($actor->branch_id === null || !$this->branchIntegrationAvailable()) {
             abort(403, 'Branch manager must be assigned to a branch.');
         }
         $activeBranch = \Illuminate\Support\Facades\DB::table('branches')
