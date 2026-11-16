@@ -199,6 +199,31 @@ class MobileAppUpdateAndPublicParityTest extends TestCase
             ->assertJsonMissing(['title' => 'Student Only Notice']);
     }
 
+    public function test_mobile_course_detail_returns_published_course_without_undefined_relations(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management', 'mobile-app-api']);
+
+        $course = \\Plugins\\Modules\\CourseManagement\\Models\\Course::query()->create([
+            'code' => 'MOBILE-COURSE-01',
+            'title' => 'Mobile API Course Detail',
+            'slug' => 'mobile-api-course-detail',
+            'description' => 'Published course description',
+            'price' => 2500,
+            'status' => 'published',
+        ]);
+
+        $this->getJson('/api/mobile/courses/' . $course->slug)
+            ->assertOk()
+            ->assertJsonPath('data.id', $course->id)
+            ->assertJsonPath('data.title', 'Mobile API Course Detail')
+            ->assertJsonPath('data.description', 'Published course description');
+
+        $course->update(['status' => 'draft']);
+        $this->getJson('/api/mobile/courses/' . $course->slug)
+            ->assertNotFound();
+    }
+
     public function test_universal_update_service_blocks_zip_path_traversal_entries(): void
     {
         $this->markSystemInstalled();
