@@ -193,15 +193,15 @@ class TeacherController extends Controller
         $user = $teacher->user;
 
         DB::transaction(function () use ($teacher, $user): void {
-            $teacher->delete();
+            $teacher->update(['is_active' => false]);
             if ($user) {
-                $user->delete();
+                $user->update(['is_active' => false]);
             }
         });
 
-        $this->audit->log('teacher.deleted', 'teacher', $id, ['code' => $code]);
+        $this->audit->log('teacher.deactivated', 'teacher', $id, ['code' => $code]);
 
-        return back()->with('status', "Instructor '{$code}' removed without affecting shared LMS courses.");
+        return back()->with('status', "Instructor '{$code}' deactivated. Account and course history have been preserved.");
     }
 
     private function storePhoto(UploadedFile $file): string
