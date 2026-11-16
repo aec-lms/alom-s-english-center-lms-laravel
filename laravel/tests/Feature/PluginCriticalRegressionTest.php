@@ -76,4 +76,53 @@ class PluginCriticalRegressionTest extends TestCase
         $this->assertStringContainsString("'enabled_gateways'", $orchestrator);
     }
 
+    public function test_payroll_is_pending_until_admin_confirms_disbursement(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'hr-staff-management']);
+
+        $branchId = \\Illuminate\\Support\\Facades\\DB::table('branches')->insertGetId([
+            'code' => 'HR-TEST',
+            'name' => 'HR Test Branch',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $staff = StaffProfile::query()->create([
+            'branch_id' => $branchId,
+            'employee_code' => 'HR-EMP-001',
+            'full_name' => 'Test Staff',
+            'designation' => 'Teacher',
+            'department' => 'Academic',
+            'base_salary' => 25000,
+            'status' => 'active',
+        ]);
+        $admin = $this->createUserWithRole('admin');
+
+        $this->actingAs($admin)->post('/admin/hr/payrolls', [
+            'staff_profile_id' => $staff->id,
+            'payroll_month' => '2026-11',
+            'bonus' => 1000,
+            'deductions' => 500,
+        ])->assertSessionHasNoErrors();
+
+        $payroll = StaffPayroll::query()->firstOrFail();
+        $this->assertSame('pending', $payroll->status);
+        $this->assertNull($payroll->paid_at);
+
+        $branchManager = $this->createUserWithRole('branch_manager', $branchId);
+        $hrPermission = \\App\\Models\\Permission::query()->where('slug', 'hr.manage')->firstOrFail();
+        $branchManager->roles()->first()->permissions()->syncWithoutDetaching([$hrPermission->id]);
+
+        $this->actingAs($branchManager)
+            ->post('/admin/hr/payrolls/' . $payroll->id . '/mark-paid')
+            ->assertForbidden();
+
+        $this->actingAs($admin)
+            ->post('/admin/hr/payrolls/' . $payroll->id . '/mark-paid')
+            ->assertSessionHas('status');
+
+        $this->assertSame('paid', $payroll->fresh()->status);
+        $this->assertNotNull($payroll->fresh()->paid_at);
+    }
+
 }
