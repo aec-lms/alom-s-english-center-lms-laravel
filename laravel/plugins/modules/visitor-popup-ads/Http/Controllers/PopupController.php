@@ -132,7 +132,7 @@ class PopupController extends Controller
         }
         $ext = strtolower($file->guessExtension() ?: 'jpg');
         if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp'], true)) {
-            throw new \\RuntimeException('Unsupported popup image type.');
+            throw new \RuntimeException('Unsupported popup image type.');
         }
         $name = 'popup_' . date('Ymd_His') . '_' . Str::random(6) . '.' . $ext;
         $file->move($targetDir, $name);
