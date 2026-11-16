@@ -273,15 +273,15 @@ class PluginCriticalRegressionTest extends TestCase
             'status' => 'queued',
         ]);
 
-        $plugins = \\Mockery::mock(PluginManager::class);
+        $plugins = \Mockery::mock(PluginManager::class);
         $plugins->shouldReceive('getSetting')->with('email-notifications', 'smtp_host', '')->andReturn('smtp.example.test');
         $plugins->shouldReceive('getSetting')->with('email-notifications', 'smtp_port', 587)->andReturn(587);
         $plugins->shouldReceive('getSetting')->with('email-notifications', 'smtp_username', '')->andReturn('smtp-user');
         $plugins->shouldReceive('getSetting')->with('email-notifications', 'smtp_password', '')->andReturn('smtp-secret');
         $plugins->shouldReceive('getSetting')->withArgs(fn ($slug, $key) => $slug === 'email-notifications' && $key === 'from_address')->andReturn('noreply@aec.test');
 
-        $mailer = \\Mockery::mock();
-        $mailer->shouldReceive('raw')->once()->with('Test body', \\Mockery::type('Closure'))->andReturnNull();
+        $mailer = \Mockery::mock();
+        $mailer->shouldReceive('raw')->once()->with('Test body', \Mockery::type('Closure'))->andReturnNull();
         Mail::shouldReceive('purge')->once()->with('smtp');
         Mail::shouldReceive('mailer')->once()->with('smtp')->andReturn($mailer);
 
@@ -320,7 +320,7 @@ class PluginCriticalRegressionTest extends TestCase
             'status' => 'queued',
         ]);
 
-        $plugins = \\Mockery::mock(PluginManager::class);
+        $plugins = \Mockery::mock(PluginManager::class);
         (new DeliverNotificationJob($notification->id))->handle($plugins);
 
         $notification->refresh();
