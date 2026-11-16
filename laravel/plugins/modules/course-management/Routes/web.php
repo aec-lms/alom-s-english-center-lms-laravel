@@ -39,6 +39,10 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:course-management'])->gro
         ->name('plugins.lesson-media.access')->middleware('throttle:30,1');
     Route::get('/my-learning/lessons/{lesson}/media/{user}', [LessonContentProtectionController::class, 'stream'])
         ->name('plugins.lesson-media.stream')->middleware(['signed', 'throttle:60,1']);
+    Route::get('/my-learning/lessons/{lesson}/download/{user}', [LessonContentProtectionController::class, 'download'])
+        ->name('plugins.lesson-media.download')->middleware(['signed', 'throttle:10,1']);
+    Route::get('/my-learning/courses/{course}/lessons', [LessonContentProtectionController::class, 'showCourse'])
+        ->name('plugins.lessons.course');
 });
 
 Route::middleware(['web', 'installed', 'auth', 'plugin:course-management', 'permission:enrollments.manage'])
