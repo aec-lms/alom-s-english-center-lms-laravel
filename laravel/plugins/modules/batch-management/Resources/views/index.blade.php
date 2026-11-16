@@ -45,7 +45,7 @@
                         <input name="schedule" value="{{ $batch->schedule }}" required class="rounded border px-2 py-1">
                         <input name="room_number" value="{{ $batch->room_number }}" class="rounded border px-2 py-1">
                         <input name="max_capacity" type="number" min="1" max="500" value="{{ $batch->max_capacity }}" required class="rounded border px-2 py-1">
-                        <input name="start_date" type="date" value="{{ optional($batch->start_date)->format('Y-m-d') }}" class="rounded border px-2 py-1">
+                        <input name="start_date" type="date" value="{{ $batch->start_date }}" class="rounded border px-2 py-1">
                         <select name="status" class="rounded border px-2 py-1">
                             @foreach (['upcoming', 'ongoing', 'completed'] as $status)
                                 <option value="{{ $status }}" @selected($batch->status === $status)>{{ ucfirst($status) }}</option>
