@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
+use Plugins\Modules\RoleAiAssistant\Services\AiAssistantService;
 use Plugins\Modules\AdmissionManagement\Models\AdmissionApplication;
 use Plugins\Modules\CertificateManagement\Models\CertificateRecord;
 use Plugins\Modules\LibraryManagement\Models\LibraryBook;
@@ -337,4 +338,33 @@ class AdditionalModulesWorkflowTest extends TestCase
 
         $this->actingAs($manager)->get('/admin/students')->assertForbidden();
     }
+
+    public function test_ai_assistant_uses_only_the_configured_role_for_multi_role_users(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['role-ai-assistant']);
+
+        $admin = $this->createUserWithRole('admin');
+        $studentRoleId = DB::table('roles')->where('slug', 'student')->value('id');
+        $admin->roles()->syncWithoutDetaching([$studentRoleId]);
+
+        app(\\App\\Core\\Plugins\\PluginManager::class)->saveSettings('role-ai-assistant', [
+            'provider' => 'gemini',
+            'allowed_roles' => 'student',
+        ]);
+
+        $result = app(AiAssistantService::class)->queryAssistant($admin, 'Help me practice English grammar.');
+
+        $this->assertSame('student', $result['role']);
+        $this->assertSame('built-in', $result['assistant'] === 'AEC LMS AI Assistant'
+            ? DB::table('ai_assistant_logs')->latest('id')->value('provider')
+            : null);
+        $this->assertSame('student', DB::table('ai_assistant_logs')->latest('id')->value('role_slug'));
+
+        $adminOnly = $this->createUserWithRole('admin', null, 'ai-admin-only@example.test');
+        $this->assertFalse(app(AiAssistantService::class)->isRoleAllowed($adminOnly));
+        $this->expectException(\\RuntimeException::class);
+        app(AiAssistantService::class)->queryAssistant($adminOnly, 'Show admin settings.');
+    }
+
 }
