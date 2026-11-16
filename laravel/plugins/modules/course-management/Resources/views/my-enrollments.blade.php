@@ -21,8 +21,13 @@
                             <p class="text-sm mt-2">Invoice {{ $enrollment->invoice->invoice_number }} · {{ $enrollment->invoice->currency }} {{ number_format((float) $enrollment->invoice->net_amount, 2) }} · {{ strtoupper($enrollment->invoice->status) }}</p>
                         @endif
                     </div>
-                    <div class="flex items-center gap-3">\n                        @if ($enrollment->status === 'active' && Route::has('plugins.lessons.course'))\n                            <a href="{{ route('plugins.lessons.course', $enrollment->course_id) }}" class="px-4 py-2 rounded-lg bg-sky-600 text-white text-xs font-bold">Start Learning</a>\n                        @endif\n                        <div class="text-sm font-bold {{ $enrollment->status === 'active' ? 'text-emerald-700' : 'text-amber-700' }}">
-                        {{ $enrollment->status === 'active' ? 'Course access active' : ($enrollment->status === 'pending' ? 'Awaiting payment / approval' : ucfirst($enrollment->status)) }}
+                    <div class="flex items-center gap-3">
+                        @if ($enrollment->status === 'active' && Route::has('plugins.lessons.course'))
+                            <a href="{{ route('plugins.lessons.course', $enrollment->course_id) }}" class="px-4 py-2 rounded-lg bg-sky-600 text-white text-xs font-bold">Start Learning</a>
+                        @endif
+                        <div class="text-sm font-bold {{ $enrollment->status === 'active' ? 'text-emerald-700' : 'text-amber-700' }}">
+                            {{ $enrollment->status === 'active' ? 'Course access active' : ($enrollment->status === 'pending' ? 'Awaiting payment / approval' : ucfirst($enrollment->status)) }}
+                        </div>
                     </div>
                 </article>
             @empty
