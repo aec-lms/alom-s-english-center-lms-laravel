@@ -53,12 +53,12 @@ class NotificationCenterTest extends TestCase
             'channel' => 'sms',
             'title' => 'Class reminder',
             'message' => 'Your class starts at 5 PM.',
-        ])->assertSessionHas('status', 'Sms accepted by the configured provider.');
+        ])->assertSessionHas('status', 'SMS submitted to the provider; handset delivery is not confirmed.');
 
         $this->assertDatabaseHas('lms_notifications', [
             'user_id' => $student->id,
             'channel' => 'sms',
-            'status' => 'sent',
+            'status' => 'submitted',
         ]);
         Http::assertSent(fn ($request) => $request->url() === 'https://api.greenweb.com.bd/api.php'
             && $request['token'] === 'shared-greenweb-token'
