@@ -7,12 +7,15 @@ namespace Plugins\Modules\UniversalPayment\Http\Controllers;
 use App\Core\Plugins\PluginManager;
 use App\Core\Security\AuditLogger;
 use App\Http\Controllers\Controller;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
+use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
+use Plugins\Modules\UniversalPayment\Services\UniversalPaymentOrchestrator;
 
 class UniversalPaymentController extends Controller
 {
@@ -119,7 +122,7 @@ class UniversalPaymentController extends Controller
         return back()->with('status', "Transaction '{$transaction->reference}' marked {$validated['status']}.");
     }
 
-    public function publicCheckout(Request $request): RedirectResponse|\\Illuminate\\Http\\JsonResponse
+    public function publicCheckout(Request $request): RedirectResponse|JsonResponse
     {
         $validated = $request->validate([
             'invoice_id' => ['required', 'integer', 'exists:fee_invoices,id'],
