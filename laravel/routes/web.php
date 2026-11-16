@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\BackupController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\HealthMonitorController;
 use App\Http\Controllers\Admin\PluginCenterController;
 use App\Http\Controllers\Admin\RecycleBinController;
 use App\Http\Controllers\Admin\UpdateCenterController;
@@ -86,6 +87,9 @@ Route::middleware('installed')->group(function (): void {
             Route::post('/check', [UpdateCenterController::class, 'checkFeed'])->name('check');
             Route::post('/{log}/rollback', [UpdateCenterController::class, 'rollback'])->name('rollback');
         });
+
+        Route::get('/health', [HealthMonitorController::class, 'index'])->name('health.index')->middleware('permission:core.dashboard.view');
+        Route::post('/health/check', [HealthMonitorController::class, 'check'])->name('health.check')->middleware('permission:core.dashboard.view');
 
         Route::prefix('backups')->name('backups.')->middleware('permission:core.backups.manage')->group(function (): void {
             Route::get('/', [BackupController::class, 'index'])->name('index');
