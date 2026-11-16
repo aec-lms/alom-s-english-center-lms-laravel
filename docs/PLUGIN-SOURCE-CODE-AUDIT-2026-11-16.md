@@ -83,27 +83,27 @@ The following fixes were committed on the audit branch after the first-pass revi
 | AI integration environment key could cross provider boundary | Environment fallback now uses the selected provider's matching key and model defaults; Admin provider selector lists only implemented providers | Source review; full regression suite |
 | Visitor Pop-Up Ads edit UI hid important fields | Admin can now edit badge, description, CTA text/link, image upload or image URL, delay, frequency and active state; CTA/image URLs reject unsafe schemes; upload extension is MIME-derived | Regression test covers editable content and rejects javascript: CTA URLs |
 | Public admission application endpoint lacked abuse protection | Added request throttling to the public admission application route | Included in latest full CI run |
+| Class Management accepted arbitrary weekday/time strings and could store an end time before its start | Create/update now restrict weekdays to the seven valid days, require `HH:MM` values and require end time after start time | Regression test covers invalid weekday, invalid time format and reversed time range |
+| Library Management did not consistently fail closed for branch managers and swallowed authorization exceptions during loan issue | Enforced active branch assignment on library reads/writes; scoped both book and loan lists; forced branch managers to their assigned branch; blocked cross-branch loan issue/return and preserved HTTP 403 responses; fixed admin form actions to avoid unresolved named-route errors | Regression test covers unassigned managers, cross-branch catalog visibility, branch override and denied cross-branch loans |
 
-**Latest CI:** GitHub Actions run `43826039051` succeeded on the current audit branch head `a94cf01c81b967f040523a422bb3e2afa4864647`. Composer security audit reported no advisories; Laravel suite passed **50 tests (294 assertions)**; the cPanel release ZIP was built and package contents verified (**6,266 files**). Artifact: https://github.com/aec-lms/alom-s-english-center-lms-laravel/actions/runs/43826039051/artifacts/14206742063 (GitHub artifact digest: `sha256:1693b713d083c3a4fade7d19e65307cbc35e3a062f59fbc60db247813ddeab42`). This does not replace provider sandbox, production database, cPanel installation, or browser E2E testing.
+**Latest CI:** GitHub Actions run `43827521677` succeeded on audit branch commit `9bd3c6b16139aa0871d5fe920d49379e59d8b912`. Composer security audit reported no advisories; Laravel suite passed **61 tests (353 assertions)**; the cPanel release ZIP was built and package contents verified (**6,267 files**). Artifact: https://github.com/aec-lms/alom-s-english-center-lms-laravel/actions/runs/43827521677/artifacts/14206819762 (GitHub artifact digest: `sha256:faec797bd0bd75e1466888aac81649d187394f16e3ba295d60f1b286a94eb65d`). This does not replace provider sandbox, production database, cPanel installation, or browser E2E testing.
 
 ## Critical/high items still open
 
-- Universal Payment still needs invoice-bound checkout and provider-confirmed payment initiation for every advertised method. Do not treat arbitrary public amount submissions as payments.
+- Universal Payment now binds checkout to the authenticated student's own fee invoice and calculates the outstanding amount server-side. It still needs provider sandbox verification of checkout initiation, signatures, callbacks, replay/idempotency, amount/currency matching, refunds and ledger reconciliation.
 - bKash, Nagad, Rocket, custom card acquiring, SMS Twilio/SSL Wireless/custom adapters need real provider implementations and sandbox verification before being advertised as active.
 - Notification Center still needs actual queued channel workers and delivery-state callbacks; queued is not delivered.
-- All other critical/high findings in the individual plugin table remain open until their fixes and per-plugin tests are merged. The HR payroll and Visitor Pop-Up Ads findings listed above have now been remediated in this branch.
+- All other critical/high findings in the individual plugin table remain open until their fixes and per-plugin tests are merged. Attendance, Storefront, AEC LMS AI Assistant, SMS/notification status, Universal Payment request binding, HR payroll, Mobile App API, Visitor Pop-Up Ads, admission throttling, class schedule validation and the listed Library branch-safety items have been remediated in this branch; external provider and full acceptance checks remain outstanding.
 - Cross-branch isolation needs systematic negative tests for every CRUD, detail, export, search, and bulk action.
 - Full module CRUD, browser E2E, production MySQL/MariaDB and cPanel install/upgrade/backup/restore rehearsals remain release gates.
 
 ## Confirmed implementation mismatches to fix first
 
-1. Attendance references the wrong batch table (`batches` vs `study_batches`).
-2. Storefront Catalog manifest/provider contract does not match the plugin runtime.
-3. Role-Based AI Assistant permission, empty allowlist, provider dispatch and log privacy need correction.
-4. Universal Payment must stop accepting client-supplied amounts as verified payments and must route through real installed gateway adapters.
-5. Visitor Pop-Up Ads edit UI/controller must expose all editable fields and image replacement; add actual schedule fields if scheduling is advertised.
-6. Notification Center and SMS/Email campaign status must reflect actual delivery/provider responses, not just database queue records.
-7. Add fail-closed branch isolation across every branch-owned plugin.
+1. Complete systematic fail-closed branch-isolation tests for every branch-owned plugin and every detail/export/bulk endpoint.
+2. Add dedicated CRUD/workflow acceptance tests for all 39 plugins; the current suite is still not complete module-by-module.
+3. Complete provider sandbox testing and implement the still-unavailable bKash, Nagad, Rocket and other advertised integrations before enabling them.
+4. Implement actual Notification Center queue workers and provider delivery callbacks; queued/submitted must not be labelled delivered.
+5. Complete cPanel/MySQL install, upgrade, backup/restore, browser E2E and operational smoke tests.
 
 ## Release gate
 
