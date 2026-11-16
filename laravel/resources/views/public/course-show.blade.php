@@ -98,7 +98,7 @@
                     </div>
 
                     @auth
-                        @if (auth()->user()->hasRole('student'))
+                        @if (auth()->user()->hasRole('student') && Route::has('plugins.enrollments.store'))
                             <form method="POST" action="{{ route('plugins.enrollments.store', $course) }}">
                                 @csrf
                                 <button type="submit" class="w-full py-3.5 px-5 rounded-xl bg-[#0057FF] hover:bg-[#0046CC] text-white text-sm font-bold flex items-center justify-center shadow-sm transition-colors">
@@ -113,7 +113,9 @@
                             @endif
                             <a href="{{ route('plugins.enrollments.my') }}" class="block text-center text-xs text-sky-700 font-bold mt-3">View My Enrollments</a>
                         @else
-                            <p class="text-xs text-center text-slate-500">Sign in with a student account to enroll in this course.</p>
+                            <p class="text-xs text-center text-slate-500">
+                                {{ auth()->user()->hasRole('student') ? 'Enrollment is currently unavailable.' : 'Sign in with a student account to enroll in this course.' }}
+                            </p>
                         @endif
                     @else
                         <a href="{{ route('login') }}" class="w-full py-3.5 px-5 rounded-xl bg-[#0057FF] hover:bg-[#0046CC] text-white text-sm font-bold flex items-center justify-center shadow-sm transition-colors">
