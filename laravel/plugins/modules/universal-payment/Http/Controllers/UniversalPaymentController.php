@@ -95,9 +95,33 @@ class UniversalPaymentController extends Controller
             'verified_at' => null,
         ]);
 
-        $this->audit->log('universal_payment.recorded', 'universal_payment', $tx->reference, ['amount' => $tx->amount, 'gateway' => $tx->gateway]);
+        $this->audit->log('universal_payment.recorded', 'universal_payment', $tx->reference, ['amount' => $tx->amount, 'gateway' => $tx->gateway, 'has_proof' => $proofPath !== null]);
 
         return back()->with('status', "Transaction '{$tx->reference}' recorded ({$tx->gateway} · {$tx->status}).");
+    }
+
+    public function downloadProof(Request $request, UniversalPaymentTransaction $transaction): StreamedResponse
+    {
+        $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
+        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $transaction->branch_id) {
+            abort(404);
+        }
+
+        abort_unless(is_string($transaction->proof_path) && $transaction->proof_path !== '', 404);
+        $disk = Storage::disk('local');
+        abort_unless($disk->exists($transaction->proof_path), 404);
+
+        $mime = in_array($transaction->proof_mime, ['application/pdf', 'image/jpeg', 'image/png'], true)
+            ? $transaction->proof_mime
+            : 'application/octet-stream';
+        $extension = pathinfo($transaction->proof_path, PATHINFO_EXTENSION) ?: 'bin';
+
+        return $disk->download(
+            $transaction->proof_path,
+            'receipt-' . $transaction->reference . '.' . $extension,
+            ['Content-Type' => $mime, 'X-Content-Type-Options' => 'nosniff']
+        );
     }
 
     public function updateStatus(Request $request, UniversalPaymentTransaction $transaction): RedirectResponse
