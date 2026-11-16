@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Plugins\Modules\TeacherManagement\Http\Controllers;
 
 use App\Core\Security\AuditLogger;
+use App\Core\Plugins\PluginManager;
 use App\Http\Controllers\Controller;
 use App\Models\Role;
 use App\Models\User;
@@ -111,10 +112,13 @@ class TeacherController extends Controller
             abort(403, 'Branch isolation violation.');
         }
 
+        $branchRule = Schema::hasTable('branches')
+            ? ['nullable', 'integer', 'exists:branches,id']
+            : ['nullable', 'integer'];
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:150'],
             'email' => ['nullable', 'email', 'max:190'],
-            'branch_id' => ['nullable', 'integer'],
+            'branch_id' => $branchRule,
             'employee_code' => ['required', 'string', 'max:60', 'unique:teachers,employee_code,' . $teacher->id],
             'specialization' => ['required', 'string', 'max:160'],
             'credentials' => ['nullable', 'string', 'max:255'],
@@ -217,8 +221,11 @@ class TeacherController extends Controller
         if (!$actor || !$actor->hasRole('branch_manager')) {
             return;
         }
-        if ($actor->branch_id === null) {
-            abort(403, 'Branch manager must be assigned to a branch.');
+        if ($actor->branch_id === null
+            || !app(PluginManager::class)->isEnabled('branch-management')
+            || !Schema::hasTable('branches')
+        ) {
+            abort(403, 'Branch manager must be assigned to an active branch.');
         }
         $activeBranch = \Illuminate\Support\Facades\DB::table('branches')
             ->where('id', $actor->branch_id)
