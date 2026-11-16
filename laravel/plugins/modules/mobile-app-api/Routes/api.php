@@ -23,6 +23,7 @@ Route::middleware(['api', 'installed', 'plugin:mobile-app-api'])
 
         Route::middleware('auth:sanctum')->group(function (): void {
             Route::get('/me', [MobileApiController::class, 'me'])->name('me');
+            Route::get('/courses/{slug}/lessons', [MobileApiController::class, 'courseLessons'])->name('courses.lessons');
             Route::post('/push-token', [MobileApiController::class, 'registerPushToken'])->name('push_token');
             Route::post('/logout', [MobileApiController::class, 'logout'])->name('logout');
         });
