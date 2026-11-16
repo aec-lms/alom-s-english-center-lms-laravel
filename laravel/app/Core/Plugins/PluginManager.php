@@ -447,6 +447,175 @@ class PluginManager
         return $record;
     }
 
+    /**
+     * Move a plugin package to the private recycle bin without deleting its database records.
+     * The Core plugin and plugins with active dependents are protected by lifecycle checks.
+     */
+    public function deleteToRecycleBin(string $slug, ?int $actorId = null): array
+    {
+        if (preg_match('/^[a-z0-9][a-z0-9-]{1,79}$/', $slug) !== 1
+            || $slug === config('plugins.core_identifier')) {
+            throw new RuntimeException('Invalid or protected plugin slug.');
+        }
+
+        $modulesPath = rtrim((string) config('plugins.modules_path'), DIRECTORY_SEPARATOR);
+        $source = $modulesPath . DIRECTORY_SEPARATOR . $slug;
+        if (!is_dir($source) || !is_file($source . DIRECTORY_SEPARATOR . 'plugin.json')) {
+            throw new RuntimeException('Plugin package does not exist.');
+        }
+
+        $manifest = PluginManifest::fromDirectory($source);
+        if ($manifest->isCore || $manifest->slug !== $slug) {
+            throw new RuntimeException('Core or mismatched plugin packages cannot be deleted.');
+        }
+
+        $record = PluginRecord::query()->where('slug', $slug)->first();
+        $wasInstalled = (bool) ($record?->is_installed);
+        $wasEnabled = (bool) ($record?->is_enabled);
+        if ($wasInstalled) {
+            $this->uninstall($slug, false, $actorId);
+        }
+
+        $trashRoot = storage_path('app/plugin-recycle-bin');
+        File::ensureDirectoryExists($trashRoot);
+        $token = now()->format('YmdHis') . '-' . bin2hex(random_bytes(5));
+        $archiveName = $slug . '-' . $token;
+        $destination = $trashRoot . DIRECTORY_SEPARATOR . $archiveName;
+        if (!File::moveDirectory($source, $destination)) {
+            throw new RuntimeException('Could not move plugin package into the recycle bin. Its database records remain preserved.');
+        }
+
+        $metadata = [
+            'slug' => $slug,
+            'name' => $manifest->name,
+            'version' => $manifest->version,
+            'archive' => $archiveName,
+            'was_installed' => $wasInstalled,
+            'was_enabled' => $wasEnabled,
+            'deleted_at' => now()->toIso8601String(),
+            'sha256' => hash_file('sha256', $destination . DIRECTORY_SEPARATOR . 'plugin.json'),
+        ];
+        File::put($trashRoot . DIRECTORY_SEPARATOR . $archiveName . '.json', json_encode($metadata, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
+        $this->audit->log('plugin.deleted_to_recycle_bin', 'plugin', $slug, [
+            'archive' => $archiveName,
+            'business_data_preserved' => true,
+        ], $actorId);
+
+        return $metadata;
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    public function recycledPlugins(): array
+    {
+        $trashRoot = storage_path('app/plugin-recycle-bin');
+        if (!is_dir($trashRoot)) {
+            return [];
+        }
+
+        $items = [];
+        foreach (File::files($trashRoot) as $file) {
+            if ($file->getExtension() !== 'json') {
+                continue;
+            }
+            try {
+                $metadata = json_decode(File::get($file->getPathname()), true, 512, JSON_THROW_ON_ERROR);
+                if (is_array($metadata) && isset($metadata['slug'], $metadata['archive'])) {
+                    $items[] = $metadata;
+                }
+            } catch (Throwable) {
+                // Ignore malformed metadata; do not expose unverified archive entries.
+            }
+        }
+
+        usort($items, fn (array $a, array $b): int => strcmp((string) ($b['deleted_at'] ?? ''), (string) ($a['deleted_at'] ?? '')));
+        return $items;
+    }
+
+    public function restoreFromRecycleBin(string $archiveName, ?int $actorId = null): PluginRecord|null
+    {
+        if (preg_match('/^[a-z0-9][a-z0-9-]{1,79}-[0-9]{14}-[a-f0-9]{10}$/', $archiveName) !== 1) {
+            throw new RuntimeException('Invalid recycle-bin archive identifier.');
+        }
+
+        $trashRoot = storage_path('app/plugin-recycle-bin');
+        $metadataPath = $trashRoot . DIRECTORY_SEPARATOR . $archiveName . '.json';
+        $source = $trashRoot . DIRECTORY_SEPARATOR . $archiveName;
+        if (!is_file($metadataPath) || !is_dir($source)) {
+            throw new RuntimeException('Recycled plugin package was not found.');
+        }
+
+        $metadata = json_decode(File::get($metadataPath), true, 512, JSON_THROW_ON_ERROR);
+        $slug = (string) ($metadata['slug'] ?? '');
+        if (preg_match('/^[a-z0-9][a-z0-9-]{1,79}$/', $slug) !== 1
+            || ($metadata['archive'] ?? null) !== $archiveName
+            || !is_file($source . DIRECTORY_SEPARATOR . 'plugin.json')
+            || !hash_equals((string) ($metadata['sha256'] ?? ''), (string) hash_file('sha256', $source . DIRECTORY_SEPARATOR . 'plugin.json'))) {
+            throw new RuntimeException('Recycle-bin package integrity check failed.');
+        }
+
+        $manifest = PluginManifest::fromDirectory($source);
+        if ($manifest->slug !== $slug || $manifest->isCore || !$this->isCompatible($manifest)) {
+            throw new RuntimeException('Recycled plugin is incompatible or its manifest identity is invalid.');
+        }
+
+        $target = rtrim((string) config('plugins.modules_path'), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $slug;
+        if (file_exists($target)) {
+            throw new RuntimeException('A plugin package with this slug already exists. Remove or update it before restoring.');
+        }
+        File::ensureDirectoryExists(dirname($target));
+        if (!File::moveDirectory($source, $target)) {
+            throw new RuntimeException('Could not restore plugin package files.');
+        }
+
+        try {
+            $this->registerPluginAutoload(PluginManifest::fromDirectory($target));
+            $record = null;
+            if ((bool) ($metadata['was_installed'] ?? false)) {
+                $record = $this->install($slug, $actorId);
+                if (!(bool) ($metadata['was_enabled'] ?? false)) {
+                    $this->disable($slug, $actorId);
+                }
+            }
+            @unlink($metadataPath);
+            $this->audit->log('plugin.restored_from_recycle_bin', 'plugin', $slug, [
+                'archive' => $archiveName,
+                'business_data_preserved' => true,
+            ], $actorId);
+            return $record;
+        } catch (Throwable $e) {
+            if (is_dir($target)) {
+                File::moveDirectory($target, $source);
+            }
+            throw $e;
+        }
+    }
+
+    public function permanentlyDeleteFromRecycleBin(string $archiveName, ?int $actorId = null): void
+    {
+        if (preg_match('/^[a-z0-9][a-z0-9-]{1,79}-[0-9]{14}-[a-f0-9]{10}$/', $archiveName) !== 1) {
+            throw new RuntimeException('Invalid recycle-bin archive identifier.');
+        }
+        $trashRoot = storage_path('app/plugin-recycle-bin');
+        $metadataPath = $trashRoot . DIRECTORY_SEPARATOR . $archiveName . '.json';
+        $source = $trashRoot . DIRECTORY_SEPARATOR . $archiveName;
+        if (!is_file($metadataPath) || !is_dir($source)) {
+            throw new RuntimeException('Recycled plugin package was not found.');
+        }
+        $metadata = json_decode(File::get($metadataPath), true, 512, JSON_THROW_ON_ERROR);
+        $slug = (string) ($metadata['slug'] ?? '');
+        if (($metadata['archive'] ?? null) !== $archiveName
+            || preg_match('/^[a-z0-9][a-z0-9-]{1,79}$/', $slug) !== 1) {
+            throw new RuntimeException('Recycle-bin metadata is invalid.');
+        }
+
+        File::deleteDirectory($source);
+        @unlink($metadataPath);
+        $this->audit->log('plugin.permanently_deleted', 'plugin', $slug, [
+            'package_files_removed' => true,
+            'database_records_preserved' => true,
+        ], $actorId);
+    }
+
     public function saveSettings(string $slug, array $values, array $secretKeys = [], ?int $actorId = null): void
     {
         foreach ($values as $key => $val) {
