@@ -12,6 +12,9 @@ use Plugins\Modules\GatewayPaypal\Services\PaypalGatewayService;
 use Plugins\Modules\GatewaySslcommerz\Services\SslcommerzGatewayService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class PluginCenterController extends Controller
@@ -160,7 +163,7 @@ class PluginCenterController extends Controller
                 continue;
             }
             if (preg_match('/^[a-zA-Z0-9_-]+$/', $key) !== 1) {
-                throw new \\RuntimeException("Plugin '{$slug}' contains an invalid setting key.");
+                throw new \RuntimeException("Plugin '{$slug}' contains an invalid setting key.");
             }
 
             $allowedKeys[] = $key;
@@ -172,7 +175,7 @@ class PluginCenterController extends Controller
             if ($type === 'select') {
                 $options = (array) ($field['options'] ?? []);
                 if ($options === []) {
-                    throw new \\RuntimeException("Plugin '{$slug}' has no options for select setting '{$key}'.");
+                    throw new \RuntimeException("Plugin '{$slug}' has no options for select setting '{$key}'.");
                 }
                 $fieldRules[] = Rule::in(array_map('strval', array_keys($options)));
             }
