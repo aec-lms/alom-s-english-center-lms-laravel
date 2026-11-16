@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Plugins\Modules\HrStaffManagement\Models\StaffPayroll;
 use Plugins\Modules\HrStaffManagement\Models\StaffProfile;
 use Plugins\Modules\RoleAiAssistant\Services\AiAssistantService;
+use Plugins\Modules\VisitorPopupAds\Models\VisitorPopup;
 use Tests\TestCase;
 
 class PluginCriticalRegressionTest extends TestCase
