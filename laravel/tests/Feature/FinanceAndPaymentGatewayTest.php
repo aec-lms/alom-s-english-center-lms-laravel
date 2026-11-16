@@ -553,4 +553,106 @@ class FinanceAndPaymentGatewayTest extends TestCase
         $this->assertSame('paid', $stripeInvoice->fresh()->status);
         $this->assertEquals(4500.0, (float) $stripeInvoice->fresh()->paid_amount);
     }
+
+    public function test_standalone_invoice_payer_can_use_independent_gateways_without_student_plugin(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins([
+            'fees-management',
+            'payment-management',
+            'gateway-sslcommerz',
+            'gateway-stripe',
+            'gateway-paypal',
+            'universal-payment',
+        ]);
+
+        $plugins = app(PluginManager::class);
+        $this->assertFalse($plugins->isInstalled('student-management'));
+        $plugins->saveSettings('gateway-sslcommerz', [
+            'store_id' => 'aec_standalone_store',
+            'store_password' => 'ssl_standalone_secret',
+            'sandbox_mode' => '1',
+        ], ['store_password']);
+        $plugins->saveSettings('gateway-stripe', [
+            'publishable_key' => 'pk_test_standalone',
+            'secret_key' => 'sk_test_standalone_123',
+            'webhook_secret' => 'whsec_standalone_123',
+        ], ['secret_key', 'webhook_secret']);
+        $plugins->saveSettings('gateway-paypal', [
+            'client_id' => 'paypal_standalone_client',
+            'client_secret' => 'paypal_standalone_secret',
+            'webhook_id' => 'WH-STANDALONE',
+            'sandbox_mode' => '1',
+        ], ['client_secret', 'webhook_id']);
+
+        $payer = $this->createUserWithRole('student', null, 'standalone-payer@aec.test');
+        $invoice = FeeInvoice::query()->create([
+            'invoice_number' => 'INV-STANDALONE-PAY-01',
+            'student_id' => null,
+            'payer_name' => 'Standalone Payer',
+            'payer_email' => 'standalone-payer@aec.test',
+            'payer_phone' => '01712345678',
+            'branch_id' => null,
+            'subtotal_amount' => 3200,
+            'discount_amount' => 0,
+            'net_amount' => 3200,
+            'paid_amount' => 0,
+            'currency' => 'BDT',
+            'status' => 'unpaid',
+        ]);
+
+        Http::fake(function (ClientRequest $request) {
+            $url = $request->url();
+            if (str_contains($url, '/v1/payment_intents')) {
+                return Http::response([
+                    'id' => 'pi_standalone_001',
+                    'status' => 'requires_action',
+                    'client_secret' => 'pi_standalone_001_secret',
+                ], 200);
+            }
+            if (str_contains($url, '/v1/oauth2/token')) {
+                return Http::response(['access_token' => 'paypal-standalone-token', 'token_type' => 'Bearer'], 200);
+            }
+            if (str_contains($url, '/v2/checkout/orders')) {
+                return Http::response([
+                    'id' => 'ORDER-STANDALONE-001',
+                    'status' => 'CREATED',
+                    'links' => [['rel' => 'approve', 'href' => 'https://www.sandbox.paypal.com/checkoutnow?token=ORDER-STANDALONE-001']],
+                ], 201);
+            }
+            if (str_ends_with((string) parse_url($url, PHP_URL_PATH), '/gwprocess/v4/api.php')) {
+                return Http::response([
+                    'status' => 'SUCCESS',
+                    'sessionkey' => 'SSL-STANDALONE-SESSION',
+                    'GatewayPageURL' => 'https://sandbox.sslcommerz.com/gwprocess/v4/gw.php?SESSIONKEY=SSL-STANDALONE-SESSION',
+                ], 200);
+            }
+            return Http::response(['message' => 'Unexpected payment request'], 404);
+        });
+
+        $this->actingAs($payer)->postJson('/payments/stripe/checkout', [
+            'invoice_id' => $invoice->id,
+            'payment_token' => 'pm_standalone_token',
+        ])->assertOk()->assertJsonPath('gateway', 'gateway-stripe');
+
+        $this->actingAs($payer)->postJson('/payments/paypal/create-order', [
+            'invoice_id' => $invoice->id,
+        ])->assertOk()->assertJsonPath('paypal_order_id', 'ORDER-STANDALONE-001');
+
+        $this->actingAs($payer)->postJson('/payments/sslcommerz/initiate', [
+            'invoice_id' => $invoice->id,
+        ])->assertOk()->assertJsonPath('gateway', 'gateway-sslcommerz');
+
+        $plugins->saveSettings('universal-payment', [
+            'allow_offline_payments' => '0',
+        ]);
+        $this->actingAs($payer)->post('/plugins/universal-payment/transactions', [
+            'payer_name' => 'Standalone Payer',
+            'item_title' => 'Invoice INV-STANDALONE-PAY-01',
+            'gateway' => 'bank_cash',
+            'amount' => 3200,
+            'external_trx_id' => 'BANK-REF-STANDALONE-01',
+        ])->assertForbidden();
+    }
+
 }
