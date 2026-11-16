@@ -88,6 +88,16 @@ class HealthMonitorService
             return ['status' => 'failed', 'message' => $message];
         }
     }
+    private function ensurePrivateDirectory(string $path): string
+    {
+        if ($path === '' || is_link($path)) throw new \\RuntimeException('Safe recovery refused an empty or symbolic-link private path.');
+        if (!is_dir($path)) {
+            $parent = dirname($path);
+            if (!is_dir($parent) || !is_writable($parent) || !mkdir($path, 0700, true)) throw new \\RuntimeException('Safe recovery could not create a private storage directory.');
+        }
+        if (!is_writable($path)) throw new \\RuntimeException('Private directory permissions require hosting-provider review; automatic chmod is disabled.');
+        return 'Missing private storage directory was created with restrictive permissions.';
+    }
     private function safeMessage(Throwable $e): string
     {
         return preg_match('/password|secret|token|host|sql|select|connection string/i', $e->getMessage())
