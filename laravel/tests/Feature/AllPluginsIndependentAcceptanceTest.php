@@ -76,6 +76,16 @@ class AllPluginsIndependentAcceptanceTest extends TestCase
             "{$slug} manifest disappeared during lifecycle operations"
         );
 
+        // Exercise uninstall/reinstall for every package, not only the generic manager fixture.
+        $manager->uninstall($slug);
+        $this->assertFalse($manager->isInstalled($slug), "{$slug} remained installed after uninstall");
+        $this->assertFalse($manager->isEnabled($slug), "{$slug} remained enabled after uninstall");
+        $this->assertFileExists($directory . '/plugin.json', "{$slug} package files must remain available after uninstall");
+
+        $manager->install($slug);
+        $this->assertTrue($manager->isInstalled($slug), "{$slug} did not reinstall after uninstall");
+        $this->assertTrue($manager->isEnabled($slug), "{$slug} did not enable after reinstall");
+
         $manager->resetSettingsToDefaults($slug);
         $recycled = $manager->deleteToRecycleBin($slug);
         $this->assertFalse($manager->isInstalled($slug), "{$slug} remained installed after recycle-bin delete");
