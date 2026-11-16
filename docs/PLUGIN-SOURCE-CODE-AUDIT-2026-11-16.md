@@ -77,6 +77,7 @@ The following fixes were committed on the audit branch after the first-pass revi
 | AI provider/brand mismatch | Only implemented OpenAI/Gemini integrations are accepted; unsupported provider configuration fails safely; user-facing identity is AEC LMS AI Assistant | Source review |
 | SMS provider result was reported as sent without checking response | Greenweb requests check HTTP acceptance and use chunked recipients; status is `submitted` rather than claiming handset delivery; unimplemented provider adapters remain queued | Source review; live provider test still required |
 | Notification message overstated delivery | Non-in-app channels are explicitly described as queued until a worker confirms delivery | Source review |
+| Universal Payment accepted arbitrary public amounts | Public checkout now requires an authenticated student, an owned fee invoice, an allowed installed/configured gateway, and server-calculated outstanding amount; online gateway choices are limited to implemented adapters | Regression test added; provider sandbox still required |
 
 **Latest CI:** GitHub Actions run `43823687313` succeeded. Composer security audit reported no advisories; Laravel suite passed **46 tests (264 assertions)**; the cPanel release ZIP was built and uploaded. This does not replace provider sandbox, production database, cPanel installation, or browser E2E testing.
 
