@@ -82,6 +82,10 @@
                     <input name="external_trx_id" required class="w-full rounded-xl border border-slate-300 px-3 py-2 font-mono">
                 </div>
                 <div class="col-span-2">
+                    <label class="font-semibold text-slate-700 block mb-1">Receipt Proof (PDF / JPG / PNG, max 5 MB)</label>
+                    <input type="file" name="proof" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" class="w-full rounded-xl border border-slate-300 px-3 py-2">
+                </div>
+                <div class="col-span-2">
                     <label class="font-semibold text-slate-700 block mb-1">Receipt Proof (PDF/JPG/PNG, max 5 MB)</label>
                     <input type="file" name="proof_file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" class="w-full rounded-xl border border-slate-300 px-3 py-2">
                     <p class="mt-1 text-[11px] text-slate-500">Stored privately. Only authorized finance staff and the assigned branch can access the uploaded proof.</p>
@@ -96,7 +100,7 @@
         <h2 class="text-sm font-bold text-slate-900">Manual Receipt Register ({{ $transactions->count() }})</h2>
         <div class="overflow-x-auto">
             <table class="w-full text-xs text-left">
-                <thead class="text-slate-500 border-b"><tr><th class="py-2">Ref</th><th>Payer</th><th>Item</th><th>Gateway</th><th>Amount</th><th>Proof</th><th>Status</th><th>Action</th></tr></thead>
+                <thead class="text-slate-500 border-b"><tr><th class="py-2">Ref</th><th>Payer</th><th>Item</th><th>Gateway</th><th>Amount</th><th>Proof</th><th>Status</th><th>Proof</th><th>Action</th></tr></thead>
                 <tbody class="divide-y">
                     @forelse ($transactions as $tx)
                         <tr>
@@ -113,6 +117,13 @@
                                 @endif
                             </td>
                             <td><span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase {{ $tx->status === 'verified' ? 'bg-emerald-100 text-emerald-800' : ($tx->status === 'refunded' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800') }}">{{ $tx->status }}</span></td>
+                            <td>
+                                @if ($tx->proof_path)
+                                    <a href="{{ route('plugins.universal_payment.proof', $tx) }}" class="font-semibold text-blue-700 underline">Download</a>
+                                @else
+                                    <span class="text-slate-400">—</span>
+                                @endif
+                            </td>
                             <td>
                                 <form method="POST" action="{{ url('/plugins/universal-payment/transactions/' . $tx->id . '/status') }}" class="inline-flex items-center gap-1.5">
                                     @csrf
