@@ -83,6 +83,8 @@ class MobileApiController extends Controller
             ? DB::table('storefront_items')->where('type', 'product')->where('is_active', true)->orderByDesc('id')->limit(12)->get()
             : collect();
 
+        $visibleNoticeRoles = $actor ? $actor->roles()->pluck('slug')->all() : [];
+        $visibleNoticeRoles[] = 'all';
         $notices = Schema::hasTable('notices')
             ? DB::table('notices')
                 ->where(function ($query) use ($actor): void {
@@ -90,6 +92,12 @@ class MobileApiController extends Controller
                     if ($actor && $actor->branch_id !== null) {
                         $query->orWhere('branch_id', $actor->branch_id);
                     }
+                })
+                ->where(function ($query) use ($visibleNoticeRoles): void {
+                    $query->whereNull('audience_role')->orWhereIn('audience_role', $visibleNoticeRoles);
+                })
+                ->where(function ($query): void {
+                    $query->whereNull('published_at')->orWhere('published_at', '<=', now());
                 })
                 ->orderByDesc('id')
                 ->limit(12)
@@ -298,6 +306,8 @@ class MobileApiController extends Controller
     public function notices(Request $request): JsonResponse
     {
         $actor = $request->user();
+        $visibleNoticeRoles = $actor ? $actor->roles()->pluck('slug')->all() : [];
+        $visibleNoticeRoles[] = 'all';
         $notices = Schema::hasTable('notices')
             ? DB::table('notices')
                 ->where(function ($query) use ($actor): void {
@@ -305,6 +315,12 @@ class MobileApiController extends Controller
                     if ($actor && $actor->branch_id !== null) {
                         $query->orWhere('branch_id', $actor->branch_id);
                     }
+                })
+                ->where(function ($query) use ($visibleNoticeRoles): void {
+                    $query->whereNull('audience_role')->orWhereIn('audience_role', $visibleNoticeRoles);
+                })
+                ->where(function ($query): void {
+                    $query->whereNull('published_at')->orWhere('published_at', '<=', now());
                 })
                 ->orderByDesc('id')
                 ->limit(30)
