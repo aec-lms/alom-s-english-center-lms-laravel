@@ -38,4 +38,47 @@ class HealthMonitorTest extends TestCase
         $this->markSystemInstalled();
         $this->actingAs($this->createUserWithRole('admin'))->get('/admin/health')->assertOk()->assertSee('System Health &amp; Recovery', false);
     }
+
+    public function test_safe_recovery_recreates_missing_private_and_backup_storage(): void
+    {
+        $this->markSystemInstalled();
+        $privatePath = sys_get_temp_dir() . '/aec-private-recovery-' . uniqid('', true);
+        $backupPath = sys_get_temp_dir() . '/aec-backup-recovery-' . uniqid('', true);
+        config([
+            'lms.private_storage_path' => $privatePath,
+            'lms.backup_path' => $backupPath,
+        ]);
+
+        $report = app(HealthMonitorService::class)->report(true);
+
+        $this->assertDirectoryExists($privatePath);
+        $this->assertDirectoryExists($backupPath);
+        $this->assertSame('recovered', $report['checks']['private_storage']['status']);
+        $this->assertSame('recovered', $report['checks']['backup_storage']['status']);
+
+        @rmdir($privatePath);
+        @rmdir($backupPath);
+    }
+
+    public function test_safe_recovery_refuses_symbolic_link_private_storage(): void
+    {
+        $this->markSystemInstalled();
+        $target = sys_get_temp_dir() . '/aec-private-target-' . uniqid('', true);
+        $link = sys_get_temp_dir() . '/aec-private-link-' . uniqid('', true);
+        mkdir($target, 0700, true);
+        if (!symlink($target, $link)) {
+            $this->markTestSkipped('Symbolic links are unavailable in this test environment.');
+        }
+        config(['lms.private_storage_path' => $link]);
+
+        try {
+            $report = app(HealthMonitorService::class)->report(true);
+            $this->assertSame('failed', $report['checks']['private_storage']['status']);
+            $this->assertStringContainsString('symbolic-link', $report['checks']['private_storage']['message']);
+            $this->assertDirectoryExists($target);
+        } finally {
+            @unlink($link);
+            @rmdir($target);
+        }
+    }
 }
