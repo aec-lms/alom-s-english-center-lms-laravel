@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use Illuminate\\Support\\Facades\\Route;
-use Plugins\\Modules\\StudentTracking\\Http\\Controllers\\StudentTrackingController;
+use Illuminate\Support\Facades\Route;
+use Plugins\Modules\StudentTracking\Http\Controllers\StudentTrackingController;
 
 Route::middleware(['web', 'installed', 'auth', 'plugin:student-tracking'])
     ->prefix('student-tracking')
