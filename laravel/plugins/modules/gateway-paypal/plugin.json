@@ -1,12 +1,14 @@
 {
     "slug": "gateway-paypal",
     "name": "PayPal Payment Gateway",
-    "version": "2.0.0",
+    "version": "2.0.1",
     "author": "Alom's English Center",
-    "category": "finance",
-    "description": "Independent PayPal Orders v2 Checkout, Order Capture, and Webhook HMAC verification with encrypted credentials and idempotency.",
+    "category": "payment-gateway",
+    "description": "Live PayPal Orders v2 checkout and capture with OAuth credentials, server-side webhook signature verification, amount/currency matching and idempotency.",
     "core_compatibility": "^2.0",
-    "dependencies": ["payment-management"],
+    "dependencies": [
+        "payment-management"
+    ],
     "provider": "Plugins\\Modules\\GatewayPaypal\\Providers\\GatewayPaypalServiceProvider",
     "permissions": [
         {
@@ -15,9 +17,36 @@
         }
     ],
     "settings_schema": [
-        { "key": "client_id", "label": "PayPal Client ID", "type": "text", "secret": false },
-        { "key": "client_secret", "label": "PayPal Client Secret", "type": "password", "secret": true },
-        { "key": "webhook_id", "label": "PayPal Webhook Signing Secret / ID", "type": "password", "secret": true },
-        { "key": "sandbox_mode", "label": "Sandbox Mode (1 or 0)", "type": "text", "secret": false }
+        {
+            "key": "client_id",
+            "label": "PayPal REST App Client ID",
+            "type": "text",
+            "secret": false,
+            "help": "Create a REST API app in PayPal Developer Dashboard."
+        },
+        {
+            "key": "client_secret",
+            "label": "PayPal REST App Secret",
+            "type": "password",
+            "secret": true
+        },
+        {
+            "key": "webhook_id",
+            "label": "PayPal Webhook ID",
+            "type": "password",
+            "secret": true,
+            "help": "Webhook ID from the PayPal Developer Dashboard; the server verifies each event with PayPal."
+        },
+        {
+            "key": "sandbox_mode",
+            "label": "PayPal Environment",
+            "type": "select",
+            "secret": false,
+            "default": "1",
+            "options": {
+                "0": "Live",
+                "1": "Sandbox"
+            }
+        }
     ]
 }
