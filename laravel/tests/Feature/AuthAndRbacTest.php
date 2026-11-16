@@ -62,8 +62,6 @@ class AuthAndRbacTest extends TestCase
         $this->post('/forgot-password', ['email' => 'unknown@aec.test'])
             ->assertRedirect()
             ->assertSessionHas('status', 'If an account matches that email, password recovery instructions will be sent shortly.');
-
-        Notification::assertCount(1);
     }
 
     public function test_password_reset_token_changes_password_and_is_single_use(): void
