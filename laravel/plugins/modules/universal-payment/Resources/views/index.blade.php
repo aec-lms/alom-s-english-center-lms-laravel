@@ -14,7 +14,7 @@
 @endphp
 <div class="space-y-6 max-w-6xl">
     <div>
-        <div class="inline-flex items-center px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold">Independent Universal Payment Plugin · Zero Dependencies</div>
+        <div class="inline-flex items-center px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold">Independent Universal Payment Plugin · Requires Fees & Invoicing</div>
         <h1 class="text-2xl font-extrabold text-slate-900 mt-1">Universal Payment Gateway & Ledger</h1>
         <p class="text-xs text-slate-500">Manage SSLCommerz, bKash, Nagad, Rocket, Card, PayPal, and Bank/Cash checkout & reconciliation inside one unified plugin.</p>
     </div>
