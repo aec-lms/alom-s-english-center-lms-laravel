@@ -456,7 +456,7 @@ class PluginManager
                 ['plugin_slug' => $slug, 'setting_key' => (string) $key],
                 [
                     'setting_value' => $isSecret && $stringVal !== '' ? Crypt::encryptString($stringVal) : $stringVal,
-                    'is_encrypted' => $isSecret,
+                    'is_encrypted' => $isSecret && $stringVal !== '',
                 ]
             );
         }
