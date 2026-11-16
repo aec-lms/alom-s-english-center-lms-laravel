@@ -22,9 +22,10 @@ class ExamController extends Controller
     public function index(Request $request): View
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $exams = Exam::query()
             ->withCount(['questions', 'attempts'])
-            ->when($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null, fn ($q) => $q->where('branch_id', $actor->branch_id))
+            ->when($actor && $actor->hasRole('branch_manager'), fn ($q) => $q->where('branch_id', $actor->branch_id))
             ->latest()
             ->paginate(20);
         $courses = Schema::hasTable('courses') ? DB::table('courses')->when($actor && $actor->hasRole('branch_manager'), fn ($q) => $q->where('branch_id', $actor->branch_id))->orderBy('title')->get() : collect();
@@ -35,6 +36,7 @@ class ExamController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $validated = $request->validate([
             'course_id' => ['required', 'integer', 'exists:courses,id'],
             'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
@@ -74,6 +76,7 @@ class ExamController extends Controller
     public function update(Request $request, Exam $exam): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $exam->branch_id) {
             abort(403, 'Branch isolation violation.');
         }
@@ -196,5 +199,14 @@ class ExamController extends Controller
         ]);
 
         return back()->with('status', "Exam graded server-side: {$score}/{$total} marks.");
+    }
+    private function ensureAssignedBranch($actor): void
+    {
+        if (!$actor || !$actor->hasRole('branch_manager')) {
+            return;
+        }
+        if ($actor->branch_id === null || !app('db')->table('branches')->where('id', $actor->branch_id)->where('is_active', true)->exists()) {
+            abort(403, 'Branch manager must be assigned to an active branch.');
+        }
     }
 }
