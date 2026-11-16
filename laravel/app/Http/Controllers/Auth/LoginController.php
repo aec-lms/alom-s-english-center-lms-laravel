@@ -50,7 +50,8 @@ class LoginController extends Controller
         $request->session()->regenerate();
         $this->audit->log('auth.login_succeeded', 'user', (string) Auth::id());
 
-        return redirect()->intended(route('portal.dashboard'));
+        $defaultDestination = Auth::user()?->hasRole('admin') ? route('admin.dashboard') : route('portal.dashboard');
+        return redirect()->intended($defaultDestination);
     }
 
     public function showRegister(): View
