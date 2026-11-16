@@ -64,10 +64,10 @@
                                 <div class="text-[11px] font-mono text-slate-400">{{ $teacher->employee_code }} &middot; {{ $teacher->user?->email }} &middot; {{ $teacher->is_active ? 'Active' : 'Inactive' }}</div>
                             </div>
                         </div>
-                        <form method="POST" action="/admin/teachers/{{ $teacher->id }}" onsubmit="return confirm('Delete this instructor? Courses and students remain safe.')">
+                        <form method="POST" action="/admin/teachers/{{ $teacher->id }}" onsubmit="return confirm('Deactivate this instructor? Account and course history will be preserved.')">
                             @csrf
                             @method('DELETE')
-                            <button type="submit" class="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-700 font-bold hover:bg-rose-50">Delete</button>
+                            <button type="submit" class="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-700 font-bold hover:bg-rose-50">Deactivate</button>
                         </form>
                     </div>
 
