@@ -98,6 +98,10 @@ jobs:
               "storage/app/plugin-rollbacks/",
               "storage/app/update-staging/",
               "storage/app/update-snapshots/",
+              "storage/framework/cache/",
+              "storage/framework/testing/",
+              ".phpunit.result.cache",
+              "phpunit.xml",
               ".git/",
               "node_modules/",
           ]
