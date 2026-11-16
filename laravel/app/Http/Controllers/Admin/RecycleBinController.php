@@ -368,7 +368,8 @@ class RecycleBinController extends Controller
             && Schema::hasTable($table)
             && Schema::hasColumn($table, 'deleted_at'), 404);
 
-        DB::transaction(function () use ($modelClass, $recordId, $entityType, $type, $request): void {
+        try {
+            DB::transaction(function () use ($modelClass, $recordId, $entityType, $type, $request): void {
             $record = $modelClass::withTrashed()->lockForUpdate()->findOrFail($recordId);
             abort_unless($record->trashed(), 409, 'This record is not in the Recycle Bin.');
 
@@ -387,7 +388,14 @@ class RecycleBinController extends Controller
                 'record_label' => (string) $recordLabel,
                 'permanent' => true,
             ], $request->user()->id);
-        });
+            });
+        } catch (\\Illuminate\\Database\\QueryException $exception) {
+            report($exception);
+
+            return back()->withErrors([
+                'permanent_delete' => 'This record still has linked data and cannot be permanently deleted yet.',
+            ]);
+        }
 
         return redirect()->route('admin.recycle-bin.index')
             ->with('status', 'The selected record was permanently deleted.');
