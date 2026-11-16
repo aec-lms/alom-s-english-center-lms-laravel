@@ -204,6 +204,7 @@ class SmsController extends Controller
     public function destroy(SmsCampaign $campaign): RedirectResponse
     {
         $campaign->delete();
-        return back()->with('status', 'SMS campaign log deleted.');
+        $this->audit->log('sms.campaign_trashed', 'sms_campaign', (string) $campaign->id);
+        return back()->with('status', 'SMS campaign log moved to the Admin Recycle Bin.');
     }
 }
