@@ -42,14 +42,18 @@ class HealthMonitorService
         } : null, $recoveries);
         $checks['private_storage'] = $this->check(function (): string {
             $path = (string) config('lms.private_storage_path');
-            if (is_link($path) || !is_dir($path) || !is_writable($path)) throw new \RuntimeException('Private storage is missing, linked, or not writable.');
+            if ($path === '' || is_link($path) || !is_dir($path) || !is_writable($path)) {
+                throw new \RuntimeException('Private storage is missing, linked, or not writable.');
+            }
             return 'Private storage is present and writable.';
-        }, null, $recoveries);
+        }, $attemptSafeRecovery ? fn (): string => $this->ensurePrivateDirectory((string) config('lms.private_storage_path')) : null, $recoveries);
         $checks['backup_storage'] = $this->check(function (): string {
             $path = (string) config('lms.backup_path');
-            if (is_link($path) || !is_dir($path) || !is_writable($path)) throw new \RuntimeException('Backup storage is missing, linked, or not writable.');
+            if ($path === '' || is_link($path) || !is_dir($path) || !is_writable($path)) {
+                throw new \RuntimeException('Backup storage is missing, linked, or not writable.');
+            }
             return 'Backup storage is present and writable.';
-        }, null, $recoveries);
+        }, $attemptSafeRecovery ? fn (): string => $this->ensurePrivateDirectory((string) config('lms.backup_path')) : null, $recoveries);
         $checks['queue'] = $this->check(function (): string {
             $driver = (string) config('queue.default', 'sync');
             if ($driver !== 'database') return 'Queue driver ' . $driver . ' is configured; database backlog check is not applicable.';
