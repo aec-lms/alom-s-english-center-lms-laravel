@@ -69,6 +69,7 @@ Route::middleware('installed')->group(function (): void {
             Route::post('/{slug}/update', [PluginCenterController::class, 'update'])->name('update');
             Route::post('/{slug}/enable', [PluginCenterController::class, 'enable'])->name('enable');
             Route::post('/{slug}/disable', [PluginCenterController::class, 'disable'])->name('disable');
+            Route::post('/{slug}/reset-settings', [PluginCenterController::class, 'resetSettings'])->name('reset-settings');
             Route::post('/{slug}/uninstall', [PluginCenterController::class, 'uninstall'])->name('uninstall');
             Route::get('/{slug}/configure', [PluginCenterController::class, 'configure'])->name('configure');
             Route::post('/{slug}/configure', [PluginCenterController::class, 'saveConfiguration'])->name('configure.save');
