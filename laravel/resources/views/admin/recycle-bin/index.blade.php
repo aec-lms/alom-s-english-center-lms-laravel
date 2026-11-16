@@ -25,7 +25,7 @@
                 </form>
             </div>
         @empty
-            <p class="border-t border-slate-100 pt-4 text-xs text-slate-400">The Recycle Bin is empty for currently supported modules.</p>
+            <p class="border-t border-slate-100 pt-4 text-xs text-slate-400">No deleted students.</p>
         @endforelse
         <div>{{ $students->links() }}</div>
     </section>
