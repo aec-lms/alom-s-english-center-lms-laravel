@@ -162,7 +162,7 @@ class UniversalPaymentController extends Controller
                 'payment_method_id' => $validated['payment_method_id'] ?? '',
                 'idempotency_key' => $validated['idempotency_key'] ?? null,
             ]);
-        } catch (\\RuntimeException $exception) {
+        } catch (\RuntimeException $exception) {
             if ($request->expectsJson()) {
                 return response()->json(['message' => $exception->getMessage()], 503);
             }
@@ -175,4 +175,5 @@ class UniversalPaymentController extends Controller
         }
 
         return response()->json($result, 201);
-    }}
+    }
+}
