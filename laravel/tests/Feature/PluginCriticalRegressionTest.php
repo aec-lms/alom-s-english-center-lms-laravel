@@ -87,7 +87,8 @@ class PluginCriticalRegressionTest extends TestCase
         $this->assertStringContainsString("'exists:fee_invoices,id'", $controller);
         $checkoutMethod = substr($controller, strpos($controller, 'public function publicCheckout'));
         $this->assertStringNotContainsString("'amount' => ['required'", $checkoutMethod);
-        $this->assertStringContainsString("'enabled_gateways'", $orchestrator);
+        $this->assertStringContainsString("'enabled_gateways'", $controller);
+        $this->assertStringContainsString('assertGatewayReady', $orchestrator);
     }
 
     public function test_payroll_is_pending_until_admin_confirms_disbursement(): void
