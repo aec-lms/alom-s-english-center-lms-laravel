@@ -16,11 +16,12 @@ class FeesStandaloneTest extends TestCase
         $admin = $this->createUserWithRole('admin');
 
         $this->assertFalse(app(PluginManager::class)->isInstalled('student-management'));
-        $this->actingAs($admin)->get('/admin/fees')->assertOk();
+        $this->actingAs($admin)->get('/admin/fees')->assertOk()->assertSee('Create Fee Invoice')->assertSee('Payer Phone');
 
         $this->actingAs($admin)->post('/admin/fees/invoices', [
             'payer_name' => 'Standalone Course Customer',
             'payer_email' => 'customer@aec.test',
+            'payer_phone' => '01712345678',
             'subtotal_amount' => 2500,
             'discount_amount' => 250,
             'due_date' => now()->addDays(7)->toDateString(),
@@ -30,6 +31,7 @@ class FeesStandaloneTest extends TestCase
             'student_id' => null,
             'payer_name' => 'Standalone Course Customer',
             'payer_email' => 'customer@aec.test',
+            'payer_phone' => '01712345678',
             'branch_id' => null,
             'net_amount' => 2250,
         ]);
