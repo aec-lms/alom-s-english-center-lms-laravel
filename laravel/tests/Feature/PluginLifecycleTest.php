@@ -39,6 +39,17 @@ class PluginLifecycleTest extends TestCase
         $manager->install('student-management');
     }
 
+    public function test_uninstalled_plugin_cannot_be_updated_through_the_lifecycle_manager(): void
+    {
+        $this->markSystemInstalled();
+        $manager = app(PluginManager::class);
+        $manager->syncCatalog();
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('must be installed before it can be updated');
+        $manager->updatePlugin('branch-management');
+    }
+
     public function test_core_cannot_be_disabled_or_uninstalled(): void
     {
         $this->markSystemInstalled();
