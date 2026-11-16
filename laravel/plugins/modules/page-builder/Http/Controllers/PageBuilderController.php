@@ -113,9 +113,9 @@ class PageBuilderController extends Controller
         $slug = $page->slug;
         $id = (string) $page->id;
         $page->delete();
-        $this->audit->log('page_builder.deleted', 'builder_page', $id, ['slug' => $slug]);
+        $this->audit->log('page_builder.trashed', 'builder_page', $id, ['slug' => $slug]);
 
-        return back()->with('status', "Page '/page/{$slug}' deleted.");
+        return back()->with('status', "Page '/page/{$slug}' moved to the Admin Recycle Bin.");
     }
 
     private function storeImage(UploadedFile $file): string
