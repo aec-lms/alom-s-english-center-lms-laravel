@@ -37,8 +37,9 @@
     @endphp
 
     <title>@yield('title', $seoTitle ?: config('app.name', "Alom's English Center — AEC LMS"))</title>
-    @if ($seoDescription)
-        <meta name="description" content="{{ $seoDescription }}">
+    @php $pageMetaDescription = trim($__env->yieldContent('meta_description')); @endphp
+    @if ($pageMetaDescription !== '' || $seoDescription)
+        <meta name="description" content="{{ $pageMetaDescription !== '' ? $pageMetaDescription : $seoDescription }}">
     @endif
     @if ($seoKeywords)
         <meta name="keywords" content="{{ $seoKeywords }}">
