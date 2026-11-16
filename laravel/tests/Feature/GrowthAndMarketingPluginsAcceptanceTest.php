@@ -135,7 +135,7 @@ class GrowthAndMarketingPluginsAcceptanceTest extends TestCase
 
         $this->assertDatabaseHas('plugin_settings', [
             'plugin_slug' => 'meta-pixel',
-            'key' => 'capi_access_token',
+            'setting_key' => 'capi_access_token',
             'is_encrypted' => true,
         ]);
     }
@@ -180,13 +180,13 @@ class GrowthAndMarketingPluginsAcceptanceTest extends TestCase
             'route_path' => 'courses',
             'meta_title' => 'English Courses',
             'meta_description' => 'Browse English courses.',
-            'robots_directive' => 'index,follow',
+            'robots_directive' => 'index',
         ])->assertSessionHasNoErrors();
 
         $this->assertDatabaseHas('seo_meta_rules', [
             'route_path' => '/courses',
             'meta_title' => 'English Courses',
-            'robots_directive' => 'index,follow',
+            'robots_directive' => 'index',
         ]);
 
         $this->assertSame('Aloms English Center | AEC LMS', app(PluginManager::class)->getSetting('seo-manager', 'site_title_seo'));
