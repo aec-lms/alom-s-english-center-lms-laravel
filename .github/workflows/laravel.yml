@@ -92,6 +92,9 @@ jobs:
           forbidden = [
               "storage/app/installed.lock",
               "storage/app/backups/",
+              "storage/app/plugin-recycle-bin/",
+              "storage/app/plugin-setting-backups/",
+              "storage/app/plugin-permanent-delete-backups/",
               "storage/app/private/",
               "storage/app/restore-staging/",
               "storage/app/plugin-staging/",
