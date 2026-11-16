@@ -77,8 +77,12 @@ class PortalController extends Controller
                     ->orderBy('title')->get();
             }
             if (Schema::hasTable('live_classes')) {
-                $liveClasses = DB::table('live_classes')->where('instructor_name', $user->name)
-                    ->orderBy('starts_at')->limit(20)->get();
+                $liveClasses = DB::table('live_classes')
+                    ->join('courses', 'live_classes.course_id', '=', 'courses.id')
+                    ->where('live_classes.instructor_name', $user->name)
+                    ->when($branchId !== null, fn ($q) => $q->where('courses.branch_id', $branchId))
+                    ->select('live_classes.*')
+                    ->orderBy('live_classes.starts_at')->limit(20)->get();
             }
             $metrics = [
                 'assigned_courses' => $courses->count(),
@@ -94,6 +98,7 @@ class PortalController extends Controller
                     ->join('students', 'guardian_student.student_id', '=', 'students.id')
                     ->join('users', 'students.user_id', '=', 'users.id')
                     ->where('guardian_student.guardian_id', $guardian->id)
+                    ->where('students.branch_id', $guardian->branch_id)
                     ->select('students.id', 'students.student_code', 'students.status', 'users.name', 'users.email')
                     ->get();
                 $studentIds = $children->pluck('id');
