@@ -53,8 +53,9 @@ class GuardianController extends Controller
         $studentIntegration = app(PluginManager::class)->isEnabled('student-management')
             && Schema::hasTable('students')
             && Schema::hasTable('guardian_student');
-        $branchRule = Schema::hasTable('branches')
-            ? ['nullable', 'integer', 'exists:branches,id']
+        $branchIntegration = app(PluginManager::class)->isEnabled('branch-management') && Schema::hasTable('branches');
+        $branchRule = $branchIntegration
+            ? ['nullable', 'integer', 'exists:branches,id,is_active,1']
             : ['nullable', 'integer'];
         $studentRule = $studentIntegration
             ? ['nullable', 'integer', 'exists:students,id']
@@ -69,6 +70,10 @@ class GuardianController extends Controller
             'student_id' => $studentRule,
         ]);
 
+        if (!$branchIntegration) {
+            $validated['branch_id'] = null;
+        }
+
         if ($actor && $actor->hasRole('branch_manager')) {
             if (isset($validated['branch_id']) && (int) $actor->branch_id !== (int) $validated['branch_id']) {
                 abort(403, 'Branch isolation violation.');
@@ -78,7 +83,7 @@ class GuardianController extends Controller
 
         if ($studentIntegration && !empty($validated['student_id'])) {
             $student = Student::query()->findOrFail((int) $validated['student_id']);
-            if ((int) $student->branch_id !== (int) $validated['branch_id']) {
+            if ($branchIntegration && (int) $student->branch_id !== (int) $validated['branch_id']) {
                 abort(422, 'Guardian and linked student must belong to the same branch.');
             }
         }
