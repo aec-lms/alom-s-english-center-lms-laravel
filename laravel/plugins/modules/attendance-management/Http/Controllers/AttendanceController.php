@@ -77,6 +77,10 @@ class AttendanceController extends Controller
             ]
         );
 
+        if ($plugins->isEnabled('student-tracking')) {
+            app(StudentActivityTracker::class)->record((int) $student->user_id, 'attendance_marked', 'attendance', (int) $record->id, null, ['attendance_status' => $record->status, 'source' => 'attendance-register'], (int) ($actor?->id ?? $student->user_id));
+        }
+
         $this->audit->log('attendance.marked', 'attendance', (string) $record->id, ['status' => $record->status]);
 
         return back()->with('status', 'Attendance saved.');
