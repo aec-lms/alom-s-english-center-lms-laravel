@@ -66,6 +66,40 @@ class NotificationCenterTest extends TestCase
             ->assertDontSee('Another student private notice');
     }
 
+    public function test_user_can_mark_only_their_own_notification_as_read(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['email-notifications', 'sms-gateway', 'notification-center']);
+        $student = $this->createUserWithRole('student');
+        $otherStudent = $this->createUserWithRole('student');
+
+        $ownId = DB::table('lms_notifications')->insertGetId([
+            'user_id' => $student->id,
+            'channel' => 'in_app',
+            'title' => 'Own notification',
+            'message' => 'Read this.',
+            'status' => 'sent',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $otherId = DB::table('lms_notifications')->insertGetId([
+            'user_id' => $otherStudent->id,
+            'channel' => 'in_app',
+            'title' => 'Other notification',
+            'message' => 'Private.',
+            'status' => 'sent',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($student)->post('/my-notifications/' . $ownId . '/read')
+            ->assertSessionHas('status', 'Notification marked as read.');
+        $this->assertDatabaseHas('lms_notifications', ['id' => $ownId, 'read_at' => now()->toDateTimeString()]);
+
+        $this->actingAs($student)->post('/my-notifications/' . $otherId . '/read')->assertNotFound();
+        $this->assertDatabaseHas('lms_notifications', ['id' => $otherId, 'read_at' => null]);
+    }
+
     public function test_unconfigured_external_channels_are_not_reported_as_queued_or_sent(): void
     {
         $this->markSystemInstalled();
