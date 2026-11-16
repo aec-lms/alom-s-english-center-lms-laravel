@@ -9,6 +9,7 @@ use Plugins\Modules\AdmissionManagement\Models\AdmissionApplication;
 use Plugins\Modules\CertificateManagement\Models\CertificateRecord;
 use Plugins\Modules\LibraryManagement\Models\LibraryBook;
 use Plugins\Modules\LibraryManagement\Models\LibraryLoan;
+use Plugins\Modules\StudentManagement\Models\Student;
 use Tests\TestCase;
 
 class AdditionalModulesWorkflowTest extends TestCase
