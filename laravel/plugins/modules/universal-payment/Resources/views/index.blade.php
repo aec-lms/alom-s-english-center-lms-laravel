@@ -50,7 +50,7 @@
             <button class="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold">Save Gateway Settings</button>
         </form>
 
-        <form method="POST" action="{{ url('/plugins/universal-payment/transactions') }}" class="bg-white rounded-2xl border border-slate-200 p-6 space-y-4 text-xs">
+        <form method="POST" enctype="multipart/form-data" action="{{ url('/plugins/universal-payment/transactions') }}" class="bg-white rounded-2xl border border-slate-200 p-6 space-y-4 text-xs">
             @csrf
             <h2 class="text-sm font-bold text-slate-900">2. Record Offline Receipt (Manual Review)</h2>
             <p class="text-[11px] text-slate-500">Offline receipts remain Pending until reviewed. This register does not settle a Fee Invoice; use the Finance Payments workflow to apply an approved amount to an invoice. Online checkout uses the dedicated provider plugins.</p>
@@ -81,6 +81,11 @@
                     <label class="font-semibold text-slate-700 block mb-1">Payment / Deposit Reference *</label>
                     <input name="external_trx_id" required class="w-full rounded-xl border border-slate-300 px-3 py-2 font-mono">
                 </div>
+                <div class="col-span-2">
+                    <label class="font-semibold text-slate-700 block mb-1">Receipt Proof (PDF/JPG/PNG, max 5 MB)</label>
+                    <input type="file" name="proof_file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" class="w-full rounded-xl border border-slate-300 px-3 py-2">
+                    <p class="mt-1 text-[11px] text-slate-500">Stored privately. Only authorized finance staff and the assigned branch can access the uploaded proof.</p>
+                </div>
 
             </div>
             <button class="px-5 py-2.5 rounded-xl bg-[#0057FF] hover:bg-blue-700 text-white font-bold">Record Payment</button>
@@ -91,7 +96,7 @@
         <h2 class="text-sm font-bold text-slate-900">Manual Receipt Register ({{ $transactions->count() }})</h2>
         <div class="overflow-x-auto">
             <table class="w-full text-xs text-left">
-                <thead class="text-slate-500 border-b"><tr><th class="py-2">Ref</th><th>Payer</th><th>Item</th><th>Gateway</th><th>Amount</th><th>Status</th><th>Action</th></tr></thead>
+                <thead class="text-slate-500 border-b"><tr><th class="py-2">Ref</th><th>Payer</th><th>Item</th><th>Gateway</th><th>Amount</th><th>Proof</th><th>Status</th><th>Action</th></tr></thead>
                 <tbody class="divide-y">
                     @forelse ($transactions as $tx)
                         <tr>
@@ -100,6 +105,13 @@
                             <td>{{ $tx->item_title }}</td>
                             <td class="uppercase">{{ $tx->gateway }}</td>
                             <td class="font-bold">{{ $tx->currency }} {{ number_format((float) $tx->amount, 2) }}</td>
+                            <td>
+                                @if ($tx->proof_path)
+                                    <a href="{{ url('/plugins/universal-payment/transactions/' . $tx->id . '/proof') }}" class="font-semibold text-blue-700 underline">View proof</a>
+                                @else
+                                    <span class="text-slate-400">Not uploaded</span>
+                                @endif
+                            </td>
                             <td><span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase {{ $tx->status === 'verified' ? 'bg-emerald-100 text-emerald-800' : ($tx->status === 'refunded' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800') }}">{{ $tx->status }}</span></td>
                             <td>
                                 <form method="POST" action="{{ url('/plugins/universal-payment/transactions/' . $tx->id . '/status') }}" class="inline-flex items-center gap-1.5">
@@ -113,7 +125,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="7" class="py-4 text-slate-400">No transactions recorded yet.</td></tr>
+                        <tr><td colspan="8" class="py-4 text-slate-400">No transactions recorded yet.</td></tr>
                     @endforelse
                 </tbody>
             </table>
