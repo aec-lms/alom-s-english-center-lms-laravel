@@ -58,6 +58,37 @@ class BackupAndUpdateTest extends TestCase
         $record->delete();
     }
 
+    public function test_encrypted_backup_restores_database_rows_from_the_snapshot(): void
+    {
+        $this->markSystemInstalled();
+        $table = 'backup_restore_acceptance_' . strtolower(str_replace('.', '', uniqid('', true)));
+        Schema::create($table, function ($blueprint): void {
+            $blueprint->string('code')->primary();
+            $blueprint->string('value');
+        });
+
+        $record = null;
+        try {
+            DB::table($table)->insert(['code' => 'original', 'value' => 'snapshot-value']);
+            $backups = app(BackupService::class);
+            $record = $backups->createEncryptedBackup(null, false);
+
+            DB::table($table)->delete();
+            DB::table($table)->insert(['code' => 'later', 'value' => 'must-be-replaced']);
+
+            $backups->restoreEncryptedBackup($record);
+
+            $this->assertDatabaseHas($table, ['code' => 'original', 'value' => 'snapshot-value']);
+            $this->assertDatabaseMissing($table, ['code' => 'later']);
+        } finally {
+            Schema::dropIfExists($table);
+            if ($record !== null) {
+                @unlink($record->storage_path);
+                $record->delete();
+            }
+        }
+    }
+
     public function test_backup_restore_rejects_paths_outside_the_private_backup_directory(): void
     {
         $this->markSystemInstalled();
