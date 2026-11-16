@@ -13,9 +13,9 @@ The stronger requirement—running the same plugin package on an arbitrary, non-
 
 ## Manifest dependency inventory
 
-The 39 plugin manifests were checked individually on the reviewed branch. The following 11 plugins currently declare sibling dependencies:
+The 39 plugin manifests were checked individually on the reviewed branch. The following 14 plugins previously declared or now declare optional sibling integrations. Their manifests no longer block independent installation:
 
-| Plugin | Declared dependencies | Portability concern |
+| Plugin | Optional integrations | Portability concern |
 |---|---|---|
 | admission-management | branch-management | Admission should support an optional branch context and a default/global mode. |
 | attendance-management | branch-management, student-management, course-management, batch-management | Attendance needs stable student/course/batch interfaces; integrations should be adapters, not hard-coded model imports. |
@@ -29,7 +29,7 @@ The 39 plugin manifests were checked individually on the reviewed branch. The fo
 | teacher-management | branch-management | Teacher records should support a nullable/default organization context. |
 | universal-payment | payment-management, fees-management | Payment orchestration should depend on invoice/payment contracts, not sibling Eloquent models. |
 
-The remaining 28 manifests declare no sibling dependency. This does **not** prove they are independent: source files may still import sibling models, tables, routes or services without declaring those dependencies. Source-level import and runtime dependency scans remain required for all 39 modules.
+The following three additional manifests were converted to optional integrations during this remediation: `guardian-management` → `student-management`, `fees-management` → `student-management`, and `payment-management` → `fees-management`. The remaining manifests declare no optional sibling integration. This does **not** prove they are independent: source files may still import sibling models, tables, routes or services without declaring those dependencies. Source-level import and runtime dependency scans remain required for all 39 modules.
 
 ## Target architecture
 
@@ -58,4 +58,4 @@ The remaining 28 manifests declare no sibling dependency. This does **not** prov
 
 ## Release policy
 
-Until the second host adapter and cross-host contract suite exist, describe these modules as **AEC LMS Laravel plugins**, not universal plugins compatible with every LMS. Manifest dependency cleanup alone is not sufficient. Do not remove dependencies from manifests until the corresponding source imports and workflows have been replaced by tested adapters.
+Until the second host adapter and cross-host contract suite exist, describe these modules as **AEC LMS Laravel plugins**, not universal plugins compatible with every LMS. All current sibling relationships are recorded as `optional_dependencies` rather than installation-blocking `dependencies`. This permits standalone installation but does not yet prove every integration gracefully degrades when the optional module is disabled or absent. Manifest dependency cleanup alone is not sufficient. Do not remove dependencies from manifests until the corresponding source imports and workflows have been replaced by tested adapters.
