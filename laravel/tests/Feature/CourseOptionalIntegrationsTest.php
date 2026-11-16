@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
 use Plugins\Modules\CourseManagement\Models\Course;
+use Plugins\Modules\CourseManagement\Models\Enrollment;
 use Tests\TestCase;
 
 class CourseOptionalIntegrationsTest extends TestCase
@@ -58,4 +59,31 @@ class CourseOptionalIntegrationsTest extends TestCase
 
         $this->actingAs($student)->get('/my-learning/enrollments')->assertOk();
     }
+
+    public function test_course_enrollment_views_do_not_query_invoice_table_when_fees_plugin_is_disabled(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management']);
+        $student = $this->createUserWithRole('student');
+        $course = Course::query()->create([
+            'code' => 'FREE-NO-FEES-001',
+            'title' => 'Free Course Without Fees',
+            'slug' => 'free-course-without-fees',
+            'description' => 'Enrollment records can be listed without the Fees plugin.',
+            'price' => 0,
+            'status' => 'published',
+        ]);
+        Enrollment::query()->create([
+            'user_id' => $student->id,
+            'course_id' => $course->id,
+            'branch_id' => null,
+            'invoice_id' => null,
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($student)->get('/my-learning/enrollments')->assertOk();
+        $admin = $this->createUserWithRole('admin');
+        $this->actingAs($admin)->get('/admin/enrollments')->assertOk();
+    }
+
 }
