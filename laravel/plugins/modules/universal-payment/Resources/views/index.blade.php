@@ -11,7 +11,7 @@
 @endphp
 <div class="space-y-6 max-w-6xl">
     <div>
-        <div class="inline-flex items-center px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold">Independent Universal Payment Plugin · Requires Fees & Invoicing</div>
+        <div class="inline-flex items-center px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold">AEC LMS Universal Payment · Provider Checkout & Manual Receipt Register</div>
         <h1 class="text-2xl font-extrabold text-slate-900 mt-1">Universal Payment Gateway & Ledger</h1>
         <p class="text-xs text-slate-500">Route invoice payments through installed provider plugins; credentials and webhook settings remain inside each independent gateway plugin.</p>
     </div>
@@ -45,8 +45,8 @@
 
         <form method="POST" action="{{ url('/plugins/universal-payment/transactions') }}" class="bg-white rounded-2xl border border-slate-200 p-6 space-y-4 text-xs">
             @csrf
-            <h2 class="text-sm font-bold text-slate-900">2. Record Offline Bank / Cash Payment</h2>
-            <p class="text-[11px] text-slate-500">Offline entries start as Pending. Add a receipt or voucher reference before confirming payment. Online checkout uses the dedicated provider plugins.</p>
+            <h2 class="text-sm font-bold text-slate-900">2. Record Offline Receipt (Manual Review)</h2>
+            <p class="text-[11px] text-slate-500">Offline receipts remain Pending until reviewed. This register does not settle a Fee Invoice; use the Finance Payments workflow to apply an approved amount to an invoice. Online checkout uses the dedicated provider plugins.</p>
             <div class="grid grid-cols-2 gap-3">
                 <div>
                     <label class="font-semibold text-slate-700 block mb-1">Student / Payer Name *</label>
@@ -81,7 +81,7 @@
     </div>
 
     <div class="bg-white rounded-2xl border border-slate-200 p-6 space-y-3">
-        <h2 class="text-sm font-bold text-slate-900">Unified Payment Transactions ({{ $transactions->count() }})</h2>
+        <h2 class="text-sm font-bold text-slate-900">Manual Receipt Register ({{ $transactions->count() }})</h2>
         <div class="overflow-x-auto">
             <table class="w-full text-xs text-left">
                 <thead class="text-slate-500 border-b"><tr><th class="py-2">Ref</th><th>Payer</th><th>Item</th><th>Gateway</th><th>Amount</th><th>Status</th><th>Action</th></tr></thead>
