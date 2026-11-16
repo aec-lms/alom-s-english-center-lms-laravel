@@ -84,10 +84,19 @@ class PaymentController extends Controller
             abort(403, 'Branch isolation violation.');
         }
 
+        // Do not create a local refund ledger entry for an online charge until a real
+        // provider refund adapter has executed and verified the provider response.
+        // A caller-supplied reference is not evidence that money was returned.
+        if ($transaction->gateway_slug !== 'offline') {
+            return back()->withErrors([
+                'refund' => 'Online refunds are disabled until this gateway has a verified provider refund adapter. No ledger or invoice balance was changed.',
+            ]);
+        }
+
         $validated = $request->validate([
             'amount' => ['required', 'numeric', 'min:0.01'],
             'reason' => ['required', 'string', 'max:255'],
-            'provider_refund_reference' => [$transaction->gateway_slug === 'offline' ? 'nullable' : 'required', 'string', 'max:160'],
+            'provider_refund_reference' => ['nullable', 'string', 'max:160'],
         ]);
 
         try {
