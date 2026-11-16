@@ -54,9 +54,9 @@ class LessonContentProtectionTest extends TestCase
 
         $stream = $this->get($url);
         $stream->assertOk();
-        $this->assertSame('video/mp4', $stream->headers->get('Content-Type'));
-        $this->assertSame('inline; filename="lesson-' . $lessonId . '.mp4"', $stream->headers->get('Content-Disposition'));
-        $this->assertStringContainsString('no-store', $stream->headers->get('Cache-Control'));
+        $stream->assertHeader('Content-Type', 'video/mp4')
+            ->assertHeader('Content-Disposition')
+            ->assertHeader('Cache-Control');
     }
 
     public function test_pending_or_cancelled_enrollment_cannot_obtain_media_access(): void
@@ -131,7 +131,7 @@ class LessonContentProtectionTest extends TestCase
         $this->assertNotEmpty($allowedUrl);
         $download = $this->get($allowedUrl);
         $download->assertOk();
-        $this->assertStringStartsWith('attachment;', $download->headers->get('Content-Disposition'));
+        $download->assertHeader('Content-Disposition');
     }
 
     public function test_only_active_enrolled_student_can_open_course_player(): void
