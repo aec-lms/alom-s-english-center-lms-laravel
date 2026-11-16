@@ -87,6 +87,29 @@ class LessonContentProtectionController extends Controller
         ]);
     }
 
+    public function showCourse(Request $request, int $course): \Illuminate\View\View
+    {
+        $enrolled = DB::table('enrollments')
+            ->where('user_id', $request->user()->id)
+            ->where('course_id', $course)
+            ->where('status', 'active')
+            ->exists();
+        abort_unless($enrolled, 403, 'An active enrollment is required to access this course.');
+
+        $courseRow = DB::table('courses')->where('id', $course)->first();
+        abort_unless($courseRow && $courseRow->status === 'published', 404);
+
+        $lessons = DB::table('course_lessons')
+            ->where('course_id', $course)
+            ->orderBy('sort_order')
+            ->get(['id', 'title', 'sort_order', 'media_mime', 'protection_enabled', 'is_downloadable', 'media_path']);
+
+        return view('course-management::learning-player', [
+            'course' => $courseRow,
+            'lessons' => $lessons,
+        ]);
+    }
+
     public function issueAccess(Request $request, int $lesson): JsonResponse
     {
         $lessonRow = $this->authorizedLesson($request, $lesson);
