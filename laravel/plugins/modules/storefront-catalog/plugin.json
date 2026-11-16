@@ -1,10 +1,10 @@
 {
   "slug": "storefront-catalog",
   "name": "Products & E-Books Storefront Plugin",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Independent plugin to create, edit, upload thumbnails, publish, and delete Printed Products, Study Kits, and Free/Premium E-Books.",
   "author": "AEC LMS Core Team",
-  "service_provider": "Plugins\\Modules\\StorefrontCatalog\\Providers\\StorefrontCatalogServiceProvider",
+  "provider": "Plugins\\Modules\\StorefrontCatalog\\Providers\\StorefrontCatalogServiceProvider",
   "dependencies": [],
   "migrations_path": "Database/Migrations",
   "routes_file": "Routes/web.php",
