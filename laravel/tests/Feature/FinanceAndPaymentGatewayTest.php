@@ -230,6 +230,101 @@ class FinanceAndPaymentGatewayTest extends TestCase
         $this->assertSame('unpaid', $invoice->fresh()->status);
     }
 
+    public function test_students_can_start_own_stripe_and_paypal_checkout_but_cannot_capture_another_users_order(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins([
+            'branch-management',
+            'student-management',
+            'fees-management',
+            'payment-management',
+            'gateway-stripe',
+            'gateway-paypal',
+        ]);
+
+        $plugins = app(PluginManager::class);
+        $plugins->saveSettings('gateway-stripe', [
+            'secret_key' => 'sk_test_checkout_owner_123',
+            'webhook_secret' => 'whsec_checkout_owner_123',
+        ], ['secret_key', 'webhook_secret']);
+        $plugins->saveSettings('gateway-paypal', [
+            'client_id' => 'paypal_owner_client',
+            'client_secret' => 'paypal_owner_secret',
+            'webhook_id' => 'WH-OWNER-TEST',
+        ], ['client_secret', 'webhook_id']);
+
+        $branchId = DB::table('branches')->insertGetId([
+            'code' => 'PAY-OWNER',
+            'name' => 'Payment Owner Branch',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $studentUser = $this->createUserWithRole('student', $branchId);
+        $student = Student::query()->create([
+            'user_id' => $studentUser->id,
+            'branch_id' => $branchId,
+            'student_code' => 'PAY-OWNER-01',
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+        ]);
+        $invoice = FeeInvoice::query()->create([
+            'invoice_number' => 'INV-PAY-OWNER-01',
+            'student_id' => $student->id,
+            'branch_id' => $branchId,
+            'subtotal_amount' => 1800,
+            'discount_amount' => 0,
+            'net_amount' => 1800,
+            'paid_amount' => 0,
+            'currency' => 'BDT',
+            'status' => 'unpaid',
+        ]);
+        $outsider = $this->createUserWithRole('student', $branchId, 'payment-outsider@aec.test');
+
+        Http::fake(function (ClientRequest $request) {
+            if (str_contains($request->url(), '/v1/payment_intents')) {
+                return Http::response([
+                    'id' => 'pi_owner_checkout_001',
+                    'status' => 'requires_action',
+                    'client_secret' => 'pi_owner_checkout_001_secret',
+                ], 200);
+            }
+            if (str_contains($request->url(), '/v1/oauth2/token')) {
+                return Http::response(['access_token' => 'paypal-owner-access-token', 'token_type' => 'Bearer'], 200);
+            }
+            if (str_contains($request->url(), '/v2/checkout/orders')) {
+                return Http::response([
+                    'id' => 'ORDER-OWNER-CHECKOUT-001',
+                    'status' => 'CREATED',
+                    'links' => [['rel' => 'approve', 'href' => 'https://www.sandbox.paypal.com/checkoutnow?token=ORDER-OWNER-CHECKOUT-001']],
+                ], 201);
+            }
+            return Http::response(['message' => 'Unexpected payment request'], 404);
+        });
+
+        $this->actingAs($studentUser)->postJson('/payments/stripe/checkout', [
+            'invoice_id' => $invoice->id,
+            'payment_token' => 'pm_owner_checkout_token',
+        ])->assertOk()->assertJsonPath('gateway', 'gateway-stripe');
+
+        $this->actingAs($studentUser)->postJson('/payments/paypal/create-order', [
+            'invoice_id' => $invoice->id,
+        ])->assertOk()->assertJsonPath('paypal_order_id', 'ORDER-OWNER-CHECKOUT-001');
+
+        $this->actingAs($outsider)->postJson('/payments/stripe/checkout', [
+            'invoice_id' => $invoice->id,
+            'payment_token' => 'pm_other_user_token',
+        ])->assertForbidden();
+
+        $this->actingAs($outsider)->postJson('/payments/paypal/create-order', [
+            'invoice_id' => $invoice->id,
+        ])->assertForbidden();
+
+        $this->actingAs($outsider)->getJson('/payments/paypal/return?token=ORDER-OWNER-CHECKOUT-001')
+            ->assertForbidden();
+
+        $this->assertSame('unpaid', $invoice->fresh()->status);
+    }
+
     public function test_stripe_and_paypal_gateways_and_atomic_refund_workflow(): void
     {
         $this->markSystemInstalled();
