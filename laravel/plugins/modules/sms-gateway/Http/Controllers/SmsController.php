@@ -69,9 +69,23 @@ class SmsController extends Controller
             'message' => ['required', 'string', 'max:640'],
         ]);
 
-        $numbers = [];
         if ($validated['audience'] === 'custom') {
-            $numbers = array_values(array_filter(array_map('trim', preg_split('/[\s,;]+/', (string) ($validated['custom_numbers'] ?? '')) ?: [])));
+            $rawNumbers = array_values(array_filter(array_map('trim', preg_split('/[\\s,;]+/', (string) ($validated['custom_numbers'] ?? '')) ?: [])));
+            $numbers = [];
+            $invalidNumbers = [];
+            foreach ($rawNumbers as $rawNumber) {
+                $normalized = $this->normalizeBangladeshNumber($rawNumber);
+                if ($normalized === null) {
+                    $invalidNumbers[] = $rawNumber;
+                } else {
+                    $numbers[] = $normalized;
+                }
+            }
+            if ($invalidNumbers !== []) {
+                return back()->withErrors([
+                    'custom_numbers' => 'Invalid Bangladesh mobile number(s): ' . implode(', ', array_slice($invalidNumbers, 0, 5)),
+                ])->withInput();
+            }
         } else {
             $query = User::query()->whereNotNull('phone')->where('phone', '!=', '');
             if ($validated['audience'] !== 'all_users') {
@@ -83,24 +97,66 @@ class SmsController extends Controller
                 };
                 $query->whereHas('roles', fn ($q) => $q->where('slug', $roleSlug));
             }
-            $numbers = $query->pluck('phone')->all();
+            $numbers = $query->pluck('phone')
+                ->map(fn ($phone) => $this->normalizeBangladeshNumber((string) $phone))
+                ->filter()
+                ->values()
+                ->all();
         }
 
+        $numbers = array_values(array_unique($numbers));
         $provider = (string) $this->plugins->getSetting('sms-gateway', 'provider', 'greenweb');
         $token = (string) $this->plugins->getSetting('sms-gateway', 'api_token', '');
-        $status = 'queued';
+        $status = 'not_configured';
 
-        if ($token !== '' && count($numbers) > 0 && $provider === 'greenweb') {
-            try {
-                Http::timeout(10)->asForm()->post('https://api.greenweb.com.bd/api.php', [
-                    'token' => $token,
-                    'to' => implode(',', array_slice($numbers, 0, 100)),
-                    'message' => $validated['message'],
-                ]);
-                $status = 'sent';
-            } catch (\Throwable) {
-                $status = 'queued_retry';
+        if ($numbers === []) {
+            $status = 'no_valid_recipients';
+        } elseif ($provider !== 'greenweb') {
+            $status = 'provider_not_implemented';
+        } elseif ($token === '') {
+            $status = 'not_configured';
+        } else {
+            $sentCount = 0;
+            $failedCount = 0;
+            $unknownResponse = false;
+
+            foreach (array_chunk($numbers, 100) as $batch) {
+                try {
+                    $response = Http::timeout(20)
+                        ->asForm()
+                        ->post('https://api.greenweb.com.bd/api.php', [
+                            'token' => $token,
+                            'to' => implode(',', $batch),
+                            'message' => $validated['message'],
+                        ]);
+                    $response->throw();
+
+                    $lines = preg_split('/\\r\\n|\\r|\\n/', trim((string) $response->body())) ?: [];
+                    if (count($lines) !== count($batch)) {
+                        $unknownResponse = true;
+                        continue;
+                    }
+
+                    foreach ($lines as $line) {
+                        if (str_starts_with(trim($line), 'Ok:')) {
+                            $sentCount++;
+                        } elseif (str_starts_with(trim($line), 'Error:')) {
+                            $failedCount++;
+                        } else {
+                            $unknownResponse = true;
+                        }
+                    }
+                } catch (\\Throwable) {
+                    // A timeout can happen after provider acceptance; never auto-retry and risk duplicate SMS.
+                    $unknownResponse = true;
+                }
             }
+
+            $status = $unknownResponse
+                ? 'delivery_unknown'
+                : ($sentCount === count($numbers)
+                    ? 'sent'
+                    : ($sentCount > 0 ? 'partially_sent' : 'failed'));
         }
 
         $campaign = SmsCampaign::query()->create([
@@ -116,9 +172,33 @@ class SmsController extends Controller
         $this->audit->log('sms.campaign_created', 'sms_campaign', (string) $campaign->id, [
             'audience' => $campaign->audience,
             'recipients' => $campaign->recipient_count,
+            'status' => $status,
         ]);
 
-        return back()->with('status', "SMS Campaign '{$campaign->title}' processed for {$campaign->recipient_count} recipient(s) [{$status}].");
+        $message = match ($status) {
+            'sent' => 'Greenweb accepted all SMS messages.',
+            'partially_sent' => 'Some SMS messages were accepted and some failed. Review the provider portal before retrying.',
+            'failed' => 'Greenweb rejected all SMS messages.',
+            'delivery_unknown' => 'Delivery could not be confirmed. Do not retry until you check the provider portal to avoid duplicate SMS.',
+            'provider_not_implemented' => "The selected provider '{$provider}' is not connected yet. No SMS was sent.",
+            'no_valid_recipients' => 'No valid Bangladesh mobile numbers were found. No SMS was sent.',
+            default => 'SMS was not sent because Greenweb credentials are not configured.',
+        };
+
+        return back()->with('status', $message);
+    }
+
+    private function normalizeBangladeshNumber(string $number): ?string
+    {
+        $digits = preg_replace('/\\D+/', '', $number) ?? '';
+        if (preg_match('/^01[3-9][0-9]{8}$/', $digits)) {
+            return '+88' . $digits;
+        }
+        if (preg_match('/^8801[3-9][0-9]{8}$/', $digits)) {
+            return '+' . $digits;
+        }
+
+        return null;
     }
 
     public function destroy(SmsCampaign $campaign): RedirectResponse
