@@ -64,7 +64,7 @@
     50% { transform: translate(18%, 12%); }
     100% { transform: translate(-8%, 18%); }
 }
-#aec-watermark-text { animation: aec-watermark-drift 19s ease-in-out infinite alternate; }
+#protected-watermark-text { animation: aec-watermark-drift 19s ease-in-out infinite alternate; }
 </style>
 <script>
 (() => {
