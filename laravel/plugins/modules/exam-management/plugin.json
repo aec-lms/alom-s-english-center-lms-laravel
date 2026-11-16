@@ -6,7 +6,7 @@
     "category": "academic",
     "description": "Exam schedules, question bank, online exam attempts with strict server-side grading, and results.",
     "core_compatibility": "^2.0",
-    "dependencies": ["course-management"],
+    "dependencies": [],
     "provider": "Plugins\\Modules\\ExamManagement\\Providers\\ExamManagementServiceProvider",
     "permissions": [
         {
@@ -18,5 +18,8 @@
             "name": "Attempt Online Exams"
         }
     ],
-    "settings_schema": []
+    "settings_schema": [],
+    "optional_dependencies": [
+        "course-management"
+    ]
 }
