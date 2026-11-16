@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Core\Plugins\PluginManager;
 use Illuminate\Support\Facades\DB;
 use Plugins\Modules\CourseManagement\Models\Course;
 use Plugins\Modules\NoticeBoard\Models\Notice;
@@ -129,4 +130,23 @@ class MobileAppSecurityTest extends TestCase
             ->getJson('/api/mobile/courses/' . $course->slug . '/lessons')
             ->assertForbidden();
     }
+
+    public function test_mobile_api_stops_serving_catalog_when_optional_plugins_are_disabled(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management', 'storefront-catalog', 'mobile-app-api']);
+
+        $plugins = app(PluginManager::class);
+        $plugins->disable('course-management');
+        $plugins->disable('storefront-catalog');
+
+        $this->getJson('/api/mobile/courses')->assertStatus(409);
+        $this->getJson('/api/mobile/home')
+            ->assertOk()
+            ->assertJsonCount(0, 'courses')
+            ->assertJsonCount(0, 'ebooks')
+            ->assertJsonCount(0, 'products')
+            ->assertJsonCount(0, 'digital_carousel');
+    }
+
 }
