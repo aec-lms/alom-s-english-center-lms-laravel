@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class CmsWebsiteSafetyTest extends TestCase
@@ -43,11 +43,10 @@ class CmsWebsiteSafetyTest extends TestCase
             'is_published' => '1',
         ])->assertSessionHasNoErrors();
 
-        $this->assertDatabaseHas('cms_posts', [
-            'title' => 'Safe CMS Article',
-            'thumbnail_path' => '/uploads/posts/article.webp',
-            'pdf_path' => 'https://cdn.example.test/guide.pdf',
-            'pdf_thumbnail' => '/uploads/posts/pdf-thumbs/guide.webp',
-        ]);
+        $post = DB::table('cms_posts')->where('title', 'Safe CMS Article')->first();
+        $this->assertNotNull($post);
+        $this->assertSame('/uploads/posts/article.webp', $post->thumbnail_path);
+        $this->assertSame('https://cdn.example.test/guide.pdf', $post->pdf_path);
+        $this->assertSame('/uploads/posts/pdf-thumbs/guide.webp', $post->pdf_thumbnail);
     }
 }
