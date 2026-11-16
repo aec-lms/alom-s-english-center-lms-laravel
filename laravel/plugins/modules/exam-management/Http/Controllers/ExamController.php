@@ -49,9 +49,13 @@ class ExamController extends Controller
         if ($actor && $actor->hasRole('branch_manager') && (int) $course->branch_id !== (int) $actor->branch_id) {
             abort(403, 'Course is outside your assigned branch.');
         }
-        $validated['branch_id'] = $actor && $actor->hasRole('branch_manager')
-            ? $actor->branch_id
-            : ($validated['branch_id'] ?? $course->branch_id);
+        $resolvedBranchId = $actor && $actor->hasRole('branch_manager')
+            ? (int) $actor->branch_id
+            : (isset($validated['branch_id']) ? (int) $validated['branch_id'] : ($course->branch_id !== null ? (int) $course->branch_id : null));
+        if ((int) ($course->branch_id ?? 0) !== (int) ($resolvedBranchId ?? 0)) {
+            abort(422, 'Exam and course must belong to the same branch.');
+        }
+        $validated['branch_id'] = $resolvedBranchId;
 
         $exam = Exam::query()->create([
             'course_id' => (int) $validated['course_id'],
