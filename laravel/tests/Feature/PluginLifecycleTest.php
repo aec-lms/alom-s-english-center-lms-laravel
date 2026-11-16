@@ -627,4 +627,40 @@ PHP;
         }
     }
 
+    public function test_plugin_delete_restore_and_permanent_delete_preserve_business_data_and_sibling_plugins(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'student-management']);
+
+        DB::table('branches')->insert([
+            'code' => 'RB-01',
+            'name' => 'Recycle Bin Preservation Branch',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $manager = app(PluginManager::class);
+        $metadata = $manager->deleteToRecycleBin('branch-management');
+
+        $this->assertDirectoryDoesNotExist(base_path('plugins/modules/branch-management'));
+        $this->assertFalse($manager->isInstalled('branch-management'));
+        $this->assertTrue($manager->isEnabled('student-management'));
+        $this->assertDatabaseHas('branches', ['code' => 'RB-01']);
+        $this->assertSame($metadata['archive'], $manager->recycledPlugins()[0]['archive']);
+
+        $restored = $manager->restoreFromRecycleBin($metadata['archive']);
+        $this->assertNotNull($restored);
+        $this->assertTrue($manager->isInstalled('branch-management'));
+        $this->assertTrue($manager->isEnabled('branch-management'));
+        $this->assertTrue($manager->isEnabled('student-management'));
+        $this->assertDatabaseHas('branches', ['code' => 'RB-01']);
+
+        $secondDelete = $manager->deleteToRecycleBin('branch-management');
+        $manager->permanentlyDeleteFromRecycleBin($secondDelete['archive']);
+        $this->assertSame([], $manager->recycledPlugins());
+        $this->assertDatabaseHas('branches', ['code' => 'RB-01']);
+        $this->assertTrue($manager->isEnabled('student-management'));
+    }
+
 }
