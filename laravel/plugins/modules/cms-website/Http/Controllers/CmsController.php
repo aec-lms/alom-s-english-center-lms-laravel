@@ -96,7 +96,7 @@ class CmsController extends Controller
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:200'],
             'slug' => ['nullable', 'alpha_dash', 'max:180', 'unique:cms_posts,slug'],
-            'category_id' => ['nullable', 'integer'],
+            'category_id' => ['nullable', 'integer', 'exists:cms_categories,id'],
             'category' => ['nullable', 'string', 'max:100'],
             'author' => ['nullable', 'string', 'max:120'],
             'excerpt' => ['nullable', 'string', 'max:500'],
@@ -104,11 +104,11 @@ class CmsController extends Controller
             'seo_title' => ['nullable', 'string', 'max:180'],
             'seo_description' => ['nullable', 'string', 'max:320'],
             'thumbnail' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
-            'thumbnail_url' => ['nullable', 'string', 'max:255'],
+            'thumbnail_url' => ['nullable', 'string', 'max:255', $this->safeUrlRule()],
             'pdf_file' => ['nullable', 'file', 'mimes:pdf', 'max:20480'],
-            'pdf_url' => ['nullable', 'string', 'max:255'],
+            'pdf_url' => ['nullable', 'string', 'max:255', $this->safeUrlRule()],
             'pdf_thumbnail' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
-            'pdf_thumbnail_url' => ['nullable', 'string', 'max:255'],
+            'pdf_thumbnail_url' => ['nullable', 'string', 'max:255', $this->safeUrlRule()],
             'is_published' => ['nullable', 'boolean'],
         ]);
 
@@ -171,11 +171,11 @@ class CmsController extends Controller
             'seo_title' => ['nullable', 'string', 'max:180'],
             'seo_description' => ['nullable', 'string', 'max:320'],
             'thumbnail' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
-            'thumbnail_url' => ['nullable', 'string', 'max:255'],
+            'thumbnail_url' => ['nullable', 'string', 'max:255', $this->safeUrlRule()],
             'pdf_file' => ['nullable', 'file', 'mimes:pdf', 'max:20480'],
-            'pdf_url' => ['nullable', 'string', 'max:255'],
+            'pdf_url' => ['nullable', 'string', 'max:255', $this->safeUrlRule()],
             'pdf_thumbnail' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
-            'pdf_thumbnail_url' => ['nullable', 'string', 'max:255'],
+            'pdf_thumbnail_url' => ['nullable', 'string', 'max:255', $this->safeUrlRule()],
             'is_published' => ['nullable', 'boolean'],
         ]);
 
@@ -248,10 +248,10 @@ class CmsController extends Controller
             'batches_subtitle' => ['required', 'string', 'max:180'],
             'batch_1_title' => ['nullable', 'string', 'max:140'],
             'batch_1_desc' => ['nullable', 'string', 'max:180'],
-            'batch_1_url' => ['nullable', 'string', 'max:255'],
+            'batch_1_url' => ['nullable', 'string', 'max:255', $this->safeUrlRule()],
             'batch_2_title' => ['nullable', 'string', 'max:140'],
             'batch_2_desc' => ['nullable', 'string', 'max:180'],
-            'batch_2_url' => ['nullable', 'string', 'max:255'],
+            'batch_2_url' => ['nullable', 'string', 'max:255', $this->safeUrlRule()],
             'stats_badge' => ['nullable', 'string', 'max:80'],
             'stats_title' => ['required', 'string', 'max:180'],
             'stats_subtitle' => ['required', 'string', 'max:180'],
@@ -270,16 +270,17 @@ class CmsController extends Controller
             'app_banner_eyebrow' => ['nullable', 'string', 'max:120'],
             'app_banner_title' => ['nullable', 'string', 'max:180'],
             'app_banner_subtitle' => ['nullable', 'string', 'max:360'],
-            'app_ios_url' => ['nullable', 'string', 'max:255'],
-            'app_android_url' => ['nullable', 'string', 'max:255'],
+            'app_ios_url' => ['nullable', 'string', 'max:255', $this->safeUrlRule()],
+            'app_android_url' => ['nullable', 'string', 'max:255', $this->safeUrlRule()],
             'footer_description' => ['nullable', 'string', 'max:500'],
             'footer_license_no' => ['nullable', 'string', 'max:120'],
             'footer_address' => ['nullable', 'string', 'max:255'],
             'footer_phone' => ['nullable', 'string', 'max:60'],
             'footer_email' => ['nullable', 'email', 'max:150'],
-            'footer_youtube_url' => ['nullable', 'string', 'max:255'],
-            'footer_facebook_url' => ['nullable', 'string', 'max:255'],
+            'footer_youtube_url' => ['nullable', 'string', 'max:255', $this->safeUrlRule()],
+            'footer_facebook_url' => ['nullable', 'string', 'max:255', $this->safeUrlRule()],
             'paths' => ['nullable', 'array'],
+            'paths.*.url' => ['nullable', 'string', 'max:255', $this->safeUrlRule()],
         ]);
 
         $defaults = $this->defaultHomepageConfig();
@@ -386,6 +387,27 @@ class CmsController extends Controller
         $file->move($dir, $filename);
 
         return '/uploads/' . $folder . '/' . $filename;
+    }
+
+
+    private function safeUrlRule(): \Closure
+    {
+        return static function (string $attribute, mixed $value, \Closure $fail): void {
+            if ($value === null || $value === '') {
+                return;
+            }
+
+            $url = (string) $value;
+            $relative = str_starts_with($url, '/') && !str_starts_with($url, '//');
+            $scheme = parse_url($url, PHP_URL_SCHEME);
+            $external = is_string($scheme)
+                && in_array(strtolower($scheme), ['http', 'https'], true)
+                && filter_var($url, FILTER_VALIDATE_URL);
+
+            if (!$relative && !$external) {
+                $fail('The URL must be a relative site path or an HTTP(S) URL.');
+            }
+        };
     }
 
     private function defaultHomepageConfig(): array
