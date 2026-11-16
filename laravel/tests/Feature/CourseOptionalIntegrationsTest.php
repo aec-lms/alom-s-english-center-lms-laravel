@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use Illuminate\Support\Facades\DB;
 use Plugins\Modules\CourseManagement\Models\Course;
 use Tests\TestCase;
 
@@ -12,7 +13,7 @@ class CourseOptionalIntegrationsTest extends TestCase
     public function test_course_enrollment_lists_work_without_fees_and_student_plugins(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['course-management']);
+        $this->activatePlugins(['course-management', 'fees-management']);
         $student = $this->createUserWithRole('student');
         $course = Course::query()->create([
             'code' => 'FREE-OPT-001',
@@ -33,6 +34,27 @@ class CourseOptionalIntegrationsTest extends TestCase
             'invoice_id' => null,
             'status' => 'active',
         ]);
+
+        $paidCourse = Course::query()->create([
+            'code' => 'PAID-OPT-001',
+            'title' => 'Paid Optional Integration Course',
+            'slug' => 'paid-optional-integration-course',
+            'description' => 'Paid course uses standalone payer invoice without a Student profile.',
+            'price' => 2400,
+            'status' => 'published',
+        ]);
+        $this->actingAs($student)->post('/courses/' . $paidCourse->id . '/enroll')
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $paidEnrollment = DB::table('enrollments')->where('course_id', $paidCourse->id)->first();
+        $this->assertNotNull($paidEnrollment);
+        $this->assertSame('pending', $paidEnrollment->status);
+        $invoice = DB::table('fee_invoices')->where('id', $paidEnrollment->invoice_id)->first();
+        $this->assertNotNull($invoice);
+        $this->assertNull($invoice->student_id);
+        $this->assertSame($student->name, $invoice->payer_name);
+        $this->assertSame($student->email, $invoice->payer_email);
 
         $this->actingAs($student)->get('/my-learning/enrollments')->assertOk();
     }
