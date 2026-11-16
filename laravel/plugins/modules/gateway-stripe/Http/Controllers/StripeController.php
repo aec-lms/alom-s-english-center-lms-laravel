@@ -36,12 +36,7 @@ class StripeController extends Controller
             'idempotency_key' => ['nullable', 'string', 'max:80'],
         ]);
         $invoice = FeeInvoice::query()->with('student.user')->findOrFail((int) $validated['invoice_id']);
-        $user = $request->user();
-        if ($user->hasRole('student')) {
-            abort_unless((int) $invoice->student?->user_id === (int) $user->id, 403);
-        } elseif ($user->hasRole('branch_manager')) {
-            abort_unless((int) $user->branch_id > 0 && (int) $invoice->branch_id === (int) $user->branch_id, 403);
-        }
+        $this->assertCanPayInvoice($request, $invoice);
         $result = $this->stripe->initiateTokenizedCheckout(
             $invoice,
             $validated['payment_token'],
@@ -63,4 +58,22 @@ class StripeController extends Controller
         $tx = $this->stripe->verifyAndSettleWebhook($request->getContent(), (string) $request->header('Stripe-Signature', ''));
         return response()->json(['gateway' => 'gateway-stripe', 'status' => $tx->status, 'transaction_ref' => $tx->transaction_ref]);
     }
-}
+
+    private function assertCanPayInvoice(Request $request, FeeInvoice $invoice): void
+    {
+        $user = $request->user();
+        abort_unless($user, 401);
+
+        $isFinanceOperator = $user->hasRole('admin')
+            || $user->hasRole('accountant')
+            || $user->hasPermission('payments.manage')
+            || $user->hasPermission('payments.stripe.manage');
+        $isInvoiceOwner = (int) ($invoice->student?->user_id ?? 0) === (int) $user->id;
+        $isAssignedBranchManager = $user->hasRole('branch_manager')
+            && (int) $user->branch_id > 0
+            && (int) $invoice->branch_id === (int) $user->branch_id;
+
+        abort_unless($isFinanceOperator || $isInvoiceOwner || $isAssignedBranchManager, 403,
+            'You are not authorized to pay this invoice.');
+    }
+}\n
