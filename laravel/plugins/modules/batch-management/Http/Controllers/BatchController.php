@@ -9,6 +9,7 @@ use App\Core\Plugins\PluginManager;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 use Plugins\Modules\BatchManagement\Models\StudyBatch;
@@ -90,7 +91,7 @@ class BatchController extends Controller
         ]);
 
         if ((int) $validated['max_capacity'] < (int) $batch->enrolled_count) {
-            abort(422, 'Batch capacity cannot be reduced below the current enrolled learner count.');
+            throw ValidationException::withMessages(['max_capacity' => 'Batch capacity cannot be reduced below the current enrolled learner count.']);
         }
         if (!$branchIntegration) {
             $validated['branch_id'] = null;
