@@ -72,15 +72,15 @@ class MobileApiController extends Controller
                 ->orderByDesc('is_carousel_featured')
                 ->orderByDesc('id')
                 ->limit(12)
-                ->get(['id', 'type', 'slug', 'title', 'category', 'badge', 'price', 'original_price', 'is_free', 'thumbnail_path', 'pdf_thumbnail_path', 'download_url'])
+                ->get(['id', 'type', 'slug', 'title', 'category', 'badge', 'price', 'original_price', 'is_free', 'pages', 'summary', 'thumbnail_path', 'pdf_thumbnail_path'])
             : collect();
 
         $ebooks = Schema::hasTable('storefront_items')
-            ? DB::table('storefront_items')->where('type', 'ebook')->where('is_active', true)->orderByDesc('id')->limit(12)->get()
+            ? DB::table('storefront_items')->where('type', 'ebook')->where('is_active', true)->orderByDesc('id')->limit(12)->get(['id', 'type', 'slug', 'title', 'category', 'badge', 'price', 'original_price', 'is_free', 'pages', 'summary', 'thumbnail_path', 'pdf_thumbnail_path'])
             : collect();
 
         $products = Schema::hasTable('storefront_items')
-            ? DB::table('storefront_items')->where('type', 'product')->where('is_active', true)->orderByDesc('id')->limit(12)->get()
+            ? DB::table('storefront_items')->where('type', 'product')->where('is_active', true)->orderByDesc('id')->limit(12)->get(['id', 'type', 'slug', 'title', 'category', 'badge', 'price', 'original_price', 'summary', 'thumbnail_path'])
             : collect();
 
         $visibleNoticeRoles = $actor ? $actor->roles()->pluck('slug')->all() : [];
@@ -281,7 +281,7 @@ class MobileApiController extends Controller
     public function ebooks(): JsonResponse
     {
         $items = Schema::hasTable('storefront_items')
-            ? DB::table('storefront_items')->where('type', 'ebook')->where('is_active', true)->orderByDesc('id')->get()
+            ? DB::table('storefront_items')->where('type', 'ebook')->where('is_active', true)->orderByDesc('id')->get(['id', 'type', 'slug', 'title', 'category', 'badge', 'price', 'original_price', 'is_free', 'pages', 'summary', 'thumbnail_path', 'pdf_thumbnail_path'])
             : collect();
 
         return response()->json(['data' => $items]);
@@ -290,7 +290,7 @@ class MobileApiController extends Controller
     public function products(): JsonResponse
     {
         $items = Schema::hasTable('storefront_items')
-            ? DB::table('storefront_items')->where('type', 'product')->where('is_active', true)->orderByDesc('id')->get()
+            ? DB::table('storefront_items')->where('type', 'product')->where('is_active', true)->orderByDesc('id')->get(['id', 'type', 'slug', 'title', 'category', 'badge', 'price', 'original_price', 'summary', 'thumbnail_path'])
             : collect();
 
         return response()->json(['data' => $items]);
