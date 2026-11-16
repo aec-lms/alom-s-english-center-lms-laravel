@@ -1,7 +1,7 @@
 {
     "slug": "email-notifications",
     "name": "Email Notifications",
-    "version": "2.0.0",
+    "version": "2.0.1",
     "author": "Alom's English Center",
     "category": "communications",
     "description": "Transactional & Academic Email Templates, Encrypted SMTP Gateway Settings, and Delivery Logs.",
