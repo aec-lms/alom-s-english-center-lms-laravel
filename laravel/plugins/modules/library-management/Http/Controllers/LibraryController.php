@@ -16,7 +16,6 @@ use Illuminate\View\View;
 use Plugins\Modules\LibraryManagement\Models\LibraryBook;
 use Plugins\Modules\LibraryManagement\Models\LibraryLoan;
 use RuntimeException;
-use Symfony\Component\HttpKernel\Exception\\HttpExceptionInterface;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 class LibraryController extends Controller
