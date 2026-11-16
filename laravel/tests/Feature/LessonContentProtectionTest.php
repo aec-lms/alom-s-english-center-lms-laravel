@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\URL;
 use Tests\TestCase;
 
 class LessonContentProtectionTest extends TestCase
