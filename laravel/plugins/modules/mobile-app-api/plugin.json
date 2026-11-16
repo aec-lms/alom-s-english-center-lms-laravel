@@ -14,5 +14,15 @@
             "name": "Access Mobile App REST API"
         }
     ],
-    "settings_schema": []
+    "settings_schema": [],
+    "optional_dependencies": [
+        "course-management",
+        "student-management",
+        "teacher-management",
+        "notice-board",
+        "storefront-catalog",
+        "exam-management",
+        "certificate-management",
+        "slider-builder"
+    ]
 }
