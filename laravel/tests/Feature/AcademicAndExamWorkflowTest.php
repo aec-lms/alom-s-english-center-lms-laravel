@@ -115,7 +115,7 @@ class AcademicAndExamWorkflowTest extends TestCase
     public function test_attendance_rejects_student_and_batch_from_different_branches(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['branch-management', 'student-management', 'course-management', 'attendance-management']);
+        $this->activatePlugins(['branch-management', 'student-management', 'course-management', 'batch-management', 'attendance-management']);
 
         $branchA = DB::table('branches')->insertGetId(['code' => 'ATT-A', 'name' => 'Attendance A', 'created_at' => now(), 'updated_at' => now()]);
         $branchB = DB::table('branches')->insertGetId(['code' => 'ATT-B', 'name' => 'Attendance B', 'created_at' => now(), 'updated_at' => now()]);
@@ -141,11 +141,15 @@ class AcademicAndExamWorkflowTest extends TestCase
             'status' => 'published',
             'branch_id' => $branchB,
         ]);
-        $batchId = DB::table('batches')->insertGetId([
-            'course_id' => $course->id,
+        $batchId = DB::table('study_batches')->insertGetId([
             'branch_id' => $branchB,
+            'course_title' => $course->title,
+            'batch_code' => 'ATT-BATCH-B',
             'name' => 'Branch B Batch',
-            'capacity' => 20,
+            'schedule' => 'Sun-Tue 10:00',
+            'max_capacity' => 20,
+            'enrolled_count' => 0,
+            'status' => 'ongoing',
             'created_at' => now(),
             'updated_at' => now(),
         ]);
