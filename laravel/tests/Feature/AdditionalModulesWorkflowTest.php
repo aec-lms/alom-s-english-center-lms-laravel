@@ -233,7 +233,7 @@ class AdditionalModulesWorkflowTest extends TestCase
             'branch_id' => $branchA,
             'relationship' => 'parent',
             'student_id' => $student->id,
-        ])->assertSessionHasErrors();
+        ])->assertStatus(422);
     }
 
 }
