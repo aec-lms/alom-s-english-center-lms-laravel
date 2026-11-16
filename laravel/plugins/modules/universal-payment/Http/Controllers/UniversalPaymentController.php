@@ -105,6 +105,10 @@ class UniversalPaymentController extends Controller
             'status' => ['required', 'in:verified,rejected'],
         ]);
 
+        if ($transaction->status !== 'pending') {
+            abort(422, 'Only pending manual receipts can be reviewed.');
+        }
+
         if ($validated['status'] === 'verified') {
             if ($transaction->gateway !== 'bank_cash') {
                 abort(422, 'Online gateway transactions must be verified by the provider webhook.');
