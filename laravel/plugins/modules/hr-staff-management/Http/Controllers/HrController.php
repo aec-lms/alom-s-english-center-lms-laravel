@@ -20,6 +20,7 @@ class HrController extends Controller
     public function index(Request $request): View
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $staff = Schema::hasTable('staff_profiles')
             ? StaffProfile::query()
                 ->when($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null, fn ($q) => $q->where('branch_id', $actor->branch_id))
@@ -42,6 +43,7 @@ class HrController extends Controller
     public function storeStaff(Request $request): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $validated = $request->validate([
             'employee_code' => ['required', 'string', 'max:40', 'unique:staff_profiles,employee_code'],
             'full_name' => ['required', 'string', 'max:160'],
@@ -71,6 +73,7 @@ class HrController extends Controller
     public function recordPayroll(Request $request): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $validated = $request->validate([
             'staff_profile_id' => ['required', 'integer', 'exists:staff_profiles,id'],
             'payroll_month' => ['required', 'string', 'max:16'],
@@ -103,5 +106,12 @@ class HrController extends Controller
         $this->audit->log('hr.payroll_recorded', 'staff_payroll', (string) $payroll->id, ['net_paid' => $netPaid]);
 
         return back()->with('status', "Payroll disbursed for {$member->full_name} ({$validated['payroll_month']}).");
+    }
+
+    private function ensureAssignedBranch($actor): void
+    {
+        if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id === null) {
+            abort(403, 'Branch manager must be assigned to a branch.');
+        }
     }
 }
