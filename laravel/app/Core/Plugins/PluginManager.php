@@ -469,6 +469,7 @@ class PluginManager
             throw new RuntimeException('Core or mismatched plugin packages cannot be deleted.');
         }
 
+        $packageChecksums = $this->pluginDirectoryChecksums($source);
         $record = PluginRecord::query()->where('slug', $slug)->first();
         $wasInstalled = (bool) ($record?->is_installed);
         $wasEnabled = (bool) ($record?->is_enabled);
@@ -506,9 +507,25 @@ class PluginManager
             'was_installed' => $wasInstalled,
             'was_enabled' => $wasEnabled,
             'deleted_at' => now()->toIso8601String(),
-            'files_sha256' => $this->pluginDirectoryChecksums($destination),
+            'files_sha256' => $packageChecksums,
         ];
-        File::put($trashRoot . DIRECTORY_SEPARATOR . $archiveName . '.json', json_encode($metadata, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
+        $metadataPath = $trashRoot . DIRECTORY_SEPARATOR . $archiveName . '.json';
+        $written = File::put($metadataPath, json_encode($metadata, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
+        if ($written === false) {
+            File::moveDirectory($destination, $source);
+            if ($wasInstalled) {
+                try {
+                    $this->install($slug, $actorId);
+                    if (!$wasEnabled) {
+                        $this->disable($slug, $actorId);
+                    }
+                } catch (Throwable) {
+                    PluginRecord::query()->where('slug', $slug)->update(['is_installed' => false, 'is_enabled' => false]);
+                }
+            }
+            throw new RuntimeException('Plugin recycle-bin metadata could not be written; the package was returned to its original location.');
+        }
+        @chmod($metadataPath, 0600);
         $this->audit->log('plugin.deleted_to_recycle_bin', 'plugin', $slug, [
             'archive' => $archiveName,
             'business_data_preserved' => true,
@@ -640,6 +657,7 @@ class PluginManager
         @chmod($backupRoot, 0700);
         $backupPath = $backupRoot . DIRECTORY_SEPARATOR . $archiveName;
         if (!File::copyDirectory($source, $backupPath)) {
+            File::deleteDirectory($backupPath);
             throw new RuntimeException('Permanent delete cancelled: could not create a private backup.');
         }
         @chmod($backupPath, 0700);
@@ -648,7 +666,9 @@ class PluginManager
             throw new RuntimeException('Permanent delete cancelled: backup integrity verification failed.');
         }
 
-        File::deleteDirectory($source);
+        if (!File::deleteDirectory($source)) {
+            throw new RuntimeException('Private backup was created, but the recycle-bin package could not be removed.');
+        }
         @unlink($metadataPath);
         $this->audit->log('plugin.permanently_deleted', 'plugin', $slug, [
             'package_files_removed_from_recycle_bin' => true,
