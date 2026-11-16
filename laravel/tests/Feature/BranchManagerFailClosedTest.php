@@ -59,7 +59,7 @@ class BranchManagerFailClosedTest extends TestCase
     public function test_unassigned_branch_manager_is_denied_admission_and_certificate_workflows(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['student-management', 'admission-management', 'certificate-management']);
+        $this->activatePlugins(['branch-management', 'student-management', 'admission-management', 'certificate-management']);
 
         $manager = $this->createUserWithRole('branch_manager');
         $permissions = DB::table('permissions')
