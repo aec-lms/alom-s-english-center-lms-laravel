@@ -97,6 +97,17 @@ class FinanceAndPaymentGatewayTest extends TestCase
 
         $admin = $this->createUserWithRole('admin');
 
+        // Offline receipts must not create a dangling initiated transaction when the amount exceeds the invoice.
+        $this->actingAs($admin)->post('/admin/payments/offline', [
+            'invoice_id' => $invoice->id,
+            'amount' => 2501,
+            'receipt_note' => 'Overpayment test',
+        ])->assertStatus(422);
+        $this->assertDatabaseMissing('payment_transactions', [
+            'invoice_id' => $invoice->id,
+            'gateway_slug' => 'offline',
+        ]);
+
         // Raw PAN/CVV must be rejected with 422 on both gateways
         $this->actingAs($admin)->postJson('/payments/card/checkout', [
             'invoice_id' => $invoice->id,
