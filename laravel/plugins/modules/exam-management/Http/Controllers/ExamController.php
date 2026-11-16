@@ -63,10 +63,12 @@ class ExamController extends Controller
         $courseId = $courseIntegration && !empty($validated['course_id']) && (int) $validated['course_id'] > 0
             ? (int) $validated['course_id']
             : null;
-        $branchId = $branchIntegration && isset($validated['branch_id'])
-            ? (int) $validated['branch_id']
-            : null;
         $course = $courseId !== null ? DB::table('courses')->where('id', $courseId)->first() : null;
+        $branchId = $branchIntegration
+            ? (isset($validated['branch_id'])
+                ? (int) $validated['branch_id']
+                : ($course && $course->branch_id !== null ? (int) $course->branch_id : null))
+            : null;
 
         if ($courseId !== null && !$course) {
             abort(422, 'Selected course does not exist.');
