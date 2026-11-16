@@ -646,9 +646,12 @@ class PluginManager
         }
         $metadata = json_decode(File::get($metadataPath), true, 512, JSON_THROW_ON_ERROR);
         $slug = (string) ($metadata['slug'] ?? '');
+        $sourceChecksums = $this->pluginDirectoryChecksums($source);
         if (($metadata['archive'] ?? null) !== $archiveName
-            || preg_match('/^[a-z0-9][a-z0-9-]{1,79}$/', $slug) !== 1) {
-            throw new RuntimeException('Recycle-bin metadata is invalid.');
+            || preg_match('/^[a-z0-9][a-z0-9-]{1,79}$/', $slug) !== 1
+            || !is_array($metadata['files_sha256'] ?? null)
+            || $metadata['files_sha256'] !== $sourceChecksums) {
+            throw new RuntimeException('Recycle-bin metadata or package integrity is invalid; permanent deletion was cancelled.');
         }
 
         // Keep a private, integrity-checked recovery snapshot before permanent removal.
