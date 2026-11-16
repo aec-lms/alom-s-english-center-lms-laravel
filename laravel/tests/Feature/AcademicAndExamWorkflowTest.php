@@ -115,7 +115,7 @@ class AcademicAndExamWorkflowTest extends TestCase
     public function test_attendance_rejects_student_and_batch_from_different_branches(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['branch-management', 'student-management', 'course-management', 'batch-management', 'attendance-management']);
+        $this->activatePlugins(['branch-management', 'student-management', 'course-management', 'batch-management', 'guardian-management', 'mobile-app-api', 'attendance-management']);
 
         $branchA = DB::table('branches')->insertGetId(['code' => 'ATT-A', 'name' => 'Attendance A', 'created_at' => now(), 'updated_at' => now()]);
         $branchB = DB::table('branches')->insertGetId(['code' => 'ATT-B', 'name' => 'Attendance B', 'created_at' => now(), 'updated_at' => now()]);
