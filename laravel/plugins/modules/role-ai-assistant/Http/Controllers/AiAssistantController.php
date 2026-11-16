@@ -18,7 +18,7 @@ class AiAssistantController extends Controller
     public function index(Request $request): View
     {
         $actor = $request->user();
-        $canViewAll = $actor && ($actor->hasRole('admin') || $actor->hasPermissionTo('ai.assistant.configure'));
+        $canViewAll = $actor && ($actor->hasRole('admin') || $actor->hasPermission('ai.assistant.configure'));
         $logs = AiAssistantLog::query()
             ->when(!$canViewAll, fn ($query) => $query->where('user_id', $actor?->id))
             ->latest()
