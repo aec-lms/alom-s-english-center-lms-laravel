@@ -10,11 +10,37 @@ use App\Models\User;
 use Database\Seeders\CoreRolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 abstract class TestCase extends BaseTestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase {
+        refreshTestDatabase as protected refreshTestDatabaseWithTransactions;
+        beginDatabaseTransaction as protected beginDatabaseTransactionWithTransactions;
+    }
+
+    protected function refreshTestDatabase(): void
+    {
+        if (DB::getDriverName() === 'mysql') {
+            // MySQL DDL implicitly commits. Re-fresh each test instead of wrapping
+            // runtime plugin migrations in a transaction/savepoint.
+            $this->artisan('migrate:fresh', $this->migrateFreshUsing());
+
+            return;
+        }
+
+        $this->refreshTestDatabaseWithTransactions();
+    }
+
+    protected function beginDatabaseTransaction(): void
+    {
+        if (DB::getDriverName() === 'mysql') {
+            return;
+        }
+
+        $this->beginDatabaseTransactionWithTransactions();
+    }
 
     protected string $tempLockPath;
 
