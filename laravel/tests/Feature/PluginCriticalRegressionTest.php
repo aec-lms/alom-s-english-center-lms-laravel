@@ -180,4 +180,20 @@ class PluginCriticalRegressionTest extends TestCase
         ])->assertSessionHasErrors('cta_url');
     }
 
+    public function test_universal_payment_manual_records_cannot_self_verify_or_refund_and_are_branch_scoped(): void
+    {
+        $controller = file_get_contents(base_path('plugins/modules/universal-payment/Http/Controllers/UniversalPaymentController.php'));
+        $migration = file_get_contents(base_path('plugins/modules/universal-payment/Database/Migrations/2026_11_16_000001_add_branch_id_to_universal_payment_transactions.php'));
+
+        $this->assertIsString($controller);
+        $this->assertIsString($migration);
+        $this->assertStringContainsString("'status' => 'pending'", $controller);
+        $this->assertStringContainsString("'in:verified,rejected'", $controller);
+        $this->assertStringContainsString("Only pending transactions can be reviewed.", $controller);
+        $this->assertStringContainsString("verified provider callbacks", $controller);
+        $this->assertStringContainsString("where('branch_id', $user->branch_id ?? 0)", $controller);
+        $this->assertStringContainsString("branch_id", $migration);
+        $this->assertStringNotContainsString("'in:pending,verified,refunded'", $controller);
+    }
+
 }
