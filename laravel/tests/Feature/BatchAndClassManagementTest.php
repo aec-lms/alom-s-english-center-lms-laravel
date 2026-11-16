@@ -42,7 +42,7 @@ class BatchAndClassManagementTest extends TestCase
             'schedule' => 'Mon-Wed 11:00',
             'max_capacity' => 2,
             'status' => 'ongoing',
-        ])->assertStatus(422);
+        ])->assertSessionHasErrors('max_capacity');
 
         $this->actingAs($admin)->post('/admin/classes', [
             'code' => 'CLASS-OLD',
