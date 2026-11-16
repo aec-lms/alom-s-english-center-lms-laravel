@@ -102,12 +102,12 @@ class RecycleBinTest extends TestCase
             'end_time' => '11:00',
         ]);
 
-        $course->delete();
-        $category->delete();
-        $liveClass->delete();
-        $exam->delete();
-        $batch->delete();
-        $academicClass->delete();
+        $this->actingAs($admin)->delete('/admin/courses/' . $course->id)->assertRedirect();
+        $this->actingAs($admin)->delete('/admin/courses/categories/' . $category->id)->assertRedirect();
+        $this->actingAs($admin)->delete('/admin/courses/live-classes/' . $liveClass->id)->assertRedirect();
+        $this->actingAs($admin)->delete('/admin/exams/' . $exam->id)->assertRedirect();
+        $this->actingAs($admin)->delete('/admin/batches/' . $batch->id)->assertRedirect();
+        $this->actingAs($admin)->delete('/admin/classes/' . $academicClass->id)->assertRedirect();
 
         $this->assertTrue(Course::withTrashed()->findOrFail($course->id)->trashed());
         $this->assertTrue(CourseCategory::withTrashed()->findOrFail($category->id)->trashed());
