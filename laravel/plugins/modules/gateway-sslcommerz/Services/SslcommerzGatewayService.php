@@ -253,10 +253,10 @@ class SslcommerzGatewayService
             ->where('gateway_slug', 'gateway-sslcommerz')
             ->firstOrFail();
 
-        if ($tx->status !== 'settled') {
-            $tx->update(['status' => $status]);
-        }
-
-        return $tx->fresh();
+        // Browser return URLs are not authenticated by SSLCOMMERZ. A caller can
+        // forge failed/cancelled callbacks for a known transaction reference, so
+        // these callbacks must never mutate payment state. Only a verified IPN
+        // or validation-server response may settle a transaction.
+        return $tx;
     }
 }
