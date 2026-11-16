@@ -326,6 +326,13 @@ class AttendanceController extends Controller
             'qr_session_id' => $session->id, 'latitude' => $data['latitude'], 'longitude' => $data['longitude'],
             'location_accuracy' => $data['location_accuracy'] ?? null, 'location_captured_at' => now(),
         ]);
+        DB::table('attendance_record_history')->insert([
+            'attendance_record_id' => $record->id, 'actor_id' => $request->user()->id,
+            'action' => $record->wasRecentlyCreated ? 'qr_created' : 'duplicate_ignored',
+            'new_status' => $record->status,
+            'metadata' => json_encode(['qr_session_id' => $session->id]),
+            'created_at' => now(),
+        ]);
         return response()->json(['status' => $record->wasRecentlyCreated ? 'synced' : 'duplicate', 'record_id' => $record->id]);
     }
 
