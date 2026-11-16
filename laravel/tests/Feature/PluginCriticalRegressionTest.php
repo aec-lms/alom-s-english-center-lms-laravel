@@ -219,7 +219,7 @@ class PluginCriticalRegressionTest extends TestCase
         $this->assertIsString($migration);
         $this->assertIsString($controller);
         $this->assertStringContainsString('implements ShouldQueue', $job);
-        $this->assertStringContainsString('Mail::raw', $job);
+        $this->assertStringContainsString('Mail::mailer(\'smtp\')->raw', $job);
         $this->assertStringContainsString("'status' => 'sent'", $job);
         $this->assertStringContainsString('No verified delivery adapter is configured for this channel.', $job);
         $this->assertStringContainsString('DeliverNotificationJob::dispatch', $controller);
