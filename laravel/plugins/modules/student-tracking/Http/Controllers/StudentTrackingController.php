@@ -52,6 +52,7 @@ class StudentTrackingController extends Controller
 
     public function record(Request $request, StudentActivityTracker $tracker): JsonResponse
     {
+        abort_unless($request->user()->hasRole('student'), 403, 'Only student accounts can submit their own learning activity.');
         $validated = $request->validate([
             'event_type' => ['required', 'string', 'in:' . implode(',', StudentActivityTracker::EVENT_TYPES)],
             'subject_type' => ['nullable', 'string', 'max:60'],
