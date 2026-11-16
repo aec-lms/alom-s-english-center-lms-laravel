@@ -94,6 +94,16 @@ abstract class TestCase extends BaseTestCase
         foreach ($slugs as $slug) {
             $manager->install($slug);
             $manager->enable($slug);
+
+            // Plugins enabled during a test are activated after the application has
+            // booted. Ensure their route files are present in this test's route
+            // collection, just as they are on the next normal HTTP request.
+            foreach (['web.php', 'api.php'] as $routeFile) {
+                $path = base_path('plugins/modules/' . $slug . '/Routes/' . $routeFile);
+                if (is_file($path)) {
+                    require_once $path;
+                }
+            }
         }
     }
 }
