@@ -15,7 +15,7 @@ module.exports = defineConfig({
     video: 'retain-on-failure',
   },
   webServer: {
-    cwd: '../..',
+    cwd: process.env.GITHUB_WORKSPACE ? `${process.env.GITHUB_WORKSPACE}/laravel` : process.cwd(),
     command: 'php artisan serve --host=127.0.0.1 --port=8000',
     url: 'http://127.0.0.1:8000/login',
     reuseExistingServer: !process.env.CI,
