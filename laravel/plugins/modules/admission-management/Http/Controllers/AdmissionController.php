@@ -40,7 +40,7 @@ class AdmissionController extends Controller
             'desired_course' => ['required', 'string', 'max:160'],
             'preferred_batch' => ['nullable', 'string', 'max:80'],
             'previous_education' => ['nullable', 'string', 'max:160'],
-            'branch_id' => ['nullable', 'integer'],
+            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
         ]);
 
         $app = AdmissionApplication::query()->create($validated + [
