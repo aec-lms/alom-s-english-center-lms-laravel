@@ -96,4 +96,16 @@ class AuthAndRbacTest extends TestCase
             ->post('/reset-password', $payload)
             ->assertSessionHasErrors('email');
     }
+    public function test_student_lands_on_student_portal_and_unassigned_branch_manager_is_blocked(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management']);
+
+        $student = $this->createUserWithRole('student', null, 'portal.student@aec.test');
+        $this->actingAs($student)->get('/dashboard')->assertOk()->assertSee('Student Portal');
+
+        $unassignedManager = $this->createUserWithRole('branch_manager');
+        $this->actingAs($unassignedManager)->get('/dashboard')->assertForbidden();
+    }
+
 }
