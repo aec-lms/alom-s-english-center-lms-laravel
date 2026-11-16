@@ -69,7 +69,8 @@
 
         <form method="POST" action="{{ route('plugins.universal_payment.store') }}" class="bg-white rounded-2xl border border-slate-200 p-6 space-y-4 text-xs">
             @csrf
-            <h2 class="text-sm font-bold text-slate-900">2. Record / Collect Payment</h2>
+            <h2 class="text-sm font-bold text-slate-900">2. Record Offline Bank / Cash Payment</h2>
+            <p class="text-[11px] text-slate-500">Offline entries start as Pending. Add a receipt or voucher reference before confirming payment. Online checkout uses the dedicated provider plugins.</p>
             <div class="grid grid-cols-2 gap-3">
                 <div>
                     <label class="font-semibold text-slate-700 block mb-1">Student / Payer Name *</label>
@@ -86,9 +87,7 @@
                 <div>
                     <label class="font-semibold text-slate-700 block mb-1">Gateway *</label>
                     <select name="gateway" class="w-full rounded-xl border border-slate-300 px-3 py-2 bg-white">
-                        @foreach ($allGateways as $gKey => $gLabel)
-                            <option value="{{ $gKey }}">{{ $gLabel }}</option>
-                        @endforeach
+                        <option value="bank_cash">Bank Transfer &amp; Cash Desk</option>
                     </select>
                 </div>
                 <div>
@@ -99,13 +98,7 @@
                     <label class="font-semibold text-slate-700 block mb-1">External TrxID (Optional)</label>
                     <input name="external_trx_id" class="w-full rounded-xl border border-slate-300 px-3 py-2 font-mono">
                 </div>
-                <div>
-                    <label class="font-semibold text-slate-700 block mb-1">Initial Status</label>
-                    <select name="status" class="w-full rounded-xl border border-slate-300 px-3 py-2 bg-white">
-                        <option value="verified">Verified / Paid</option>
-                        <option value="pending">Pending Verification</option>
-                    </select>
-                </div>
+
             </div>
             <button class="px-5 py-2.5 rounded-xl bg-[#0057FF] hover:bg-blue-700 text-white font-bold">Record Payment</button>
         </form>
