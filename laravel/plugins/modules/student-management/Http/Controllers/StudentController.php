@@ -39,12 +39,15 @@ class StudentController extends Controller
     {
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
+        $branchRule = Schema::hasTable('branches')
+            ? ['nullable', 'integer', 'exists:branches,id']
+            : ['nullable', 'integer'];
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:120'],
             'email' => ['required', 'email', 'unique:users,email'],
             'phone' => ['nullable', 'string', 'max:32'],
             'password' => ['required', 'string', 'min:8'],
-            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
+            'branch_id' => $branchRule,
             'student_code' => ['nullable', 'string', 'max:40', 'unique:students,student_code'],
             'status' => ['nullable', 'in:active,inactive,graduated'],
         ]);
@@ -94,11 +97,14 @@ class StudentController extends Controller
             abort(403, 'Branch isolation violation.');
         }
 
+        $branchRule = Schema::hasTable('branches')
+            ? ['nullable', 'integer', 'exists:branches,id']
+            : ['nullable', 'integer'];
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:120'],
             'email' => ['required', 'email', 'unique:users,email,' . $student->user_id],
             'phone' => ['nullable', 'string', 'max:32'],
-            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
+            'branch_id' => $branchRule,
             'student_code' => ['required', 'string', 'max:40', 'unique:students,student_code,' . $student->id],
             'status' => ['required', 'in:active,inactive,graduated'],
             'password' => ['nullable', 'string', 'min:8'],
