@@ -7,6 +7,9 @@ namespace App\Http\Controllers\Admin;
 use App\Core\Plugins\PluginManager;
 use App\Http\Controllers\Controller;
 use App\Models\PluginRecord;
+use Plugins\Modules\GatewayStripe\Services\StripeGatewayService;
+use Plugins\Modules\GatewayPaypal\Services\PaypalGatewayService;
+use Plugins\Modules\GatewaySslcommerz\Services\SslcommerzGatewayService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -119,6 +122,25 @@ class PluginCenterController extends Controller
         }
 
         return view('admin.plugins.configure', compact('manifest', 'record', 'values'));
+    }
+
+
+    public function testConnection(string $slug): RedirectResponse
+    {
+        try {
+            $result = match ($slug) {
+                'gateway-stripe' => app(StripeGatewayService::class)->testCredentials(),
+                'gateway-paypal' => app(PaypalGatewayService::class)->testCredentials(),
+                'gateway-sslcommerz' => app(SslcommerzGatewayService::class)->testCredentials(),
+                'gateway-card' => throw new \\RuntimeException('Visa/Mastercard is a card network, not a processor. Connect an acquiring bank/PSP adapter or use the Stripe plugin for Visa/Mastercard processing.'),
+                default => throw new \\RuntimeException('This plugin does not provide an automated payment credential test.'),
+            };
+
+            $mode = isset($result['mode']) ? ' (' . $result['mode'] . ')' : '';
+            return back()->with('status', strtoupper(str_replace('gateway-', '', $slug)) . ' connection verified' . $mode . '.');
+        } catch (\\Throwable $e) {
+            return back()->withErrors(['gateway_connection' => $e->getMessage()]);
+        }
     }
 
     public function saveConfiguration(Request $request, string $slug): RedirectResponse
