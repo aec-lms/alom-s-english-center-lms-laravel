@@ -14,7 +14,13 @@ class HealthMonitorTest extends TestCase
         $this->assertSame([], $report['recoveries']);
         $this->assertSame($report, Cache::get('aec:health:last-report'));
     }
-    public function test_scheduled_backup_command_creates_an_encrypted_database_backup(): void\n    {\n        $this->markSystemInstalled();\n        $this->artisan('lms:backup-create', ['--without-files' => true])->assertExitCode(0);\n        $this->assertDatabaseHas('backups', ['is_encrypted' => true, 'includes_files' => false]);\n    }\n    public function test_health_report_does_not_expose_sql_or_secret_values(): void
+    public function test_scheduled_backup_command_creates_an_encrypted_database_backup(): void
+    {
+        $this->markSystemInstalled();
+        $this->artisan('lms:backup-create', ['--without-files' => true])->assertExitCode(0);
+        $this->assertDatabaseHas('backups', ['is_encrypted' => true, 'includes_files' => false]);
+    }
+    public function test_health_report_does_not_expose_sql_or_secret_values(): void
     {
         $this->markSystemInstalled();
         $encoded = json_encode(app(HealthMonitorService::class)->report(false));
