@@ -79,7 +79,8 @@ class MediaLibraryAndDigitalEbookTest extends TestCase
         $this->actingAs($student)->get('/ebooks/protected-guide/download')->assertForbidden();
 
         $validationCalls = 0;
-        Http::fake(function ($request) use (&$validationCalls) {
+        $expectedReference = '';
+        Http::fake(function ($request) use (&$validationCalls, &$expectedReference) {
             if (str_contains($request->url(), '/gwprocess/v4/api.php')) {
                 return Http::response([
                     'status' => 'SUCCESS',
@@ -95,7 +96,7 @@ class MediaLibraryAndDigitalEbookTest extends TestCase
             if ($validationCalls === 1) {
                 return Http::response([
                     'status' => 'FAILED',
-                    'tran_id' => (string) ($query['tran_id'] ?? ''),
+                    'tran_id' => $expectedReference,
                     'amount' => '1.00',
                     'currency' => 'BDT',
                 ]);
@@ -121,6 +122,7 @@ class MediaLibraryAndDigitalEbookTest extends TestCase
         ])->assertRedirect('https://sandbox.sslcommerz.com/gwprocess/v4/gateway.php?Q=test');
 
         $transaction = UniversalPaymentTransaction::query()->where('user_id', $student->id)->firstOrFail();
+        $expectedReference = $transaction->reference;
         $this->assertSame(450.0, (float) $transaction->amount);
         $this->assertSame($itemId, (int) $transaction->storefront_item_id);
         $this->actingAs($student)->get('/ebooks/protected-guide/download')->assertForbidden();
