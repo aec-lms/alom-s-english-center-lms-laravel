@@ -74,6 +74,26 @@ class FinanceAndPaymentGatewayTest extends TestCase
             'status' => 'unpaid',
         ]);
 
+        $otherStudentUser = $this->createUserWithRole('student', $branchId, 'other-student@aec.test');
+        $otherStudent = Student::query()->create([
+            'user_id' => $otherStudentUser->id,
+            'branch_id' => $branchId,
+            'student_code' => 'STU-102',
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+        ]);
+        $otherInvoice = FeeInvoice::query()->create([
+            'invoice_number' => 'INV-SSL-OTHER',
+            'student_id' => $otherStudent->id,
+            'branch_id' => $branchId,
+            'subtotal_amount' => 800,
+            'discount_amount' => 0,
+            'net_amount' => 800,
+            'paid_amount' => 0,
+            'currency' => 'BDT',
+            'status' => 'unpaid',
+        ]);
+
         $admin = $this->createUserWithRole('admin');
 
         // Raw PAN/CVV must be rejected with 422 on both gateways
@@ -87,6 +107,11 @@ class FinanceAndPaymentGatewayTest extends TestCase
             'invoice_id' => $invoice->id,
             'pan' => '4111111111111111',
         ])->assertStatus(422);
+
+        // A student may pay their own invoice, but cannot initiate checkout for another student's invoice.
+        $this->actingAs($studentUser)->postJson('/payments/sslcommerz/initiate', [
+            'invoice_id' => $otherInvoice->id,
+        ])->assertForbidden();
 
         // SSLCOMMERZ must create a server-side session and validate the IPN with the official validation API.
         $sslTransactionRef = '';
@@ -112,7 +137,7 @@ class FinanceAndPaymentGatewayTest extends TestCase
             ], 200);
         });
 
-        $sslSession = $this->actingAs($admin)->postJson('/payments/sslcommerz/initiate', [
+        $sslSession = $this->actingAs($studentUser)->postJson('/payments/sslcommerz/initiate', [
             'invoice_id' => $sslInvoice->id,
         ])->assertOk()->json();
 
