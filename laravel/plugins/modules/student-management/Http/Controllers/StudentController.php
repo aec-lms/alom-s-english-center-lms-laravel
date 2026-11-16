@@ -169,7 +169,7 @@ class StudentController extends Controller
         if ($actor->branch_id === null) {
             abort(403, 'Branch manager must be assigned to a branch.');
         }
-        $activeBranch = \\Illuminate\\Support\\Facades\\DB::table('branches')
+        $activeBranch = \Illuminate\Support\Facades\DB::table('branches')
             ->where('id', $actor->branch_id)
             ->where('is_active', true)
             ->exists();
