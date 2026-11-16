@@ -34,6 +34,7 @@ class UniversalPaymentController extends Controller
         $config = [
             'default_currency' => $this->plugins->getSetting('universal-payment', 'default_currency', 'BDT'),
             'enabled_gateways' => array_filter(array_map('trim', explode(',', (string) $enabledRaw))),
+            'allow_offline_payments' => $this->plugins->getSetting('universal-payment', 'allow_offline_payments', '1') === '1',
         ];
         $transactions = Schema::hasTable('universal_payment_transactions')
             ? UniversalPaymentTransaction::query()
