@@ -237,8 +237,18 @@ class ExamController extends Controller
 
     private function ensureAssignedBranch($actor): void
     {
-        if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id === null) {
+        if (!$actor || !$actor->hasRole('branch_manager')) {
+            return;
+        }
+        if ($actor->branch_id === null) {
             abort(403, 'Branch manager must be assigned to a branch.');
+        }
+        $activeBranch = app('db')->table('branches')
+            ->where('id', $actor->branch_id)
+            ->where('is_active', true)
+            ->exists();
+        if (!$activeBranch) {
+            abort(403, 'Branch manager access is disabled because the assigned branch is inactive.');
         }
     }
 }
