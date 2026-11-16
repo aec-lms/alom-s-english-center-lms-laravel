@@ -5,7 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Route;
 use Plugins\Modules\AdmissionManagement\Http\Controllers\AdmissionController;
 
-Route::middleware(['web', 'installed', 'plugin:admission-management'])
+Route::middleware(['web', 'installed', 'plugin:admission-management', 'throttle:5,1'])
     ->post('/admission/apply', [AdmissionController::class, 'applyPublic'])
     ->name('plugins.admissions.public_apply');
 
