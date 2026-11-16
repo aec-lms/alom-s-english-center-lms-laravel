@@ -81,6 +81,9 @@
             @if ($pluginManager->isEnabled('course-management') && Route::has('plugins.courses.index'))
                 <a href="{{ route('plugins.courses.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Courses</a>
             @endif
+            @if ($pluginManager->isEnabled('course-management') && Route::has('plugins.enrollments.index'))
+                <a href="{{ route('plugins.enrollments.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Course Enrollments</a>
+            @endif
             @if ($pluginManager->isEnabled('class-management') && Route::has('plugins.classes.index'))
                 <a href="{{ route('plugins.classes.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Classes &amp; Routines</a>
             @endif
