@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Plugins\Modules\AdmissionManagement\Http\Controllers;
 
 use App\Core\Security\AuditLogger;
+use App\Core\Plugins\PluginManager;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -41,8 +42,10 @@ class AdmissionController extends Controller
             'desired_course' => ['required', 'string', 'max:160'],
             'preferred_batch' => ['nullable', 'string', 'max:80'],
             'previous_education' => ['nullable', 'string', 'max:160'],
-            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
+            'branch_id' => $this->branchRule(),
         ]);
+
+        if (!$this->branchIntegrationAvailable()) { $validated['branch_id'] = null; }
 
         $app = AdmissionApplication::query()->create($validated + [
             'application_code' => 'ADM-' . strtoupper(Str::random(7)),
@@ -64,10 +67,10 @@ class AdmissionController extends Controller
             'desired_course' => ['required', 'string', 'max:160'],
             'preferred_batch' => ['nullable', 'string', 'max:80'],
             'previous_education' => ['nullable', 'string', 'max:160'],
-            'branch_id' => ['nullable', 'integer'],
+            'branch_id' => $this->branchRule(),
         ]);
 
-        if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null) {
+        if ($actor && $actor->hasRole('branch_manager')) {
             $validated['branch_id'] = $actor->branch_id;
         }
 
@@ -108,12 +111,24 @@ class AdmissionController extends Controller
         return back()->with('status', "Application {$application->application_code} marked as {$validated['status']}.");
     }
 
+    private function branchIntegrationAvailable(): bool
+    {
+        return app(PluginManager::class)->isEnabled('branch-management') && Schema::hasTable('branches');
+    }
+
+    private function branchRule(): array
+    {
+        return $this->branchIntegrationAvailable()
+            ? ['nullable', 'integer', 'exists:branches,id']
+            : ['nullable', 'integer'];
+    }
+
     private function ensureAssignedBranch($actor): void
     {
         if (!$actor || !$actor->hasRole('branch_manager')) {
             return;
         }
-        if ($actor->branch_id === null) {
+        if ($actor->branch_id === null || !$this->branchIntegrationAvailable()) {
             abort(403, 'Branch manager must be assigned to a branch.');
         }
         $activeBranch = app('db')->table('branches')
