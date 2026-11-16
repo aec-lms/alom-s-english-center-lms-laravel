@@ -646,7 +646,8 @@ class FinanceAndPaymentGatewayTest extends TestCase
         $plugins->saveSettings('universal-payment', [
             'allow_offline_payments' => '0',
         ]);
-        $this->actingAs($payer)->post('/plugins/universal-payment/transactions', [
+        $financeAdmin = $this->createUserWithRole('admin');
+        $this->actingAs($financeAdmin)->post('/plugins/universal-payment/transactions', [
             'payer_name' => 'Standalone Payer',
             'item_title' => 'Invoice INV-STANDALONE-PAY-01',
             'gateway' => 'bank_cash',
