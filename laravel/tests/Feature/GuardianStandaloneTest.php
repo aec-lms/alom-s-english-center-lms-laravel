@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Core\Plugins\PluginManager;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class GuardianStandaloneTest extends TestCase
@@ -38,6 +39,6 @@ class GuardianStandaloneTest extends TestCase
             'email' => 'guardian.standalone@aec.test',
             'branch_id' => null,
         ]);
-        $this->assertDatabaseMissing('guardian_student', []);
+        $this->assertFalse(Schema::hasTable('guardian_student'));
     }
 }
