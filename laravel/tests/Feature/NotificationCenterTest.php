@@ -7,6 +7,9 @@ namespace Tests\Feature;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Mail;
+use Mockery;
+use Plugins\Modules\NotificationCenter\Models\LmsNotification;
 use App\Core\Plugins\PluginManager;
 use Plugins\Modules\NotificationCenter\Jobs\DeliverNotificationJob;
 use Tests\TestCase;
@@ -203,6 +206,47 @@ class NotificationCenterTest extends TestCase
         $this->assertNotNull($notification);
         $this->assertSame('queued', $notification->status);
         Queue::assertPushed(DeliverNotificationJob::class, fn ($job) => $job->notificationId === (int) $notification->id);
+    }
+
+
+    public function test_smtp_worker_marks_email_sent_only_after_transport_accepts_message(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['email-notifications', 'notification-center']);
+        $admin = $this->createUserWithRole('admin');
+        $student = $this->createUserWithRole('student');
+
+        app(PluginManager::class)->saveSettings('email-notifications', [
+            'smtp_host' => 'smtp.aec.test',
+            'smtp_port' => '587',
+            'smtp_username' => 'smtp-user',
+            'smtp_password' => 'smtp-secret',
+            'from_address' => 'noreply@aec.test',
+        ], ['smtp_password'], $admin->id);
+
+        $notification = LmsNotification::query()->create([
+            'user_id' => $student->id,
+            'channel' => 'email',
+            'title' => 'Course access',
+            'message' => 'Your course access is ready.',
+            'status' => 'queued',
+        ]);
+
+        $mailer = Mockery::mock();
+        $mailer->shouldReceive('raw')->once()
+            ->with('Your course access is ready.', Mockery::type('Closure'));
+        Mail::shouldReceive('purge')->once()->with('smtp');
+        Mail::shouldReceive('mailer')->once()->with('smtp')->andReturn($mailer);
+
+        (new DeliverNotificationJob((int) $notification->id))->handle(app(PluginManager::class));
+
+        $this->assertDatabaseHas('lms_notifications', [
+            'id' => $notification->id,
+            'status' => 'sent',
+            'attempt_count' => 1,
+            'last_error' => null,
+        ]);
+        $this->assertNotNull($notification->fresh()->processed_at);
     }
 
 }
