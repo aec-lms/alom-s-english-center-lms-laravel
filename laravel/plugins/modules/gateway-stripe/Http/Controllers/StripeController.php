@@ -20,6 +20,7 @@ class StripeController extends Controller
 
     public function index(): View
     {
+        $this->assertPaymentIntegrationsReady();
         $configured = (string) $this->plugins->getSetting('gateway-stripe', 'secret_key', '') !== '';
         $sandbox = str_starts_with((string) $this->plugins->getSetting('gateway-stripe', 'secret_key', ''), 'sk_test_');
         $transactions = PaymentTransaction::query()->where('gateway_slug', 'gateway-stripe')->latest()->limit(20)->get();
@@ -60,6 +61,7 @@ class StripeController extends Controller
 
     public function webhook(Request $request): JsonResponse
     {
+        $this->assertPaymentIntegrationsReady();
         $tx = $this->stripe->verifyAndSettleWebhook($request->getContent(), (string) $request->header('Stripe-Signature', ''));
         return response()->json(['gateway' => 'gateway-stripe', 'status' => $tx->status, 'transaction_ref' => $tx->transaction_ref]);
     }
