@@ -52,6 +52,13 @@ class GuardianController extends Controller
             abort(403, 'Branch isolation violation.');
         }
 
+        if (!empty($validated['student_id'])) {
+            $student = Student::query()->findOrFail((int) $validated['student_id']);
+            if ((int) $student->branch_id !== (int) $validated['branch_id']) {
+                abort(422, 'Guardian and linked student must belong to the same branch.');
+            }
+        }
+
         $guardian = DB::transaction(function () use ($validated): Guardian {
             $user = User::query()->create([
                 'name' => $validated['name'],
