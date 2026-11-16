@@ -18,6 +18,7 @@ class NoticeController extends Controller
     public function index(Request $request): View
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $notices = Notice::query()
             ->when($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null, fn ($q) => $q->where(fn ($sub) => $sub->whereNull('branch_id')->orWhere('branch_id', $actor->branch_id)))
             ->orderByDesc('is_pinned')
@@ -30,6 +31,7 @@ class NoticeController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:180'],
             'body' => ['required', 'string'],
@@ -55,5 +57,12 @@ class NoticeController extends Controller
         $this->audit->log('notice.published', 'notice', (string) $notice->id, ['audience' => $notice->audience_role]);
 
         return back()->with('status', 'Notice published.');
+    }
+
+    private function ensureAssignedBranch($actor): void
+    {
+        if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id === null) {
+            abort(403, 'Branch manager must be assigned to a branch.');
+        }
     }
 }
