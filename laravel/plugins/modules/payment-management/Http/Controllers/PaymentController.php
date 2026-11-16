@@ -10,6 +10,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\PaymentManagement\Models\PaymentRefund;
 use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
@@ -118,6 +119,15 @@ class PaymentController extends Controller
                         'paid_amount' => $newPaid,
                         'status' => $newPaid <= 0 ? 'unpaid' : ($newPaid >= (float) $invoice->net_amount ? 'paid' : 'partial'),
                     ]);
+
+                    if ($newPaid + 0.01 < (float) $invoice->net_amount
+                        && Schema::hasTable('enrollments')
+                        && Schema::hasColumn('enrollments', 'invoice_id')) {
+                        DB::table('enrollments')
+                            ->where('invoice_id', $invoice->id)
+                            ->where('status', 'active')
+                            ->update(['status' => 'pending', 'updated_at' => now()]);
+                    }
                 }
             });
         } catch (\Throwable $e) {
