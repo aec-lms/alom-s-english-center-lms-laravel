@@ -205,7 +205,59 @@ class AcademicAndExamWorkflowTest extends TestCase
         $this->assertSame(5, $attempt->score_obtained);
         $this->assertSame(5, $attempt->total_marks);
         $this->assertTrue($attempt->passed);
+
+        $this->actingAs($student)->post("/admin/exams/{$exam->id}/attempt", [
+            'answers' => [(string) $q1->id => 99],
+        ])->assertStatus(422);
     }
+    public function test_only_students_can_attempt_exams_and_exam_time_window_is_enforced(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'student-management', 'course-management', 'exam-management']);
+
+        $course = Course::query()->create([
+            'code' => 'EXAM-WINDOW-01',
+            'title' => 'Exam Window Course',
+            'slug' => 'exam-window-course',
+            'price' => 0,
+            'status' => 'published',
+        ]);
+        $exam = Exam::query()->create([
+            'course_id' => $course->id,
+            'title' => 'Scheduled Diagnostic',
+            'duration_minutes' => 30,
+            'pass_marks' => 1,
+            'starts_at' => now()->addHour(),
+            'ends_at' => now()->addHours(2),
+            'is_published' => true,
+        ]);
+        ExamQuestion::query()->create([
+            'exam_id' => $exam->id,
+            'prompt' => 'Choose the correct answer.',
+            'options' => ['A', 'B'],
+            'correct_option_index' => 0,
+            'marks' => 1,
+        ]);
+
+        $teacher = $this->createUserWithRole('teacher');
+        $attemptPermission = Permission::query()->where('slug', 'exams.attempt')->value('id');
+        $teacher->roles()->first()->permissions()->syncWithoutDetaching([$attemptPermission]);
+
+        $this->actingAs($teacher)->post('/admin/exams/' . $exam->id . '/attempt', [
+            'answers' => [],
+        ])->assertForbidden();
+
+        $student = $this->createUserWithRole('student');
+        $this->actingAs($student)->post('/admin/exams/' . $exam->id . '/attempt', [
+            'answers' => [],
+        ])->assertForbidden();
+
+        $exam->update(['starts_at' => null, 'ends_at' => now()->subMinute()]);
+        $this->actingAs($student)->post('/admin/exams/' . $exam->id . '/attempt', [
+            'answers' => [],
+        ])->assertForbidden();
+    }
+
     public function test_paid_course_enrollment_is_activated_only_after_verified_invoice_settlement(): void
     {
         $this->markSystemInstalled();
