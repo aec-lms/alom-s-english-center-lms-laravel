@@ -151,6 +151,46 @@ class PluginCenterController extends Controller
         $manifest = $this->plugins->discoverManifests()[$slug] ?? abort(404);
         $values = [];
         $secretKeys = [];
+        $rules = ['settings' => ['sometimes', 'array']];
+        $allowedKeys = [];
+
+        foreach ($manifest->settingsSchema as $field) {
+            $key = (string) ($field['key'] ?? '');
+            if ($key === '') {
+                continue;
+            }
+            if (preg_match('/^[a-zA-Z0-9_-]+$/', $key) !== 1) {
+                throw new \\RuntimeException("Plugin '{$slug}' contains an invalid setting key.");
+            }
+
+            $allowedKeys[] = $key;
+            $type = (string) ($field['type'] ?? 'text');
+            $fieldRules = ['nullable', 'string', 'max:2048'];
+            if (!empty($field['required'])) {
+                $fieldRules = ['required', 'string', 'max:2048'];
+            }
+            if ($type === 'select') {
+                $options = (array) ($field['options'] ?? []);
+                if ($options === []) {
+                    throw new \\RuntimeException("Plugin '{$slug}' has no options for select setting '{$key}'.");
+                }
+                $fieldRules[] = Rule::in(array_map('strval', array_keys($options)));
+            }
+            $rules["settings.{$key}"] = $fieldRules;
+
+            if ((bool) ($field['secret'] ?? false)) {
+                $secretKeys[] = $key;
+            }
+        }
+
+        $validated = Validator::make($request->all(), $rules)->validate();
+        $submittedSettings = $validated['settings'] ?? [];
+        $unknownKeys = array_diff(array_keys($request->input('settings', [])), $allowedKeys);
+        if ($unknownKeys !== []) {
+            throw ValidationException::withMessages([
+                'settings' => 'Unsupported plugin setting(s): ' . implode(', ', $unknownKeys),
+            ]);
+        }
 
         foreach ($manifest->settingsSchema as $field) {
             $key = (string) ($field['key'] ?? '');
@@ -158,14 +198,13 @@ class PluginCenterController extends Controller
                 continue;
             }
             $isSecret = (bool) ($field['secret'] ?? false);
+            $submitted = $submittedSettings[$key] ?? '';
             if ($isSecret) {
-                $secretKeys[] = $key;
-                $submitted = (string) $request->input("settings.{$key}", '');
                 if ($submitted !== '') {
                     $values[$key] = $submitted;
                 }
             } else {
-                $values[$key] = (string) $request->input("settings.{$key}", '');
+                $values[$key] = (string) $submitted;
             }
         }
 
