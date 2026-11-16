@@ -21,6 +21,15 @@ use Plugins\Modules\CourseManagement\Models\LiveClass;
 use Plugins\Modules\ExamManagement\Models\Exam;
 use Plugins\Modules\BatchManagement\Models\StudyBatch;
 use Plugins\Modules\ClassManagement\Models\AcademicClass;
+use Plugins\Modules\AdminBoosting\Models\BoostCampaign;
+use Plugins\Modules\BranchManagement\Models\Branch;
+use Plugins\Modules\CarouselBuilder\Models\CarouselItem;
+use Plugins\Modules\CmsWebsite\Models\CmsCategory;
+use Plugins\Modules\CmsWebsite\Models\CmsPost;
+use Plugins\Modules\PageBuilder\Models\BuilderPage;
+use Plugins\Modules\SliderBuilder\Models\HeroSlider;
+use Plugins\Modules\SmsGateway\Models\SmsCampaign;
+use Plugins\Modules\VisitorPopupAds\Models\VisitorPopup;
 
 class RecycleBinController extends Controller
 {
@@ -41,6 +50,15 @@ class RecycleBinController extends Controller
         $exams = new LengthAwarePaginator([], 0, 25);
         $batches = new LengthAwarePaginator([], 0, 25);
         $classes = new LengthAwarePaginator([], 0, 25);
+        $boostCampaigns = new LengthAwarePaginator([], 0, 25);
+        $branches = new LengthAwarePaginator([], 0, 25);
+        $carouselItems = new LengthAwarePaginator([], 0, 25);
+        $cmsCategories = new LengthAwarePaginator([], 0, 25);
+        $cmsPosts = new LengthAwarePaginator([], 0, 25);
+        $builderPages = new LengthAwarePaginator([], 0, 25);
+        $heroSliders = new LengthAwarePaginator([], 0, 25);
+        $smsCampaigns = new LengthAwarePaginator([], 0, 25);
+        $visitorPopups = new LengthAwarePaginator([], 0, 25);
         if ($this->plugins->isEnabled('student-management')
             && Schema::hasTable('students')
             && Schema::hasColumn('students', 'deleted_at')) {
@@ -80,7 +98,35 @@ class RecycleBinController extends Controller
             $classes = AcademicClass::withTrashed()->whereNotNull('deleted_at')->latest('deleted_at')->paginate(25, ['*'], 'classes_page');
         }
 
-        return view('admin.recycle-bin.index', compact('students', 'teachers', 'courses', 'courseCategories', 'liveClasses', 'exams', 'batches', 'classes'));
+        if ($this->plugins->isEnabled('admin-boosting') && Schema::hasTable('boost_campaigns') && Schema::hasColumn('boost_campaigns', 'deleted_at')) {
+            $boostCampaigns = BoostCampaign::withTrashed()->whereNotNull('deleted_at')->latest('deleted_at')->paginate(25, ['*'], 'boostCampaigns_page');
+        }
+        if ($this->plugins->isEnabled('branch-management') && Schema::hasTable('branches') && Schema::hasColumn('branches', 'deleted_at')) {
+            $branches = Branch::withTrashed()->whereNotNull('deleted_at')->latest('deleted_at')->paginate(25, ['*'], 'branches_page');
+        }
+        if ($this->plugins->isEnabled('carousel-builder') && Schema::hasTable('cms_carousels') && Schema::hasColumn('cms_carousels', 'deleted_at')) {
+            $carouselItems = CarouselItem::withTrashed()->whereNotNull('deleted_at')->latest('deleted_at')->paginate(25, ['*'], 'carouselItems_page');
+        }
+        if ($this->plugins->isEnabled('cms-website') && Schema::hasTable('cms_categories') && Schema::hasColumn('cms_categories', 'deleted_at')) {
+            $cmsCategories = CmsCategory::withTrashed()->whereNotNull('deleted_at')->latest('deleted_at')->paginate(25, ['*'], 'cmsCategories_page');
+        }
+        if ($this->plugins->isEnabled('cms-website') && Schema::hasTable('cms_posts') && Schema::hasColumn('cms_posts', 'deleted_at')) {
+            $cmsPosts = CmsPost::withTrashed()->whereNotNull('deleted_at')->latest('deleted_at')->paginate(25, ['*'], 'cmsPosts_page');
+        }
+        if ($this->plugins->isEnabled('page-builder') && Schema::hasTable('cms_pages') && Schema::hasColumn('cms_pages', 'deleted_at')) {
+            $builderPages = BuilderPage::withTrashed()->whereNotNull('deleted_at')->latest('deleted_at')->paginate(25, ['*'], 'builderPages_page');
+        }
+        if ($this->plugins->isEnabled('slider-builder') && Schema::hasTable('cms_sliders') && Schema::hasColumn('cms_sliders', 'deleted_at')) {
+            $heroSliders = HeroSlider::withTrashed()->whereNotNull('deleted_at')->latest('deleted_at')->paginate(25, ['*'], 'heroSliders_page');
+        }
+        if ($this->plugins->isEnabled('sms-gateway') && Schema::hasTable('sms_campaigns') && Schema::hasColumn('sms_campaigns', 'deleted_at')) {
+            $smsCampaigns = SmsCampaign::withTrashed()->whereNotNull('deleted_at')->latest('deleted_at')->paginate(25, ['*'], 'smsCampaigns_page');
+        }
+        if ($this->plugins->isEnabled('visitor-popup-ads') && Schema::hasTable('visitor_popups') && Schema::hasColumn('visitor_popups', 'deleted_at')) {
+            $visitorPopups = VisitorPopup::withTrashed()->whereNotNull('deleted_at')->latest('deleted_at')->paginate(25, ['*'], 'visitorPopups_page');
+        }
+
+        return view('admin.recycle-bin.index', compact('students', 'teachers', 'courses', 'courseCategories', 'liveClasses', 'exams', 'batches', 'classes', 'boostCampaigns', 'branches', 'carouselItems', 'cmsCategories', 'cmsPosts', 'builderPages', 'heroSliders', 'smsCampaigns', 'visitorPopups'));
     }
 
     public function restoreStudent(Request $request, int $studentId): RedirectResponse
@@ -244,6 +290,77 @@ class RecycleBinController extends Controller
         });
 
         return redirect()->route('admin.recycle-bin.index')->with('status', 'Live class restored successfully.');
+    }
+
+    public function restoreBoostCampaign(Request $request, int $recordId): RedirectResponse
+    {
+        return $this->restoreEntity($request, $recordId, 'admin-boosting', 'boost_campaigns', BoostCampaign::class, 'boost_campaign', 'recycle_bin.boost_campaign_restored', 'campaign_name', 'Boost campaign');
+    }
+
+    public function restoreBranch(Request $request, int $recordId): RedirectResponse
+    {
+        return $this->restoreEntity($request, $recordId, 'branch-management', 'branches', Branch::class, 'branch', 'recycle_bin.branch_restored', 'name', 'Branch');
+    }
+
+    public function restoreCarouselItem(Request $request, int $recordId): RedirectResponse
+    {
+        return $this->restoreEntity($request, $recordId, 'carousel-builder', 'cms_carousels', CarouselItem::class, 'carousel_item', 'recycle_bin.carousel_item_restored', 'title', 'Carousel item');
+    }
+
+    public function restoreCmsCategory(Request $request, int $recordId): RedirectResponse
+    {
+        return $this->restoreEntity($request, $recordId, 'cms-website', 'cms_categories', CmsCategory::class, 'cms_category', 'recycle_bin.cms_category_restored', 'name', 'CMS category');
+    }
+
+    public function restoreCmsPost(Request $request, int $recordId): RedirectResponse
+    {
+        return $this->restoreEntity($request, $recordId, 'cms-website', 'cms_posts', CmsPost::class, 'cms_post', 'recycle_bin.cms_post_restored', 'title', 'CMS post');
+    }
+
+    public function restoreBuilderPage(Request $request, int $recordId): RedirectResponse
+    {
+        return $this->restoreEntity($request, $recordId, 'page-builder', 'cms_pages', BuilderPage::class, 'builder_page', 'recycle_bin.builder_page_restored', 'title', 'Page');
+    }
+
+    public function restoreHeroSlider(Request $request, int $recordId): RedirectResponse
+    {
+        return $this->restoreEntity($request, $recordId, 'slider-builder', 'cms_sliders', HeroSlider::class, 'hero_slider', 'recycle_bin.hero_slider_restored', 'title', 'Slider');
+    }
+
+    public function restoreSmsCampaign(Request $request, int $recordId): RedirectResponse
+    {
+        return $this->restoreEntity($request, $recordId, 'sms-gateway', 'sms_campaigns', SmsCampaign::class, 'sms_campaign', 'recycle_bin.sms_campaign_restored', 'title', 'SMS campaign');
+    }
+
+    public function restoreVisitorPopup(Request $request, int $recordId): RedirectResponse
+    {
+        return $this->restoreEntity($request, $recordId, 'visitor-popup-ads', 'visitor_popups', VisitorPopup::class, 'visitor_popup', 'recycle_bin.visitor_popup_restored', 'title', 'Visitor pop-up');
+    }
+
+    private function restoreEntity(
+        Request $request,
+        int $recordId,
+        string $plugin,
+        string $table,
+        string $modelClass,
+        string $entityType,
+        string $event,
+        string $displayColumn,
+        string $label
+    ): RedirectResponse {
+        abort_unless($request->user()?->hasRole('admin'), 403);
+        abort_unless($this->plugins->isEnabled($plugin) && Schema::hasTable($table) && Schema::hasColumn($table, 'deleted_at'), 404);
+
+        DB::transaction(function () use ($recordId, $request, $modelClass, $entityType, $event, $displayColumn): void {
+            $record = $modelClass::withTrashed()->lockForUpdate()->findOrFail($recordId);
+            abort_unless($record->trashed(), 409, 'This record is not in the Recycle Bin.');
+            $record->restore();
+            $this->audit->log($event, $entityType, (string) $record->id, [
+                $displayColumn => $record->getAttribute($displayColumn),
+            ], $request->user()->id);
+        });
+
+        return redirect()->route('admin.recycle-bin.index')->with('status', $label . ' restored successfully.');
     }
 
 }
