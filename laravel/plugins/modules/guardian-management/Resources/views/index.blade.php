@@ -13,7 +13,7 @@
                         <td>{{ $guardian->user?->email }}</td>
                         <td>{{ $guardian->relationship }}</td>
                         <td>{{ $guardian->branch_id }}</td>
-                        <td>{{ $guardian->students->map(fn ($s) => $s->student_code)->implode(', ') ?: 'None' }}</td>
+                        <td>@if ($studentIntegration){{ $guardian->students->map(fn ($s) => $s->student_code)->implode(', ') ?: 'None' }}@else<span class="text-slate-400">Student integration not enabled</span>@endif</td>
                     </tr>
                 @empty
                     <tr><td colspan="5" class="py-4 text-slate-400">No guardians registered yet.</td></tr>
