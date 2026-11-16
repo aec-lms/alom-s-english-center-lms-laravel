@@ -59,6 +59,34 @@ class StripeController extends Controller
         ]);
     }
 
+    public function returnStatus(Request $request): JsonResponse
+    {
+        $this->assertPaymentIntegrationsReady();
+        $paymentIntentId = (string) $request->query('payment_intent', '');
+        abort_if($paymentIntentId === '', 422, 'Stripe PaymentIntent reference is missing.');
+
+        $transaction = PaymentTransaction::query()
+            ->where('gateway_slug', 'gateway-stripe')
+            ->where('external_reference', $paymentIntentId)
+            ->firstOrFail();
+        $studentIntegration = $this->plugins->isEnabled('student-management') && Schema::hasTable('students');
+        $invoice = FeeInvoice::query()->findOrFail($transaction->invoice_id);
+        if ($studentIntegration) {
+            $invoice->load('student');
+        }
+        $this->assertCanPayInvoice($request, $invoice, $studentIntegration);
+
+        return response()->json([
+            'gateway' => 'gateway-stripe',
+            'transaction_ref' => $transaction->transaction_ref,
+            'status' => $transaction->status,
+            'invoice_status' => $invoice->status,
+            'message' => $transaction->status === 'settled'
+                ? 'Stripe confirmed payment settlement.'
+                : 'Payment is awaiting verified Stripe webhook confirmation.',
+        ]);
+    }
+
     public function webhook(Request $request): JsonResponse
     {
         $this->assertPaymentIntegrationsReady();
