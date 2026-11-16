@@ -615,12 +615,12 @@ PHP;
                 ->where('plugin_slug', $slug)
                 ->where('setting_key', 'api_token')
                 ->firstOrFail();
-            $this->assertTrue($secretRow->is_encrypted);
+            $this->assertFalse($secretRow->is_encrypted, 'An empty reset credential must not be marked as ciphertext.');
             $this->assertSame($userCountBefore, DB::table('users')->count());
             $this->assertDatabaseHas('audit_logs', [
                 'action' => 'plugin.settings_reset',
-                'target_type' => 'plugin',
-                'target_id' => $slug,
+                'entity_type' => 'plugin',
+                'entity_id' => $slug,
             ]);
         } finally {
             File::deleteDirectory($directory);
