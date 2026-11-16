@@ -46,6 +46,7 @@ class UniversalPaymentController extends Controller
 
     public function saveGateways(Request $request): RedirectResponse
     {
+        abort_if($request->user()?->hasRole('branch_manager'), 403, 'Only central finance administrators can change global gateway settings.');
         $validated = $request->validate([
             'default_currency' => ['required', 'in:BDT,USD,EUR,GBP'],
             'gateways' => ['nullable', 'array'],
@@ -110,13 +111,12 @@ class UniversalPaymentController extends Controller
             abort(422, 'Only pending manual receipts can be reviewed.');
         }
 
-        if ($validated['status'] === 'verified') {
-            if ($transaction->gateway !== 'bank_cash') {
-                abort(422, 'Online gateway transactions must be verified by the provider webhook.');
-            }
-            if (trim((string) $transaction->external_trx_id) === '') {
-                abort(422, 'A bank receipt or cash voucher reference is required before verification.');
-            }
+        if ($transaction->gateway !== 'bank_cash') {
+            abort(422, 'Online gateway transactions must be updated by the verified provider callback.');
+        }
+
+        if ($validated['status'] === 'verified' && trim((string) $transaction->external_trx_id) === '') {
+            abort(422, 'A bank receipt or cash voucher reference is required before verification.');
         }
 
         $transaction->update([
