@@ -115,7 +115,7 @@ class AcademicAndExamWorkflowTest extends TestCase
     public function test_attendance_rejects_student_and_batch_from_different_branches(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['branch-management', 'student-management', 'course-management', 'attendance-management']);
+        $this->activatePlugins(['branch-management', 'student-management', 'course-management', 'batch-management', 'attendance-management']);
 
         $branchA = DB::table('branches')->insertGetId(['code' => 'ATT-A', 'name' => 'Attendance A', 'created_at' => now(), 'updated_at' => now()]);
         $branchB = DB::table('branches')->insertGetId(['code' => 'ATT-B', 'name' => 'Attendance B', 'created_at' => now(), 'updated_at' => now()]);
@@ -141,11 +141,13 @@ class AcademicAndExamWorkflowTest extends TestCase
             'status' => 'published',
             'branch_id' => $branchB,
         ]);
-        $batchId = DB::table('batches')->insertGetId([
-            'course_id' => $course->id,
+        $batchId = DB::table('study_batches')->insertGetId([
             'branch_id' => $branchB,
+            'course_title' => 'Branch B Course',
+            'batch_code' => 'ATT-BATCH-B',
             'name' => 'Branch B Batch',
-            'capacity' => 20,
+            'schedule' => 'Mon/Wed 10:00-11:00',
+            'max_capacity' => 20,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
@@ -153,7 +155,6 @@ class AcademicAndExamWorkflowTest extends TestCase
         $this->actingAs($managerA)->post('/admin/attendance', [
             'batch_id' => $batchId,
             'student_id' => $student->id,
-            'branch_id' => $branchA,
             'attendance_date' => now()->toDateString(),
             'status' => 'present',
         ])->assertStatus(422);
