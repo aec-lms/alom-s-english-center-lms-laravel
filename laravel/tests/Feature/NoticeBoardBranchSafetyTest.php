@@ -54,7 +54,7 @@ class NoticeBoardBranchSafetyTest extends TestCase
         $request = Request::create('/admin/notices', 'GET');
         $request->setUserResolver(static fn () => $manager);
 
-        $this->expectException(\\Symfony\\Component\\HttpKernel\\Exception\\HttpException::class);
+        $this->expectException(\Symfony\Component\HttpKernel\Exception\HttpException::class);
         app(NoticeController::class)->index($request);
     }
 }
