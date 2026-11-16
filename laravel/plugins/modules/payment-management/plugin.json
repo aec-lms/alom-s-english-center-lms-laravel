@@ -16,6 +16,7 @@
     ],
     "settings_schema": [],
     "optional_dependencies": [
-        "fees-management"
+        "fees-management",
+        "branch-management"
     ]
 }
