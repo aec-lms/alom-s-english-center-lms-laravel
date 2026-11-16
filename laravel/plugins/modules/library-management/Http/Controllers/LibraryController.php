@@ -114,8 +114,6 @@ class LibraryController extends Controller
             return back()->with('status', "Book loaned to {$loan->borrower_name}.");
         } catch (HttpExceptionInterface $e) {
             throw $e;
-        } catch (HttpExceptionInterface $e) {
-            throw $e;
         } catch (RuntimeException $e) {
             return back()->withErrors(['library_book_id' => $e->getMessage()]);
         }
