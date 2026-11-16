@@ -140,7 +140,7 @@ class LessonContentProtectionTest extends TestCase
 
         $directory = $this->privateMediaRoot . '/course-media/' . $courseId;
         mkdir($directory, 0700, true);
-        file_put_contents($directory . '/sample.mp4', 'private lesson video');
+        file_put_contents($directory . '/sample.mp4', "\\x00\\x00\\x00\\x18ftypisom\\x00\\x00\\x02\\x00isomiso2");
 
         return [$student, $lessonId];
     }
