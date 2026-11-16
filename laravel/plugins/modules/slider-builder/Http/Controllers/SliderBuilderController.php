@@ -96,9 +96,9 @@ class SliderBuilderController extends Controller
         $title = $slider->title;
         $id = (string) $slider->id;
         $slider->delete();
-        $this->audit->log('slider_builder.deleted', 'hero_slider', $id);
+        $this->audit->log('slider_builder.trashed', 'hero_slider', $id);
 
-        return back()->with('status', "Slider '{$title}' deleted.");
+        return back()->with('status', "Slider '{$title}' moved to the Admin Recycle Bin.");
     }
 
     private function storeImage(UploadedFile $file): string
