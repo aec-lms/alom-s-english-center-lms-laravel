@@ -20,6 +20,7 @@ class PaypalController extends Controller
 
     public function index(): View
     {
+        $this->assertPaymentIntegrationsReady();
         $configured = (string) $this->plugins->getSetting('gateway-paypal', 'client_secret', '') !== '';
         $sandbox = $this->plugins->getSetting('gateway-paypal', 'sandbox_mode', '1') === '1';
         $transactions = PaymentTransaction::query()->where('gateway_slug', 'gateway-paypal')->latest()->limit(20)->get();
@@ -72,6 +73,7 @@ class PaypalController extends Controller
 
     public function webhook(Request $request): JsonResponse
     {
+        $this->assertPaymentIntegrationsReady();
         $headers = [
             'auth_algo' => $request->header('PAYPAL-AUTH-ALGO'),
             'cert_url' => $request->header('PAYPAL-CERT-URL'),
