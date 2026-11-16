@@ -102,7 +102,7 @@ The following fixes were committed on the audit branch after the first-pass revi
 1. Complete systematic fail-closed branch-isolation tests for every branch-owned plugin and every detail/export/bulk endpoint.
 2. Add dedicated CRUD/workflow acceptance tests for all 39 plugins; the current suite is still not complete module-by-module.
 3. Complete provider sandbox testing and implement the still-unavailable bKash, Nagad, Rocket and other advertised integrations before enabling them.
-4. Implement actual Notification Center queue workers and provider delivery callbacks; queued/submitted must not be labelled delivered.
+4. Complete Notification Center SMS/Push adapters and delivery callbacks; verify SMTP/queue operation on cPanel and never label queued/submitted as delivered.
 5. Complete cPanel/MySQL install, upgrade, backup/restore, browser E2E and operational smoke tests.
 
 ## Release gate
