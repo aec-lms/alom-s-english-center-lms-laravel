@@ -194,6 +194,12 @@ class FinanceAndPaymentGatewayTest extends TestCase
         $this->actingAs($admin)->post('/admin/plugins/gateway-sslcommerz/test-connection')
             ->assertSessionHas('status');
 
+        $universalHostedCheckout = $this->actingAs($studentUser)->post('/universal-checkout', [
+            'invoice_id' => $sslInvoice->id,
+            'gateway' => 'sslcommerz',
+        ])->assertRedirect();
+        $this->assertStringContainsString('sandbox.sslcommerz.com', $universalHostedCheckout->headers->get('Location'));
+
         $sslSession = $this->actingAs($studentUser)->postJson('/payments/sslcommerz/initiate', [
             'invoice_id' => $sslInvoice->id,
         ])->assertOk()->json();
