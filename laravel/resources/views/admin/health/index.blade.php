@@ -16,6 +16,7 @@
             <div class="rounded-xl border {{ in_array($check['status'], ['ok', 'recovered'], true) ? 'border-emerald-200 bg-emerald-50' : 'border-rose-200 bg-rose-50' }} p-4">
                 <div class="flex items-center justify-between gap-2"><h2 class="font-bold text-slate-900">{{ str($name)->replace('_', ' ')->title() }}</h2><span class="text-[10px] font-extrabold uppercase">{{ $check['status'] }}</span></div>
                 <p class="mt-2 text-xs leading-5 text-slate-600">{{ $check['message'] }}</p>
+                @if (isset($check['duration_ms']))<p class="mt-2 text-[10px] text-slate-400">Check time: {{ $check['duration_ms'] }} ms</p>@endif
             </div>
             @endforeach
         </div>
