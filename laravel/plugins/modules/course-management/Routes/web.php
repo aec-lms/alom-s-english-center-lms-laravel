@@ -11,6 +11,7 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:course-management', 'perm
     ->name('plugins.courses.')
     ->group(function (): void {
         Route::get('/', [CourseController::class, 'index'])->name('index');
+        Route::get('/content-protection', [LessonContentProtectionController::class, 'adminIndex'])->name('content-protection');
         Route::post('/', [CourseController::class, 'store'])->name('store');
         Route::put('/{course}', [CourseController::class, 'update'])->name('update');
         Route::delete('/{course}', [CourseController::class, 'destroy'])->name('destroy');
