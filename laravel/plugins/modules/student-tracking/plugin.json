@@ -10,8 +10,7 @@
   "optional_dependencies": [],
   "provider": "Plugins\\Modules\\StudentTracking\\Providers\\StudentTrackingServiceProvider",
   "permissions": [
-    {"slug": "student-tracking.view", "name": "View Student Tracking Reports"},
-    {"slug": "student-tracking.record", "name": "Record Learning Activity Events"}
+    {"slug": "student-tracking.view", "name": "View Student Tracking Reports"}
   ],
   "settings_schema": []
 }
