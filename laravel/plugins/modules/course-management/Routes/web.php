@@ -14,7 +14,7 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:course-management', 'perm
         Route::put('/{course}', [CourseController::class, 'update'])->name('update');
         Route::delete('/{course}', [CourseController::class, 'destroy'])->name('destroy');
 
-        // Categories CRUD
+        Route::post('/lessons/{lesson}/media', [LessonContentProtectionController::class, 'upload'])->name('lessons.media.upload');\n        Route::patch('/lessons/{lesson}/protection', [LessonContentProtectionController::class, 'updatePolicy'])->name('lessons.protection.update');\n\n        // Categories CRUD
         Route::post('/categories', [CourseController::class, 'storeCategory'])->name('categories.store');
         Route::put('/categories/{category}', [CourseController::class, 'updateCategory'])->name('categories.update');
         Route::delete('/categories/{category}', [CourseController::class, 'destroyCategory'])->name('categories.destroy');
