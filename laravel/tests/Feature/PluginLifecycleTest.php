@@ -667,4 +667,33 @@ PHP;
         $this->assertTrue($manager->isEnabled('student-management'));
     }
 
+    public function test_recycle_bin_restore_rejects_tampered_plugin_files(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management']);
+
+        $manager = app(PluginManager::class);
+        $metadata = $manager->deleteToRecycleBin('branch-management');
+        $archivePath = storage_path('app/plugin-recycle-bin/' . $metadata['archive']);
+        $files = File::allFiles($archivePath);
+        $this->assertNotEmpty($files);
+
+        $tamperedFile = $files[0]->getPathname();
+        $originalContents = File::get($tamperedFile);
+        File::append($tamperedFile, "\n// tampered after recycle-bin deletion");
+
+        try {
+            $manager->restoreFromRecycleBin($metadata['archive']);
+            $this->fail('Tampered plugin files must never be restored.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('integrity', strtolower($exception->getMessage()));
+        } finally {
+            File::put($tamperedFile, $originalContents);
+        }
+
+        $restored = $manager->restoreFromRecycleBin($metadata['archive']);
+        $this->assertNotNull($restored);
+        $this->assertTrue($manager->isEnabled('branch-management'));
+    }
+
 }
