@@ -121,7 +121,7 @@ class PluginCenterController extends Controller
         $configuredSecrets = [];
         foreach ($manifest->settingsSchema as $field) {
             $key = (string) ($field['key'] ?? '');
-            $isSecret = (bool) ($field['secret'] ?? false);
+            $isSecret = (bool) ($field['secret'] ?? $field['encrypted'] ?? false);
             $stored = $this->plugins->getSetting($slug, $key);
             $values[$key] = $isSecret ? '' : ($stored ?? '');
             if ($isSecret) $configuredSecrets[$key] = $stored !== null && $stored !== '';
@@ -181,7 +181,7 @@ class PluginCenterController extends Controller
             }
             $rules["settings.{$key}"] = $fieldRules;
 
-            if ((bool) ($field['secret'] ?? false)) {
+            if ((bool) ($field['secret'] ?? $field['encrypted'] ?? false)) {
                 $secretKeys[] = $key;
             }
         }
@@ -200,7 +200,7 @@ class PluginCenterController extends Controller
             if ($key === '') {
                 continue;
             }
-            $isSecret = (bool) ($field['secret'] ?? false);
+            $isSecret = (bool) ($field['secret'] ?? $field['encrypted'] ?? false);
             $submitted = $submittedSettings[$key] ?? '';
             if ($isSecret) {
                 if ($submitted !== '') {
