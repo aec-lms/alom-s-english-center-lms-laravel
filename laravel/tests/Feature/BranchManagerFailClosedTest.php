@@ -120,6 +120,50 @@ class BranchManagerFailClosedTest extends TestCase
         ])->assertForbidden();
     }
 
+    public function test_branch_scoped_plugins_fail_closed_when_optional_branch_integration_is_disabled(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins([
+            'course-management',
+            'class-management',
+            'batch-management',
+            'notice-board',
+            'reports-analytics',
+        ]);
+
+        $manager = $this->createUserWithRole('branch_manager', 999999);
+        $permissionIds = DB::table('permissions')
+            ->whereIn('slug', [
+                'courses.manage',
+                'classes.manage',
+                'batches.manage',
+                'notices.manage',
+                'reports.view',
+            ])
+            ->pluck('id');
+        $this->assertCount(5, $permissionIds);
+        $manager->roles()->first()->permissions()->syncWithoutDetaching($permissionIds);
+
+        foreach ([
+            '/admin/courses',
+            '/admin/classes',
+            '/admin/batches',
+            '/admin/notices',
+            '/admin/reports',
+        ] as $path) {
+            $this->actingAs($manager)->get($path)->assertForbidden();
+        }
+
+        foreach ([
+            '/admin/courses',
+            '/admin/classes',
+            '/admin/batches',
+            '/admin/notices',
+        ] as $path) {
+            $this->actingAs($manager)->post($path, [])->assertForbidden();
+        }
+    }
+
     public function test_branch_manager_access_is_denied_when_assigned_branch_is_inactive(): void
     {
         $this->markSystemInstalled();
