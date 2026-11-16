@@ -11,7 +11,7 @@ Route::middleware(['web', 'installed', 'plugin:gateway-sslcommerz'])
     ->name('plugins.gateway.sslcommerz.')
     ->group(function (): void {
         Route::post('/initiate', [SslcommerzController::class, 'initiate'])
-            ->middleware(['auth', 'permission:gateway.sslcommerz.use'])
+            ->middleware('auth')
             ->name('initiate');
         Route::post('/ipn', [SslcommerzController::class, 'ipn'])
             ->withoutMiddleware([VerifyCsrfToken::class])
