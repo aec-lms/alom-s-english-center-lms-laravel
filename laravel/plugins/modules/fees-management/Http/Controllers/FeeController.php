@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Plugins\Modules\FeesManagement\Http\Controllers;
 
 use App\Core\Security\AuditLogger;
+use App\Core\Plugins\PluginManager;
+use Illuminate\Support\Facades\Schema;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -21,20 +23,28 @@ class FeeController extends Controller
     {
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
+        $studentIntegration = app(PluginManager::class)->isEnabled('student-management')
+            && Schema::hasTable('students');
         $invoices = FeeInvoice::query()
-            ->with(['student.user', 'category'])
+            ->when($studentIntegration, fn ($q) => $q->with('student.user'))
+            ->with('category')
             ->when($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null, fn ($q) => $q->where('branch_id', $actor->branch_id))
             ->latest()
             ->paginate(25);
         $categories = FeeCategory::query()->orderBy('name')->get();
 
-        return view('fees-management::index', compact('invoices', 'categories'));
+        return view('fees-management::index', compact('invoices', 'categories', 'studentIntegration'));
     }
 
     public function storeInvoice(Request $request): RedirectResponse
     {
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
+        abort_unless(
+            app(PluginManager::class)->isEnabled('student-management') && Schema::hasTable('students'),
+            409,
+            'Enable Student Management before issuing student invoices.'
+        );
         $validated = $request->validate([
             'student_id' => ['required', 'integer', 'exists:students,id'],
             'fee_category_id' => ['nullable', 'integer', 'exists:fee_categories,id'],
@@ -76,8 +86,8 @@ class FeeController extends Controller
         if (!$actor || !$actor->hasRole('branch_manager')) {
             return;
         }
-        if ($actor->branch_id === null) {
-            abort(403, 'Branch manager must be assigned to a branch.');
+        if ($actor->branch_id === null || !app(PluginManager::class)->isEnabled('branch-management') || !Schema::hasTable('branches')) {
+            abort(403, 'Branch manager must be assigned to an active branch.');
         }
         $activeBranch = app('db')->table('branches')
             ->where('id', $actor->branch_id)
