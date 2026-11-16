@@ -630,10 +630,15 @@ class FinanceAndPaymentGatewayTest extends TestCase
             return Http::response(['message' => 'Unexpected payment request'], 404);
         });
 
-        $this->actingAs($payer)->postJson('/payments/stripe/checkout', [
+        $stripeCheckout = $this->actingAs($payer)->postJson('/payments/stripe/checkout', [
             'invoice_id' => $invoice->id,
             'payment_token' => 'pm_standalone_token',
-        ])->assertOk()->assertJsonPath('gateway', 'gateway-stripe');
+        ])->assertOk()->assertJsonPath('gateway', 'gateway-stripe')->json();
+
+        $this->actingAs($payer)->getJson('/payments/stripe/return?payment_intent=pi_standalone_001')
+            ->assertOk()
+            ->assertJsonPath('transaction_ref', $stripeCheckout['transaction_ref'])
+            ->assertJsonPath('status', 'initiated');
 
         $this->actingAs($payer)->postJson('/payments/paypal/create-order', [
             'invoice_id' => $invoice->id,
