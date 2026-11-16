@@ -177,6 +177,9 @@ class AdditionalModulesWorkflowTest extends TestCase
             'guardian-management',
             'class-management',
             'batch-management',
+            'course-management',
+            'exam-management',
+            'certificate-management',
         ]);
 
         $branchA = DB::table('branches')->insertGetId([
@@ -224,6 +227,45 @@ class AdditionalModulesWorkflowTest extends TestCase
             'admission_date' => now()->toDateString(),
             'status' => 'active',
         ]);
+
+        $this->actingAs($admin)->post('/admin/courses', [
+            'code' => 'COURSE-BR-B',
+            'title' => 'Branch B English Course',
+            'price' => 2500,
+            'branch_id' => $branchB,
+            'status' => 'published',
+        ])->assertSessionHasNoErrors();
+        $courseId = DB::table('courses')->where('code', 'COURSE-BR-B')->value('id');
+
+        $this->actingAs($admin)->post('/admin/exams', [
+            'course_id' => $courseId,
+            'title' => 'Branch B Assessment',
+            'duration_minutes' => 60,
+            'pass_marks' => 40,
+        ])->assertSessionHasNoErrors();
+        $examId = DB::table('exams')->where('title', 'Branch B Assessment')->value('id');
+
+        $this->actingAs($admin)->post('/admin/certificates', [
+            'student_name' => 'Branch B Learner',
+            'course_title' => 'Branch B English Course',
+            'grade_or_band' => 'A',
+            'issued_at' => now()->toDateString(),
+            'branch_id' => $branchB,
+        ])->assertSessionHasNoErrors();
+        $certificateId = DB::table('certificates')->where('student_name', 'Branch B Learner')->value('id');
+
+        $permissionIds = DB::table('permissions')
+            ->whereIn('slug', ['courses.manage', 'exams.manage', 'certificates.manage'])
+            ->pluck('id');
+        $manager->roles()->first()->permissions()->syncWithoutDetaching($permissionIds);
+
+        $this->actingAs($manager)->delete('/admin/courses/' . $courseId)->assertForbidden();
+        $this->actingAs($manager)->delete('/admin/exams/' . $examId)->assertForbidden();
+        $this->actingAs($manager)->post('/admin/certificates/' . $certificateId . '/revoke')->assertForbidden();
+
+        $this->assertDatabaseHas('courses', ['id' => $courseId]);
+        $this->assertDatabaseHas('exams', ['id' => $examId]);
+        $this->assertDatabaseHas('certificates', ['id' => $certificateId, 'status' => 'issued']);
 
         $guardianPermission = DB::table('permissions')->where('slug', 'guardians.manage')->first();
         if ($guardianPermission) {
