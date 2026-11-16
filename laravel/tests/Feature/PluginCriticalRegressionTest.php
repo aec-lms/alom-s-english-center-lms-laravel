@@ -242,4 +242,87 @@ class PluginCriticalRegressionTest extends TestCase
         $this->assertStringContainsString("Schema::create('failed_jobs'", $migration);
     }
 
+    public function test_notification_email_job_marks_sent_only_after_mail_transport_returns(): void
+    {
+        $this->markSystemInstalled();
+        Schema::create('lms_notifications', function (Blueprint $table): void {
+            $table->id();
+            $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
+            $table->unsignedBigInteger('branch_id')->nullable();
+            $table->string('channel', 24);
+            $table->string('title', 180);
+            $table->text('message');
+            $table->string('status', 24)->default('queued');
+            $table->unsignedSmallInteger('attempt_count')->default(0);
+            $table->text('last_error')->nullable();
+            $table->timestamp('processed_at')->nullable();
+            $table->timestamps();
+        });
+
+        $recipient = $this->createUserWithRole('student', null, 'notification-recipient@aec.test');
+        $notification = LmsNotification::query()->create([
+            'user_id' => $recipient->id,
+            'channel' => 'email',
+            'title' => 'Test notification',
+            'message' => 'Test body',
+            'status' => 'queued',
+        ]);
+
+        $plugins = \\Mockery::mock(PluginManager::class);
+        $plugins->shouldReceive('getSetting')->with('email-notifications', 'smtp_host', '')->andReturn('smtp.example.test');
+        $plugins->shouldReceive('getSetting')->with('email-notifications', 'smtp_port', 587)->andReturn(587);
+        $plugins->shouldReceive('getSetting')->with('email-notifications', 'smtp_username', '')->andReturn('smtp-user');
+        $plugins->shouldReceive('getSetting')->with('email-notifications', 'smtp_password', '')->andReturn('smtp-secret');
+        $plugins->shouldReceive('getSetting')->withArgs(fn ($slug, $key) => $slug === 'email-notifications' && $key === 'from_address')->andReturn('noreply@aec.test');
+
+        $mailer = \\Mockery::mock();
+        $mailer->shouldReceive('raw')->once()->with('Test body', \\Mockery::type('Closure'))->andReturnNull();
+        Mail::shouldReceive('purge')->once()->with('smtp');
+        Mail::shouldReceive('mailer')->once()->with('smtp')->andReturn($mailer);
+
+        (new DeliverNotificationJob($notification->id))->handle($plugins);
+
+        $notification->refresh();
+        $this->assertSame('sent', $notification->status);
+        $this->assertSame(1, $notification->attempt_count);
+        $this->assertNotNull($notification->processed_at);
+        $this->assertNull($notification->last_error);
+    }
+
+    public function test_notification_email_job_does_not_mark_unsupported_channels_as_sent(): void
+    {
+        $this->markSystemInstalled();
+        Schema::create('lms_notifications', function (Blueprint $table): void {
+            $table->id();
+            $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
+            $table->unsignedBigInteger('branch_id')->nullable();
+            $table->string('channel', 24);
+            $table->string('title', 180);
+            $table->text('message');
+            $table->string('status', 24)->default('queued');
+            $table->unsignedSmallInteger('attempt_count')->default(0);
+            $table->text('last_error')->nullable();
+            $table->timestamp('processed_at')->nullable();
+            $table->timestamps();
+        });
+
+        $recipient = $this->createUserWithRole('student');
+        $notification = LmsNotification::query()->create([
+            'user_id' => $recipient->id,
+            'channel' => 'sms',
+            'title' => 'SMS test',
+            'message' => 'Test body',
+            'status' => 'queued',
+        ]);
+
+        $plugins = \\Mockery::mock(PluginManager::class);
+        (new DeliverNotificationJob($notification->id))->handle($plugins);
+
+        $notification->refresh();
+        $this->assertSame('failed', $notification->status);
+        $this->assertSame('No verified delivery adapter is configured for this channel.', $notification->last_error);
+        $this->assertSame(1, $notification->attempt_count);
+    }
+
+
 }
