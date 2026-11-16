@@ -37,6 +37,7 @@ class WebsiteBuildersTest extends TestCase
             ->assertOk()
             ->assertSee('Applications are now open.')
             ->assertSee('Explore Courses')
+            ->assertSee('max-w-[1120px]', false)
             ->assertSee('href="/courses"', false)
             ->assertSee('<meta name="description" content="Apply to AEC courses.">', false);
     }
