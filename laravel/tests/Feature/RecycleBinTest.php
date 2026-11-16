@@ -46,6 +46,25 @@ class RecycleBinTest extends TestCase
 
         $this->assertDatabaseHas('students', ['id' => $student->id, 'deleted_at' => null]);
         $this->assertDatabaseHas('users', ['id' => $learner->id, 'is_active' => true]);
+
+        $permanentLearner = $this->createUserWithRole('student');
+        $permanentStudent = Student::query()->create([
+            'user_id' => $permanentLearner->id,
+            'student_code' => 'RECYCLE-PERM-001',
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+        ]);
+        $this->actingAs($admin)->delete('/admin/students/' . $permanentStudent->id)->assertRedirect();
+        $this->actingAs($admin)->post('/admin/recycle-bin/students/' . $permanentStudent->id . '/permanent-delete', [
+            'confirm_permanent_delete' => '1',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertDatabaseMissing('students', ['id' => $permanentStudent->id]);
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'recycle_bin.permanently_deleted',
+            'entity_type' => 'student',
+            'entity_id' => (string) $permanentStudent->id,
+        ]);
     }
 
     public function test_course_exam_batch_and_class_records_can_be_trashed_and_restored(): void
@@ -167,5 +186,8 @@ class RecycleBinTest extends TestCase
 
         $this->actingAs($student)->get('/admin/recycle-bin')->assertForbidden();
         $this->actingAs($student)->post('/admin/recycle-bin/students/1/restore')->assertForbidden();
+        $this->actingAs($student)->post('/admin/recycle-bin/students/1/permanent-delete', [
+            'confirm_permanent_delete' => '1',
+        ])->assertForbidden();
     }
 }
