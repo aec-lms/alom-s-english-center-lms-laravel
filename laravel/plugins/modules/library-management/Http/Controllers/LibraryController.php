@@ -27,9 +27,10 @@ class LibraryController extends Controller
     public function index(Request $request): View
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $books = Schema::hasTable('library_books')
             ? LibraryBook::query()
-                ->when($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null, fn ($q) => $q->where('branch_id', $actor->branch_id))
+                ->when($actor && $actor->hasRole('branch_manager'), fn ($q) => $q->where('branch_id', $actor->branch_id))
                 ->orderBy('title')
                 ->get()
             : collect();
@@ -49,6 +50,7 @@ class LibraryController extends Controller
     public function storeBook(Request $request): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $validated = $request->validate([
             'isbn' => ['required', 'string', 'max:40', 'unique:library_books,isbn'],
             'title' => ['required', 'string', 'max:200'],
@@ -56,7 +58,7 @@ class LibraryController extends Controller
             'category' => ['required', 'string', 'max:80'],
             'total_copies' => ['required', 'integer', 'min:1', 'max:1000'],
             'shelf_location' => ['nullable', 'string', 'max:60'],
-            'branch_id' => ['nullable', 'integer'],
+            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
         ]);
 
         if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null) {
@@ -75,6 +77,7 @@ class LibraryController extends Controller
     public function issueLoan(Request $request): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $validated = $request->validate([
             'library_book_id' => ['required', 'integer', 'exists:library_books,id'],
             'borrower_name' => ['required', 'string', 'max:160'],
@@ -85,8 +88,8 @@ class LibraryController extends Controller
         try {
             $loan = DB::transaction(function () use ($validated, $actor): LibraryLoan {
                 $book = LibraryBook::query()->whereKey($validated['library_book_id'])->lockForUpdate()->firstOrFail();
-                if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null && (int) $book->branch_id !== (int) $actor->branch_id) {
-                    throw new RuntimeException('Branch isolation violation.');
+                if ($actor && $actor->hasRole('branch_manager') && (int) $book->branch_id !== (int) $actor->branch_id) {
+                    abort(403, 'Branch isolation violation.');
                 }
                 if ($book->available_copies < 1) {
                     throw new RuntimeException("No copies of '{$book->title}' are currently available.");
@@ -116,7 +119,8 @@ class LibraryController extends Controller
     public function returnLoan(Request $request, LibraryLoan $loan): RedirectResponse
     {
         $actor = $request->user();
-        if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null && (int) $loan->branch_id !== (int) $actor->branch_id) {
+        $this->ensureAssignedBranch($actor);
+        if ($actor && $actor->hasRole('branch_manager') && (int) $loan->branch_id !== (int) $actor->branch_id) {
             abort(403, 'Branch isolation violation.');
         }
 
@@ -149,4 +153,19 @@ class LibraryController extends Controller
 
         return back()->with('status', 'Book return recorded cleanly.');
     }
+
+    private function ensureAssignedBranch($actor): void
+    {
+        if (!$actor || !$actor->hasRole('branch_manager')) {
+            return;
+        }
+
+        if ($actor->branch_id === null || !DB::table('branches')
+            ->where('id', $actor->branch_id)
+            ->where('is_active', true)
+            ->exists()) {
+            abort(403, 'Branch manager must be assigned to an active branch.');
+        }
+    }
+
 }
