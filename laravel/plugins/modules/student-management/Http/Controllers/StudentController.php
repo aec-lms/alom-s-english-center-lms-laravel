@@ -27,7 +27,6 @@ class StudentController extends Controller
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
         $query = Student::query()->with('user')->latest();
-        if (!$branchIntegration) { $validated['branch_id'] = null; }
         if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null) {
             $query->where('branch_id', $actor->branch_id);
         }
@@ -55,6 +54,7 @@ class StudentController extends Controller
             'status' => ['nullable', 'in:active,inactive,graduated'],
         ]);
 
+        if (!$branchIntegration) { $validated['branch_id'] = null; }
         if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null) {
             if (isset($validated['branch_id']) && (int) $validated['branch_id'] !== (int) $actor->branch_id) {
                 abort(403, 'Branch isolation violation.');
