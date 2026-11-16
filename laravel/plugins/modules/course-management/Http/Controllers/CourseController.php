@@ -21,9 +21,13 @@ class CourseController extends Controller
 {
     public function __construct(private readonly AuditLogger $audit) {}
 
-    public function index(): View
+    public function index(Request $request): View
     {
-        $courses = Schema::hasTable('courses') ? Course::query()->latest()->paginate(20) : collect();
+        $actor = $request->user();
+        $isBranchManager = $actor && $actor->hasRole('branch_manager');
+        $courses = Schema::hasTable('courses')
+            ? Course::query()->when($isBranchManager, fn ($q) => $q->where('branch_id', $actor->branch_id))->latest()->paginate(20)
+            : collect();
         $categories = Schema::hasTable('course_categories')
             ? CourseCategory::query()->orderBy('name')->get()
             : collect();
@@ -34,7 +38,7 @@ class CourseController extends Controller
             ? DB::table('cms_posts')->orderByDesc('id')->limit(100)->get()
             : collect();
         $liveClasses = Schema::hasTable('live_classes')
-            ? LiveClass::query()->with('course')->latest('starts_at')->get()
+            ? LiveClass::query()->with('course')->when($isBranchManager, fn ($q) => $q->whereHas('course', fn ($courseQuery) => $courseQuery->where('branch_id', $actor->branch_id)))->latest('starts_at')->get()
             : collect();
 
         return view('course-management::index', compact('courses', 'categories', 'cmsCategories', 'cmsPosts', 'liveClasses'));
@@ -55,7 +59,7 @@ class CourseController extends Controller
             'price' => ['required', 'numeric', 'min:0'],
             'original_price' => ['nullable', 'numeric', 'min:0'],
             'duration_weeks' => ['nullable', 'integer', 'min:1', 'max:104'],
-            'branch_id' => ['nullable', 'integer'],
+            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
             'status' => ['nullable', 'in:published,draft,archived'],
             'thumbnail' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
             'thumbnail_url' => ['nullable', 'string', 'max:255'],
@@ -66,6 +70,11 @@ class CourseController extends Controller
             'seo_title' => ['nullable', 'string', 'max:180'],
             'seo_description' => ['nullable', 'string', 'max:320'],
         ]);
+
+        $actor = $request->user();
+        if ($actor && $actor->hasRole('branch_manager')) {
+            $validated['branch_id'] = $actor->branch_id;
+        }
 
         $linkedPost = null;
         $cmsPostId = $validated['cms_post_id'] ?? null;
@@ -157,6 +166,10 @@ class CourseController extends Controller
 
     public function update(Request $request, Course $course): RedirectResponse
     {
+        $actor = $request->user();
+        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $course->branch_id) {
+            abort(403, 'Branch isolation violation.');
+        }
         $validated = $request->validate([
             'code' => ['required', 'string', 'max:40', 'unique:courses,code,' . $course->id],
             'title' => ['required', 'string', 'max:180'],
@@ -248,8 +261,12 @@ class CourseController extends Controller
         return back()->with('status', "Course '{$course->title}' updated.");
     }
 
-    public function destroy(Course $course): RedirectResponse
+    public function destroy(Request $request, Course $course): RedirectResponse
     {
+        $actor = $request->user();
+        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $course->branch_id) {
+            abort(403, 'Branch isolation violation.');
+        }
         $title = $course->title;
         $id = (string) $course->id;
         $course->delete();
@@ -321,6 +338,7 @@ class CourseController extends Controller
 
     public function storeLiveClass(Request $request): RedirectResponse
     {
+        $actor = $request->user();
         $validated = $request->validate([
             'course_id' => ['required', 'integer', 'exists:courses,id'],
             'title' => ['required', 'string', 'max:180'],
@@ -329,6 +347,11 @@ class CourseController extends Controller
             'meeting_url' => ['required', 'url', 'max:255'],
             'starts_at' => ['required', 'date'],
         ]);
+
+        $course = Course::query()->findOrFail((int) $validated['course_id']);
+        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $course->branch_id) {
+            abort(403, 'Branch isolation violation.');
+        }
 
         $live = LiveClass::query()->create([
             'course_id' => $validated['course_id'],
@@ -347,6 +370,10 @@ class CourseController extends Controller
 
     public function updateLiveClass(Request $request, LiveClass $liveClass): RedirectResponse
     {
+        $actor = $request->user();
+        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $liveClass->course?->branch_id) {
+            abort(403, 'Branch isolation violation.');
+        }
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:180'],
             'instructor_name' => ['nullable', 'string', 'max:120'],
@@ -364,8 +391,12 @@ class CourseController extends Controller
         return back()->with('status', "Live class '{$liveClass->title}' updated ({$liveClass->status}).");
     }
 
-    public function destroyLiveClass(LiveClass $liveClass): RedirectResponse
+    public function destroyLiveClass(Request $request, LiveClass $liveClass): RedirectResponse
     {
+        $actor = $request->user();
+        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $liveClass->course?->branch_id) {
+            abort(403, 'Branch isolation violation.');
+        }
         $title = $liveClass->title;
         $id = (string) $liveClass->id;
         $liveClass->delete();
