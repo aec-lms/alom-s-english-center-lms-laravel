@@ -1,5 +1,6 @@
 @extends('layouts.app')
 @section('title', ($page->seo_title ?: $page->title) . " — Alom's English Center")
+@section('meta_description', $page->seo_description ?: '')
 @section('content')
 <div class="min-h-screen flex flex-col">
     @include('public.partials.navbar')
