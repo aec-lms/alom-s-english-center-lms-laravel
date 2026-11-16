@@ -20,6 +20,7 @@ class AdmissionController extends Controller
     public function index(Request $request): View
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $applications = Schema::hasTable('admission_applications')
             ? AdmissionApplication::query()
                 ->when($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null, fn ($q) => $q->where('branch_id', $actor->branch_id))
@@ -54,6 +55,7 @@ class AdmissionController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $validated = $request->validate([
             'applicant_name' => ['required', 'string', 'max:160'],
             'email' => ['required', 'email', 'max:160'],
@@ -82,6 +84,7 @@ class AdmissionController extends Controller
     public function review(Request $request, AdmissionApplication $application): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null && (int) $application->branch_id !== (int) $actor->branch_id) {
             abort(403, 'Branch isolation violation.');
         }
@@ -103,5 +106,12 @@ class AdmissionController extends Controller
         ]);
 
         return back()->with('status', "Application {$application->application_code} marked as {$validated['status']}.");
+    }
+
+    private function ensureAssignedBranch($actor): void
+    {
+        if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id === null) {
+            abort(403, 'Branch manager must be assigned to a branch.');
+        }
     }
 }
