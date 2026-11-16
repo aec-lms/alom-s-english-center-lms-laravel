@@ -6,7 +6,8 @@
     "category": "academic",
     "description": "Batch daily attendance registers, student progress tracking, and attendance summary analytics.",
     "core_compatibility": "^2.0",
-    "dependencies": ["branch-management", "student-management", "course-management", "batch-management"],
+    "dependencies": [],
+    "optional_dependencies": ["branch-management", "student-management", "course-management", "batch-management"],
     "provider": "Plugins\\Modules\\AttendanceManagement\\Providers\\AttendanceManagementServiceProvider",
     "permissions": [
         {
