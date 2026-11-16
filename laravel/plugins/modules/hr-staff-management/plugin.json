@@ -6,12 +6,22 @@
     "category": "operations",
     "description": "Employee & Staff Directory, Departments, Designations, Leave Status, and Monthly Payroll Ledgers.",
     "core_compatibility": "^2.0",
-    "dependencies": ["branch-management"],
+    "dependencies": [],
     "provider": "Plugins\\Modules\\HrStaffManagement\\Providers\\HrStaffManagementServiceProvider",
     "permissions": [
-        { "slug": "hr.manage", "name": "Manage Staff Profiles & Payrolls" }
+        {
+            "slug": "hr.manage",
+            "name": "Manage Staff Profiles & Payrolls"
+        }
     ],
     "settings_schema": [
-        { "key": "payroll_currency", "label": "Payroll Currency (e.g. BDT)", "encrypted": false }
+        {
+            "key": "payroll_currency",
+            "label": "Payroll Currency (e.g. BDT)",
+            "encrypted": false
+        }
+    ],
+    "optional_dependencies": [
+        "branch-management"
     ]
 }
