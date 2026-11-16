@@ -165,9 +165,9 @@ class ExamController extends Controller
         $id = (string) $exam->id;
         $exam->delete();
 
-        $this->audit->log('exam.deleted', 'exam', $id, ['title' => $title]);
+        $this->audit->log('exam.trashed', 'exam', $id, ['title' => $title]);
 
-        return back()->with('status', "Exam '{$title}' deleted.");
+        return back()->with('status', "Exam '{$title}' moved to the Admin Recycle Bin.");
     }
 
     public function addQuestion(Request $request, Exam $exam): RedirectResponse
