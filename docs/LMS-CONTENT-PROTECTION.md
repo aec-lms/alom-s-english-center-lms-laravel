@@ -12,8 +12,13 @@ The course-management module includes an initial server-side lesson media protec
 - The stream endpoint checks the account and enrollment again, validates the canonical file path, rejects traversal/symlink escapes, and sends private/no-store response headers.
 - Admin endpoints allow course managers to upload lesson media and change the protection/download policy.
 
+## Admin screen
+
+Open the Course Management admin area and choose **Content Protection**. Administrators with `courses.manage` can upload lesson media and save per-lesson protection/download policy. Branch managers are restricted to their assigned active branch.
+
 ## Routes
 
+- GET /admin/courses/content-protection — admin content protection dashboard; requires `courses.manage`.
 - POST /admin/courses/lessons/{lesson}/media — multipart upload field media; requires courses.manage.
 - PATCH /admin/courses/lessons/{lesson}/protection — JSON fields protection_enabled and is_downloadable; requires courses.manage.
 - GET /my-learning/lessons/{lesson}/media-access — returns a short-lived signed URL and learner watermark text; requires login and active enrollment.
