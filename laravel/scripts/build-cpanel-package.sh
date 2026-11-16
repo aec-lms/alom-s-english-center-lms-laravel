@@ -30,9 +30,9 @@ if command -v rsync >/dev/null 2>&1; then
     --exclude='tests' \
     --exclude='dist' \
     --exclude='storage/logs/*.log' \
-    --exclude='storage/framework/cache/**' \\
-    --exclude='storage/framework/testing/**' \\
-    --exclude='.phpunit.result.cache' \\
+    --exclude='storage/framework/cache/**' \
+    --exclude='storage/framework/testing/**' \
+    --exclude='.phpunit.result.cache' \
     --exclude='phpunit.xml' \
     --exclude='storage/framework/sessions/*' \
     --exclude='storage/framework/views/*' \
@@ -58,9 +58,9 @@ else
     --exclude='tests' \
     --exclude='dist' \
     --exclude='storage/logs/*.log' \
-    --exclude='storage/framework/cache/**' \\
-    --exclude='storage/framework/testing/**' \\
-    --exclude='.phpunit.result.cache' \\
+    --exclude='storage/framework/cache/**' \
+    --exclude='storage/framework/testing/**' \
+    --exclude='.phpunit.result.cache' \
     --exclude='phpunit.xml' \
     --exclude='storage/framework/sessions/*' \
     --exclude='storage/framework/views/*' \
