@@ -5,7 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Route;
 use Plugins\Modules\UniversalPayment\Http\Controllers\UniversalPaymentController;
 
-Route::middleware(['web', 'installed', 'auth', 'plugin:universal-payment'])
+Route::middleware(['web', 'installed', 'auth', 'plugin:universal-payment', 'throttle:10,1'])
     ->post('/universal-checkout', [UniversalPaymentController::class, 'publicCheckout'])
     ->name('plugins.universal_payment.checkout');
 
