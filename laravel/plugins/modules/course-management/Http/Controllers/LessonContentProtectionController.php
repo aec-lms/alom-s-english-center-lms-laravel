@@ -174,7 +174,7 @@ class LessonContentProtectionController extends Controller
     private function resolveMediaPath(string $relativePath): string
     {
         abort_if($relativePath === '' || str_contains($relativePath, "\0") || str_starts_with($relativePath, '/') || preg_match('/^[A-Za-z]:/', $relativePath), 404);
-        $segments = explode('/', str_replace('\\\\', '/', $relativePath));
+        $segments = explode('/', str_replace(chr(92), '/', $relativePath));
         abort_if(in_array('..', $segments, true) || in_array('.', $segments, true), 404);
 
         $root = $this->privateRoot();
