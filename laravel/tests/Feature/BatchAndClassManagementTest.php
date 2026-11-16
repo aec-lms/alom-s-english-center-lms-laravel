@@ -34,6 +34,15 @@ class BatchAndClassManagementTest extends TestCase
             'status' => 'ongoing',
         ])->assertSessionHasNoErrors()->assertRedirect();
         $this->assertDatabaseHas('study_batches', ['id' => $batchId, 'batch_code' => 'BATCH-NEW', 'name' => 'Updated Batch']);
+        DB::table('study_batches')->where('id', $batchId)->update(['enrolled_count' => 3]);
+        $this->actingAs($admin)->put('/admin/batches/' . $batchId, [
+            'batch_code' => 'BATCH-NEW',
+            'name' => 'Updated Batch',
+            'course_title' => 'IELTS Advanced',
+            'schedule' => 'Mon-Wed 11:00',
+            'max_capacity' => 2,
+            'status' => 'ongoing',
+        ])->assertSessionHasErrors('max_capacity');
 
         $this->actingAs($admin)->post('/admin/classes', [
             'code' => 'CLASS-OLD',
