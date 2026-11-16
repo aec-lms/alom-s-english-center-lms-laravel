@@ -57,4 +57,5 @@ class PluginCriticalRegressionTest extends TestCase
         $this->assertIsString($routeFile);
         $this->assertStringContainsString("Route::post('/ask'", $routeFile);
         $this->assertStringContainsString("->middleware('permission:ai.assistant.use')", $routeFile);
-    }}
+    }
+}
