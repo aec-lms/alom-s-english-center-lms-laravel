@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use Plugins\Modules\CourseManagement\Models\Course;
-use Plugins\Modules\CourseManagement\Models\Enrollment;
 use Tests\TestCase;
 
 class CourseOptionalIntegrationsTest extends TestCase
