@@ -34,7 +34,7 @@ class PageBuilderController extends Controller
             'seo_description' => ['nullable', 'string', 'max:320'],
             'content_body' => ['required', 'string'],
             'cta_label' => ['nullable', 'string', 'max:80'],
-            'cta_url' => ['nullable', 'string', 'max:255'],
+            'cta_url' => ['nullable', 'string', 'max:255', 'regex:#^(https?://[^\\s]+|/(?!/)[^\\s]*)$#i'],
             'banner' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
             'is_published' => ['nullable', 'boolean'],
         ]);
@@ -75,18 +75,29 @@ class PageBuilderController extends Controller
             'seo_title' => ['nullable', 'string', 'max:180'],
             'seo_description' => ['nullable', 'string', 'max:320'],
             'content_body' => ['required', 'string'],
+            'cta_label' => ['nullable', 'string', 'max:80'],
+            'cta_url' => ['nullable', 'string', 'max:255', 'regex:#^(https?://[^\\s]+|/(?!/)[^\\s]*)$#i'],
             'banner' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
             'is_published' => ['nullable', 'boolean'],
         ]);
 
         $bannerPath = $request->hasFile('banner') ? $this->storeImage($request->file('banner')) : $page->banner_image;
 
+        $blocks = [['type' => 'rich_text', 'content' => $validated['content_body']]];
+        if (!empty($validated['cta_label'])) {
+            $blocks[] = [
+                'type' => 'cta',
+                'label' => $validated['cta_label'],
+                'url' => $validated['cta_url'] ?? '/courses',
+            ];
+        }
+
         $page->update([
             'slug' => strtolower($validated['slug']),
             'title' => $validated['title'],
-            'template' => $validated['template'] ?? $page->template ?? 'standard',
+            'template' => $validated['template'] ?? 'standard',
             'banner_image' => $bannerPath,
-            'blocks_json' => [['type' => 'rich_text', 'content' => $validated['content_body']]],
+            'blocks_json' => $blocks,
             'seo_title' => $validated['seo_title'] ?? $validated['title'],
             'seo_description' => $validated['seo_description'] ?? null,
             'is_published' => $request->boolean('is_published'),
@@ -113,7 +124,7 @@ class PageBuilderController extends Controller
         if (!is_dir($dir)) {
             mkdir($dir, 0755, true);
         }
-        $filename = Str::uuid()->toString() . '.' . $file->getClientOriginalExtension();
+        $filename = Str::uuid()->toString() . '.' . $file->extension();
         $file->move($dir, $filename);
 
         return '/uploads/pages/' . $filename;
