@@ -94,12 +94,25 @@ class HealthMonitorService
     private function check(callable $test, ?callable $repair, array &$recoveries): array
     {
         $started = microtime(true);
-        try {\n            $message = $test();\n            $duration = (int) round((microtime(true) - $started) * 1000);\n            $slow = $duration >= (int) config('lms.health_slow_check_ms', 2000);\n            return ['status' => $slow ? 'slow' : 'ok', 'message' => $message . ($slow ? ' Probe exceeded the response-time threshold.' : ''), 'duration_ms' => $duration];\n        }
-        catch (Throwable $e) {
+        try {
+            $message = $test();
+            $duration = (int) round((microtime(true) - $started) * 1000);
+            $slow = $duration >= (int) config('lms.health_slow_check_ms', 2000);
+            return [
+                'status' => $slow ? 'slow' : 'ok',
+                'message' => $message . ($slow ? ' Probe exceeded the response-time threshold.' : ''),
+                'duration_ms' => $duration,
+            ];
+        } catch (Throwable $e) {
             $message = $this->safeMessage($e);
             if ($repair !== null) {
-                try { $recoveries['safe_runtime'] = $repair(); $verified = $test(); return ['status' => 'recovered', 'message' => $verified . ' Safe recovery verified.', 'duration_ms' => (int) round((microtime(true) - $started) * 1000)]; }
-                catch (Throwable $repairException) { $message .= ' Recovery attempt failed: ' . $this->safeMessage($repairException); }
+                try {
+                    $recoveries['safe_runtime'] = $repair();
+                    $verified = $test();
+                    return ['status' => 'recovered', 'message' => $verified . ' Safe recovery verified.', 'duration_ms' => (int) round((microtime(true) - $started) * 1000)];
+                } catch (Throwable $repairException) {
+                    $message .= ' Recovery attempt failed: ' . $this->safeMessage($repairException);
+                }
             }
             return ['status' => 'failed', 'message' => $message, 'duration_ms' => (int) round((microtime(true) - $started) * 1000)];
         }
