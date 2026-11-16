@@ -74,7 +74,7 @@ class DeliverNotificationJob implements ShouldQueue
             return;
         }
 
-        $smtpPort = (int) $plugins->getSetting('email-notifications', 'smtp_port', 587);
+        $smtpPort = (int) $plugins->getSetting('email-notifications', 'smtp_port', '587');
         $smtpUsername = (string) $plugins->getSetting('email-notifications', 'smtp_username', '');
         $smtpPassword = (string) $plugins->getSetting('email-notifications', 'smtp_password', '');
         $fromAddress = (string) $plugins->getSetting('email-notifications', 'from_address', config('mail.from.address'));
