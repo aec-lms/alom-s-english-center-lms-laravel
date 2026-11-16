@@ -115,7 +115,8 @@ class PopupController extends Controller
     public function destroy(VisitorPopup $popup): RedirectResponse
     {
         $popup->delete();
-        return back()->with('status', 'Visitor pop-up ad deleted.');
+        $this->audit->log('visitor_popup.trashed', 'visitor_popup', (string) $popup->id);
+        return back()->with('status', 'Visitor pop-up ad moved to the Admin Recycle Bin.');
     }
 
     public function trackClick(VisitorPopup $popup): JsonResponse
