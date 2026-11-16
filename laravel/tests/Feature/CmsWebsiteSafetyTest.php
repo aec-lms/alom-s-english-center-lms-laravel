@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use Plugins\Modules\CmsWebsite\Models\CmsPost;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -49,4 +50,34 @@ class CmsWebsiteSafetyTest extends TestCase
         $this->assertSame('https://cdn.example.test/guide.pdf', $post->pdf_path);
         $this->assertSame('/uploads/posts/pdf-thumbs/guide.webp', $post->pdf_thumbnail);
     }
+
+    public function test_cms_post_update_rejects_a_nonexistent_category(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+        $admin = $this->createUserWithRole('admin');
+        $post = CmsPost::query()->create([
+            'slug' => 'existing-cms-post',
+            'title' => 'Existing CMS Post',
+            'category' => 'General',
+            'author' => 'AEC LMS',
+            'content' => 'Existing content',
+            'is_published' => true,
+        ]);
+
+        $this->actingAs($admin)->put('/admin/cms/posts/' . $post->id, [
+            'title' => 'Updated CMS Post',
+            'slug' => 'updated-cms-post',
+            'category_id' => 999999,
+            'content' => 'Updated content',
+            'is_published' => '1',
+        ])->assertSessionHasErrors('category_id');
+
+        $this->assertDatabaseHas('cms_posts', [
+            'id' => $post->id,
+            'title' => 'Existing CMS Post',
+            'slug' => 'existing-cms-post',
+        ]);
+    }
+
 }
