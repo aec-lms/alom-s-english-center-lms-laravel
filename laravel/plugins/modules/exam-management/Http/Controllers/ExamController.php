@@ -16,6 +16,7 @@ use Plugins\Modules\ExamManagement\Models\Exam;
 use Plugins\Modules\ExamManagement\Models\ExamAttempt;
 use Plugins\Modules\ExamManagement\Models\ExamQuestion;
 use Plugins\Modules\StudentManagement\Models\Student;
+use Plugins\Modules\StudentTracking\Services\StudentActivityTracker;
 
 class ExamController extends Controller
 {
