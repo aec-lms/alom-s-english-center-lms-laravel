@@ -53,7 +53,9 @@ class LessonContentProtectionTest extends TestCase
 
         $stream = $this->get($url);
         $stream->assertOk();
-        $this->assertSame('video/mp4', $stream->headers->get('Content-Type'));\n        $this->assertSame('inline; filename=\"lesson-' . $lessonId . '.mp4\"', $stream->headers->get('Content-Disposition'));\n        $this->assertSame('private lesson video', file_get_contents($stream->baseResponse->getFile()->getPathname()));
+        $this->assertSame('video/mp4', $stream->headers->get('Content-Type'));
+        $this->assertSame('inline; filename="lesson-' . $lessonId . '.mp4"', $stream->headers->get('Content-Disposition'));
+        $this->assertStringContainsString('no-store', $stream->headers->get('Cache-Control'));
     }
 
     public function test_pending_or_cancelled_enrollment_cannot_obtain_media_access(): void
