@@ -202,4 +202,68 @@ class AcademicAndExamWorkflowTest extends TestCase
         $this->assertSame(5, $attempt->total_marks);
         $this->assertTrue($attempt->passed);
     }
+    public function test_paid_course_enrollment_is_activated_only_after_verified_invoice_settlement(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins([
+            'branch-management',
+            'student-management',
+            'fees-management',
+            'payment-management',
+            'course-management',
+        ]);
+
+        $branchId = DB::table('branches')->insertGetId([
+            'code' => 'ENR-A',
+            'name' => 'Enrollment Branch',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $studentUser = $this->createUserWithRole('student', $branchId);
+        $student = Student::query()->create([
+            'user_id' => $studentUser->id,
+            'branch_id' => $branchId,
+            'student_code' => 'ENR-STU-001',
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+        ]);
+
+        $course = Course::query()->create([
+            'code' => 'ENR-PAID-001',
+            'title' => 'Paid IELTS Course',
+            'slug' => 'paid-ielts-course',
+            'price' => 1500,
+            'status' => 'published',
+            'branch_id' => $branchId,
+        ]);
+
+        $this->actingAs($studentUser)->post('/courses/' . $course->id . '/enroll')->assertSessionHasNoErrors();
+
+        $enrollment = Enrollment::query()->where('user_id', $studentUser->id)->where('course_id', $course->id)->firstOrFail();
+        $invoice = FeeInvoice::query()->findOrFail($enrollment->invoice_id);
+        $this->assertSame('pending', $enrollment->status);
+        $this->assertSame('unpaid', $invoice->status);
+
+        $admin = $this->createUserWithRole('admin');
+        $this->actingAs($admin)->patch('/admin/enrollments/' . $enrollment->id . '/status', [
+            'status' => 'active',
+        ])->assertStatus(422);
+
+        $transaction = PaymentTransaction::query()->create([
+            'transaction_ref' => 'ENR-TXN-001',
+            'invoice_id' => $invoice->id,
+            'branch_id' => $branchId,
+            'gateway_slug' => 'offline',
+            'amount' => 1500,
+            'currency' => 'BDT',
+            'status' => 'initiated',
+        ]);
+
+        app(PaymentSettlementService::class)->settleTransaction($transaction, 'ENR-RECEIPT-001');
+
+        $this->assertSame('paid', $invoice->fresh()->status);
+        $this->assertSame('active', $enrollment->fresh()->status);
+    }
+
 }
