@@ -121,7 +121,7 @@ class AdmissionController extends Controller
     private function branchRule(): array
     {
         return $this->branchIntegrationAvailable()
-            ? ['nullable', 'integer', 'exists:branches,id']
+            ? ['nullable', 'integer', 'exists:branches,id,is_active,1']
             : ['nullable', 'integer'];
     }
 
