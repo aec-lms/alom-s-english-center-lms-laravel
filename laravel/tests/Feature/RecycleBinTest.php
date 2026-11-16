@@ -38,7 +38,8 @@ class RecycleBinTest extends TestCase
 
         $this->actingAs($admin)->get('/admin/recycle-bin')
             ->assertOk()
-            ->assertSee('RECYCLE-001');
+            ->assertSee('RECYCLE-001')
+            ->assertSee('Permanently Delete');
 
         $this->actingAs($admin)->post('/admin/recycle-bin/students/' . $student->id . '/restore')
             ->assertRedirect()
