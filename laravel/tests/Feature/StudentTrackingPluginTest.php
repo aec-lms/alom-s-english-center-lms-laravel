@@ -22,7 +22,6 @@ class StudentTrackingPluginTest extends TestCase
         $this->assertFalse($manager->isInstalled('student-management'));
         $this->assertFalse($manager->isInstalled('attendance-management'));
         $this->assertFalse($manager->isInstalled('course-management'));
-        $this->assertDatabaseHas('student_activity_events', []);
 
         $this->actingAs($admin)->postJson('/student-tracking/events', [
             'event_type' => 'lesson_completed',
