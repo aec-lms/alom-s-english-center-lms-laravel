@@ -346,4 +346,68 @@ class AdditionalModulesWorkflowTest extends TestCase
         ]);
     }
 
+
+    public function test_library_branch_manager_is_fail_closed_and_cannot_access_other_branch_books(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'library-management']);
+
+        $branchA = DB::table('branches')->insertGetId([
+            'code' => 'LIB-A', 'name' => 'Library Branch A', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $branchB = DB::table('branches')->insertGetId([
+            'code' => 'LIB-B', 'name' => 'Library Branch B', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $admin = $this->createUserWithRole('admin');
+        $manager = $this->createUserWithRole('branch_manager', $branchA);
+        $permission = DB::table('permissions')->where('slug', 'library.manage')->first();
+        $this->assertNotNull($permission);
+        $manager->roles()->first()->permissions()->syncWithoutDetaching([$permission->id]);
+
+        $this->actingAs($admin)->post('/admin/library/books', [
+            'isbn' => 'LIB-FOREIGN-001',
+            'title' => 'Foreign Branch Book',
+            'author' => 'Test Author',
+            'category' => 'English',
+            'total_copies' => 2,
+            'branch_id' => $branchB,
+        ])->assertSessionHasNoErrors();
+        $foreignBookId = DB::table('library_books')->where('isbn', 'LIB-FOREIGN-001')->value('id');
+        $this->assertNotNull($foreignBookId);
+
+        $this->actingAs($manager)->get('/admin/library')->assertOk()->assertDontSee('Foreign Branch Book');
+        $this->actingAs($manager)->post('/admin/library/books', [
+            'isbn' => 'LIB-OWN-001',
+            'title' => 'Own Branch Book',
+            'author' => 'Test Author',
+            'category' => 'English',
+            'total_copies' => 1,
+            'branch_id' => $branchB,
+        ])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('library_books', [
+            'isbn' => 'LIB-OWN-001',
+            'branch_id' => $branchA,
+        ]);
+
+        $this->actingAs($manager)->post('/admin/library/loans', [
+            'library_book_id' => $foreignBookId,
+            'borrower_name' => 'Cross Branch Attempt',
+            'borrower_code' => 'STU-X',
+            'due_at' => now()->addDays(5)->toDateString(),
+        ])->assertForbidden();
+
+        $unassigned = $this->createUserWithRole('branch_manager');
+        $unassigned->roles()->first()->permissions()->syncWithoutDetaching([$permission->id]);
+        $this->actingAs($unassigned)->get('/admin/library')->assertForbidden();
+        $this->actingAs($unassigned)->post('/admin/library/books', [
+            'isbn' => 'LIB-NO-BRANCH',
+            'title' => 'Should Not Exist',
+            'author' => 'Test Author',
+            'category' => 'English',
+            'total_copies' => 1,
+        ])->assertForbidden();
+        $this->assertDatabaseMissing('library_books', ['isbn' => 'LIB-NO-BRANCH']);
+    }
+
 }
