@@ -179,6 +179,41 @@ class RecycleBinTest extends TestCase
         }
     }
 
+
+    public function test_admin_can_permanently_delete_a_trashed_student_only_after_confirmation(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['student-management']);
+        $admin = $this->createUserWithRole('admin');
+        $learner = $this->createUserWithRole('student');
+
+        $student = Student::query()->create([
+            'user_id' => $learner->id,
+            'student_code' => 'RECYCLE-PURGE-001',
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($admin)->delete('/admin/students/' . $student->id)->assertRedirect();
+        $this->assertSoftDeleted('students', ['id' => $student->id]);
+
+        $this->actingAs($admin)->get('/admin/recycle-bin')
+            ->assertOk()
+            ->assertSee('Permanently Delete');
+
+        $this->actingAs($admin)->post('/admin/recycle-bin/students/' . $student->id . '/permanent-delete')
+            ->assertSessionHasErrors('confirm_permanent_delete');
+        $this->assertSoftDeleted('students', ['id' => $student->id]);
+
+        $this->actingAs($admin)->post('/admin/recycle-bin/students/' . $student->id . '/permanent-delete', [
+            'confirm_permanent_delete' => '1',
+        ])->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseMissing('students', ['id' => $student->id]);
+        $this->assertDatabaseHas('users', ['id' => $learner->id]);
+    }
+
     public function test_non_admin_cannot_view_or_restore_recycle_bin_records(): void
     {
         $this->markSystemInstalled();
