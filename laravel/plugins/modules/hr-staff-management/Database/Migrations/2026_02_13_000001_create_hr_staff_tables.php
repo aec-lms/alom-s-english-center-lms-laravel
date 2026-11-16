@@ -36,7 +36,7 @@ return new class extends Migration {
                 $table->decimal('bonus', 12, 2)->default(0);
                 $table->decimal('deductions', 12, 2)->default(0);
                 $table->decimal('net_paid', 12, 2);
-                $table->string('status', 24)->default('paid'); // pending, paid
+                $table->string('status', 24)->default('pending'); // pending, paid
                 $table->timestamp('paid_at')->nullable();
                 $table->timestamps();
             });
