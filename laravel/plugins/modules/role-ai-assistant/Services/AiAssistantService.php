@@ -55,11 +55,13 @@ class AiAssistantService
 
         $apiKey = (string) $this->plugins->getSetting('role-ai-assistant', 'api_key', '');
         if ($apiKey === '') {
-            $apiKey = (string) env('GEMINI_API_KEY', '');
+            $environmentKey = $provider === 'openai' ? env('OPENAI_API_KEY', '') : env('GEMINI_API_KEY', '');
+            $apiKey = is_string($environmentKey) ? $environmentKey : '';
         }
 
         $defaultModel = $provider === 'openai' ? 'gpt-4o-mini' : 'gemini-2.5-flash';
-        $model = trim((string) $this->plugins->getSetting('role-ai-assistant', 'model', $defaultModel));
+        $configuredModel = trim((string) $this->plugins->getSetting('role-ai-assistant', 'model', $defaultModel));
+        $model = $configuredModel !== '' ? $configuredModel : $defaultModel;
         $maxTokens = min(8192, max(64, (int) $this->plugins->getSetting('role-ai-assistant', 'max_tokens', '1024')));
         $roleSlug = (string) ($user->roles()->first()?->slug ?? 'user');
         $systemInstruction = $this->systemPromptForRole($roleSlug);
