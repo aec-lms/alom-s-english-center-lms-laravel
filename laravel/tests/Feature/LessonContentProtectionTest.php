@@ -41,7 +41,7 @@ class LessonContentProtectionTest extends TestCase
 
         $response = $this->actingAs($student)->getJson(route('plugins.lesson-media.access', $lessonId));
 
-        $response->assertOk()->assertJsonPath('download_allowed', false);
+        $response->assertOk()->assertJsonPath('download_allowed', false)->assertJsonPath('download_url', null);
         $this->assertSame(
             $student->email . ' | ID ' . $student->id . ' | ' . now()->format('Y-m-d H:i:s'),
             $response->json('watermark')
@@ -103,6 +103,51 @@ class LessonContentProtectionTest extends TestCase
             ->json('url');
 
         $this->get($url)->assertNotFound();
+    }
+
+
+    public function test_download_link_is_only_issued_when_lesson_policy_allows_downloads(): void
+    {
+        [$student, $lessonId] = $this->createProtectedLesson('active');
+
+        $blocked = $this->actingAs($student)
+            ->getJson(route('plugins.lesson-media.access', $lessonId))
+            ->assertOk()
+            ->assertJsonPath('download_url', null);
+
+        $blockedUrl = URL::temporarySignedRoute(
+            'plugins.lesson-media.download',
+            now()->addMinutes(5),
+            ['lesson' => $lessonId, 'user' => $student->id]
+        );
+        $this->get($blockedUrl)->assertForbidden();
+
+        DB::table('course_lessons')->where('id', $lessonId)->update(['is_downloadable' => true]);
+        $allowedUrl = $this->getJson(route('plugins.lesson-media.access', $lessonId))
+            ->assertOk()
+            ->json('download_url');
+
+        $this->assertNotEmpty($allowedUrl);
+        $download = $this->get($allowedUrl);
+        $download->assertOk();
+        $this->assertStringStartsWith('attachment;', $download->headers->get('Content-Disposition'));
+    }
+
+    public function test_only_active_enrolled_student_can_open_course_player(): void
+    {
+        [$student, $lessonId] = $this->createProtectedLesson('active');
+        $courseId = (int) DB::table('course_lessons')->where('id', $lessonId)->value('course_id');
+
+        $this->actingAs($student)
+            ->get(route('plugins.lessons.course', $courseId))
+            ->assertOk()
+            ->assertSee('Protected Course')
+            ->assertSee('Open Lesson');
+
+        $otherStudent = $this->createUserWithRole('student');
+        $this->actingAs($otherStudent)
+            ->get(route('plugins.lessons.course', $courseId))
+            ->assertForbidden();
     }
 
     private function createProtectedLesson(string $enrollmentStatus): array
