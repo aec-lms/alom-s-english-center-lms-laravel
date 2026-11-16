@@ -493,7 +493,7 @@ class PluginManager
             'was_installed' => $wasInstalled,
             'was_enabled' => $wasEnabled,
             'deleted_at' => now()->toIso8601String(),
-            'sha256' => hash_file('sha256', $destination . DIRECTORY_SEPARATOR . 'plugin.json'),
+            'files_sha256' => $this->pluginDirectoryChecksums($destination),
         ];
         File::put($trashRoot . DIRECTORY_SEPARATOR . $archiveName . '.json', json_encode($metadata, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
         $this->audit->log('plugin.deleted_to_recycle_bin', 'plugin', $slug, [
@@ -549,7 +549,8 @@ class PluginManager
         if (preg_match('/^[a-z0-9][a-z0-9-]{1,79}$/', $slug) !== 1
             || ($metadata['archive'] ?? null) !== $archiveName
             || !is_file($source . DIRECTORY_SEPARATOR . 'plugin.json')
-            || !hash_equals((string) ($metadata['sha256'] ?? ''), (string) hash_file('sha256', $source . DIRECTORY_SEPARATOR . 'plugin.json'))) {
+            || !is_array($metadata['files_sha256'] ?? null)
+            || $metadata['files_sha256'] !== $this->pluginDirectoryChecksums($source)) {
             throw new RuntimeException('Recycle-bin package integrity check failed.');
         }
 
@@ -614,6 +615,21 @@ class PluginManager
             'package_files_removed' => true,
             'database_records_preserved' => true,
         ], $actorId);
+    }
+
+    /** @return array<string, string> */
+    private function pluginDirectoryChecksums(string $directory): array
+    {
+        $checksums = [];
+        foreach (File::allFiles($directory) as $file) {
+            if ($file->isLink()) {
+                throw new RuntimeException('Symlinks are not allowed in archived plugin packages.');
+            }
+            $relative = str_replace('\\\\', '/', $file->getRelativePathname());
+            $checksums[$relative] = hash_file('sha256', $file->getPathname());
+        }
+        ksort($checksums);
+        return $checksums;
     }
 
     public function saveSettings(string $slug, array $values, array $secretKeys = [], ?int $actorId = null): void
