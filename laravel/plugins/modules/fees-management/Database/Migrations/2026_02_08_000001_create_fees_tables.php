@@ -23,7 +23,7 @@ return new class extends Migration {
             Schema::create('fee_invoices', function (Blueprint $table): void {
                 $table->id();
                 $table->string('invoice_number', 50)->unique();
-                $table->foreignId('student_id')->constrained('students')->cascadeOnDelete();
+                $table->unsignedBigInteger('student_id');
                 $table->unsignedBigInteger('branch_id')->index();
                 $table->foreignId('fee_category_id')->nullable()->constrained('fee_categories')->nullOnDelete();
                 $table->decimal('subtotal_amount', 10, 2);
