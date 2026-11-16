@@ -18,7 +18,7 @@ class StudentTrackingServiceProvider extends BasePluginServiceProvider
         parent::boot();
         Event::listen(Login::class, function (Login $event): void {
             $user = $event->user;
-            if (method_exists($user, 'hasRole') && $user->hasRole('student')) {
+            if (app(PluginManager::class)->isEnabled('student-tracking') && method_exists($user, 'hasRole') && $user->hasRole('student')) {
                 app(StudentActivityTracker::class)->record((int) $user->id, 'login', 'session', null, null, ['source' => 'web-login']);
             }
         });
