@@ -99,13 +99,35 @@ class HrController extends Controller
             'bonus' => $bonus,
             'deductions' => $deductions,
             'net_paid' => $netPaid,
+            'status' => 'pending',
+            'paid_at' => null,
+        ]);
+
+        $this->audit->log('hr.payroll_prepared', 'staff_payroll', (string) $payroll->id, ['net_amount' => $netPaid]);
+
+        return back()->with('status', "Payroll prepared for {$member->full_name} ({$validated['payroll_month']}) and is awaiting admin disbursement confirmation.");
+    }
+
+    public function markPayrollPaid(Request $request, StaffPayroll $payroll): RedirectResponse
+    {
+        $actor = $request->user();
+        if (!$actor || !$actor->hasRole('admin')) {
+            abort(403, 'Only an administrator can confirm payroll disbursement.');
+        }
+        if ($payroll->status !== 'pending') {
+            abort(422, 'Only pending payroll records can be marked as paid.');
+        }
+
+        $payroll->update([
             'status' => 'paid',
             'paid_at' => now(),
         ]);
 
-        $this->audit->log('hr.payroll_recorded', 'staff_payroll', (string) $payroll->id, ['net_paid' => $netPaid]);
+        $this->audit->log('hr.payroll_disbursed', 'staff_payroll', (string) $payroll->id, [
+            'net_amount' => $payroll->net_paid,
+        ], $actor->id);
 
-        return back()->with('status', "Payroll disbursed for {$member->full_name} ({$validated['payroll_month']}).");
+        return back()->with('status', 'Payroll disbursement confirmed.');
     }
 
     private function ensureAssignedBranch($actor): void
