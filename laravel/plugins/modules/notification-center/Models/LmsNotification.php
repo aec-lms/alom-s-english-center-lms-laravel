@@ -12,5 +12,5 @@ class LmsNotification extends Model
 
     protected $fillable = ['user_id', 'channel', 'title', 'message', 'status', 'read_at'];
 
-    protected $casts = ['read_at' => 'datetime'];
+    protected $casts = ['read_at' => 'datetime'];\n\n    public function user(): BelongsTo\n    {\n        return $this->belongsTo(User::class);\n    }
 }
