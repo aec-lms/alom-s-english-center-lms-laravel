@@ -80,11 +80,11 @@ class UniversalPaymentController extends Controller
             'gateway' => ['required', 'in:bank_cash'],
             'amount' => ['required', 'numeric', 'min:1'],
             'external_trx_id' => ['required', 'string', 'max:120'],
-            'proof' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'mimetypes:application/pdf,image/jpeg,image/png', 'max:5120'],
+            'proof_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'mimetypes:application/pdf,image/jpeg,image/png', 'max:5120'],
         ]);
 
         $reference = 'UPAY-' . strtoupper(Str::random(8));
-        $proofFile = $request->file('proof');
+        $proofFile = $request->file('proof_file');
         $proofPath = $proofFile?->store('universal-payment-proofs/' . $reference, 'local');
         if ($proofFile && !$proofPath) {
             abort(500, 'Unable to securely store the uploaded receipt proof.');
