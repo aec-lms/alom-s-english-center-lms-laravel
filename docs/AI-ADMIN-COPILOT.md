@@ -28,7 +28,7 @@ Add these values to the private configuration file outside the public document r
 
 ```php
 return [
-    // Keep this server-side. Never add it to VITE_* or commit it.
+    // Keep this credential server-side and never commit it.
     'AEC_AI_API_KEY' => 'YOUR_PROVIDER_API_KEY',
     'AEC_AI_MODEL' => 'gpt-4.1-mini',
 ];
