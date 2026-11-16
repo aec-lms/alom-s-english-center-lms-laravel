@@ -12,9 +12,9 @@ class LmsNotification extends Model
 {
     protected $table = 'lms_notifications';
 
-    protected $fillable = ['user_id', 'branch_id', 'channel', 'title', 'message', 'status', 'read_at'];
+    protected $fillable = ['user_id', 'branch_id', 'channel', 'title', 'message', 'status', 'read_at', 'attempt_count', 'last_error', 'processed_at'];
 
-    protected $casts = ['read_at' => 'datetime'];
+    protected $casts = ['read_at' => 'datetime', 'processed_at' => 'datetime'];
 
     public function user(): BelongsTo
     {
