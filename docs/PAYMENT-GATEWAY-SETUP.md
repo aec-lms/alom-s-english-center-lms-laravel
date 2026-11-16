@@ -67,5 +67,6 @@ A gateway is offered only when its plugin is installed, enabled and has all requ
 
 - Implemented provider API flows: SSLCOMMERZ Session + Order Validation API; Stripe PaymentIntents + signed webhook; PayPal Orders v2 + OAuth + server-side capture + PayPal webhook verification.
 - Manual cash/bank-transfer records continue through the LMS payment ledger and require authorized staff reconciliation.
+- Online provider refunds are not silently marked as sent: process the refund in the provider dashboard first, then record the provider-issued refund reference in the LMS refund ledger. The LMS currently reconciles that reference and updates the invoice; provider-side refund API automation is not claimed as complete.
 - bKash, Nagad and Rocket are not yet independent live gateway plugins in this release. They must be added as separate provider integrations with merchant-issued API credentials and official API specifications; they must not be represented as working merely because a Universal Payment setting mentions them.
 - Real-money acceptance cannot be certified until the merchant supplies credentials and performs provider sandbox/live acceptance tests.
