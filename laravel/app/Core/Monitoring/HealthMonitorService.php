@@ -111,7 +111,7 @@ class HealthMonitorService
             $message = $this->safeMessage($e);
             if ($repair !== null) {
                 try {
-                    $recoveries['safe_runtime'] = $repair();
+                    $recoveries[] = $repair();
                     $verified = $test();
                     return ['status' => 'recovered', 'message' => $verified . ' Safe recovery verified.', 'duration_ms' => (int) round((microtime(true) - $started) * 1000)];
                 } catch (Throwable $repairException) {
