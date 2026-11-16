@@ -23,6 +23,7 @@ class GuardianController extends Controller
     public function index(Request $request): View
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $query = Guardian::query()->with(['user', 'students.user'])->latest();
         if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null) {
             $query->where('branch_id', $actor->branch_id);
@@ -38,6 +39,7 @@ class GuardianController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:120'],
             'email' => ['required', 'email', 'unique:users,email'],
@@ -86,5 +88,12 @@ class GuardianController extends Controller
         $this->audit->log('guardian.created', 'guardian', (string) $guardian->id, ['branch_id' => $guardian->branch_id]);
 
         return back()->with('status', 'Guardian profile created and linked.');
+    }
+
+    private function ensureAssignedBranch($actor): void
+    {
+        if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id === null) {
+            abort(403, 'Branch manager must be assigned to a branch.');
+        }
     }
 }
