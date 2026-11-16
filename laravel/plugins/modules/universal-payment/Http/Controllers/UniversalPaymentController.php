@@ -27,12 +27,10 @@ class UniversalPaymentController extends Controller
 
     public function index(): View
     {
-        $enabledRaw = $this->plugins->getSetting('universal-payment', 'enabled_gateways', 'sslcommerz,bkash,nagad,rocket,card,bank_cash');
+        $enabledRaw = $this->plugins->getSetting('universal-payment', 'enabled_gateways', 'sslcommerz,stripe,paypal');
         $config = [
             'default_currency' => $this->plugins->getSetting('universal-payment', 'default_currency', 'BDT'),
             'enabled_gateways' => array_filter(array_map('trim', explode(',', (string) $enabledRaw))),
-            'sslcommerz_store_id' => $this->plugins->getSetting('universal-payment', 'sslcommerz_store_id', ''),
-            'nagad_merchant_id' => $this->plugins->getSetting('universal-payment', 'nagad_merchant_id', ''),
         ];
         $transactions = Schema::hasTable('universal_payment_transactions')
             ? UniversalPaymentTransaction::query()->latest()->limit(50)->get()
@@ -46,28 +44,13 @@ class UniversalPaymentController extends Controller
         $validated = $request->validate([
             'default_currency' => ['required', 'in:BDT,USD,EUR,GBP'],
             'gateways' => ['nullable', 'array'],
-            'sslcommerz_store_id' => ['nullable', 'string', 'max:120'],
-            'sslcommerz_store_password' => ['nullable', 'string', 'max:255'],
-            'bkash_app_key' => ['nullable', 'string', 'max:255'],
-            'bkash_app_secret' => ['nullable', 'string', 'max:255'],
-            'nagad_merchant_id' => ['nullable', 'string', 'max:120'],
-            'stripe_secret_key' => ['nullable', 'string', 'max:255'],
+            'gateways.*' => ['required', 'in:sslcommerz,stripe,paypal'],
         ]);
 
         $values = [
             'default_currency' => $validated['default_currency'],
-            'enabled_gateways' => implode(',', $validated['gateways'] ?? ['sslcommerz', 'bkash', 'nagad', 'bank_cash']),
-            'sslcommerz_store_id' => trim((string) ($validated['sslcommerz_store_id'] ?? '')),
-            'nagad_merchant_id' => trim((string) ($validated['nagad_merchant_id'] ?? '')),
+            'enabled_gateways' => implode(',', array_unique($validated['gateways'] ?? [])),
         ];
-
-        $secrets = [];
-        foreach (['sslcommerz_store_password', 'bkash_app_key', 'bkash_app_secret', 'stripe_secret_key'] as $secKey) {
-            if (!empty($validated[$secKey])) {
-                $values[$secKey] = trim((string) $validated[$secKey]);
-                $secrets[] = $secKey;
-            }
-        }
 
         $this->plugins->saveSettings('universal-payment', $values, $secrets, auth()->id());
 
