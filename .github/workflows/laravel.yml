@@ -36,6 +36,10 @@ jobs:
           extensions: mbstring, dom, fileinfo, sqlite3, pdo_sqlite, xml, curl, ctype, tokenizer, bcmath
           coverage: none
 
+      - name: PHP syntax check (core, all plugins, routes and tests)
+        run: |
+          find app bootstrap config database plugins routes tests public -type f -name '*.php' ! -name '*.blade.php' -print0 | xargs -0 -r -n1 php -l
+
       - name: Copy environment
         run: cp .env.example .env
 
