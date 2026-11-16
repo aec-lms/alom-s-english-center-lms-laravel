@@ -368,6 +368,9 @@ class PluginManager
             }
 
             $manifest = $this->discoverManifests()[$slug] ?? throw new RuntimeException("Plugin manifest {$slug} missing.");
+            if (!$this->isCompatible($manifest)) {
+                throw new RuntimeException("Plugin {$slug} ({$manifest->coreCompatibility}) is incompatible with Core " . config('lms.core_version'));
+            }
             $this->assertDependenciesSatisfied($manifest, true);
 
             $record->update(['is_enabled' => true]);
