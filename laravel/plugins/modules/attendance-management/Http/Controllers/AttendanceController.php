@@ -8,9 +8,9 @@ use App\Core\Security\AuditLogger;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use Plugins\Modules\AttendanceManagement\Models\AttendanceRecord;
+use Plugins\Modules\BatchManagement\Models\StudyBatch;
 use Plugins\Modules\StudentManagement\Models\Student;
 
 class AttendanceController extends Controller
@@ -34,18 +34,17 @@ class AttendanceController extends Controller
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
         $validated = $request->validate([
-            'batch_id' => ['required', 'integer', 'exists:batches,id'],
+            'batch_id' => ['required', 'integer', 'exists:study_batches,id'],
             'student_id' => ['required', 'integer', 'exists:students,id'],
-            'branch_id' => ['required', 'integer', 'exists:branches,id'],
             'attendance_date' => ['required', 'date'],
             'status' => ['required', 'in:present,absent,late,excused'],
             'remarks' => ['nullable', 'string', 'max:255'],
         ]);
 
         $student = Student::query()->findOrFail((int) $validated['student_id']);
-        $batch = DB::table('batches')->where('id', (int) $validated['batch_id'])->first();
-        if (!$batch || (int) $student->branch_id !== (int) $validated['branch_id'] || (int) $batch->branch_id !== (int) $student->branch_id) {
-            abort(422, 'Student, batch and attendance branch must match.');
+        $batch = StudyBatch::query()->findOrFail((int) $validated['batch_id']);
+        if ($student->branch_id === null || (int) $batch->branch_id !== (int) $student->branch_id) {
+            abort(422, 'Student and batch must belong to the same branch.');
         }
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $student->branch_id) {
             abort(403, 'Branch isolation violation.');
