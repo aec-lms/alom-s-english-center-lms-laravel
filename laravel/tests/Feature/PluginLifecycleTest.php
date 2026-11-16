@@ -661,6 +661,7 @@ PHP;
 
         $secondDelete = $manager->deleteToRecycleBin('branch-management');
         $manager->permanentlyDeleteFromRecycleBin($secondDelete['archive']);
+        $this->assertDirectoryExists(storage_path('app/plugin-permanent-delete-backups/' . $secondDelete['archive']));
         $this->assertSame([], $manager->recycledPlugins());
         $this->assertDatabaseHas('branches', ['code' => 'RB-01']);
         $this->assertTrue($manager->isEnabled('student-management'));
