@@ -1,6 +1,0 @@
-{
-  "name": "Alom's English Center",
-  "description": "Alom's English Center — structured online and campus learning platform for IELTS, Spoken English, and Grammar.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
