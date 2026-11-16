@@ -23,14 +23,13 @@ class LessonContentProtectionController extends Controller
         'application/pdf',
     ];
 
-    public function upload(Request $request, int $lesson): JsonResponse
+    public function upload(Request $request, int $lesson): RedirectResponse
     {
         $validated = $request->validate([
             'media' => ['required', 'file', 'max:512000', 'mimes:mp4,webm,mp3,m4a,pdf'],
         ]);
 
-        $lessonRow = DB::table('course_lessons')->where('id', $lesson)->first();
-        abort_unless($lessonRow, 404);
+        $lessonRow = $this->managedLesson($request, $lesson);
 
         $file = $request->file('media');
         $mime = (string) $file->getMimeType();
@@ -56,23 +55,17 @@ class LessonContentProtectionController extends Controller
             'updated_at' => now(),
         ]);
 
-        return response()->json([
-            'message' => 'Lesson media stored in private storage with protection enabled.',
-            'lesson_id' => $lesson,
-            'mime_type' => $mime,
-            'download_allowed' => false,
-        ], 201);
+        return back()->with('status', 'Protected media uploaded for lesson #' . $lesson . '. Downloads are disabled by default.');
     }
 
-    public function updatePolicy(Request $request, int $lesson): JsonResponse
+    public function updatePolicy(Request $request, int $lesson): RedirectResponse
     {
         $validated = $request->validate([
             'protection_enabled' => ['required', 'boolean'],
             'is_downloadable' => ['required', 'boolean'],
         ]);
 
-        $exists = DB::table('course_lessons')->where('id', $lesson)->exists();
-        abort_unless($exists, 404);
+        $this->managedLesson($request, $lesson);
 
         DB::table('course_lessons')->where('id', $lesson)->update([
             'protection_enabled' => (bool) $validated['protection_enabled'],
@@ -80,11 +73,7 @@ class LessonContentProtectionController extends Controller
             'updated_at' => now(),
         ]);
 
-        return response()->json([
-            'lesson_id' => $lesson,
-            'protection_enabled' => (bool) $validated['protection_enabled'],
-            'download_allowed' => (bool) $validated['is_downloadable'],
-        ]);
+        return back()->with('status', 'Lesson protection policy updated.');
     }
 
     public function adminIndex(): \Illuminate\View\View
@@ -183,6 +172,43 @@ class LessonContentProtectionController extends Controller
         ]);
 
         return $response;
+    }
+
+    private function managedBranchId(Request $request): ?int
+    {
+        $actor = $request->user();
+        if (!$actor || !$actor->hasRole('branch_manager')) {
+            return null;
+        }
+
+        abort_unless($actor->branch_id !== null, 403, 'Branch manager must be assigned to a branch.');
+        abort_unless(
+            Schema::hasTable('branches') && DB::table('branches')
+                ->where('id', $actor->branch_id)
+                ->where('is_active', true)
+                ->exists(),
+            403,
+            'Branch manager access is disabled because the assigned branch is inactive.'
+        );
+
+        return (int) $actor->branch_id;
+    }
+
+    private function managedLesson(Request $request, int $lesson): object
+    {
+        $row = DB::table('course_lessons')
+            ->join('courses', 'courses.id', '=', 'course_lessons.course_id')
+            ->where('course_lessons.id', $lesson)
+            ->select('course_lessons.*', 'courses.branch_id as course_branch_id')
+            ->first();
+        abort_unless($row, 404);
+
+        $branchId = $this->managedBranchId($request);
+        if ($branchId !== null) {
+            abort_unless((int) $row->course_branch_id === $branchId, 403, 'Branch isolation violation.');
+        }
+
+        return $row;
     }
 
     private function authorizedLesson(Request $request, int $lesson): object
