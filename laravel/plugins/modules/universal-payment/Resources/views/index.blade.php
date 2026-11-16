@@ -83,7 +83,7 @@
                 </div>
                 <div class="col-span-2">
                     <label class="font-semibold text-slate-700 block mb-1">Receipt Proof (PDF / JPG / PNG, max 5 MB)</label>
-                    <input type="file" name="proof" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" class="w-full rounded-xl border border-slate-300 px-3 py-2">
+                    <input type="file" name="proof_file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" class="w-full rounded-xl border border-slate-300 px-3 py-2">
                 </div>
             </div>
             <button class="px-5 py-2.5 rounded-xl bg-[#0057FF] hover:bg-blue-700 text-white font-bold">Record Payment</button>
