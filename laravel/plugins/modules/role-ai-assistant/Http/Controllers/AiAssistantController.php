@@ -15,9 +15,16 @@ class AiAssistantController extends Controller
 {
     public function __construct(private readonly AiAssistantService $assistant) {}
 
-    public function index(): View
+    public function index(Request $request): View
     {
-        $logs = AiAssistantLog::query()->latest()->limit(25)->get();
+        $actor = $request->user();
+        $canViewAll = $actor && ($actor->hasRole('admin') || $actor->hasPermissionTo('ai.assistant.configure'));
+        $logs = AiAssistantLog::query()
+            ->when(!$canViewAll, fn ($query) => $query->where('user_id', $actor?->id))
+            ->latest()
+            ->limit(25)
+            ->get();
+
         return view('role-ai-assistant::index', compact('logs'));
     }
 
@@ -31,7 +38,8 @@ class AiAssistantController extends Controller
             $result = $this->assistant->queryAssistant($request->user(), $validated['prompt']);
             return response()->json($result);
         } catch (\Throwable $e) {
-            return response()->json(['error' => $e->getMessage()], 403);
+            report($e);
+            return response()->json(['error' => 'AEC LMS AI Assistant is temporarily unavailable. Please check your access or contact the administrator.'], 503);
         }
     }
 }
