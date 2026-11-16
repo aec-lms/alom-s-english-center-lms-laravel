@@ -12,6 +12,7 @@ class UniversalPaymentTransaction extends Model
 
     protected $fillable = [
         'reference',
+        'branch_id',
         'payer_name',
         'payer_contact',
         'item_title',
