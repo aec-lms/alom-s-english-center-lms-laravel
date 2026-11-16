@@ -283,4 +283,17 @@ class AdditionalModulesWorkflowTest extends TestCase
         ])->assertStatus(422);
     }
 
+
+    public function test_unassigned_branch_manager_is_denied_student_directory_access(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'student-management']);
+
+        $manager = $this->createUserWithRole('branch_manager');
+        $permission = DB::table('permissions')->where('slug', 'students.manage')->first();
+        $this->assertNotNull($permission);
+        $manager->roles()->first()->permissions()->syncWithoutDetaching([$permission->id]);
+
+        $this->actingAs($manager)->get('/admin/students')->assertForbidden();
+    }
 }
