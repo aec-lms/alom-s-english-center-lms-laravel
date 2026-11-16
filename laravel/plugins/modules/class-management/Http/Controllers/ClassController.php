@@ -36,7 +36,11 @@ class ClassController extends Controller
     {
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
-        $validated = $request->validate([
+                $branchIntegration = app(PluginManager::class)->isEnabled('branch-management') && Schema::hasTable('branches');
+        $branchRule = $branchIntegration
+            ? ['nullable', 'integer', 'exists:branches,id,is_active,1']
+            : ['nullable', 'integer'];
+$validated = $request->validate([
             'code' => ['required', 'string', 'max:40', 'unique:academic_classes,code'],
             'name' => ['required', 'string', 'max:160'],
             'section' => ['required', 'string', 'max:60'],
@@ -46,8 +50,12 @@ class ClassController extends Controller
             'start_time' => ['required', 'string', 'max:20'],
             'end_time' => ['required', 'string', 'max:20'],
             'instructor_name' => ['nullable', 'string', 'max:120'],
-            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
+            'branch_id' => $branchRule,
         ]);
+
+        if (!$branchIntegration) {
+            $validated['branch_id'] = null;
+        }
 
         if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null) {
             $validated['branch_id'] = $actor->branch_id;
