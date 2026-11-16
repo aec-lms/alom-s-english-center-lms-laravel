@@ -16,7 +16,6 @@ class SslcommerzController extends Controller
 
     public function initiate(Request $request): JsonResponse
     {
-        // Strictly reject direct card fields in hosted SSLCOMMERZ checkout
         if ($request->hasAny(['card_number', 'pan', 'cvv', 'cvc'])) {
             abort(422, 'Raw card details are prohibited on SSLCOMMERZ Hosted Checkout.');
         }
@@ -31,7 +30,7 @@ class SslcommerzController extends Controller
         return response()->json([
             'gateway' => 'gateway-sslcommerz',
             'transaction_ref' => $session['transaction']->transaction_ref,
-            'hosted_endpoint' => $session['hosted_endpoint'],
+            'redirect_url' => $session['hosted_endpoint'],
         ]);
     }
 
@@ -43,5 +42,26 @@ class SslcommerzController extends Controller
             'status' => $tx->status,
             'transaction_ref' => $tx->transaction_ref,
         ]);
+    }
+
+    public function success(Request $request): JsonResponse
+    {
+        return $this->ipn($request);
+    }
+
+    public function failed(Request $request): JsonResponse
+    {
+        $validated = $request->validate(['tran_id' => ['required', 'string', 'max:30']]);
+        $tx = $this->gateway->markUnsuccessful($validated['tran_id'], 'failed');
+
+        return response()->json(['status' => $tx->status, 'transaction_ref' => $tx->transaction_ref]);
+    }
+
+    public function cancelled(Request $request): JsonResponse
+    {
+        $validated = $request->validate(['tran_id' => ['required', 'string', 'max:30']]);
+        $tx = $this->gateway->markUnsuccessful($validated['tran_id'], 'cancelled');
+
+        return response()->json(['status' => $tx->status, 'transaction_ref' => $tx->transaction_ref]);
     }
 }
