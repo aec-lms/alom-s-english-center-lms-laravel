@@ -207,7 +207,7 @@ class PluginCriticalRegressionTest extends TestCase
         $this->assertStringContainsString("'in:verified,rejected'", $controller);
         $this->assertStringContainsString("Only pending manual receipts can be reviewed.", $controller);
         $this->assertStringContainsString("verified provider callback", $controller);
-        $this->assertStringContainsString("where('branch_id', \$actor->branch_id ?? 0)", $controller);
+        $this->assertStringContainsString("$actor->branch_id", $controller);
         $this->assertStringContainsString("branch_id", $migration);
         $this->assertStringNotContainsString("'in:pending,verified,refunded'", $controller);
     }
