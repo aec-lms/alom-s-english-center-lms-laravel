@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
+use Plugins\Modules\NotificationCenter\Models\LmsNotification;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Plugins\Modules\CourseManagement\Http\Controllers\CourseController;
