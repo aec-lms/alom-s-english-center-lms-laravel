@@ -23,6 +23,11 @@ class AiAssistantService
 
     public function isRoleAllowed(User $user): bool
     {
+        return $this->allowedRoleSlug($user) !== null;
+    }
+
+    private function allowedRoleSlug(User $user): ?string
+    {
         $raw = (string) $this->plugins->getSetting(
             'role-ai-assistant',
             'allowed_roles',
@@ -30,21 +35,23 @@ class AiAssistantService
         );
         $allowed = array_values(array_filter(array_map('trim', explode(',', strtolower($raw)))));
         if ($allowed === []) {
-            return false;
+            return null;
         }
 
-        foreach ($allowed as $roleSlug) {
-            if ($user->hasRole($roleSlug)) {
-                return true;
+        foreach ($user->roles()->pluck('slug') as $roleSlug) {
+            $roleSlug = strtolower((string) $roleSlug);
+            if (in_array($roleSlug, $allowed, true)) {
+                return $roleSlug;
             }
         }
 
-        return false;
+        return null;
     }
 
     public function queryAssistant(User $user, string $prompt): array
     {
-        if (!$this->isRoleAllowed($user)) {
+        $roleSlug = $this->allowedRoleSlug($user);
+        if ($roleSlug === null) {
             throw new RuntimeException('Your panel role is not enabled for the AEC LMS AI Assistant.');
         }
 
@@ -63,7 +70,6 @@ class AiAssistantService
         $configuredModel = trim((string) $this->plugins->getSetting('role-ai-assistant', 'model', $defaultModel));
         $model = $configuredModel !== '' ? $configuredModel : $defaultModel;
         $maxTokens = min(8192, max(64, (int) $this->plugins->getSetting('role-ai-assistant', 'max_tokens', '1024')));
-        $roleSlug = (string) ($user->roles()->first()?->slug ?? 'user');
         $systemInstruction = $this->systemPromptForRole($roleSlug);
 
         $reply = $apiKey === ''
