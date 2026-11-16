@@ -76,14 +76,14 @@ class PluginLifecycleTest extends TestCase
     {
         $this->markSystemInstalled();
 
-        $request = \\Illuminate\\Http\\Request::create('/admin/plugins/email-notifications/configure', 'POST', [
+        $request = \Illuminate\Http\Request::create('/admin/plugins/email-notifications/configure', 'POST', [
             'settings' => [
                 'smtp_host' => 'smtp.example.test',
                 'smtp_password' => 'smtp-app-secret-123',
             ],
         ]);
 
-        app(\\App\\Http\\Controllers\\Admin\\PluginCenterController::class)
+        app(\App\Http\Controllers\Admin\PluginCenterController::class)
             ->saveConfiguration($request, 'email-notifications');
 
         $setting = PluginSetting::query()
