@@ -279,7 +279,7 @@ class MobileApiController extends Controller
     public function exams(): JsonResponse
     {
         $exams = Schema::hasTable('exams')
-            ? DB::table('exams')->orderByDesc('id')->limit(30)->get()
+            ? DB::table('exams')->where('is_published', true)->orderByDesc('id')->limit(30)->get()
             : collect();
 
         return response()->json(['data' => $exams]);
