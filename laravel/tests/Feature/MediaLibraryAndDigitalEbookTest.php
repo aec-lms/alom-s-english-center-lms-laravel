@@ -26,7 +26,7 @@ class MediaLibraryAndDigitalEbookTest extends TestCase
             'file' => UploadedFile::fake()->image('course-cover.jpg'),
             'collection' => 'courses',
             'alt_text' => 'Course cover',
-        ])->assertSessionHasNoErrors();
+        ])->assertSessionHasNoErrors()->assertRedirect();
 
         $image = DB::table('media_assets')->where('original_name', 'course-cover.jpg')->first();
         $this->assertNotNull($image);
@@ -36,7 +36,7 @@ class MediaLibraryAndDigitalEbookTest extends TestCase
         $this->actingAs($admin)->post('/admin/media', [
             'file' => UploadedFile::fake()->create('worksheet.pdf', 32, 'application/pdf'),
             'collection' => 'worksheets',
-        ])->assertSessionHasNoErrors();
+        ])->assertSessionHasNoErrors()->assertRedirect();
 
         $pdf = DB::table('media_assets')->where('original_name', 'worksheet.pdf')->first();
         $this->assertNotNull($pdf);
@@ -47,7 +47,7 @@ class MediaLibraryAndDigitalEbookTest extends TestCase
     public function test_paid_ebook_download_is_locked_until_verified_payment_and_uses_server_price(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['storefront-catalog', 'universal-payment']);
+        $this->activatePlugins(['storefront-catalog', 'payment-management', 'universal-payment']);
 
         $admin = $this->createUserWithRole('admin');
         $student = $this->createUserWithRole('student');
