@@ -86,9 +86,9 @@ class CmsController extends Controller
         $name = $category->name;
         $id = (string) $category->id;
         $category->delete();
-        $this->audit->log('cms.category_deleted', 'cms_category', $id, ['name' => $name]);
+        $this->audit->log('cms.category_trashed', 'cms_category', $id, ['name' => $name]);
 
-        return back()->with('status', "CMS Category '{$name}' deleted.");
+        return back()->with('status', "CMS Category '{$name}' moved to the Admin Recycle Bin.");
     }
 
     public function storePost(Request $request): RedirectResponse
@@ -235,9 +235,9 @@ class CmsController extends Controller
         $title = $post->title;
         $id = (string) $post->id;
         $post->delete();
-        $this->audit->log('cms.post_deleted', 'cms_post', $id, ['title' => $title]);
+        $this->audit->log('cms.post_trashed', 'cms_post', $id, ['title' => $title]);
 
-        return back()->with('status', "Post '{$title}' deleted.");
+        return back()->with('status', "Post '{$title}' moved to the Admin Recycle Bin.");
     }
 
     public function saveHomepage(Request $request): RedirectResponse
