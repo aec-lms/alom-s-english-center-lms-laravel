@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
 use Plugins\Modules\NotificationCenter\Models\LmsNotification;
 use Tests\TestCase;
@@ -328,6 +329,12 @@ class BranchManagerFailClosedTest extends TestCase
             'updated_at' => now(),
         ]);
 
+        Storage::fake('local');
+        $ownProofPath = 'universal-payment-proofs/own-branch.pdf';
+        $otherProofPath = 'universal-payment-proofs/other-branch.pdf';
+        Storage::disk('local')->put($ownProofPath, 'own branch proof');
+        Storage::disk('local')->put($otherProofPath, 'other branch proof');
+
         $manager = $this->createUserWithRole('branch_manager', $ownBranch);
         $permission = DB::table('permissions')->where('slug', 'payments.universal.manage')->firstOrFail();
         $manager->roles()->first()->permissions()->syncWithoutDetaching([$permission->id]);
@@ -340,6 +347,9 @@ class BranchManagerFailClosedTest extends TestCase
             'currency' => 'BDT',
             'amount' => 1000,
             'external_trx_id' => 'OWN-TRX-001',
+            'proof_path' => $ownProofPath,
+            'proof_mime' => 'application/pdf',
+            'proof_size' => 16,
             'status' => 'pending',
             'branch_id' => $ownBranch,
         ]);
@@ -351,6 +361,9 @@ class BranchManagerFailClosedTest extends TestCase
             'currency' => 'BDT',
             'amount' => 2000,
             'external_trx_id' => 'OTHER-TRX-001',
+            'proof_path' => $otherProofPath,
+            'proof_mime' => 'application/pdf',
+            'proof_size' => 17,
             'status' => 'pending',
             'branch_id' => $otherBranch,
         ]);
@@ -364,6 +377,13 @@ class BranchManagerFailClosedTest extends TestCase
         $this->actingAs($manager)
             ->post('/plugins/universal-payment/transactions/' . $ownReceipt->id . '/status', ['status' => 'verified'])
             ->assertRedirect();
+
+        $this->actingAs($manager)
+            ->get('/plugins/universal-payment/transactions/' . $ownReceipt->id . '/proof')
+            ->assertOk();
+        $this->actingAs($manager)
+            ->get('/plugins/universal-payment/transactions/' . $otherReceipt->id . '/proof')
+            ->assertNotFound();
 
         $this->assertDatabaseHas('universal_payment_transactions', [
             'id' => $ownReceipt->id,
