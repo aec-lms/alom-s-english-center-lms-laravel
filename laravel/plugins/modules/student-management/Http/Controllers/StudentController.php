@@ -27,6 +27,7 @@ class StudentController extends Controller
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
         $query = Student::query()->with('user')->latest();
+        if (!$branchIntegration) { $validated['branch_id'] = null; }
         if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null) {
             $query->where('branch_id', $actor->branch_id);
         }
@@ -40,8 +41,9 @@ class StudentController extends Controller
     {
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
-        $branchRule = Schema::hasTable('branches')
-            ? ['nullable', 'integer', 'exists:branches,id']
+        $branchIntegration = app(PluginManager::class)->isEnabled('branch-management') && Schema::hasTable('branches');
+        $branchRule = $branchIntegration
+            ? ['nullable', 'integer', 'exists:branches,id,is_active,1']
             : ['nullable', 'integer'];
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:120'],
