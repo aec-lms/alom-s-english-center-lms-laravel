@@ -50,34 +50,43 @@ class GuardianController extends Controller
     {
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
+        $studentIntegration = app(PluginManager::class)->isEnabled('student-management')
+            && Schema::hasTable('students')
+            && Schema::hasTable('guardian_student');
+        $branchRule = Schema::hasTable('branches')
+            ? ['nullable', 'integer', 'exists:branches,id']
+            : ['nullable', 'integer'];
+        $studentRule = $studentIntegration
+            ? ['nullable', 'integer', 'exists:students,id']
+            : ['nullable', 'integer'];
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:120'],
             'email' => ['required', 'email', 'unique:users,email'],
             'phone' => ['nullable', 'string', 'max:32'],
             'password' => ['required', 'string', 'min:12'],
-            'branch_id' => ['required', 'integer', 'exists:branches,id'],
+            'branch_id' => $branchRule,
             'relationship' => ['required', 'string', 'max:60'],
-            'student_id' => ['nullable', 'integer', 'exists:students,id'],
+            'student_id' => $studentRule,
         ]);
 
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $validated['branch_id']) {
             abort(403, 'Branch isolation violation.');
         }
 
-        if (!empty($validated['student_id'])) {
+        if ($studentIntegration && !empty($validated['student_id'])) {
             $student = Student::query()->findOrFail((int) $validated['student_id']);
             if ((int) $student->branch_id !== (int) $validated['branch_id']) {
                 abort(422, 'Guardian and linked student must belong to the same branch.');
             }
         }
 
-        $guardian = DB::transaction(function () use ($validated): Guardian {
+        $guardian = DB::transaction(function () use ($validated, $studentIntegration): Guardian {
             $user = User::query()->create([
                 'name' => $validated['name'],
                 'email' => strtolower($validated['email']),
                 'phone' => $validated['phone'] ?? null,
                 'password' => Hash::make($validated['password']),
-                'branch_id' => (int) $validated['branch_id'],
+                'branch_id' => isset($validated['branch_id']) ? (int) $validated['branch_id'] : null,
                 'is_active' => true,
             ]);
             if ($role = Role::query()->where('slug', 'guardian')->first()) {
@@ -89,7 +98,7 @@ class GuardianController extends Controller
                 'relationship' => $validated['relationship'],
                 'emergency_phone' => $validated['phone'] ?? null,
             ]);
-            if (!empty($validated['student_id'])) {
+            if ($studentIntegration && !empty($validated['student_id'])) {
                 $guardian->students()->syncWithoutDetaching([(int) $validated['student_id'] => ['is_primary' => true]]);
             }
             return $guardian;
