@@ -20,6 +20,7 @@ class FeeController extends Controller
     public function index(Request $request): View
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $invoices = FeeInvoice::query()
             ->with(['student.user', 'category'])
             ->when($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null, fn ($q) => $q->where('branch_id', $actor->branch_id))
@@ -33,6 +34,7 @@ class FeeController extends Controller
     public function storeInvoice(Request $request): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $validated = $request->validate([
             'student_id' => ['required', 'integer', 'exists:students,id'],
             'fee_category_id' => ['nullable', 'integer', 'exists:fee_categories,id'],
@@ -67,5 +69,12 @@ class FeeController extends Controller
         $this->audit->log('fees.invoice_created', 'fee_invoice', (string) $invoice->id, ['net_amount' => $net]);
 
         return back()->with('status', "Invoice {$invoice->invoice_number} created.");
+    }
+
+    private function ensureAssignedBranch($actor): void
+    {
+        if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id === null) {
+            abort(403, 'Branch manager must be assigned to a branch.');
+        }
     }
 }
