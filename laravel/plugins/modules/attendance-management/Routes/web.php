@@ -13,7 +13,12 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:attendance-management'])
         Route::get('/batches/{batch}/roster', [AttendanceController::class, 'roster'])->name('roster');
         Route::post('/batches/{batch}/students', [AttendanceController::class, 'assignStudent'])->name('assign');
         Route::post('/sync', [AttendanceController::class, 'syncOffline'])->name('sync');
+        Route::post('/qr/session', [AttendanceController::class, 'issueQr'])->name('qr.issue');
         Route::patch('/records/{record}', [AttendanceController::class, 'update'])->name('update');
         Route::get('/records/{record}/history', [AttendanceController::class, 'history'])->name('history');
         Route::post('/', [AttendanceController::class, 'store'])->name('store');
     });
+
+Route::middleware(['web', 'installed', 'auth', 'plugin:attendance-management'])
+    ->get('/my-attendance', [AttendanceController::class, 'portalAttendance'])
+    ->name('plugins.attendance.portal');

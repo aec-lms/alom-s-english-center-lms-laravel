@@ -211,7 +211,10 @@ class AttendanceController extends Controller
             ]);
         });
         $this->audit->log('attendance.updated', 'attendance', (string) $record->id, ['reason' => $data['reason']]);
-        return response()->json(['message' => 'Attendance updated with audit history.', 'record' => $record->fresh()]);
+        if ($request->expectsJson()) {
+            return response()->json(['message' => 'Attendance updated with audit history.', 'record' => $record->fresh()]);
+        }
+        return back()->with('status', 'Attendance updated. The reason and change were added to audit history.');
     }
 
     public function syncOffline(Request $request): JsonResponse
@@ -324,6 +327,30 @@ class AttendanceController extends Controller
             'location_accuracy' => $data['location_accuracy'] ?? null, 'location_captured_at' => now(),
         ]);
         return response()->json(['status' => $record->wasRecentlyCreated ? 'synced' : 'duplicate', 'record_id' => $record->id]);
+    }
+
+    public function portalAttendance(Request $request): View
+    {
+        $user = $request->user();
+        $student = DB::table('students')->where('user_id', $user->id)->first();
+        $studentIds = $student ? [(int) $student->id] : [];
+        $isGuardian = false;
+        if (!$student && Schema::hasTable('guardians') && Schema::hasTable('guardian_student')) {
+            $guardian = DB::table('guardians')->where('user_id', $user->id)->first();
+            if ($guardian) {
+                $studentIds = DB::table('guardian_student')->where('guardian_id', $guardian->id)->pluck('student_id')->map(fn ($id) => (int) $id)->all();
+                $isGuardian = true;
+            }
+        }
+        abort_unless($studentIds !== [], 403, 'No linked student attendance is available for this account.');
+        $records = AttendanceRecord::query()
+            ->join('students', 'students.id', '=', 'attendance_records.student_id')
+            ->join('users', 'users.id', '=', 'students.user_id')
+            ->leftJoin('study_batches', 'study_batches.id', '=', 'attendance_records.batch_id')
+            ->whereIn('attendance_records.student_id', $studentIds)
+            ->select('attendance_records.*', 'users.name as student_name', 'study_batches.name as batch_name')
+            ->orderByDesc('attendance_records.attendance_date')->paginate(30);
+        return view('attendance-management::portal', compact('records', 'isGuardian'));
     }
 
     public function myAttendance(Request $request): JsonResponse
