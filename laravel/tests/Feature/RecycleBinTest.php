@@ -140,6 +140,25 @@ class RecycleBinTest extends TestCase
         $this->assertFalse(AcademicClass::query()->findOrFail($academicClass->id)->trashed());
     }
 
+    public function test_all_plugin_entities_with_delete_actions_use_soft_deletes(): void
+    {
+        $models = [
+            \\Plugins\\Modules\\AdminBoosting\\Models\\BoostCampaign::class,
+            \\Plugins\\Modules\\BranchManagement\\Models\\Branch::class,
+            \\Plugins\\Modules\\CarouselBuilder\\Models\\CarouselItem::class,
+            \\Plugins\\Modules\\CmsWebsite\\Models\\CmsCategory::class,
+            \\Plugins\\Modules\\CmsWebsite\\Models\\CmsPost::class,
+            \\Plugins\\Modules\\PageBuilder\\Models\\BuilderPage::class,
+            \\Plugins\\Modules\\SliderBuilder\\Models\\HeroSlider::class,
+            \\Plugins\\Modules\\SmsGateway\\Models\\SmsCampaign::class,
+            \\Plugins\\Modules\\VisitorPopupAds\\Models\\VisitorPopup::class,
+        ];
+
+        foreach ($models as $model) {
+            $this->assertContains(\\Illuminate\\Database\\Eloquent\\SoftDeletes::class, class_uses_recursive($model), $model . ' must support soft deletes.');
+        }
+    }
+
     public function test_non_admin_cannot_view_or_restore_recycle_bin_records(): void
     {
         $this->markSystemInstalled();
