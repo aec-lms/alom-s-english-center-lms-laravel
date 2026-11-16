@@ -225,6 +225,11 @@ class AdditionalModulesWorkflowTest extends TestCase
             'status' => 'active',
         ]);
 
+        $guardianPermission = DB::table('permissions')->where('slug', 'guardians.manage')->first();
+        if ($guardianPermission) {
+            $manager->roles()->first()->permissions()->syncWithoutDetaching([$guardianPermission->id]);
+        }
+
         $this->actingAs($manager)->post('/admin/guardians', [
             'name' => 'Guardian Branch A',
             'email' => 'guardian.branch.a@example.test',
