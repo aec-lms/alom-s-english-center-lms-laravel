@@ -5,7 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Route;
 use Plugins\Modules\VisitorPopupAds\Http\Controllers\PopupController;
 
-Route::middleware(['web', 'installed', 'plugin:visitor-popup-ads'])
+Route::middleware(['web', 'installed', 'plugin:visitor-popup-ads', 'throttle:60,1'])
     ->post('/popup-ads/{popup}/click', [PopupController::class, 'trackClick'])
     ->name('plugins.popups.click');
 
