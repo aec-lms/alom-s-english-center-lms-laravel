@@ -2,7 +2,7 @@
 
 **Production application:** Laravel 12 in `/laravel` (PHP 8.3+, Composer, Blade/Livewire, MySQL/MariaDB).
 
-This repository also contains the original Google AI Studio / React prototype at the repository root. That prototype is retained for reference only; it is **not** the production LMS runtime and must not be deployed as the LMS. All production LMS backend, authentication, data, plugin lifecycle, installation and administration work belongs in the Laravel application.
+This repository contains the complete production application for ALOMS ENGLISH CENTER. The Laravel application is the sole supported runtime for the LMS. All authentication, data, business workflows, plugin lifecycle, installation, administration, deployment and maintenance must be implemented and operated through Laravel.
 
 ## Laravel application
 
