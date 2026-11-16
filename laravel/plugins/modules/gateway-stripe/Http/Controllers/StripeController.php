@@ -15,57 +15,52 @@ use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
 
 class StripeController extends Controller
 {
-    public function __construct(
-        private readonly StripeGatewayService $stripe,
-        private readonly PluginManager $plugins,
-    ) {}
+    public function __construct(private readonly StripeGatewayService $stripe, private readonly PluginManager $plugins) {}
 
     public function index(): View
     {
         $configured = (string) $this->plugins->getSetting('gateway-stripe', 'secret_key', '') !== '';
-        $sandbox = $this->plugins->getSetting('gateway-stripe', 'sandbox_mode', '1') === '1';
+        $sandbox = str_starts_with((string) $this->plugins->getSetting('gateway-stripe', 'secret_key', ''), 'sk_test_');
         $transactions = PaymentTransaction::query()->where('gateway_slug', 'gateway-stripe')->latest()->limit(20)->get();
-
         return view('gateway-stripe::index', compact('configured', 'sandbox', 'transactions'));
     }
 
     public function checkout(Request $request): JsonResponse
     {
         if ($request->hasAny(['card_number', 'pan', 'cvv', 'cvc', 'security_code'])) {
-            abort(422, 'Raw PAN and CVV are strictly prohibited. Use a Stripe tokenized payment_method_token.');
+            abort(422, 'Raw PAN and CVV are strictly prohibited. Use Stripe.js to create a PaymentMethod.');
         }
-
         $validated = $request->validate([
             'invoice_id' => ['required', 'integer', 'exists:fee_invoices,id'],
-            'payment_token' => ['required', 'string', 'min:8', 'max:180'],
+            'payment_token' => ['required', 'string', 'starts_with:pm_', 'max:180'],
             'idempotency_key' => ['nullable', 'string', 'max:80'],
         ]);
-
-        $invoice = FeeInvoice::query()->findOrFail((int) $validated['invoice_id']);
-        $tx = $this->stripe->initiateTokenizedCheckout(
+        $invoice = FeeInvoice::query()->with('student.user')->findOrFail((int) $validated['invoice_id']);
+        $user = $request->user();
+        if ($user->hasRole('student')) {
+            abort_unless((int) $invoice->student?->user_id === (int) $user->id, 403);
+        } elseif ($user->hasRole('branch_manager')) {
+            abort_unless((int) $user->branch_id > 0 && (int) $invoice->branch_id === (int) $user->branch_id, 403);
+        }
+        $result = $this->stripe->initiateTokenizedCheckout(
             $invoice,
             $validated['payment_token'],
             $validated['idempotency_key'] ?? $request->header('Idempotency-Key')
         );
-
         return response()->json([
             'gateway' => 'gateway-stripe',
-            'transaction_ref' => $tx->transaction_ref,
-            'amount' => $tx->amount,
-            'currency' => $tx->currency,
-            'status' => $tx->status,
+            'transaction_ref' => $result['transaction']->transaction_ref,
+            'payment_intent_id' => $result['payment_intent_id'],
+            'client_secret' => $result['client_secret'],
+            'amount' => $result['transaction']->amount,
+            'currency' => $result['transaction']->currency,
+            'status' => $result['transaction']->status,
         ]);
     }
 
     public function webhook(Request $request): JsonResponse
     {
-        $sig = (string) $request->header('Stripe-Signature', '');
-        $tx = $this->stripe->verifyAndSettleWebhook($request->getContent(), $sig, $request->all());
-
-        return response()->json([
-            'gateway' => 'gateway-stripe',
-            'status' => $tx->status,
-            'transaction_ref' => $tx->transaction_ref,
-        ]);
+        $tx = $this->stripe->verifyAndSettleWebhook($request->getContent(), (string) $request->header('Stripe-Signature', ''));
+        return response()->json(['gateway' => 'gateway-stripe', 'status' => $tx->status, 'transaction_ref' => $tx->transaction_ref]);
     }
 }
