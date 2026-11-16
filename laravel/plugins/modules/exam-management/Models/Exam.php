@@ -13,14 +13,14 @@ class Exam extends Model
     use SoftDeletes;
 
     protected $fillable = [
-        'course_id', 'branch_id', 'title', 'duration_minutes', 'pass_marks',
+        'course_id', 'branch_id', 'title', 'duration_minutes', 'pass_marks', 'learn_earn_type', 'access_price',
         'starts_at', 'ends_at', 'is_published',
     ];
 
     protected $casts = [
         'starts_at' => 'datetime',
         'ends_at' => 'datetime',
-        'is_published' => 'boolean',
+        'is_published' => 'boolean',\n        'access_price' => 'decimal:2',
     ];
 
     public function questions(): HasMany
