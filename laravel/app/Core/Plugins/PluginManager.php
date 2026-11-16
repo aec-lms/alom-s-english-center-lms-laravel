@@ -584,6 +584,18 @@ class PluginManager
             ], $actorId);
             return $record;
         } catch (Throwable $e) {
+            // If installation succeeded but restoring the previous enabled state failed,
+            // return the database lifecycle state to uninstalled before moving files back.
+            if ((bool) ($metadata['was_installed'] ?? false) && $this->isInstalled($slug)) {
+                try {
+                    $this->uninstall($slug, false, $actorId);
+                } catch (Throwable) {
+                    PluginRecord::query()->where('slug', $slug)->update([
+                        'is_installed' => false,
+                        'is_enabled' => false,
+                    ]);
+                }
+            }
             if (is_dir($target)) {
                 File::moveDirectory($target, $source);
             }
