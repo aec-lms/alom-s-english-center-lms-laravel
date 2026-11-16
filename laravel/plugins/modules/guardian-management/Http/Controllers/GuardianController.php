@@ -114,7 +114,7 @@ class GuardianController extends Controller
         if (!$actor || !$actor->hasRole('branch_manager')) {
             return;
         }
-        if ($actor->branch_id === null) {
+        if ($actor->branch_id === null || !app(PluginManager::class)->isEnabled('branch-management') || !Schema::hasTable('branches')) {
             abort(403, 'Branch manager must be assigned to a branch.');
         }
         $activeBranch = \Illuminate\Support\Facades\DB::table('branches')
