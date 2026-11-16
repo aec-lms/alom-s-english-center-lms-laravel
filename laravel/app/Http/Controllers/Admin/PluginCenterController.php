@@ -121,7 +121,7 @@ class PluginCenterController extends Controller
         try {
             $item = $this->plugins->deleteToRecycleBin($slug, auth()->id());
             return back()->with('status', "Plugin '{$item['name']}' moved to Recycle Bin. Its database records and settings were preserved.");
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             return back()->withErrors(['plugin' => $e->getMessage()]);
         }
     }
@@ -132,7 +132,7 @@ class PluginCenterController extends Controller
         try {
             $this->plugins->restoreFromRecycleBin($archive, auth()->id());
             return back()->with('status', 'Plugin package restored. Previous installation state was recovered where possible.');
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             return back()->withErrors(['plugin' => $e->getMessage()]);
         }
     }
@@ -143,7 +143,7 @@ class PluginCenterController extends Controller
         try {
             $this->plugins->permanentlyDeleteFromRecycleBin($archive, auth()->id());
             return back()->with('status', 'Plugin package permanently removed from Recycle Bin. Database records were preserved.');
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             return back()->withErrors(['plugin' => $e->getMessage()]);
         }
     }
