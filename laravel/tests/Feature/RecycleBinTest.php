@@ -143,15 +143,15 @@ class RecycleBinTest extends TestCase
     public function test_all_plugin_entities_with_delete_actions_use_soft_deletes(): void
     {
         $models = [
-            \\Plugins\\Modules\\AdminBoosting\\Models\\BoostCampaign::class,
-            \\Plugins\\Modules\\BranchManagement\\Models\\Branch::class,
-            \\Plugins\\Modules\\CarouselBuilder\\Models\\CarouselItem::class,
-            \\Plugins\\Modules\\CmsWebsite\\Models\\CmsCategory::class,
-            \\Plugins\\Modules\\CmsWebsite\\Models\\CmsPost::class,
-            \\Plugins\\Modules\\PageBuilder\\Models\\BuilderPage::class,
-            \\Plugins\\Modules\\SliderBuilder\\Models\\HeroSlider::class,
-            \\Plugins\\Modules\\SmsGateway\\Models\\SmsCampaign::class,
-            \\Plugins\\Modules\\VisitorPopupAds\\Models\\VisitorPopup::class,
+            \Plugins\Modules\AdminBoosting\Models\BoostCampaign::class,
+            \Plugins\Modules\BranchManagement\Models\Branch::class,
+            \Plugins\Modules\CarouselBuilder\Models\CarouselItem::class,
+            \Plugins\Modules\CmsWebsite\Models\CmsCategory::class,
+            \Plugins\Modules\CmsWebsite\Models\CmsPost::class,
+            \Plugins\Modules\PageBuilder\Models\BuilderPage::class,
+            \Plugins\Modules\SliderBuilder\Models\HeroSlider::class,
+            \Plugins\Modules\SmsGateway\Models\SmsCampaign::class,
+            \Plugins\Modules\VisitorPopupAds\Models\VisitorPopup::class,
         ];
 
         foreach ($models as $model) {
