@@ -356,7 +356,7 @@ class CourseController extends Controller
         $live = LiveClass::query()->create([
             'course_id' => $validated['course_id'],
             'title' => $validated['title'],
-            'instructor_name' => $validated['instructor_name'] ?: "Engr. Mahbubul Alom",
+            'instructor_name' => ($validated['instructor_name'] ?? '') ?: "Engr. Mahbubul Alom",
             'platform' => $validated['platform'],
             'meeting_url' => $validated['meeting_url'],
             'starts_at' => $validated['starts_at'],
