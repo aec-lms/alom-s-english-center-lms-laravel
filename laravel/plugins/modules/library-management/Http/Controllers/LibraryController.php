@@ -38,7 +38,7 @@ class LibraryController extends Controller
         $loans = Schema::hasTable('library_loans')
             ? LibraryLoan::query()
                 ->with('book')
-                ->when($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null, fn ($q) => $q->where('branch_id', $actor->branch_id))
+                ->when($actor && $actor->hasRole('branch_manager'), fn ($q) => $q->where('branch_id', $actor->branch_id))
                 ->orderByDesc('id')
                 ->limit(40)
                 ->get()
@@ -61,7 +61,7 @@ class LibraryController extends Controller
             'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
         ]);
 
-        if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null) {
+        if ($actor && $actor->hasRole('branch_manager')) {
             $validated['branch_id'] = $actor->branch_id;
         }
 
@@ -111,7 +111,7 @@ class LibraryController extends Controller
 
             $this->audit->log('library.loan_issued', 'library_loan', (string) $loan->id);
             return back()->with('status', "Book loaned to {$loan->borrower_name}.");
-        } catch (\Throwable $e) {
+        } catch (RuntimeException $e) {
             return back()->withErrors(['library_book_id' => $e->getMessage()]);
         }
     }
