@@ -57,7 +57,8 @@ class RecycleBinTest extends TestCase
             'title' => 'Recycle Bin Course',
             'slug' => 'recycle-bin-course',
             'price' => 0,
-            'status' => 'draft',
+            'description' => 'Course retained for restore testing.',
+            'status' => 'published',
         ]);
         $exam = Exam::query()->create([
             'title' => 'Recycle Bin Exam',
@@ -71,10 +72,16 @@ class RecycleBinTest extends TestCase
             'name' => 'Recycle Bin Batch',
             'schedule' => 'Mon 10:00-11:00',
             'max_capacity' => 20,
+            'status' => 'upcoming',
         ]);
         $academicClass = AcademicClass::query()->create([
             'code' => 'RB-CLASS-01',
             'name' => 'Recycle Bin Class',
+            'section' => 'A',
+            'subject' => 'English',
+            'day_of_week' => 'Sunday',
+            'start_time' => '10:00',
+            'end_time' => '11:00',
         ]);
 
         $course->delete();
