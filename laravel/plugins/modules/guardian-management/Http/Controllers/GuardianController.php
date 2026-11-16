@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Plugins\Modules\GuardianManagement\Http\Controllers;
 
 use App\Core\Security\AuditLogger;
+use App\Core\Plugins\PluginManager;
 use App\Http\Controllers\Controller;
 use App\Models\Role;
 use App\Models\User;
@@ -12,6 +13,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 use Plugins\Modules\GuardianManagement\Models\Guardian;
 use Plugins\Modules\StudentManagement\Models\Student;
@@ -24,16 +26,24 @@ class GuardianController extends Controller
     {
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
-        $query = Guardian::query()->with(['user', 'students.user'])->latest();
+        $studentIntegration = app(PluginManager::class)->isEnabled('student-management')
+            && Schema::hasTable('students')
+            && Schema::hasTable('guardian_student');
+        $query = Guardian::query()->with('user')->latest();
+        if ($studentIntegration) {
+            $query->with('students.user');
+        }
         if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null) {
             $query->where('branch_id', $actor->branch_id);
         }
         $guardians = $query->paginate(25);
-        $students = Student::query()->with('user')
-            ->when($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null, fn ($q) => $q->where('branch_id', $actor->branch_id))
-            ->get();
+        $students = $studentIntegration
+            ? Student::query()->with('user')
+                ->when($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null, fn ($q) => $q->where('branch_id', $actor->branch_id))
+                ->get()
+            : collect();
 
-        return view('guardian-management::index', compact('guardians', 'students'));
+        return view('guardian-management::index', compact('guardians', 'students', 'studentIntegration'));
     }
 
     public function store(Request $request): RedirectResponse
