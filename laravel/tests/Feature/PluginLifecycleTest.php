@@ -445,4 +445,29 @@ PHP;
             File::deleteDirectory($targetDir);
         }
     }
+
+    public function test_zip_uploader_rejects_unix_symlink_entries_before_extraction(): void
+    {
+        $this->markSystemInstalled();
+
+        $zipPath = sys_get_temp_dir() . '/symlink_plugin_' . uniqid('', true) . '.zip';
+        $zip = new ZipArchive();
+        $this->assertTrue($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true);
+        $zip->addFromString('symlink.php', '../../outside.php');
+        $this->assertTrue($zip->setExternalAttributesName(
+            'symlink.php',
+            ZipArchive::OPSYS_UNIX,
+            (0120777 << 16)
+        ));
+        $zip->close();
+
+        try {
+            app(PluginManager::class)->installOrUpdateFromZip($zipPath);
+            $this->fail('Unix symlink entries must be rejected before extraction.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('Symlink entry blocked in ZIP', $exception->getMessage());
+        } finally {
+            @unlink($zipPath);
+        }
+    }
 }
