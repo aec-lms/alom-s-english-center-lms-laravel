@@ -374,7 +374,13 @@ class FinanceAndPaymentGatewayTest extends TestCase
         $this->actingAs($admin)->post("/admin/payments/{$tx->id}/refund", [
             'amount' => 1500,
             'reason' => 'Partial fee adjustment',
+            'provider_refund_reference' => 're_test_provider_refund_001',
         ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('payment_refunds', [
+            'payment_transaction_id' => $tx->id,
+            'provider_refund_reference' => 're_test_provider_refund_001',
+        ]);
 
         $this->assertSame('partial', $stripeInvoice->fresh()->status);
         $this->assertEquals(3000.0, (float) $stripeInvoice->fresh()->paid_amount);
