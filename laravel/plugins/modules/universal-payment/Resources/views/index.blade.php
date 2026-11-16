@@ -94,7 +94,7 @@
         <h2 class="text-sm font-bold text-slate-900">Manual Receipt Register ({{ $transactions->count() }})</h2>
         <div class="overflow-x-auto">
             <table class="w-full text-xs text-left">
-                <thead class="text-slate-500 border-b"><tr><th class="py-2">Ref</th><th>Payer</th><th>Item</th><th>Gateway</th><th>Amount</th><th>Proof</th><th>Status</th><th>Proof</th><th>Action</th></tr></thead>
+                <thead class="text-slate-500 border-b"><tr><th class="py-2">Ref</th><th>Payer</th><th>Item</th><th>Gateway</th><th>Amount</th><th>Proof</th><th>Status</th><th>Action</th></tr></thead>
                 <tbody class="divide-y">
                     @forelse ($transactions as $tx)
                         <tr>
@@ -103,13 +103,6 @@
                             <td>{{ $tx->item_title }}</td>
                             <td class="uppercase">{{ $tx->gateway }}</td>
                             <td class="font-bold">{{ $tx->currency }} {{ number_format((float) $tx->amount, 2) }}</td>
-                            <td>
-                                @if ($tx->proof_path)
-                                    <a href="{{ url('/plugins/universal-payment/transactions/' . $tx->id . '/proof') }}" class="font-semibold text-blue-700 underline">View proof</a>
-                                @else
-                                    <span class="text-slate-400">Not uploaded</span>
-                                @endif
-                            </td>
                             <td><span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase {{ $tx->status === 'verified' ? 'bg-emerald-100 text-emerald-800' : ($tx->status === 'refunded' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800') }}">{{ $tx->status }}</span></td>
                             <td>
                                 @if ($tx->proof_path)
