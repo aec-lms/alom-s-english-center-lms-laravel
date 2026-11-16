@@ -121,4 +121,99 @@ class BranchManagerFailClosedTest extends TestCase
         }
     }
 
+    public function test_notification_center_branch_manager_reads_and_dispatches_only_within_own_branch(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'email-notifications', 'notification-center']);
+
+        $ownBranch = DB::table('branches')->insertGetId([
+            'code' => 'NC-OWN',
+            'name' => 'Notification Own Branch',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $otherBranch = DB::table('branches')->insertGetId([
+            'code' => 'NC-OTHER',
+            'name' => 'Notification Other Branch',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $manager = $this->createUserWithRole('branch_manager', $ownBranch);
+        $ownStudent = $this->createUserWithRole('student', $ownBranch);
+        $otherStudent = $this->createUserWithRole('student', $otherBranch);
+        $permission = DB::table('permissions')->where('slug', 'notifications.manage')->first();
+        $this->assertNotNull($permission);
+        $manager->roles()->first()->permissions()->syncWithoutDetaching([$permission->id]);
+
+        LmsNotification::query()->create([
+            'user_id' => $ownStudent->id,
+            'branch_id' => $ownBranch,
+            'channel' => 'in_app',
+            'title' => 'Own Branch Alert',
+            'message' => 'Own branch only',
+            'status' => 'sent',
+        ]);
+        LmsNotification::query()->create([
+            'user_id' => $otherStudent->id,
+            'branch_id' => $otherBranch,
+            'channel' => 'in_app',
+            'title' => 'Other Branch Alert',
+            'message' => 'Must remain private',
+            'status' => 'sent',
+        ]);
+
+        $this->actingAs($manager)
+            ->get('/admin/notifications')
+            ->assertOk()
+            ->assertSee('Own Branch Alert')
+            ->assertDontSee('Other Branch Alert');
+
+        $this->actingAs($manager)->post('/admin/notifications/dispatch', [
+            'user_id' => $ownStudent->id,
+            'channel' => 'in_app',
+            'title' => 'Branch-scoped dispatch',
+            'message' => 'Allowed',
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('lms_notifications', [
+            'user_id' => $ownStudent->id,
+            'branch_id' => $ownBranch,
+            'title' => 'Branch-scoped dispatch',
+        ]);
+
+        $this->actingAs($manager)->post('/admin/notifications/dispatch', [
+            'user_id' => $otherStudent->id,
+            'channel' => 'in_app',
+            'title' => 'Cross-branch attempt',
+            'message' => 'Must be blocked',
+        ])->assertNotFound();
+
+        $this->assertDatabaseMissing('lms_notifications', [
+            'user_id' => $otherStudent->id,
+            'title' => 'Cross-branch attempt',
+        ]);
+    }
+
+    public function test_unassigned_branch_manager_cannot_access_notification_center(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'email-notifications', 'notification-center']);
+
+        $manager = $this->createUserWithRole('branch_manager');
+        $permission = DB::table('permissions')->where('slug', 'notifications.manage')->firstOrFail();
+        $manager->roles()->first()->permissions()->syncWithoutDetaching([$permission->id]);
+
+        $this->actingAs($manager)->get('/admin/notifications')->assertForbidden();
+        $this->actingAs($manager)->post('/admin/notifications/dispatch', [
+            'user_id' => $this->createUserWithRole('student')->id,
+            'channel' => 'in_app',
+            'title' => 'Denied',
+            'message' => 'No branch assignment',
+        ])->assertForbidden();
+    }
+
+
 }
