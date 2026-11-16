@@ -46,8 +46,14 @@ Enter the application name, HTTPS URL, initial Admin name/email and a strong pas
 - Confirm `/install` is unavailable after installation.
 - Verify `.env`, source, storage, backups and private uploads cannot be downloaded over HTTP.
 - Test authentication, authorization, branch isolation and one complete workflow in every enabled module.
-- Verify HTTPS, secure cookies, SMTP delivery, private file authorization and the actual notification delivery status.
-- Current Notification Center email and Greenweb SMS sends are synchronous; a background queue worker is not part of this release candidate. Do not configure a database queue worker unless a future verified release explicitly enables one.
+- Verify HTTPS, secure cookies, SMTP settings, private file authorization and the actual notification delivery status.
+- Notification Center email uses the database queue. In cPanel → Cron Jobs, add a job to run every minute (replace the home path and PHP binary with the values shown by your hosting provider):
+  ```bash
+  cd /home/CPANEL-USER/private-app && /usr/local/bin/php artisan queue:work database --stop-when-empty --tries=3 --timeout=90 >> storage/logs/queue-worker.log 2>&1
+  ```
+  The queue migration creates `jobs`, `job_batches` and `failed_jobs` if they do not already exist. Check the queue log and failed-jobs table during staging. Do not place the log under the public document root.
+- Greenweb SMS remains a synchronous provider submission. A provider acceptance response is recorded as `submitted`, not as confirmed handset delivery.
+- If the hosting plan does not permit PHP CLI/Cron Jobs, queued email cannot be treated as operational; keep this as a release blocker until a supported worker is configured and tested.
 - Take a backup and rehearse restore into a separate disposable database and private directory.
 
 ## 6. Upgrade and recovery policy
