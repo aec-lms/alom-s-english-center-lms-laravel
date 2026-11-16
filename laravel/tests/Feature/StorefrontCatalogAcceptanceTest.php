@@ -14,6 +14,9 @@ class StorefrontCatalogAcceptanceTest extends TestCase
         $this->markSystemInstalled();
         $this->activatePlugins(['storefront-catalog']);
         $admin = $this->createUserWithRole('admin');
+        $cmsPermissionId = \\App\\Models\\Permission::query()->where('slug', 'cms.manage')->value('id');
+        $this->assertNotNull($cmsPermissionId);
+        $admin->roles()->first()->permissions()->syncWithoutDetaching([$cmsPermissionId]);
 
         $this->actingAs($admin)->post('/admin/storefront', [
             'type' => 'ebook',
@@ -30,7 +33,7 @@ class StorefrontCatalogAcceptanceTest extends TestCase
             'is_free' => true,
             'is_active' => true,
             'is_carousel_featured' => true,
-        ])->assertSessionHasNoErrors();
+        ])->assertSessionHasNoErrors()->assertRedirect();
 
         $item = StorefrontItem::query()->where('title', 'SSC English Grammar Guide')->firstOrFail();
         $this->assertSame(0.0, $item->price);
