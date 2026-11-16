@@ -32,8 +32,11 @@ class FeeController extends Controller
             ->latest()
             ->paginate(25);
         $categories = FeeCategory::query()->orderBy('name')->get();
+        $students = $studentIntegration
+            ? Student::query()->with('user')->orderBy('student_code')->get()
+            : collect();
 
-        return view('fees-management::index', compact('invoices', 'categories', 'studentIntegration'));
+        return view('fees-management::index', compact('invoices', 'categories', 'students', 'studentIntegration'));
     }
 
     public function storeInvoice(Request $request): RedirectResponse
