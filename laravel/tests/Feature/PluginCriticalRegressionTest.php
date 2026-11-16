@@ -7,6 +7,10 @@ namespace Tests\Feature;
 use App\Core\Contracts\PluginInterface;
 use App\Core\Plugins\PluginManifest;
 use App\Core\Plugins\PluginManager;
+use App\Models\Permission;
+use Illuminate\Support\Facades\DB;
+use Plugins\Modules\HrStaffManagement\Models\StaffPayroll;
+use Plugins\Modules\HrStaffManagement\Models\StaffProfile;
 use Plugins\Modules\RoleAiAssistant\Services\AiAssistantService;
 use Tests\TestCase;
 
@@ -81,7 +85,7 @@ class PluginCriticalRegressionTest extends TestCase
         $this->markSystemInstalled();
         $this->activatePlugins(['branch-management', 'hr-staff-management']);
 
-        $branchId = \\Illuminate\\Support\\Facades\\DB::table('branches')->insertGetId([
+        $branchId = DB::table('branches')->insertGetId([
             'code' => 'HR-TEST',
             'name' => 'HR Test Branch',
             'created_at' => now(),
@@ -110,7 +114,7 @@ class PluginCriticalRegressionTest extends TestCase
         $this->assertNull($payroll->paid_at);
 
         $branchManager = $this->createUserWithRole('branch_manager', $branchId);
-        $hrPermission = \\App\\Models\\Permission::query()->where('slug', 'hr.manage')->firstOrFail();
+        $hrPermission = Permission::query()->where('slug', 'hr.manage')->firstOrFail();
         $branchManager->roles()->first()->permissions()->syncWithoutDetaching([$hrPermission->id]);
 
         $this->actingAs($branchManager)
