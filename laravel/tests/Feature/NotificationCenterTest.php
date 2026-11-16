@@ -13,7 +13,7 @@ class NotificationCenterTest extends TestCase
     public function test_in_app_notification_is_saved_for_the_selected_user(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['notification-center', 'email-notifications', 'sms-gateway']);
+        $this->activatePlugins(['email-notifications', 'sms-gateway', 'notification-center']);
         $admin = $this->createUserWithRole('admin');
         $student = $this->createUserWithRole('student');
 
@@ -35,7 +35,7 @@ class NotificationCenterTest extends TestCase
     public function test_user_portal_only_shows_notifications_belonging_to_signed_in_user(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['notification-center']);
+        $this->activatePlugins(['email-notifications', 'sms-gateway', 'notification-center']);
         $student = $this->createUserWithRole('student');
         $otherStudent = $this->createUserWithRole('student');
 
@@ -69,7 +69,7 @@ class NotificationCenterTest extends TestCase
     public function test_unconfigured_external_channels_are_not_reported_as_queued_or_sent(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['notification-center', 'email-notifications', 'sms-gateway']);
+        $this->activatePlugins(['email-notifications', 'sms-gateway', 'notification-center']);
         $admin = $this->createUserWithRole('admin');
         $student = $this->createUserWithRole('student');
         Http::fake();
