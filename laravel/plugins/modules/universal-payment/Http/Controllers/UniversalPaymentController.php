@@ -7,18 +7,22 @@ namespace Plugins\Modules\UniversalPayment\Http\Controllers;
 use App\Core\Plugins\PluginManager;
 use App\Core\Security\AuditLogger;
 use App\Http\Controllers\Controller;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
+use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
+use Plugins\Modules\UniversalPayment\Services\UniversalPaymentOrchestrator;
 
 class UniversalPaymentController extends Controller
 {
     public function __construct(
         private readonly PluginManager $plugins,
         private readonly AuditLogger $audit,
+        private readonly UniversalPaymentOrchestrator $orchestrator,
     ) {}
 
     public function index(): View
@@ -76,10 +80,9 @@ class UniversalPaymentController extends Controller
             'payer_name' => ['required', 'string', 'max:160'],
             'payer_contact' => ['nullable', 'string', 'max:120'],
             'item_title' => ['required', 'string', 'max:200'],
-            'gateway' => ['required', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,bank_cash'],
+            'gateway' => ['required', 'in:bank_cash'],
             'amount' => ['required', 'numeric', 'min:1'],
             'external_trx_id' => ['nullable', 'string', 'max:120'],
-            'status' => ['required', 'in:pending,verified,refunded'],
         ]);
 
         $tx = UniversalPaymentTransaction::query()->create([
@@ -91,9 +94,9 @@ class UniversalPaymentController extends Controller
             'currency' => $this->plugins->getSetting('universal-payment', 'default_currency', 'BDT') ?: 'BDT',
             'amount' => $validated['amount'],
             'external_trx_id' => $validated['external_trx_id'] ?? null,
-            'status' => $validated['status'],
-            'verified_by' => $validated['status'] === 'verified' ? auth()->id() : null,
-            'verified_at' => $validated['status'] === 'verified' ? now() : null,
+            'status' => 'pending',
+            'verified_by' => null,
+            'verified_at' => null,
         ]);
 
         $this->audit->log('universal_payment.recorded', 'universal_payment', $tx->reference, ['amount' => $tx->amount, 'gateway' => $tx->gateway]);
@@ -104,8 +107,17 @@ class UniversalPaymentController extends Controller
     public function updateStatus(Request $request, UniversalPaymentTransaction $transaction): RedirectResponse
     {
         $validated = $request->validate([
-            'status' => ['required', 'in:pending,verified,refunded,rejected'],
+            'status' => ['required', 'in:verified,rejected'],
         ]);
+
+        if ($validated['status'] === 'verified') {
+            if ($transaction->gateway !== 'bank_cash') {
+                abort(422, 'Online gateway transactions must be verified by the provider webhook.');
+            }
+            if (trim((string) $transaction->external_trx_id) === '') {
+                abort(422, 'A bank receipt or cash voucher reference is required before verification.');
+            }
+        }
 
         $transaction->update([
             'status' => $validated['status'],
@@ -118,29 +130,49 @@ class UniversalPaymentController extends Controller
         return back()->with('status', "Transaction '{$transaction->reference}' marked {$validated['status']}.");
     }
 
-    public function publicCheckout(Request $request): RedirectResponse
+    public function publicCheckout(Request $request): JsonResponse|RedirectResponse
     {
         $validated = $request->validate([
-            'payer_name' => ['required', 'string', 'max:160'],
-            'payer_contact' => ['required', 'string', 'max:120'],
-            'item_title' => ['required', 'string', 'max:200'],
-            'gateway' => ['required', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,bank_cash'],
-            'amount' => ['required', 'numeric', 'min:1'],
-            'external_trx_id' => ['nullable', 'string', 'max:120'],
+            'invoice_id' => ['required', 'integer', 'exists:fee_invoices,id'],
+            'gateway' => ['required', 'in:sslcommerz,card,paypal'],
+            'payment_method_id' => ['nullable', 'string', 'max:160'],
+            'idempotency_key' => ['nullable', 'string', 'max:120'],
         ]);
 
-        $tx = UniversalPaymentTransaction::query()->create([
-            'reference' => 'UPAY-' . strtoupper(Str::random(8)),
-            'payer_name' => $validated['payer_name'],
-            'payer_contact' => $validated['payer_contact'],
-            'item_title' => $validated['item_title'],
-            'gateway' => $validated['gateway'],
-            'currency' => $this->plugins->getSetting('universal-payment', 'default_currency', 'BDT') ?: 'BDT',
-            'amount' => $validated['amount'],
-            'external_trx_id' => $validated['external_trx_id'] ?? null,
-            'status' => 'pending',
-        ]);
+        $actor = $request->user();
+        abort_unless($actor, 401);
 
-        return back()->with('status', "Payment submitted! Reference: {$tx->reference}");
-    }
-}
+        $invoice = FeeInvoice::query()->with('student')->findOrFail((int) $validated['invoice_id']);
+        $isFinanceOperator = $actor->hasRole('admin') || $actor->hasRole('accountant');
+        $isInvoiceOwner = (int) ($invoice->student?->user_id ?? 0) === (int) $actor->id;
+        abort_unless($isFinanceOperator || $isInvoiceOwner, 403, 'You are not authorized to pay this invoice.');
+
+        $enabledRaw = (string) $this->plugins->getSetting('universal-payment', 'enabled_gateways', 'sslcommerz,card,paypal');
+        $enabledGateways = array_values(array_filter(array_map('trim', explode(',', $enabledRaw))));
+        abort_unless(in_array($validated['gateway'], $enabledGateways, true), 403, 'This checkout provider is not enabled by the LMS administrator.');
+
+        $gatewaySlug = match ($validated['gateway']) {
+            'sslcommerz' => 'gateway-sslcommerz',
+            'card' => 'gateway-stripe',
+            'paypal' => 'gateway-paypal',
+        };
+
+        try {
+            $result = $this->orchestrator->initiate($gatewaySlug, $invoice, [
+                'payment_method_id' => $validated['payment_method_id'] ?? '',
+                'idempotency_key' => $validated['idempotency_key'] ?? null,
+            ]);
+        } catch (\\RuntimeException $exception) {
+            if ($request->expectsJson()) {
+                return response()->json(['message' => $exception->getMessage()], 503);
+            }
+
+            return back()->withErrors(['gateway' => $exception->getMessage()]);
+        }
+
+        if (!empty($result['redirect_url'])) {
+            return redirect()->away($result['redirect_url']);
+        }
+
+        return response()->json($result, 201);
+    }}
