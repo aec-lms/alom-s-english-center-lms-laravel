@@ -155,12 +155,13 @@ class FinanceAndPaymentGatewayTest extends TestCase
         $this->assertSame('settled', $sslTransaction->fresh()->status);
 
         // Visa/Mastercard is a card network; never fake authorization without an acquiring PSP adapter.
-        $this->actingAs($admin)->postJson('/payments/card/checkout', [
+        $cardResponse = $this->actingAs($admin)->postJson('/payments/card/checkout', [
             'invoice_id' => $invoice->id,
             'payment_token' => 'tok_visa_1234567890',
             'card_brand' => 'visa',
             'last4' => '4242',
-        ])->assertStatus(503)->assertJsonPath('message', fn ($message) => str_contains($message, 'acquiring-bank/PSP adapter'));
+        ])->assertStatus(503);
+        $this->assertStringContainsString('acquiring-bank/PSP adapter', $cardResponse->json('message'));
 
         $this->assertSame(0, PaymentTransaction::query()->where('gateway_slug', 'gateway-card')->count());
         $this->assertSame('unpaid', $invoice->fresh()->status);
