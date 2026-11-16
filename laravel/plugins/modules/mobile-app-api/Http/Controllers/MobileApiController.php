@@ -235,7 +235,7 @@ class MobileApiController extends Controller
         $enrollments = Schema::hasTable('enrollments')
             ? Enrollment::query()
                 ->where('user_id', $user->id)
-                ->with('course:id,code,title,slug,thumbnail,pdf_path,pdf_thumbnail')
+                ->with('course:id,code,title,slug,thumbnail,pdf_thumbnail')
                 ->get()
             : collect();
 
@@ -266,6 +266,7 @@ class MobileApiController extends Controller
         // Course currently has no Eloquent category/lessons relationships.
         // Return the persisted course record instead of eager-loading undefined relations.
         $course = Course::query()
+            ->select(['id', 'code', 'title', 'slug', 'description', 'price', 'thumbnail', 'pdf_thumbnail', 'instructor_name', 'status'])
             ->where('slug', $slug)
             ->where('status', 'published')
             ->select(['id', 'code', 'title', 'slug', 'price', 'description', 'thumbnail', 'instructor_name'])
