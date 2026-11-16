@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use Illuminate\Support\Facades\DB;
+use App\Core\Plugins\PluginManager;
 use Tests\TestCase;
 
 class StudentStandaloneTest extends TestCase
@@ -15,7 +15,7 @@ class StudentStandaloneTest extends TestCase
         $this->activatePlugins(['student-management']);
         $admin = $this->createUserWithRole('admin');
 
-        $this->assertDatabaseMissing('plugins', ['slug' => 'branch-management', 'status' => 'installed']);
+        $this->assertFalse(app(PluginManager::class)->isInstalled('branch-management'));
 
         $this->actingAs($admin)
             ->get('/admin/students')
