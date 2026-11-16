@@ -39,6 +39,9 @@ class TeacherController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
+
         $branchRule = Schema::hasTable('branches')
             ? ['nullable', 'integer', 'exists:branches,id']
             : ['nullable', 'integer'];
@@ -58,8 +61,6 @@ class TeacherController extends Controller
             'is_active' => ['nullable', 'boolean'],
         ]);
 
-        $actor = $request->user();
-        $this->ensureAssignedBranch($actor);
         if ($actor && $actor->hasRole('branch_manager')) {
             if (isset($validated['branch_id']) && (int) $validated['branch_id'] !== (int) $actor->branch_id) {
                 abort(403, 'Branch isolation violation.');
