@@ -2,19 +2,22 @@
 
 declare(strict_types=1);
 
-namespace App\Http\Controllers\Auth;
+namespace App\\Http\\Controllers\\Auth;
 
-use App\Core\Security\AuditLogger;
-use App\Http\Controllers\Controller;
-use App\Models\Role;
-use App\Models\User;
-use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\RateLimiter;
-use Illuminate\Support\Facades\Schema;
-use Illuminate\View\View;
+use App\\Core\\Security\\AuditLogger;
+use App\\Http\\Controllers\\Controller;
+use App\\Models\\Role;
+use App\\Models\\User;
+use Illuminate\\Auth\\Notifications\\ResetPassword;
+use Illuminate\\Http\\RedirectResponse;
+use Illuminate\\Http\\Request;
+use Illuminate\\Support\\Facades\\Auth;
+use Illuminate\\Support\\Facades\\Hash;
+use Illuminate\\Support\\Facades\\Password;
+use Illuminate\\Support\\Facades\\RateLimiter;
+use Illuminate\\Support\\Facades\\Schema;
+use Illuminate\\Support\\Str;
+use Illuminate\\View\\View;
 
 class LoginController extends Controller
 {
@@ -40,7 +43,7 @@ class LoginController extends Controller
 
         if (!Auth::attempt(['email' => strtolower($credentials['email']), 'password' => $credentials['password'], 'is_active' => true], $request->boolean('remember'))) {
             RateLimiter::hit($throttleKey, 900);
-            $this->audit->log('auth.login_failed', 'user', $credentials['email']);
+            $this->audit->log('auth.login_failed', 'user', hash('sha256', strtolower($credentials['email'])));
             return back()->withInput($request->only('email'))->withErrors(['email' => 'Invalid credentials or inactive account.']);
         }
 
@@ -92,10 +95,54 @@ class LoginController extends Controller
 
     public function sendResetNotice(Request $request): RedirectResponse
     {
-        $request->validate(['email' => ['required', 'email']]);
-        $this->audit->log('auth.password_reset_requested', 'user', strtolower((string) $request->input('email')));
+        $validated = $request->validate(['email' => ['required', 'email']]);
+        Password::sendResetLink(['email' => strtolower($validated['email'])]);
 
-        return back()->with('status', 'If an account matches that email, password recovery instructions have been queued by info@alomsenglishcenter.com.');
+        // Keep the response identical for known and unknown addresses to prevent account enumeration.
+        $this->audit->log('auth.password_reset_requested', 'user', hash('sha256', strtolower($validated['email'])));
+
+        return back()->with('status', 'If an account matches that email, password recovery instructions will be sent shortly.');
+    }
+
+    public function showResetPassword(Request $request, string $token): View
+    {
+        return view('auth.reset-password', [
+            'token' => $token,
+            'email' => (string) $request->query('email', ''),
+        ]);
+    }
+
+    public function resetPassword(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'token' => ['required', 'string'],
+            'email' => ['required', 'email'],
+            'password' => ['required', 'string', 'min:10', 'confirmed'],
+        ]);
+
+        $status = Password::reset(
+            [
+                'email' => strtolower($validated['email']),
+                'password' => $validated['password'],
+                'password_confirmation' => $validated['password_confirmation'],
+                'token' => $validated['token'],
+            ],
+            function (User $user, string $password): void {
+                $user->forceFill([
+                    'password' => Hash::make($password),
+                    'remember_token' => Str::random(60),
+                ])->save();
+            }
+        );
+
+        if ($status === Password::PASSWORD_RESET) {
+            $this->audit->log('auth.password_reset_completed', 'user', hash('sha256', strtolower($validated['email'])));
+            return redirect()->route('login')->with('status', 'Your password has been reset. You can now sign in.');
+        }
+
+        return back()->withInput($request->only('email'))->withErrors([
+            'email' => __($status),
+        ]);
     }
 
     public function logout(Request $request): RedirectResponse
