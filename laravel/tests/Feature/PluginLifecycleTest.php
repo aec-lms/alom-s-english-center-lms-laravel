@@ -28,6 +28,20 @@ class PluginLifecycleTest extends TestCase
         $this->assertTrue(VersionConstraint::matches('2.1.0', '>=2.0'));
     }
 
+    public function test_incompatible_installed_plugin_cannot_be_reenabled_after_core_upgrade(): void
+    {
+        $this->markSystemInstalled();
+        $manager = app(PluginManager::class);
+        $manager->syncCatalog();
+        $manager->install('student-management');
+        $manager->disable('student-management');
+
+        config(['lms.core_version' => '3.0.0']);
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('is incompatible with Core 3.0.0');
+        $manager->enable('student-management');
+    }
+
     public function test_student_plugin_installs_without_optional_branch_plugin(): void
     {
         $this->markSystemInstalled();
