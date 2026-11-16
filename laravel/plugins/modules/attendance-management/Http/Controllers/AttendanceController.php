@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Plugins\Modules\AttendanceManagement\Http\Controllers;
 
 use App\Core\Security\AuditLogger;
+use App\Core\Plugins\PluginManager;
+use Illuminate\Support\Facades\Schema;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -33,6 +35,17 @@ class AttendanceController extends Controller
     {
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
+        $plugins = app(PluginManager::class);
+        abort_unless(
+            $plugins->isEnabled('student-management') && Schema::hasTable('students'),
+            409,
+            'Enable Student Management before recording attendance.'
+        );
+        abort_unless(
+            $plugins->isEnabled('batch-management') && Schema::hasTable('study_batches'),
+            409,
+            'Enable Batch Management before recording attendance.'
+        );
         $validated = $request->validate([
             'batch_id' => ['required', 'integer', 'exists:study_batches,id'],
             'student_id' => ['required', 'integer', 'exists:students,id'],
@@ -43,7 +56,7 @@ class AttendanceController extends Controller
 
         $student = Student::query()->findOrFail((int) $validated['student_id']);
         $batch = StudyBatch::query()->findOrFail((int) $validated['batch_id']);
-        if ($student->branch_id === null || (int) $batch->branch_id !== (int) $student->branch_id) {
+        if ((int) ($batch->branch_id ?? 0) !== (int) ($student->branch_id ?? 0)) {
             abort(422, 'Student and batch must belong to the same branch.');
         }
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $student->branch_id) {
@@ -74,8 +87,8 @@ class AttendanceController extends Controller
         if (!$actor || !$actor->hasRole('branch_manager')) {
             return;
         }
-        if ($actor->branch_id === null) {
-            abort(403, 'Branch manager must be assigned to a branch.');
+        if ($actor->branch_id === null || !app(PluginManager::class)->isEnabled('branch-management') || !Schema::hasTable('branches')) {
+            abort(403, 'Branch manager must be assigned to an active branch.');
         }
         $activeBranch = app('db')->table('branches')
             ->where('id', $actor->branch_id)
