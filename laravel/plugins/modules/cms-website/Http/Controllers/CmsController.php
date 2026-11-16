@@ -96,7 +96,7 @@ class CmsController extends Controller
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:200'],
             'slug' => ['nullable', 'alpha_dash', 'max:180', 'unique:cms_posts,slug'],
-            'category_id' => ['nullable', 'integer'],
+            'category_id' => ['nullable', 'integer', 'exists:cms_categories,id'],
             'category' => ['nullable', 'string', 'max:100'],
             'author' => ['nullable', 'string', 'max:120'],
             'excerpt' => ['nullable', 'string', 'max:500'],
@@ -163,7 +163,7 @@ class CmsController extends Controller
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:200'],
             'slug' => ['required', 'alpha_dash', 'max:180', 'unique:cms_posts,slug,' . $post->id],
-            'category_id' => ['nullable', 'integer'],
+            'category_id' => ['nullable', 'integer', 'exists:cms_categories,id'],
             'category' => ['nullable', 'string', 'max:100'],
             'author' => ['nullable', 'string', 'max:120'],
             'excerpt' => ['nullable', 'string', 'max:500'],
