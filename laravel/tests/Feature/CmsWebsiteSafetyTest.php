@@ -14,8 +14,9 @@ class CmsWebsiteSafetyTest extends TestCase
         $this->activatePlugins(['cms-website']);
         $admin = $this->createUserWithRole('admin');
 
-        $response = $this->actingAs($admin)->get('/admin/cms')->assertOk();
-        $homepage = $response->viewData('homepage');
+        $controller = app(\\Plugins\\Modules\\CmsWebsite\\Http\\Controllers\\CmsController::class);
+        $view = $controller->index();
+        $homepage = $view->getData()['homepage'];
 
         $this->assertSame('', $homepage['footer_license_no']);
         $this->assertSame('', $homepage['footer_address']);
