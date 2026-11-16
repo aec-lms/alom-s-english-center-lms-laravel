@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\StudentTracking\\Models;
+namespace Plugins\Modules\StudentTracking\Models;
 
-use Illuminate\\Database\\Eloquent\\Model;
+use Illuminate\Database\Eloquent\Model;
 
 class StudentActivityEvent extends Model
 {
