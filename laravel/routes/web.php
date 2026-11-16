@@ -42,7 +42,7 @@ Route::middleware('installed')->group(function (): void {
     Route::get('/terms-and-conditions', [PublicHomeController::class, 'legalPage'])->defaults('slug', 'terms-and-conditions')->name('public.terms');
     Route::get('/privacy-policy', [PublicHomeController::class, 'legalPage'])->defaults('slug', 'privacy-policy')->name('public.privacy');
     Route::get('/refund-policy', [PublicHomeController::class, 'legalPage'])->defaults('slug', 'refund-policy')->name('public.refund');
-    Route::get('/profile', [PublicHomeController::class, 'profile'])->name('public.profile');
+    Route::get('/profile', [PublicHomeController::class, 'profile'])->name('public.profile');\n    Route::get('/dashboard', [PortalController::class, 'index'])->middleware('auth')->name('portal.dashboard');
 
     Route::get('/login', [LoginController::class, 'show'])->name('login')->middleware('guest');
     Route::post('/login', [LoginController::class, 'authenticate'])->name('login.attempt')->middleware('guest');
