@@ -13,7 +13,7 @@ The stronger requirement—running the same plugin package on an arbitrary, non-
 
 ## Manifest dependency inventory
 
-The 39 plugin manifests were checked individually on the reviewed branch. All 39 declare an empty required-sibling `dependencies` list; the following 20 declare optional sibling integrations. A source-level PHP namespace scan now checks that direct sibling references are declared as required or optional integrations. This prevents hidden undeclared references, but runtime standalone behavior still requires plugin-by-plugin acceptance tests:
+The 39 plugin manifests were checked individually on the reviewed branch. All 39 declare an empty required-sibling `dependencies` list; optional sibling integrations are declared explicitly in the manifests listed below and in the additional integrations note. A source-level PHP namespace scan now checks that direct sibling references are declared as required or optional integrations. This prevents hidden undeclared references, but runtime standalone behavior still requires plugin-by-plugin acceptance tests:
 
 | Plugin | Optional integrations | Portability concern |
 |---|---|---|
@@ -24,6 +24,7 @@ The 39 plugin manifests were checked individually on the reviewed branch. All 39
 | certificate-management | student-management, branch-management | Certificate issuance should accept a verified learner identity through a contract. |
 | course-management | branch-management, student-management, fees-management | Course catalogs should support a global/default organization context; learner enrollment and invoicing remain optional adapters. |
 | exam-management | course-management, branch-management | Exams should use optional course/branch adapters and remain usable in standalone mode where supported. |
+| gateway-card | fees-management, payment-management | Generic card adapter remains a provider contract; it must fail closed until a real processor adapter is installed and configured. |
 | gateway-paypal | payment-management, fees-management, student-management | Gateway should implement a payment-provider contract and resolve invoice/learner adapters only when enabled. |
 | gateway-stripe | payment-management, fees-management, student-management | Gateway should implement a payment-provider contract and resolve invoice/learner adapters only when enabled. |
 | gateway-sslcommerz | fees-management, payment-management, student-management | Hosted checkout should use the same invoice/provider contracts and keep credentials in its own settings. |
@@ -33,10 +34,11 @@ The 39 plugin manifests were checked individually on the reviewed branch. All 39
 | student-management | branch-management | Student records should support a nullable/default organization context. |
 | teacher-management | branch-management | Teacher records should support a nullable/default organization context. |
 | reports-analytics | branch-management | Reports should degrade to global scope without branch integration. |
+| mobile-app-api | course-management, student-management, teacher-management, notice-board, storefront-catalog, exam-management, certificate-management, slider-builder | Public/mobile endpoints must hide disabled module data and require enrollment for protected lesson content. |
 | notice-board | branch-management | Notices should support global audience when branch integration is absent. |
 | universal-payment | payment-management, fees-management, branch-management, gateway-paypal, gateway-sslcommerz, gateway-stripe | Payment orchestration should depend on invoice/payment/provider contracts, not sibling Eloquent models. |
 
-Additional plugins also declare optional integrations: `guardian-management` → `student-management, branch-management`, `fees-management` → `student-management, branch-management`, and `payment-management` → `fees-management, branch-management`. `universal-payment`, `notification-center`, and `certificate-management` also include branch context in their optional integration lists. The remaining 19 manifests declare no optional sibling integration. This does **not** prove they are independent: source files may still import sibling models, tables, routes or services without declaring those dependencies. Source-level import and runtime dependency scans remain required for all 39 modules.
+Additional plugins also declare optional integrations: `guardian-management` → `student-management, branch-management`, `fees-management` → `student-management, branch-management`, and `payment-management` → `fees-management, branch-management`. `universal-payment`, `notification-center`, and `certificate-management` also include branch context in their optional integration lists. The remaining manifests declare no optional sibling integration. This does **not** prove they are independent: source files may still import sibling models, tables, routes or services without declaring those dependencies. Source-level import and runtime dependency scans remain required for all 39 modules.
 
 ## Target architecture
 
@@ -65,4 +67,4 @@ Additional plugins also declare optional integrations: `guardian-management` →
 
 ## Release policy
 
-Until the second host adapter and cross-host contract suite exist, describe these modules as **AEC LMS Laravel plugins**, not universal plugins compatible with every LMS. All 39 manifests currently have no required sibling-plugin dependencies. Twenty manifests declare optional integrations. This permits the lifecycle manager to install each plugin without first installing sibling plugins, but it does not prove every workflow gracefully degrades when an optional module is absent. The source-level audit and standalone feature tests remain mandatory. Do not remove dependencies from manifests until the corresponding source imports and workflows have been replaced by tested adapters.
+Until the second host adapter and cross-host contract suite exist, describe these modules as **AEC LMS Laravel plugins**, not universal plugins compatible with every LMS. All 39 manifests currently have no required sibling-plugin dependencies. Optional integrations are declared in the manifest for each affected plugin. This permits the lifecycle manager to install each plugin without first installing sibling plugins, but it does not prove every workflow gracefully degrades when an optional module is absent. The source-level audit and standalone feature tests remain mandatory. Do not remove dependencies from manifests until the corresponding source imports and workflows have been replaced by tested adapters.
