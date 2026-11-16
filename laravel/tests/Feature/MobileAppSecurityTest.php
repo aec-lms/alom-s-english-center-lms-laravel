@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use Illuminate\\Support\\Facades\\DB;
-use Plugins\\Modules\\CourseManagement\\Models\\Course;
-use Plugins\\Modules\\NoticeBoard\\Models\\Notice;
-use Tests\\TestCase;
+use Illuminate\Support\Facades\DB;
+use Plugins\Modules\CourseManagement\Models\Course;
+use Plugins\Modules\NoticeBoard\Models\Notice;
+use Tests\TestCase;
 
 class MobileAppSecurityTest extends TestCase
 {
