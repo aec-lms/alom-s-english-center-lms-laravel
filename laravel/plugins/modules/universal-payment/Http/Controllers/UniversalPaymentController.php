@@ -80,10 +80,18 @@ class UniversalPaymentController extends Controller
             'gateway' => ['required', 'in:bank_cash'],
             'amount' => ['required', 'numeric', 'min:1'],
             'external_trx_id' => ['required', 'string', 'max:120'],
+            'proof' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'mimetypes:application/pdf,image/jpeg,image/png', 'max:5120'],
         ]);
 
+        $reference = 'UPAY-' . strtoupper(Str::random(8));
+        $proofFile = $request->file('proof');
+        $proofPath = $proofFile?->store('universal-payment-proofs/' . $reference, 'local');
+        if ($proofFile && !$proofPath) {
+            abort(500, 'Unable to securely store the uploaded receipt proof.');
+        }
+
         $tx = UniversalPaymentTransaction::query()->create([
-            'reference' => 'UPAY-' . strtoupper(Str::random(8)),
+            'reference' => $reference,
             'payer_name' => $validated['payer_name'],
             'payer_contact' => $validated['payer_contact'] ?? null,
             'item_title' => $validated['item_title'],
@@ -91,6 +99,9 @@ class UniversalPaymentController extends Controller
             'currency' => $this->plugins->getSetting('universal-payment', 'default_currency', 'BDT') ?: 'BDT',
             'amount' => $validated['amount'],
             'external_trx_id' => $validated['external_trx_id'] ?? null,
+            'proof_path' => $proofPath,
+            'proof_mime' => $proofFile?->getMimeType(),
+            'proof_size' => $proofFile?->getSize(),
             'status' => 'pending',
             'branch_id' => $actor && $actor->hasRole('branch_manager') ? $actor->branch_id : null,
             'verified_by' => null,
