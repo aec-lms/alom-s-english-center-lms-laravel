@@ -576,4 +576,55 @@ PHP;
         $this->assertCount(count(array_unique($manifests)), $manifests, 'Plugin slugs must be unique.');
     }
 
+    public function test_reset_plugin_settings_restores_manifest_defaults_and_preserves_business_records(): void
+    {
+        $this->markSystemInstalled();
+        $slug = 'settings-reset-probe';
+        $directory = (string) config('plugins.modules_path') . DIRECTORY_SEPARATOR . $slug;
+        File::ensureDirectoryExists($directory);
+
+        File::put($directory . DIRECTORY_SEPARATOR . 'plugin.json', json_encode([
+            'slug' => $slug,
+            'name' => 'Settings Reset Probe',
+            'version' => '1.0.0',
+            'core_compatibility' => '^2.0',
+            'dependencies' => [],
+            'settings_schema' => [
+                ['key' => 'site_label', 'type' => 'text', 'default' => 'Default label'],
+                ['key' => 'api_token', 'type' => 'password', 'secret' => true, 'default' => ''],
+            ],
+        ], JSON_THROW_ON_ERROR));
+
+        $admin = $this->createUserWithRole('admin');
+        try {
+            $manager = app(PluginManager::class);
+            $manager->saveSettings($slug, [
+                'site_label' => 'Custom label',
+                'api_token' => 'sensitive-token',
+                'unknown_old_key' => 'legacy value',
+            ], ['api_token'], $admin->id);
+
+            $userCountBefore = DB::table('users')->count();
+            $manager->resetSettingsToDefaults($slug, $admin->id);
+
+            $this->assertSame('Default label', $manager->getSetting($slug, 'site_label'));
+            $this->assertSame('', $manager->getSetting($slug, 'api_token'));
+            $this->assertNull($manager->getSetting($slug, 'unknown_old_key'));
+
+            $secretRow = PluginSetting::query()
+                ->where('plugin_slug', $slug)
+                ->where('setting_key', 'api_token')
+                ->firstOrFail();
+            $this->assertTrue($secretRow->is_encrypted);
+            $this->assertSame($userCountBefore, DB::table('users')->count());
+            $this->assertDatabaseHas('audit_logs', [
+                'action' => 'plugin.settings_reset',
+                'target_type' => 'plugin',
+                'target_id' => $slug,
+            ]);
+        } finally {
+            File::deleteDirectory($directory);
+        }
+    }
+
 }
