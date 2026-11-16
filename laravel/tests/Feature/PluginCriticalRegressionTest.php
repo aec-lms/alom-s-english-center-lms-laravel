@@ -209,4 +209,23 @@ class PluginCriticalRegressionTest extends TestCase
         $this->assertStringContainsString("branch_id", $migration);
     }
 
+    public function test_notification_delivery_job_confirms_email_only_after_mail_transport_and_marks_unsupported_channels_failed(): void
+    {
+        $job = file_get_contents(base_path('plugins/modules/notification-center/Jobs/DeliverNotificationJob.php'));
+        $migration = file_get_contents(base_path('plugins/modules/notification-center/Database/Migrations/2026_11_16_000002_add_notification_delivery_tracking.php'));
+        $controller = file_get_contents(base_path('plugins/modules/notification-center/Http/Controllers/NotificationController.php'));
+
+        $this->assertIsString($job);
+        $this->assertIsString($migration);
+        $this->assertIsString($controller);
+        $this->assertStringContainsString('implements ShouldQueue', $job);
+        $this->assertStringContainsString('Mail::raw', $job);
+        $this->assertStringContainsString("'status' => 'sent'", $job);
+        $this->assertStringContainsString('No verified delivery adapter is configured for this channel.', $job);
+        $this->assertStringContainsString('DeliverNotificationJob::dispatch', $controller);
+        $this->assertStringContainsString('attempt_count', $migration);
+        $this->assertStringContainsString('last_error', $migration);
+        $this->assertStringContainsString('processed_at', $migration);
+    }
+
 }
