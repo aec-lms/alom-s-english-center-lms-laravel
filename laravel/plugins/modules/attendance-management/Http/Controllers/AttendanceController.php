@@ -20,9 +20,7 @@ class AttendanceController extends Controller
     public function index(Request $request): View
     {
         $actor = $request->user();
-        if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id === null) {
-            abort(403, 'Your account is not assigned to a branch.');
-        }
+        $this->ensureAssignedBranch($actor);
 
         $records = AttendanceRecord::query()
             ->when($actor && $actor->hasRole('branch_manager'), fn ($q) => $q->where('branch_id', $actor->branch_id))
@@ -35,9 +33,7 @@ class AttendanceController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $actor = $request->user();
-        if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id === null) {
-            abort(403, 'Your account is not assigned to a branch.');
-        }
+        $this->ensureAssignedBranch($actor);
 
         $validated = $request->validate([
             'batch_id' => ['required', 'integer', 'exists:study_batches,id'],
@@ -74,5 +70,14 @@ class AttendanceController extends Controller
         $this->audit->log('attendance.marked', 'attendance', (string) $record->id, ['status' => $record->status]);
 
         return back()->with('status', 'Attendance saved.');
+    }
+    private function ensureAssignedBranch($actor): void
+    {
+        if (!$actor || !$actor->hasRole('branch_manager')) {
+            return;
+        }
+        if ($actor->branch_id === null || !app('db')->table('branches')->where('id', $actor->branch_id)->where('is_active', true)->exists()) {
+            abort(403, 'Branch manager must be assigned to an active branch.');
+        }
     }
 }
