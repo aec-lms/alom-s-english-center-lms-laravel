@@ -182,6 +182,10 @@ class PaypalGatewayService
 
         $capture = $event['resource'] ?? [];
         $transactionRef = (string) ($capture['custom_id'] ?? '');
+        if ($transactionRef === '') {
+            $orderId = (string) ($capture['supplementary_data']['related_ids']['order_id'] ?? '');
+            $transactionRef = (string) PaymentTransaction::query()->where('external_reference', $orderId)->where('gateway_slug', 'gateway-paypal')->value('transaction_ref');
+        }
         if ($transactionRef === '') throw new RuntimeException('PayPal capture is missing the LMS transaction reference.');
 
         $tx = PaymentTransaction::query()->where('transaction_ref', $transactionRef)
