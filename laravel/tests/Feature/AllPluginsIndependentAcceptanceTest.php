@@ -145,5 +145,15 @@ class AllPluginsIndependentAcceptanceTest extends TestCase
         $this->assertTrue($manager->isInstalled($slug), "{$slug} was not installed after restore");
         $this->assertTrue($manager->isEnabled($slug), "{$slug} did not restore its active state");
         $this->assertFileExists($directory . '/plugin.json');
+
+        // Verify the irreversible Recycle Bin action for every plugin, while
+        // retaining the manager's private recovery snapshot for test isolation.
+        $secondRecycle = $manager->deleteToRecycleBin($slug);
+        $manager->permanentlyDeleteFromRecycleBin($secondRecycle['archive']);
+        $privateBackup = storage_path('app/plugin-permanent-delete-backups/' . $secondRecycle['archive']);
+        $this->assertDirectoryExists($privateBackup, "{$slug} permanent delete must create a verified recovery backup");
+        $this->assertSame([], $manager->recycledPlugins(), "{$slug} archive must leave the Recycle Bin after permanent delete");
+        $this->assertTrue(File::copyDirectory($privateBackup, $directory), "{$slug} source fixture could not be restored from its private backup");
+        $this->assertFileExists($directory . '/plugin.json');
     }
 }
