@@ -379,7 +379,7 @@ class RecycleBinController extends Controller
                 ?? ('#' . $recordId);
 
             if (!$record->forceDelete()) {
-                throw new \\RuntimeException('The record could not be permanently deleted.');
+                throw new \RuntimeException('The record could not be permanently deleted.');
             }
 
             $this->audit->log('recycle_bin.permanently_deleted', $entityType, (string) $recordId, [
