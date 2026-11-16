@@ -26,6 +26,7 @@ Route::middleware(['api', 'installed', 'plugin:mobile-app-api'])
         Route::get('/certificates/verify/{code}', [MobileApiController::class, 'verifyCertificate'])->name('certificates.verify');
 
         Route::middleware('auth:sanctum')->group(function (): void {
+            Route::get('/courses/{slug}/lessons', [MobileApiController::class, 'lessons'])->name('courses.lessons');
             Route::get('/me', [MobileApiController::class, 'me'])->name('me');
             Route::post('/push-token', [MobileApiController::class, 'registerPushToken'])->name('push_token');
             Route::post('/logout', [MobileApiController::class, 'logout'])->name('logout');
