@@ -7,7 +7,10 @@
     "description": "Fee categories, student invoices, discounts/scholarships, and due balances.",
     "core_compatibility": "^2.0",
     "dependencies": [],
-    "optional_dependencies": ["student-management"],
+    "optional_dependencies": [
+        "student-management",
+        "branch-management"
+    ],
     "provider": "Plugins\\Modules\\FeesManagement\\Providers\\FeesManagementServiceProvider",
     "permissions": [
         {
