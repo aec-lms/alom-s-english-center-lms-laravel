@@ -11,6 +11,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Mail;
 use Plugins\Modules\NotificationCenter\Models\LmsNotification;
 use Throwable;
@@ -73,7 +74,25 @@ class DeliverNotificationJob implements ShouldQueue
             return;
         }
 
-        Mail::raw($notification->message, function ($mail) use ($recipient, $notification): void {
+        $smtpPort = (int) $plugins->getSetting('email-notifications', 'smtp_port', 587);
+        $smtpUsername = (string) $plugins->getSetting('email-notifications', 'smtp_username', '');
+        $smtpPassword = (string) $plugins->getSetting('email-notifications', 'smtp_password', '');
+        $fromAddress = (string) $plugins->getSetting('email-notifications', 'from_address', config('mail.from.address'));
+
+        Config::set([
+            'mail.default' => 'smtp',
+            'mail.mailers.smtp.transport' => 'smtp',
+            'mail.mailers.smtp.host' => $smtpHost,
+            'mail.mailers.smtp.port' => $smtpPort,
+            'mail.mailers.smtp.username' => $smtpUsername !== '' ? $smtpUsername : null,
+            'mail.mailers.smtp.password' => $smtpPassword !== '' ? $smtpPassword : null,
+            'mail.mailers.smtp.encryption' => $smtpPort === 465 ? 'ssl' : 'tls',
+            'mail.from.address' => $fromAddress,
+            'mail.from.name' => config('app.name', 'AEC LMS'),
+        ]);
+        Mail::purge('smtp');
+
+        Mail::mailer('smtp')->raw($notification->message, function ($mail) use ($recipient, $notification): void {
             $mail->to($recipient->email)->subject($notification->title);
         });
 
