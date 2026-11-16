@@ -148,34 +148,41 @@ class UniversalPaymentController extends Controller
     {
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
-        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $transaction->branch_id) {
-            abort(404);
-        }
         $validated = $request->validate([
             'status' => ['required', 'in:verified,rejected'],
         ]);
 
-        if ($transaction->status !== 'pending') {
-            abort(422, 'Only pending manual receipts can be reviewed.');
-        }
+        $reviewed = DB::transaction(function () use ($actor, $transaction, $validated): UniversalPaymentTransaction {
+            $locked = UniversalPaymentTransaction::query()
+                ->whereKey($transaction->id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        if ($transaction->gateway !== 'bank_cash') {
-            abort(422, 'Online gateway transactions must be updated by the verified provider callback.');
-        }
+            if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $locked->branch_id) {
+                abort(404);
+            }
+            if ($locked->status !== 'pending') {
+                abort(422, 'Only pending manual receipts can be reviewed.');
+            }
+            if ($locked->gateway !== 'bank_cash') {
+                abort(422, 'Online gateway transactions must be updated by the verified provider callback.');
+            }
+            if ($validated['status'] === 'verified' && trim((string) $locked->external_trx_id) === '') {
+                abort(422, 'A bank receipt or cash voucher reference is required before verification.');
+            }
 
-        if ($validated['status'] === 'verified' && trim((string) $transaction->external_trx_id) === '') {
-            abort(422, 'A bank receipt or cash voucher reference is required before verification.');
-        }
+            $locked->update([
+                'status' => $validated['status'],
+                'verified_by' => $actor?->id,
+                'verified_at' => now(),
+            ]);
 
-        $transaction->update([
-            'status' => $validated['status'],
-            'verified_by' => auth()->id(),
-            'verified_at' => now(),
-        ]);
+            return $locked->fresh();
+        });
 
-        $this->audit->log('universal_payment.status_updated', 'universal_payment', $transaction->reference, ['status' => $validated['status']]);
+        $this->audit->log('universal_payment.status_updated', 'universal_payment', $reviewed->reference, ['status' => $validated['status']], $actor?->id);
 
-        return back()->with('status', "Transaction '{$transaction->reference}' marked {$validated['status']}.");
+        return back()->with('status', "Transaction '{$reviewed->reference}' marked {$validated['status']}.");
     }
 
     public function publicCheckout(Request $request): JsonResponse|RedirectResponse
