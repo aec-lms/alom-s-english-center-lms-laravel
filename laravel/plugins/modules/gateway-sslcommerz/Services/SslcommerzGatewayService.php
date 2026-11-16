@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Plugins\Modules\GatewaySslcommerz\Services;
 
 use App\Core\Plugins\PluginManager;
+use Illuminate\Support\Facades\Http;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
 use Plugins\Modules\PaymentManagement\Services\PaymentSettlementService;
 use RuntimeException;
+use Throwable;
 
 class SslcommerzGatewayService
 {
@@ -19,15 +21,25 @@ class SslcommerzGatewayService
 
     public function initiateHostedCheckout(FeeInvoice $invoice): array
     {
-        $storeId = $this->plugins->getSetting('gateway-sslcommerz', 'store_id', '');
-        $storePass = $this->plugins->getSetting('gateway-sslcommerz', 'store_password', '');
+        $storeId = (string) $this->plugins->getSetting('gateway-sslcommerz', 'store_id', '');
+        $storePass = (string) $this->plugins->getSetting('gateway-sslcommerz', 'store_password', '');
         if ($storeId === '' || $storePass === '') {
             throw new RuntimeException('SSLCOMMERZ credentials are not configured.');
         }
 
+        $invoice->loadMissing('student.user');
+        $customer = $invoice->student?->user;
+        if (!$customer || trim((string) $customer->name) === '' || !filter_var($customer->email, FILTER_VALIDATE_EMAIL)) {
+            throw new RuntimeException('The invoice must be linked to a customer with a valid name and email.');
+        }
+        $phone = preg_replace('/[^0-9+]/', '', (string) $customer->phone);
+        if (!$phone || strlen(preg_replace('/\D/', '', $phone)) < 7) {
+            throw new RuntimeException('Add a valid customer phone number before starting SSLCOMMERZ checkout.');
+        }
+
         $remaining = round((float) $invoice->net_amount - (float) $invoice->paid_amount, 2);
-        if ($remaining <= 0) {
-            throw new RuntimeException('Invoice is already fully settled.');
+        if ($remaining < 10 || $remaining > 500000) {
+            throw new RuntimeException('SSLCOMMERZ checkout amount must be between 10.00 and 500000.00.');
         }
 
         $tx = PaymentTransaction::query()->create([
@@ -36,62 +48,97 @@ class SslcommerzGatewayService
             'branch_id' => $invoice->branch_id,
             'gateway_slug' => 'gateway-sslcommerz',
             'amount' => $remaining,
-            'currency' => $invoice->currency,
+            'currency' => strtoupper((string) $invoice->currency),
             'status' => 'initiated',
             'metadata' => ['channel' => 'sslcommerz_hosted'],
         ]);
 
         $sandbox = $this->plugins->getSetting('gateway-sslcommerz', 'sandbox_mode', '1') === '1';
-        $endpoint = $sandbox
-            ? 'https://sandbox.sslcommerz.com/gwprocess/v4/api.php'
-            : 'https://securepay.sslcommerz.com/gwprocess/v4/api.php';
+        $baseUrl = $sandbox ? 'https://sandbox.sslcommerz.com' : 'https://securepay.sslcommerz.com';
+        $endpoint = $baseUrl . '/gwprocess/v4/api.php';
 
-        return [
-            'transaction' => $tx,
-            'hosted_endpoint' => $endpoint,
-            'payload' => [
-                'store_id' => $storeId,
-                'tran_id' => $tx->transaction_ref,
-                'total_amount' => $remaining,
-                'currency' => $invoice->currency,
-            ],
+        $payload = [
+            'store_id' => $storeId,
+            'store_passwd' => $storePass,
+            'total_amount' => number_format($remaining, 2, '.', ''),
+            'currency' => strtoupper((string) $invoice->currency),
+            'tran_id' => $tx->transaction_ref,
+            'success_url' => route('plugins.gateway.sslcommerz.success'),
+            'fail_url' => route('plugins.gateway.sslcommerz.failed'),
+            'cancel_url' => route('plugins.gateway.sslcommerz.cancelled'),
+            'ipn_url' => route('plugins.gateway.sslcommerz.ipn'),
+            'cus_name' => mb_substr((string) $customer->name, 0, 50),
+            'cus_email' => mb_substr((string) $customer->email, 0, 50),
+            'cus_add1' => 'N/A',
+            'cus_city' => 'N/A',
+            'cus_postcode' => '0000',
+            'cus_country' => 'Bangladesh',
+            'cus_phone' => mb_substr($phone, 0, 20),
+            'shipping_method' => 'NO',
+            'num_of_item' => '1',
+            'product_name' => 'Course fee invoice ' . $invoice->invoice_number,
+            'product_category' => 'Education',
+            'product_profile' => 'non-physical-goods',
         ];
+
+        try {
+            $response = Http::asForm()
+                ->acceptJson()
+                ->timeout(20)
+                ->post($endpoint, $payload);
+
+            if (!$response->successful()) {
+                throw new RuntimeException('SSLCOMMERZ session API returned an unsuccessful HTTP response.');
+            }
+
+            $data = $response->json();
+            $gatewayUrl = is_array($data) ? (string) ($data['GatewayPageURL'] ?? '') : '';
+            $host = strtolower((string) parse_url($gatewayUrl, PHP_URL_HOST));
+            $scheme = strtolower((string) parse_url($gatewayUrl, PHP_URL_SCHEME));
+            $expectedHost = $sandbox ? 'sandbox.sslcommerz.com' : 'securepay.sslcommerz.com';
+
+            if (!is_array($data) || strtoupper((string) ($data['status'] ?? '')) !== 'SUCCESS'
+                || $scheme !== 'https' || $host !== $expectedHost || $gatewayUrl === '') {
+                throw new RuntimeException('SSLCOMMERZ did not return a valid hosted checkout URL.');
+            }
+
+            $tx->update([
+                'metadata' => array_merge($tx->metadata ?? [], [
+                    'session_key' => (string) ($data['sessionkey'] ?? ''),
+                    'session_created' => true,
+                ]),
+            ]);
+
+            return [
+                'transaction' => $tx->fresh(),
+                'hosted_endpoint' => $gatewayUrl,
+            ];
+        } catch (Throwable $exception) {
+            $tx->update([
+                'status' => 'failed',
+                'metadata' => array_merge($tx->metadata ?? [], ['session_created' => false]),
+            ]);
+
+            if ($exception instanceof RuntimeException) {
+                throw $exception;
+            }
+
+            throw new RuntimeException('Unable to create an SSLCOMMERZ hosted checkout session.', 0, $exception);
+        }
     }
 
     public function verifyAndSettleIpn(array $payload): PaymentTransaction
     {
+        $storeId = (string) $this->plugins->getSetting('gateway-sslcommerz', 'store_id', '');
         $storePass = (string) $this->plugins->getSetting('gateway-sslcommerz', 'store_password', '');
-        if ($storePass === '') {
-            throw new RuntimeException('SSLCOMMERZ store password not configured.');
+        if ($storeId === '' || $storePass === '') {
+            throw new RuntimeException('SSLCOMMERZ credentials are not configured.');
         }
 
-        $tranId = (string) ($payload['tran_id'] ?? '');
-        $valId = (string) ($payload['val_id'] ?? '');
-        $status = strtoupper((string) ($payload['status'] ?? ''));
-        $verifySign = strtolower((string) ($payload['verify_sign'] ?? ''));
-        $verifyKey = (string) ($payload['verify_key'] ?? '');
-
-        if ($tranId === '' || $valId === '' || $verifySign === '' || $verifyKey === '') {
-            throw new RuntimeException('Incomplete SSLCOMMERZ IPN payload.');
-        }
-
-        // SSLCOMMERZ verify_key / store_passwd hash verification
-        $hashString = '';
-        foreach (explode(',', $verifyKey) as $key) {
-            $k = trim($key);
-            if ($k === 'store_passwd') {
-                $hashString .= $k . '=' . md5($storePass) . '&';
-            } elseif (isset($payload[$k])) {
-                $hashString .= $k . '=' . $payload[$k] . '&';
-            }
-        }
-        $expectedSign = md5(rtrim($hashString, '&'));
-        if (!hash_equals($expectedSign, $verifySign)) {
-            throw new RuntimeException('SSLCOMMERZ IPN signature verification failed.');
-        }
-
-        if ($status !== 'VALID' && $status !== 'VALIDATED') {
-            throw new RuntimeException("SSLCOMMERZ transaction status not valid: {$status}");
+        $tranId = trim((string) ($payload['tran_id'] ?? ''));
+        $valId = trim((string) ($payload['val_id'] ?? ''));
+        if ($tranId === '' || $valId === '') {
+            throw new RuntimeException('SSLCOMMERZ callback is missing its transaction or validation reference.');
         }
 
         $tx = PaymentTransaction::query()
@@ -99,10 +146,72 @@ class SslcommerzGatewayService
             ->where('gateway_slug', 'gateway-sslcommerz')
             ->firstOrFail();
 
-        if ((float) ($payload['amount'] ?? 0) + 0.01 < (float) $tx->amount) {
-            throw new RuntimeException('SSLCOMMERZ IPN amount mismatch.');
+        if ($tx->status === 'settled') {
+            return $tx;
         }
 
-        return $this->settlement->settleTransaction($tx, $valId, ['ipn_verified' => true]);
+        $sandbox = $this->plugins->getSetting('gateway-sslcommerz', 'sandbox_mode', '1') === '1';
+        $baseUrl = $sandbox ? 'https://sandbox.sslcommerz.com' : 'https://securepay.sslcommerz.com';
+        $validationUrl = $baseUrl . '/validator/api/validationserverAPI.php';
+
+        $response = Http::acceptJson()
+            ->timeout(20)
+            ->get($validationUrl, [
+                'val_id' => $valId,
+                'store_id' => $storeId,
+                'store_passwd' => $storePass,
+                'format' => 'json',
+            ]);
+
+        if (!$response->successful()) {
+            throw new RuntimeException('SSLCOMMERZ transaction validation API returned an unsuccessful HTTP response.');
+        }
+
+        $validation = $response->json();
+        if (!is_array($validation)
+            || !in_array(strtoupper((string) ($validation['status'] ?? '')), ['VALID', 'VALIDATED'], true)) {
+            throw new RuntimeException('SSLCOMMERZ could not validate this payment.');
+        }
+
+        if (!hash_equals($tx->transaction_ref, (string) ($validation['tran_id'] ?? ''))) {
+            throw new RuntimeException('SSLCOMMERZ validation transaction reference does not match.');
+        }
+
+        if (strtoupper((string) ($validation['currency'] ?? '')) !== strtoupper((string) $tx->currency)) {
+            throw new RuntimeException('SSLCOMMERZ validation currency does not match the invoice.');
+        }
+
+        if (abs((float) ($validation['amount'] ?? 0) - (float) $tx->amount) > 0.01) {
+            throw new RuntimeException('SSLCOMMERZ validation amount does not match the invoice.');
+        }
+
+        if ((string) ($validation['risk_level'] ?? '0') === '1') {
+            $tx->update([
+                'status' => 'risk_review',
+                'metadata' => array_merge($tx->metadata ?? [], ['risk_review_required' => true]),
+            ]);
+            throw new RuntimeException('SSLCOMMERZ marked this payment as high risk; manual review is required.');
+        }
+
+        return $this->settlement->settleTransaction($tx, $valId, [
+            'ipn_verified' => true,
+            'validation_status' => strtoupper((string) $validation['status']),
+            'bank_transaction_id' => (string) ($validation['bank_tran_id'] ?? ''),
+            'risk_level' => (string) ($validation['risk_level'] ?? '0'),
+        ]);
+    }
+
+    public function markUnsuccessful(string $transactionRef, string $status): PaymentTransaction
+    {
+        $tx = PaymentTransaction::query()
+            ->where('transaction_ref', $transactionRef)
+            ->where('gateway_slug', 'gateway-sslcommerz')
+            ->firstOrFail();
+
+        if ($tx->status !== 'settled') {
+            $tx->update(['status' => $status]);
+        }
+
+        return $tx->fresh();
     }
 }
