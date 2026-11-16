@@ -28,7 +28,9 @@
             <a href="{{ route('admin.users.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Users & Roles</a>
             <a href="{{ route('admin.updates.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Update Center</a>
             <a href="{{ route('admin.backups.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Backup & Restore</a>
+@if (auth()->user()?->hasPermission('core.dashboard.view'))
             <a href="{{ route('admin.health.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">System Health & Recovery</a>
+            @endif
             <a href="{{ route('admin.audit.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Audit Logs</a>
             @if (auth()->user()?->hasPermission('core.recycle_bin.manage'))
                 <a href="{{ route('admin.recycle-bin.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Recycle Bin</a>
