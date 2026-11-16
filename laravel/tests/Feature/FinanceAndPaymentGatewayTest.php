@@ -733,7 +733,7 @@ class FinanceAndPaymentGatewayTest extends TestCase
             'amount' => 100,
             'external_trx_id' => 'BANK-PROOF-INVALID',
             'proof' => UploadedFile::fake()->create('malware.exe', 20, 'application/x-msdownload'),
-        ])->assertSessionHasErrors('proof_file');
+        ])->assertSessionHasErrors('proof');
     }
 
 }
