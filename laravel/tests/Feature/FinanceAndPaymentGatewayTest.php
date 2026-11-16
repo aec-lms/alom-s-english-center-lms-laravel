@@ -137,6 +137,9 @@ class FinanceAndPaymentGatewayTest extends TestCase
             ], 200);
         });
 
+        $this->actingAs($admin)->post('/admin/plugins/gateway-sslcommerz/test-connection')
+            ->assertSessionHas('status');
+
         $sslSession = $this->actingAs($studentUser)->postJson('/payments/sslcommerz/initiate', [
             'invoice_id' => $sslInvoice->id,
         ])->assertOk()->json();
@@ -177,6 +180,8 @@ class FinanceAndPaymentGatewayTest extends TestCase
             'payment-management',
             'gateway-stripe',
             'gateway-paypal',
+            'gateway-card',
+            'universal-payment',
         ]);
 
         $plugins = app(PluginManager::class);
@@ -243,6 +248,9 @@ class FinanceAndPaymentGatewayTest extends TestCase
 
         Http::fake(function (ClientRequest $request) {
             $url = $request->url();
+            if (str_contains($url, '/v1/account')) {
+                return Http::response(['id' => 'acct_test_123', 'country' => 'US'], 200);
+            }
             if (str_contains($url, '/v1/payment_intents')) {
                 return Http::response([
                     'id' => 'pi_test_settled_1',
@@ -265,6 +273,16 @@ class FinanceAndPaymentGatewayTest extends TestCase
             }
             return Http::response(['message' => 'Unexpected fake payment endpoint'], 404);
         });
+
+        $this->actingAs($admin)->post('/admin/plugins/gateway-stripe/test-connection')
+            ->assertSessionHas('status');
+        $this->actingAs($admin)->post('/admin/plugins/gateway-paypal/test-connection')
+            ->assertSessionHas('status');
+
+        $gatewayStatuses = app(UniversalPaymentOrchestrator::class)->gatewayStatus();
+        $this->assertTrue($gatewayStatuses['gateway-stripe']['available']);
+        $this->assertTrue($gatewayStatuses['gateway-paypal']['available']);
+        $this->assertSame('processor_adapter_required', $gatewayStatuses['gateway-card']['status']);
 
         // Stripe tokenized checkout + idempotency + signed webhook
         $stripeRes1 = $this->actingAs($admin)->postJson('/payments/stripe/checkout', [
