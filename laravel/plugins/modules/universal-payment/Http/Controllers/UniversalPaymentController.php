@@ -118,7 +118,7 @@ class UniversalPaymentController extends Controller
         $validated = $request->validate([
             'invoice_id' => ['required', 'integer', 'exists:fee_invoices,id'],
             'gateway' => ['required', 'in:sslcommerz,card,paypal'],
-            'payment_method_id' => ['nullable', 'string', 'max:160'],
+            'payment_method_id' => ['required_if:gateway,card', 'nullable', 'string', 'max:160'],
             'idempotency_key' => ['nullable', 'string', 'max:120'],
         ]);
 
