@@ -50,7 +50,7 @@ class LoginController extends Controller
         $request->session()->regenerate();
         $this->audit->log('auth.login_succeeded', 'user', (string) Auth::id());
 
-        return redirect()->intended(route('admin.dashboard'));
+        return redirect()->intended(route('portal.dashboard'));
     }
 
     public function showRegister(): View
@@ -84,7 +84,7 @@ class LoginController extends Controller
         $request->session()->regenerate();
         $this->audit->log('auth.registered', 'user', (string) $user->id);
 
-        return redirect()->route('home')->with('status', "Welcome to Alom's English Center, {$user->name}!");
+        return redirect()->route('portal.dashboard')->with('status', "Welcome to Alom's English Center, {$user->name}!");
     }
 
     public function showForgotPassword(): View
