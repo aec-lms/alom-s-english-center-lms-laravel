@@ -6,6 +6,8 @@ namespace Tests\Feature;
 
 use Plugins\Modules\StudentManagement\Models\Student;
 use Plugins\Modules\CourseManagement\Models\Course;
+use Plugins\Modules\CourseManagement\Models\CourseCategory;
+use Plugins\Modules\CourseManagement\Models\LiveClass;
 use Plugins\Modules\ExamManagement\Models\Exam;
 use Plugins\Modules\BatchManagement\Models\StudyBatch;
 use Plugins\Modules\ClassManagement\Models\AcademicClass;
@@ -60,6 +62,22 @@ class RecycleBinTest extends TestCase
             'description' => 'Course retained for restore testing.',
             'status' => 'published',
         ]);
+        $category = CourseCategory::query()->create([
+            'name' => 'Recycle Bin Category',
+            'slug' => 'recycle-bin-category',
+            'description' => 'Category retained for restore testing.',
+            'color' => 'blue',
+            'is_active' => true,
+        ]);
+        $liveClass = LiveClass::query()->create([
+            'course_id' => $course->id,
+            'title' => 'Recycle Bin Live Class',
+            'instructor_name' => 'Test Instructor',
+            'platform' => 'google_meet',
+            'meeting_url' => 'https://meet.google.com/abc-defg-hij',
+            'starts_at' => now()->addDay(),
+            'status' => 'scheduled',
+        ]);
         $exam = Exam::query()->create([
             'title' => 'Recycle Bin Exam',
             'duration_minutes' => 30,
@@ -85,11 +103,15 @@ class RecycleBinTest extends TestCase
         ]);
 
         $course->delete();
+        $category->delete();
+        $liveClass->delete();
         $exam->delete();
         $batch->delete();
         $academicClass->delete();
 
         $this->assertTrue(Course::withTrashed()->findOrFail($course->id)->trashed());
+        $this->assertTrue(CourseCategory::withTrashed()->findOrFail($category->id)->trashed());
+        $this->assertTrue(LiveClass::withTrashed()->findOrFail($liveClass->id)->trashed());
         $this->assertTrue(Exam::withTrashed()->findOrFail($exam->id)->trashed());
         $this->assertTrue(StudyBatch::withTrashed()->findOrFail($batch->id)->trashed());
         $this->assertTrue(AcademicClass::withTrashed()->findOrFail($academicClass->id)->trashed());
@@ -97,16 +119,22 @@ class RecycleBinTest extends TestCase
         $this->actingAs($admin)->get('/admin/recycle-bin')
             ->assertOk()
             ->assertSee('Recycle Bin Course')
+            ->assertSee('Recycle Bin Category')
+            ->assertSee('Recycle Bin Live Class')
             ->assertSee('Recycle Bin Exam')
             ->assertSee('Recycle Bin Batch')
             ->assertSee('Recycle Bin Class');
 
         $this->actingAs($admin)->post('/admin/recycle-bin/courses/' . $course->id . '/restore')->assertRedirect();
+        $this->actingAs($admin)->post('/admin/recycle-bin/course-categories/' . $category->id . '/restore')->assertRedirect();
+        $this->actingAs($admin)->post('/admin/recycle-bin/live-classes/' . $liveClass->id . '/restore')->assertRedirect();
         $this->actingAs($admin)->post('/admin/recycle-bin/exams/' . $exam->id . '/restore')->assertRedirect();
         $this->actingAs($admin)->post('/admin/recycle-bin/batches/' . $batch->id . '/restore')->assertRedirect();
         $this->actingAs($admin)->post('/admin/recycle-bin/classes/' . $academicClass->id . '/restore')->assertRedirect();
 
         $this->assertFalse(Course::query()->findOrFail($course->id)->trashed());
+        $this->assertFalse(CourseCategory::query()->findOrFail($category->id)->trashed());
+        $this->assertFalse(LiveClass::query()->findOrFail($liveClass->id)->trashed());
         $this->assertFalse(Exam::query()->findOrFail($exam->id)->trashed());
         $this->assertFalse(StudyBatch::query()->findOrFail($batch->id)->trashed());
         $this->assertFalse(AcademicClass::query()->findOrFail($academicClass->id)->trashed());
