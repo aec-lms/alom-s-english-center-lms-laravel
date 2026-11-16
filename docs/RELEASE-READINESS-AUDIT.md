@@ -52,9 +52,9 @@ The repository currently contains 39 plugin manifests: Branch, Student, Teacher,
 | Backup/restore | Test large MySQL/MariaDB snapshots, PHP memory/time limits, file/database consistency, key recovery and restore into a disposable separate database |
 | Installer | Run the fresh installer on a clean cPanel account, verify no existing data can be overwritten, verify generated keys/permissions and test installer lockout |
 | cPanel packaging | Build exact release ZIP from a clean checkout; verify Composer dependencies, no secrets/private files, correct public document root and protected HTTP paths |
-| Browser/security | Complete browser E2E, CSRF/session/RBAC tests, upload/download authorization, ZIP abuse tests, dependency audit, static analysis and security review |
+| Browser/security | A Chromium Playwright smoke suite now covers public auth pages/password visibility, Admin sign-in/dashboard/Recycle Bin/Plugin Center and guest denial. This is initial smoke coverage, not complete browser E2E. Expand real CRUD/restore flows and retain CSRF/session/RBAC, upload/download authorization, ZIP abuse, static analysis and security review gates |
 | Operations | Verify SMTP, queues/cron, SMS, provider credentials, backups off-host, logs, restore procedure and real-host monitoring |
-| Admin Recycle Bin | No verified cross-module recycle-bin/restore workflow is present in the current source tree; implement per-module archive/restore/permanent-purge contracts, permission and branch scoping, and private-file retention tests before acceptance |
+| Admin Recycle Bin | Implemented for 17 record types across Student, Teacher, Course, Course Category, Live Class, Exam, Batch, Academic Class, Branch, Boost Campaign, Carousel Item, CMS Category/Post, Page Builder Page, Hero Slider, SMS Campaign and Visitor Popup. Admin-only restore is transactional/row-locked with audit events. Still require broader browser coverage, branch-scope review where applicable, retention/private-file tests and explicit permanent-purge policy acceptance |
 | Live-class capacity | A basic LiveClass model stores meeting URLs, but 300+ participant capacity is not enforced or provider-verified; require a selected provider adapter, sandbox/API validation and load test before promising 300+ concurrent attendees |
 
 ## Backup/restore safety notes
@@ -85,3 +85,12 @@ Do not point the main domain at an unverified build or import operational data b
 - This is a file-presence inventory only. It is **not** a pass/fail functional test and must not be represented as module completion.
 - See [PLUGIN-ACCEPTANCE-MATRIX.md](PLUGIN-ACCEPTANCE-MATRIX.md) for the per-plugin inventory and required acceptance evidence.
 - A complete implementation audit must inspect controller/service/model/view behavior, route middleware, policy/permission checks, branch constraints, validation, failure handling and automated positive/negative tests for every module.
+
+
+## Recycle Bin implementation status (feature branch)
+
+The current feature branch now contains a permission-gated Admin Recycle Bin with paginated lists and restore handlers for 17 record types: Students, Teachers, Courses, Course Categories, Live Classes, Exams, Study Batches, Academic Classes, Branches, Boost Campaigns, Carousel Items, CMS Categories, CMS Posts, Page Builder Pages, Hero Sliders, SMS Campaigns and Visitor Pop-ups. Supported delete actions use soft deletion; restore operations use database transactions and row locks and emit audit events. Student/Teacher restoration also returns linked account activation to its pre-deletion state. This is not a claim that every plugin has a complete recycle-bin workflow: financial records are deliberately not exposed to destructive deletion, and permanent purge, private-file retention, branch-scoped edge cases and broader browser coverage remain acceptance work.
+
+## Browser E2E status
+
+A dedicated Playwright/Chromium GitHub Actions workflow runs against an isolated SQLite database and test-only Admin fixture. The current smoke suite checks public home/login/register/forgot-password rendering, password visibility, Admin authentication and navigation to the dashboard, Recycle Bin and Plugin Center, plus guest denial of the Admin Recycle Bin. Three browser tests are present; this is a useful smoke baseline, not comprehensive end-to-end acceptance of the LMS.
