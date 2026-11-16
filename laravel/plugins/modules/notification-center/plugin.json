@@ -1,12 +1,14 @@
 {
     "slug": "notification-center",
     "name": "Multi-Channel Notification Center",
-    "version": "2.0.0",
+    "version": "2.1.0",
     "author": "Alom's English Center",
     "category": "communication",
-    "description": "In-app notification inbox and encrypted Email/SMS/Push gateway configuration.",
+    "description": "In-app inbox and queued email delivery with explicit provider status; SMS and push remain unavailable until their adapters are configured.",
     "core_compatibility": "^2.0",
-    "dependencies": [],
+    "dependencies": [
+        "email-notifications"
+    ],
     "provider": "Plugins\\Modules\\NotificationCenter\\Providers\\NotificationCenterServiceProvider",
     "permissions": [
         {
@@ -14,24 +16,5 @@
             "name": "Manage & Dispatch Notifications"
         }
     ],
-    "settings_schema": [
-        {
-            "key": "sms_provider",
-            "label": "SMS Provider (twilio/sslwireless)",
-            "type": "text",
-            "secret": false
-        },
-        {
-            "key": "sms_api_token",
-            "label": "SMS API Token",
-            "type": "password",
-            "secret": true
-        },
-        {
-            "key": "push_server_key",
-            "label": "Push Gateway Key",
-            "type": "password",
-            "secret": true
-        }
-    ]
+    "settings_schema": []
 }
