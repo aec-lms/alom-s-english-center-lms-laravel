@@ -1,23 +1,13 @@
 {
   "slug": "storefront-catalog",
   "name": "Products & E-Books Storefront Plugin",
-  "version": "1.0.0",
-  "description": "Independent plugin to create, edit, upload thumbnails, publish, and delete Printed Products, Study Kits, and Free/Premium E-Books.",
+  "version": "1.0.1",
   "author": "AEC LMS Core Team",
-  "service_provider": "Plugins\\Modules\\StorefrontCatalog\\Providers\\StorefrontCatalogServiceProvider",
+  "category": "commerce",
+  "description": "Independent plugin to create, edit, upload thumbnails, publish, sell and securely deliver printed products, study kits, and free or premium PDF e-books.",
+  "core_compatibility": "^2.0",
+  "provider": "Plugins\\Modules\\StorefrontCatalog\\Providers\\StorefrontCatalogServiceProvider",
   "dependencies": [],
-  "migrations_path": "Database/Migrations",
-  "routes_file": "Routes/web.php",
-  "permissions": [
-    "cms.manage"
-  ],
-  "settings_schema": {
-    "currency_symbol": {
-      "type": "string",
-      "label": "Currency Symbol",
-      "encrypted": false,
-      "required": false,
-      "default": "৳"
-    }
-  }
+  "permissions": [{"slug": "cms.manage", "name": "Manage Storefront Catalog"}],
+  "settings_schema": [{"key":"currency_symbol","label":"Currency Symbol","type":"text","secret":false,"default":"৳"}]
 }

@@ -1,12 +1,13 @@
 {
   "slug": "media-library",
   "name": "Central Media Library",
-  "version": "1.0.0",
-  "description": "Centralized image and document library with private PDF storage, searchable metadata, image crop workflow, and rich content editing assets.",
+  "version": "1.0.1",
   "author": "AEC LMS Core Team",
-  "service_provider": "Plugins\\Modules\\MediaLibrary\\Providers\\MediaLibraryServiceProvider",
+  "category": "content",
+  "description": "Centralized image and document library with private PDF storage, searchable metadata, image crop workflow, and rich content editing assets.",
+  "core_compatibility": "^2.0",
+  "provider": "Plugins\\Modules\\MediaLibrary\\Providers\\MediaLibraryServiceProvider",
   "dependencies": [],
-  "migrations_path": "Database/Migrations",
-  "routes_file": "Routes/web.php",
-  "permissions": ["media.manage"]
+  "permissions": [{"slug": "media.manage", "name": "Manage Central Media Library"}],
+  "settings_schema": []
 }
