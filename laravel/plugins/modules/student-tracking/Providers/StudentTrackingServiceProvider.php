@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\StudentTracking\\Providers;
+namespace Plugins\Modules\StudentTracking\Providers;
 
-use App\\Core\\Plugins\\BasePluginServiceProvider;
-use Illuminate\\Auth\\Events\\Login;
-use Illuminate\\Support\\Facades\\Event;
-use Plugins\\Modules\\StudentTracking\\Services\\StudentActivityTracker;
+use App\Core\Plugins\BasePluginServiceProvider;
+use Illuminate\Auth\Events\Login;
+use Illuminate\Support\Facades\Event;
+use Plugins\Modules\StudentTracking\Services\StudentActivityTracker;
 
 class StudentTrackingServiceProvider extends BasePluginServiceProvider
 {
