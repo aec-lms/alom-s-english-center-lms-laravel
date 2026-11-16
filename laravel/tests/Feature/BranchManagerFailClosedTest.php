@@ -125,8 +125,9 @@ class BranchManagerFailClosedTest extends TestCase
         $permissionId = DB::table('permissions')->where('slug', 'branches.manage')->value('id');
         $manager->roles()->first()->permissions()->syncWithoutDetaching([$permissionId]);
 
-        $this->actingAs($manager);
-        $branchView = app(\Plugins\Modules\BranchManagement\Http\Controllers\BranchController::class)->index(request());
+        $branchRequest = \Illuminate\Http\Request::create('/admin/branches', 'GET');
+        $branchRequest->setUserResolver(static fn () => $manager);
+        $branchView = app(\Plugins\Modules\BranchManagement\Http\Controllers\BranchController::class)->index($branchRequest);
         $visibleBranches = $branchView->getData()['branches'];
         $this->assertCount(1, $visibleBranches);
         $this->assertSame($branchA, (int) $visibleBranches->first()->id);
