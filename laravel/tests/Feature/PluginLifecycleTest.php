@@ -88,6 +88,95 @@ class PluginLifecycleTest extends TestCase
             ->saveConfiguration($request, 'gateway-stripe');
     }
 
+    public function test_enable_and_disable_hook_failures_roll_back_plugin_state(): void
+    {
+        $this->markSystemInstalled();
+
+        $slug = 'lifecycle-failure-probe';
+        $pluginDir = (string) config('plugins.modules_path') . DIRECTORY_SEPARATOR . $slug;
+        File::ensureDirectoryExists($pluginDir);
+
+        file_put_contents($pluginDir . DIRECTORY_SEPARATOR . 'plugin.json', json_encode([
+            'slug' => $slug,
+            'name' => 'Lifecycle Failure Probe',
+            'version' => '1.0.0',
+            'core_compatibility' => '^2.0',
+            'dependencies' => [],
+            'provider' => 'Plugins\\Modules\\LifecycleFailureProbe\\Providers\\LifecycleFailureProbeServiceProvider',
+        ], JSON_THROW_ON_ERROR));
+
+        $providerDir = $pluginDir . DIRECTORY_SEPARATOR . 'Providers';
+        File::ensureDirectoryExists($providerDir);
+        file_put_contents($providerDir . DIRECTORY_SEPARATOR . 'LifecycleFailureProbeServiceProvider.php', <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+namespace Plugins\Modules\LifecycleFailureProbe\Providers;
+
+use App\Core\Plugins\BasePluginServiceProvider;
+use RuntimeException;
+
+class LifecycleFailureProbeServiceProvider extends BasePluginServiceProvider
+{
+    public function slug(): string
+    {
+        return 'lifecycle-failure-probe';
+    }
+
+    protected function pluginPath(string $relative = ''): string
+    {
+        return dirname(__DIR__) . ($relative !== '' ? DIRECTORY_SEPARATOR . ltrim($relative, DIRECTORY_SEPARATOR) : '');
+    }
+
+    public function onEnable(): void
+    {
+        throw new RuntimeException('intentional enable hook failure');
+    }
+
+    public function onDisable(): void
+    {
+        throw new RuntimeException('intentional disable hook failure');
+    }
+}
+PHP);
+
+        PluginRecord::query()->create([
+            'slug' => $slug,
+            'name' => 'Lifecycle Failure Probe',
+            'version' => '1.0.0',
+            'is_installed' => true,
+            'is_enabled' => false,
+            'dependencies' => [],
+        ]);
+
+        $manager = app(PluginManager::class);
+
+        try {
+            try {
+                $manager->enable($slug);
+                $this->fail('Enable hook failure should abort the operation.');
+            } catch (RuntimeException $exception) {
+                $this->assertStringContainsString('intentional enable hook failure', $exception->getMessage());
+            }
+
+            $this->assertDatabaseHas('plugins', ['slug' => $slug, 'is_enabled' => false]);
+
+            PluginRecord::query()->where('slug', $slug)->update(['is_enabled' => true]);
+
+            try {
+                $manager->disable($slug);
+                $this->fail('Disable hook failure should abort the operation.');
+            } catch (RuntimeException $exception) {
+                $this->assertStringContainsString('intentional disable hook failure', $exception->getMessage());
+            }
+
+            $this->assertDatabaseHas('plugins', ['slug' => $slug, 'is_enabled' => true]);
+        } finally {
+            File::deleteDirectory($pluginDir);
+        }
+    }
+
     public function test_core_cannot_be_disabled_or_uninstalled(): void
     {
         $this->markSystemInstalled();
