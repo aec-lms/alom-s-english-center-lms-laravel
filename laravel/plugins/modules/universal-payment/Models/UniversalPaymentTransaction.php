@@ -20,6 +20,7 @@ class UniversalPaymentTransaction extends Model
         'amount',
         'external_trx_id',
         'status',
+        'branch_id',
         'notes',
         'verified_by',
         'verified_at',
