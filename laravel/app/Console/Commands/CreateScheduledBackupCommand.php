@@ -16,11 +16,10 @@ class CreateScheduledBackupCommand extends Command
             return self::SUCCESS;
         }
         try {
-        if (!Schema::hasTable('backups')) {
-            $this->warn('Backup table is not installed; scheduled backup skipped.');
-            return self::SUCCESS;
-        }
-        try {
+            if (!Schema::hasTable('backups')) {
+                $this->warn('Backup table is not installed; scheduled backup skipped.');
+                return self::SUCCESS;
+            }
             $record = $backups->createEncryptedBackup(null, !$this->option('without-files'));
             $this->info('Encrypted backup created and recorded: ' . $record->filename);
             return self::SUCCESS;
