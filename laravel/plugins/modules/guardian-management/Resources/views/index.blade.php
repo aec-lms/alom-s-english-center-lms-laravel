@@ -3,6 +3,11 @@
 @section('content')
 <div class="space-y-6 max-w-5xl">
     <h1 class="text-2xl font-extrabold text-slate-900">Guardian & Parent Portal</h1>
+    @unless ($studentIntegration)
+        <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+            Student integration not enabled. Guardian profiles can be managed independently; enable Student Management to link student records.
+        </div>
+    @endunless
     <div class="bg-white rounded-2xl border border-slate-200 p-5">
         <table class="w-full text-xs text-left">
             <thead class="text-slate-500 border-b"><tr><th class="py-2">Guardian</th><th>Email</th><th>Relationship</th><th>Branch</th><th>Linked Students</th></tr></thead>
