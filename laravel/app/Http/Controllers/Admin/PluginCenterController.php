@@ -115,13 +115,16 @@ class PluginCenterController extends Controller
         $manifest = $this->plugins->discoverManifests()[$slug] ?? abort(404);
         $record = PluginRecord::query()->where('slug', $slug)->firstOrFail();
         $values = [];
+        $configuredSecrets = [];
         foreach ($manifest->settingsSchema as $field) {
             $key = (string) ($field['key'] ?? '');
             $isSecret = (bool) ($field['secret'] ?? false);
-            $values[$key] = $isSecret ? '' : ($this->plugins->getSetting($slug, $key) ?? '');
+            $stored = $this->plugins->getSetting($slug, $key);
+            $values[$key] = $isSecret ? '' : ($stored ?? '');
+            if ($isSecret) $configuredSecrets[$key] = $stored !== null && $stored !== '';
         }
 
-        return view('admin.plugins.configure', compact('manifest', 'record', 'values'));
+        return view('admin.plugins.configure', compact('manifest', 'record', 'values', 'configuredSecrets'));
     }
 
 
