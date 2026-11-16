@@ -3,7 +3,7 @@
 ## Included in this release candidate
 
 - php artisan lms:health-check performs a read-only health report.
-- php artisan lms:health-check --recover additionally attempts narrowly scoped recovery: recreate missing Laravel runtime directories (never follow symlinks or change permissions) and reconnect the database once.
+- php artisan lms:health-check --recover additionally attempts narrowly scoped recovery: recreate missing Laravel runtime, private-storage and backup-storage directories (never follow symlinks or change permissions) and reconnect the database once. Each successful recovery action is recorded separately.
 - Admin Health Monitor is available at /admin/health for users with core.dashboard.view.
 - Checks cover database query, cache read/write, Laravel runtime storage, private storage, backup storage, available disk space, database queue backlog, PHP runtime and PHP memory pressure. Each probe records its duration and flags checks that exceed AEC_HEALTH_SLOW_CHECK_MS.
 - Failed checks are written to the protected Laravel log. If AEC_HEALTH_ALERT_EMAIL is configured, one alert per 15-minute cooldown is sent to that address.
@@ -36,7 +36,7 @@ The LMS never automatically chmods files, deletes cache/data indiscriminately, r
 
 1. Configure the cPanel cron and verify repeated scheduler execution.
 2. Configure SMTP alert delivery and test an alert on staging.
-3. Simulate a missing runtime directory on staging and confirm safe recreation.
+3. Simulate missing runtime, private-storage and backup-storage directories on staging and confirm safe recreation; verify symbolic-link targets are refused.
 4. Simulate database/cache failure and confirm alerts without exposing secrets.
 5. Verify the Admin page is denied to non-admin roles.
 6. Confirm logs, backups and private files remain outside the public web root.
