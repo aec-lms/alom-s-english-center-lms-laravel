@@ -1,6 +1,7 @@
-@extends('layouts.admin')
+@extends('layouts.app')
 @section('title', 'My Learning Activity — AEC LMS')
 @section('content')
+@include('public.partials.navbar')
 <div class="max-w-5xl mx-auto space-y-5">
     <div>
         <h1 class="text-2xl font-bold text-slate-900">My Learning Activity</h1>
