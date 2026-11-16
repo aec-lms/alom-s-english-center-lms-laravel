@@ -13,7 +13,7 @@ return new class extends Migration {
             Schema::create('attendance_records', function (Blueprint $table): void {
                 $table->id();
                 $table->unsignedBigInteger('batch_id');
-                $table->foreignId('student_id')->constrained('students')->cascadeOnDelete();
+                $table->unsignedBigInteger('student_id');
                 $table->unsignedBigInteger('branch_id')->index();
                 $table->date('attendance_date');
                 $table->string('status', 20)->default('present'); // present, absent, late, excused
