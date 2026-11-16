@@ -14,6 +14,7 @@ use Illuminate\View\View;
 use Plugins\Modules\ExamManagement\Models\Exam;
 use Plugins\Modules\ExamManagement\Models\ExamAttempt;
 use Plugins\Modules\ExamManagement\Models\ExamQuestion;
+use Plugins\Modules\StudentManagement\Models\Student;
 
 class ExamController extends Controller
 {
@@ -161,16 +162,43 @@ class ExamController extends Controller
         if (!$exam->is_published) {
             abort(403, 'Exam is not published for attempts.');
         }
+
         $actor = $request->user();
-        if ($actor && $actor->hasRole('student') && (int) $actor->branch_id !== (int) $exam->branch_id) {
-            abort(403, 'Exam is outside your assigned branch.');
+        abort_unless($actor && $actor->hasRole('student'), 403, 'Only student accounts can submit exam attempts.');
+
+        if ($exam->starts_at && now()->lt($exam->starts_at)) {
+            abort(403, 'This exam has not started yet.');
+        }
+        if ($exam->ends_at && now()->gt($exam->ends_at)) {
+            abort(403, 'The exam submission window has closed.');
+        }
+
+        if ($exam->branch_id !== null) {
+            abort_unless(Schema::hasTable('students'), 403, 'Student profile is required for branch-specific exams.');
+            $studentProfile = Student::query()->where('user_id', $actor->id)->first();
+            abort_unless(
+                $studentProfile && (int) $studentProfile->branch_id === (int) $exam->branch_id,
+                403,
+                'Exam is outside your assigned branch.'
+            );
+        }
+
+        $questions = $exam->questions()->get();
+        if ($questions->isEmpty()) {
+            abort(422, 'This exam has no questions and cannot accept attempts.');
         }
 
         $validated = $request->validate([
             'answers' => ['required', 'array'],
+            'answers.*' => ['nullable', 'integer', 'min:0'],
         ]);
 
-        $questions = $exam->questions()->get();
+        $allowedQuestionIds = $questions->pluck('id')->map(static fn ($id): string => (string) $id)->all();
+        $submittedQuestionIds = array_map('strval', array_keys($validated['answers']));
+        if (array_diff($submittedQuestionIds, $allowedQuestionIds) !== []) {
+            abort(422, 'Answers contain a question that does not belong to this exam.');
+        }
+
         $score = 0;
         $total = 0;
         $sanitizedAnswers = [];
@@ -178,6 +206,10 @@ class ExamController extends Controller
         foreach ($questions as $question) {
             $total += (int) $question->marks;
             $selected = $validated['answers'][(string) $question->id] ?? null;
+            $options = (array) $question->options;
+            if ($selected !== null && (int) $selected >= count($options)) {
+                abort(422, 'An answer option is outside the allowed range.');
+            }
             if ($selected !== null && (int) $selected === (int) $question->correct_option_index) {
                 $score += (int) $question->marks;
             }
