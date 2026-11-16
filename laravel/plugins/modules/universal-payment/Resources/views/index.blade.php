@@ -16,7 +16,7 @@
 @endphp
 <div class="space-y-6 max-w-6xl">
     <div>
-        <div class="inline-flex items-center px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold">Independent Universal Payment Plugin · Zero Dependencies</div>
+        <div class="inline-flex items-center px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold">Universal Payment · Manual verification protected</div>
         <h1 class="text-2xl font-extrabold text-slate-900 mt-1">Universal Payment Gateway & Ledger</h1>
         <p class="text-xs text-slate-500">Online checkout is available only through configured SSLCommerz, Stripe and PayPal adapters. bKash, Nagad, Rocket and bank/cash entries are manual records until dedicated online adapters are installed.</p>
     </div>
@@ -86,10 +86,7 @@
                 </div>
                 <div>
                     <label class="font-semibold text-slate-700 block mb-1">Initial Status</label>
-                    <select name="status" class="w-full rounded-xl border border-slate-300 px-3 py-2 bg-white">
-                        <option value="verified">Verified / Paid</option>
-                        <option value="pending">Pending Verification</option>
-                    </select>
+                    <p class="rounded-lg bg-amber-50 border border-amber-200 p-2 text-amber-800">New manual entries are always saved as Pending. An authorized reviewer must verify payment evidence.</p>
                 </div>
             </div>
             <button class="px-5 py-2.5 rounded-xl bg-[#0057FF] hover:bg-blue-700 text-white font-bold">Record Payment</button>
@@ -111,16 +108,20 @@
                             <td class="font-bold">{{ $tx->currency }} {{ number_format((float) $tx->amount, 2) }}</td>
                             <td><span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase {{ $tx->status === 'verified' ? 'bg-emerald-100 text-emerald-800' : ($tx->status === 'refunded' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800') }}">{{ $tx->status }}</span></td>
                             <td>
+                                @if ($tx->status === 'pending' && in_array($tx->gateway, ['bank_cash', 'bkash', 'nagad', 'rocket'], true))
                                 <form method="POST" action="{{ route('plugins.universal_payment.status', $tx) }}" class="inline-flex items-center gap-1.5">
                                     @csrf
-                                    <select name="status" class="rounded border border-slate-300 px-1.5 py-1 text-[11px]">
-                                        <option value="verified" {{ $tx->status === 'verified' ? 'selected' : '' }}>Verify</option>
-                                        <option value="pending" {{ $tx->status === 'pending' ? 'selected' : '' }}>Pending</option>
-                                        <option value="refunded" {{ $tx->status === 'refunded' ? 'selected' : '' }}>Refund</option>
-                                        <option value="rejected" {{ $tx->status === 'rejected' ? 'selected' : '' }}>Reject</option>
+                                    <select name="status" required class="rounded border border-slate-300 px-1.5 py-1 text-[11px]">
+                                        @if ($tx->status === 'pending' && in_array($tx->gateway, ['bank_cash', 'bkash', 'nagad', 'rocket'], true))
+                                            <option value="verified">Verify evidence</option>
+                                            <option value="rejected">Reject</option>
+                                        @endif
                                     </select>
                                     <button class="px-2 py-1 rounded bg-slate-900 text-white text-[11px] font-semibold">Apply</button>
                                 </form>
+                                @else
+                                    <span class="text-slate-400">No manual action</span>
+                                @endif
                             </td>
                         </tr>
                     @empty
