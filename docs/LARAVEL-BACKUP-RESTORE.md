@@ -3,7 +3,7 @@
 **Applies to:** Laravel 12 under `/laravel` only.  
 **Status:** Automated SQLite coverage exists; production-size MySQL/cPanel restore rehearsal is still required.
 
-Do not use the legacy root-level PHP API backup scripts for the Laravel application.
+Use only the Laravel backup and restore commands documented in this guide.
 
 ## Create a backup
 
