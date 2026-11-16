@@ -119,10 +119,21 @@
                     <article class="border-t border-slate-100 pt-3">
                         <div class="flex items-center justify-between gap-3">
                             <h3 class="font-semibold text-sm">{{ $notification->title }}</h3>
-                            <span class="text-[10px] font-bold uppercase text-sky-700">{{ $notification->channel }}</span>
+                            <div class="flex items-center gap-2">
+                                <span class="text-[10px] font-bold uppercase text-sky-700">{{ $notification->channel }}</span>
+                                <span class="text-[10px] font-bold uppercase {{ $notification->read_at ? 'text-slate-400' : 'text-amber-700' }}">{{ $notification->read_at ? 'Read' : 'Unread' }}</span>
+                            </div>
                         </div>
                         <p class="text-xs text-slate-600 mt-1 whitespace-pre-line">{{ $notification->message }}</p>
-                        <p class="text-[10px] text-slate-400 mt-1">{{ $notification->created_at }} · {{ $notification->status }}</p>
+                        <div class="flex items-center justify-between gap-3 mt-1">
+                            <p class="text-[10px] text-slate-400">{{ $notification->created_at }} · {{ $notification->status }}</p>
+                            @if (!$notification->read_at && Route::has('my-notifications.read'))
+                                <form method="POST" action="{{ route('my-notifications.read', $notification->id) }}">
+                                    @csrf
+                                    <button type="submit" class="text-[10px] font-bold text-sky-700 hover:underline">Mark as read</button>
+                                </form>
+                            @endif
+                        </div>
                     </article>
                 @endforeach
             </section>
