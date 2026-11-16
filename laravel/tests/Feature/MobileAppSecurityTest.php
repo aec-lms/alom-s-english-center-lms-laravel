@@ -78,7 +78,7 @@ class MobileAppSecurityTest extends TestCase
 
         $otherStudent = $this->createUserWithRole('student');
         $otherToken = $otherStudent->createToken('mobile-test-other')->plainTextToken;
-        $this->withHeader('Authorization', 'Bearer ' . $otherToken)
+        $this->actingAs($otherStudent, 'sanctum')
             ->getJson('/api/mobile/courses/' . $course->slug . '/lessons')
             ->assertForbidden();
     }
