@@ -133,6 +133,14 @@ class LessonContentProtectionController extends Controller
         );
 
         $user = $request->user();
+        if ($user->hasRole('student') && app(PluginManager::class)->isEnabled('student-tracking')) {
+            $courseTitle = DB::table('courses')->where('id', $lessonRow->course_id)->value('title');
+            app(StudentActivityTracker::class)->record((int) $user->id, 'lesson_started', 'lesson', $lesson, null, [
+                'lesson_title' => $lessonRow->title ?? 'Lesson ' . $lesson,
+                'course_title' => $courseTitle ?: null,
+                'source' => 'protected-media-access',
+            ]);
+        }
         $watermark = trim((string) $user->email) . ' | ID ' . $user->id . ' | ' . now()->format('Y-m-d H:i:s');
 
         return response()->json([
