@@ -544,10 +544,20 @@ class PluginManager
                 throw new RuntimeException('Plugin archive exceeds the allowed uncompressed size.');
             }
 
-            if (is_array($stat) && isset($stat['external_attributes'])) {
-                $mode = ($stat['external_attributes'] >> 16) & 0xF000;
-                if ($mode === 0xA000) {
+            // ZipArchive::statIndex() does not expose Unix external attributes.
+            // Read them through getExternalAttributesIndex() so symlink entries
+            // cannot bypass the archive safety check and escape the staging tree.
+            $opsys = 0;
+            $externalAttributes = 0;
+            if ($zip->getExternalAttributesIndex($i, $opsys, $externalAttributes)
+                && $opsys === ZipArchive::OPSYS_UNIX
+            ) {
+                $fileType = ($externalAttributes >> 16) & 0170000;
+                if ($fileType === 0120000) {
                     throw new RuntimeException("Symlink entry blocked in ZIP: {$name}");
+                }
+                if ($fileType !== 0 && $fileType !== 0100000 && $fileType !== 0040000) {
+                    throw new RuntimeException("Special file entry blocked in ZIP: {$name}");
                 }
             }
 
