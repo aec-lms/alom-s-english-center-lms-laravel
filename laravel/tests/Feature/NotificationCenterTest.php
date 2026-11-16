@@ -32,6 +32,40 @@ class NotificationCenterTest extends TestCase
         ]);
     }
 
+    public function test_user_portal_only_shows_notifications_belonging_to_signed_in_user(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['notification-center']);
+        $student = $this->createUserWithRole('student');
+        $otherStudent = $this->createUserWithRole('student');
+
+        DB::table('lms_notifications')->insert([
+            [
+                'user_id' => $student->id,
+                'channel' => 'in_app',
+                'title' => 'My private notice',
+                'message' => 'Your attendance is updated.',
+                'status' => 'sent',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'user_id' => $otherStudent->id,
+                'channel' => 'in_app',
+                'title' => 'Another student private notice',
+                'message' => 'This must not be visible to another student.',
+                'status' => 'sent',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        $this->actingAs($student)->get('/dashboard')
+            ->assertOk()
+            ->assertSee('My private notice')
+            ->assertDontSee('Another student private notice');
+    }
+
     public function test_unconfigured_external_channels_are_not_reported_as_queued_or_sent(): void
     {
         $this->markSystemInstalled();
