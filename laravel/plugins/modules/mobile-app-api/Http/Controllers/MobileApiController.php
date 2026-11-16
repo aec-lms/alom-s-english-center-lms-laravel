@@ -279,6 +279,39 @@ class MobileApiController extends Controller
         return response()->json(['data' => $course, 'lessons' => []]);
     }
 
+    public function lessons(Request $request, string $slug): JsonResponse
+    {
+        $actor = $request->user();
+        abort_unless($actor, 401);
+        abort_unless(
+            Schema::hasTable('courses')
+                && Schema::hasTable('course_lessons')
+                && Schema::hasTable('enrollments'),
+            409,
+            'Course content access is unavailable until Course Management is installed.'
+        );
+
+        $course = Course::query()
+            ->where('slug', $slug)
+            ->where('status', 'published')
+            ->firstOrFail();
+
+        $hasAccess = Enrollment::query()
+            ->where('user_id', $actor->id)
+            ->where('course_id', $course->id)
+            ->whereIn('status', ['active', 'completed'])
+            ->exists();
+        abort_unless($hasAccess, 403, 'An active course enrollment is required to view lessons.');
+
+        $lessons = DB::table('course_lessons')
+            ->where('course_id', $course->id)
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get(['id', 'course_id', 'title', 'content', 'sort_order']);
+
+        return response()->json(['data' => $lessons]);
+    }
+
     public function ebooks(): JsonResponse
     {
         $items = Schema::hasTable('storefront_items')
