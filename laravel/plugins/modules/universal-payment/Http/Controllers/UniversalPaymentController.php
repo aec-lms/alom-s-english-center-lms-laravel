@@ -19,6 +19,7 @@ class UniversalPaymentController extends Controller
     public function __construct(
         private readonly PluginManager $plugins,
         private readonly AuditLogger $audit,
+        private readonly UniversalPaymentOrchestrator $orchestrator,
     ) {}
 
     public function index(): View
@@ -118,29 +119,49 @@ class UniversalPaymentController extends Controller
         return back()->with('status', "Transaction '{$transaction->reference}' marked {$validated['status']}.");
     }
 
-    public function publicCheckout(Request $request): RedirectResponse
+    public function publicCheckout(Request $request): RedirectResponse|\\Illuminate\\Http\\JsonResponse
     {
         $validated = $request->validate([
-            'payer_name' => ['required', 'string', 'max:160'],
-            'payer_contact' => ['required', 'string', 'max:120'],
-            'item_title' => ['required', 'string', 'max:200'],
-            'gateway' => ['required', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,bank_cash'],
-            'amount' => ['required', 'numeric', 'min:1'],
-            'external_trx_id' => ['nullable', 'string', 'max:120'],
+            'invoice_id' => ['required', 'integer', 'exists:fee_invoices,id'],
+            'gateway' => ['required', 'in:sslcommerz,stripe,paypal'],
+            'payment_method_id' => ['required_if:gateway,stripe', 'nullable', 'string', 'max:180'],
+            'idempotency_key' => ['nullable', 'string', 'max:120'],
         ]);
 
-        $tx = UniversalPaymentTransaction::query()->create([
-            'reference' => 'UPAY-' . strtoupper(Str::random(8)),
-            'payer_name' => $validated['payer_name'],
-            'payer_contact' => $validated['payer_contact'],
-            'item_title' => $validated['item_title'],
-            'gateway' => $validated['gateway'],
-            'currency' => $this->plugins->getSetting('universal-payment', 'default_currency', 'BDT') ?: 'BDT',
-            'amount' => $validated['amount'],
-            'external_trx_id' => $validated['external_trx_id'] ?? null,
-            'status' => 'pending',
+        $invoice = FeeInvoice::query()
+            ->whereHas('student', fn ($query) => $query->where('user_id', $request->user()->id))
+            ->findOrFail((int) $validated['invoice_id']);
+
+        $remaining = round((float) $invoice->net_amount - (float) $invoice->paid_amount, 2);
+        if ($remaining <= 0 || $invoice->status === 'paid') {
+            abort(422, 'This invoice is already fully paid.');
+        }
+
+        $gatewaySlug = match ($validated['gateway']) {
+            'sslcommerz' => 'gateway-sslcommerz',
+            'stripe' => 'gateway-stripe',
+            'paypal' => 'gateway-paypal',
+        };
+
+        $result = $this->orchestrator->initiate($gatewaySlug, $invoice, [
+            'payment_method_id' => $validated['payment_method_id'] ?? '',
+            'idempotency_key' => $validated['idempotency_key'] ?? null,
         ]);
 
-        return back()->with('status', "Payment submitted! Reference: {$tx->reference}");
+        if (!empty($result['redirect_url'])) {
+            return redirect()->away($result['redirect_url']);
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'assistant' => 'AEC LMS Payment',
+                'gateway' => $result['gateway'],
+                'transaction_ref' => $result['transaction_ref'],
+                'payment_intent_id' => $result['payment_intent_id'] ?? null,
+                'client_secret' => $result['client_secret'] ?? null,
+            ]);
+        }
+
+        return back()->with('status', 'Payment intent created. Complete the secure payment step to settle your invoice.');
     }
 }
