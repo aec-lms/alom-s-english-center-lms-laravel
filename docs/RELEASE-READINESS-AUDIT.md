@@ -15,6 +15,8 @@ The sole production application is Laravel 12 under `/laravel`. The production d
 - `laravel/composer.lock` is committed and CI uses it for reproducible dependency installation.
 - The passing workflow proves only the checks currently implemented in CI; it does not establish complete acceptance of all 39 plugins or production readiness.
 - This audit refresh is being prepared on `chore/release-audit-and-plugin-matrix`; it does not change `main` until reviewed and merged.
+- [PR #2](https://github.com/aec-lms/alom-s-english-center-lms-laravel/pull/2) remains **open and unmerged** on `chore/release-audit-and-plugin-matrix`; no production deployment has occurred.
+- Latest fully green PHP 8.3 CI [43858321888](https://github.com/aec-lms/alom-s-english-center-lms-laravel/actions/runs/43858321888) passed **129 tests (1,011 assertions) on SQLite and MySQL 8**, PHP syntax lint across core/plugins/routes/tests/public, Composer security audit, and cPanel package verification (**6,284 files**). Artifact: [aec-lms-cpanel-release](https://github.com/aec-lms/alom-s-english-center-lms-laravel/actions/runs/43858321888/artifacts/14222661024), SHA-256 `4ae9169a9ab35d3c8554c0dea104e458a326dad929414292579492a699a98188`.
 
 A green CI run is evidence only for the automated checks that exist. It is not proof of production deployment readiness.
 
