@@ -350,7 +350,9 @@ class MobileApiController extends Controller
     {
         // Public mobile endpoints accept optional Sanctum bearer authentication.
         // The API guard is not required so anonymous app visitors remain supported.
-        return $request->user('sanctum') ?? $request->user();
+        return $request->bearerToken() !== null
+            ? $request->user('sanctum')
+            : $request->user();
     }
 
     private function recordDeviceToken(?User $user, array $validated): ?MobileDeviceToken
