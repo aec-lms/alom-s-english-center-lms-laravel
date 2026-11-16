@@ -38,7 +38,8 @@ class PluginCriticalRegressionTest extends TestCase
     {
         $manifest = PluginManifest::fromDirectory(base_path('plugins/modules/attendance-management'));
 
-        $this->assertContains('batch-management', $manifest->dependencies);
+        $this->assertSame([], $manifest->dependencies);
+        $this->assertContains('batch-management', $manifest->optionalDependencies);
         $migration = file_get_contents(base_path('plugins/modules/attendance-management/Database/Migrations/2026_02_07_000001_create_attendance_records_table.php'));
         $controller = file_get_contents(base_path('plugins/modules/attendance-management/Http/Controllers/AttendanceController.php'));
 
