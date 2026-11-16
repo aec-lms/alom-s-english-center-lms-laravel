@@ -65,6 +65,42 @@ $validated = $request->validate([
         return back()->with('status', "Batch '{$batch->name}' created.");
     }
 
+    public function update(Request $request, StudyBatch $batch): RedirectResponse
+    {
+        $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
+        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $batch->branch_id) {
+            abort(403, 'Branch isolation violation.');
+        }
+
+        $branchIntegration = app(PluginManager::class)->isEnabled('branch-management') && Schema::hasTable('branches');
+        $branchRule = $branchIntegration
+            ? ['nullable', 'integer', 'exists:branches,id,is_active,1']
+            : ['nullable', 'integer'];
+        $validated = $request->validate([
+            'batch_code' => ['required', 'string', 'max:40', 'unique:study_batches,batch_code,' . $batch->id],
+            'name' => ['required', 'string', 'max:160'],
+            'course_title' => ['nullable', 'string', 'max:180'],
+            'schedule' => ['required', 'string', 'max:160'],
+            'room_number' => ['nullable', 'string', 'max:60'],
+            'max_capacity' => ['required', 'integer', 'min:1', 'max:500'],
+            'start_date' => ['nullable', 'date'],
+            'status' => ['required', 'in:upcoming,ongoing,completed'],
+            'branch_id' => $branchRule,
+        ]);
+
+        if (!$branchIntegration) {
+            $validated['branch_id'] = null;
+        }
+        if ($actor && $actor->hasRole('branch_manager')) {
+            $validated['branch_id'] = (int) $actor->branch_id;
+        }
+
+        $batch->update($validated);
+        $this->audit->log('batch.updated', 'study_batch', (string) $batch->id);
+        return back()->with('status', "Batch '{$batch->name}' updated.");
+    }
+
     public function destroy(Request $request, StudyBatch $batch): RedirectResponse
     {
         $actor = $request->user();
