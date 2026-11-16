@@ -105,7 +105,7 @@ class MediaLibraryAndDigitalEbookTest extends TestCase
 
             return Http::response([
                 'status' => 'VALID',
-                'tran_id' => (string) ($query['tran_id'] ?? ''),
+                'tran_id' => $expectedReference,
                 'amount' => '450.00',
                 'currency' => 'BDT',
                 'risk_level' => '0',
