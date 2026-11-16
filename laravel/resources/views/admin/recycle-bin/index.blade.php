@@ -144,5 +144,51 @@
         @endforelse
         <div>{{ $classes->links() }}</div>
     </section>
+
+    <section class="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+        <div class="flex items-center justify-between gap-3">
+            <h2 class="font-bold text-slate-900">Deleted Course Categories</h2>
+            <span class="text-xs text-slate-500">{{ $courseCategories->total() }} item(s)</span>
+        </div>
+        @forelse ($courseCategories as $record)
+            <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                <div class="min-w-0">
+                    <div class="font-semibold text-sm text-slate-900">{{ $record->name }}</div>
+                    
+                    <div class="text-[11px] text-slate-400">Moved to trash: {{ $record->deleted_at?->format('Y-m-d H:i') }}</div>
+                </div>
+                <form method="POST" action="{{ route('admin.recycle-bin.course-categories.restore', $record->id) }}" onsubmit="return confirm('Restore this course categorie record?')">
+                    @csrf
+                    <button class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold">Restore</button>
+                </form>
+            </div>
+        @empty
+            <p class="border-t border-slate-100 pt-4 text-xs text-slate-400">No deleted course categories.</p>
+        @endforelse
+        <div>{{ $courseCategories->links() }}</div>
+    </section>
+
+    <section class="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+        <div class="flex items-center justify-between gap-3">
+            <h2 class="font-bold text-slate-900">Deleted Live Classes</h2>
+            <span class="text-xs text-slate-500">{{ $liveClasses->total() }} item(s)</span>
+        </div>
+        @forelse ($liveClasses as $record)
+            <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                <div class="min-w-0">
+                    <div class="font-semibold text-sm text-slate-900">{{ $record->title }}</div>
+                    <div class="text-xs text-slate-500">{{ $record->course?->title ?? 'Course unavailable' }}</div>
+                    <div class="text-[11px] text-slate-400">Moved to trash: {{ $record->deleted_at?->format('Y-m-d H:i') }}</div>
+                </div>
+                <form method="POST" action="{{ route('admin.recycle-bin.live-classes.restore', $record->id) }}" onsubmit="return confirm('Restore this live classe record?')">
+                    @csrf
+                    <button class="px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold">Restore</button>
+                </form>
+            </div>
+        @empty
+            <p class="border-t border-slate-100 pt-4 text-xs text-slate-400">No deleted live classes.</p>
+        @endforelse
+        <div>{{ $liveClasses->links() }}</div>
+    </section>
 </div>
 @endsection
