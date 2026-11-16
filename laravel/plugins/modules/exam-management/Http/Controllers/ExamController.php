@@ -219,6 +219,10 @@ class ExamController extends Controller
             abort(403, 'The exam submission window has closed.');
         }
 
+        if (\Illuminate\Support\Facades\Schema::hasColumn('exams', 'learn_earn_type') && $exam->learn_earn_type === 'paid') {
+            abort_unless(\Illuminate\Support\Facades\Schema::hasTable('learn_earn_exam_access') && DB::table('learn_earn_exam_access')->where('exam_id', $exam->id)->where('user_id', $actor->id)->where('status', 'granted')->exists(), 403, 'Payment is required before attempting this exam.');
+        }
+
         if ($exam->branch_id !== null) {
             abort_unless(app(PluginManager::class)->isEnabled('student-management') && Schema::hasTable('students'), 403, 'Student Management must be enabled for branch-specific exam attempts.');
             $studentProfile = Student::query()->where('user_id', $actor->id)->first();
@@ -250,14 +254,16 @@ class ExamController extends Controller
         $sanitizedAnswers = [];
 
         foreach ($questions as $question) {
-            $total += (int) $question->marks;
+            $total += (float) $question->marks;
             $selected = $validated['answers'][(string) $question->id] ?? null;
             $options = (array) $question->options;
             if ($selected !== null && (int) $selected >= count($options)) {
                 abort(422, 'An answer option is outside the allowed range.');
             }
             if ($selected !== null && (int) $selected === (int) $question->correct_option_index) {
-                $score += (int) $question->marks;
+                $score += (float) $question->marks;
+            } elseif ($selected !== null) {
+                $score -= (float) ($question->negative_marks ?? 0);
             }
             $sanitizedAnswers[(string) $question->id] = $selected !== null ? (int) $selected : null;
         }
@@ -268,7 +274,7 @@ class ExamController extends Controller
             'submitted_answers' => $sanitizedAnswers,
             'score_obtained' => $score,
             'total_marks' => $total,
-            'passed' => $score >= (int) $exam->pass_marks,
+            'passed' => $score >= (float) $exam->pass_marks,
             'submitted_at' => now(),
         ]);
 
