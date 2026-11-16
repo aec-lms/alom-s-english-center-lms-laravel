@@ -345,9 +345,9 @@ $validated = $request->validate([
         $id = (string) $category->id;
         $category->delete();
 
-        $this->audit->log('course_category.deleted', 'course_category', $id, ['name' => $name]);
+        $this->audit->log('course_category.trashed', 'course_category', $id, ['name' => $name]);
 
-        return back()->with('status', "Category '{$name}' deleted.");
+        return back()->with('status', "Category '{$name}' moved to the Admin Recycle Bin.");
     }
 
     public function storeLiveClass(Request $request): RedirectResponse
@@ -418,9 +418,9 @@ $validated = $request->validate([
         $id = (string) $liveClass->id;
         $liveClass->delete();
 
-        $this->audit->log('live_class.deleted', 'live_class', $id, ['title' => $title]);
+        $this->audit->log('live_class.trashed', 'live_class', $id, ['title' => $title]);
 
-        return back()->with('status', "Live class '{$title}' removed.");
+        return back()->with('status', "Live class '{$title}' moved to the Admin Recycle Bin.");
     }
 
     private function parseSyllabusLines(string $raw): array
