@@ -77,15 +77,6 @@ class UniversalPaymentController extends Controller
             return redirect('/ebooks/' . rawurlencode((string) $storefrontItem->slug))->with('status', 'You already have access to this e-book.');
         }
 
-        if ($storefrontItem !== null && $validated['gateway'] !== 'sslcommerz') {
-            return back()->withErrors(['gateway' => 'Choose SSLCOMMERZ for secure automatic e-book checkout.'])->withInput();
-        }
-
-        if ($storefrontItem !== null && DB::table('storefront_item_access')
-            ->where('storefront_item_id', $storefrontItem->id)->where('user_id', auth()->id())->exists()) {
-            return redirect('/ebooks/' . rawurlencode((string) $storefrontItem->slug))->with('status', 'You already have access to this e-book.');
-        }
-
         $tx = UniversalPaymentTransaction::query()->create([
             'reference' => 'UPAY-' . strtoupper(Str::random(8)),
             'payer_name' => $validated['payer_name'],
@@ -154,6 +145,15 @@ class UniversalPaymentController extends Controller
                 ->where('type', 'ebook')->where('is_active', true)->first();
             abort_if($storefrontItem === null || (bool) $storefrontItem->is_free || (float) $storefrontItem->price <= 0, 422, 'This is not a paid active e-book.');
             abort_if(empty($storefrontItem->download_url) || !str_starts_with((string) $storefrontItem->download_url, 'private:'), 422, 'The e-book PDF must be privately uploaded before it can be sold.');
+        }
+
+        if ($storefrontItem !== null && $validated['gateway'] !== 'sslcommerz') {
+            return back()->withErrors(['gateway' => 'Choose SSLCOMMERZ for secure automatic e-book checkout.'])->withInput();
+        }
+
+        if ($storefrontItem !== null && DB::table('storefront_item_access')
+            ->where('storefront_item_id', $storefrontItem->id)->where('user_id', auth()->id())->exists()) {
+            return redirect('/ebooks/' . rawurlencode((string) $storefrontItem->slug))->with('status', 'You already have access to this e-book.');
         }
 
         $tx = UniversalPaymentTransaction::query()->create([
