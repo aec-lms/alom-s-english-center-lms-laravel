@@ -152,7 +152,7 @@ class LessonContentProtectionController extends Controller
         abort_unless((bool) $lessonRow->protection_enabled && (bool) $lessonRow->is_downloadable, 403, 'Downloads are disabled for this lesson.');
 
         $path = $this->resolveMediaPath((string) ($lessonRow->media_path ?? ''));
-        $mime = (new \\finfo(FILEINFO_MIME_TYPE))->file($path) ?: 'application/octet-stream';
+        $mime = (new \finfo(FILEINFO_MIME_TYPE))->file($path) ?: 'application/octet-stream';
         abort_unless(in_array($mime, self::ALLOWED_MIME_TYPES, true), 415, 'Unsupported media format.');
         return response()->download($path, 'lesson-' . $lesson . '.' . pathinfo($path, PATHINFO_EXTENSION), [
             'X-Content-Type-Options' => 'nosniff',
