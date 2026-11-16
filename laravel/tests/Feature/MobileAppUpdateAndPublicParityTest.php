@@ -204,7 +204,7 @@ class MobileAppUpdateAndPublicParityTest extends TestCase
         $this->markSystemInstalled();
         $this->activatePlugins(['course-management', 'mobile-app-api']);
 
-        $course = \\Plugins\\Modules\\CourseManagement\\Models\\Course::query()->create([
+        $course = \Plugins\Modules\CourseManagement\Models\Course::query()->create([
             'code' => 'MOBILE-COURSE-01',
             'title' => 'Mobile API Course Detail',
             'slug' => 'mobile-api-course-detail',
