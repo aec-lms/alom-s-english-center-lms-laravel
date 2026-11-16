@@ -115,6 +115,7 @@ declare(strict_types=1);
 namespace Plugins\Modules\LifecycleFailureProbe\Providers;
 
 use App\Core\Plugins\BasePluginServiceProvider;
+use App\Models\PluginRecord;
 use RuntimeException;
 
 class LifecycleFailureProbeServiceProvider extends BasePluginServiceProvider
@@ -137,6 +138,12 @@ class LifecycleFailureProbeServiceProvider extends BasePluginServiceProvider
     public function onDisable(): void
     {
         throw new RuntimeException('intentional disable hook failure');
+    }
+
+    public function onUninstall(bool $purgePluginData = false): void
+    {
+        PluginRecord::query()->where('slug', $this->slug())->update(['is_installed' => false]);
+        throw new RuntimeException('intentional uninstall hook failure');
     }
 }
 PHP);
@@ -172,6 +179,20 @@ PHP);
             }
 
             $this->assertDatabaseHas('plugins', ['slug' => $slug, 'is_enabled' => true]);
+
+            PluginRecord::query()->where('slug', $slug)->update(['is_enabled' => false]);
+            try {
+                $manager->uninstall($slug);
+                $this->fail('Uninstall hook failure should abort and roll back the operation.');
+            } catch (RuntimeException $exception) {
+                $this->assertStringContainsString('intentional uninstall hook failure', $exception->getMessage());
+            }
+
+            $this->assertDatabaseHas('plugins', [
+                'slug' => $slug,
+                'is_installed' => true,
+                'is_enabled' => false,
+            ]);
         } finally {
             File::deleteDirectory($pluginDir);
         }
