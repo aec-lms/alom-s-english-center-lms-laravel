@@ -58,4 +58,21 @@ class PluginCriticalRegressionTest extends TestCase
         $this->assertStringContainsString("Route::post('/ask'", $routeFile);
         $this->assertStringContainsString("->middleware('permission:ai.assistant.use')", $routeFile);
     }
+    public function test_universal_payment_checkout_is_authenticated_rate_limited_and_invoice_bound(): void
+    {
+        $routeFile = file_get_contents(base_path('plugins/modules/universal-payment/Routes/web.php'));
+        $controller = file_get_contents(base_path('plugins/modules/universal-payment/Http/Controllers/UniversalPaymentController.php'));
+        $orchestrator = file_get_contents(base_path('plugins/modules/universal-payment/Services/UniversalPaymentOrchestrator.php'));
+
+        $this->assertIsString($routeFile);
+        $this->assertIsString($controller);
+        $this->assertIsString($orchestrator);
+        $this->assertStringContainsString("'auth'", $routeFile);
+        $this->assertStringContainsString("'throttle:10,1'", $routeFile);
+        $this->assertStringContainsString("whereHas('student'", $controller);
+        $this->assertStringContainsString("'exists:fee_invoices,id'", $controller);
+        $this->assertStringNotContainsString("'amount' => ['required'", $controller);
+        $this->assertStringContainsString("'enabled_gateways'", $orchestrator);
+    }
+
 }
