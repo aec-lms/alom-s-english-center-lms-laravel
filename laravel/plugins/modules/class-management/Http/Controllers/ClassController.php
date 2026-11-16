@@ -114,9 +114,9 @@ $validated = $request->validate([
         $name = $academicClass->name;
         $id = (string) $academicClass->id;
         $academicClass->delete();
-        $this->audit->log('class.deleted', 'academic_class', $id);
+        $this->audit->log('class.trashed', 'academic_class', $id);
 
-        return back()->with('status', "Class '{$name}' removed.");
+        return back()->with('status', "Class '{$name}' moved to the Admin Recycle Bin.");
     }
 
     private function ensureAssignedBranch($actor): void
