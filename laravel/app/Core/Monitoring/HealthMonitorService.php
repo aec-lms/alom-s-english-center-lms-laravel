@@ -82,7 +82,7 @@ class HealthMonitorService
         catch (Throwable $e) {
             $message = $this->safeMessage($e);
             if ($repair !== null) {
-                try { $recoveries['safe_runtime'] = $repair(); return ['status' => 'recovered', 'message' => $message . ' Safe recovery succeeded.']; }
+                try { $recoveries['safe_runtime'] = $repair(); $verified = $test(); return ['status' => 'recovered', 'message' => $verified . ' Safe recovery verified.']; }
                 catch (Throwable $repairException) { $message .= ' Recovery attempt failed: ' . $this->safeMessage($repairException); }
             }
             return ['status' => 'failed', 'message' => $message];
