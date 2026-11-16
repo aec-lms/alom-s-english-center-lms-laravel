@@ -38,6 +38,9 @@ if command -v rsync >/dev/null 2>&1; then
     --exclude='storage/framework/views/*' \
     --exclude='storage/app/installed.lock' \
     --exclude='storage/app/backups/*' \
+    --exclude='storage/app/plugin-recycle-bin/**' \
+    --exclude='storage/app/plugin-setting-backups/**' \
+    --exclude='storage/app/plugin-permanent-delete-backups/**' \
     --exclude='storage/app/private/**' \
     --exclude='storage/app/restore-staging/**' \
     --exclude='storage/app/plugin-staging/**' \
@@ -66,6 +69,9 @@ else
     --exclude='storage/framework/views/*' \
     --exclude='storage/app/installed.lock' \
     --exclude='storage/app/backups/*' \
+    --exclude='storage/app/plugin-recycle-bin/**' \
+    --exclude='storage/app/plugin-setting-backups/**' \
+    --exclude='storage/app/plugin-permanent-delete-backups/**' \
     --exclude='storage/app/private/**' \
     --exclude='storage/app/restore-staging/**' \
     --exclude='storage/app/plugin-staging/**' \
