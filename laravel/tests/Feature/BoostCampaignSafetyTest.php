@@ -40,8 +40,10 @@ class BoostCampaignSafetyTest extends TestCase
             'destination_url' => '/courses/ielts',
             'starts_at' => now()->subMinute()->toDateTimeString(),
             'ends_at' => now()->addDay()->toDateTimeString(),
-        ])->assertSessionHasNoErrors();
+        ])->assertRedirect()
+            ->assertSessionHas('status', "Boost campaign 'Active Campaign' launched.");
 
+        $this->assertDatabaseHas('boost_campaigns', ['campaign_name' => 'Active Campaign']);
         $campaign = BoostCampaign::query()->firstOrFail();
         $this->get('/boost/click/' . $campaign->id)
             ->assertRedirect('/courses/ielts');
