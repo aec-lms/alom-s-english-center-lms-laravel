@@ -4,7 +4,7 @@
 <div class="space-y-6 max-w-5xl">
     <div>
         <h1 class="text-2xl font-extrabold text-slate-900">HR, Staff &amp; Payroll Management</h1>
-        <p class="text-xs text-slate-500 mt-0.5">Manage academic &amp; operational staff profiles, designations, and monthly payroll disbursements.</p>
+        <p class="text-xs text-slate-500 mt-0.5">Manage academic &amp; operational staff profiles, designations, and monthly payroll preparation and approval.</p>
     </div>
 
     <div class="grid md:grid-cols-2 gap-6">
@@ -24,7 +24,7 @@
         </div>
 
         <div class="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
-            <h2 class="text-sm font-bold text-slate-900">Disburse Monthly Payroll</h2>
+            <h2 class="text-sm font-bold text-slate-900">Prepare Monthly Payroll</h2>
             <form method="POST" action="{{ route('plugins.hr.payrolls.store') }}" class="grid gap-3 text-xs">
                 @csrf
                 <select name="staff_profile_id" required class="rounded-lg border border-slate-300 px-3 py-2 bg-white">
@@ -38,7 +38,7 @@
                     <input name="bonus" type="number" step="0.01" min="0" value="0" placeholder="Bonus" class="rounded-lg border border-slate-300 px-3 py-2">
                     <input name="deductions" type="number" step="0.01" min="0" value="0" placeholder="Deductions" class="rounded-lg border border-slate-300 px-3 py-2">
                 </div>
-                <button type="submit" class="px-4 py-2 rounded-lg bg-emerald-600 text-white font-bold">Record Payroll</button>
+                <button type="submit" class="px-4 py-2 rounded-lg bg-emerald-600 text-white font-bold">Prepare Payroll</button>
             </form>
         </div>
     </div>
@@ -54,6 +54,12 @@
                 <div class="text-right">
                     <div class="font-extrabold text-emerald-700 text-sm">৳{{ $pay->net_paid }}</div>
                     <div class="text-[11px] uppercase text-slate-500">{{ $pay->status }}</div>
+                    @if ($pay->status === 'pending' && auth()->user()?->hasRole('admin'))
+                        <form method="POST" action="{{ route('plugins.hr.payrolls.mark-paid', $pay) }}" class="mt-2">
+                            @csrf
+                            <button type="submit" class="px-2.5 py-1 rounded-lg bg-emerald-700 text-white text-[10px] font-bold">Confirm Disbursed</button>
+                        </form>
+                    @endif
                 </div>
             </div>
         @empty
