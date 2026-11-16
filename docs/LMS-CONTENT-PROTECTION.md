@@ -17,7 +17,7 @@ The course-management module includes an initial server-side lesson media protec
 - POST /admin/courses/lessons/{lesson}/media — multipart upload field media; requires courses.manage.
 - PATCH /admin/courses/lessons/{lesson}/protection — JSON fields protection_enabled and is_downloadable; requires courses.manage.
 - GET /my-learning/lessons/{lesson}/media-access — returns a short-lived signed URL and learner watermark text; requires login and active enrollment.
-- GET /my-learning/lessons/{lesson}/media/{user} — signed, account-bound media response.
+- GET /my-learning/lessons/{lesson}/media/{user} — signed, account-bound media response.\n- GET /my-learning/lessons/{lesson}/download/{user} — signed download endpoint; works only when the lesson download policy is enabled.\n- GET /my-learning/courses/{course}/lessons — enrolled learner player with moving visible watermark.
 
 ## Player integration
 
