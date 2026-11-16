@@ -27,7 +27,7 @@ class AllPluginsIndependentAcceptanceTest extends TestCase
             ['library-management'], ['marketing-management'], ['meta-pixel'],
             ['mobile-app-api'], ['notice-board'], ['notification-center'],
             ['page-builder'], ['payment-management'], ['reports-analytics'],
-            ['role-ai-assistant'], ['seo-manager'], ['slider-builder'],
+            ['role-ai-assistant'], ['seo-manager'], ['student-tracking'], ['slider-builder'],
             ['sms-gateway'], ['storefront-catalog'], ['student-management'],
             ['teacher-management'], ['universal-payment'], ['visitor-popup-ads'],
         ];
