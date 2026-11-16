@@ -43,7 +43,9 @@
                             class="protected-lesson-open shrink-0 px-4 py-2.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-sm font-bold"
                             data-access-url="{{ route('plugins.lesson-media.access', $lesson->id) }}"
                             data-mime="{{ $lesson->media_mime }}"
-                            data-title="{{ $lesson->title }}"\n                            data-lesson-id="{{ $lesson->id }}"\n                            data-course-title="{{ $course->title }}">
+                            data-title="{{ $lesson->title }}"
+                            data-lesson-id="{{ $lesson->id }}"
+                            data-course-title="{{ $course->title }}">
                             Open Lesson
                         </button>
                     @else
