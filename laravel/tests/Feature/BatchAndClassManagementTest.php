@@ -42,7 +42,7 @@ class BatchAndClassManagementTest extends TestCase
             'schedule' => 'Mon-Wed 11:00',
             'max_capacity' => 2,
             'status' => 'ongoing',
-        ])->assertSessionHasErrors('max_capacity');
+        ])->assertStatus(422)->assertInvalid(['max_capacity']);
         $this->assertDatabaseHas('study_batches', [
             'id' => $batchId,
             'max_capacity' => 25,
