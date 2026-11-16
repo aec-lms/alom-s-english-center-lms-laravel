@@ -24,7 +24,7 @@ class TeacherStandaloneTest extends TestCase
             'employee_code' => 'TEACHER-GLOBAL-001',
             'specialization' => 'English Grammar',
             'is_active' => '1',
-        ])->assertSessionHasNoErrors();
+        ])->assertRedirect()->assertSessionHasNoErrors();
 
         $this->assertDatabaseHas('teachers', [
             'employee_code' => 'TEACHER-GLOBAL-001',
