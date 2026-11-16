@@ -8,47 +8,47 @@
 
 This first pass is a **static file inventory**, not a functional certification. “Present” means a matching file/directory exists in the plugin folder; it does not prove the feature works, is secure, or is production-ready. “Not present” means no matching file was found in that plugin directory and may be appropriate for an integration-only plugin. No module is marked functionally accepted until its acceptance tests pass.
 
-| Plugin | Files | Manifest | Controller | Model | Blade view | Routes | Migration | Functional acceptance |
-|---|---:|---|---|---|---|---|---|---|
-| `admin-boosting` | 7 | Present | Present | Present | Present | Present | **Not yet functionally accepted** |
-| `admission-management` | 7 | Present | Present | Present | Present | Present | **Not yet functionally accepted** |
-| `attendance-management` | 7 | Present | Present | Present | Present | Present | **Not yet functionally accepted** |
-| `batch-management` | 7 | Present | Present | Present | Present | Present | **Not yet functionally accepted** |
-| `branch-management` | 7 | Present | Present | Present | Present | Present | **Not yet functionally accepted** |
-| `carousel-builder` | 8 | Present | Present | Present | Present | Present | **Not yet functionally accepted** |
-| `certificate-management` | 7 | Present | Present | Present | Present | Present | **Not yet functionally accepted** |
-| `class-management` | 7 | Present | Present | Present | Present | Present | **Not yet functionally accepted** |
-| `cms-website` | 10 | Present | Present | Present | Present | Present | **Not yet functionally accepted** |
-| `course-management` | 16 | Present | Present | Present | Present | Present | **Not yet functionally accepted** |
-| `email-notifications` | 8 | Present | Present | Present | Present | Present | **Not yet functionally accepted** |
-| `exam-management` | 9 | Present | Present | Present | Present | Present | **Not yet functionally accepted** |
-| `fees-management` | 8 | Present | Present | Present | Present | Present | **Not yet functionally accepted** |
-| `gateway-card` | 5 | Present | Not present | Not present | Present | Not present | **Not yet functionally accepted** |
-| `gateway-paypal` | 6 | Present | Not present | Present | Present | Not present | **Not yet functionally accepted** |
-| `gateway-sslcommerz` | 5 | Present | Not present | Not present | Present | Not present | **Not yet functionally accepted** |
-| `gateway-stripe` | 6 | Present | Not present | Present | Present | Not present | **Not yet functionally accepted** |
-| `gmail-marketing` | 7 | Present | Present | Present | Present | Present | **Not yet functionally accepted** |
-| `google-console` | 5 | Present | Not present | Present | Present | Not present | **Not yet functionally accepted** |
-| `guardian-management` | 7 | Present | Present | Present | Present | Present | **Not yet functionally accepted** |
-| `hr-staff-management` | 8 | Present | Present | Present | Present | Present | **Not yet functionally accepted** |
-| `library-management` | 8 | Present | Present | Present | Present | Present | **Not yet functionally accepted** |
-| `marketing-management` | 8 | Present | Present | Present | Present | Present | **Not yet functionally accepted** |
-| `meta-pixel` | 5 | Present | Not present | Present | Present | Not present | **Not yet functionally accepted** |
-| `mobile-app-api` | 9 | Present | Present | Present | Present | Present | **Not yet functionally accepted** |
-| `notice-board` | 7 | Present | Present | Present | Present | Present | **Not yet functionally accepted** |
-| `notification-center` | 7 | Present | Present | Present | Present | Present | **Not yet functionally accepted** |
-| `page-builder` | 7 | Present | Present | Present | Present | Present | **Not yet functionally accepted** |
-| `payment-management` | 10 | Present | Present | Present | Present | Present | **Not yet functionally accepted** |
-| `reports-analytics` | 5 | Present | Not present | Present | Present | Not present | **Not yet functionally accepted** |
-| `role-ai-assistant` | 9 | Present | Present | Present | Present | Present | **Not yet functionally accepted** |
-| `seo-manager` | 7 | Present | Present | Present | Present | Present | **Not yet functionally accepted** |
-| `slider-builder` | 7 | Present | Present | Present | Present | Present | **Not yet functionally accepted** |
-| `sms-gateway` | 7 | Present | Present | Present | Present | Present | **Not yet functionally accepted** |
-| `storefront-catalog` | 8 | Present | Present | Present | Present | Present | **Not yet functionally accepted** |
-| `student-management` | 7 | Present | Present | Present | Present | Present | **Not yet functionally accepted** |
-| `teacher-management` | 8 | Present | Present | Present | Present | Present | **Not yet functionally accepted** |
-| `universal-payment` | 8 | Present | Present | Present | Present | Present | **Not yet functionally accepted** |
-| `visitor-popup-ads` | 7 | Present | Present | Present | Present | Present | **Not yet functionally accepted** |
+| Plugin | Files inventoried | Inventory status | Functional acceptance |
+|---|---:|---|---|
+| `admin-boosting` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `admission-management` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `attendance-management` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `batch-management` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `branch-management` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `carousel-builder` | 8 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `certificate-management` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `class-management` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `cms-website` | 10 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `course-management` | 16 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `email-notifications` | 8 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `exam-management` | 9 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `fees-management` | 8 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `gateway-card` | 5 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `gateway-paypal` | 6 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `gateway-sslcommerz` | 5 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `gateway-stripe` | 6 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `gmail-marketing` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `google-console` | 5 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `guardian-management` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `hr-staff-management` | 8 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `library-management` | 8 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `marketing-management` | 8 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `meta-pixel` | 5 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `mobile-app-api` | 9 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `notice-board` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `notification-center` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `page-builder` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `payment-management` | 10 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `reports-analytics` | 5 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `role-ai-assistant` | 9 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `seo-manager` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `slider-builder` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `sms-gateway` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `storefront-catalog` | 8 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `student-management` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `teacher-management` | 8 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `universal-payment` | 8 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `visitor-popup-ads` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
 
 ## Required acceptance gate for every plugin
 
