@@ -37,7 +37,7 @@ class TeacherStandaloneTest extends TestCase
         ]);
     }
 
-    public function test_deactivating_teacher_preserves_teacher_and_user_history(): void
+    public function test_deleting_teacher_moves_it_to_recycle_bin_and_admin_can_restore_it(): void
     {
         $this->markSystemInstalled();
         $this->activatePlugins(['teacher-management']);
@@ -54,8 +54,18 @@ class TeacherStandaloneTest extends TestCase
         $teacher = Teacher::query()->where('employee_code', 'SAFE-TEACH-001')->firstOrFail();
         $this->actingAs($admin)->delete('/admin/teachers/' . $teacher->id)->assertRedirect();
 
-        $this->assertDatabaseHas('teachers', ['id' => $teacher->id, 'is_active' => false]);
+        $this->assertTrue(Teacher::withTrashed()->findOrFail($teacher->id)->trashed());
         $this->assertDatabaseHas('users', ['id' => $teacher->user_id, 'is_active' => false]);
+
+        $this->actingAs($admin)->get('/admin/recycle-bin')->assertOk()->assertSee('SAFE-TEACH-001');
+        $this->actingAs($admin)
+            ->post('/admin/recycle-bin/teachers/' . $teacher->id . '/restore')
+            ->assertRedirect('/admin/recycle-bin')
+            ->assertSessionHasNoErrors();
+
+        $this->assertFalse(Teacher::query()->findOrFail($teacher->id)->trashed());
+        $this->assertDatabaseHas('teachers', ['id' => $teacher->id, 'employee_code' => 'SAFE-TEACH-001']);
+        $this->assertDatabaseHas('users', ['id' => $teacher->user_id, 'is_active' => true]);
     }
 
 }
