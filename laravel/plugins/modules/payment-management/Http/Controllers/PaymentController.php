@@ -9,6 +9,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use Illuminate\Support\Facades\DB;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\PaymentManagement\Models\PaymentRefund;
 use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
@@ -47,18 +48,27 @@ class PaymentController extends Controller
             abort(403, 'Branch isolation violation.');
         }
 
-        $tx = PaymentTransaction::query()->create([
-            'transaction_ref' => 'TXN-' . strtoupper(bin2hex(random_bytes(6))),
-            'invoice_id' => $invoice->id,
-            'branch_id' => $invoice->branch_id,
-            'gateway_slug' => 'offline',
-            'amount' => round((float) $validated['amount'], 2),
-            'currency' => $invoice->currency,
-            'status' => 'initiated',
-            'metadata' => ['note' => $validated['receipt_note'] ?? 'Cash/Bank Desk'],
-        ]);
+        $tx = DB::transaction(function () use ($invoice, $validated, $actor): PaymentTransaction {
+            $lockedInvoice = FeeInvoice::query()->whereKey($invoice->id)->lockForUpdate()->firstOrFail();
+            $remaining = round((float) $lockedInvoice->net_amount - (float) $lockedInvoice->paid_amount, 2);
+            $amount = round((float) $validated['amount'], 2);
+            if ($remaining <= 0 || $amount > $remaining + 0.01) {
+                abort(422, 'Offline payment amount exceeds the remaining invoice balance.');
+            }
 
-        $this->settlement->settleTransaction($tx, 'OFFLINE-' . $tx->id, [], $actor?->id);
+            $transaction = PaymentTransaction::query()->create([
+                'transaction_ref' => 'TXN-' . strtoupper(bin2hex(random_bytes(6))),
+                'invoice_id' => $lockedInvoice->id,
+                'branch_id' => $lockedInvoice->branch_id,
+                'gateway_slug' => 'offline',
+                'amount' => $amount,
+                'currency' => $lockedInvoice->currency,
+                'status' => 'initiated',
+                'metadata' => ['note' => $validated['receipt_note'] ?? 'Cash/Bank Desk'],
+            ]);
+
+            return $this->settlement->settleTransaction($transaction, 'OFFLINE-' . $transaction->id, [], $actor?->id);
+        });
 
         return back()->with('status', "Offline payment {$tx->transaction_ref} recorded and settled.");
     }
@@ -73,6 +83,7 @@ class PaymentController extends Controller
         $validated = $request->validate([
             'amount' => ['required', 'numeric', 'min:0.01'],
             'reason' => ['required', 'string', 'max:255'],
+            'provider_refund_reference' => [$transaction->gateway_slug === 'offline' ? 'nullable' : 'required', 'string', 'max:160'],
         ]);
 
         try {
@@ -92,6 +103,7 @@ class PaymentController extends Controller
                     'payment_transaction_id' => $lockedTx->id,
                     'amount' => $refundAmount,
                     'reason' => $validated['reason'],
+                    'provider_refund_reference' => $validated['provider_refund_reference'] ?? null,
                     'approved_by' => $actor?->id,
                 ]);
 
