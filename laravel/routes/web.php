@@ -11,6 +11,7 @@ use App\Http\Controllers\Admin\UserRoleController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\InstallerController;
 use App\Http\Controllers\PublicHomeController;
+use App\Http\Controllers\PortalController;
 use Illuminate\Support\Facades\Route;
 
 // Browser-based Fresh Installer (permanently locked after installation)
