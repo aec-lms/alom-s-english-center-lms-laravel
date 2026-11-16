@@ -33,7 +33,7 @@ class StudentActivityTracker
 
         // Explicitly exclude keystrokes, screen contents, precise location and credentials.
         $safeMetadata = [];
-        foreach (['course_title', 'lesson_title', 'batch_name', 'result_percent', 'source'] as $key) {
+        foreach (['course_title', 'lesson_title', 'batch_name', 'result_percent', 'attendance_status', 'source'] as $key) {
             $value = $metadata[$key] ?? null;
             if (is_scalar($value)) {
                 $safeMetadata[$key] = mb_substr((string) $value, 0, 160);
