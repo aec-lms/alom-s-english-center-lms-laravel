@@ -114,7 +114,15 @@ class StorefrontPaymentGatewayService
             || !hash_equals($transaction->reference, (string) ($data['tran_id'] ?? ''))
             || strtoupper((string) ($data['currency'] ?? '')) !== strtoupper((string) $transaction->currency)
             || abs((float) ($data['amount'] ?? 0) - (float) $transaction->amount) > 0.01) {
-            throw new RuntimeException('SSLCOMMERZ payment validation failed: reference, amount, or currency did not match.');
+            throw new RuntimeException(sprintf(
+                'SSLCOMMERZ validation mismatch (status=%s, reference_match=%s, amount=%s/%s, currency=%s/%s).',
+                strtoupper((string) ($data['status'] ?? 'missing')),
+                hash_equals($transaction->reference, (string) ($data['tran_id'] ?? '')) ? 'yes' : 'no',
+                (string) ($data['amount'] ?? 'missing'),
+                (string) $transaction->amount,
+                strtoupper((string) ($data['currency'] ?? 'missing')),
+                strtoupper((string) $transaction->currency)
+            ));
         }
 
         if ((string) ($data['risk_level'] ?? '0') === '1') {

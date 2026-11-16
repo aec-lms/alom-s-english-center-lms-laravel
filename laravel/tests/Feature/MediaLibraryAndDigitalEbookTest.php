@@ -102,7 +102,7 @@ class MediaLibraryAndDigitalEbookTest extends TestCase
         $this->actingAs($student)->get('/ebooks/protected-guide/download')->assertForbidden();
 
         Http::fake([
-            'https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php*' => Http::response([
+            '*' => Http::response([
                 'status' => 'FAILED',
                 'tran_id' => $transaction->reference,
                 'amount' => '1.00',
