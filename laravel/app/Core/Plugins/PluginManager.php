@@ -609,10 +609,25 @@ class PluginManager
             throw new RuntimeException('Recycle-bin metadata is invalid.');
         }
 
+        // Keep a private, integrity-checked recovery snapshot before permanent removal.
+        $backupRoot = storage_path('app/plugin-permanent-delete-backups');
+        File::ensureDirectoryExists($backupRoot);
+        @chmod($backupRoot, 0700);
+        $backupPath = $backupRoot . DIRECTORY_SEPARATOR . $archiveName;
+        if (!File::copyDirectory($source, $backupPath)) {
+            throw new RuntimeException('Permanent delete cancelled: could not create a private backup.');
+        }
+        @chmod($backupPath, 0700);
+        if ($this->pluginDirectoryChecksums($source) !== $this->pluginDirectoryChecksums($backupPath)) {
+            File::deleteDirectory($backupPath);
+            throw new RuntimeException('Permanent delete cancelled: backup integrity verification failed.');
+        }
+
         File::deleteDirectory($source);
         @unlink($metadataPath);
         $this->audit->log('plugin.permanently_deleted', 'plugin', $slug, [
-            'package_files_removed' => true,
+            'package_files_removed_from_recycle_bin' => true,
+            'private_backup_id' => $archiveName,
             'database_records_preserved' => true,
         ], $actorId);
     }
