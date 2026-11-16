@@ -41,8 +41,9 @@ class FeeController extends Controller
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
         $studentIntegration = app(PluginManager::class)->isEnabled('student-management') && Schema::hasTable('students');
-        $branchRule = Schema::hasTable('branches')
-            ? ['nullable', 'integer', 'exists:branches,id']
+        $branchIntegration = app(PluginManager::class)->isEnabled('branch-management') && Schema::hasTable('branches');
+        $branchRule = $branchIntegration
+            ? ['nullable', 'integer', 'exists:branches,id,is_active,1']
             : ['nullable', 'integer'];
         $validated = $request->validate([
             'student_id' => $studentIntegration ? ['nullable', 'integer', 'exists:students,id'] : ['nullable', 'integer'],
@@ -55,6 +56,7 @@ class FeeController extends Controller
             'due_date' => ['nullable', 'date'],
         ]);
 
+        if (!$branchIntegration) { $validated['branch_id'] = null; }
         $student = $studentIntegration && !empty($validated['student_id'])
             ? Student::query()->with('user')->findOrFail((int) $validated['student_id'])
             : null;
