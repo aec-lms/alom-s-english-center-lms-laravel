@@ -33,7 +33,7 @@ class BoostController extends Controller
             'placement' => ['required', 'in:homepage_featured,course_listing,notice_banner'],
             'badge_text' => ['nullable', 'string', 'max:60'],
             'cta_text' => ['nullable', 'string', 'max:60'],
-            'destination_url' => ['nullable', 'string', 'max:255', function (string $attribute, mixed $value, \\Closure $fail): void {
+            'destination_url' => ['nullable', 'string', 'max:255', function (string $attribute, mixed $value, \Closure $fail): void {
                 if ($value === null || $value === '') {
                     return;
                 }
