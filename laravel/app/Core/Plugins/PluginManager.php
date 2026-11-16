@@ -464,6 +464,40 @@ class PluginManager
         $this->audit->log('plugin.configured', 'plugin', $slug, ['keys' => array_keys($values)], $actorId);
     }
 
+    /** Reset only plugin configuration to manifest defaults; business data is never touched. */
+    public function resetSettingsToDefaults(string $slug, ?int $actorId = null): void
+    {
+        $manifest = $this->discoverManifests()[$slug] ?? throw new RuntimeException("Unknown plugin: {$slug}");
+        if (!Schema::hasTable('plugin_settings')) {
+            throw new RuntimeException('Plugin settings storage is not available.');
+        }
+
+        DB::transaction(function () use ($slug, $manifest, $actorId): void {
+            PluginSetting::query()->where('plugin_slug', $slug)->delete();
+
+            $values = [];
+            $secretKeys = [];
+            foreach ($manifest->settingsSchema as $field) {
+                $key = (string) ($field['key'] ?? '');
+                if ($key === '') {
+                    continue;
+                }
+
+                $default = $field['default'] ?? '';
+                $values[$key] = is_scalar($default) ? (string) $default : json_encode($default, JSON_THROW_ON_ERROR);
+                if ((bool) ($field['secret'] ?? $field['encrypted'] ?? false)) {
+                    $secretKeys[] = $key;
+                }
+            }
+
+            $this->saveSettings($slug, $values, $secretKeys, $actorId);
+            $this->audit->log('plugin.settings_reset', 'plugin', $slug, [
+                'setting_count' => count($values),
+                'business_data_preserved' => true,
+            ], $actorId);
+        });
+    }
+
     public function getSetting(string $slug, string $key, ?string $default = null): ?string
     {
         if (!Schema::hasTable('plugin_settings')) {
