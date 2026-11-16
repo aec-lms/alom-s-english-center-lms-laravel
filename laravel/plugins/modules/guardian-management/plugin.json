@@ -7,7 +7,10 @@
     "description": "Guardian profiles and branch-scoped student-guardian relationship management.",
     "core_compatibility": "^2.0",
     "dependencies": [],
-    "optional_dependencies": ["student-management"],
+    "optional_dependencies": [
+        "student-management",
+        "branch-management"
+    ],
     "provider": "Plugins\\Modules\\GuardianManagement\\Providers\\GuardianManagementServiceProvider",
     "permissions": [
         {
