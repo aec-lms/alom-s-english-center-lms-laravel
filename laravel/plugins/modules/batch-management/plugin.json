@@ -20,7 +20,8 @@
             "group": "Academic & Operations",
             "label": "Batches & Seats",
             "route": "plugins.batches.index",
-            "order": 100
+            "order": 100,
+            "permission": "batches.manage"
         }
     ]
 }
