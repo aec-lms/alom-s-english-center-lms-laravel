@@ -115,6 +115,26 @@ class PluginLifecycleTest extends TestCase
         ] as $table) {
             $this->assertTrue(\\Illuminate\\Support\\Facades\\Schema::hasTable($table), "Expected standalone schema table {$table}.");
         }
+
+        $admin = $this->createUserWithRole('admin');
+        $permissionIds = \\Illuminate\\Support\\Facades\\DB::table('permissions')
+            ->whereIn('slug', [
+                'students.manage',
+                'teachers.manage',
+                'guardians.manage',
+                'fees.manage',
+                'payments.manage',
+                'attendance.manage',
+            ])
+            ->pluck('id');
+        $admin->roles()->first()->permissions()->syncWithoutDetaching($permissionIds);
+
+        $this->actingAs($admin)->get('/admin/students')->assertOk();
+        $this->actingAs($admin)->get('/admin/teachers')->assertOk();
+        $this->actingAs($admin)->get('/admin/guardians')->assertOk();
+        $this->actingAs($admin)->get('/admin/fees')->assertOk();
+        $this->actingAs($admin)->get('/admin/payments')->assertOk();
+        $this->actingAs($admin)->get('/admin/attendance')->assertOk();
     }
 
     public function test_core_cannot_be_disabled_or_uninstalled(): void
