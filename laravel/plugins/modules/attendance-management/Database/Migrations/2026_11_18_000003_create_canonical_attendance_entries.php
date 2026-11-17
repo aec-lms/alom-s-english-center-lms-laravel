@@ -61,6 +61,22 @@ return new class extends Migration {
             });
         }
 
+
+        if (!Schema::hasTable('attendance_entry_audit_logs')) {
+            Schema::create('attendance_entry_audit_logs', function (Blueprint $table): void {
+                $table->id();
+                $table->foreignId('attendance_entry_id')->constrained('attendance_entries')->cascadeOnDelete();
+                $table->foreignId('actor_id')->nullable()->constrained('users')->nullOnDelete();
+                $table->string('event', 30);
+                $table->string('old_status', 20)->nullable();
+                $table->string('new_status', 20)->nullable();
+                $table->string('reason', 255)->nullable();
+                $table->string('source', 20)->default('online');
+                $table->timestamp('occurred_at')->useCurrent();
+                $table->index(['attendance_entry_id', 'occurred_at']);
+            });
+        }
+
         if (Schema::hasTable('attendance_qr_checkins')
             && !Schema::hasColumn('attendance_qr_checkins', 'attendance_entry_id')) {
             Schema::table('attendance_qr_checkins', function (Blueprint $table): void {
