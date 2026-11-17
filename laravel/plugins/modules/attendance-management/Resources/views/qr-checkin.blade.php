@@ -35,7 +35,7 @@
             payload.longitude = location.coords.longitude;
             payload.gps_accuracy_meters = Math.max(1, Math.ceil(location.coords.accuracy));
         }
-        const response = await fetch(@json(route('plugins.attendance.qr.checkin')), {
+        const response = await fetch(@json(url('/attendance/qr/check-in')), {
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrf },
