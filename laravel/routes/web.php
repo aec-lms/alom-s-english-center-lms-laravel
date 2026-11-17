@@ -83,7 +83,7 @@ Route::middleware('installed')->group(function (): void {
         });
         Route::get('/menu-editor', [AdminMenuController::class, 'index'])
             ->name('menu-editor.index')
-            ->middleware('permission:core.settings.manage');
+            ->middleware(['permission:core.settings.manage', 'central.admin']);
         Route::post('/menu-editor', [AdminMenuController::class, 'update'])
             ->name('menu-editor.update')
             ->middleware(['permission:core.settings.manage', 'central.admin']);
