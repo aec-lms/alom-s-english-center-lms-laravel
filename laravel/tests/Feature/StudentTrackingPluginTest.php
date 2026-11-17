@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use App\Core\Plugins\PluginManager;
 use Plugins\Modules\StudentTracking\Models\StudentActivityEvent;
+use Plugins\Modules\StudentTracking\Services\StudentActivityTracker;
 use Tests\TestCase;
 
 class StudentTrackingPluginTest extends TestCase
