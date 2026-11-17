@@ -351,4 +351,6 @@
     }
 })();
 </script>
+@includeIf('media-library::partials.editor-tools')
+
 @endsection
