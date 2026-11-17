@@ -45,9 +45,13 @@ class StudentTracingServiceProvider extends BasePluginServiceProvider
                             return;
                         }
 
-                        $branchId = $branchKey && isset($model->{$branchKey})
-                            ? (int) $model->{$branchKey}
-                            : null;
+                        $branchValue = null;
+                        if ($branchKey !== null) {
+                            $branchValue = $action === 'deleted' && method_exists($model, 'getOriginal')
+                                ? $model->getOriginal($branchKey)
+                                : (method_exists($model, 'getAttribute') ? $model->getAttribute($branchKey) : ($model->{$branchKey} ?? null));
+                        }
+                        $branchId = $branchValue !== null ? (int) $branchValue : null;
                         if ($branchId === null && Schema::hasTable('students')) {
                             $branchId = DB::table('students')->where('id', $studentId)->value('branch_id');
                         }

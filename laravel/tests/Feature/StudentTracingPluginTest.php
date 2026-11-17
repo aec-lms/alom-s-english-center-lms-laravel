@@ -40,6 +40,29 @@ class StudentTracingPluginTest extends TestCase
             'event_type' => 'student.created',
         ]);
 
+        $deletedStudent = new class {
+            public int $id = 901;
+
+            public function getOriginal(string $key): mixed
+            {
+                return $key === 'branch_id' ? 12 : null;
+            }
+
+            public function getAttribute(string $key): mixed
+            {
+                return null;
+            }
+        };
+        Event::dispatch(
+            'eloquent.deleted: Plugins\\Modules\\StudentManagement\\Models\\Student',
+            [$deletedStudent]
+        );
+        $this->assertDatabaseHas('student_activity_events', [
+            'student_id' => 901,
+            'branch_id' => 12,
+            'event_type' => 'student.deleted',
+        ]);
+
         Schema::create('students', function ($table): void {
             $table->id();
             $table->unsignedBigInteger('user_id');
@@ -63,6 +86,52 @@ class StudentTracingPluginTest extends TestCase
         $this->assertDatabaseHas('student_activity_events', ['student_id' => 903, 'event_type' => 'attendance.created']);
         $this->assertDatabaseHas('student_activity_events', ['student_id' => 903, 'event_type' => 'enrollment.created']);
         $this->assertDatabaseHas('student_activity_events', ['student_id' => 903, 'event_type' => 'exam_attempt.created']);
+    }
+
+    public function test_branch_manager_trace_timeline_and_csv_are_limited_to_assigned_branch(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'student-tracing']);
+
+        $branchA = DB::table('branches')->insertGetId([
+            'code' => 'TRACE-A', 'name' => 'Trace Branch A', 'is_active' => true,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $branchB = DB::table('branches')->insertGetId([
+            'code' => 'TRACE-B', 'name' => 'Trace Branch B', 'is_active' => true,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $manager = $this->createUserWithRole('branch_manager', $branchA);
+        $viewPermission = DB::table('permissions')->where('slug', 'students.trace.view')->value('id');
+        $exportPermission = DB::table('permissions')->where('slug', 'students.trace.export')->value('id');
+        $this->assertNotNull($viewPermission);
+        $this->assertNotNull($exportPermission);
+        $manager->roles()->first()->permissions()->syncWithoutDetaching([$viewPermission]);
+
+        foreach ([['student_id' => 1101, 'branch_id' => $branchA], ['student_id' => 2202, 'branch_id' => $branchB]] as $row) {
+            DB::table('student_activity_events')->insert($row + [
+                'actor_id' => null,
+                'event_type' => 'student.created',
+                'metadata' => json_encode(['changed_fields' => []]),
+                'occurred_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $this->actingAs($manager)->get('/admin/student-tracing')
+            ->assertOk()
+            ->assertSee('#1101')
+            ->assertDontSee('#2202');
+
+        $this->actingAs($manager)->get('/admin/student-tracing/export')->assertForbidden();
+
+        $manager->roles()->first()->permissions()->syncWithoutDetaching([$exportPermission]);
+        $response = $this->actingAs($manager)->get('/admin/student-tracing/export')->assertOk();
+        $csv = $response->streamedContent();
+        $this->assertStringContainsString('1101', $csv);
+        $this->assertStringNotContainsString('2202', $csv);
     }
 
     public function test_student_trace_uninstall_preserves_history(): void
