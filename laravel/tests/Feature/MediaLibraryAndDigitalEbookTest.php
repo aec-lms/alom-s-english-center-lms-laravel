@@ -50,7 +50,7 @@ class MediaLibraryAndDigitalEbookTest extends TestCase
     public function test_paid_ebook_download_is_locked_until_verified_payment_and_uses_server_price(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['storefront-catalog', 'branch-management', 'student-management', 'fees-management', 'payment-management', 'universal-payment', 'gateway-sslcommerz']);
+        $this->activatePlugins(['storefront-catalog', 'payment-management', 'universal-payment', 'gateway-sslcommerz']);
         app(PluginManager::class)->saveSettings('gateway-sslcommerz', [
             'store_id' => 'test-store',
             'store_password' => 'test-secret',
