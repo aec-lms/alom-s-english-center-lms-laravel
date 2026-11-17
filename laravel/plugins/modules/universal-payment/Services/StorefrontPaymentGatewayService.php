@@ -147,7 +147,7 @@ class StorefrontPaymentGatewayService
         $reference = trim((string) ($callback['tran_id'] ?? ''));
         abort_if($reference === '', 422, 'Missing payment reference.');
         $transaction = UniversalPaymentTransaction::query()->where('reference', $reference)->where('gateway', 'sslcommerz')->firstOrFail();
-        if ($transaction->status !== 'verified') {
+        if ($transaction->status === 'pending') {
             $transaction->update(['status' => $status]);
         }
         return $transaction->fresh();
@@ -176,26 +176,32 @@ class StorefrontPaymentGatewayService
                 ->where('user_id', $locked->user_id)
                 ->first();
 
-            if (!$existingAccess) {
-                DB::table('learn_earn_exam_access')->insert([
-                    'exam_id' => $exam->id,
-                    'user_id' => $locked->user_id,
+            if ($existingAccess && $existingAccess->status === 'granted'
+                && (string) ($existingAccess->payment_reference ?? '') !== $locked->reference) {
+                $locked->update([
+                    'status' => 'risk_review',
+                    'external_trx_id' => $externalReference,
+                    'notes' => json_encode([
+                        'provider' => $locked->gateway,
+                        'purpose' => 'learn_earn_exam',
+                        'risk_review' => true,
+                        'reason' => 'exam_access_already_granted_by_another_transaction',
+                    ], JSON_THROW_ON_ERROR),
+                ]);
+
+                return $locked->fresh();
+            }
+
+            DB::table('learn_earn_exam_access')->updateOrInsert(
+                ['exam_id' => $exam->id, 'user_id' => $locked->user_id],
+                [
                     'status' => 'granted',
                     'payment_reference' => $locked->reference,
                     'granted_at' => now(),
                     'created_at' => now(),
                     'updated_at' => now(),
-                ]);
-            } elseif ($existingAccess->status !== 'granted') {
-                DB::table('learn_earn_exam_access')
-                    ->where('id', $existingAccess->id)
-                    ->update([
-                        'status' => 'granted',
-                        'payment_reference' => $locked->reference,
-                        'granted_at' => now(),
-                        'updated_at' => now(),
-                    ]);
-            }
+                ]
+            );
 
             $locked->update([
                 'status' => 'verified',
@@ -221,6 +227,24 @@ class StorefrontPaymentGatewayService
             $item = DB::table('storefront_items')->where('id', $locked->storefront_item_id)->where('type', 'ebook')->where('is_active', true)->first();
             if (!$item || (float) $item->price <= 0 || abs((float) $item->price - (float) $locked->amount) > 0.01) {
                 throw new RuntimeException('The e-book price changed or the item is no longer available. Manual review is required.');
+            }
+
+            $existingAccess = DB::table('storefront_item_access')
+                ->where('storefront_item_id', $locked->storefront_item_id)
+                ->where('user_id', $locked->user_id)
+                ->first();
+            if ($existingAccess && (int) ($existingAccess->payment_transaction_id ?? 0) !== (int) $locked->id) {
+                $locked->update([
+                    'status' => 'risk_review',
+                    'external_trx_id' => $externalReference,
+                    'notes' => json_encode([
+                        'provider' => $locked->gateway,
+                        'risk_review' => true,
+                        'reason' => 'ebook_access_already_granted_by_another_transaction',
+                    ], JSON_THROW_ON_ERROR),
+                ]);
+
+                return $locked->fresh();
             }
 
             DB::table('storefront_item_access')->updateOrInsert(
