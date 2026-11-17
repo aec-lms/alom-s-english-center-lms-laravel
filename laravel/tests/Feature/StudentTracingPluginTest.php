@@ -134,6 +134,20 @@ class StudentTracingPluginTest extends TestCase
         $this->assertStringNotContainsString('2202', $csv);
     }
 
+    public function test_branch_manager_is_denied_when_branch_management_storage_is_not_installed(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['student-tracing']);
+
+        $manager = $this->createUserWithRole('branch_manager');
+        $permissionId = DB::table('permissions')->where('slug', 'students.trace.view')->value('id');
+        $this->assertNotNull($permissionId);
+        $manager->roles()->first()->permissions()->syncWithoutDetaching([$permissionId]);
+
+        $this->assertFalse(Schema::hasTable('branches'));
+        $this->actingAs($manager)->get('/admin/student-tracing')->assertForbidden();
+    }
+
     public function test_student_trace_uninstall_preserves_history(): void
     {
         $this->markSystemInstalled();
