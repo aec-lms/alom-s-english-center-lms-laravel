@@ -22,7 +22,8 @@
             "group": "Academic & Operations",
             "label": "Students",
             "route": "plugins.students.index",
-            "order": 100
+            "order": 100,
+            "permission": "students.manage"
         }
     ]
 }
