@@ -10,7 +10,7 @@
                 @forelse ($invoices as $inv)
                     <tr>
                         <td class="py-2 font-mono">{{ $inv->invoice_number }}</td>
-                        <td>{{ $inv->student?->student_code }}</td>
+                        <td>{{ $studentIntegrationEnabled ? ($inv->student?->student_code ?? '—') : 'Student plugin disabled' }}</td>
                         <td>{{ $inv->currency }} {{ $inv->net_amount }}</td>
                         <td>{{ $inv->currency }} {{ $inv->paid_amount }}</td>
                         <td class="uppercase font-semibold">{{ $inv->status }}</td>
