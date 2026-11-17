@@ -12,15 +12,16 @@ return new class extends Migration {
         if (!Schema::hasTable('exams')) {
             Schema::create('exams', function (Blueprint $table): void {
                 $table->id();
-                $table->foreignId('course_id')->constrained('courses')->cascadeOnDelete();
+                $table->unsignedBigInteger('course_id')->nullable()->index();
                 $table->unsignedBigInteger('branch_id')->nullable()->index();
                 $table->string('title', 180);
                 $table->unsignedInteger('duration_minutes')->default(30);
-                $table->unsignedInteger('pass_marks')->default(40);
+                $table->decimal('pass_marks', 8, 2)->default(40);
                 $table->timestamp('starts_at')->nullable();
                 $table->timestamp('ends_at')->nullable();
                 $table->boolean('is_published')->default(false);
                 $table->timestamps();
+                $table->softDeletes();
             });
         }
 
@@ -31,7 +32,7 @@ return new class extends Migration {
                 $table->text('prompt');
                 $table->json('options');
                 $table->unsignedInteger('correct_option_index');
-                $table->unsignedInteger('marks')->default(1);
+                $table->decimal('marks', 8, 2)->default(1);
                 $table->timestamps();
             });
         }
@@ -42,8 +43,8 @@ return new class extends Migration {
                 $table->foreignId('exam_id')->constrained('exams')->cascadeOnDelete();
                 $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
                 $table->json('submitted_answers');
-                $table->unsignedInteger('score_obtained')->default(0);
-                $table->unsignedInteger('total_marks')->default(0);
+                $table->decimal('score_obtained', 10, 2)->default(0);
+                $table->decimal('total_marks', 10, 2)->default(0);
                 $table->boolean('passed')->default(false);
                 $table->timestamp('submitted_at');
                 $table->timestamps();
