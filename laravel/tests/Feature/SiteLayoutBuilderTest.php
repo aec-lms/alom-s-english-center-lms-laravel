@@ -16,7 +16,7 @@ class SiteLayoutBuilderTest extends TestCase
 
         $this->actingAs($admin)->get(route('admin.site-layout.index'))
             ->assertOk()
-            ->assertSee('Header &amp; Footer Builder')
+            ->assertSee('Header & Footer Builder')
             ->assertSee('Website Header')
             ->assertSee('Website Footer');
 
