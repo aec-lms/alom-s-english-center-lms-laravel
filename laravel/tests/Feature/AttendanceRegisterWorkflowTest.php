@@ -149,4 +149,79 @@ class AttendanceRegisterWorkflowTest extends TestCase
         $this->assertDatabaseCount('attendance_audit_logs', 1);
     }
 
+    public function test_qr_checkin_requires_roster_and_rejects_replay_and_expired_tokens(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'student-management', 'course-management', 'attendance-management']);
+
+        $branch = DB::table('branches')->insertGetId([
+            'code' => 'ATT-QR-01',
+            'name' => 'QR Attendance',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $admin = $this->createUserWithRole('admin', $branch);
+        $permission = Permission::query()->where('slug', 'attendance.manage')->value('id');
+        $admin->roles()->first()->permissions()->syncWithoutDetaching([$permission]);
+
+        $studentUser = $this->createUserWithRole('student', $branch);
+        $student = Student::query()->create([
+            'user_id' => $studentUser->id,
+            'branch_id' => $branch,
+            'student_code' => 'ATT-QR-STU-01',
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+        ]);
+        $course = DB::table('courses')->insertGetId([
+            'branch_id' => $branch,
+            'code' => 'ATT-QR-COURSE',
+            'title' => 'QR Attendance Course',
+            'slug' => 'qr-attendance-course',
+            'price' => 0,
+            'status' => 'published',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $batch = DB::table('batches')->insertGetId([
+            'course_id' => $course,
+            'branch_id' => $branch,
+            'name' => 'QR Attendance Batch',
+            'capacity' => 20,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $mapping = AttendanceBatchMapping::resolve('course_batch', $batch, $branch, 'QR Attendance Batch');
+
+        $this->actingAs($admin)->putJson("/admin/attendance/batches/{$mapping->id}/roster", [
+            'student_ids' => [$student->id],
+        ])->assertOk()->assertJson(['assigned' => 1]);
+
+        $issued = $this->actingAs($admin)->postJson("/admin/attendance/batches/{$mapping->id}/qr", [
+            'expires_in_minutes' => 5,
+        ])->assertOk()->json();
+        $this->actingAs($studentUser)->postJson('/attendance/qr/check-in', [
+            'token' => $issued['token'],
+            'gps_consent' => true,
+        ])->assertOk()->assertJson(['status' => 'ok']);
+
+        $this->assertDatabaseHas('attendance_records', [
+            'batch_id' => $batch,
+            'student_id' => $student->id,
+            'status' => 'present',
+            'source' => 'qr',
+        ]);
+        $this->assertDatabaseHas('attendance_gps_consents', ['user_id' => $studentUser->id, 'policy_version' => 'attendance-gps-v1']);
+        $this->actingAs($studentUser)->postJson('/attendance/qr/check-in', [
+            'token' => $issued['token'],
+        ])->assertStatus(409);
+
+        $expired = $this->actingAs($admin)->postJson("/admin/attendance/batches/{$mapping->id}/qr", [
+            'expires_in_minutes' => 5,
+        ])->assertOk()->json();
+        DB::table('attendance_qr_sessions')->where('id', $expired['session_id'])->update(['expires_at' => now()->subMinute()]);
+        $this->actingAs($studentUser)->postJson('/attendance/qr/check-in', [
+            'token' => $expired['token'],
+        ])->assertStatus(410);
+    }
+
 }
