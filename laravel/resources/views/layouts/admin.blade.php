@@ -5,6 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Panel — AEC LMS')</title>
+    @inject('themeManager', 'App\\Core\\Appearance\\ThemeManager')
+    <style>
+        :root { {!! $themeManager->cssVariables() !!} }
+        body { background-color:var(--aec-page-bg)!important;color:var(--aec-text)!important; }
+        .bg-white { background-color:var(--aec-surface)!important; }
+        .bg-slate-50 { background-color:var(--aec-surface-alt)!important; }
+        .bg-slate-100 { background-color:var(--aec-page-bg)!important; }
+        .text-slate-900 { color:var(--aec-text)!important; }
+        .text-slate-500,.text-slate-400 { color:var(--aec-muted)!important; }
+        .border-slate-200,.border-slate-300 { border-color:var(--aec-border)!important; }
+        .text-blue-600,.text-blue-700 { color:var(--aec-link)!important; }
+        .bg-blue-600 { background-color:var(--aec-primary)!important; }
+        .hover\\:bg-blue-700:hover { background-color:var(--aec-primary-hover)!important; }
+        input:not([type=color]),select,textarea { background-color:var(--aec-input-bg);color:var(--aec-input-text);border-color:var(--aec-border); }
+        aside { background-color:var(--aec-sidebar-bg)!important;color:var(--aec-sidebar-text)!important; }
+        aside > div:first-child { background-color:var(--aec-secondary)!important; }
+        aside a:hover { background-color:color-mix(in srgb,var(--aec-sidebar-text) 12%,transparent)!important; }
+    </style>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -15,8 +33,8 @@
 </head>
 <body class="bg-slate-100 text-slate-900 antialiased">
 <div class="min-h-screen flex">
-    <aside class="w-64 bg-[#022233] text-slate-200 flex flex-col shrink-0 border-r border-white/10">
-        <div class="px-5 py-4 border-b border-white/10 bg-[#022D41]">
+    <aside class="w-64 text-slate-200 flex flex-col shrink-0 border-r border-white/10">
+        <div class="px-5 py-4 border-b border-white/10">
             <div class="text-sm font-extrabold tracking-tight text-white">AEC LMS Core</div>
             <div class="text-[11px] text-[#38BDF8] font-medium">Core + Independent Plugins</div>
         </div>
@@ -29,6 +47,7 @@
             <a href="{{ route('admin.updates.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Update Center</a>
             <a href="{{ route('admin.backups.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Backup & Restore</a>
             <a href="{{ route('admin.audit.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Audit Logs</a>
+            <a href="{{ route('admin.appearance.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Design &amp; Appearance</a>
 
             <div class="px-3 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Marketing, Growth & SEO</div>
             @if ($pluginManager->isEnabled('meta-pixel') && Route::has('plugins.meta_pixel.index'))
