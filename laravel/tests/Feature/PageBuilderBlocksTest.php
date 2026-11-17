@@ -27,6 +27,8 @@ class PageBuilderBlocksTest extends TestCase
                 ['type' => 'image', 'url' => '/uploads/pages/classroom.webp', 'alt' => 'Students in class'],
                 ['type' => 'button', 'content' => 'Explore courses', 'url' => '/courses', 'align' => 'center'],
                 ['type' => 'spacer', 'height' => 64],
+                ['type' => 'course_grid'],
+                ['type' => 'instructor_grid'],
             ],
             'is_published' => '1',
         ])->assertRedirect();
@@ -35,7 +37,7 @@ class PageBuilderBlocksTest extends TestCase
         $this->assertNotNull($page);
 
         $blocks = json_decode($page->blocks_json, true);
-        $this->assertSame(['heading', 'text', 'image', 'button', 'spacer'], array_column($blocks, 'type'));
+        $this->assertSame(['heading', 'text', 'image', 'button', 'spacer', 'course_grid', 'instructor_grid'], array_column($blocks, 'type'));
         $this->assertSame('/courses', $blocks[3]['url']);
 
         $this->get('/page/our-english-programs')
@@ -43,7 +45,11 @@ class PageBuilderBlocksTest extends TestCase
             ->assertSee('Learn English with confidence')
             ->assertSee('Small classes and practical lessons.')
             ->assertSee('/uploads/pages/classroom.webp')
-            ->assertSee('Explore courses');
+            ->assertSee('Explore courses')
+            ->assertSee('Explore our courses')
+            ->assertSee('Published courses will appear here automatically.')
+            ->assertSee('Meet our instructors')
+            ->assertSee('Active instructors will appear here automatically.');
     }
 
     public function test_page_builder_rejects_unsafe_block_links(): void
