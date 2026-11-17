@@ -6,9 +6,7 @@
     "category": "academic",
     "description": "Online & Campus Student Admission Applications, Document Screening, and Approval Workflow.",
     "core_compatibility": "^2.0",
-    "dependencies": [
-        "branch-management"
-    ],
+    "dependencies": [],
     "provider": "Plugins\\Modules\\AdmissionManagement\\Providers\\AdmissionManagementServiceProvider",
     "permissions": [
         {
@@ -36,5 +34,8 @@
             "order": 100,
             "permission": "admissions.manage"
         }
+    ],
+    "optional_dependencies": [
+        "branch-management"
     ]
 }
