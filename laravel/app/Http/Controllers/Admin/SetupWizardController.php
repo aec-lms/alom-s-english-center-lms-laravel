@@ -27,8 +27,10 @@ class SetupWizardController extends Controller
         $settings = SystemSetting::query()->pluck('value', 'key')->all();
         $values = [];
         foreach ($settings as $key => $value) {
-            if (str_starts_with($key, 'setup.payment.') && str_contains($key, '.secret')) {
-                try { $value = Crypt::decryptString((string) $value); } catch (\Throwable) { $value = ''; }
+            if (str_starts_with($key, 'setup.payment.') && str_ends_with($key, '.secret')) {
+                $values[$key . '.configured'] = filled($value);
+                $values[$key] = '';
+                continue;
             }
             $values[$key] = $value;
         }
@@ -74,6 +76,8 @@ class SetupWizardController extends Controller
                 'bkash_secret' => ['nullable', 'string', 'max:255'],
                 'rocket_enabled' => ['nullable', 'boolean'], 'rocket_number' => ['nullable', 'string', 'max:40'],
                 'rocket_secret' => ['nullable', 'string', 'max:255'],
+                'nagad_enabled' => ['nullable', 'boolean'], 'nagad_number' => ['nullable', 'string', 'max:40'],
+                'nagad_secret' => ['nullable', 'string', 'max:255'],
                 'bank_enabled' => ['nullable', 'boolean'], 'bank_name' => ['nullable', 'string', 'max:160'],
                 'bank_account_name' => ['nullable', 'string', 'max:160'], 'bank_account_number' => ['nullable', 'string', 'max:80'],
                 'bank_branch' => ['nullable', 'string', 'max:120'], 'manual_enabled' => ['nullable', 'boolean'],
@@ -93,7 +97,7 @@ class SetupWizardController extends Controller
             }
         }
         if ($step === 'payments') {
-            foreach (['bkash_enabled', 'rocket_enabled', 'bank_enabled', 'manual_enabled'] as $flag) $data[$flag] = $request->boolean($flag) ? '1' : '0';
+            foreach (['bkash_enabled', 'rocket_enabled', 'nagad_enabled', 'bank_enabled', 'manual_enabled'] as $flag) $data[$flag] = $request->boolean($flag) ? '1' : '0';
         }
         DB::transaction(function () use ($data, $step, $request): void {
             foreach ($data as $field => $value) {
@@ -108,7 +112,7 @@ class SetupWizardController extends Controller
                     'academic_year_end' => 'academic.current_year_end',
                     default => 'setup.payment.'.str_replace('_', '.', $field),
                 };
-                $secret = in_array($field, ['bkash_secret', 'rocket_secret'], true);
+                $secret = in_array($field, ['bkash_secret', 'rocket_secret', 'nagad_secret'], true);
                 if ($secret && !filled($value)) continue;
                 $stored = $secret ? Crypt::encryptString((string) $value) : (string) ($value ?? '');
                 SystemSetting::query()->updateOrCreate(['key' => $key], [
