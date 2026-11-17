@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Plugins\Modules\StudentTracking\Http\Controllers;
 
+use App\Core\Plugins\PluginManager;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -78,7 +79,9 @@ class StudentTrackingController extends Controller
         if (!$actor || !$actor->hasRole('branch_manager')) {
             return;
         }
-        if ($actor->branch_id === null || !Schema::hasTable('branches')
+        if ($actor->branch_id === null
+            || !app(PluginManager::class)->isEnabled('branch-management')
+            || !Schema::hasTable('branches')
             || !app('db')->table('branches')->where('id', $actor->branch_id)->where('is_active', true)->exists()) {
             abort(403, 'Branch manager must be assigned to an active branch.');
         }

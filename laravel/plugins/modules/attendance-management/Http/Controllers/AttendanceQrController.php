@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Plugins\Modules\AttendanceManagement\Http\Controllers;
 
 use App\Core\Security\AuditLogger;
+use App\Core\Plugins\PluginManager;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -344,7 +345,13 @@ class AttendanceQrController extends Controller
         if (!$actor || !$actor->hasRole('branch_manager')) {
             return;
         }
-        abort_if($actor->branch_id === null || !app('db')->table('branches')
-            ->where('id', $actor->branch_id)->where('is_active', true)->exists(), 403, 'Branch manager must be assigned to an active branch.');
+        abort_unless(
+            $actor->branch_id !== null
+                && app(PluginManager::class)->isEnabled('branch-management')
+                && Schema::hasTable('branches')
+                && DB::table('branches')->where('id', $actor->branch_id)->where('is_active', true)->exists(),
+            403,
+            'Branch manager must be assigned to an active branch.'
+        );
     }
 }
