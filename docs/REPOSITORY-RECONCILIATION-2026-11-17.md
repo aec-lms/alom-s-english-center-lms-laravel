@@ -1,12 +1,12 @@
 # Repository reconciliation and release status — 2026-11-17
 
 **Repository:** `aec-lms/alom-s-english-center-lms-laravel`  
-**Verified base:** `main` at `0464637dc7102c41daa2133576295a0ccd5a9826`  
+**Verified base:** `main` at `85a0f139ca43a97572696a205c172f7e5795f364`  
 **Release status:** NOT production-ready. This document reconciles merged work and open drafts; it does not certify production acceptance.
 
 ## Main branch and latest verified checks
 
-The latest main commit is the squash merge of PR #62, `feat(admin): add draggable dashboard widget ordering`.
+The latest main commit includes PR #69, `fix(universal-payment): enforce active branch isolation`. Recent merged work also includes PR #66 (server-enforced exam duration and attempt limits), PR #67 (shared Student Tracking/Tracing storage), and PR #65 (repository reconciliation).
 
 The exact main commit has four completed successful checks:
 - Laravel SQLite test job
@@ -27,6 +27,10 @@ Merged admin and site-management work includes:
 - #58 widget area/sidebar builder
 - #60 media library metadata, collections and recycle bin
 - #62 draggable dashboard widget ordering
+- #65 repository/release-status reconciliation
+- #66 server-enforced exam timer and configurable per-student attempt limits
+- #67 shared Student Tracking/Student Tracing storage and academic event capture
+- #69 Universal Payment branch-isolation enforcement
 
 Important scope limitation: PR #55 is a safe JSON design-token package manager. It is not a runtime for arbitrary PHP/Blade WordPress themes.
 
@@ -47,6 +51,12 @@ The following older drafts remain open but are based on significantly divergent 
 - #2 — plugin lifecycle, branch security, attendance and payments
 
 Do not merge these stale branches directly. Their changes must be checked against current main file-by-file and only genuinely missing changes should be ported onto a fresh branch from current main. Some remediations described in their summaries are already present in current main (for example attendance batch-table compatibility, public admission throttling, SMS response classification, payroll pending/approval, payment receipt review controls and branch-manager fail-closed checks). The current source and tests—not old PR descriptions—are the acceptance authority.
+
+## Recently resolved repository-level gaps
+
+- **Universal Payment branch isolation (PR #69):** branch managers are restricted to their active assigned branch for payment operations; retain this regression coverage when changing payment flows.
+- **Exam timing and retakes (PR #66):** each exam has a configurable maximum attempt count (1–20, default 1). Server-created attempts persist at exam entry, refresh resumes the same attempt, server time enforces the deadline, and expired attempts are finalized with zero marks.
+- **Student activity storage collision (PR #67):** Student Tracking and Student Tracing now converge on a shared nullable schema without deleting history. Tracking records login, enrollment, exam submission and attendance events without required sibling dependencies.
 
 ## Confirmed remaining release blockers
 
