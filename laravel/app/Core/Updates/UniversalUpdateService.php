@@ -168,7 +168,10 @@ class UniversalUpdateService
             }
 
             if (is_dir($payloadRoot)) {
-                Artisan::call('migrate', ['--force' => true]);
+                $migrationExitCode = Artisan::call('migrate', ['--force' => true]);
+                if ($migrationExitCode !== 0) {
+                    throw new RuntimeException('Database migrations failed (exit code ' . $migrationExitCode . ').');
+                }
             }
             Artisan::call('optimize:clear');
 
