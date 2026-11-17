@@ -53,7 +53,7 @@ class AttendanceRegisterWorkflowTest extends TestCase
 
         $payload['records'][0]['status'] = 'late';
         $payload['records'][0]['sync_uuid'] = null;
-        $this->actingAs($admin)->post('/admin/attendance', $payload)->assertSessionHasErrors();
+        $this->actingAs($admin)->post('/admin/attendance', $payload)->assertStatus(422);
         $this->assertDatabaseHas('attendance_records', ['student_id' => $student->id, 'status' => 'present']);
 
         $payload['records'][0]['edit_reason'] = 'Teacher corrected register';
