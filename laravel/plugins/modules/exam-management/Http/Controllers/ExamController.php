@@ -148,7 +148,7 @@ class ExamController extends Controller
             'options' => ['required', 'array', 'min:2'],
             'options.*' => ['required', 'string', 'max:300'],
             'correct_option_index' => ['required', 'integer', 'min:0'],
-            'marks' => ['required', 'integer', 'min:1', 'max:100'],
+            'marks' => ['required', 'numeric', 'gt:0', 'max:1000'],
         ]);
 
         if ((int) $validated['correct_option_index'] >= count($validated['options'])) {
@@ -160,7 +160,7 @@ class ExamController extends Controller
             'prompt' => $validated['prompt'],
             'options' => array_values($validated['options']),
             'correct_option_index' => (int) $validated['correct_option_index'],
-            'marks' => (int) $validated['marks'],
+            'marks' => (float) $validated['marks'],
         ]);
 
         return back()->with('status', 'Question added to exam bank.');
