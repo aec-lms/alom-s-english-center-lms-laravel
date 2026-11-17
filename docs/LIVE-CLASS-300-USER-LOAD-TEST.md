@@ -26,6 +26,12 @@ It ramps to at least 300 concurrent virtual users, holds that load for the selec
 
 These are initial acceptance thresholds, not a guarantee that every hosting plan will meet them. Record actual host metrics alongside the k6 summary.
 
+## LMS-side participant admission
+
+PR #72 adds an authenticated join flow at `POST /live-classes/{id}/join`, plus heartbeat and leave endpoints. Each session has an admin-configurable LMS seat limit (default 300, maximum 2,000). A join requires a student account with an active enrollment and matching branch, and access opens 15 minutes before the scheduled start. Seat allocation is serialized against the live-class row; presence expires after two minutes without a heartbeat.
+
+The current k6 script above still measures public course discovery pages only. It does not yet simulate 300 authenticated, distinct enrolled student accounts against the protected join endpoint. That requires an isolated staging class and a pool of at least 300 dedicated test student accounts; never reuse a single account to represent 300 distinct seats.
+
 ## Important limitation: video meeting capacity
 
 This test does **not** create 300 real Zoom/Google Meet/Teams participants and does not prove that an external meeting provider permits 300 attendees. The live class media capacity is governed by the provider account, meeting licence, host settings, and provider-side limits. To validate the complete class experience, separately run an authorized provider-side test meeting with 300 test accounts/participants and verify join, audio/video, moderation, recording, and reconnect behavior.
