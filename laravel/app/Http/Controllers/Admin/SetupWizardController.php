@@ -2,18 +2,19 @@
 
 declare(strict_types=1);
 
-namespace App\\Http\\Controllers\\Admin;
+namespace App\Http\Controllers\Admin;
 
-use App\\Http\\Controllers\\Controller;
-use App\\Models\\AuditLog;
-use App\\Models\\SystemSetting;\nuse App\\Core\\Appearance\\ThemeManager;
+use App\Http\Controllers\Controller;
+use App\Models\AuditLog;
+use App\Models\SystemSetting;
+use App\Core\Appearance\ThemeManager;
 use DateTimeZone;
-use Illuminate\\Http\\RedirectResponse;
-use Illuminate\\Http\\Request;
-use Illuminate\\Support\\Facades\\Crypt;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Facades\\Schema;
-use Illuminate\\View\\View;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\View\View;
 
 class SetupWizardController extends Controller
 {
@@ -27,7 +28,7 @@ class SetupWizardController extends Controller
         $values = [];
         foreach ($settings as $key => $value) {
             if (str_starts_with($key, 'setup.payment.') && str_contains($key, '.secret')) {
-                try { $value = Crypt::decryptString((string) $value); } catch (\\Throwable) { $value = ''; }
+                try { $value = Crypt::decryptString((string) $value); } catch (\Throwable) { $value = ''; }
             }
             $values[$key] = $value;
         }
@@ -36,7 +37,7 @@ class SetupWizardController extends Controller
             $mediaAssets = DB::table('media_assets')->where('mime_type', 'like', 'image/%')
                 ->where('mime_type', '<>', 'image/svg+xml')->latest()->limit(100)->get();
             $mediaAssets = $mediaAssets->map(function ($asset) {
-                $asset->url = $asset->disk === 'public' ? \\Illuminate\\Support\\Facades\\Storage::disk('public')->url($asset->path) : null;
+                $asset->url = $asset->disk === 'public' ? \Illuminate\Support\Facades\Storage::disk('public')->url($asset->path) : null;
                 return $asset;
             })->filter(fn ($asset) => filled($asset->url));
         }
@@ -87,7 +88,7 @@ class SetupWizardController extends Controller
                     abort_unless(Schema::hasTable('media_assets'), 422, 'Media Library is not available.');
                     $asset = DB::table('media_assets')->where('id', $id)->where('mime_type', 'like', 'image/%')->where('mime_type', '<>', 'image/svg+xml')->first();
                     abort_unless($asset && $asset->disk === 'public', 422, 'Select a public image from LMS Media Library.');
-                    $data[$kind.'_url'] = \\Illuminate\\Support\\Facades\\Storage::disk('public')->url($asset->path);
+                    $data[$kind.'_url'] = \Illuminate\Support\Facades\Storage::disk('public')->url($asset->path);
                 }
             }
         }
@@ -139,7 +140,7 @@ class SetupWizardController extends Controller
         SystemSetting::query()->updateOrCreate(['key' => 'setup.wizard.completed'], [
             'value' => '1', 'is_encrypted' => false, 'updated_by' => $request->user()->id,
         ]);
-        app(\\App\\Core\\Security\\AuditLogger::class)->log('setup.wizard.completed', 'setup_wizard', 'global', []);
+        app(\App\Core\Security\AuditLogger::class)->log('setup.wizard.completed', 'setup_wizard', 'global', []);
         return redirect()->route('admin.dashboard')->with('status', 'LMS Setup Wizard সম্পন্ন হয়েছে।');
     }
 }
