@@ -308,6 +308,24 @@ class AttendanceRegisterWorkflowTest extends TestCase
             'student_id' => $student->id,
             'attendance_record_id' => null,
         ]);
+
+        $this->actingAs($admin)->postJson('/admin/attendance/sync', [
+            'batch_mapping_id' => $studyMapping->id,
+            'attendance_date' => now()->toDateString(),
+            'source' => 'offline',
+            'records' => [[
+                'student_id' => $student->id,
+                'status' => 'present',
+                'remarks' => 'QR check-in',
+                'sync_uuid' => 'b0e6bdf8-45d2-4f7c-bf1f-9a3d77a0a001',
+            ]],
+        ])->assertOk()->assertJson(['status' => 'ok', 'synced' => 1, 'duplicates' => 0]);
+        $this->assertDatabaseHas('attendance_entries', [
+            'attendance_batch_mapping_id' => $studyMapping->id,
+            'student_id' => $student->id,
+            'source' => 'offline',
+            'sync_uuid' => 'b0e6bdf8-45d2-4f7c-bf1f-9a3d77a0a001',
+        ]);
     }
 
 }
