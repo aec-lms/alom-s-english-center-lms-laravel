@@ -20,8 +20,14 @@ class LiveClass extends Model
         'meeting_url',
         'recording_url',
         'starts_at',
+        'capacity',
         'status',
     ];
+
+    public function participants(): \\Illuminate\\Database\\Eloquent\\Relations\\HasMany
+    {
+        return $this->hasMany(LiveClassParticipant::class);
+    }
 
     public function course(): BelongsTo
     {
