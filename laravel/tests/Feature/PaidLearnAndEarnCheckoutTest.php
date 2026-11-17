@@ -18,6 +18,7 @@ class PaidLearnAndEarnCheckoutTest extends TestCase
     {
         $this->markSystemInstalled();
         $this->activatePlugins([
+            'branch-management',
             'course-management',
             'exam-management',
             'learn-and-earn',
