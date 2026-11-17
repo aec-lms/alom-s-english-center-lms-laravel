@@ -43,7 +43,7 @@
 </head>
 <body class="bg-slate-100 text-slate-900 antialiased">
 <div class="min-h-screen flex">
-    <aside class="w-64 text-slate-200 flex flex-col shrink-0 border-r border-white/10">
+    <aside id="admin-sidebar" class="fixed inset-y-0 left-0 z-40 w-64 text-slate-200 flex flex-col shrink-0 border-r border-white/10 -translate-x-full transition-transform duration-200 shadow-2xl lg:static lg:translate-x-0 lg:shadow-none">
         <div class="px-5 py-4 border-b border-white/10">
             <div class="text-sm font-extrabold tracking-tight text-white">{{ config('app.name') }} Core</div>
             <div class="text-[11px] text-[#38BDF8] font-medium">Core + Independent Plugins</div>
@@ -231,12 +231,16 @@
             </form>
         </div>
     </aside>
+    <button type="button" id="admin-sidebar-backdrop" class="hidden fixed inset-0 z-30 bg-slate-950/50 lg:hidden" aria-label="Close navigation menu"></button>
     <main class="flex-1 min-w-0 p-4 sm:p-6 overflow-y-auto">
         <header class="sticky top-0 z-30 -mx-4 sm:-mx-6 -mt-4 sm:-mt-6 mb-6 border-b border-slate-200 px-4 sm:px-6 py-3 shadow-sm backdrop-blur">
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div class="min-w-0">
                     <div class="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">ALOMS LMS Core</div>
-                    <div class="text-sm font-extrabold text-slate-900">Admin Console <span class="font-medium text-slate-500">/ Core + Independent Plugins</span></div>
+                    <div class="flex items-center gap-2">
+                        <button type="button" id="admin-sidebar-toggle" aria-controls="admin-sidebar" aria-expanded="false" class="inline-flex lg:hidden h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700" aria-label="Open navigation menu">☰</button>
+                        <div class="text-sm font-extrabold text-slate-900">Admin Console <span class="font-medium text-slate-500">/ Core + Independent Plugins</span></div>
+                    </div>
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
                     <a href="{{ route('admin.plugins.index') }}" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:border-blue-300 hover:text-blue-700 transition-colors">＋ Plugin Center</a>
@@ -265,5 +269,33 @@
 @if ($pluginManager->isEnabled('role-ai-assistant') && Route::has('plugins.ai.ask'))
     @includeIf('role-ai-assistant::partials.widget')
 @endif
+<script>
+(function () {
+    const sidebar = document.getElementById('admin-sidebar');
+    const toggle = document.getElementById('admin-sidebar-toggle');
+    const backdrop = document.getElementById('admin-sidebar-backdrop');
+    if (!sidebar || !toggle || !backdrop) return;
+
+    const closeMenu = () => {
+        sidebar.classList.add('-translate-x-full');
+        backdrop.classList.add('hidden');
+        toggle.setAttribute('aria-expanded', 'false');
+    };
+    const openMenu = () => {
+        sidebar.classList.remove('-translate-x-full');
+        backdrop.classList.remove('hidden');
+        toggle.setAttribute('aria-expanded', 'true');
+    };
+
+    toggle.addEventListener('click', () => {
+        if (sidebar.classList.contains('-translate-x-full')) openMenu();
+        else closeMenu();
+    });
+    backdrop.addEventListener('click', closeMenu);
+    window.addEventListener('resize', () => {
+        if (window.innerWidth >= 1024) closeMenu();
+    });
+})();
+</script>
 </body>
 </html>
