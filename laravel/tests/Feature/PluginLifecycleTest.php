@@ -61,7 +61,7 @@ class PluginLifecycleTest extends TestCase
     public function test_academic_and_finance_plugins_install_without_optional_sibling_plugins(): void
     {
         $this->markSystemInstalled();
-        $slugs = [
+        $independent = [
             'admission-management',
             'attendance-management',
             'certificate-management',
@@ -72,24 +72,28 @@ class PluginLifecycleTest extends TestCase
             'hr-staff-management',
             'library-management',
             'payment-management',
-            'student-management',
-            'teacher-management',
             'universal-payment',
         ];
 
-        $this->activatePlugins($slugs);
+        $this->activatePlugins($independent);
         $manager = app(PluginManager::class);
 
-        foreach ($slugs as $slug) {
+        foreach ($independent as $slug) {
             $this->assertTrue($manager->isEnabled($slug), "{$slug} should install without required sibling plugins.");
             $this->assertSame([], $manager->discoverManifests()[$slug]->dependencies, "{$slug} must not require another LMS plugin.");
         }
 
-        foreach (['branch-management', 'student-management', 'course-management', 'fees-management', 'payment-management'] as $optional) {
-            if (!in_array($optional, $slugs, true)) {
-                $this->assertFalse($manager->isEnabled($optional));
-            }
-        }
+        $this->assertFalse($manager->isEnabled('branch-management'));
+        $this->assertFalse($manager->isEnabled('student-management'));
+        $this->assertFalse($manager->isEnabled('course-management'));
+        $this->assertFalse(\\Illuminate\\Support\\Facades\\Schema::hasTable('students'));
+        $this->assertFalse(\\Illuminate\\Support\\Facades\\Schema::hasTable('branches'));
+        $this->assertFalse(\\Illuminate\\Support\\Facades\\Schema::hasTable('courses'));
+
+        $manager->install('student-management');
+        $manager->install('teacher-management');
+        $this->assertTrue($manager->isEnabled('student-management'));
+        $this->assertTrue($manager->isEnabled('teacher-management'));
 
         foreach ([
             'admission_applications',
