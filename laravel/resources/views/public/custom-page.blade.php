@@ -12,7 +12,7 @@
 <div class="min-h-screen flex flex-col">
     @include('public.partials.navbar')
 
-    <main class="flex-1 py-12 sm:py-16 px-4 sm:px-6 w-full" style="background: linear-gradient(135deg, #EAE9FF 0%, #F2F3FF 45%, #E5F4FE 100%)">
+    <main class="flex-1 py-12 sm:py-16 px-4 sm:px-6 w-full" style="background:linear-gradient(135deg,#EAE9FF 0%,#F2F3FF 45%,#E5F4FE 100%)">
         <article class="{{ $articleClasses }}">
             @if (!empty($page->banner_image))
                 <div class="h-56 sm:h-72 w-full bg-slate-900 overflow-hidden">
@@ -20,27 +20,32 @@
                 </div>
             @endif
 
-            <div class="p-6 sm:p-10 space-y-5">
+            <div class="p-6 sm:p-10 space-y-6">
                 <div class="text-xs font-semibold text-slate-400">
                     <a href="{{ route('home') }}" class="hover:text-[#0284C7]">Home</a> &rsaquo;
                     <span class="text-slate-700">{{ $page->title }}</span>
                 </div>
 
-                <h1 class="text-2xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
-                    {{ $page->title }}
-                </h1>
+                <h1 class="text-2xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">{{ $page->title }}</h1>
 
-                <div class="prose max-w-none text-sm text-slate-600 leading-relaxed whitespace-pre-line">
-                    {{ $body }}
-                </div>
-
-                @if ($cta)
-                    <div class="pt-3">
-                        <a href="{{ $cta['url'] }}" @if (str_starts_with($cta['url'], 'http://') || str_starts_with($cta['url'], 'https://')) target="_blank" rel="noopener noreferrer" @endif class="inline-flex items-center rounded-xl bg-sky-600 px-5 py-3 text-sm font-bold text-white hover:bg-sky-700">
-                            {{ $cta['label'] }}
-                        </a>
-                    </div>
-                @endif
+                @foreach ($blocks as $block)
+                    @if ($block['type'] === 'heading')
+                        <h2 class="text-xl sm:text-2xl font-extrabold text-slate-900" style="text-align:{{ $block['align'] }}">{{ $block['content'] }}</h2>
+                    @elseif ($block['type'] === 'text')
+                        <p class="text-sm sm:text-base leading-8 text-slate-600 whitespace-pre-line" style="text-align:{{ $block['align'] }}">{{ $block['content'] }}</p>
+                    @elseif ($block['type'] === 'image')
+                        <figure class="my-5">
+                            <img src="{{ $block['url'] }}" alt="{{ $block['alt'] }}" loading="lazy" class="mx-auto max-h-[640px] w-full rounded-2xl object-contain">
+                            @if ($block['alt'] !== '')<figcaption class="mt-2 text-center text-xs text-slate-500">{{ $block['alt'] }}</figcaption>@endif
+                        </figure>
+                    @elseif ($block['type'] === 'button')
+                        <div class="flex" style="justify-content:{{ $block['align'] === 'center' ? 'center' : ($block['align'] === 'right' ? 'flex-end' : 'flex-start') }}">
+                            <a href="{{ $block['url'] }}" @if (str_starts_with($block['url'], 'http://') || str_starts_with($block['url'], 'https://')) target="_blank" rel="noopener noreferrer" @endif class="inline-flex items-center rounded-xl bg-sky-600 px-5 py-3 text-sm font-bold text-white hover:bg-sky-700">{{ $block['label'] }}</a>
+                        </div>
+                    @elseif ($block['type'] === 'spacer')
+                        <div aria-hidden="true" style="height:{{ $block['height'] }}px"></div>
+                    @endif
+                @endforeach
             </div>
         </article>
     </main>
