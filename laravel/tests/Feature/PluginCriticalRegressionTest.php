@@ -34,21 +34,22 @@ class PluginCriticalRegressionTest extends TestCase
         $this->assertTrue(is_subclass_of($manifest->providerClass, PluginInterface::class));
     }
 
-    public function test_attendance_plugin_declares_batch_dependency_and_uses_study_batches(): void
+    public function test_attendance_plugin_uses_optional_batch_integrations_without_hard_foreign_keys(): void
     {
         $manifest = PluginManifest::fromDirectory(base_path('plugins/modules/attendance-management'));
 
         $this->assertSame([], $manifest->dependencies);
         $this->assertContains('batch-management', $manifest->optionalDependencies);
+        $this->assertContains('course-management', $manifest->optionalDependencies);
+        $this->assertContains('student-management', $manifest->optionalDependencies);
         $migration = file_get_contents(base_path('plugins/modules/attendance-management/Database/Migrations/2026_02_07_000001_create_attendance_records_table.php'));
-        $upgradeMigration = file_get_contents(base_path('plugins/modules/attendance-management/Database/Migrations/2026_11_16_000001_repoint_attendance_batch_foreign_key.php'));
         $controller = file_get_contents(base_path('plugins/modules/attendance-management/Http/Controllers/AttendanceController.php'));
 
         $this->assertIsString($migration);
         $this->assertIsString($controller);
-        $this->assertStringContainsString("'batch_id'", $migration);
-        $this->assertStringContainsString("on('study_batches')", $upgradeMigration);
-        $this->assertStringContainsString("exists:study_batches,id", $controller);
+        $this->assertStringContainsString("$table->unsignedBigInteger('batch_id')->index();", $migration);
+        $this->assertStringContainsString("Schema::hasTable('study_batches')", $controller);
+        $this->assertStringContainsString("Schema::hasTable('batches')", $controller);
         $this->assertStringNotContainsString("exists:batches,id", $controller);
     }
 
