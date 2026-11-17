@@ -104,11 +104,14 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Bengali:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     @inject('themeManager', 'App\\Core\\Appearance\\ThemeManager')
     <style>
-        :root { {!! $themeManager->cssVariables() !!} }
+        :root { {!! $themeManager->cssVariables() !!}; {!! $themeManager->cssDesignVariables() !!} }
+        body { font-family:var(--aec-font-family);font-size:var(--aec-font-size); }
+        main { max-width:min(100%,var(--aec-content-width));margin-inline:auto; }
+        .rounded-xl { border-radius:var(--aec-radius); }
         body {
             background-color:var(--aec-page-bg)!important;
             color:var(--aec-text)!important;
