@@ -73,7 +73,7 @@ class FreshInstallerTest extends TestCase
 
         try {
             config(['session.driver' => 'file', 'cache.default' => 'file']);
-            $this->get('/install')->assertOk()->assertSee('Fresh Database Installer');
+            $this->get('/install')->assertOk()->assertSee('International LMS Installer');
 
             $unsafePublicPath = public_path('aec-private-leak-' . uniqid('', true));
             config(['lms.private_storage_path' => $unsafePublicPath]);
@@ -151,7 +151,7 @@ class FreshInstallerTest extends TestCase
             'lms.install_lock_path' => $this->tempLockPath,
         ]);
 
-        $this->get('/install')->assertOk()->assertSee('Fresh Database Installer');
+        $this->get('/install')->assertOk()->assertSee('International LMS Installer');
     }
 
     public function test_installer_routes_are_locked_after_installation(): void
