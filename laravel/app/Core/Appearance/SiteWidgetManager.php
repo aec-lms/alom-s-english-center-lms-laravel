@@ -32,7 +32,7 @@ final class SiteWidgetManager
                 'visible' => (bool) ($item['visible'] ?? false),
                 'order' => max(1, min(100, (int) ($item['order'] ?? 10))),
             ];
-        }, $items), static fn ($item) => $item !== null && $item['visible'] && $item['title'] !== ''));
+        }, $items), static fn ($item) => $item !== null && $item['title'] !== ''));
     }
 
     public function save(array $items, ?int $userId = null): void
