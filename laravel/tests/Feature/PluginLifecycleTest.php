@@ -337,7 +337,7 @@ PHP;
         $this->markSystemInstalled();
 
         $this->assertTrue(Schema::hasTable('plugin_archives'));
-        $archive = \\App\\Models\\PluginArchive::query()->create([
+        $archive = \App\Models\PluginArchive::query()->create([
             'plugin_slug' => 'recycle-probe',
             'plugin_name' => 'Recycle Probe',
             'version' => '1.2.3',
