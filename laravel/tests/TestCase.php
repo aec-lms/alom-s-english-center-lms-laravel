@@ -18,6 +18,19 @@ abstract class TestCase extends BaseTestCase
 
     protected string $tempLockPath;
 
+    protected function refreshDatabase(): void
+    {
+        // MySQL DDL implicitly commits. Runtime plugin migrations therefore cannot
+        // run inside RefreshDatabase's outer test transaction/savepoints.
+        // Rebuild the disposable MySQL schema for each test instead.
+        if (config('database.default') === 'mysql') {
+            $this->artisan('migrate:fresh');
+            return;
+        }
+
+        parent::refreshDatabase();
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
