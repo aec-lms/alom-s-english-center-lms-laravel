@@ -1,10 +1,10 @@
 {
     "slug": "media-library",
     "name": "Central Media Library",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "author": "AEC LMS Core Team",
     "category": "content",
-    "description": "Centralized image and document library with private PDF storage, searchable metadata, image crop workflow, and rich content editing assets.",
+    "description": "Centralized media library with searchable collections, editable alt text, private document storage, safe usage checks, and a restorable recycle bin.",
     "core_compatibility": "^2.0",
     "provider": "Plugins\\Modules\\MediaLibrary\\Providers\\MediaLibraryServiceProvider",
     "dependencies": [],
