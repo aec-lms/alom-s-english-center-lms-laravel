@@ -11,9 +11,9 @@
             <h4>{{ $exam->title }}</h4>
             <p>{{ $paid ? 'Paid' : 'Free' }} exam · {{ $exam->duration_minutes }} minutes · Pass marks {{ $exam->pass_marks }} @if($paid) · ৳{{ number_format((float)$exam->access_price,2) }} @endif</p>
             @if(!$paid || $hasAccess)
-                <a class="btn btn-primary" href="{{ route('plugins.learn_earn.student.show',$exam) }}">Open Exam</a>
+                <a class="btn btn-primary" href="{{ url('/learn-and-earn/exams/' . $exam->id) }}">Open Exam</a>
             @elseif($canPurchase)
-                <form method="POST" action="{{ route('plugins.learn_earn.student.checkout',$exam) }}" class="d-flex flex-wrap gap-2">
+                <form method="POST" action="{{ url('/learn-and-earn/exams/' . $exam->id . '/checkout') }}" class="d-flex flex-wrap gap-2">
                     @csrf
                     <input class="form-control" style="max-width:260px" name="payer_contact" required maxlength="120" placeholder="Mobile number for payment">
                     <button class="btn btn-success">Pay ৳{{ number_format((float)$exam->access_price,2) }} &amp; Unlock</button>
