@@ -33,10 +33,10 @@ class SliderBuilderController extends Controller
             'key_name' => ['required', 'in:hero,banner_slider'],
             'title' => ['required', 'string', 'max:180'],
             'subtitle' => ['nullable', 'string', 'max:255'],
-            'cta_url' => ['nullable', 'string', 'max:255'],
+            'cta_url' => ['nullable', 'string', 'max:255', 'regex:#^(https?://[^\\s]+|/(?!/)[^\\s]*)$#i'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
             'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
-            'image_path' => ['nullable', 'string', 'max:255'],
+            'image_path' => ['nullable', 'string', 'max:255', 'regex:#^/(?!/)(?!.*(?:\\.\\.|%2e|%2f))[A-Za-z0-9/_\\-.]+$#i'],
             'is_active' => ['nullable', 'boolean'],
         ]);
 
@@ -96,9 +96,9 @@ class SliderBuilderController extends Controller
         $title = $slider->title;
         $id = (string) $slider->id;
         $slider->delete();
-        $this->audit->log('slider_builder.deleted', 'hero_slider', $id);
+        $this->audit->log('slider_builder.trashed', 'hero_slider', $id);
 
-        return back()->with('status', "Slider '{$title}' deleted.");
+        return back()->with('status', "Slider '{$title}' moved to the Admin Recycle Bin.");
     }
 
     private function storeImage(UploadedFile $file): string
@@ -107,7 +107,7 @@ class SliderBuilderController extends Controller
         if (!is_dir($dir)) {
             mkdir($dir, 0755, true);
         }
-        $filename = Str::uuid()->toString() . '.' . $file->getClientOriginalExtension();
+        $filename = Str::uuid()->toString() . '.' . $file->extension();
         $file->move($dir, $filename);
 
         return '/uploads/sliders/' . $filename;

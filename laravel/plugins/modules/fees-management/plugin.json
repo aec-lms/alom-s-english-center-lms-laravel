@@ -16,6 +16,7 @@
     ],
     "settings_schema": [],
     "optional_dependencies": [
-        "student-management"
+        "student-management",
+        "branch-management"
     ]
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Plugins\Modules\MobileAppApi\Http\Controllers;
 
+use App\Core\Plugins\PluginManager;
 use App\Http\Controllers\Controller;
 use App\Models\Role;
 use App\Models\SystemSetting;
@@ -20,6 +21,8 @@ use Plugins\Modules\MobileAppApi\Models\MobileDeviceToken;
 
 class MobileApiController extends Controller
 {
+    public function __construct(private readonly PluginManager $plugins) {}
+
     public function config(Request $request): JsonResponse
     {
         $cfg = $this->loadMobileConfig();
@@ -53,44 +56,62 @@ class MobileApiController extends Controller
         ]);
     }
 
-    public function home(): JsonResponse
+    public function home(Request $request): JsonResponse
     {
+        $actor = $this->mobileActor($request);
         $cfg = $this->loadMobileConfig();
 
-        $sliders = Schema::hasTable('cms_sliders')
+        $sliders = $this->plugins->isEnabled('slider-builder') && Schema::hasTable('cms_sliders')
             ? DB::table('cms_sliders')->where('is_active', true)->orderBy('sort_order')->get(['id', 'title', 'subtitle', 'image_path', 'cta_url'])
             : collect();
 
-        $courses = Schema::hasTable('courses')
-            ? DB::table('courses')->where('status', 'published')->orderByDesc('id')->limit(12)->get(['id', 'code', 'title', 'slug', 'price', 'thumbnail', 'pdf_path', 'pdf_thumbnail', 'instructor_name'])
+        $courses = $this->plugins->isEnabled('course-management') && Schema::hasTable('courses')
+            ? DB::table('courses')->where('status', 'published')->orderByDesc('id')->limit(12)->get(['id', 'code', 'title', 'slug', 'price', 'thumbnail', 'instructor_name'])
             : collect();
 
-        $carouselItems = Schema::hasTable('storefront_items')
+        $carouselItems = $this->plugins->isEnabled('storefront-catalog') && Schema::hasTable('storefront_items')
             ? DB::table('storefront_items')
                 ->where('is_active', true)
                 ->orderByDesc('is_carousel_featured')
                 ->orderByDesc('id')
                 ->limit(12)
-                ->get(['id', 'type', 'slug', 'title', 'category', 'badge', 'price', 'original_price', 'is_free', 'thumbnail_path', 'pdf_thumbnail_path', 'download_url'])
+                ->get(['id', 'type', 'slug', 'title', 'category', 'badge', 'price', 'original_price', 'is_free', 'pages', 'summary', 'thumbnail_path', 'pdf_thumbnail_path'])
             : collect();
 
-        $ebooks = Schema::hasTable('storefront_items')
-            ? DB::table('storefront_items')->where('type', 'ebook')->where('is_active', true)->orderByDesc('id')->limit(12)->get()
+        $ebooks = $this->plugins->isEnabled('storefront-catalog') && Schema::hasTable('storefront_items')
+            ? DB::table('storefront_items')->where('type', 'ebook')->where('is_active', true)->orderByDesc('id')->limit(12)->get(['id', 'type', 'slug', 'title', 'category', 'badge', 'price', 'original_price', 'is_free', 'pages', 'summary', 'thumbnail_path', 'pdf_thumbnail_path'])
             : collect();
 
-        $products = Schema::hasTable('storefront_items')
-            ? DB::table('storefront_items')->where('type', 'product')->where('is_active', true)->orderByDesc('id')->limit(12)->get()
+        $products = $this->plugins->isEnabled('storefront-catalog') && Schema::hasTable('storefront_items')
+            ? DB::table('storefront_items')->where('type', 'product')->where('is_active', true)->orderByDesc('id')->limit(12)->get(['id', 'type', 'slug', 'title', 'category', 'badge', 'price', 'original_price', 'summary', 'thumbnail_path'])
             : collect();
 
-        $notices = Schema::hasTable('notices')
-            ? DB::table('notices')->orderByDesc('id')->limit(12)->get()
+        $visibleNoticeRoles = $actor ? $actor->roles()->pluck('slug')->all() : [];
+        $visibleNoticeRoles[] = 'all';
+        $notices = $this->plugins->isEnabled('notice-board') && Schema::hasTable('notices')
+            ? DB::table('notices')
+                ->where(function ($query) use ($actor): void {
+                    $query->whereNull('branch_id');
+                    if ($actor && $actor->branch_id !== null) {
+                        $query->orWhere('branch_id', $actor->branch_id);
+                    }
+                })
+                ->where(function ($query) use ($visibleNoticeRoles): void {
+                    $query->whereNull('audience_role')->orWhereIn('audience_role', $visibleNoticeRoles);
+                })
+                ->where(function ($query): void {
+                    $query->whereNull('published_at')->orWhere('published_at', '<=', now());
+                })
+                ->orderByDesc('id')
+                ->limit(12)
+                ->get()
             : collect();
 
         $stats = [
-            'students' => Schema::hasTable('students') ? DB::table('students')->count() : 0,
-            'courses' => Schema::hasTable('courses') ? DB::table('courses')->where('status', 'published')->count() : 0,
-            'teachers' => Schema::hasTable('teachers') ? DB::table('teachers')->count() : 0,
-            'lessons' => Schema::hasTable('course_lessons') ? DB::table('course_lessons')->count() : 0,
+            'students' => $this->plugins->isEnabled('student-management') && Schema::hasTable('students') ? DB::table('students')->count() : 0,
+            'courses' => $this->plugins->isEnabled('course-management') && Schema::hasTable('courses') ? DB::table('courses')->where('status', 'published')->count() : 0,
+            'teachers' => $this->plugins->isEnabled('teacher-management') && Schema::hasTable('teachers') ? DB::table('teachers')->count() : 0,
+            'lessons' => $this->plugins->isEnabled('course-management') && Schema::hasTable('course_lessons') ? DB::table('course_lessons')->count() : 0,
         ];
 
         return response()->json([
@@ -214,10 +235,10 @@ class MobileApiController extends Controller
     public function me(Request $request): JsonResponse
     {
         $user = $request->user();
-        $enrollments = Schema::hasTable('enrollments')
+        $enrollments = $this->plugins->isEnabled('course-management') && Schema::hasTable('enrollments')
             ? Enrollment::query()
                 ->where('user_id', $user->id)
-                ->with('course:id,code,title,slug,thumbnail,pdf_path,pdf_thumbnail')
+                ->with('course:id,code,title,slug,thumbnail,pdf_thumbnail')
                 ->get()
             : collect();
 
@@ -234,10 +255,11 @@ class MobileApiController extends Controller
 
     public function courses(): JsonResponse
     {
+        abort_unless($this->plugins->isEnabled('course-management') && Schema::hasTable('courses'), 409, 'Course Management is disabled.');
         return response()->json([
             'data' => Course::query()
                 ->where('status', 'published')
-                ->select(['id', 'code', 'title', 'slug', 'price', 'description', 'thumbnail', 'pdf_path', 'pdf_thumbnail', 'instructor_name'])
+                ->select(['id', 'code', 'title', 'slug', 'price', 'description', 'thumbnail', 'instructor_name'])
                 ->latest()
                 ->paginate(20),
         ]);
@@ -245,23 +267,60 @@ class MobileApiController extends Controller
 
     public function courseShow(string $slug): JsonResponse
     {
+        abort_unless($this->plugins->isEnabled('course-management') && Schema::hasTable('courses'), 404, 'Course Management is disabled.');
+        // Course currently has no Eloquent category/lessons relationships.
+        // Return the persisted course record instead of eager-loading undefined relations.
         $course = Course::query()
+            ->select(['id', 'code', 'title', 'slug', 'description', 'price', 'thumbnail', 'instructor_name', 'status'])
             ->where('slug', $slug)
             ->where('status', 'published')
-            ->with(['category', 'lessons'])
             ->first();
 
         if (!$course) {
             return response()->json(['message' => 'Course not found.'], 404);
         }
 
-        return response()->json(['data' => $course]);
+        return response()->json(['data' => $course, 'lessons' => []]);
+    }
+
+    public function lessons(Request $request, string $slug): JsonResponse
+    {
+        $actor = $request->user();
+        abort_unless($actor, 401);
+        abort_unless(
+            $this->plugins->isEnabled('course-management')
+                && Schema::hasTable('courses')
+                && Schema::hasTable('course_lessons')
+                && Schema::hasTable('enrollments'),
+            409,
+            'Course content access is unavailable until Course Management is installed.'
+        );
+
+        $course = Course::query()
+            ->where('slug', $slug)
+            ->where('status', 'published')
+            ->firstOrFail();
+
+        $hasAccess = Enrollment::query()
+            ->where('user_id', $actor->id)
+            ->where('course_id', $course->id)
+            ->whereIn('status', ['active', 'completed'])
+            ->exists();
+        abort_unless($hasAccess, 403, 'An active course enrollment is required to view lessons.');
+
+        $lessons = DB::table('course_lessons')
+            ->where('course_id', $course->id)
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get(['id', 'course_id', 'title', 'content', 'sort_order']);
+
+        return response()->json(['data' => $lessons]);
     }
 
     public function ebooks(): JsonResponse
     {
-        $items = Schema::hasTable('storefront_items')
-            ? DB::table('storefront_items')->where('type', 'ebook')->where('is_active', true)->orderByDesc('id')->get()
+        $items = $this->plugins->isEnabled('storefront-catalog') && Schema::hasTable('storefront_items')
+            ? DB::table('storefront_items')->where('type', 'ebook')->where('is_active', true)->orderByDesc('id')->get(['id', 'type', 'slug', 'title', 'category', 'badge', 'price', 'original_price', 'is_free', 'pages', 'summary', 'thumbnail_path', 'pdf_thumbnail_path'])
             : collect();
 
         return response()->json(['data' => $items]);
@@ -269,8 +328,8 @@ class MobileApiController extends Controller
 
     public function products(): JsonResponse
     {
-        $items = Schema::hasTable('storefront_items')
-            ? DB::table('storefront_items')->where('type', 'product')->where('is_active', true)->orderByDesc('id')->get()
+        $items = $this->plugins->isEnabled('storefront-catalog') && Schema::hasTable('storefront_items')
+            ? DB::table('storefront_items')->where('type', 'product')->where('is_active', true)->orderByDesc('id')->get(['id', 'type', 'slug', 'title', 'category', 'badge', 'price', 'original_price', 'summary', 'thumbnail_path'])
             : collect();
 
         return response()->json(['data' => $items]);
@@ -278,17 +337,35 @@ class MobileApiController extends Controller
 
     public function exams(): JsonResponse
     {
-        $exams = Schema::hasTable('exams')
+        $exams = $this->plugins->isEnabled('exam-management') && Schema::hasTable('exams')
             ? DB::table('exams')->where('is_published', true)->orderByDesc('id')->limit(30)->get()
             : collect();
 
         return response()->json(['data' => $exams]);
     }
 
-    public function notices(): JsonResponse
+    public function notices(Request $request): JsonResponse
     {
-        $notices = Schema::hasTable('notices')
-            ? DB::table('notices')->orderByDesc('id')->limit(30)->get()
+        $actor = $this->mobileActor($request);
+        $visibleNoticeRoles = $actor ? $actor->roles()->pluck('slug')->all() : [];
+        $visibleNoticeRoles[] = 'all';
+        $notices = $this->plugins->isEnabled('notice-board') && Schema::hasTable('notices')
+            ? DB::table('notices')
+                ->where(function ($query) use ($actor): void {
+                    $query->whereNull('branch_id');
+                    if ($actor && $actor->branch_id !== null) {
+                        $query->orWhere('branch_id', $actor->branch_id);
+                    }
+                })
+                ->where(function ($query) use ($visibleNoticeRoles): void {
+                    $query->whereNull('audience_role')->orWhereIn('audience_role', $visibleNoticeRoles);
+                })
+                ->where(function ($query): void {
+                    $query->whereNull('published_at')->orWhere('published_at', '<=', now());
+                })
+                ->orderByDesc('id')
+                ->limit(30)
+                ->get()
             : collect();
 
         return response()->json(['data' => $notices]);
@@ -296,7 +373,7 @@ class MobileApiController extends Controller
 
     public function verifyCertificate(string $code): JsonResponse
     {
-        if (!Schema::hasTable('certificates')) {
+        if (!$this->plugins->isEnabled('certificate-management') || !Schema::hasTable('certificates')) {
             return response()->json(['verified' => false, 'message' => 'Certificate verification unavailable.'], 404);
         }
 
@@ -306,6 +383,16 @@ class MobileApiController extends Controller
         }
 
         return response()->json(['verified' => true, 'data' => $cert]);
+    }
+
+
+    private function mobileActor(Request $request): ?User
+    {
+        // Public mobile endpoints accept optional Sanctum bearer authentication.
+        // The API guard is not required so anonymous app visitors remain supported.
+        return $request->bearerToken() !== null
+            ? $request->user('sanctum')
+            : $request->user();
     }
 
     private function recordDeviceToken(?User $user, array $validated): ?MobileDeviceToken

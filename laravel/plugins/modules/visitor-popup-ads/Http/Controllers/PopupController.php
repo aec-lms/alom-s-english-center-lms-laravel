@@ -32,11 +32,19 @@ class PopupController extends Controller
             'badge_text' => ['nullable', 'string', 'max:60'],
             'description' => ['nullable', 'string', 'max:1200'],
             'cta_text' => ['nullable', 'string', 'max:80'],
-            'cta_url' => ['nullable', 'string', 'max:255'],
+            'cta_url' => ['nullable', 'string', 'max:255', function ($attribute, $value, $fail): void {
+                if ($value === null || $value === '' || (str_starts_with($value, '/') && !str_starts_with($value, '//'))) return;
+                $scheme = strtolower((string) parse_url((string) $value, PHP_URL_SCHEME));
+                if (!filter_var($value, FILTER_VALIDATE_URL) || !in_array($scheme, ['http', 'https'], true)) $fail('The CTA destination must be a relative path or an HTTP/HTTPS URL.');
+            }],
             'delay_seconds' => ['nullable', 'integer', 'min:0', 'max:120'],
             'frequency' => ['required', 'in:once_per_session,once_per_day,always'],
             'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
-            'image_url' => ['nullable', 'string', 'max:255'],
+            'image_url' => ['nullable', 'string', 'max:255', function ($attribute, $value, $fail): void {
+                if ($value === null || $value === '' || (str_starts_with($value, '/') && !str_starts_with($value, '//'))) return;
+                $scheme = strtolower((string) parse_url((string) $value, PHP_URL_SCHEME));
+                if (!filter_var($value, FILTER_VALIDATE_URL) || !in_array($scheme, ['http', 'https'], true)) $fail('The image source must be a relative path or an HTTP/HTTPS URL.');
+            }],
         ]);
 
         $imagePath = $request->hasFile('image')
@@ -67,15 +75,25 @@ class PopupController extends Controller
             'badge_text' => ['nullable', 'string', 'max:60'],
             'description' => ['nullable', 'string', 'max:1200'],
             'cta_text' => ['nullable', 'string', 'max:80'],
-            'cta_url' => ['nullable', 'string', 'max:255'],
+            'cta_url' => ['nullable', 'string', 'max:255', function ($attribute, $value, $fail): void {
+                if ($value === null || $value === '' || (str_starts_with($value, '/') && !str_starts_with($value, '//'))) return;
+                $scheme = strtolower((string) parse_url((string) $value, PHP_URL_SCHEME));
+                if (!filter_var($value, FILTER_VALIDATE_URL) || !in_array($scheme, ['http', 'https'], true)) $fail('The CTA destination must be a relative path or an HTTP/HTTPS URL.');
+            }],
             'delay_seconds' => ['required', 'integer', 'min:0', 'max:120'],
             'frequency' => ['required', 'in:once_per_session,once_per_day,always'],
             'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
+            'image_url' => ['nullable', 'string', 'max:255', function ($attribute, $value, $fail): void {
+                if ($value === null || $value === '' || (str_starts_with($value, '/') && !str_starts_with($value, '//'))) return;
+                $scheme = strtolower((string) parse_url((string) $value, PHP_URL_SCHEME));
+                if (!filter_var($value, FILTER_VALIDATE_URL) || !in_array($scheme, ['http', 'https'], true)) $fail('The image source must be a relative path or an HTTP/HTTPS URL.');
+            }],
+            'remove_image' => ['nullable', 'boolean'],
         ]);
 
         $imagePath = $request->hasFile('image')
             ? $this->storeUploadedImage($request->file('image'))
-            : $popup->image_path;
+            : ($request->boolean('remove_image') ? null : (($validated['image_url'] ?? '') !== '' ? $validated['image_url'] : $popup->image_path));
 
         $popup->update([
             'title' => $validated['title'],
@@ -97,7 +115,8 @@ class PopupController extends Controller
     public function destroy(VisitorPopup $popup): RedirectResponse
     {
         $popup->delete();
-        return back()->with('status', 'Visitor pop-up ad deleted.');
+        $this->audit->log('visitor_popup.trashed', 'visitor_popup', (string) $popup->id);
+        return back()->with('status', 'Visitor pop-up ad moved to the Admin Recycle Bin.');
     }
 
     public function trackClick(VisitorPopup $popup): JsonResponse
@@ -112,7 +131,10 @@ class PopupController extends Controller
         if (!is_dir($targetDir)) {
             mkdir($targetDir, 0755, true);
         }
-        $ext = strtolower($file->getClientOriginalExtension() ?: 'jpg');
+        $ext = strtolower($file->guessExtension() ?: 'jpg');
+        if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp'], true)) {
+            throw new \RuntimeException('Unsupported popup image type.');
+        }
         $name = 'popup_' . date('Ymd_His') . '_' . Str::random(6) . '.' . $ext;
         $file->move($targetDir, $name);
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Plugins\Modules\TeacherManagement\Http\Controllers;
 
 use App\Core\Security\AuditLogger;
+use App\Core\Plugins\PluginManager;
 use App\Http\Controllers\Controller;
 use App\Models\Role;
 use App\Models\User;
@@ -71,7 +72,7 @@ class TeacherController extends Controller
             $user = User::query()->create([
                 'name' => $validated['name'],
                 'email' => strtolower($validated['email']),
-                'password' => Hash::make($validated['password'] ?: Str::random(12)),
+                'password' => Hash::make(($validated['password'] ?? '') ?: Str::random(12)),
                 'branch_id' => $validated['branch_id'] ?? null,
                 'is_active' => $request->boolean('is_active', true),
             ]);
@@ -185,9 +186,13 @@ class TeacherController extends Controller
         $user = $teacher->user;
 
         DB::transaction(function () use ($teacher, $user): void {
+            if (Schema::hasColumn('teachers', 'deleted_user_was_active')) {
+                $teacher->deleted_user_was_active = (bool) ($user?->is_active ?? false);
+                $teacher->save();
+            }
             $teacher->delete();
             if ($user) {
-                $user->delete();
+                $user->update(['is_active' => false]);
             }
         });
 
@@ -211,8 +216,13 @@ class TeacherController extends Controller
 
     private function ensureAssignedBranch($actor): void
     {
-        if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id === null) {
-            abort(403, 'Branch manager must be assigned to a branch.');
+        if ($actor && $actor->hasRole('branch_manager')) {
+            $branchAvailable = $actor->branch_id !== null
+                && app(PluginManager::class)->isEnabled('branch-management')
+                && Schema::hasTable('branches')
+                && DB::table('branches')->where('id', $actor->branch_id)->where('is_active', true)->exists();
+
+            abort_unless($branchAvailable, 403, 'Branch manager must be assigned to an active branch.');
         }
     }
 }

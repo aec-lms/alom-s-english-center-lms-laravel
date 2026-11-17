@@ -149,6 +149,10 @@ class PluginManager
                     $instance->onEnable();
                 }
 
+                // Routes must be available even for headless plugins without a provider class.
+                // require_once is safe when the provider already loaded these routes at boot.
+                $this->loadPluginRoutes($manifest);
+
                 $this->audit->log('plugin.installed', 'plugin', $manifest->slug, ['version' => $manifest->version], $actorId);
 
                 return $record;
@@ -179,7 +183,11 @@ class PluginManager
         $this->assertDependenciesSatisfied($manifest, false);
 
         $record = PluginRecord::query()->where('slug', $slug)->first();
-        $fromVersion = $record?->version ?? '0.0.0';
+        if (!$record || !$record->is_installed) {
+            throw new RuntimeException("Plugin {$slug} must be installed before it can be updated.");
+        }
+
+        $fromVersion = $record->version;
         if ($record && $record->is_installed && version_compare($manifest->version, $fromVersion, '<=')) {
             throw new RuntimeException('Plugin update version must be newer than the installed version.');
         }
@@ -357,43 +365,60 @@ class PluginManager
 
     public function enable(string $slug, ?int $actorId = null): PluginRecord
     {
-        $record = PluginRecord::query()->where('slug', $slug)->firstOrFail();
-        if (!$record->is_installed) {
-            throw new RuntimeException("Plugin {$slug} must be installed before enabling.");
-        }
+        $record = DB::transaction(function () use ($slug, $actorId): PluginRecord {
+            $record = PluginRecord::query()->where('slug', $slug)->lockForUpdate()->firstOrFail();
+            if (!$record->is_installed) {
+                throw new RuntimeException("Plugin {$slug} must be installed before enabling.");
+            }
 
-        $manifest = $this->discoverManifests()[$slug] ?? throw new RuntimeException("Plugin manifest {$slug} missing.");
-        $this->assertDependenciesSatisfied($manifest, true);
+            $manifest = $this->discoverManifests()[$slug] ?? throw new RuntimeException("Plugin manifest {$slug} missing.");
+            if (!$this->isCompatible($manifest)) {
+                throw new RuntimeException("Plugin {$slug} ({$manifest->coreCompatibility}) is incompatible with Core " . config('lms.core_version'));
+            }
+            $this->assertDependenciesSatisfied($manifest, true);
 
-        $record->update(['is_enabled' => true]);
-        $provider = $this->resolvePluginInstance($manifest);
-        if ($provider) {
-            app()->register($provider);
-            $provider->onEnable();
-        }
-        $this->audit->log('plugin.enabled', 'plugin', $slug, [], $actorId);
+            $record->update(['is_enabled' => true]);
+            $provider = $this->resolvePluginInstance($manifest);
+            if ($provider) {
+                app()->register($provider);
+                $provider->onEnable();
+            }
+
+            // Runtime activation must expose routes regardless of optional provider presence.
+            $this->loadPluginRoutes($manifest);
+
+            $this->audit->log('plugin.enabled', 'plugin', $slug, [], $actorId);
+
+            return $record->fresh();
+        });
+
         event(new PluginLifecycleEvent('enabled', $slug, $record->version, $actorId));
 
-        return $record->fresh();
+        return $record;
     }
 
     public function disable(string $slug, ?int $actorId = null): PluginRecord
     {
-        $record = PluginRecord::query()->where('slug', $slug)->firstOrFail();
-        if ($record->is_core || $slug === config('plugins.core_identifier')) {
-            throw new RuntimeException('Protected Core cannot be disabled.');
-        }
+        $record = DB::transaction(function () use ($slug, $actorId): PluginRecord {
+            $record = PluginRecord::query()->where('slug', $slug)->lockForUpdate()->firstOrFail();
+            if ($record->is_core || $slug === config('plugins.core_identifier')) {
+                throw new RuntimeException('Protected Core cannot be disabled.');
+            }
 
-        $this->assertNoActiveDependents($slug, 'disable');
+            $this->assertNoActiveDependents($slug, 'disable');
 
-        $record->update(['is_enabled' => false]);
-        if (isset($this->discoverManifests()[$slug])) {
-            $this->resolvePluginInstance($this->discoverManifests()[$slug])?->onDisable();
-        }
-        $this->audit->log('plugin.disabled', 'plugin', $slug, [], $actorId);
+            if (isset($this->discoverManifests()[$slug])) {
+                $this->resolvePluginInstance($this->discoverManifests()[$slug])?->onDisable();
+            }
+            $record->update(['is_enabled' => false]);
+            $this->audit->log('plugin.disabled', 'plugin', $slug, [], $actorId);
+
+            return $record->fresh();
+        });
+
         event(new PluginLifecycleEvent('disabled', $slug, $record->version, $actorId));
 
-        return $record->fresh();
+        return $record;
     }
 
     /**
@@ -402,27 +427,280 @@ class PluginManager
      */
     public function uninstall(string $slug, bool $confirmedPurgePluginData = false, ?int $actorId = null): PluginRecord
     {
-        $record = PluginRecord::query()->where('slug', $slug)->firstOrFail();
-        if ($record->is_core || $slug === config('plugins.core_identifier')) {
-            throw new RuntimeException('Protected Core cannot be uninstalled.');
-        }
+        $record = DB::transaction(function () use ($slug, $confirmedPurgePluginData, $actorId): PluginRecord {
+            $record = PluginRecord::query()->where('slug', $slug)->lockForUpdate()->firstOrFail();
+            if ($record->is_core || $slug === config('plugins.core_identifier')) {
+                throw new RuntimeException('Protected Core cannot be uninstalled.');
+            }
 
-        $this->assertNoActiveDependents($slug, 'uninstall');
+            $this->assertNoActiveDependents($slug, 'uninstall');
 
-        $manifest = $this->discoverManifests()[$slug] ?? null;
-        if ($record->is_enabled && $manifest) {
-            $this->resolvePluginInstance($manifest)?->onDisable();
-        }
+            $manifest = $this->discoverManifests()[$slug] ?? null;
+            if ($record->is_enabled && $manifest) {
+                $this->resolvePluginInstance($manifest)?->onDisable();
+            }
 
-        if ($manifest) {
-            $this->resolvePluginInstance($manifest)?->onUninstall($confirmedPurgePluginData);
-        }
+            if ($manifest) {
+                $this->resolvePluginInstance($manifest)?->onUninstall($confirmedPurgePluginData);
+            }
 
-        $record->update(['is_installed' => false, 'is_enabled' => false]);
-        $this->audit->log('plugin.uninstalled', 'plugin', $slug, ['purge_requested' => $confirmedPurgePluginData], $actorId);
+            $record->update(['is_installed' => false, 'is_enabled' => false]);
+            $this->audit->log('plugin.uninstalled', 'plugin', $slug, ['purge_requested' => $confirmedPurgePluginData], $actorId);
+
+            return $record->fresh();
+        });
+
         event(new PluginLifecycleEvent('uninstalled', $slug, $record->version, $actorId));
 
-        return $record->fresh();
+        return $record;
+    }
+
+    /**
+     * Move a plugin package to the private recycle bin without deleting its database records.
+     * The Core plugin and plugins with active dependents are protected by lifecycle checks.
+     */
+    public function deleteToRecycleBin(string $slug, ?int $actorId = null): array
+    {
+        if (preg_match('/^[a-z0-9][a-z0-9-]{1,79}$/', $slug) !== 1
+            || $slug === config('plugins.core_identifier')) {
+            throw new RuntimeException('Invalid or protected plugin slug.');
+        }
+
+        $modulesPath = rtrim((string) config('plugins.modules_path'), DIRECTORY_SEPARATOR);
+        $source = $modulesPath . DIRECTORY_SEPARATOR . $slug;
+        if (!is_dir($source) || !is_file($source . DIRECTORY_SEPARATOR . 'plugin.json')) {
+            throw new RuntimeException('Plugin package does not exist.');
+        }
+
+        $manifest = PluginManifest::fromDirectory($source);
+        if ($manifest->isCore || $manifest->slug !== $slug) {
+            throw new RuntimeException('Core or mismatched plugin packages cannot be deleted.');
+        }
+
+        $packageChecksums = $this->pluginDirectoryChecksums($source);
+        $record = PluginRecord::query()->where('slug', $slug)->first();
+        $wasInstalled = (bool) ($record?->is_installed);
+        $wasEnabled = (bool) ($record?->is_enabled);
+        if ($wasInstalled) {
+            $this->uninstall($slug, false, $actorId);
+        }
+
+        $trashRoot = storage_path('app/plugin-recycle-bin');
+        File::ensureDirectoryExists($trashRoot);
+        $token = now()->format('YmdHis') . '-' . bin2hex(random_bytes(5));
+        $archiveName = $slug . '-' . $token;
+        $destination = $trashRoot . DIRECTORY_SEPARATOR . $archiveName;
+        if (!File::moveDirectory($source, $destination)) {
+            if ($wasInstalled) {
+                try {
+                    $this->install($slug, $actorId);
+                    if (!$wasEnabled) {
+                        $this->disable($slug, $actorId);
+                    }
+                } catch (Throwable) {
+                    PluginRecord::query()->where('slug', $slug)->update([
+                        'is_installed' => false,
+                        'is_enabled' => false,
+                    ]);
+                }
+            }
+            throw new RuntimeException('Could not move plugin package into the recycle bin. The previous installation state was restored where possible; database records remain preserved.');
+        }
+
+        $metadata = [
+            'slug' => $slug,
+            'name' => $manifest->name,
+            'version' => $manifest->version,
+            'archive' => $archiveName,
+            'was_installed' => $wasInstalled,
+            'was_enabled' => $wasEnabled,
+            'deleted_at' => now()->toIso8601String(),
+            'files_sha256' => $packageChecksums,
+        ];
+        $metadataPath = $trashRoot . DIRECTORY_SEPARATOR . $archiveName . '.json';
+        $written = File::put($metadataPath, json_encode($metadata, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
+        if ($written === false) {
+            File::moveDirectory($destination, $source);
+            if ($wasInstalled) {
+                try {
+                    $this->install($slug, $actorId);
+                    if (!$wasEnabled) {
+                        $this->disable($slug, $actorId);
+                    }
+                } catch (Throwable) {
+                    PluginRecord::query()->where('slug', $slug)->update(['is_installed' => false, 'is_enabled' => false]);
+                }
+            }
+            throw new RuntimeException('Plugin recycle-bin metadata could not be written; the package was returned to its original location.');
+        }
+        @chmod($metadataPath, 0600);
+        $this->audit->log('plugin.deleted_to_recycle_bin', 'plugin', $slug, [
+            'archive' => $archiveName,
+            'business_data_preserved' => true,
+        ], $actorId);
+
+        return $metadata;
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    public function recycledPlugins(): array
+    {
+        $trashRoot = storage_path('app/plugin-recycle-bin');
+        if (!is_dir($trashRoot)) {
+            return [];
+        }
+
+        $items = [];
+        foreach (File::files($trashRoot) as $file) {
+            if ($file->getExtension() !== 'json') {
+                continue;
+            }
+            try {
+                $metadata = json_decode(File::get($file->getPathname()), true, 512, JSON_THROW_ON_ERROR);
+                if (is_array($metadata) && isset($metadata['slug'], $metadata['archive'])) {
+                    $items[] = $metadata;
+                }
+            } catch (Throwable) {
+                // Ignore malformed metadata; do not expose unverified archive entries.
+            }
+        }
+
+        usort($items, fn (array $a, array $b): int => strcmp((string) ($b['deleted_at'] ?? ''), (string) ($a['deleted_at'] ?? '')));
+        return $items;
+    }
+
+    public function restoreFromRecycleBin(string $archiveName, ?int $actorId = null): PluginRecord|null
+    {
+        if (preg_match('/^[a-z0-9][a-z0-9-]{1,79}-[0-9]{14}-[a-f0-9]{10}$/', $archiveName) !== 1) {
+            throw new RuntimeException('Invalid recycle-bin archive identifier.');
+        }
+
+        $trashRoot = storage_path('app/plugin-recycle-bin');
+        $metadataPath = $trashRoot . DIRECTORY_SEPARATOR . $archiveName . '.json';
+        $source = $trashRoot . DIRECTORY_SEPARATOR . $archiveName;
+        if (!is_file($metadataPath) || !is_dir($source)) {
+            throw new RuntimeException('Recycled plugin package was not found.');
+        }
+
+        $metadata = json_decode(File::get($metadataPath), true, 512, JSON_THROW_ON_ERROR);
+        $slug = (string) ($metadata['slug'] ?? '');
+        if (preg_match('/^[a-z0-9][a-z0-9-]{1,79}$/', $slug) !== 1
+            || ($metadata['archive'] ?? null) !== $archiveName
+            || !is_file($source . DIRECTORY_SEPARATOR . 'plugin.json')
+            || !is_array($metadata['files_sha256'] ?? null)
+            || $metadata['files_sha256'] !== $this->pluginDirectoryChecksums($source)) {
+            throw new RuntimeException('Recycle-bin package integrity check failed.');
+        }
+
+        $manifest = PluginManifest::fromDirectory($source);
+        if ($manifest->slug !== $slug || $manifest->isCore || !$this->isCompatible($manifest)) {
+            throw new RuntimeException('Recycled plugin is incompatible or its manifest identity is invalid.');
+        }
+
+        $target = rtrim((string) config('plugins.modules_path'), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $slug;
+        if (file_exists($target)) {
+            throw new RuntimeException('A plugin package with this slug already exists. Remove or update it before restoring.');
+        }
+        File::ensureDirectoryExists(dirname($target));
+        if (!File::moveDirectory($source, $target)) {
+            throw new RuntimeException('Could not restore plugin package files.');
+        }
+
+        try {
+            $this->registerPluginAutoload(PluginManifest::fromDirectory($target));
+            $record = null;
+            if ((bool) ($metadata['was_installed'] ?? false)) {
+                $record = $this->install($slug, $actorId);
+                if (!(bool) ($metadata['was_enabled'] ?? false)) {
+                    $this->disable($slug, $actorId);
+                }
+            }
+            @unlink($metadataPath);
+            $this->audit->log('plugin.restored_from_recycle_bin', 'plugin', $slug, [
+                'archive' => $archiveName,
+                'business_data_preserved' => true,
+            ], $actorId);
+            return $record;
+        } catch (Throwable $e) {
+            // If installation succeeded but restoring the previous enabled state failed,
+            // return the database lifecycle state to uninstalled before moving files back.
+            if ((bool) ($metadata['was_installed'] ?? false) && $this->isInstalled($slug)) {
+                try {
+                    $this->uninstall($slug, false, $actorId);
+                } catch (Throwable) {
+                    PluginRecord::query()->where('slug', $slug)->update([
+                        'is_installed' => false,
+                        'is_enabled' => false,
+                    ]);
+                }
+            }
+            if (is_dir($target)) {
+                File::moveDirectory($target, $source);
+            }
+            throw $e;
+        }
+    }
+
+    public function permanentlyDeleteFromRecycleBin(string $archiveName, ?int $actorId = null): void
+    {
+        if (preg_match('/^[a-z0-9][a-z0-9-]{1,79}-[0-9]{14}-[a-f0-9]{10}$/', $archiveName) !== 1) {
+            throw new RuntimeException('Invalid recycle-bin archive identifier.');
+        }
+        $trashRoot = storage_path('app/plugin-recycle-bin');
+        $metadataPath = $trashRoot . DIRECTORY_SEPARATOR . $archiveName . '.json';
+        $source = $trashRoot . DIRECTORY_SEPARATOR . $archiveName;
+        if (!is_file($metadataPath) || !is_dir($source)) {
+            throw new RuntimeException('Recycled plugin package was not found.');
+        }
+        $metadata = json_decode(File::get($metadataPath), true, 512, JSON_THROW_ON_ERROR);
+        $slug = (string) ($metadata['slug'] ?? '');
+        $sourceChecksums = $this->pluginDirectoryChecksums($source);
+        if (($metadata['archive'] ?? null) !== $archiveName
+            || preg_match('/^[a-z0-9][a-z0-9-]{1,79}$/', $slug) !== 1
+            || !is_array($metadata['files_sha256'] ?? null)
+            || $metadata['files_sha256'] !== $sourceChecksums) {
+            throw new RuntimeException('Recycle-bin metadata or package integrity is invalid; permanent deletion was cancelled.');
+        }
+
+        // Keep a private, integrity-checked recovery snapshot before permanent removal.
+        $backupRoot = storage_path('app/plugin-permanent-delete-backups');
+        File::ensureDirectoryExists($backupRoot);
+        @chmod($backupRoot, 0700);
+        $backupPath = $backupRoot . DIRECTORY_SEPARATOR . $archiveName;
+        if (!File::copyDirectory($source, $backupPath)) {
+            File::deleteDirectory($backupPath);
+            throw new RuntimeException('Permanent delete cancelled: could not create a private backup.');
+        }
+        @chmod($backupPath, 0700);
+        if ($this->pluginDirectoryChecksums($source) !== $this->pluginDirectoryChecksums($backupPath)) {
+            File::deleteDirectory($backupPath);
+            throw new RuntimeException('Permanent delete cancelled: backup integrity verification failed.');
+        }
+
+        if (!File::deleteDirectory($source)) {
+            throw new RuntimeException('Private backup was created, but the recycle-bin package could not be removed.');
+        }
+        @unlink($metadataPath);
+        $this->audit->log('plugin.permanently_deleted', 'plugin', $slug, [
+            'package_files_removed_from_recycle_bin' => true,
+            'private_backup_id' => $archiveName,
+            'database_records_preserved' => true,
+        ], $actorId);
+    }
+
+    /** @return array<string, string> */
+    private function pluginDirectoryChecksums(string $directory): array
+    {
+        $checksums = [];
+        foreach (File::allFiles($directory) as $file) {
+            if ($file->isLink()) {
+                throw new RuntimeException('Symlinks are not allowed in archived plugin packages.');
+            }
+            $relative = str_replace('\\\\', '/', $file->getRelativePathname());
+            $checksums[$relative] = hash_file('sha256', $file->getPathname());
+        }
+        ksort($checksums);
+        return $checksums;
     }
 
     public function saveSettings(string $slug, array $values, array $secretKeys = [], ?int $actorId = null): void
@@ -434,12 +712,79 @@ class PluginManager
                 ['plugin_slug' => $slug, 'setting_key' => (string) $key],
                 [
                     'setting_value' => $isSecret && $stringVal !== '' ? Crypt::encryptString($stringVal) : $stringVal,
-                    'is_encrypted' => $isSecret,
+                    'is_encrypted' => $isSecret && $stringVal !== '',
                 ]
             );
         }
 
         $this->audit->log('plugin.configured', 'plugin', $slug, ['keys' => array_keys($values)], $actorId);
+    }
+
+    /** Reset only plugin configuration to manifest defaults; business data is never touched. */
+    public function resetSettingsToDefaults(string $slug, ?int $actorId = null): void
+    {
+        $manifest = $this->discoverManifests()[$slug] ?? throw new RuntimeException("Unknown plugin: {$slug}");
+        if (!Schema::hasTable('plugin_settings')) {
+            throw new RuntimeException('Plugin settings storage is not available.');
+        }
+
+        DB::transaction(function () use ($slug, $manifest, $actorId): void {
+            $existingSettings = PluginSetting::query()->where('plugin_slug', $slug)->get();
+            $secretKeys = [];
+            foreach ($manifest->settingsSchema as $field) {
+                if ((bool) ($field['secret'] ?? $field['encrypted'] ?? false)) {
+                    $secretKeys[] = (string) ($field['key'] ?? '');
+                }
+            }
+
+            // Back up raw settings before reset. Secret values are ciphertext at rest;
+            // encrypt any legacy plaintext secret before writing the private backup.
+            $backupRows = $existingSettings->map(function (PluginSetting $setting) use ($secretKeys): array {
+                $row = $setting->getAttributes();
+                if (in_array((string) $setting->setting_key, $secretKeys, true)
+                    && !(bool) $setting->is_encrypted
+                    && (string) $setting->setting_value !== '') {
+                    $row['setting_value'] = Crypt::encryptString((string) $setting->setting_value);
+                    $row['is_encrypted'] = true;
+                }
+                return $row;
+            })->all();
+
+            $backupId = $slug . '-' . now()->format('YmdHis') . '-' . bin2hex(random_bytes(5));
+            $backupRoot = storage_path('app/plugin-setting-backups');
+            File::ensureDirectoryExists($backupRoot);
+            @chmod($backupRoot, 0700);
+            $backupPath = $backupRoot . DIRECTORY_SEPARATOR . $backupId . '.json';
+            File::put($backupPath, json_encode([
+                'plugin_slug' => $slug,
+                'created_at' => now()->toIso8601String(),
+                'settings' => $backupRows,
+            ], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
+            @chmod($backupPath, 0600);
+
+            PluginSetting::query()->where('plugin_slug', $slug)->delete();
+
+            $values = [];
+            foreach ($manifest->settingsSchema as $field) {
+                $key = (string) ($field['key'] ?? '');
+                if ($key === '') {
+                    continue;
+                }
+
+                $default = $field['default'] ?? '';
+                $values[$key] = is_scalar($default) ? (string) $default : json_encode($default, JSON_THROW_ON_ERROR);
+                if ((bool) ($field['secret'] ?? $field['encrypted'] ?? false)) {
+                    $secretKeys[] = $key;
+                }
+            }
+
+            $this->saveSettings($slug, $values, $secretKeys, $actorId);
+            $this->audit->log('plugin.settings_reset', 'plugin', $slug, [
+                'setting_count' => count($values),
+                'backup_id' => $backupId,
+                'business_data_preserved' => true,
+            ], $actorId);
+        });
     }
 
     public function getSetting(string $slug, string $key, ?string $default = null): ?string
@@ -466,6 +811,18 @@ class PluginManager
             ->where('slug', $slug)
             ->where('is_installed', true)
             ->where('is_enabled', true)
+            ->exists();
+    }
+
+    public function isInstalled(string $slug): bool
+    {
+        if (!Schema::hasTable('plugins')) {
+            return false;
+        }
+
+        return PluginRecord::query()
+            ->where('slug', $slug)
+            ->where('is_installed', true)
             ->exists();
     }
 
@@ -530,10 +887,20 @@ class PluginManager
                 throw new RuntimeException('Plugin archive exceeds the allowed uncompressed size.');
             }
 
-            if (is_array($stat) && isset($stat['external_attributes'])) {
-                $mode = ($stat['external_attributes'] >> 16) & 0xF000;
-                if ($mode === 0xA000) {
+            // ZipArchive::statIndex() does not expose Unix external attributes.
+            // Read them through getExternalAttributesIndex() so symlink entries
+            // cannot bypass the archive safety check and escape the staging tree.
+            $opsys = 0;
+            $externalAttributes = 0;
+            if ($zip->getExternalAttributesIndex($i, $opsys, $externalAttributes)
+                && $opsys === ZipArchive::OPSYS_UNIX
+            ) {
+                $fileType = ($externalAttributes >> 16) & 0170000;
+                if ($fileType === 0120000) {
                     throw new RuntimeException("Symlink entry blocked in ZIP: {$name}");
+                }
+                if ($fileType !== 0 && $fileType !== 0100000 && $fileType !== 0040000) {
+                    throw new RuntimeException("Special file entry blocked in ZIP: {$name}");
                 }
             }
 
@@ -714,6 +1081,24 @@ class PluginManager
         }
 
         return null;
+    }
+
+    /**
+     * Ensure a plugin installed/enabled after the application booted exposes its
+     * routes to the next request in this process (including test and admin flows).
+     * require_once prevents duplicate route registration when the service provider
+     * already loaded the same route file during boot.
+     */
+    private function loadPluginRoutes(PluginManifest $manifest): void
+    {
+        foreach (['Routes/web.php', 'Routes/api.php'] as $relative) {
+            $routeFile = rtrim($manifest->basePath, DIRECTORY_SEPARATOR)
+                . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relative);
+
+            if (is_file($routeFile)) {
+                require $routeFile;
+            }
+        }
     }
 
     private function resolvePluginInstance(PluginManifest $manifest): ?PluginInterface

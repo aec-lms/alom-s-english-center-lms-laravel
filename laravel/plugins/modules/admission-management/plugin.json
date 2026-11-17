@@ -1,18 +1,32 @@
 {
     "slug": "admission-management",
     "name": "Admission Management",
-    "version": "2.0.0",
+    "version": "2.0.1",
     "author": "Alom's English Center",
     "category": "academic",
     "description": "Online & Campus Student Admission Applications, Document Screening, and Approval Workflow.",
     "core_compatibility": "^2.0",
-    "dependencies": ["branch-management"],
+    "dependencies": [],
     "provider": "Plugins\\Modules\\AdmissionManagement\\Providers\\AdmissionManagementServiceProvider",
     "permissions": [
-        { "slug": "admissions.manage", "name": "Review & Approve Admission Applications" }
+        {
+            "slug": "admissions.manage",
+            "name": "Review & Approve Admission Applications"
+        }
     ],
     "settings_schema": [
-        { "key": "intake_status", "label": "Admission Intake Status (open/closed)", "encrypted": false },
-        { "key": "admission_fee_bdt", "label": "Default Admission Processing Fee (BDT)", "encrypted": false }
+        {
+            "key": "intake_status",
+            "label": "Admission Intake Status (open/closed)",
+            "encrypted": false
+        },
+        {
+            "key": "admission_fee_bdt",
+            "label": "Default Admission Processing Fee (BDT)",
+            "encrypted": false
+        }
+    ],
+    "optional_dependencies": [
+        "branch-management"
     ]
 }

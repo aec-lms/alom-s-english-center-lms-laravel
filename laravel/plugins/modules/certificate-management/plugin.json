@@ -1,18 +1,32 @@
 {
     "slug": "certificate-management",
     "name": "Certificate Management",
-    "version": "2.0.0",
+    "version": "2.0.1",
     "author": "Alom's English Center",
     "category": "academic",
     "description": "Digital Course Certificates, Band Score Credentials, Public Verification Codes, and Revocation Control.",
     "core_compatibility": "^2.0",
-    "dependencies": ["student-management"],
+    "dependencies": [],
     "provider": "Plugins\\Modules\\CertificateManagement\\Providers\\CertificateManagementServiceProvider",
     "permissions": [
-        { "slug": "certificates.manage", "name": "Issue & Revoke Student Certificates" }
+        {
+            "slug": "certificates.manage",
+            "name": "Issue & Revoke Student Certificates"
+        }
     ],
     "settings_schema": [
-        { "key": "signatory_name", "label": "Authorized Certificate Signatory Name", "encrypted": false },
-        { "key": "signatory_title", "label": "Signatory Title", "encrypted": false }
+        {
+            "key": "signatory_name",
+            "label": "Authorized Certificate Signatory Name",
+            "encrypted": false
+        },
+        {
+            "key": "signatory_title",
+            "label": "Signatory Title",
+            "encrypted": false
+        }
+    ],
+    "optional_dependencies": [
+        "student-management"
     ]
 }

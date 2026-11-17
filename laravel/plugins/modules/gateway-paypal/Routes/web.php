@@ -10,7 +10,7 @@ Route::middleware(['web', 'installed', 'plugin:gateway-paypal'])->group(function
     Route::get('/admin/payments/paypal', [PaypalController::class, 'index'])
         ->middleware(['auth', 'permission:payments.paypal.manage'])->name('plugins.gateway_paypal.index');
     Route::post('/payments/paypal/create-order', [PaypalController::class, 'createOrder'])
-        ->middleware(['auth', 'permission:payments.paypal.manage'])->name('plugins.gateway_paypal.create_order');
+        ->middleware('auth')->name('plugins.gateway_paypal.create_order');
     Route::get('/payments/paypal/return', [PaypalController::class, 'captureReturn'])
         ->middleware('auth')->name('plugins.gateway_paypal.return');
     Route::get('/payments/paypal/cancel', [PaypalController::class, 'cancelReturn'])

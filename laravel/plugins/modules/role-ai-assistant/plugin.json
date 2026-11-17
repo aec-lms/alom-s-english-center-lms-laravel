@@ -1,29 +1,33 @@
 {
     "slug": "role-ai-assistant",
-    "name": "Optional Role-Based AI Assistant",
-    "version": "2.0.0",
+    "name": "AEC LMS AI Assistant",
+    "version": "2.0.2",
     "author": "Alom's English Center",
     "category": "ai",
-    "description": "Optional role-scoped AI assistant with encrypted provider API keys, role allowlists, and prompt audit logging.",
+    "description": "AEC LMS role-based AI assistant with encrypted integration credentials, role allowlists, and privacy-aware audit logs.",
     "core_compatibility": "^2.0",
     "dependencies": [],
     "provider": "Plugins\\Modules\\RoleAiAssistant\\Providers\\RoleAiAssistantServiceProvider",
     "permissions": [
         {
             "slug": "ai.assistant.use",
-            "name": "Use Role-Based AI Assistant"
+            "name": "Use AEC LMS AI Assistant"
         },
         {
             "slug": "ai.assistant.configure",
-            "name": "Configure AI Provider & Role Access"
+            "name": "Configure AEC LMS AI Assistant"
         }
     ],
     "settings_schema": [
         {
             "key": "provider",
-            "label": "AI Provider (openai/gemini/anthropic)",
-            "type": "text",
-            "secret": false
+            "label": "AI Integration Provider",
+            "type": "select",
+            "secret": false,
+            "options": {
+                "openai": "OpenAI API",
+                "gemini": "Gemini API"
+            }
         },
         {
             "key": "model",
@@ -33,19 +37,19 @@
         },
         {
             "key": "api_key",
-            "label": "Provider API Key",
+            "label": "Integration API Key",
             "type": "password",
             "secret": true
         },
         {
             "key": "allowed_roles",
-            "label": "Allowed Roles (comma-separated)",
+            "label": "Allowed LMS Roles (comma-separated)",
             "type": "text",
             "secret": false
         },
         {
             "key": "max_tokens",
-            "label": "Max Output Tokens",
+            "label": "Maximum Output Tokens",
             "type": "text",
             "secret": false
         }

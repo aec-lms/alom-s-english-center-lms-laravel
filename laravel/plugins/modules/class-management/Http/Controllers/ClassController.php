@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Plugins\Modules\ClassManagement\Http\Controllers;
 
 use App\Core\Security\AuditLogger;
+use App\Core\Plugins\PluginManager;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -19,6 +20,7 @@ class ClassController extends Controller
     public function index(Request $request): View
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $classes = Schema::hasTable('academic_classes')
             ? AcademicClass::query()
                 ->when($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null, fn ($q) => $q->where('branch_id', $actor->branch_id))
@@ -33,7 +35,12 @@ class ClassController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $actor = $request->user();
-        $validated = $request->validate([
+        $this->ensureAssignedBranch($actor);
+                $branchIntegration = app(PluginManager::class)->isEnabled('branch-management') && Schema::hasTable('branches');
+        $branchRule = $branchIntegration
+            ? ['nullable', 'integer', 'exists:branches,id,is_active,1']
+            : ['nullable', 'integer'];
+$validated = $request->validate([
             'code' => ['required', 'string', 'max:40', 'unique:academic_classes,code'],
             'name' => ['required', 'string', 'max:160'],
             'section' => ['required', 'string', 'max:60'],
@@ -43,8 +50,12 @@ class ClassController extends Controller
             'start_time' => ['required', 'string', 'max:20'],
             'end_time' => ['required', 'string', 'max:20'],
             'instructor_name' => ['nullable', 'string', 'max:120'],
-            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
+            'branch_id' => $branchRule,
         ]);
+
+        if (!$branchIntegration) {
+            $validated['branch_id'] = null;
+        }
 
         if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null) {
             $validated['branch_id'] = $actor->branch_id;
@@ -56,17 +67,75 @@ class ClassController extends Controller
         return back()->with('status', "Class '{$item->name} ({$item->section})' scheduled.");
     }
 
+    public function update(Request $request, AcademicClass $academicClass): RedirectResponse
+    {
+        $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
+        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $academicClass->branch_id) {
+            abort(403, 'Branch isolation violation.');
+        }
+
+        $branchIntegration = app(PluginManager::class)->isEnabled('branch-management') && Schema::hasTable('branches');
+        $branchRule = $branchIntegration
+            ? ['nullable', 'integer', 'exists:branches,id,is_active,1']
+            : ['nullable', 'integer'];
+        $validated = $request->validate([
+            'code' => ['required', 'string', 'max:40', 'unique:academic_classes,code,' . $academicClass->id],
+            'name' => ['required', 'string', 'max:160'],
+            'section' => ['required', 'string', 'max:60'],
+            'subject' => ['required', 'string', 'max:120'],
+            'room_number' => ['nullable', 'string', 'max:60'],
+            'day_of_week' => ['required', 'string', 'max:24'],
+            'start_time' => ['required', 'string', 'max:20'],
+            'end_time' => ['required', 'string', 'max:20'],
+            'instructor_name' => ['nullable', 'string', 'max:120'],
+            'branch_id' => $branchRule,
+        ]);
+
+        if (!$branchIntegration) {
+            $validated['branch_id'] = null;
+        }
+        if ($actor && $actor->hasRole('branch_manager')) {
+            $validated['branch_id'] = (int) $actor->branch_id;
+        }
+
+        $academicClass->update($validated);
+        $this->audit->log('class.updated', 'academic_class', (string) $academicClass->id);
+        return back()->with('status', "Class '{$academicClass->name} ({$academicClass->section})' updated.");
+    }
+
     public function destroy(Request $request, AcademicClass $academicClass): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $academicClass->branch_id) {
             abort(403, 'Branch isolation violation.');
         }
         $name = $academicClass->name;
         $id = (string) $academicClass->id;
         $academicClass->delete();
-        $this->audit->log('class.deleted', 'academic_class', $id);
+        $this->audit->log('class.trashed', 'academic_class', $id);
 
-        return back()->with('status', "Class '{$name}' removed.");
+        return back()->with('status', "Class '{$name}' moved to the Admin Recycle Bin.");
+    }
+
+    private function ensureAssignedBranch($actor): void
+    {
+        if (!$actor || !$actor->hasRole('branch_manager')) {
+            return;
+        }
+        if ($actor->branch_id === null
+            || !app(PluginManager::class)->isEnabled('branch-management')
+            || !Schema::hasTable('branches')
+        ) {
+            abort(403, 'Branch manager must be assigned to a branch.');
+        }
+        $activeBranch = app('db')->table('branches')
+            ->where('id', $actor->branch_id)
+            ->where('is_active', true)
+            ->exists();
+        if (!$activeBranch) {
+            abort(403, 'Branch manager access is disabled because the assigned branch is inactive.');
+        }
     }
 }

@@ -5,7 +5,7 @@
     <div>
         <div class="inline-flex items-center px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold">Independent Communication Plugin</div>
         <h1 class="text-2xl font-extrabold text-slate-900 mt-1">SMS Marketing & Alerts Gateway</h1>
-        <p class="text-xs text-slate-500">Configure Greenweb BD, SSLWireless, Twilio, or Custom HTTP SMS gateway and send targeted SMS campaigns.</p>
+        <p class="text-xs text-slate-500">Greenweb BD is the active sending adapter. SSLWireless, Twilio, and custom HTTP adapters are listed for future integration and will not send messages yet.</p>
     </div>
 
     <div class="grid lg:grid-cols-2 gap-6">
@@ -15,14 +15,20 @@
             <div>
                 <label class="font-semibold text-slate-700 block mb-1">Provider</label>
                 <select name="provider" class="w-full rounded-xl border border-slate-300 px-3 py-2 bg-white">
-                    <option value="greenweb" {{ $config['provider'] === 'greenweb' ? 'selected' : '' }}>Greenweb BD</option>
-                    <option value="sslwireless" {{ $config['provider'] === 'sslwireless' ? 'selected' : '' }}>SSLWireless</option>
-                    <option value="twilio" {{ $config['provider'] === 'twilio' ? 'selected' : '' }}>Twilio</option>
-                    <option value="custom" {{ $config['provider'] === 'custom' ? 'selected' : '' }}>Custom HTTP Webhook</option>
+                    <option value="greenweb" {{ $config['provider'] === 'greenweb' ? 'selected' : '' }}>Greenweb BD (active adapter)</option>
+                    @if ($config['provider'] === 'sslwireless')
+                        <option value="sslwireless" selected disabled>SSLWireless (integration pending)</option>
+                    @endif
+                    @if ($config['provider'] === 'twilio')
+                        <option value="twilio" selected disabled>Twilio (integration pending)</option>
+                    @endif
+                    @if ($config['provider'] === 'custom')
+                        <option value="custom" selected disabled>Custom HTTP (integration pending)</option>
+                    @endif
                 </select>
             </div>
             <div>
-                <label class="font-semibold text-slate-700 block mb-1">Sender ID</label>
+                <label class="font-semibold text-slate-700 block mb-1">Sender ID (manage approval in Greenweb portal)</label>
                 <input name="sender_id" value="{{ $config['sender_id'] }}" class="w-full rounded-xl border border-slate-300 px-3 py-2 font-mono">
             </div>
             <div>

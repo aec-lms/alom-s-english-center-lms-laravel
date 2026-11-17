@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Plugins\Modules\NoticeBoard\Http\Controllers;
 
 use App\Core\Security\AuditLogger;
+use App\Core\Plugins\PluginManager;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 use Plugins\Modules\NoticeBoard\Models\Notice;
 
@@ -18,6 +20,7 @@ class NoticeController extends Controller
     public function index(Request $request): View
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $notices = Notice::query()
             ->when($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null, fn ($q) => $q->where(fn ($sub) => $sub->whereNull('branch_id')->orWhere('branch_id', $actor->branch_id)))
             ->orderByDesc('is_pinned')
@@ -30,13 +33,22 @@ class NoticeController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $actor = $request->user();
-        $validated = $request->validate([
+        $this->ensureAssignedBranch($actor);
+                $branchIntegration = app(PluginManager::class)->isEnabled('branch-management') && Schema::hasTable('branches');
+        $branchRule = $branchIntegration
+            ? ['nullable', 'integer', 'exists:branches,id,is_active,1']
+            : ['nullable', 'integer'];
+$validated = $request->validate([
             'title' => ['required', 'string', 'max:180'],
             'body' => ['required', 'string'],
             'audience_role' => ['required', 'in:all,student,teacher,guardian'],
-            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
+            'branch_id' => $branchRule,
             'is_pinned' => ['nullable', 'boolean'],
         ]);
+
+        if (!$branchIntegration) {
+            $validated['branch_id'] = null;
+        }
 
         if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null) {
             $validated['branch_id'] = $actor->branch_id;
@@ -55,5 +67,25 @@ class NoticeController extends Controller
         $this->audit->log('notice.published', 'notice', (string) $notice->id, ['audience' => $notice->audience_role]);
 
         return back()->with('status', 'Notice published.');
+    }
+
+    private function ensureAssignedBranch($actor): void
+    {
+        if (!$actor || !$actor->hasRole('branch_manager')) {
+            return;
+        }
+        if ($actor->branch_id === null
+            || !app(PluginManager::class)->isEnabled('branch-management')
+            || !Schema::hasTable('branches')
+        ) {
+            abort(403, 'Branch manager must be assigned to a branch.');
+        }
+        $activeBranch = app('db')->table('branches')
+            ->where('id', $actor->branch_id)
+            ->where('is_active', true)
+            ->exists();
+        if (!$activeBranch) {
+            abort(403, 'Branch manager access is disabled because the assigned branch is inactive.');
+        }
     }
 }

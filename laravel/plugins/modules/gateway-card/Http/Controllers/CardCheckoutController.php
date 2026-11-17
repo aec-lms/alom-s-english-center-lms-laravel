@@ -29,7 +29,14 @@ class CardCheckoutController extends Controller
             'last4' => ['required', 'digits:4'],
         ]);
 
-        $invoice = FeeInvoice::query()->findOrFail((int) $validated['invoice_id']);
+        $user = $request->user();
+        abort_unless($user, 401);
+
+        $invoice = FeeInvoice::query()->with('student')->findOrFail((int) $validated['invoice_id']);
+        $isFinanceOperator = $user->hasRole('admin') || $user->hasRole('accountant');
+        $isInvoiceOwner = (int) ($invoice->student?->user_id ?? 0) === (int) $user->id;
+        abort_unless($isFinanceOperator || $isInvoiceOwner, 403, 'You are not authorized to pay this invoice.');
+
         try {
             $tx = $this->gateway->authorizeTokenizedCheckout(
                 $invoice,

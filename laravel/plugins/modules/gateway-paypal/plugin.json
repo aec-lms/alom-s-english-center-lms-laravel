@@ -1,14 +1,12 @@
 {
     "slug": "gateway-paypal",
     "name": "PayPal Payment Gateway",
-    "version": "2.0.1",
+    "version": "2.0.2",
     "author": "Alom's English Center",
     "category": "payment-gateway",
     "description": "Live PayPal Orders v2 checkout and capture with OAuth credentials, server-side webhook signature verification, amount/currency matching and idempotency.",
     "core_compatibility": "^2.0",
-    "dependencies": [
-        "payment-management"
-    ],
+    "dependencies": [],
     "provider": "Plugins\\Modules\\GatewayPaypal\\Providers\\GatewayPaypalServiceProvider",
     "permissions": [
         {
@@ -48,5 +46,9 @@
                 "1": "Sandbox"
             }
         }
+    ],
+    "optional_dependencies": [
+        "payment-management",
+        "fees-management"
     ]
 }
