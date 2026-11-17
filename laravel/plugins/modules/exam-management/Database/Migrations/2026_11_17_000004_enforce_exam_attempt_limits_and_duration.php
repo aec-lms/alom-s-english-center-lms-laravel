@@ -21,14 +21,17 @@ return new class extends Migration {
             });
         }
 
-        Schema::table('exam_attempts', function (Blueprint $table): void {
-            if (Schema::hasColumn('exam_attempts', 'submitted_answers')) {
+        if (Schema::hasColumn('exam_attempts', 'submitted_answers')) {
+            Schema::table('exam_attempts', function (Blueprint $table): void {
                 $table->json('submitted_answers')->nullable()->change();
-            }
-            if (Schema::hasColumn('exam_attempts', 'submitted_at')) {
+            });
+        }
+
+        if (Schema::hasColumn('exam_attempts', 'submitted_at')) {
+            Schema::table('exam_attempts', function (Blueprint $table): void {
                 $table->timestamp('submitted_at')->nullable()->change();
-            }
-        });
+            });
+        }
 
         // Historical completed attempts predate the timer. Preserve them and
         // use their submission time as a harmless start-time fallback.
