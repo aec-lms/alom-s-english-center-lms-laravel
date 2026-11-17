@@ -208,7 +208,7 @@ class StorefrontPaymentGatewayService
             }
 
             $item = DB::table('storefront_items')->where('id', $locked->storefront_item_id)->where('type', 'ebook')->where('is_active', true)->first();
-            if (!$item || (float) $item->price <= 0 || (float) $item->price - (float) $locked->amount > 0.01) {
+            if (!$item || (float) $item->price <= 0 || abs((float) $item->price - (float) $locked->amount) > 0.01) {
                 throw new RuntimeException('The e-book price changed or the item is no longer available. Manual review is required.');
             }
 
