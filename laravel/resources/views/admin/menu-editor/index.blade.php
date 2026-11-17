@@ -46,8 +46,8 @@
                                 </td>
                                 <td class="px-3 py-3">
                                     <select name="items[{{ $index }}][visibility]" class="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm">
-                                        <option value="show">Show</option>
-                                        <option value="hide">Hide</option>
+                                        <option value="show" @selected(empty($item['hidden']))>Show</option>
+                                        <option value="hide" @selected(!empty($item['hidden']))>Hide</option>
                                     </select>
                                 </td>
                             </tr>
