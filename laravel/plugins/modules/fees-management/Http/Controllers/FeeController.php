@@ -111,4 +111,5 @@ class FeeController extends Controller
         return app(PluginManager::class)->isEnabled('student-management')
             && Schema::hasTable('students');
     }
+
 }
