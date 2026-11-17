@@ -34,7 +34,7 @@ class SetupWizardController extends Controller
         return view('admin.setup-wizard.index', compact('state', 'step', 'assets', 'logoLibraryUrl', 'faviconLibraryUrl'));
     }
 
-    public function save(Request $request, string $step): RedirectResponse
+    public function save(Request $request, string $step, ThemeManager $themes): RedirectResponse
     {
         abort_unless(in_array($step, self::STEPS, true), 404);
         if ($step === 'finish') {
