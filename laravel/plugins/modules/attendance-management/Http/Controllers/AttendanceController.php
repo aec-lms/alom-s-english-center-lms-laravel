@@ -68,6 +68,11 @@ class AttendanceController extends Controller
 
         $batch = DB::table('batches')->where('id', (int) $validated['batch_id'])->first();
         abort_unless($batch, 404, 'Batch not found.');
+        $batchMappingId = DB::table('attendance_batch_mappings')
+            ->where('source_type', 'course_batch')
+            ->where('source_id', (int) $batch->id)
+            ->value('id');
+        abort_unless($batchMappingId, 409, 'Attendance batch identity has not been initialized.');
         $items = $validated['records'] ?? [[
             'student_id' => $validated['student_id'] ?? null,
             'status' => $validated['status'] ?? null,
@@ -77,7 +82,7 @@ class AttendanceController extends Controller
         ]];
         abort_if(empty($items[0]['student_id']) || empty($items[0]['status']), 422, 'At least one student and attendance status are required.');
 
-        DB::transaction(function () use ($items, $batch, $validated, $actor, $plugins): void {
+        DB::transaction(function () use ($items, $batch, $batchMappingId, $validated, $actor, $plugins): void {
             foreach ($items as $item) {
                 $student = Student::query()->findOrFail((int) $item['student_id']);
                 abort_if((int) ($batch->branch_id ?? 0) !== (int) ($student->branch_id ?? 0), 422, 'Student and batch must belong to the same branch.');
@@ -110,6 +115,7 @@ class AttendanceController extends Controller
                 $record ??= new AttendanceRecord();
                 $record->fill([
                     'batch_id' => (int) $batch->id,
+                    'attendance_batch_mapping_id' => (int) $batchMappingId,
                     'student_id' => (int) $student->id,
                     'branch_id' => (int) $student->branch_id,
                     'attendance_date' => $validated['attendance_date'],
