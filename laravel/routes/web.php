@@ -153,6 +153,11 @@ Route::middleware('installed')->group(function (): void {
             Route::post('/', [SiteLayoutController::class, 'update'])->name('update');
         });
 
+        Route::prefix('site-widgets')->name('site-widgets.')->middleware('permission:core.settings.manage')->group(function (): void {
+            Route::get('/', [SiteWidgetController::class, 'index'])->name('index');
+            Route::post('/', [SiteWidgetController::class, 'update'])->name('update');
+        });
+
         Route::prefix('appearance')->name('appearance.')->middleware('permission:core.settings.manage')->group(function (): void {
             Route::get('/', [AppearanceController::class, 'index'])->name('index');
             Route::post('/', [AppearanceController::class, 'update'])->name('update');
