@@ -33,7 +33,8 @@
             "group": "CMS, Builders & AI",
             "label": "Carousel Builder",
             "route": "plugins.carousel_builder.index",
-            "order": 100
+            "order": 100,
+            "permission": "carousel_builder.manage"
         }
     ]
 }
