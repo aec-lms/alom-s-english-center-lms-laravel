@@ -23,7 +23,7 @@
             @forelse ($records as $record)
                 <tr>
                     <td>{{ $record->attendance_date?->toDateString() }}</td>
-                    <td>{{ $record->batchIdentity?->display_name ?? ('Batch #' . $record->batch_id) }}</td>
+                    <td>{{ $record->batchIdentity?->display_name ?? ('Batch #' . $record->attendance_batch_mapping_id) }}</td>
                     <td class="status">{{ $record->status }}</td>
                     <td>{{ $record->remarks ?? '—' }}</td>
                 </tr>
