@@ -132,6 +132,14 @@ class PortalController extends Controller
             ];
         }
 
+        $notifications = Schema::hasTable('lms_notifications')
+            ? DB::table('lms_notifications')
+                ->where('user_id', $user->id)
+                ->latest('id')
+                ->limit(10)
+                ->get()
+            : collect();
+
         $notices = Schema::hasTable('notices')
             ? DB::table('notices')
                 ->where(function ($q) use ($role) {
@@ -150,7 +158,7 @@ class PortalController extends Controller
         return view('portals.dashboard', compact(
             'user', 'role', 'student', 'teacher', 'guardian', 'enrollments',
             'invoices', 'attendance', 'attempts', 'courses', 'liveClasses',
-            'children', 'metrics', 'notices'
+            'children', 'metrics', 'notices', 'notifications'
         ));
     }
 }

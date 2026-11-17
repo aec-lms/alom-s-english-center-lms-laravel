@@ -12,3 +12,10 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:notification-center', 'pe
         Route::get('/', [NotificationController::class, 'index'])->name('index');
         Route::post('/dispatch', [NotificationController::class, 'dispatch'])->name('dispatch');
     });
+
+Route::middleware(['web', 'installed', 'auth', 'plugin:notification-center'])
+    ->prefix('my-notifications')
+    ->name('my-notifications.')
+    ->group(function (): void {
+        Route::post('/{notification}/read', [NotificationController::class, 'markRead'])->name('read');
+    });

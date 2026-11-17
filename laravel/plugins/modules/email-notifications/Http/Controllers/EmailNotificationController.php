@@ -61,20 +61,48 @@ class EmailNotificationController extends Controller
     {
         $validated = $request->validate([
             'recipient_email' => ['required', 'email', 'max:160'],
-            'subject' => ['required', 'string', 'max:200'],
-            'message' => ['required', 'string', 'max:5000'],
-            'template_key' => ['nullable', 'string', 'max:80'],
+            'template_key' => ['nullable', 'string', 'max:80', 'exists:email_templates,template_key'],
+            'subject' => ['nullable', 'required_without:template_key', 'string', 'max:200'],
+            'message' => ['nullable', 'required_without:template_key', 'string', 'max:10000'],
         ]);
 
-        $smtpHost = (string) $this->plugins->getSetting('email-notifications', 'smtp_host', '');
-        $status = 'queued';
+        $template = !empty($validated['template_key'])
+            ? EmailTemplate::query()->where('template_key', $validated['template_key'])->where('is_active', true)->firstOrFail()
+            : null;
+        $subject = $template?->subject ?? (string) ($validated['subject'] ?? '');
+        $html = $template?->body_html ?? nl2br(e((string) ($validated['message'] ?? '')));
 
-        if ($smtpHost !== '') {
+        $smtpHost = trim((string) $this->plugins->getSetting('email-notifications', 'smtp_host', ''));
+        $smtpPort = (int) $this->plugins->getSetting('email-notifications', 'smtp_port', '587');
+        $smtpUsername = trim((string) $this->plugins->getSetting('email-notifications', 'smtp_username', ''));
+        $smtpPassword = (string) $this->plugins->getSetting('email-notifications', 'smtp_password', '');
+        $fromAddress = trim((string) $this->plugins->getSetting('email-notifications', 'from_address', config('mail.from.address', '')));
+        $status = 'not_configured';
+        $dispatchedAt = null;
+
+        $credentialsAreConsistent = ($smtpUsername === '') === ($smtpPassword === '');
+        if ($smtpHost !== '' && $smtpPort >= 1 && $smtpPort <= 65535
+            && filter_var($fromAddress, FILTER_VALIDATE_EMAIL)
+            && $credentialsAreConsistent) {
             try {
-                Mail::raw($validated['message'], function ($mail) use ($validated): void {
-                    $mail->to($validated['recipient_email'])->subject($validated['subject']);
+                $mailer = Mail::build([
+                    'transport' => 'smtp',
+                    'scheme' => $smtpPort === 465 ? 'smtps' : 'smtp',
+                    'host' => $smtpHost,
+                    'port' => $smtpPort,
+                    'username' => $smtpUsername !== '' ? $smtpUsername : null,
+                    'password' => $smtpPassword !== '' ? $smtpPassword : null,
+                    'timeout' => 10,
+                    'local_domain' => config('mail.mailers.smtp.local_domain'),
+                ]);
+
+                $mailer->html($html, function ($mail) use ($validated, $subject, $fromAddress): void {
+                    $mail->to(strtolower($validated['recipient_email']))
+                        ->from($fromAddress, (string) config('mail.from.name', config('app.name')))
+                        ->subject($subject);
                 });
                 $status = 'sent';
+                $dispatchedAt = now();
             } catch (\Throwable) {
                 $status = 'failed';
             }
@@ -82,15 +110,21 @@ class EmailNotificationController extends Controller
 
         $log = EmailLog::query()->create([
             'recipient_email' => strtolower($validated['recipient_email']),
-            'subject' => $validated['subject'],
-            'body_excerpt' => mb_substr(strip_tags($validated['message']), 0, 240),
-            'template_key' => $validated['template_key'] ?? null,
+            'subject' => $subject,
+            'body_excerpt' => mb_substr(strip_tags($html), 0, 240),
+            'template_key' => $template?->template_key,
             'status' => $status,
-            'dispatched_at' => now(),
+            'dispatched_at' => $dispatchedAt,
         ]);
 
         $this->audit->log('email.dispatched', 'email_log', (string) $log->id, ['status' => $status]);
 
-        return back()->with('status', "Email dispatch recorded ({$status}).");
+        $message = match ($status) {
+            'sent' => 'Email accepted by the configured SMTP server.',
+            'failed' => 'SMTP delivery failed. Check the provider settings and delivery logs.',
+            default => 'Email was not sent because SMTP is not fully configured.',
+        };
+
+        return back()->with('status', $message);
     }
 }

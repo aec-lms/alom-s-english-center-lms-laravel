@@ -21,6 +21,7 @@ class StaffPayroll extends Model
         'net_paid',
         'status',
         'paid_at',
+        'payment_reference',
     ];
 
     protected $casts = [

@@ -18,7 +18,7 @@
             @csrf
             <input name="title" required placeholder="Exam Title (e.g. IELTS Mock 02) *" class="sm:col-span-2 rounded-lg border border-slate-300 px-3 py-2">
             <select name="course_id" class="rounded-lg border border-slate-300 px-3 py-2 bg-white">
-                <option value="0">Standalone / General Exam</option>
+                <option value="">Standalone / General Exam</option>
                 @foreach ($courses as $course)
                     <option value="{{ $course->id }}">{{ $course->title }}</option>
                 @endforeach

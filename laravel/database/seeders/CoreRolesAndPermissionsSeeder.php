@@ -37,6 +37,7 @@ class CoreRolesAndPermissionsSeeder extends Seeder
             ['slug' => 'core.updates.manage', 'name' => 'Manage Core & Plugin Updates', 'module' => 'core'],
             ['slug' => 'core.backups.manage', 'name' => 'Create & Restore Encrypted Backups', 'module' => 'core'],
             ['slug' => 'core.audit.view', 'name' => 'View Security Audit Logs', 'module' => 'core'],
+            ['slug' => 'core.recycle_bin.manage', 'name' => 'View Recycle Bin and Restore Records', 'module' => 'core'],
             ['slug' => 'core.settings.manage', 'name' => 'Manage Core System Settings', 'module' => 'core'],
         ];
 

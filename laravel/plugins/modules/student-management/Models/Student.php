@@ -6,10 +6,13 @@ namespace Plugins\Modules\StudentManagement\Models;
 
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Student extends Model
 {
+    use SoftDeletes;
+
     protected $fillable = ['user_id', 'branch_id', 'student_code', 'admission_date', 'status'];
 
     protected function casts(): array
