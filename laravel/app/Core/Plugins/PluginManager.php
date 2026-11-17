@@ -1086,8 +1086,8 @@ class PluginManager
     /**
      * Ensure a plugin installed/enabled after the application booted exposes its
      * routes to the next request in this process (including test and admin flows).
-     * require_once prevents duplicate route registration when the service provider
-     * already loaded the same route file during boot.
+     * Route files are required again after runtime installation so newly enabled
+     * modules are available without restarting the application.
      */
     private function loadPluginRoutes(PluginManifest $manifest): void
     {
