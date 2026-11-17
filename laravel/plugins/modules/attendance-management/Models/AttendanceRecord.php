@@ -13,6 +13,11 @@ class AttendanceRecord extends Model
         'status', 'remarks', 'marked_by', 'sync_uuid', 'source', 'edited_reason',
     ];
 
+    public function batchIdentity(): BelongsTo
+    {
+        return $this->belongsTo(AttendanceBatchMapping::class, 'attendance_batch_mapping_id');
+    }
+
     protected $casts = [
         'attendance_date' => 'date',
     ];
