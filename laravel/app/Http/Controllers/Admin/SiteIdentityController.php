@@ -41,8 +41,8 @@ class SiteIdentityController extends Controller
             'address' => ['nullable', 'string', 'max:255'],
             'login_title' => ['required', 'string', 'max:120'],
             'login_message' => ['nullable', 'string', 'max:300'],
-            'logo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
-            'favicon' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:512'],
+            'logo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'dimensions:max_width=4000,max_height=4000', 'max:2048'],
+            'favicon' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'dimensions:ratio=1/1,max_width=512,max_height=512', 'max:512'],
             'remove_logo' => ['nullable', 'boolean'],
             'remove_favicon' => ['nullable', 'boolean'],
         ]);
