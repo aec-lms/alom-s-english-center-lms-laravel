@@ -15,7 +15,7 @@ final class AdminMenuRegistry
      *
      * @return array<string, array<int, array{label:string,route:string,permission:?string,plugin:string,order:int}>>
      */
-    public function groups(): array
+    public function groups(bool $includeHidden = false): array
     {
         $user = auth()->user();
         if (!$user) {
@@ -82,7 +82,8 @@ final class AdminMenuRegistry
                         foreach ($items as $item) {
                             $key = $item['plugin'] . '|' . $item['route'];
                             $preference = $saved[$key] ?? [];
-                            if ((bool) ($preference['hidden'] ?? false)) {
+                            $item['hidden'] = (bool) ($preference['hidden'] ?? false);
+                            if ($item['hidden'] && !$includeHidden) {
                                 continue;
                             }
                             if (isset($preference['order']) && is_numeric($preference['order'])) {
@@ -96,7 +97,7 @@ final class AdminMenuRegistry
                     }
                     $groups = $regrouped;
                 }
-            } catch (\\JsonException) {
+            } catch (\JsonException) {
                 // Invalid saved settings must never break Admin navigation.
             }
         }
