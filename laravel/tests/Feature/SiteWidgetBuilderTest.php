@@ -15,7 +15,7 @@ class SiteWidgetBuilderTest extends TestCase
         $admin = $this->createUserWithRole('admin', null, 'site-widgets-admin@aec.test');
 
         $this->actingAs($admin)->get(route('admin.site-widgets.index'))
-            ->assertOk()->assertSee('Widget Area &amp; Sidebar Builder');
+            ->assertOk()->assertSee('Widget Area & Sidebar Builder');
 
         $this->actingAs($admin)->post(route('admin.site-widgets.update'), [
             'widgets' => [
