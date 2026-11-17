@@ -3,6 +3,7 @@ declare(strict_types=1);
 namespace Plugins\Modules\LearnAndEarn\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Core\Plugins\PluginManager;
+use App\Core\Security\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -86,7 +87,11 @@ class LearnAndEarnController extends Controller {
   }
  }
  public function grantAccess(Request $r,Exam $exam):RedirectResponse {
-  $v=$r->validate(['user_id'=>['required','integer','exists:users,id'],'payment_reference'=>['nullable','string','max:190']]);abort_unless($exam->learn_earn_type==='paid',422,'This is not a paid exam.');
-  DB::table('learn_earn_exam_access')->updateOrInsert(['exam_id'=>$exam->id,'user_id'=>$v['user_id']],['status'=>'granted','payment_reference'=>$v['payment_reference']??null,'granted_at'=>now(),'created_at'=>now(),'updated_at'=>now()]);return back()->with('status','Verified access granted.');
+  $v=$r->validate(['user_id'=>['required','integer','exists:users,id'],'payment_reference'=>['required','string','max:190']]);abort_unless($exam->learn_earn_type==='paid',422,'This is not a paid exam.');
+  $reference=trim($v['payment_reference']);
+  abort_if($reference==='',422,'A verified payment or bank/cash receipt reference is required.');
+  DB::table('learn_earn_exam_access')->updateOrInsert(['exam_id'=>$exam->id,'user_id'=>$v['user_id']],['status'=>'granted','payment_reference'=>$reference,'granted_at'=>now(),'created_at'=>now(),'updated_at'=>now()]);
+  app(AuditLogger::class)->log('learn_earn.exam_access_manually_granted','learn_earn_exam_access',(string)$exam->id,['user_id'=>(int)$v['user_id'],'payment_reference'=>$reference]);
+  return back()->with('status','Manual exam access granted and recorded for audit.');
  }
 }
