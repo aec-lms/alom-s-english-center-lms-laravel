@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Plugins\Modules\AttendanceManagement\Models\AttendanceBatchMapping;
+use Plugins\Modules\AttendanceManagement\Models\AttendanceEntry;
 use Plugins\Modules\AttendanceManagement\Models\AttendanceRecord;
 use Plugins\Modules\StudentManagement\Models\Student;
 
@@ -114,6 +115,34 @@ class AttendanceSyncController extends Controller
                     'edited_reason' => $changed ? $item['edit_reason'] : null,
                 ]);
                 $record->save();
+
+                $entry = AttendanceEntry::query()->updateOrCreate(
+                    [
+                        'attendance_batch_mapping_id' => (int) $batchMappingId,
+                        'student_id' => (int) $student->id,
+                        'attendance_date' => $validated['attendance_date'],
+                    ],
+                    [
+                        'branch_id' => (int) $student->branch_id,
+                        'status' => $record->status,
+                        'remarks' => $record->remarks,
+                        'marked_by' => $actor->id,
+                        'sync_uuid' => $record->sync_uuid,
+                        'source' => $record->source ?? 'online',
+                        'edited_reason' => $record->edited_reason,
+                    ]
+                );
+
+                DB::table('attendance_entry_audit_logs')->insert([
+                    'attendance_entry_id' => $entry->id,
+                    'actor_id' => $actor->id,
+                    'event' => $isEdit ? ($changed ? 'updated' : 'reconfirmed') : 'created',
+                    'old_status' => $oldStatus,
+                    'new_status' => $entry->status,
+                    'reason' => $changed ? $reason : null,
+                    'source' => $validated['source'] ?? 'online',
+                    'occurred_at' => now(),
+                ]);
 
                 DB::table('attendance_audit_logs')->insert([
                     'attendance_record_id' => $record->id,
