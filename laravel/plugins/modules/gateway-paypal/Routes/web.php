@@ -8,7 +8,7 @@ use Plugins\Modules\GatewayPaypal\Http\Controllers\PaypalController;
 
 Route::middleware(['web', 'installed', 'plugin:gateway-paypal'])->group(function (): void {
     Route::get('/admin/payments/paypal', [PaypalController::class, 'index'])
-        ->middleware(['auth', 'permission:payments.paypal.manage'])->name('plugins.gateway_paypal.index');
+        ->middleware(['auth', 'permission:payments.paypal.manage', 'central.admin'])->name('plugins.gateway_paypal.index');
     Route::post('/payments/paypal/create-order', [PaypalController::class, 'createOrder'])
         ->middleware('auth')->name('plugins.gateway_paypal.create_order');
     Route::get('/payments/paypal/return', [PaypalController::class, 'captureReturn'])
