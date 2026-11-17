@@ -25,7 +25,8 @@ class SiteNavigationBuilderTest extends TestCase
                 'primary' => [
                     ['label' => 'Home', 'url' => '/', 'order' => 10, 'visibility' => 'show'],
                     ['label' => 'Admissions', 'url' => '/admissions', 'order' => 20, 'visibility' => 'show'],
-                    ['label' => 'External Partner', 'url' => 'https://partner.example.test', 'order' => 30, 'visibility' => 'hide'],
+                    ['label' => 'Partner Portal', 'url' => 'https://partner.example.test', 'order' => 30, 'visibility' => 'show'],
+                    ['label' => 'External Partner', 'url' => 'https://hidden.example.test', 'order' => 40, 'visibility' => 'hide'],
                 ],
                 'footer' => [
                     ['label' => 'About', 'url' => '/about-us', 'order' => 10, 'visibility' => 'show'],
@@ -46,6 +47,7 @@ class SiteNavigationBuilderTest extends TestCase
             ->assertOk()
             ->assertSee('Admissions')
             ->assertSee('href="/admissions"', false)
+            ->assertSee('href="https://partner.example.test" target="_blank" rel="noopener noreferrer"', false)
             ->assertDontSee('External Partner');
 
         $this->assertSame(['About', 'Contact'], array_column(app(SiteNavigationManager::class)->items('footer'), 'label'));
