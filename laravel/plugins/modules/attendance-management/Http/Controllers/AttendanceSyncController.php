@@ -11,6 +11,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Plugins\Modules\AttendanceManagement\Models\AttendanceBatchMapping;
 use Plugins\Modules\AttendanceManagement\Models\AttendanceRecord;
 use Plugins\Modules\StudentManagement\Models\Student;
 
