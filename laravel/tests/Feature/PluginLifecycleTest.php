@@ -58,6 +58,20 @@ class PluginLifecycleTest extends TestCase
         }
     }
 
+    public function test_every_current_plugin_declares_no_required_sibling_dependencies(): void
+    {
+        $this->markSystemInstalled();
+        $manager = app(PluginManager::class);
+        $manager->syncCatalog();
+
+        $manifests = $manager->discoverManifests();
+        $this->assertNotEmpty($manifests);
+
+        foreach ($manifests as $slug => $manifest) {
+            $this->assertSame([], $manifest->dependencies, "{$slug} must use optional integrations rather than required sibling plugins.");
+        }
+    }
+
     public function test_academic_and_finance_plugins_install_without_optional_sibling_plugins(): void
     {
         $this->markSystemInstalled();
