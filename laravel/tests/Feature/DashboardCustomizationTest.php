@@ -70,4 +70,31 @@ class DashboardCustomizationTest extends TestCase
         $this->actingAs($student)->post(route('admin.dashboard.widgets'), ['widgets' => ['users']])
             ->assertForbidden();
     }
+
+    public function test_admin_can_reorder_dashboard_widgets_and_order_is_preserved_on_render(): void
+    {
+        $this->markSystemInstalled();
+        $admin = $this->createUserWithRole('admin', null, 'dashboard-order@aec.test');
+
+        $this->actingAs($admin)->post(route('admin.dashboard.widgets'), [
+            'widgets' => ['audit_trail', 'system_info', 'users'],
+        ])->assertRedirect(route('admin.dashboard'));
+
+        $stored = SystemSetting::query()
+            ->where('key', 'admin.dashboard.widgets.user.' . $admin->id)
+            ->value('value');
+        $this->assertSame(['audit_trail', 'system_info', 'users'], json_decode($stored, true));
+
+        $response = $this->actingAs($admin)->get(route('admin.dashboard'))->assertOk();
+        $html = $response->getContent();
+        $auditPosition = strpos($html, 'data-dashboard-widget="audit_trail"');
+        $systemPosition = strpos($html, 'data-dashboard-widget="system_info"');
+        $usersPosition = strpos($html, 'data-dashboard-widget="users"');
+        $this->assertNotFalse($auditPosition);
+        $this->assertNotFalse($systemPosition);
+        $this->assertNotFalse($usersPosition);
+        $this->assertTrue($auditPosition < $systemPosition && $systemPosition < $usersPosition);
+    }
+
+
 }
