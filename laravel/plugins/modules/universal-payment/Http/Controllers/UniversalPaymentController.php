@@ -28,7 +28,7 @@ class UniversalPaymentController extends Controller
     {
         $enabledRaw = $this->plugins->getSetting('universal-payment', 'enabled_gateways', 'sslcommerz,bkash,nagad,rocket,card,bank_cash');
         $config = [
-            'default_currency' => $this->plugins->getSetting('universal-payment', 'default_currency', 'BDT'),
+            'default_currency' => $this->plugins->getSetting('universal-payment', 'default_currency', (string) config('lms.default_currency', 'BDT')),
             'enabled_gateways' => array_filter(array_map('trim', explode(',', (string) $enabledRaw))),
         ];
         $transactions = Schema::hasTable('universal_payment_transactions')
@@ -41,13 +41,13 @@ class UniversalPaymentController extends Controller
     public function saveGateways(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'default_currency' => ['required', 'in:BDT,USD,EUR,GBP'],
+            'default_currency' => ['required', 'string', 'regex:/^[A-Z]{3}$/'],
             'gateways' => ['nullable', 'array'],
             'gateways.*' => ['string', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,bank_cash'],
         ]);
 
         $values = [
-            'default_currency' => $validated['default_currency'],
+            'default_currency' => strtoupper($validated['default_currency']),
             'enabled_gateways' => implode(',', $validated['gateways'] ?? []),
         ];
 
