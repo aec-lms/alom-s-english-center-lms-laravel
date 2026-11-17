@@ -69,8 +69,14 @@ class BackupRestoreRehearsalCommand extends Command
         $this->warn("This will REPLACE application tables in rehearsal database '{$targetDatabase}'.");
         $this->line('The live production database remains the source and will not be restored into.');
 
+        $rehearsalPrivatePath = storage_path('app/restore-rehearsal-private/' . bin2hex(random_bytes(8)));
+
         try {
-            config(['database.default' => $targetConnection]);
+            // Never let a rehearsal restore overwrite the live application's private uploads.
+            config([
+                'database.default' => $targetConnection,
+                'lms.private_storage_path' => $rehearsalPrivatePath,
+            ]);
             DB::purge($targetConnection);
             DB::reconnect($targetConnection);
 
@@ -80,6 +86,7 @@ class BackupRestoreRehearsalCommand extends Command
             $this->info('Backup restore rehearsal completed successfully.');
             $this->line('Target database: ' . $targetDatabase);
             $this->line('Backup: ' . $backup->filename);
+            if ($backup->includes_files) $this->line('Private files staged under: ' . $rehearsalPrivatePath);
             foreach ((array) ($backup->metadata['tables'] ?? []) as $table) {
                 if (Schema::hasTable($table)) {
                     $this->line($table . ': ' . number_format(DB::table($table)->count()) . ' rows');

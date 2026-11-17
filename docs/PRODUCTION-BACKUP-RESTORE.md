@@ -50,7 +50,7 @@ php artisan config:cache
 php artisan lms:backup:rehearse BACKUP_ID --connection=backup_rehearsal --confirm-target=aec_lms_restore_rehearsal
 ```
 
-The command refuses to run unless the connection is separate from the configured default database and the exact target database name is confirmed. It restores only into the rehearsal database and prints row counts for the restored tables. Review the output and application health on a separate staging URL before approving a production recovery procedure.
+The command refuses to run unless the connection is separate from the configured default database and the exact target database name is confirmed. It restores only into the rehearsal database and prints row counts for the restored tables. If the backup includes private files, they are restored under a separate `storage/app/restore-rehearsal-private/` directory—not into the live LMS private-upload directory. Review the output and application health on a separate staging URL before approving a production recovery procedure. Remove the rehearsal private-file directory after review.
 
 ## 4. Operational safety
 
