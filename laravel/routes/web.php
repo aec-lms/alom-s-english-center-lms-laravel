@@ -84,6 +84,11 @@ Route::middleware('installed')->group(function (): void {
             ->name('menu-editor.update')
             ->middleware('permission:core.settings.manage');
 
+        Route::prefix('site-navigation')->name('site-navigation.')->middleware('permission:core.settings.manage')->group(function (): void {
+            Route::get('/', [SiteNavigationController::class, 'index'])->name('index');
+            Route::post('/', [SiteNavigationController::class, 'update'])->name('update');
+        });
+
         Route::prefix('plugins')->name('plugins.')->middleware('permission:core.plugins.manage')->group(function (): void {
             Route::get('/', [PluginCenterController::class, 'index'])->name('index');
             Route::post('/upload', [PluginCenterController::class, 'upload'])->name('upload');
