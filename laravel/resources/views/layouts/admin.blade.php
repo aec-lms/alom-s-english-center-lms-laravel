@@ -1,10 +1,11 @@
 <!doctype html>
-<html lang="en">
+@php($rtl = in_array(substr(strtolower(str_replace('_', '-', app()->getLocale())), 0, 2), ['ar', 'fa', 'he', 'ur', 'ps', 'dv'], true))
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" dir="{{ $rtl ? 'rtl' : 'ltr' }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>@yield('title', 'Panel — AEC LMS')</title>
+    <title>@yield('title', 'Panel — ' . config('app.name'))</title>
     @inject('themeManager', 'App\\Core\\Appearance\\ThemeManager')
     <style>
         :root { {!! $themeManager->cssVariables() !!} }
@@ -44,7 +45,7 @@
 <div class="min-h-screen flex">
     <aside class="w-64 text-slate-200 flex flex-col shrink-0 border-r border-white/10">
         <div class="px-5 py-4 border-b border-white/10">
-            <div class="text-sm font-extrabold tracking-tight text-white">AEC LMS Core</div>
+            <div class="text-sm font-extrabold tracking-tight text-white">{{ config('app.name') }} Core</div>
             <div class="text-[11px] text-[#38BDF8] font-medium">Core + Independent Plugins</div>
         </div>
         @inject('pluginManager', 'App\Core\Plugins\PluginManager')
@@ -56,6 +57,7 @@
             <a href="{{ route('admin.updates.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Update Center</a>
             <a href="{{ route('admin.backups.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Backup & Restore</a>
             <a href="{{ route('admin.audit.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Audit Logs</a>
+            <a href="{{ route('admin.institution-settings.edit') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Institution &amp; Region</a>
             <a href="{{ route('admin.appearance.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Design &amp; Appearance</a>
 
             <div class="px-3 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Marketing, Growth & SEO</div>
