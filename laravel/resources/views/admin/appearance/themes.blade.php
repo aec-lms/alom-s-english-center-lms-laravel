@@ -9,7 +9,7 @@
     @if(session('status'))<div role="status" class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">{{ session('status') }}</div>@endif
     @if($errors->any())<div role="alert" class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800"><strong>Theme package could not be processed.</strong><ul class="mt-1 list-disc pl-5">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
     <section class="rounded-2xl border border-slate-200 bg-white p-5 space-y-4">
-        <div><h2 class="text-lg font-extrabold text-slate-900">Upload Theme ZIP</h2><p class="mt-1 text-xs leading-5 text-slate-500">A package must contain a root-level theme.json file. Optional preview images and README.md are accepted. Only validated color and typography tokens are applied.</p></div>
+        <div><h2 class="text-lg font-extrabold text-slate-900">Upload Theme ZIP</h2><p class="mt-1 text-xs leading-5 text-slate-500">A package must contain only a root-level theme.json file. Only validated color and typography tokens are applied.</p></div>
         <form method="POST" action="{{ route('admin.appearance.themes.upload') }}" enctype="multipart/form-data" class="flex flex-wrap items-center gap-3">
             @csrf
             <input type="file" name="theme_zip" accept=".zip,application/zip" required class="min-w-0 flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm">
