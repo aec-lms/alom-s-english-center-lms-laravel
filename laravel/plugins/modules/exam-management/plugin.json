@@ -24,7 +24,8 @@
             "group": "Academic & Operations",
             "label": "Exams & Bank",
             "route": "plugins.exams.index",
-            "order": 100
+            "order": 100,
+            "permission": "exams.manage"
         }
     ]
 }
