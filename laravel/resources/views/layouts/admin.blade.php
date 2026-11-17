@@ -54,33 +54,6 @@
                 <span>Visit Public Site</span>
             </a>
         </div>
-        @php
-            $managerForNavigation = app(\App\Core\Plugins\PluginManager::class);
-            $staticPluginRouteNames = ['plugins.meta_pixel.index', 'plugins.google_console.index', 'plugins.boost.index', 'plugins.popups.index', 'plugins.seo.index', 'plugins.sms.index', 'plugins.marketing.index', 'plugins.gmail.index', 'plugins.email_notifications.index', 'plugins.notices.index', 'plugins.branches.index', 'plugins.admissions.index', 'plugins.students.index', 'plugins.teachers.index', 'plugins.guardians.index', 'plugins.courses.index', 'plugins.enrollments.index', 'plugins.classes.index', 'plugins.batches.index', 'plugins.exams.index', 'plugins.attendance.index', 'plugins.certificates.index', 'plugins.library.index', 'plugins.hr.index', 'plugins.fees.index', 'plugins.payments.index', 'plugins.universal_payment.index', 'plugins.gateway_stripe.index', 'plugins.gateway_paypal.index', 'plugins.media.index', 'plugins.storefront.index', 'plugins.cms.index', 'plugins.page_builder.index', 'plugins.slider_builder.index', 'plugins.carousel_builder.index', 'plugins.notifications.index', 'plugins.reports.index', 'plugins.mobile_app.index', 'plugins.ai.index', 'plugins.ai.ask'];
-            $dynamicPluginLinks = [];
-            foreach ($managerForNavigation->discoverManifests() as $pluginSlug => $pluginManifest) {
-                if (!$managerForNavigation->isEnabled($pluginSlug)) {
-                    continue;
-                }
-
-                $controllerPrefix = 'Plugins\\Modules\\' . \Illuminate\Support\Str::studly(str_replace('-', ' ', $pluginSlug)) . '\\';
-                foreach (Route::getRoutes() as $registeredRoute) {
-                    $routeName = $registeredRoute->getName();
-                    if (!is_string($routeName)
-                        || !str_starts_with($routeName, 'plugins.')
-                        || !str_ends_with($routeName, '.index')
-                        || in_array($routeName, $staticPluginRouteNames, true)
-                        || !in_array('GET', $registeredRoute->methods(), true)
-                        || !str_starts_with($registeredRoute->getActionName(), $controllerPrefix)
-                    ) {
-                        continue;
-                    }
-
-                    $dynamicPluginLinks[$pluginSlug] = ['route' => $routeName, 'label' => $pluginManifest->name];
-                    break;
-                }
-            }
-        @endphp
         <nav class="flex-1 p-3 space-y-1 text-sm overflow-y-auto">
             <div class="px-3 pt-1 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Protected Core</div>
             <a href="{{ route('admin.dashboard') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Dashboard</a>
@@ -217,12 +190,6 @@
                 <a href="{{ route('plugins.ai.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Panel AI Assistant</a>
             @endif
 
-            @if (count($dynamicPluginLinks) > 0)
-                <div class="px-3 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Additional Enabled Plugins</div>
-                @foreach ($dynamicPluginLinks as $pluginLink)
-                    <a href="{{ route($pluginLink['route']) }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">{{ $pluginLink['label'] }}</a>
-                @endforeach
-            @endif
         </nav>
         <div class="p-3 border-t border-slate-800">
             <form method="POST" action="{{ route('logout') }}">
