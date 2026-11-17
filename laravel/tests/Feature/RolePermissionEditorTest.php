@@ -78,4 +78,29 @@ class RolePermissionEditorTest extends TestCase
             'slug' => 'Invalid Slug!',
         ])->assertSessionHasErrors('slug');
     }
+    public function test_custom_user_manager_cannot_grant_protected_admin_role(): void
+    {
+        $this->markSystemInstalled();
+        $permission = Permission::query()->where('slug', 'core.users.manage')->firstOrFail();
+        $managerRole = Role::query()->create([
+            'name' => 'User Manager',
+            'slug' => 'user_manager',
+            'description' => 'Can manage ordinary users',
+            'is_system' => false,
+        ]);
+        $managerRole->permissions()->sync([$permission->id]);
+        $manager = $this->createUserWithRole('student', null, 'limited-user-manager@aec.test');
+        $manager->roles()->sync([$managerRole->id]);
+        $adminRole = Role::query()->where('slug', 'admin')->firstOrFail();
+
+        $this->actingAs($manager)->post(route('admin.users.store'), [
+            'name' => 'Unexpected Administrator',
+            'email' => 'unexpected-admin@aec.test',
+            'password' => 'StrongPassword!2026',
+            'role_id' => $adminRole->id,
+        ])->assertForbidden();
+
+        $this->assertDatabaseMissing('users', ['email' => 'unexpected-admin@aec.test']);
+    }
+
 }
