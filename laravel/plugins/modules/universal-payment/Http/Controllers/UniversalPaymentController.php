@@ -64,8 +64,8 @@ class UniversalPaymentController extends Controller
             'item_title' => ['required', 'string', 'max:200'],
             'gateway' => ['required', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,bank_cash'],
             'amount' => ['required', 'numeric', 'min:1'],
-            'external_trx_id' => ['nullable', 'string', 'max:120'],
-            'status' => ['required', 'in:pending,verified,refunded'],
+            'external_trx_id' => ['required', 'string', 'max:120'],
+            'status' => ['nullable', 'in:pending,verified,refunded'],
         ]);
 
         $tx = UniversalPaymentTransaction::query()->create([
@@ -77,9 +77,9 @@ class UniversalPaymentController extends Controller
             'currency' => $this->plugins->getSetting('universal-payment', 'default_currency', 'BDT') ?: 'BDT',
             'amount' => $validated['amount'],
             'external_trx_id' => $validated['external_trx_id'] ?? null,
-            'status' => $validated['status'],
-            'verified_by' => $validated['status'] === 'verified' ? auth()->id() : null,
-            'verified_at' => $validated['status'] === 'verified' ? now() : null,
+            'status' => $validated['status'] ?? 'pending',
+            'verified_by' => ($validated['status'] ?? 'pending') === 'verified' ? auth()->id() : null,
+            'verified_at' => ($validated['status'] ?? 'pending') === 'verified' ? now() : null,
         ]);
 
         $this->audit->log('universal_payment.recorded', 'universal_payment', $tx->reference, ['amount' => $tx->amount, 'gateway' => $tx->gateway]);
