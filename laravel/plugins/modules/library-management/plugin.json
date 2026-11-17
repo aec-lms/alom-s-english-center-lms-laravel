@@ -33,7 +33,8 @@
             "group": "Academic & Operations",
             "label": "Library & Loans",
             "route": "plugins.library.index",
-            "order": 100
+            "order": 100,
+            "permission": "library.manage"
         }
     ]
 }
