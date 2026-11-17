@@ -207,6 +207,7 @@ class ExamController extends Controller
                 ->lockForUpdate()
                 ->first();
 
+            $expiredPending = false;
             if ($pending) {
                 $deadline = $pending->started_at?->copy()->addMinutes((int) $lockedExam->duration_minutes);
                 if ($deadline && now()->greaterThan($deadline)) {
@@ -217,6 +218,7 @@ class ExamController extends Controller
                         'passed' => false,
                         'submitted_at' => now(),
                     ]);
+                    $expiredPending = true;
                 } else {
                     return $pending;
                 }
@@ -227,7 +229,12 @@ class ExamController extends Controller
                 ->where('user_id', $actor->id)
                 ->whereNotNull('submitted_at')
                 ->count();
-            abort_if($completedAttempts >= max(1, (int) $lockedExam->max_attempts), 403, 'You have used all allowed attempts for this exam.');
+            if ($completedAttempts >= max(1, (int) $lockedExam->max_attempts)) {
+                if ($expiredPending) {
+                    return $pending->fresh();
+                }
+                abort(403, 'You have used all allowed attempts for this exam.');
+            }
 
             return ExamAttempt::query()->create([
                 'exam_id' => $lockedExam->id,
