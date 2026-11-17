@@ -215,7 +215,7 @@ class BackupService
 
         for ($i = 0; $i < $zip->numFiles; $i++) {
             $name = (string) $zip->getNameIndex($i);
-            if ($name === 'database.json' || $name === 'manifest.json') {
+            if ($name === 'database.json' || $name === 'database.jsonl' || $name === 'manifest.json') {
                 continue;
             }
             if (!str_starts_with($name, 'private-files/')) {
