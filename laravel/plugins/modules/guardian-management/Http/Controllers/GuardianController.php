@@ -64,7 +64,7 @@ class GuardianController extends Controller
             'student_id' => $studentIntegrationEnabled ? ['nullable', 'integer', 'exists:students,id'] : ['nullable', 'integer'],
         ]);
 
-        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $validated['branch_id']) {
+        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) ($validated['branch_id'] ?? 0)) {
             abort(403, 'Branch isolation violation.');
         }
 
@@ -90,7 +90,7 @@ class GuardianController extends Controller
             }
             $guardian = Guardian::query()->create([
                 'user_id' => $user->id,
-                'branch_id' => (int) $validated['branch_id'],
+                'branch_id' => isset($validated['branch_id']) ? (int) $validated['branch_id'] : null,
                 'relationship' => $validated['relationship'],
                 'emergency_phone' => $validated['phone'] ?? null,
             ]);
