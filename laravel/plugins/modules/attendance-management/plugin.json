@@ -22,5 +22,13 @@
             "name": "Mark Attendance as Excused"
         }
     ],
-    "settings_schema": []
+    "settings_schema": [],
+    "admin_menu": [
+        {
+            "group": "Academic & Operations",
+            "label": "Attendance",
+            "route": "plugins.attendance.index",
+            "order": 100
+        }
+    ]
 }
