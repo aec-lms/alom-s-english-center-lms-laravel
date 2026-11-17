@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class ExamStandaloneTest extends TestCase
