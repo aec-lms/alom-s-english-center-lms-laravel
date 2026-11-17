@@ -106,6 +106,8 @@ class UniversalPaymentInvoiceSettlementTest extends TestCase
             'invoice_number' => 'UPAY-REJ-INV-' . $studentUser->id,
             'payer_name' => $studentUser->name,
             'payer_email' => $studentUser->email,
+            'subtotal_amount' => 900,
+            'discount_amount' => 0,
             'net_amount' => 900,
             'paid_amount' => 0,
             'currency' => 'BDT',
