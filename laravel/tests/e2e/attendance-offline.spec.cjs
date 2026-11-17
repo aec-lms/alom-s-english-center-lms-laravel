@@ -9,7 +9,7 @@ const fixture = fs.readFileSync(path.join(__dirname, 'fixtures/attendance-offlin
 
 (async () => {
     const server = http.createServer((req, res) => {
-        if (req.url === '/attendance-offline.js') {
+        if (req.url === '/js/attendance-offline.js') {
             res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' });
             return fs.createReadStream(path.join(root, 'public/js/attendance-offline.js')).pipe(res);
         }

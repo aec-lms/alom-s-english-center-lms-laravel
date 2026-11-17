@@ -13,6 +13,7 @@ const assets = {
     '/css/attendance-offline.css': ['public/css/attendance-offline.css', 'text/css; charset=utf-8'],
     '/attendance.webmanifest': ['public/attendance.webmanifest', 'application/manifest+json; charset=utf-8'],
     '/attendance-offline.html': ['public/attendance-offline.html', 'text/html; charset=utf-8'],
+    '/images/attendance-pwa.svg': ['public/images/attendance-pwa.svg', 'image/svg+xml'],
 };
 const fixture = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="csrf-token" content="pwa-test-token"><meta name="viewport" content="width=device-width, initial-scale=1"><title>AEC Attendance PWA Test</title><link rel="manifest" href="/attendance.webmanifest"><link rel="stylesheet" href="/css/attendance-offline.css"></head>
@@ -64,7 +65,6 @@ const server = http.createServer((req, res) => {
         await context.setOffline(true);
         page = await context.newPage();
         await page.goto(origin + '/admin/attendance/');
-        await page.getByRole('heading', { name: 'Attendance PWA Test' }).waitFor().catch(() => {});
         assert.equal(await page.title(), 'AEC Attendance PWA Test');
         assert.equal(await page.evaluate(() => navigator.onLine), false);
         await page.locator('#attendance-register-form button[type="submit"]').click();

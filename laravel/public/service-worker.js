@@ -6,6 +6,7 @@ const SHELL_ASSETS = [
     '/css/attendance-offline.css',
     '/attendance.webmanifest',
     '/attendance-offline.html',
+    '/images/attendance-pwa.svg',
 ];
 
 self.addEventListener('install', event => {
