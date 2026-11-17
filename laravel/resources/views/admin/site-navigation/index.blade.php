@@ -65,6 +65,7 @@
             rows.forEach((row, index) => {
                 row.querySelectorAll('[data-field]').forEach((input) => {
                     input.name = 'menus[' + location + '][' + index + '][' + input.dataset.field + ']';
+                    if (input.dataset.field === 'order') input.value = (index + 1) * 10;
                 });
                 const up = row.querySelector('[data-move-up]');
                 const down = row.querySelector('[data-move-down]');
