@@ -18,5 +18,11 @@
             "name": "Attempt Online Exams"
         }
     ],
-    "settings_schema": []
+    "settings_schema": [],
+    "optional_dependencies": [
+        "course-management",
+        "branch-management",
+        "student-management",
+        "student-tracking"
+    ]
 }

@@ -5,7 +5,7 @@
     <div>
         <div class="inline-flex items-center px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 text-[11px] font-bold">Independent Visitor Marketing Plugin</div>
         <h1 class="text-2xl font-extrabold text-slate-900 mt-1">Pop-Up Ads for Visitors</h1>
-        <p class="text-xs text-slate-500">Create, edit, upload banners, schedule timing, and track impressions/clicks for public website visitors.</p>
+        <p class="text-xs text-slate-500">Create and edit popup text, banners, destination links, display delay/frequency, and track impressions/clicks for public website visitors.</p>
     </div>
 
     <form method="POST" action="{{ route('plugins.popups.store') }}" enctype="multipart/form-data" class="bg-white rounded-2xl border border-slate-200 p-6 space-y-4 text-xs">
@@ -76,18 +76,44 @@
                 <form method="POST" action="{{ route('plugins.popups.update', $popup) }}" enctype="multipart/form-data" class="space-y-2 border-t border-slate-100 pt-3">
                     @csrf @method('PUT')
                     <div class="grid grid-cols-2 gap-2">
-                        <input name="title" value="{{ $popup->title }}" class="rounded-lg border border-slate-300 px-2.5 py-1.5">
-                        <input name="cta_url" value="{{ $popup->cta_url }}" class="rounded-lg border border-slate-300 px-2.5 py-1.5">
-                        <input type="number" name="delay_seconds" value="{{ $popup->delay_seconds }}" class="rounded-lg border border-slate-300 px-2.5 py-1.5">
-                        <select name="frequency" class="rounded-lg border border-slate-300 px-2.5 py-1.5 bg-white">
-                            <option value="once_per_session" {{ $popup->frequency === 'once_per_session' ? 'selected' : '' }}>Once / session</option>
-                            <option value="once_per_day" {{ $popup->frequency === 'once_per_day' ? 'selected' : '' }}>Once / day</option>
-                            <option value="always" {{ $popup->frequency === 'always' ? 'selected' : '' }}>Every visit</option>
-                        </select>
+                        <label class="col-span-2 font-semibold text-slate-700">Headline
+                            <input name="title" value="{{ $popup->title }}" required class="mt-1 w-full rounded-lg border border-slate-300 px-2.5 py-1.5">
+                        </label>
+                        <label class="font-semibold text-slate-700">Badge Text
+                            <input name="badge_text" value="{{ $popup->badge_text }}" class="mt-1 w-full rounded-lg border border-slate-300 px-2.5 py-1.5">
+                        </label>
+                        <label class="font-semibold text-slate-700">Button Text
+                            <input name="cta_text" value="{{ $popup->cta_text }}" class="mt-1 w-full rounded-lg border border-slate-300 px-2.5 py-1.5">
+                        </label>
+                        <label class="col-span-2 font-semibold text-slate-700">Description
+                            <textarea name="description" rows="2" class="mt-1 w-full rounded-lg border border-slate-300 px-2.5 py-1.5">{{ $popup->description }}</textarea>
+                        </label>
+                        <label class="col-span-2 font-semibold text-slate-700">Button Destination (relative path or HTTPS/HTTP URL)
+                            <input name="cta_url" value="{{ $popup->cta_url }}" class="mt-1 w-full rounded-lg border border-slate-300 px-2.5 py-1.5">
+                        </label>
+                        <label class="col-span-2 font-semibold text-slate-700">Replace Banner Image
+                            <input type="file" name="image" accept=".jpg,.jpeg,.png,.webp" class="mt-1 w-full rounded-lg border border-slate-300 px-2.5 py-1.5">
+                        </label>
+                        <label class="col-span-2 font-semibold text-slate-700">Or Image URL / Relative Path
+                            <input name="image_url" value="{{ $popup->image_path }}" class="mt-1 w-full rounded-lg border border-slate-300 px-2.5 py-1.5">
+                        </label>
+                        @if ($popup->image_path)
+                            <label class="col-span-2 inline-flex items-center gap-2 font-semibold text-slate-700">
+                                <input type="checkbox" name="remove_image" value="1" class="rounded text-rose-600">
+                                <span>Remove current banner image</span>
+                            </label>
+                        @endif
+                        <label class="font-semibold text-slate-700">Delay (seconds)
+                            <input type="number" min="0" max="120" name="delay_seconds" value="{{ $popup->delay_seconds }}" required class="mt-1 w-full rounded-lg border border-slate-300 px-2.5 py-1.5">
+                        </label>
+                        <label class="font-semibold text-slate-700">Display Frequency
+                            <select name="frequency" class="mt-1 w-full rounded-lg border border-slate-300 px-2.5 py-1.5 bg-white">
+                                <option value="once_per_session" {{ $popup->frequency === 'once_per_session' ? 'selected' : '' }}>Once / session</option>
+                                <option value="once_per_day" {{ $popup->frequency === 'once_per_day' ? 'selected' : '' }}>Once / day</option>
+                                <option value="always" {{ $popup->frequency === 'always' ? 'selected' : '' }}>Every visit</option>
+                            </select>
+                        </label>
                     </div>
-                    <input type="hidden" name="badge_text" value="{{ $popup->badge_text }}">
-                    <input type="hidden" name="description" value="{{ $popup->description }}">
-                    <input type="hidden" name="cta_text" value="{{ $popup->cta_text }}">
                     <div class="flex items-center justify-between">
                         <label class="inline-flex items-center gap-1.5 font-semibold">
                             <input type="checkbox" name="is_active" value="1" {{ $popup->is_active ? 'checked' : '' }} class="rounded text-blue-600">

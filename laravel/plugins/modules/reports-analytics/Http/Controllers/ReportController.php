@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Plugins\Modules\ReportsAnalytics\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Core\Plugins\PluginManager;
 use App\Models\AuditLog;
 use App\Models\PluginRecord;
 use App\Models\User;
@@ -19,6 +20,7 @@ class ReportController extends Controller
     public function index(Request $request): View
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $isBranchManager = $actor && $actor->hasRole('branch_manager');
         $branchId = $isBranchManager ? (int) $actor->branch_id : null;
         $branchUserIds = $isBranchManager
@@ -50,6 +52,7 @@ class ReportController extends Controller
     public function exportAuditCsv(Request $request): StreamedResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $isBranchManager = $actor && $actor->hasRole('branch_manager');
         $branchUserIds = $isBranchManager
             ? User::query()->where('branch_id', (int) $actor->branch_id)->pluck('id')
@@ -76,5 +79,25 @@ class ReportController extends Controller
             }
             fclose($handle);
         }, 'aec-lms-audit-export.csv', ['Content-Type' => 'text/csv']);
+    }
+
+    private function ensureAssignedBranch($actor): void
+    {
+        if (!$actor || !$actor->hasRole('branch_manager')) {
+            return;
+        }
+        if ($actor->branch_id === null
+            || !app(PluginManager::class)->isEnabled('branch-management')
+            || !Schema::hasTable('branches')
+        ) {
+            abort(403, 'Branch manager must be assigned to a branch.');
+        }
+        $activeBranch = app('db')->table('branches')
+            ->where('id', $actor->branch_id)
+            ->where('is_active', true)
+            ->exists();
+        if (!$activeBranch) {
+            abort(403, 'Branch manager access is disabled because the assigned branch is inactive.');
+        }
     }
 }

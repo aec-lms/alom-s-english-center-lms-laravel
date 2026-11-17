@@ -19,7 +19,7 @@
                         <td>{{ $enrollment->course?->title }}</td>
                         <td>{{ $enrollment->branch_id ?: 'Global' }}</td>
                         <td>
-                            @if ($enrollment->invoice)
+                            @if ($feesIntegrationAvailable && $enrollment->invoice)
                                 <div>{{ $enrollment->invoice->invoice_number }}</div>
                                 <div class="text-slate-500">{{ $enrollment->invoice->currency }} {{ number_format((float) $enrollment->invoice->net_amount, 2) }} · {{ $enrollment->invoice->status }}</div>
                             @else

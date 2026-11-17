@@ -12,6 +12,9 @@ use Plugins\Modules\GatewayPaypal\Services\PaypalGatewayService;
 use Plugins\Modules\GatewaySslcommerz\Services\SslcommerzGatewayService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class PluginCenterController extends Controller
@@ -26,7 +29,9 @@ class PluginCenterController extends Controller
             ? \App\Models\UpdateLog::query()->where('target_type', 'plugin')->latest()->limit(100)->get()->groupBy('target_slug')
             : collect();
 
-        $records = PluginRecord::query()->orderBy('category')->orderBy('name')->get()->map(function (PluginRecord $record) use ($manifests, $recentLogs) {
+        $records = PluginRecord::query()->orderBy('category')->orderBy('name')->get()
+            ->filter(fn (PluginRecord $record): bool => isset($manifests[$record->slug]) || $record->is_core)
+            ->map(function (PluginRecord $record) use ($manifests, $recentLogs) {
             $manifest = $manifests[$record->slug] ?? null;
             $record->setAttribute('is_compatible', $manifest ? $this->plugins->isCompatible($manifest) : false);
             $record->setAttribute('has_settings', $manifest && count($manifest->settingsSchema) > 0);
@@ -36,7 +41,9 @@ class PluginCenterController extends Controller
             return $record;
         });
 
-        return view('admin.plugins.index', compact('records'));
+        $recycledPlugins = $this->plugins->recycledPlugins();
+
+        return view('admin.plugins.index', compact('records', 'recycledPlugins'));
     }
 
     public function upload(Request $request): RedirectResponse
@@ -110,6 +117,51 @@ class PluginCenterController extends Controller
         }
     }
 
+    public function deleteToRecycleBin(Request $request, string $slug): RedirectResponse
+    {
+        $request->validate(['confirm_delete' => ['required', 'accepted']]);
+        try {
+            $item = $this->plugins->deleteToRecycleBin($slug, auth()->id());
+            return back()->with('status', "Plugin '{$item['name']}' moved to Recycle Bin. Its database records and settings were preserved.");
+        } catch (\Throwable $e) {
+            return back()->withErrors(['plugin' => $e->getMessage()]);
+        }
+    }
+
+    public function restoreFromRecycleBin(Request $request, string $archive): RedirectResponse
+    {
+        $request->validate(['confirm_restore' => ['required', 'accepted']]);
+        try {
+            $this->plugins->restoreFromRecycleBin($archive, auth()->id());
+            return back()->with('status', 'Plugin package restored. Previous installation state was recovered where possible.');
+        } catch (\Throwable $e) {
+            return back()->withErrors(['plugin' => $e->getMessage()]);
+        }
+    }
+
+    public function permanentlyDeleteFromRecycleBin(Request $request, string $archive): RedirectResponse
+    {
+        $request->validate(['confirm_permanent_delete' => ['required', 'accepted']]);
+        try {
+            $this->plugins->permanentlyDeleteFromRecycleBin($archive, auth()->id());
+            return back()->with('status', 'Plugin package permanently removed from Recycle Bin. Database records were preserved.');
+        } catch (\Throwable $e) {
+            return back()->withErrors(['plugin' => $e->getMessage()]);
+        }
+    }
+
+    public function resetSettings(Request $request, string $slug): RedirectResponse
+    {
+        $request->validate(['confirm_reset' => ['required', 'accepted']]);
+
+        try {
+            $this->plugins->resetSettingsToDefaults($slug, auth()->id());
+            return back()->with('status', "Settings for '{$slug}' were reset to manifest defaults. Plugin business data was preserved.");
+        } catch (\Throwable $e) {
+            return back()->withErrors(['plugin' => $e->getMessage()]);
+        }
+    }
+
     public function configure(string $slug): View
     {
         $manifest = $this->plugins->discoverManifests()[$slug] ?? abort(404);
@@ -118,7 +170,7 @@ class PluginCenterController extends Controller
         $configuredSecrets = [];
         foreach ($manifest->settingsSchema as $field) {
             $key = (string) ($field['key'] ?? '');
-            $isSecret = (bool) ($field['secret'] ?? false);
+            $isSecret = (bool) ($field['secret'] ?? $field['encrypted'] ?? false);
             $stored = $this->plugins->getSetting($slug, $key);
             $values[$key] = $isSecret ? '' : ($stored ?? '');
             if ($isSecret) $configuredSecrets[$key] = $stored !== null && $stored !== '';
@@ -151,21 +203,60 @@ class PluginCenterController extends Controller
         $manifest = $this->plugins->discoverManifests()[$slug] ?? abort(404);
         $values = [];
         $secretKeys = [];
+        $rules = ['settings' => ['sometimes', 'array']];
+        $allowedKeys = [];
 
         foreach ($manifest->settingsSchema as $field) {
             $key = (string) ($field['key'] ?? '');
             if ($key === '') {
                 continue;
             }
-            $isSecret = (bool) ($field['secret'] ?? false);
-            if ($isSecret) {
+            if (preg_match('/^[a-zA-Z0-9_-]+$/', $key) !== 1) {
+                throw new \RuntimeException("Plugin '{$slug}' contains an invalid setting key.");
+            }
+
+            $allowedKeys[] = $key;
+            $type = (string) ($field['type'] ?? 'text');
+            $fieldRules = ['nullable', 'string', 'max:2048'];
+            if (!empty($field['required'])) {
+                $fieldRules = ['required', 'string', 'max:2048'];
+            }
+            if ($type === 'select') {
+                $options = (array) ($field['options'] ?? []);
+                if ($options === []) {
+                    throw new \RuntimeException("Plugin '{$slug}' has no options for select setting '{$key}'.");
+                }
+                $fieldRules[] = Rule::in(array_map('strval', array_keys($options)));
+            }
+            $rules["settings.{$key}"] = $fieldRules;
+
+            if ((bool) ($field['secret'] ?? $field['encrypted'] ?? false)) {
                 $secretKeys[] = $key;
-                $submitted = (string) $request->input("settings.{$key}", '');
+            }
+        }
+
+        $validated = Validator::make($request->all(), $rules)->validate();
+        $submittedSettings = $validated['settings'] ?? [];
+        $unknownKeys = array_diff(array_keys($request->input('settings', [])), $allowedKeys);
+        if ($unknownKeys !== []) {
+            throw ValidationException::withMessages([
+                'settings' => 'Unsupported plugin setting(s): ' . implode(', ', $unknownKeys),
+            ]);
+        }
+
+        foreach ($manifest->settingsSchema as $field) {
+            $key = (string) ($field['key'] ?? '');
+            if ($key === '') {
+                continue;
+            }
+            $isSecret = (bool) ($field['secret'] ?? $field['encrypted'] ?? false);
+            $submitted = $submittedSettings[$key] ?? '';
+            if ($isSecret) {
                 if ($submitted !== '') {
                     $values[$key] = $submitted;
                 }
             } else {
-                $values[$key] = (string) $request->input("settings.{$key}", '');
+                $values[$key] = (string) $submitted;
             }
         }
 

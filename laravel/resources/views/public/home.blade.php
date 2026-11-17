@@ -5,8 +5,8 @@
     $heroSlides = $sliders->isNotEmpty() ? $sliders->map(fn ($s) => [
         'title' => $s->title,
         'subtitle' => $s->subtitle ?? '',
-        'image' => $s->image_path ?: asset('assets/images/hero_educator_studio_1794552233836.jpg'),
-        'cta_url' => $s->cta_url ?: '#learning-paths',
+        'image' => is_string($s->image_path) && preg_match('~^/(?!/)(?!.*\\.\\.)[A-Za-z0-9/_\\-.]+$~', $s->image_path) ? $s->image_path : asset('assets/images/hero_educator_studio_1794552233836.jpg'),
+        'cta_url' => is_string($s->cta_url) && preg_match('~^(https?://\\S+|/(?!/)\\S*|#[A-Za-z][A-Za-z0-9_-]*)$~i', $s->cta_url) ? $s->cta_url : '#learning-paths',
     ])->values()->all() : [
         [
             'title' => 'IELTS & English All in One',
@@ -37,19 +37,10 @@
         ['title' => 'Community', 'desc' => 'Join our supportive peer learning community', 'bg' => '#FFE0EE', 'border' => '#FFC4DE', 'accent' => '#EC0075', 'abbr' => 'CM', 'url' => route('public.instructors'), 'enabled' => true],
     ];
 
-    $leftCards = $leftReviews->isNotEmpty() ? $leftReviews : collect([
-        (object) ['title' => 'Mahmud Hasan', 'subtitle' => 'Weekly mock interviews and line-by-line Writing feedback helped me progress from Band 6.0 to 8.0.', 'meta' => 'Verified Student'],
-        (object) ['title' => 'Afrina Jahan', 'subtitle' => 'Every grammar concept from tense logic to free-hand composition is explained with crystal clarity.', 'meta' => 'Verified Student'],
-        (object) ['title' => 'Borhan Uddin', 'subtitle' => 'Structured lessons and daily practice drills built my spoken fluency inside two months.', 'meta' => 'Verified Student'],
-        (object) ['title' => 'Sadia Afrin', 'subtitle' => 'Clear guidance, responsive instructors, and reliable exam evaluation at every step.', 'meta' => 'Verified Student'],
-    ]);
-
-    $rightCards = $rightReviews->isNotEmpty() ? $rightReviews : collect([
-        (object) ['title' => 'Zidni Islam', 'subtitle' => 'The online classroom, lecture sheets, and diagnostic exams make daily revision effortless.', 'meta' => 'Verified Student'],
-        (object) ['title' => 'Sumaiya Saima', 'subtitle' => 'Phonetics sessions and live speaking clubs removed my hesitation during interviews.', 'meta' => 'Verified Student'],
-        (object) ['title' => 'Fakhrul Islam', 'subtitle' => 'Best structured English academy with measurable progress tracking across every module.', 'meta' => 'Verified Student'],
-        (object) ['title' => 'Tasannun Tarin', 'subtitle' => 'Reading strategy workshops helped me solve passage traps rapidly and accurately.', 'meta' => 'Verified Student'],
-    ]);
+    $leftCards = $leftReviews;
+    $rightCards = $rightReviews;
+    $allReviewCards = $leftReviews->merge($rightReviews);
+    $reviewAverage = $allReviewCards->pluck('rating')->filter(fn ($rating) => $rating !== null)->avg();
 @endphp
 
 @include('public.partials.navbar')
@@ -268,7 +259,7 @@
 @endif
 
 <!-- 5. WHAT OUR STUDENTS SAY (DUAL LEFT & RIGHT MARQUEE CAROUSELS) -->
-@if ($homepage['show_reviews'] ?? true)
+@if (($homepage['show_reviews'] ?? true) && ($leftCards->isNotEmpty() || $rightCards->isNotEmpty()))
 <section id="reviews" class="py-16 sm:py-20 text-white overflow-hidden" style="background: linear-gradient(180deg, #131D2D 0%, #0B1220 100%)">
     <div class="max-w-[1200px] mx-auto px-4 sm:px-6 mb-10 text-center space-y-3">
         <div class="text-xs font-semibold tracking-wide text-[#38BDF8]">Student Reviews</div>
@@ -276,13 +267,15 @@
         <p class="text-xs sm:text-sm text-slate-300 max-w-xl mx-auto">
             {{ $homepage['reviews_subtitle'] ?? "Feedbacks from students who have transformed their learning journey with Alom's English Center." }}
         </p>
-        <div class="pt-2 flex justify-center">
-            <div class="inline-flex items-center gap-2.5 px-5 py-2 rounded-full bg-[#162238] border border-white/10 text-xs shadow-sm">
-                <span class="text-amber-400 tracking-tight">&#9733;&#9733;&#9733;&#9733;&#9733;</span>
-                <span class="font-bold text-white tabular-nums">5.0</span>
-                <span class="text-slate-400">average rating</span>
+        @if ($reviewAverage !== null)
+            <div class="pt-2 flex justify-center">
+                <div class="inline-flex items-center gap-2.5 px-5 py-2 rounded-full bg-[#162238] border border-white/10 text-xs shadow-sm">
+                    <span class="text-amber-400 tracking-tight">{{ str_repeat('★', (int) round($reviewAverage)) }}</span>
+                    <span class="font-bold text-white tabular-nums">{{ number_format((float) $reviewAverage, 1) }}</span>
+                    <span class="text-slate-400">average from {{ $allReviewCards->count() }} published reviews</span>
+                </div>
             </div>
-        </div>
+        @endif
     </div>
 
     <div class="marquee-wrapper relative overflow-hidden space-y-5">
@@ -296,7 +289,7 @@
                         <article class="w-[330px] sm:w-[360px] shrink-0 bg-[#1B2537] border border-white/10 rounded-xl p-5 flex flex-col justify-between space-y-4 shadow-lg">
                             <div class="space-y-3">
                                 <div class="flex items-center justify-between">
-                                    <span class="text-amber-400 text-xs tracking-tight">&#9733;&#9733;&#9733;&#9733;&#9733;</span>
+                                    @if (!empty($card->rating))<span class="text-amber-400 text-xs tracking-tight">{{ str_repeat('★', max(0, min(5, (int) $card->rating))) }}</span>@endif
                                     <span class="text-slate-600 font-serif text-lg leading-none">&ldquo;&rdquo;</span>
                                 </div>
                                 <p class="text-xs sm:text-[13px] text-slate-300 leading-relaxed italic line-clamp-4">{{ $card->subtitle }}</p>
@@ -307,7 +300,7 @@
                                 </div>
                                 <div class="min-w-0">
                                     <div class="text-xs font-bold text-white truncate">{{ $card->title }}</div>
-                                    <div class="text-[11px] text-slate-400">Verified Student</div>
+                                    <div class="text-[11px] text-slate-400">Student Review</div>
                                 </div>
                             </div>
                         </article>
@@ -323,7 +316,7 @@
                         <article class="w-[330px] sm:w-[360px] shrink-0 bg-[#1B2537] border border-white/10 rounded-xl p-5 flex flex-col justify-between space-y-4 shadow-lg">
                             <div class="space-y-3">
                                 <div class="flex items-center justify-between">
-                                    <span class="text-amber-400 text-xs tracking-tight">&#9733;&#9733;&#9733;&#9733;&#9733;</span>
+                                    @if (!empty($card->rating))<span class="text-amber-400 text-xs tracking-tight">{{ str_repeat('★', max(0, min(5, (int) $card->rating))) }}</span>@endif
                                     <span class="text-slate-600 font-serif text-lg leading-none">&ldquo;&rdquo;</span>
                                 </div>
                                 <p class="text-xs sm:text-[13px] text-slate-300 leading-relaxed italic line-clamp-4">{{ $card->subtitle }}</p>
@@ -334,7 +327,7 @@
                                 </div>
                                 <div class="min-w-0">
                                     <div class="text-xs font-bold text-white truncate">{{ $card->title }}</div>
-                                    <div class="text-[11px] text-slate-400">Verified Student</div>
+                                    <div class="text-[11px] text-slate-400">Student Review</div>
                                 </div>
                             </div>
                         </article>

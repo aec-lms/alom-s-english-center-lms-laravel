@@ -33,11 +33,11 @@ class CarouselBuilderController extends Controller
             'carousel_group' => ['required', 'in:featured_carousel,testimonial_left,testimonial_right,course_showcase,partner_logos'],
             'title' => ['required', 'string', 'max:180'],
             'subtitle' => ['nullable', 'string', 'max:500'],
-            'cta_url' => ['nullable', 'string', 'max:255'],
+            'cta_url' => ['nullable', 'string', 'max:255', 'regex:#^(https?://[^\\s]+|/(?!/)[^\\s]*)$#i'],
             'rating' => ['nullable', 'integer', 'min:1', 'max:5'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
             'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
-            'image_path' => ['nullable', 'string', 'max:255'],
+            'image_path' => ['nullable', 'string', 'max:255', 'regex:#^/(?!/)(?!.*(?:\\.\\.|%2e|%2f))[A-Za-z0-9/_\\-.]+$#i'],
             'is_active' => ['nullable', 'boolean'],
         ]);
 
@@ -100,9 +100,9 @@ class CarouselBuilderController extends Controller
         $title = $item->title;
         $id = (string) $item->id;
         $item->delete();
-        $this->audit->log('carousel_builder.deleted', 'carousel_item', $id);
+        $this->audit->log('carousel_builder.trashed', 'carousel_item', $id);
 
-        return back()->with('status', "Carousel item '{$title}' deleted.");
+        return back()->with('status', "Carousel item '{$title}' moved to the Admin Recycle Bin.");
     }
 
     private function storeImage(UploadedFile $file): string
@@ -111,7 +111,7 @@ class CarouselBuilderController extends Controller
         if (!is_dir($dir)) {
             mkdir($dir, 0755, true);
         }
-        $filename = Str::uuid()->toString() . '.' . $file->getClientOriginalExtension();
+        $filename = Str::uuid()->toString() . '.' . $file->extension();
         $file->move($dir, $filename);
 
         return '/uploads/carousels/' . $filename;

@@ -13,7 +13,7 @@ return new class extends Migration {
             Schema::create('teachers', function (Blueprint $table): void {
                 $table->id();
                 $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
-                $table->unsignedBigInteger('branch_id')->index();
+                $table->unsignedBigInteger('branch_id')->nullable()->index();
                 $table->string('employee_code', 40)->unique();
                 $table->string('specialization', 120)->nullable();
                 $table->boolean('is_active')->default(true);

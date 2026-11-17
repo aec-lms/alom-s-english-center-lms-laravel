@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Plugins\Modules\StudentManagement\Http\Controllers;
 
 use App\Core\Security\AuditLogger;
+use App\Core\Plugins\PluginManager;
 use App\Http\Controllers\Controller;
 use App\Models\Role;
 use App\Models\User;
@@ -39,16 +40,21 @@ class StudentController extends Controller
     {
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
+        $branchIntegration = app(PluginManager::class)->isEnabled('branch-management') && Schema::hasTable('branches');
+        $branchRule = $branchIntegration
+            ? ['nullable', 'integer', 'exists:branches,id,is_active,1']
+            : ['nullable', 'integer'];
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:120'],
             'email' => ['required', 'email', 'unique:users,email'],
             'phone' => ['nullable', 'string', 'max:32'],
             'password' => ['required', 'string', 'min:8'],
-            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
+            'branch_id' => $branchRule,
             'student_code' => ['nullable', 'string', 'max:40', 'unique:students,student_code'],
             'status' => ['nullable', 'in:active,inactive,graduated'],
         ]);
 
+        if (!$branchIntegration) { $validated['branch_id'] = null; }
         if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null) {
             if (isset($validated['branch_id']) && (int) $validated['branch_id'] !== (int) $actor->branch_id) {
                 abort(403, 'Branch isolation violation.');
@@ -94,16 +100,21 @@ class StudentController extends Controller
             abort(403, 'Branch isolation violation.');
         }
 
+        $branchIntegration = app(PluginManager::class)->isEnabled('branch-management') && Schema::hasTable('branches');
+        $branchRule = $branchIntegration
+            ? ['nullable', 'integer', 'exists:branches,id,is_active,1']
+            : ['nullable', 'integer'];
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:120'],
             'email' => ['required', 'email', 'unique:users,email,' . $student->user_id],
             'phone' => ['nullable', 'string', 'max:32'],
-            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
+            'branch_id' => $branchRule,
             'student_code' => ['required', 'string', 'max:40', 'unique:students,student_code,' . $student->id],
             'status' => ['required', 'in:active,inactive,graduated'],
             'password' => ['nullable', 'string', 'min:8'],
         ]);
 
+        if (!$branchIntegration) { $validated['branch_id'] = null; }
         if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null) {
             if (isset($validated['branch_id']) && (int) $validated['branch_id'] !== (int) $actor->branch_id) {
                 abort(403, 'Branch isolation violation.');
@@ -149,22 +160,36 @@ class StudentController extends Controller
         $code = $student->student_code;
         $id = (string) $student->id;
         DB::transaction(function () use ($student): void {
-            $user = $student->user;
-            $student->delete();
-            if ($user) {
-                $user->update(['is_active' => false]);
+            $student->deleted_user_was_active = (bool) $student->user?->is_active;
+            $student->save();
+            if ($student->user) {
+                $student->user->update(['is_active' => false]);
             }
+            $student->delete();
         });
 
-        $this->audit->log('student.deleted', 'student', $id, ['code' => $code]);
+        $this->audit->log('student.trashed', 'student', $id, ['code' => $code]);
 
-        return back()->with('status', "Student '{$code}' removed from active enrollment directory.");
+        return back()->with('status', "Student '{$code}' moved to the Admin Recycle Bin. Linked academic, guardian and invoice history has been preserved.");
     }
 
     private function ensureAssignedBranch($actor): void
     {
-        if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id === null) {
-            abort(403, 'Branch manager must be assigned to a branch.');
+        if (!$actor || !$actor->hasRole('branch_manager')) {
+            return;
+        }
+        if ($actor->branch_id === null
+            || !app(PluginManager::class)->isEnabled('branch-management')
+            || !Schema::hasTable('branches')
+        ) {
+            abort(403, 'Branch manager must be assigned to an active branch.');
+        }
+        $activeBranch = \Illuminate\Support\Facades\DB::table('branches')
+            ->where('id', $actor->branch_id)
+            ->where('is_active', true)
+            ->exists();
+        if (!$activeBranch) {
+            abort(403, 'Branch manager access is disabled because the assigned branch is inactive.');
         }
     }
 }

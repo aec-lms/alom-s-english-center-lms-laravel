@@ -83,15 +83,60 @@
                             <a href="{{ route('admin.plugins.configure', $plugin->slug) }}" class="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50">Configure</a>
                         @endif
 
+                        @if ($plugin->has_settings)
+                            <form method="POST" action="{{ route('admin.plugins.reset-settings', $plugin->slug) }}" onsubmit="return confirm('Reset all settings for {{ $plugin->name }} to defaults? API credentials and custom configuration will be cleared. Business data will remain unchanged.')">
+                                @csrf
+                                <input type="hidden" name="confirm_reset" value="1">
+                                <button class="px-3 py-1.5 rounded-lg border border-amber-300 text-amber-800 font-semibold hover:bg-amber-50">Reset to Default</button>
+                            </form>
+                        @endif
+
                         <form method="POST" action="{{ route('admin.plugins.uninstall', $plugin->slug) }}" onsubmit="return confirm('Uninstall {{ $plugin->name }}? Shared LMS records will be preserved.')">
                             @csrf
                             <input type="hidden" name="confirm_uninstall" value="1">
                             <button class="px-3 py-1.5 rounded-lg border border-rose-300 text-rose-700 font-semibold hover:bg-rose-50">Uninstall</button>
+                        </form>
+
+                    @endif
+                    @if (!$plugin->is_core)
+                        <form method="POST" action="{{ route('admin.plugins.delete', $plugin->slug) }}" onsubmit="return confirm('Move {{ $plugin->name }} package to Recycle Bin? It will be deactivated and uninstalled. Its data and settings will be preserved.')">
+                            @csrf
+                            <input type="hidden" name="confirm_delete" value="1">
+                            <button class="px-3 py-1.5 rounded-lg border border-rose-400 text-rose-800 font-semibold hover:bg-rose-50">Delete to Recycle Bin</button>
                         </form>
                     @endif
                 </div>
             </div>
         @endforeach
     </div>
+
+    <section class="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+        <div>
+            <h2 class="text-lg font-extrabold text-slate-900">Plugin Recycle Bin</h2>
+            <p class="text-xs text-slate-500">Restore deleted plugin packages or permanently remove archived package files. LMS business records and settings are preserved.</p>
+        </div>
+        @forelse ($recycledPlugins as $item)
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 border border-slate-100 rounded-xl p-3">
+                <div>
+                    <div class="text-sm font-bold text-slate-800">{{ $item['name'] ?? $item['slug'] }}</div>
+                    <div class="text-xs text-slate-500">v{{ $item['version'] ?? '—' }} · Deleted {{ $item['deleted_at'] ?? '—' }} · Previously {{ !empty($item['was_installed']) ? (!empty($item['was_enabled']) ? 'Active' : 'Installed / Disabled') : 'Not installed' }}</div>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <form method="POST" action="{{ route('admin.plugins.recycle-bin.restore', $item['archive']) }}" onsubmit="return confirm('Restore this plugin package?')">
+                        @csrf
+                        <input type="hidden" name="confirm_restore" value="1">
+                        <button class="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold">Restore</button>
+                    </form>
+                    <form method="POST" action="{{ route('admin.plugins.recycle-bin.permanent-delete', $item['archive']) }}" onsubmit="return confirm('Permanently delete the archived plugin package files? This cannot be undone. Database records remain preserved.')">
+                        @csrf
+                        <input type="hidden" name="confirm_permanent_delete" value="1">
+                        <button class="px-3 py-1.5 rounded-lg border border-rose-300 text-rose-700 text-xs font-semibold">Permanent Delete</button>
+                    </form>
+                </div>
+            </div>
+        @empty
+            <p class="text-xs text-slate-500">Recycle Bin is empty.</p>
+        @endforelse
+    </section>
 </div>
 @endsection

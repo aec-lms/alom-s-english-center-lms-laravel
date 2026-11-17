@@ -43,6 +43,26 @@
                     <div class="text-slate-600 mt-0.5">{{ $item->subtitle }}</div>
                     <div class="text-slate-400 font-mono mt-1">{{ $item->carousel_group }} &middot; Order {{ $item->sort_order }} &middot; {{ $item->is_active ? 'Active' : 'Hidden' }}</div>
                 </div>
+                <details class="mt-3 border-t border-slate-100 pt-3">
+                    <summary class="cursor-pointer font-semibold text-sky-700">Edit Carousel Item</summary>
+                    <form method="POST" action="{{ route('plugins.carousel_builder.update', $item) }}" enctype="multipart/form-data" class="mt-3 grid sm:grid-cols-2 gap-2">
+                        @csrf @method('PUT')
+                        <select name="carousel_group" class="rounded-lg border border-slate-300 px-3 py-2">
+                            @foreach (['featured_carousel' => 'Featured Showcase', 'testimonial_left' => 'Student Reviews Row 1', 'testimonial_right' => 'Student Reviews Row 2', 'course_showcase' => 'Course Showcase', 'partner_logos' => 'Partner Logos'] as $key => $label)
+                                <option value="{{ $key }}" @selected($item->carousel_group === $key)>{{ $label }}</option>
+                            @endforeach
+                        </select>
+                        <input name="sort_order" type="number" min="0" value="{{ $item->sort_order }}" class="rounded-lg border border-slate-300 px-3 py-2">
+                        <input name="title" required value="{{ $item->title }}" class="rounded-lg border border-slate-300 px-3 py-2">
+                        <input name="rating" type="number" min="1" max="5" value="{{ $item->rating }}" class="rounded-lg border border-slate-300 px-3 py-2">
+                        <input type="file" name="image" accept="image/jpeg,image/png,image/webp" class="rounded-lg border border-slate-300 px-2 py-1.5">
+                        <input name="image_path" value="{{ $item->image_path }}" placeholder="/assets/images/..." class="rounded-lg border border-slate-300 px-3 py-2">
+                        <input name="cta_url" value="{{ $item->cta_url }}" placeholder="/courses or https://..." class="rounded-lg border border-slate-300 px-3 py-2">
+                        <textarea name="subtitle" rows="2" class="sm:col-span-2 rounded-lg border border-slate-300 px-3 py-2">{{ $item->subtitle }}</textarea>
+                        <label class="inline-flex items-center gap-2"><input type="checkbox" name="is_active" value="1" @checked($item->is_active)> Active</label>
+                        <button type="submit" class="rounded-lg bg-slate-900 px-4 py-2 text-white font-bold">Save Item</button>
+                    </form>
+                </details>
                 <form method="POST" action="{{ route('plugins.carousel_builder.destroy', $item) }}" onsubmit="return confirm('Delete carousel item?')">
                     @csrf @method('DELETE')
                     <button type="submit" class="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-700 font-bold">Delete</button>
