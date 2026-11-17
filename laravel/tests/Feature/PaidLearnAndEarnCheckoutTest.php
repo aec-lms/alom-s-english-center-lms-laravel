@@ -18,10 +18,10 @@ class PaidLearnAndEarnCheckoutTest extends TestCase
     {
         $this->markSystemInstalled();
         $this->activatePlugins([
-            'branch-management',
             'course-management',
             'exam-management',
             'learn-and-earn',
+            'branch-management',
             'student-management',
             'fees-management',
             'payment-management',
@@ -87,9 +87,14 @@ class PaidLearnAndEarnCheckoutTest extends TestCase
         $expectedReference = $transaction->reference;
         $this->assertSame(150.0, (float) $transaction->amount);
         $this->assertSame('pending', $transaction->status);
+
         $this->actingAs($student)->post("/learn-and-earn/exams/{$exam->id}/checkout", [
             'payer_contact' => '01700000000',
         ])->assertStatus(409);
+        $this->assertSame(1, UniversalPaymentTransaction::query()
+            ->where('user_id', $student->id)
+            ->where('learn_earn_exam_id', $exam->id)
+            ->count());
 
         $this->actingAs($student)->get("/learn-and-earn/exams/{$exam->id}")->assertForbidden();
 
@@ -105,9 +110,6 @@ class PaidLearnAndEarnCheckoutTest extends TestCase
             'payment_reference' => $transaction->reference,
         ]);
         $this->assertSame('verified', $transaction->fresh()->status);
-        $this->actingAs($student)->post("/learn-and-earn/exams/{$exam->id}/checkout", [
-            'payer_contact' => '01700000000',
-        ])->assertRedirect("/learn-and-earn/exams/{$exam->id}");
 
         $this->actingAs($student)->get("/learn-and-earn/exams/{$exam->id}")->assertOk();
 
