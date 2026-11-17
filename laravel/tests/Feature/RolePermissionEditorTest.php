@@ -22,7 +22,7 @@ class RolePermissionEditorTest extends TestCase
 
         $this->actingAs($admin)->get(route('admin.roles.index'))
             ->assertOk()
-            ->assertSee('Roles &amp; Permissions');
+            ->assertSee('Roles & Permissions');
 
         $this->actingAs($admin)->post(route('admin.roles.store'), [
             'name' => 'Report Analyst',
