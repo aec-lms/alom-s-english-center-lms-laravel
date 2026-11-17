@@ -115,6 +115,19 @@
             </section>
         @endif
 
+        @if (isset($notifications) && $notifications->isNotEmpty())
+            <section class="bg-white rounded-2xl border border-slate-200 p-5">
+                <h2 class="font-extrabold mb-3">My Notifications</h2>
+                @foreach ($notifications as $notification)
+                    <article class="border-t py-3">
+                        <h3 class="font-semibold text-sm">{{ $notification->title }}</h3>
+                        <p class="text-xs text-slate-600 mt-1">{{ $notification->message }}</p>
+                        <p class="text-[11px] text-slate-400 mt-1">{{ $notification->created_at }}</p>
+                    </article>
+                @endforeach
+            </section>
+        @endif
+
         @if ($notices->isNotEmpty())
             <section class="bg-white rounded-2xl border border-slate-200 p-5">
                 <h2 class="font-extrabold mb-3">Notices</h2>
