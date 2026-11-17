@@ -1,6 +1,7 @@
 @extends('layouts.admin')
 @section('title', 'Course Enrollments — AEC LMS')
 @section('content')
+@php($feesIntegrationAvailable = app(\App\Core\Plugins\PluginManager::class)->isEnabled('fees-management') && \Illuminate\Support\Facades\Schema::hasTable('fee_invoices'))
 <div class="max-w-7xl space-y-6">
     <div>
         <h1 class="text-2xl font-extrabold text-slate-900">Course Enrollments</h1>
@@ -19,7 +20,7 @@
                         <td>{{ $enrollment->course?->title }}</td>
                         <td>{{ $enrollment->branch_id ?: 'Global' }}</td>
                         <td>
-                            @if ($enrollment->invoice)
+                            @if ($feesIntegrationAvailable && $enrollment->invoice)
                                 <div>{{ $enrollment->invoice->invoice_number }}</div>
                                 <div class="text-slate-500">{{ $enrollment->invoice->currency }} {{ number_format((float) $enrollment->invoice->net_amount, 2) }} · {{ $enrollment->invoice->status }}</div>
                             @else

@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Core\Updates\UniversalUpdateService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Plugins\Modules\CourseManagement\Models\Course;
 use RuntimeException;
 use Tests\TestCase;
 use ZipArchive;
@@ -86,6 +87,144 @@ class MobileAppUpdateAndPublicParityTest extends TestCase
         $this->getJson('/api/mobile/home')
             ->assertOk()
             ->assertJsonStructure(['courses', 'ebooks', 'products', 'notices']);
+    }
+
+    public function test_mobile_notices_only_expose_global_and_authenticated_users_own_branch(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins([
+            'branch-management',
+            'notice-board',
+            'mobile-app-api',
+        ]);
+
+        $branchA = DB::table('branches')->insertGetId([
+            'code' => 'DHK-A',
+            'name' => 'Dhaka Branch A',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $branchB = DB::table('branches')->insertGetId([
+            'code' => 'DHK-B',
+            'name' => 'Dhaka Branch B',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        foreach ([
+            ['branch_id' => null, 'title' => 'Global Notice'],
+            ['branch_id' => $branchA, 'title' => 'Branch A Notice'],
+            ['branch_id' => $branchB, 'title' => 'Branch B Private Notice'],
+        ] as $notice) {
+            DB::table('notices')->insert($notice + [
+                'body' => 'Notice content',
+                'audience_role' => 'all',
+                'is_pinned' => false,
+                'published_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $this->getJson('/api/mobile/notices')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonFragment(['title' => 'Global Notice'])
+            ->assertJsonMissing(['title' => 'Branch A Notice'])
+            ->assertJsonMissing(['title' => 'Branch B Private Notice']);
+
+        $studentA = $this->createUserWithRole('student', (int) $branchA);
+        $mobileToken = $studentA->createToken('branch-notice-test')->plainTextToken;
+
+        $this->withHeader('Authorization', 'Bearer ' . $mobileToken)
+            ->getJson('/api/mobile/notices')
+            ->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonFragment(['title' => 'Global Notice'])
+            ->assertJsonFragment(['title' => 'Branch A Notice'])
+            ->assertJsonMissing(['title' => 'Branch B Private Notice']);
+
+        $this->withHeader('Authorization', 'Bearer ' . $mobileToken)
+            ->getJson('/api/mobile/home')
+            ->assertOk()
+            ->assertJsonCount(2, 'notices')
+            ->assertJsonMissing(['title' => 'Branch B Private Notice']);
+    }
+
+    public function test_mobile_notice_endpoints_enforce_audience_and_publication_time(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['notice-board', 'mobile-app-api']);
+
+        foreach ([
+            ['title' => 'Everyone Notice', 'audience_role' => 'all', 'published_at' => now()],
+            ['title' => 'Student Only Notice', 'audience_role' => 'student', 'published_at' => now()],
+            ['title' => 'Teacher Only Notice', 'audience_role' => 'teacher', 'published_at' => now()],
+            ['title' => 'Future Student Notice', 'audience_role' => 'student', 'published_at' => now()->addDay()],
+        ] as $notice) {
+            DB::table('notices')->insert($notice + [
+                'branch_id' => null,
+                'body' => 'Audience restricted content',
+                'is_pinned' => false,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $this->getJson('/api/mobile/notices')
+            ->assertOk()
+            ->assertJsonFragment(['title' => 'Everyone Notice'])
+            ->assertJsonMissing(['title' => 'Student Only Notice'])
+            ->assertJsonMissing(['title' => 'Teacher Only Notice'])
+            ->assertJsonMissing(['title' => 'Future Student Notice']);
+
+        $student = $this->createUserWithRole('student');
+        $this->actingAs($student)->getJson('/api/mobile/notices')
+            ->assertOk()
+            ->assertJsonFragment(['title' => 'Everyone Notice'])
+            ->assertJsonFragment(['title' => 'Student Only Notice'])
+            ->assertJsonMissing(['title' => 'Teacher Only Notice'])
+            ->assertJsonMissing(['title' => 'Future Student Notice']);
+
+        $this->actingAs($student)->getJson('/api/mobile/home')
+            ->assertOk()
+            ->assertJsonFragment(['title' => 'Student Only Notice'])
+            ->assertJsonMissing(['title' => 'Teacher Only Notice'])
+            ->assertJsonMissing(['title' => 'Future Student Notice']);
+
+        $teacher = $this->createUserWithRole('teacher');
+        $this->actingAs($teacher)->getJson('/api/mobile/notices')
+            ->assertOk()
+            ->assertJsonFragment(['title' => 'Everyone Notice'])
+            ->assertJsonFragment(['title' => 'Teacher Only Notice'])
+            ->assertJsonMissing(['title' => 'Student Only Notice']);
+    }
+
+    public function test_mobile_course_detail_returns_published_course_without_undefined_relations(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management', 'mobile-app-api']);
+
+        $course = Course::query()->create([
+            'code' => 'MOBILE-COURSE-01',
+            'title' => 'Mobile API Course Detail',
+            'slug' => 'mobile-api-course-detail',
+            'description' => 'Published course description',
+            'price' => 2500,
+            'status' => 'published',
+        ]);
+
+        $this->getJson('/api/mobile/courses/' . $course->slug)
+            ->assertOk()
+            ->assertJsonPath('data.id', $course->id)
+            ->assertJsonPath('data.title', 'Mobile API Course Detail')
+            ->assertJsonPath('data.description', 'Published course description');
+
+        $course->update(['status' => 'draft']);
+        $this->getJson('/api/mobile/courses/' . $course->slug)
+            ->assertNotFound();
     }
 
     public function test_universal_update_service_blocks_zip_path_traversal_entries(): void

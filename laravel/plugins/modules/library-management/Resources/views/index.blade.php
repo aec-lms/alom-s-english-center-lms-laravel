@@ -10,7 +10,7 @@
     <div class="grid md:grid-cols-2 gap-6">
         <div class="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
             <h2 class="text-sm font-bold text-slate-900">Add Book to Catalog</h2>
-            <form method="POST" action="{{ route('plugins.library.books.store') }}" class="grid gap-3 text-xs">
+            <form method="POST" action="{{ url('/admin/library/books') }}" class="grid gap-3 text-xs">
                 @csrf
                 <input name="isbn" required placeholder="ISBN / Catalog Code *" class="rounded-lg border border-slate-300 px-3 py-2 font-mono">
                 <input name="title" required placeholder="Book Title *" class="rounded-lg border border-slate-300 px-3 py-2">
@@ -25,7 +25,7 @@
 
         <div class="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
             <h2 class="text-sm font-bold text-slate-900">Issue Book Loan</h2>
-            <form method="POST" action="{{ route('plugins.library.loans.issue') }}" class="grid gap-3 text-xs">
+            <form method="POST" action="{{ url('/admin/library/loans') }}" class="grid gap-3 text-xs">
                 @csrf
                 <select name="library_book_id" required class="rounded-lg border border-slate-300 px-3 py-2 bg-white">
                     <option value="">Select Book...</option>
@@ -50,7 +50,7 @@
                     <div class="text-slate-500">{{ $loan->borrower_name }} ({{ $loan->borrower_code }}) &middot; Due {{ $loan->due_at?->toDateString() }} &middot; Fine: ৳{{ $loan->fine_amount }} &middot; <strong class="uppercase">{{ $loan->status }}</strong></div>
                 </div>
                 @if ($loan->status === 'borrowed')
-                    <form method="POST" action="{{ route('plugins.library.loans.return', $loan) }}">
+                    <form method="POST" action="{{ url('/admin/library/loans/' . $loan->id . '/return') }}">
                         @csrf
                         <button type="submit" class="px-3 py-1.5 rounded-lg bg-slate-900 text-white font-bold">Mark Returned</button>
                     </form>

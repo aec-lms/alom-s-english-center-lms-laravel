@@ -6,8 +6,8 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Plugins\Modules\UniversalPayment\Http\Controllers\UniversalPaymentController;
 
-Route::middleware(['web', 'installed', 'plugin:universal-payment'])
-    ->post('/universal-checkout', [UniversalPaymentController::class, 'publicCheckout'])
+Route::middleware(['web', 'installed', 'auth', 'plugin:universal-payment'])
+    ->post('/universal-checkout', [UniversalPaymentController::class, 'publicCheckout'])->middleware('throttle:10,1')
     ->name('plugins.universal_payment.checkout');
 
 Route::middleware(['web', 'installed', 'plugin:universal-payment'])
@@ -32,4 +32,5 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:universal-payment', 'perm
         Route::post('/gateways', [UniversalPaymentController::class, 'saveGateways'])->name('gateways');
         Route::post('/transactions', [UniversalPaymentController::class, 'storeTransaction'])->name('store');
         Route::post('/transactions/{transaction}/status', [UniversalPaymentController::class, 'updateStatus'])->name('status');
+        Route::get('/transactions/{transaction}/proof', [UniversalPaymentController::class, 'downloadProof'])->name('proof');
     });

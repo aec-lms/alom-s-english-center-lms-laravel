@@ -1,0 +1,103 @@
+# Plugin implementation & acceptance matrix
+
+**Repository:** `aec-lms/alom-s-english-center-lms-laravel`  
+**Inventory source:** `main` tree at commit `2471a9a929d1b36684aa82f2f9889d4c75ecfb01`  
+**Review date:** 2026-11-16
+
+## How to read this matrix
+
+This first pass is a **static file inventory**, not a functional certification. “Present” means a matching file/directory exists in the plugin folder; it does not prove the feature works, is secure, or is production-ready. “Not present” means no matching file was found in that plugin directory and may be appropriate for an integration-only plugin. No module is marked functionally accepted until its acceptance tests pass.
+
+| Plugin | Files inventoried | Inventory status | Functional acceptance |
+|---|---:|---|---|
+| `admin-boosting` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `admission-management` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `attendance-management` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `batch-management` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `branch-management` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `carousel-builder` | 8 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `certificate-management` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `class-management` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `cms-website` | 10 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `course-management` | 16 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `email-notifications` | 8 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `exam-management` | 9 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `fees-management` | 8 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `gateway-card` | 5 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `gateway-paypal` | 6 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `gateway-sslcommerz` | 5 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `gateway-stripe` | 6 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `gmail-marketing` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `google-console` | 5 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `guardian-management` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `hr-staff-management` | 8 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `library-management` | 8 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `marketing-management` | 8 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `meta-pixel` | 5 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `mobile-app-api` | 9 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `notice-board` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `notification-center` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `page-builder` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `payment-management` | 10 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `reports-analytics` | 5 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `role-ai-assistant` | 9 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `seo-manager` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `slider-builder` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `sms-gateway` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `storefront-catalog` | 8 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `student-management` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `teacher-management` | 8 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `universal-payment` | 8 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `visitor-popup-ads` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+
+## Source-level dependency scan
+
+`PluginSiblingDependencyAuditTest` scans PHP files under all 39 plugin directories for direct `Plugins\\Modules\\...` namespace references and verifies that each sibling reference is declared in the plugin manifest as required or optional. The current policy keeps all sibling integrations optional. This scan does not prove standalone runtime behavior and does not yet detect every string-based table reference, dynamic service lookup, event coupling or external provider dependency; those remain part of each plugin's functional acceptance.
+
+## Targeted regression coverage (not full plugin acceptance)
+
+The current code candidate `02e3e31b111c62d734575c3816c247ed08d038ae` passed PHP 8.3 CI run [43858321888](https://github.com/aec-lms/alom-s-english-center-lms-laravel/actions/runs/43858321888): **129 tests / 1,011 assertions on SQLite and 129 tests / 1,011 assertions on MySQL 8**. PHP syntax lint, Composer security audit, cPanel package build and package verification also passed.
+
+Targeted automated regressions cover plugin lifecycle and ZIP safety, branch isolation, Batch/Class updates, payroll authorization, mobile API privacy and enrolled-lesson access, standalone Fees/Course enrollment, Universal Payment private receipt evidence, and Stripe/PayPal/SSLCOMMERZ checkout paths. These focused tests do **not** certify every plugin in the 39-plugin inventory; the per-plugin acceptance gate below remains mandatory.
+
+## Required acceptance gate for every plugin
+
+- [ ] Manifest schema, unique slug, version and dependency constraints validated.
+- [ ] Install, enable, disable, update and uninstall tested; failed operations roll back safely.
+- [ ] Admin UI is complete, validates input server-side and reports success/failure accurately.
+- [ ] Every route has authentication, role/permission middleware and CSRF protection where applicable.
+- [ ] Create/read/update/delete and business workflows work with real persisted data (where applicable).
+- [ ] Every branch-owned record is scoped on index, show, create, update, delete, export, download and API paths.
+- [ ] Cross-branch access is rejected by negative tests.
+- [ ] Input validation, authorization failures, missing dependencies and provider/network errors are covered.
+- [ ] Audit events and operational logs are emitted for sensitive actions.
+- [ ] Automated feature/integration tests cover success, validation, authorization, branch isolation and failure/rollback.
+- [ ] Browser end-to-end test covers the actual Admin and end-user workflow.
+- [ ] No hard-coded credentials, fake payment settlement, demo records or external-provider secrets.
+
+## Priority order
+
+1. Core plugin lifecycle and branch/permission enforcement shared by all modules.
+2. Student, Guardian, Teacher, Admission, Course, Class, Batch, Exam and Attendance.
+3. Fees, Payment Management, individual payment gateways and accounting reconciliation.
+4. Certificate, Library, HR/Staff, Reports and Notifications.
+5. CMS, Page Builder, Slider Builder, Carousel Builder and Storefront.
+6. SEO, Marketing, Gmail, Meta Pixel, Google Search Console, SMS and email integrations.
+7. Mobile App API and Role-based AI Assistant.
+
+## Tracking rule
+
+Update each row's functional acceptance only after code review and tests have been run on the exact candidate commit. Do not mark an integration as production-ready until sandbox/credential-backed provider tests are complete.
+
+## Verified common lifecycle acceptance (39/39)
+
+At candidate commit `e15a0299c55a1876ba555778eb19b8d1c47192c0`, the parameterized `AllPluginsIndependentAcceptanceTest` ran once for each of the 39 plugin slugs. It verifies each manifest and provider autoload, no required sibling dependency, install/enable, disable/re-enable, checksum-verified ZIP update with a newer version, uninstall/reinstall, reset-to-default settings, move-to-Recycle-Bin, restore to the prior installed/enabled state, and permanent removal from the Recycle Bin with a verified private recovery snapshot for test isolation. Optional integrations are not auto-installed. This establishes common lifecycle behavior for all 39 packages, not full feature acceptance for each plugin.
+
+The same candidate adds permanent deletion to the main LMS Recycle Bin for all 17 supported record types (students, teachers, courses, categories, live classes, exams, batches, classes, branches, CMS content, sliders, campaigns and pop-ups). The action is admin/permission protected, requires explicit confirmation, only accepts soft-deleted records, writes an audit event, and returns a user-safe error when linked database records prevent deletion.
+
+The exact candidate's GitHub Actions checks completed successfully:
+- Laravel workflow `43873892471`: SQLite and MySQL 8 suites each passed **183 tests / 2,758 assertions**; PHP 8.3 syntax, Composer validation, cPanel production package build and package-content verification passed.
+- Browser E2E workflow `43873892493`: passed.
+- Composer Security Audit workflow `43872996475`: passed on the immediately preceding candidate; no Composer manifest or lockfile changes were made between that audit and this candidate.
+
+**Still open:** plugin-specific feature acceptance for every business workflow; payment/email/SMS/marketing provider sandbox tests requiring approved credentials; real cPanel staging installation and migration/rollback validation; and a real staging 300-user load test. The LMS live-class module currently relies on external meeting providers, so the 300-user web-tier test does not prove that an external Zoom/Meet/Teams room supports 300 attendees. No plugin is being marked fully feature-accepted or production-certified by these common lifecycle checks.

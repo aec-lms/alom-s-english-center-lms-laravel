@@ -23,25 +23,23 @@ bash scripts/build-cpanel-package.sh
 
 The script creates `dist/aec-lms-cpanel-release.zip` and its SHA-256 sidecar. It installs locked production dependencies and excludes environment secrets, backups, private uploads, installation locks and development files. Inspect the ZIP and checksum before transferring it.
 
-## 3. Configure the application
+## 3. Configure the application (cPanel File Manager)
 
-Extract the package into a private application directory outside the public document root. Point the domain document root to that application's `public/` directory. Keep `.env`, source directories, `storage/`, `vendor/`, backups and private uploads outside public access.
+1. Extract the verified ZIP into a private application directory. Do not expose the Laravel application root as the website document root.
+2. Set the domain document root to the extracted application's `public/` directory.
+3. Copy `.env.example` to `.env` in the application root (not inside `public/`) using File Manager.
+4. Edit `.env` with the cPanel MySQL host, database name, database username and password, plus the HTTPS application URL. Do not send database passwords or keys in chat.
+5. Ensure `storage/` and `bootstrap/cache/` are writable by the PHP process. Keep backups and private uploads outside the public document root.
 
-From cPanel Terminal, copy `.env.example` to `.env`, set production database, URL and mail values, protect the file with mode 0600, and prepare writable Laravel directories. Install locked dependencies with Composer from the application root.
+Manual Universal Payment receipt proofs are stored on Laravel's private `local` disk under `storage/app/private/universal-payment-proofs/` (not in `public/storage`). Do not create a public symlink for this directory. The authenticated proof-download route checks finance permission and branch ownership. Include this private directory in encrypted backups and verify restore access during the cPanel rehearsal; the release ZIP intentionally excludes uploaded proofs.
+
+The release ZIP includes the locked Composer dependencies, so a Composer install command is not needed for the packaged build. The initial setup is available through the browser installer; cPanel Terminal/SSH is not required for this initial installation.
 
 ## 4. Install on a new empty database
 
-Run the Laravel installer from the application root:
+Open `https://YOUR-DOMAIN/install` in a browser. The installer checks PHP 8.3+, required extensions, writable paths and the database connection. It refuses any database that already contains tables; create a completely empty database and database user in cPanel first.
 
-```bash
-php artisan lms:install \\
-  --app-name="Alom's English Center" \\
-  --app-url="https://YOUR-DOMAIN" \\
-  --admin-name="Administrator" \\
-  --admin-email="ADMIN@YOUR-DOMAIN"
-```
-
-Enter the administrator password only when prompted. Never put passwords in shell history or command-line arguments. The installer creates the initial Admin account, persists generated keys privately and writes the permanent installation lock. Do not remove the lock or rerun the installer on an installed database.
+Enter the application name, HTTPS URL, initial Admin name/email and a strong password in the installer form. The installer generates and privately persists the application, plugin-signing and backup-encryption keys, runs the core migrations, creates the Admin account and writes a permanent installation lock. After installation, `/install` is locked. Never remove the lock or run a fresh install against an existing database.
 
 ## 5. Post-install verification
 
@@ -50,7 +48,14 @@ Enter the administrator password only when prompted. Never put passwords in shel
 - Confirm `/install` is unavailable after installation.
 - Verify `.env`, source, storage, backups and private uploads cannot be downloaded over HTTP.
 - Test authentication, authorization, branch isolation and one complete workflow in every enabled module.
-- Verify HTTPS, secure cookies, SMTP, queues/cron and private file authorization.
+- Verify HTTPS, secure cookies, SMTP settings, private file authorization and the actual notification delivery status.
+- Notification Center email uses the database queue. In cPanel → Cron Jobs, add a job to run every minute (replace the home path and PHP binary with the values shown by your hosting provider):
+  ```bash
+  cd /home/CPANEL-USER/private-app && /usr/local/bin/php artisan queue:work database --stop-when-empty --tries=3 --timeout=90 >> storage/logs/queue-worker.log 2>&1
+  ```
+  The queue migration creates `jobs`, `job_batches` and `failed_jobs` if they do not already exist. Check the queue log and failed-jobs table during staging. Do not place the log under the public document root.
+- Greenweb SMS remains a synchronous provider submission. A provider acceptance response is recorded as `submitted`, not as confirmed handset delivery.
+- If the hosting plan does not permit PHP CLI/Cron Jobs, queued email cannot be treated as operational; keep this as a release blocker until a supported worker is configured and tested.
 - Take a backup and rehearse restore into a separate disposable database and private directory.
 
 ## 6. Upgrade and recovery policy

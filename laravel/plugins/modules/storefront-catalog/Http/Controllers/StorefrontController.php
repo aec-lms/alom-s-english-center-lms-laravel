@@ -78,7 +78,7 @@ class StorefrontController extends Controller
             'slug' => Str::slug($validated['title']) . '-' . Str::lower(Str::random(4)),
             'title' => $validated['title'],
             'category' => $validated['category'],
-            'badge' => $validated['badge'] ?: ($validated['type'] === 'ebook' ? ($isFree ? 'Free' : 'Premium') : 'Featured'),
+            'badge' => ($validated['badge'] ?? null) ?: ($validated['type'] === 'ebook' ? ($isFree ? 'Free' : 'Premium') : 'Featured'),
             'price' => $isFree ? 0 : (float) $validated['price'],
             'original_price' => (float) ($validated['original_price'] ?? $validated['price']),
             'is_free' => $isFree,

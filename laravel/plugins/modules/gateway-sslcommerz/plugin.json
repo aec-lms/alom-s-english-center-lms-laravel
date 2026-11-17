@@ -38,5 +38,10 @@
                 "1": "Sandbox"
             }
         }
+    ],
+    "optional_dependencies": [
+        "fees-management",
+        "payment-management",
+        "student-management"
     ]
 }

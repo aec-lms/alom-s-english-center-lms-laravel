@@ -11,6 +11,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
@@ -64,9 +65,19 @@ class UniversalPaymentController extends Controller
             'item_title' => ['required', 'string', 'max:200'],
             'gateway' => ['required', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,bank_cash'],
             'amount' => ['required', 'numeric', 'min:1'],
-            'external_trx_id' => ['nullable', 'string', 'max:120'],
-            'status' => ['required', 'in:pending,verified,refunded'],
+            'external_trx_id' => ['required', 'string', 'max:120'],
+            'proof_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
         ]);
+
+        if ($request->hasFile('proof_file')) {
+            abort_unless(in_array($validated['gateway'], ['bank_cash', 'offline'], true), 422, 'Receipt evidence is accepted only for manual bank/cash payments.');
+            abort_unless(Schema::hasColumn('universal_payment_transactions', 'proof_path')
+                && Schema::hasColumn('universal_payment_transactions', 'proof_mime')
+                && Schema::hasColumn('universal_payment_transactions', 'proof_size'), 503, 'Receipt evidence storage is not available until the payment migration is applied.');
+        }
+
+        $proofFile = $request->file('proof_file');
+        $proofPath = $proofFile?->store('universal-payment-proofs', 'local');
 
         $tx = UniversalPaymentTransaction::query()->create([
             'reference' => 'UPAY-' . strtoupper(Str::random(8)),
@@ -76,10 +87,14 @@ class UniversalPaymentController extends Controller
             'gateway' => $validated['gateway'],
             'currency' => $this->plugins->getSetting('universal-payment', 'default_currency', 'BDT') ?: 'BDT',
             'amount' => $validated['amount'],
-            'external_trx_id' => $validated['external_trx_id'] ?? null,
-            'status' => $validated['status'],
-            'verified_by' => $validated['status'] === 'verified' ? auth()->id() : null,
-            'verified_at' => $validated['status'] === 'verified' ? now() : null,
+            'external_trx_id' => trim($validated['external_trx_id']),
+            'branch_id' => auth()->user()?->branch_id,
+            'status' => 'pending',
+            'verified_by' => null,
+            'verified_at' => null,
+            'proof_path' => $proofPath,
+            'proof_mime' => $proofFile?->getMimeType(),
+            'proof_size' => $proofFile?->getSize(),
         ]);
 
         $this->audit->log('universal_payment.recorded', 'universal_payment', $tx->reference, ['amount' => $tx->amount, 'gateway' => $tx->gateway]);
@@ -87,17 +102,60 @@ class UniversalPaymentController extends Controller
         return back()->with('status', "Transaction '{$tx->reference}' recorded ({$tx->gateway} · {$tx->status}).");
     }
 
+    public function downloadProof(Request $request, UniversalPaymentTransaction $transaction): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $actor = $request->user();
+        abort_unless($actor !== null, 401);
+        if ($actor->hasRole('branch_manager')) {
+            abort_unless((int) ($actor->branch_id ?? 0) > 0
+                && (int) ($transaction->branch_id ?? 0) === (int) $actor->branch_id, 404);
+        }
+
+        abort_unless(is_string($transaction->proof_path) && $transaction->proof_path !== '', 404);
+        abort_unless(Storage::disk('local')->exists($transaction->proof_path), 404);
+
+        $filename = basename($transaction->proof_path);
+        $mime = in_array($transaction->proof_mime, ['application/pdf', 'image/jpeg', 'image/png'], true)
+            ? $transaction->proof_mime
+            : 'application/octet-stream';
+
+        return Storage::disk('local')->download($transaction->proof_path, $filename, [
+            'Content-Type' => $mime,
+            'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'private, no-store, max-age=0',
+        ]);
+    }
+
     public function updateStatus(Request $request, UniversalPaymentTransaction $transaction): RedirectResponse
     {
+        $actor = $request->user();
+        if ($actor && $actor->hasRole('branch_manager')) {
+            abort_unless((int) ($actor->branch_id ?? 0) > 0
+                && (int) ($transaction->branch_id ?? 0) === (int) $actor->branch_id, 404);
+        }
+
         $validated = $request->validate([
-            'status' => ['required', 'in:pending,verified,refunded,rejected'],
+            'status' => ['required', 'in:verified,rejected'],
+            'payment_reference' => ['required', 'string', 'max:120'],
         ]);
 
+        abort_unless($transaction->status === 'pending'
+            && in_array($transaction->gateway, ['bank_cash', 'offline'], true),
+            422,
+            'Only pending manual receipts can be reviewed.'
+        );
+
+        $reference = trim($validated['payment_reference']);
+        abort_if($reference === '', 422, 'A bank receipt or cash voucher reference is required before verification.');
+
         $transaction->update([
+            'external_trx_id' => $reference,
             'status' => $validated['status'],
-            'verified_by' => auth()->id(),
-            'verified_at' => now(),
+            'verified_by' => $validated['status'] === 'verified' ? $actor?->id : null,
+            'verified_at' => $validated['status'] === 'verified' ? now() : null,
         ]);
+
+        // Online transactions are changed only by a verified provider callback, never by manual review.
 
         if ($transaction->storefront_item_id && $transaction->user_id && Schema::hasTable('storefront_item_access')) {
             if ($validated['status'] === 'verified') {
@@ -126,7 +184,20 @@ class UniversalPaymentController extends Controller
             'amount' => ['required', 'numeric', 'min:0.01'],
             'external_trx_id' => ['nullable', 'string', 'max:120'],
             'storefront_item_id' => ['nullable', 'integer'],
+            'fee_invoice_id' => ['nullable', 'integer', 'exists:fee_invoices,id'],
         ]);
+
+        $invoice = null;
+        if (!empty($validated['fee_invoice_id'])) {
+            abort_unless(auth()->check() && Schema::hasTable('fee_invoices'), 401, 'Sign in to pay an invoice.');
+            $invoice = DB::table('fee_invoices')->where('id', $validated['fee_invoice_id'])->first();
+            $isInvoiceOwner = $invoice !== null
+                && filled($invoice->payer_email)
+                && hash_equals(strtolower((string) $invoice->payer_email), strtolower((string) auth()->user()->email));
+            abort_unless($isInvoiceOwner, 403, 'You can only pay an invoice issued to your account.');
+            $invoiceBalance = max(0, (float) $invoice->net_amount - (float) $invoice->paid_amount);
+            abort_if($invoiceBalance <= 0, 422, 'This invoice has no outstanding balance.');
+        }
 
         $storefrontItem = null;
         if (!empty($validated['storefront_item_id'])) {
@@ -137,6 +208,8 @@ class UniversalPaymentController extends Controller
             abort_if($storefrontItem === null || (bool) $storefrontItem->is_free || (float) $storefrontItem->price <= 0, 422, 'This is not a paid active e-book.');
             abort_if(empty($storefrontItem->download_url) || !str_starts_with((string) $storefrontItem->download_url, 'private:'), 422, 'The e-book PDF must be privately uploaded before it can be sold.');
         }
+
+        abort_unless($invoice !== null || $storefrontItem !== null, 422, 'Choose an invoice or paid e-book to continue checkout.');
 
         if ($storefrontItem !== null && $validated['gateway'] !== 'sslcommerz') {
             return back()->withErrors(['gateway' => 'Choose SSLCOMMERZ for secure automatic e-book checkout.'])->withInput();
@@ -161,15 +234,20 @@ class UniversalPaymentController extends Controller
             'reference' => 'UPAY-' . strtoupper(Str::random(8)),
             'payer_name' => $storefrontItem ? auth()->user()->name : $validated['payer_name'],
             'payer_contact' => $validated['payer_contact'],
-            'item_title' => $storefrontItem?->title ?? $validated['item_title'],
+            'item_title' => $invoice ? ('Invoice ' . $invoice->invoice_number) : ($storefrontItem?->title ?? $validated['item_title']),
             'gateway' => $validated['gateway'],
             'currency' => $this->plugins->getSetting('universal-payment', 'default_currency', 'BDT') ?: 'BDT',
-            'amount' => $storefrontItem ? (float) $storefrontItem->price : $validated['amount'],
+            'amount' => $invoice ? $invoiceBalance : (float) $storefrontItem->price,
             'external_trx_id' => $validated['external_trx_id'] ?? null,
-            'user_id' => $storefrontItem ? auth()->id() : null,
+            'user_id' => auth()->id(),
+            'fee_invoice_id' => $invoice?->id,
             'storefront_item_id' => $storefrontItem?->id,
             'status' => 'pending',
         ]);
+
+        if ($invoice !== null) {
+            return back()->with('status', "Invoice payment submitted! Reference: {$tx->reference}. Access will be updated after payment verification.");
+        }
 
         if ($storefrontItem !== null) {
             try {
