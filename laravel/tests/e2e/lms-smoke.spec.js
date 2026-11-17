@@ -54,5 +54,5 @@ test('admin can reorder dashboard widgets and save the layout', async ({ page })
   }
   await page.getByRole('button', { name: 'Save layout' }).click();
   await expect(page.locator('[data-dashboard-widget]').first()).toHaveAttribute('data-dashboard-widget', 'system_info');
-  await expect(page.getByText('System Information')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'System Information' })).toBeVisible();
 });
