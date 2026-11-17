@@ -17,7 +17,7 @@ class AdminMenuController extends Controller
     public function index(AdminMenuRegistry $registry): View
     {
         $items = [];
-        foreach ($registry->groups() as $group => $groupItems) {
+        foreach ($registry->groups(true) as $group => $groupItems) {
             foreach ($groupItems as $item) {
                 $items[] = $item + ['group' => $group];
             }
@@ -37,7 +37,7 @@ class AdminMenuController extends Controller
         ]);
 
         $allowed = [];
-        foreach ($registry->groups() as $groupItems) {
+        foreach ($registry->groups(true) as $groupItems) {
             foreach ($groupItems as $item) {
                 $allowed[$item['plugin'] . '|' . $item['route']] = true;
             }
