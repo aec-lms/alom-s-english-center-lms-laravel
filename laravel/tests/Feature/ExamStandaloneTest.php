@@ -39,6 +39,7 @@ class ExamStandaloneTest extends TestCase
         $examId = \Illuminate\Support\Facades\DB::table('exams')->insertGetId([
             'title' => 'Student Grammar Exam',
             'duration_minutes' => 20,
+            'max_attempts' => 2,
             'pass_marks' => 1,
             'is_published' => true,
             'created_at' => now(),
@@ -89,11 +90,11 @@ class ExamStandaloneTest extends TestCase
         $this->activatePlugins(['exam-management']);
         $student = $this->createUserWithRole('student');
 
-        $examId = \\Illuminate\\Support\\Facades\\DB::table('exams')->insertGetId([
+        $examId = \Illuminate\\Support\\Facades\\DB::table('exams')->insertGetId([
             'title' => 'Timed Exam', 'duration_minutes' => 5, 'max_attempts' => 1,
             'pass_marks' => 1, 'is_published' => true, 'created_at' => now(), 'updated_at' => now(),
         ]);
-        $questionId = \\Illuminate\\Support\\Facades\\DB::table('exam_questions')->insertGetId([
+        $questionId = \Illuminate\\Support\\Facades\\DB::table('exam_questions')->insertGetId([
             'exam_id' => $examId, 'prompt' => 'Timed question?', 'options' => json_encode(['A', 'B']),
             'correct_option_index' => 0, 'marks' => 2, 'created_at' => now(), 'updated_at' => now(),
         ]);
@@ -103,7 +104,7 @@ class ExamStandaloneTest extends TestCase
         $attemptId = (int) ($attemptMatch[1] ?? 0);
         $this->assertGreaterThan(0, $attemptId);
 
-        \\Illuminate\\Support\\Facades\\DB::table('exam_attempts')->where('id', $attemptId)->update([
+        \Illuminate\\Support\\Facades\\DB::table('exam_attempts')->where('id', $attemptId)->update([
             'started_at' => now()->subMinutes(6),
         ]);
 
