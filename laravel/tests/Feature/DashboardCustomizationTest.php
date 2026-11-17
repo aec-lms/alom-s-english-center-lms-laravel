@@ -34,8 +34,8 @@ class DashboardCustomizationTest extends TestCase
             ->assertOk()
             ->assertSee('Registered Accounts')
             ->assertSee('System Information')
-            ->assertDontSee('Recent Security Audit Trail')
-            ->assertDontSee('Encrypted Backups');
+            ->assertDontSee('data-dashboard-widget="audit_trail"', false)
+            ->assertDontSee('data-dashboard-widget="backups"', false);
     }
 
     public function test_dashboard_widget_preferences_are_isolated_per_admin(): void
