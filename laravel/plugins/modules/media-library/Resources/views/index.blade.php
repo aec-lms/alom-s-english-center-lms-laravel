@@ -60,7 +60,7 @@
             <article class="bg-white border rounded-xl overflow-hidden">
                 <div class="h-36 bg-slate-50 flex items-center justify-center">
                     @if (str_starts_with($asset->mime_type, 'image/') && $asset->disk === 'public')
-                        <img src="{{ IlluminateSupportFacadesStorage::disk('public')->url($asset->path) }}" alt="{{ $asset->alt_text ?: $asset->original_name }}" loading="lazy" class="w-full h-full object-contain">
+                        <img src="{{ $asset->public_url }}" alt="{{ $asset->alt_text ?: $asset->original_name }}" loading="lazy" class="w-full h-full object-contain">
                     @else
                         <span class="text-3xl font-black text-slate-400">{{ strtoupper(pathinfo($asset->original_name, PATHINFO_EXTENSION)) }}</span>
                     @endif
@@ -76,7 +76,7 @@
                         </div>
                     @else
                         @if($asset->disk === 'public')
-                            <button type="button" data-copy-url="{{ IlluminateSupportFacadesStorage::disk('public')->url($asset->path) }}" class="copy-media-url text-xs text-sky-700 font-bold">Copy URL</button>
+                            <button type="button" data-copy-url="{{ $asset->public_url }}" class="copy-media-url text-xs text-sky-700 font-bold">Copy URL</button>
                         @else
                             <a href="{{ route('plugins.media.download', $asset) }}" class="text-xs text-sky-700 font-bold">Download private file</a>
                         @endif
