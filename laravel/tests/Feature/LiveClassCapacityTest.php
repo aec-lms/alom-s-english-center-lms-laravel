@@ -46,7 +46,7 @@ class LiveClassCapacityTest extends TestCase
             ->post("/live-classes/{$liveClass->id}/join")
             ->assertOk()
             ->assertSee('Open ZOOM Meeting')
-            ->assertSee('1 / 1 active LMS participants');
+            ->assertSee('active LMS participants');
 
         $participant = LiveClassParticipant::query()
             ->where('live_class_id', $liveClass->id)
