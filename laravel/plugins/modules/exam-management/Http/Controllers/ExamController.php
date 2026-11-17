@@ -258,6 +258,6 @@ class ExamController extends Controller
             'total' => $total,
         ]);
 
-        return back()->with('status', "Exam graded server-side: {$score}/{$total} marks.");
+        return redirect()->route('portal.dashboard')->with('status', "Exam graded server-side: {$score}/{$total} marks.");
     }
 }
