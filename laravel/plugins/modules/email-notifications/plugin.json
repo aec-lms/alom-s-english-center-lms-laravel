@@ -46,7 +46,8 @@
             "group": "Marketing, Growth & SEO",
             "label": "Email Notifications",
             "route": "plugins.email_notifications.index",
-            "order": 100
+            "order": 100,
+            "permission": "email.notifications.manage"
         }
     ]
 }
