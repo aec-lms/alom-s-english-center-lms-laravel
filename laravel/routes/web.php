@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\AppearanceController;
 use App\Http\Controllers\Admin\ThemePackageController;
 use App\Http\Controllers\Admin\SiteIdentityController;
 use App\Http\Controllers\Admin\SiteLayoutController;
+use App\Http\Controllers\Admin\SiteWidgetController;
 use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\BackupController;
 use App\Http\Controllers\Admin\DashboardController;
