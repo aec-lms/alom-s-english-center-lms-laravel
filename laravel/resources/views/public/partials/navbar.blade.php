@@ -1,4 +1,5 @@
 @php
+    $headerLayout = app(\App\Core\Appearance\SiteLayoutManager::class)->header();
     $navLinks = app(\App\Core\Appearance\SiteNavigationManager::class)->items('primary');
     if (auth()->check() && auth()->user()->hasRole('student') && app(\App\Core\Plugins\PluginManager::class)->isEnabled('student-tracking') && Route::has('plugins.student-tracking.mine')) {
         $navLinks[] = [
@@ -10,9 +11,10 @@
     }
 @endphp
 
-<header class="w-full bg-white border-b border-slate-200/80 sticky top-0 z-40 shadow-2xs">
-    <div class="max-w-[1200px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-6">
-        <a href="{{ route('home') }}" class="flex items-center gap-2.5 whitespace-nowrap shrink-0">
+<header data-header-style="{{ $headerLayout['style'] }}" class="w-full bg-white border-b border-slate-200/80 {{ $headerLayout['sticky'] ? 'sticky top-0' : 'relative' }} z-40 shadow-2xs">
+    <div class="max-w-[1200px] mx-auto px-4 sm:px-6 min-h-16 flex items-center {{ $headerLayout['style'] === 'centered' ? 'justify-center' : 'justify-between' }} {{ $headerLayout['style'] === 'compact' ? 'gap-3' : 'gap-6' }}">
+        @if ($headerLayout['sections']['brand']['visible'])
+        <a href="{{ route('home') }}" style="order:{{ $headerLayout['sections']['brand']['order'] }}" class="flex items-center gap-2.5 whitespace-nowrap shrink-0">
             @if (empty($siteIdentity['logo_url']))
             <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-9 h-9 shrink-0" aria-hidden="true">
                 <circle cx="32" cy="32" r="24" stroke="#CBD5E1" stroke-width="1.6" />
@@ -34,8 +36,10 @@
                 <span class="block text-[10px] sm:text-[11px] font-extrabold tracking-tight text-slate-800">{{ $siteIdentity['tagline'] ?? '' }}</span>
             </span>
         </a>
+        @endif
 
-        <nav class="hidden lg:flex items-center gap-7 text-[13px] font-medium text-slate-600">
+        @if ($headerLayout['sections']['navigation']['visible'])
+        <nav style="order:{{ $headerLayout['sections']['navigation']['order'] }}" class="hidden lg:flex items-center gap-7 text-[13px] font-medium text-slate-600">
             @foreach ($navLinks as $item)
                 <a
                     href="{{ $item['url'] }}" @if (!empty($item['external'])) target="_blank" rel="noopener noreferrer" @endif
@@ -45,8 +49,10 @@
                 </a>
             @endforeach
         </nav>
+        @endif
 
-        <div class="flex items-center gap-2.5 shrink-0">
+        @if ($headerLayout['sections']['actions']['visible'])
+        <div style="order:{{ $headerLayout['sections']['actions']['order'] }}" class="flex items-center gap-2.5 shrink-0">
             @auth
                 <a href="{{ route('portal.dashboard') }}" class="px-6 py-2 rounded-full bg-[#EEF2FF] hover:bg-[#E0E7FF] border border-[#E0E7FF]/80 text-[#3B82F6] text-xs sm:text-[13px] font-semibold whitespace-nowrap transition-colors">
                     My Dashboard
@@ -68,8 +74,10 @@
                 </svg>
             </button>
         </div>
+        @endif
     </div>
 
+    @if ($headerLayout['sections']['navigation']['visible'])
     <div id="public-mobile-menu" class="hidden lg:hidden bg-white border-t border-slate-200 px-4 py-3 space-y-1 shadow-md">
         @foreach ($navLinks as $item)
             <a
@@ -80,6 +88,7 @@
             </a>
         @endforeach
     </div>
+    @endif
 </header>
 
 <script>
