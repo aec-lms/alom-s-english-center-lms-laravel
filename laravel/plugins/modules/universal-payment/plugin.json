@@ -48,7 +48,8 @@
             "group": "Finance & Gateways",
             "label": "Universal Payment",
             "route": "plugins.universal_payment.index",
-            "order": 100
+            "order": 100,
+            "permission": "payments.universal.manage"
         }
     ]
 }
