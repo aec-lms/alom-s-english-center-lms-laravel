@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Plugins\Modules\CourseManagement\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Core\Plugins\PluginManager;
 use Plugins\Modules\StudentTracking\Services\StudentActivityTracker;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
