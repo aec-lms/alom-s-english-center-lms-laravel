@@ -15,7 +15,7 @@
             <label class="text-sm">Event
                 <select name="event_type" class="mt-1 w-full rounded border-gray-300">
                     <option value="">All events</option>
-                    @foreach (['student.created' => 'Created', 'student.updated' => 'Updated', 'student.deleted' => 'Deleted'] as $value => $label)
+                    @foreach (['student.created' => 'Student created', 'student.updated' => 'Student updated', 'student.deleted' => 'Student deleted', 'attendance.created' => 'Attendance recorded', 'attendance.updated' => 'Attendance updated', 'attendance.deleted' => 'Attendance deleted', 'enrollment.created' => 'Enrollment created', 'enrollment.updated' => 'Enrollment updated', 'enrollment.deleted' => 'Enrollment deleted', 'exam_attempt.created' => 'Exam attempt created', 'exam_attempt.updated' => 'Exam attempt updated', 'exam_attempt.deleted' => 'Exam attempt deleted'] as $value => $label)
                         <option value="{{ $value }}" @selected(request('event_type') === $value)>{{ $label }}</option>
                     @endforeach
                 </select>
