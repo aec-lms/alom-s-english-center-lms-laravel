@@ -77,8 +77,15 @@ class LearnAndEarnController extends Controller {
    && Schema::hasColumn('universal_payment_transactions','learn_earn_exam_id'),503,
    'Enable and configure Universal Payment and SSLCOMMERZ before purchasing paid exams.');
   if(DB::table('learn_earn_exam_access')->where('exam_id',$exam->id)->where('user_id',$r->user()->id)->where('status','granted')->exists()) {
-   return redirect()->route('plugins.learn_earn.student.show',$exam)->with('status','You already have access to this exam.');
+   return redirect('/learn-and-earn/exams/'.$exam->id)->with('status','You already have access to this exam.');
   }
+  $pendingCheckout = UniversalPaymentTransaction::query()
+   ->where('user_id',$r->user()->id)
+   ->where('learn_earn_exam_id',$exam->id)
+   ->where('status','pending')
+   ->where('created_at','>=',now()->subMinutes(30))
+   ->exists();
+  abort_if($pendingCheckout,409,'A checkout for this exam is already pending. Wait for its result or contact the administrator before retrying.');
   $v=$r->validate(['payer_contact'=>['required','string','max:120']]);
   abort_unless(filter_var((string)$r->user()->email,FILTER_VALIDATE_EMAIL),422,'A valid account email is required for checkout.');
   $tx=UniversalPaymentTransaction::query()->create([
