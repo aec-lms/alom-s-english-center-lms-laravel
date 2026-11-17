@@ -201,9 +201,11 @@ class LessonContentProtectionController extends Controller
             return null;
         }
 
-        abort_unless($actor->branch_id !== null, 403, 'Branch manager must be assigned to a branch.');
         abort_unless(
-            Schema::hasTable('branches') && DB::table('branches')
+            $actor->branch_id !== null
+                && app(PluginManager::class)->isEnabled('branch-management')
+                && Schema::hasTable('branches')
+                && DB::table('branches')
                 ->where('id', $actor->branch_id)
                 ->where('is_active', true)
                 ->exists(),
