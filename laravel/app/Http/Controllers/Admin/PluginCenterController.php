@@ -125,7 +125,7 @@ class PluginCenterController extends Controller
             $this->plugins->resetSettingsToDefaults($slug, auth()->id());
 
             return back()->with('status', "Settings for '{$slug}' restored to manifest defaults. A private recovery copy was retained.");
-        } catch (\\Throwable $e) {
+        } catch (\Throwable $e) {
             return back()->withErrors(['plugin' => $e->getMessage()]);
         }
     }
