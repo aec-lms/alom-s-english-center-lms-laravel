@@ -28,9 +28,19 @@ It ramps to at least 300 concurrent virtual users, holds that load for the selec
 
 These are initial acceptance thresholds, not a guarantee that every hosting plan will meet them. Record actual host metrics alongside the k6 summary.
 
-## Remaining live-class acceptance tests
+## Authenticated live-class stress workflow
 
-Before production release, run a separate authorized staging test with at least 300 distinct enrolled student accounts against the authenticated join, heartbeat, and leave flow. Verify that no more than the configured number of active seats are granted, rejected attempts do not create joined activity events, expired presence is reclaimed, and branch/enrollment restrictions remain enforced. The test must use a disposable staging database and report concurrency, error rate, p95 latency, database lock behavior, and participant counts.
+A separate workflow now exists: **Authenticated Live Class 300+ Load Test** (`.github/workflows/live-class-authenticated-load-test.yml`). It uses `laravel/tests/load/live-class-authenticated-300-vus.js` to authenticate distinct pre-provisioned student accounts, join a live class, and send heartbeats during the hold period.
+
+Follow `laravel/tests/load/AUTHENTICATED-LIVE-CLASS.md` for the staging setup. It requires:
+- A disposable HTTPS staging site and database
+- At least 300 distinct active student accounts, each enrolled in the target course
+- A unique email pattern containing `{vu}`
+- A dedicated temporary password stored as the GitHub Actions secret `AEC_LIVE_CLASS_TEST_PASSWORD`
+- A live class with capacity greater than or equal to the selected virtual-user count
+
+**The workflow is implemented but must still be run against the actual authorized staging site.** Record authentication/join/heartbeat success, seat counts, request failure rate, p95 latency, database lock behavior, and host metrics. Verify that rejected attempts do not create joined activity events and that branch/enrollment restrictions remain enforced.
+
 
 ## Important limitation: video meeting capacity
 
