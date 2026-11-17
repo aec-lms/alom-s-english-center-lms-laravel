@@ -9,12 +9,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ExamQuestion extends Model
 {
-    protected $fillable = ['exam_id', 'prompt', 'options', 'correct_option_index', 'marks'];
+    protected $fillable = ['exam_id', 'prompt', 'options', 'correct_option_index', 'marks', 'negative_marks'];
 
     protected $casts = [
         'options' => 'array',
         'correct_option_index' => 'integer',
-        'marks' => 'integer',
+        'marks' => 'decimal:2',
+        'negative_marks' => 'decimal:2',
     ];
 
     public function exam(): BelongsTo
