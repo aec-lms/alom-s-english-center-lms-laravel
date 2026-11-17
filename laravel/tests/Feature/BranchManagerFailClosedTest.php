@@ -51,4 +51,24 @@ class BranchManagerFailClosedTest extends TestCase
             ->post('/admin/hr/payrolls', [])
             ->assertForbidden();
     }
+    public function test_unassigned_branch_manager_cannot_access_exam_management(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'exam-management']);
+
+        $manager = $this->createUserWithRole('branch_manager');
+        $permissionIds = DB::table('permissions')->where('slug', 'exams.manage')->pluck('id');
+        $this->assertCount(1, $permissionIds);
+        $manager->roles()->first()->permissions()->syncWithoutDetaching($permissionIds);
+
+        $this->actingAs($manager)->get('/admin/exams')->assertForbidden();
+        $this->actingAs($manager)->post('/admin/exams', [
+            'title' => 'Unassigned Branch Exam',
+            'duration_minutes' => 30,
+            'pass_marks' => 10,
+        ])->assertForbidden();
+
+        $this->assertDatabaseMissing('exams', ['title' => 'Unassigned Branch Exam']);
+    }
+
 }
