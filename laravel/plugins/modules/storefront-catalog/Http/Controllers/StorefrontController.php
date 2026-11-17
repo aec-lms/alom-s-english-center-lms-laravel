@@ -67,6 +67,9 @@ class StorefrontController extends Controller
         $downloadUrl = $request->hasFile('pdf_file')
             ? $this->storePrivatePdf($request->file('pdf_file'))
             : ($validated['download_url'] ?? null);
+        if ($validated['type'] === 'ebook' && !$isFree && !str_starts_with((string) $downloadUrl, 'private:')) {
+            return back()->withErrors(['download_url' => 'Paid e-books require a privately uploaded PDF.'])->withInput();
+        }
 
         $isFree = $request->boolean('is_free') || (float) $validated['price'] <= 0;
 
@@ -143,6 +146,9 @@ class StorefrontController extends Controller
             $downloadUrl = $this->storePrivatePdf($request->file('pdf_file'));
         } elseif (!empty($validated['download_url'])) {
             $downloadUrl = $validated['download_url'];
+        }
+        if ($validated['type'] === 'ebook' && !$isFree && !str_starts_with((string) $downloadUrl, 'private:')) {
+            return back()->withErrors(['download_url' => 'Paid e-books require a privately uploaded PDF.'])->withInput();
         }
 
         $isFree = $request->boolean('is_free') || (float) $validated['price'] <= 0;
