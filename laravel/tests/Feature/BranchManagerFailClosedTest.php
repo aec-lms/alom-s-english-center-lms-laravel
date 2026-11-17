@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
+use Plugins\Modules\CourseManagement\Models\Course;
+use Plugins\Modules\CourseManagement\Models\Enrollment;
 use Tests\TestCase;
 
 class BranchManagerFailClosedTest extends TestCase
