@@ -234,6 +234,18 @@ class UniversalPaymentController extends Controller
     public function sslcommerzFailed(Request $request): RedirectResponse
     {
         $transaction = $this->storefrontGateway->markSslcommerzFailed($request->all(), 'failed');
+        if (in_array($transaction->status, ['verified', 'risk_review'], true)) {
+            $message = $transaction->status === 'verified'
+                ? 'Payment was already verified; your access remains available.'
+                : 'Payment was received but remains under manual review; no additional access was granted.';
+            if ($transaction->learn_earn_exam_id) {
+                return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)->with('status', $message);
+            }
+            $reviewSlug = DB::table('storefront_items')->where('id', $transaction->storefront_item_id)->value('slug');
+            return $reviewSlug
+                ? redirect('/ebooks/' . rawurlencode((string) $reviewSlug))->with('status', $message)
+                : redirect('/ebooks')->with('status', $message);
+        }
         if ($transaction->learn_earn_exam_id) {
             return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)->withErrors(['payment' => 'Payment was not completed. You can try again.']);
         }
@@ -244,6 +256,18 @@ class UniversalPaymentController extends Controller
     public function sslcommerzCancelled(Request $request): RedirectResponse
     {
         $transaction = $this->storefrontGateway->markSslcommerzFailed($request->all(), 'cancelled');
+        if (in_array($transaction->status, ['verified', 'risk_review'], true)) {
+            $message = $transaction->status === 'verified'
+                ? 'Payment was already verified; your access remains available.'
+                : 'Payment was received but remains under manual review; no additional access was granted.';
+            if ($transaction->learn_earn_exam_id) {
+                return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)->with('status', $message);
+            }
+            $reviewSlug = DB::table('storefront_items')->where('id', $transaction->storefront_item_id)->value('slug');
+            return $reviewSlug
+                ? redirect('/ebooks/' . rawurlencode((string) $reviewSlug))->with('status', $message)
+                : redirect('/ebooks')->with('status', $message);
+        }
         if ($transaction->learn_earn_exam_id) {
             return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)->with('status', 'Payment was cancelled.');
         }
