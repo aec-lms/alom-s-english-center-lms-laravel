@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace App\\Core\\Appearance;
+namespace App\Core\Appearance;
 
-use App\\Models\\SystemSetting;
-use Illuminate\\Support\\Facades\\Schema;
+use App\Models\SystemSetting;
+use Illuminate\Support\Facades\Schema;
 
 class ThemeManager
 {
@@ -39,13 +39,13 @@ class ThemeManager
     {
         $route = request()->route();
         $action = (string) ($route?->getActionName() ?? '');
-        if (preg_match('/^Plugins\\\\Modules\\\\([A-Za-z0-9]+)\\\\/', $action, $matches)) {
+        if (preg_match('/^Plugins\\Modules\\([A-Za-z0-9]+)\\/', $action, $matches)) {
             $slug = strtolower((string) preg_replace('/(?<!^)[A-Z]/', '-$0', $matches[1]));
             return 'plugin.' . $slug;
         }
 
         $name = (string) ($route?->getName() ?? '');
-        if (preg_match('/^plugins\\.([a-z0-9_-]+)\\./', $name, $matches)) {
+        if (preg_match('/^plugins\.([a-z0-9_-]+)\./', $name, $matches)) {
             return 'plugin.' . $matches[1];
         }
 
