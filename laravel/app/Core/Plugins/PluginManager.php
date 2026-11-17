@@ -149,15 +149,14 @@ class PluginManager
                     $instance->onEnable();
                 }
 
-                // Routes must be available even for headless plugins without a provider class.
-                // require_once is safe when the provider already loaded these routes at boot.
-                $this->loadPluginRoutes($manifest);
-
                 $this->audit->log('plugin.installed', 'plugin', $manifest->slug, ['version' => $manifest->version], $actorId);
 
                 return $record;
             });
 
+            // Register plugin routes after the database transaction commits so the router
+            // sees a stable installed/enabled plugin state in tests and long-lived workers.
+            $this->loadPluginRoutes($manifest);
             event(new PluginLifecycleEvent('installed', $manifest->slug, $manifest->version, $actorId));
 
             return $record;
@@ -384,14 +383,15 @@ class PluginManager
                 $provider->onEnable();
             }
 
-            // Runtime activation must expose routes regardless of optional provider presence.
-            $this->loadPluginRoutes($manifest);
-
             $this->audit->log('plugin.enabled', 'plugin', $slug, [], $actorId);
 
             return $record->fresh();
         });
 
+        $manifest = $this->discoverManifests()[$slug] ?? null;
+        if ($manifest) {
+            $this->loadPluginRoutes($manifest);
+        }
         event(new PluginLifecycleEvent('enabled', $slug, $record->version, $actorId));
 
         return $record;
