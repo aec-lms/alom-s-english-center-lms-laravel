@@ -15,7 +15,7 @@ class LiveClassCapacityTest extends TestCase
     public function test_only_enrolled_students_can_join_and_capacity_is_enforced_with_presence_heartbeats(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['course-management']);
+        $this->activatePlugins(['course-management', 'student-tracking']);
 
         $course = Course::query()->create([
             'code' => 'LIVE-300',
@@ -53,6 +53,11 @@ class LiveClassCapacityTest extends TestCase
             ->where('user_id', $studentA->id)
             ->firstOrFail();
         $this->assertNull($participant->left_at);
+        $this->assertDatabaseHas('student_activity_events', [
+            'user_id' => $studentA->id,
+            'event_type' => 'live_class_joined',
+            'subject_id' => (string) $liveClass->id,
+        ]);
 
         $this->actingAs($studentA)
             ->postJson("/live-classes/{$liveClass->id}/heartbeat")
