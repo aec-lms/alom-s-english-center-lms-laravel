@@ -105,3 +105,11 @@ A dedicated Playwright/Chromium GitHub Actions workflow runs against an isolated
 - The feature branch remains PR #2, open and draft. The main branch and production domain were not changed.
 - The PR branch is substantially divergent from the recorded main baseline and must receive a careful base/history review before merge; a green CI run alone is not merge authorization.
 - Remaining external release gates include a production-sized SQL restore into a disposable database, a real clean cPanel staging install, complete Core upgrade/rollback rehearsal on staging, provider sandbox callbacks/reconciliation, and a validated 300+ live-class provider/load test. These cannot be truthfully marked complete from CI-only tests.
+
+
+## External staging rehearsal tracking (2026-11-17)
+
+- Runbook: [EXTERNAL-STAGING-REHEARSAL.md](EXTERNAL-STAGING-REHEARSAL.md) defines safe, isolated procedures and pass criteria for production-sized database restore, clean cPanel install, Core update/rollback, payment provider sandbox acceptance, and separate LMS-vs-meeting 300+ capacity tests.
+- Tracking issue: [#14 — External staging release gates](https://github.com/aec-lms/alom-s-english-center-lms-laravel/issues/14).
+- These external gates remain **OPEN / NOT RUN** until the required anonymized dump, disposable cPanel staging environment, official provider sandbox access, and authorized conferencing load-test facility are available. No production resources were used.
+- Documentation commit `59087fa97ceda3fb4837ec76b3c4509a15aec860` has Composer Security Audit passing; Laravel MySQL/SQLite and Browser E2E workflows are running.
