@@ -1097,6 +1097,7 @@ class PluginManager
 
             if (is_file($routeFile)) {
                 require $routeFile;
+                app('router')->getRoutes()->refreshNameLookups();
             }
         }
     }
