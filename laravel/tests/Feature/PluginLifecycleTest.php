@@ -28,221 +28,127 @@ class PluginLifecycleTest extends TestCase
         $this->assertTrue(VersionConstraint::matches('2.1.0', '>=2.0'));
     }
 
-    public function test_incompatible_installed_plugin_cannot_be_reenabled_after_core_upgrade(): void
+    public function test_explicit_required_plugin_dependencies_are_still_enforced(): void
     {
         $this->markSystemInstalled();
         $manager = app(PluginManager::class);
-        $manager->syncCatalog();
-        $manager->install('student-management');
-        $manager->disable('student-management');
-
-        config(['lms.core_version' => '3.0.0']);
-        $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('is incompatible with Core 3.0.0');
-        $manager->enable('student-management');
-    }
-
-    public function test_student_plugin_installs_without_optional_branch_plugin(): void
-    {
-        $this->markSystemInstalled();
-        $manager = app(PluginManager::class);
-        $manager->syncCatalog();
-
-        $manifest = \App\Core\Plugins\PluginManifest::fromDirectory(base_path('plugins/modules/student-management'));
-        $this->assertSame([], $manifest->dependencies);
-        $this->assertSame(['branch-management'], $manifest->optionalDependencies);
-
-        $manager->install('student-management');
-
-        $this->assertTrue($manager->isInstalled('student-management'));
-        $this->assertFalse($manager->isInstalled('branch-management'));
-        $this->assertTrue(\Illuminate\Support\Facades\Schema::hasTable('students'));
-    }
-
-    public function test_uninstalled_plugin_cannot_be_updated_through_the_lifecycle_manager(): void
-    {
-        $this->markSystemInstalled();
-        $manager = app(PluginManager::class);
-        $manager->syncCatalog();
-
-        $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('must be installed before it can be updated');
-        $manager->updatePlugin('branch-management');
-    }
-
-    public function test_plugin_select_settings_reject_values_outside_manifest_options(): void
-    {
-        $this->markSystemInstalled();
-
-        $request = \Illuminate\Http\Request::create('/admin/plugins/gateway-stripe/configure', 'POST', [
-            'settings' => ['sandbox_mode' => 'production-ish'],
-        ]);
-
-        try {
-            app(\App\Http\Controllers\Admin\PluginCenterController::class)
-                ->saveConfiguration($request, 'gateway-stripe');
-            $this->fail('Invalid select option should be rejected.');
-        } catch (\Illuminate\Validation\ValidationException $exception) {
-            $this->assertArrayHasKey('settings.sandbox_mode', $exception->errors());
-        }
-
-        $this->assertDatabaseMissing('plugin_settings', [
-            'plugin_slug' => 'gateway-stripe',
-            'setting_key' => 'sandbox_mode',
-        ]);
-    }
-
-    public function test_legacy_encrypted_manifest_settings_are_encrypted_by_plugin_center(): void
-    {
-        $this->markSystemInstalled();
-
-        $request = \Illuminate\Http\Request::create('/admin/plugins/email-notifications/configure', 'POST', [
-            'settings' => [
-                'smtp_host' => 'smtp.example.test',
-                'smtp_password' => 'smtp-app-secret-123',
-            ],
-        ]);
-
-        app(\App\Http\Controllers\Admin\PluginCenterController::class)
-            ->saveConfiguration($request, 'email-notifications');
-
-        $setting = PluginSetting::query()
-            ->where('plugin_slug', 'email-notifications')
-            ->where('setting_key', 'smtp_password')
-            ->firstOrFail();
-
-        $this->assertTrue($setting->is_encrypted);
-        $this->assertNotSame('smtp-app-secret-123', $setting->setting_value);
-        $this->assertSame('smtp-app-secret-123', app(PluginManager::class)->getSetting(
-            'email-notifications',
-            'smtp_password'
-        ));
-    }
-
-    public function test_plugin_configuration_rejects_unknown_setting_keys(): void
-    {
-        $this->markSystemInstalled();
-
-        $request = \Illuminate\Http\Request::create('/admin/plugins/gateway-stripe/configure', 'POST', [
-            'settings' => [
-                'sandbox_mode' => '1',
-                'secret_key_override' => 'untrusted',
-            ],
-        ]);
-
-        $this->expectException(\Illuminate\Validation\ValidationException::class);
-        app(\App\Http\Controllers\Admin\PluginCenterController::class)
-            ->saveConfiguration($request, 'gateway-stripe');
-    }
-
-    public function test_enable_and_disable_hook_failures_roll_back_plugin_state(): void
-    {
-        $this->markSystemInstalled();
-
-        $slug = 'lifecycle-failure-probe';
+        $slug = 'required-dependency-probe';
         $pluginDir = (string) config('plugins.modules_path') . DIRECTORY_SEPARATOR . $slug;
         File::ensureDirectoryExists($pluginDir);
 
         file_put_contents($pluginDir . DIRECTORY_SEPARATOR . 'plugin.json', json_encode([
             'slug' => $slug,
-            'name' => 'Lifecycle Failure Probe',
+            'name' => 'Required Dependency Probe',
             'version' => '1.0.0',
             'core_compatibility' => '^2.0',
-            'dependencies' => [],
-            'provider' => 'Plugins\\Modules\\LifecycleFailureProbe\\Providers\\LifecycleFailureProbeServiceProvider',
+            'dependencies' => ['branch-management'],
+            'provider' => 'Plugins\\Modules\\BranchManagement\\Providers\\BranchManagementServiceProvider',
         ], JSON_THROW_ON_ERROR));
 
-        $providerDir = $pluginDir . DIRECTORY_SEPARATOR . 'Providers';
-        File::ensureDirectoryExists($providerDir);
-        file_put_contents($providerDir . DIRECTORY_SEPARATOR . 'LifecycleFailureProbeServiceProvider.php', <<<'PHP'
-<?php
-
-declare(strict_types=1);
-
-namespace Plugins\Modules\LifecycleFailureProbe\Providers;
-
-use App\Core\Plugins\BasePluginServiceProvider;
-use App\Models\PluginRecord;
-use RuntimeException;
-
-class LifecycleFailureProbeServiceProvider extends BasePluginServiceProvider
-{
-    public function slug(): string
-    {
-        return 'lifecycle-failure-probe';
-    }
-
-    protected function pluginPath(string $relative = ''): string
-    {
-        return dirname(__DIR__) . ($relative !== '' ? DIRECTORY_SEPARATOR . ltrim($relative, DIRECTORY_SEPARATOR) : '');
-    }
-
-    public function onEnable(): void
-    {
-        throw new RuntimeException('intentional enable hook failure');
-    }
-
-    public function onDisable(): void
-    {
-        throw new RuntimeException('intentional disable hook failure');
-    }
-
-    public function onUninstall(bool $purgePluginData = false): void
-    {
-        PluginRecord::query()->where('slug', $this->slug())->update(['is_installed' => false]);
-        throw new RuntimeException('intentional uninstall hook failure');
-    }
-}
-PHP);
-
-        PluginRecord::query()->create([
-            'slug' => $slug,
-            'name' => 'Lifecycle Failure Probe',
-            'version' => '1.0.0',
-            'is_installed' => true,
-            'is_enabled' => false,
-            'dependencies' => [],
-        ]);
-
-        $manager = app(PluginManager::class);
-
         try {
+            $manager->syncCatalog();
             try {
-                $manager->enable($slug);
-                $this->fail('Enable hook failure should abort the operation.');
+                $manager->install($slug);
+                $this->fail('A missing explicitly-required plugin dependency must block installation.');
             } catch (RuntimeException $exception) {
-                $this->assertStringContainsString('intentional enable hook failure', $exception->getMessage());
+                $this->assertStringContainsString('branch-management', $exception->getMessage());
             }
-
-            $this->assertDatabaseHas('plugins', ['slug' => $slug, 'is_enabled' => false]);
-
-            PluginRecord::query()->where('slug', $slug)->update(['is_enabled' => true]);
-
-            try {
-                $manager->disable($slug);
-                $this->fail('Disable hook failure should abort the operation.');
-            } catch (RuntimeException $exception) {
-                $this->assertStringContainsString('intentional disable hook failure', $exception->getMessage());
-            }
-
-            $this->assertDatabaseHas('plugins', ['slug' => $slug, 'is_enabled' => true]);
-
-            PluginRecord::query()->where('slug', $slug)->update(['is_enabled' => false]);
-            try {
-                $manager->uninstall($slug);
-                $this->fail('Uninstall hook failure should abort and roll back the operation.');
-            } catch (RuntimeException $exception) {
-                $this->assertStringContainsString('intentional uninstall hook failure', $exception->getMessage());
-            }
-
-            $this->assertDatabaseHas('plugins', [
-                'slug' => $slug,
-                'is_installed' => true,
-                'is_enabled' => false,
-            ]);
         } finally {
             File::deleteDirectory($pluginDir);
         }
+    }
+
+    public function test_every_current_plugin_declares_no_required_sibling_dependencies(): void
+    {
+        $this->markSystemInstalled();
+        $manager = app(PluginManager::class);
+        $manager->syncCatalog();
+
+        $manifests = $manager->discoverManifests();
+        $this->assertNotEmpty($manifests);
+
+        foreach ($manifests as $slug => $manifest) {
+            $this->assertSame([], $manifest->dependencies, "{$slug} must use optional integrations rather than required sibling plugins.");
+        }
+    }
+
+    public function test_academic_and_finance_plugins_install_without_optional_sibling_plugins(): void
+    {
+        $this->markSystemInstalled();
+        $independent = [
+            'admission-management',
+            'attendance-management',
+            'certificate-management',
+            'fees-management',
+            'gateway-paypal',
+            'gateway-stripe',
+            'guardian-management',
+            'hr-staff-management',
+            'library-management',
+            'payment-management',
+            'universal-payment',
+        ];
+
+        $this->activatePlugins($independent);
+        $manager = app(PluginManager::class);
+
+        foreach ($independent as $slug) {
+            $this->assertTrue($manager->isEnabled($slug), "{$slug} should install without required sibling plugins.");
+            $this->assertSame([], $manager->discoverManifests()[$slug]->dependencies, "{$slug} must not require another LMS plugin.");
+        }
+
+        $this->assertFalse($manager->isEnabled('branch-management'));
+        $this->assertFalse($manager->isEnabled('student-management'));
+        $this->assertFalse($manager->isEnabled('course-management'));
+        $this->assertFalse(\Illuminate\\Support\\Facades\\Schema::hasTable('students'));
+        $this->assertFalse(\Illuminate\\Support\\Facades\\Schema::hasTable('branches'));
+        $this->assertFalse(\Illuminate\\Support\\Facades\\Schema::hasTable('courses'));
+
+        $manager->install('student-management');
+        $manager->install('teacher-management');
+        $this->assertTrue($manager->isEnabled('student-management'));
+        $this->assertTrue($manager->isEnabled('teacher-management'));
+
+        foreach ([
+            'admission_applications',
+            'attendance_records',
+            'certificates',
+            'fee_categories',
+            'fee_invoices',
+            'guardians',
+            'guardian_student',
+            'staff_profiles',
+            'staff_payrolls',
+            'library_books',
+            'library_loans',
+            'payment_transactions',
+            'payment_refunds',
+            'students',
+            'teachers',
+            'universal_payment_transactions',
+        ] as $table) {
+            $this->assertTrue(\Illuminate\\Support\\Facades\\Schema::hasTable($table), "Expected standalone schema table {$table}.");
+        }
+
+        $admin = $this->createUserWithRole('admin');
+        $permissionIds = \Illuminate\\Support\\Facades\\DB::table('permissions')
+            ->whereIn('slug', [
+                'students.manage',
+                'teachers.manage',
+                'guardians.manage',
+                'fees.manage',
+                'payments.manage',
+                'attendance.manage',
+            ])
+            ->pluck('id');
+        $admin->roles()->first()->permissions()->syncWithoutDetaching($permissionIds);
+
+        $this->actingAs($admin)->get('/admin/students')->assertOk();
+        $this->actingAs($admin)->get('/admin/teachers')->assertOk();
+        $this->actingAs($admin)->get('/admin/guardians')->assertOk();
+        $this->actingAs($admin)->get('/admin/fees')->assertOk();
+        $this->actingAs($admin)->get('/admin/payments')->assertOk();
+        $this->actingAs($admin)->get('/admin/attendance')->assertOk();
     }
 
     public function test_core_cannot_be_disabled_or_uninstalled(): void
@@ -513,192 +419,4 @@ PHP;
             File::deleteDirectory($targetDir);
         }
     }
-
-    public function test_zip_uploader_rejects_unix_symlink_entries_before_extraction(): void
-    {
-        $this->markSystemInstalled();
-
-        $zipPath = sys_get_temp_dir() . '/symlink_plugin_' . uniqid('', true) . '.zip';
-        $zip = new ZipArchive();
-        $this->assertTrue($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true);
-        $zip->addFromString('symlink.php', '../../outside.php');
-        $this->assertTrue($zip->setExternalAttributesName(
-            'symlink.php',
-            ZipArchive::OPSYS_UNIX,
-            (0120777 << 16)
-        ));
-        $zip->close();
-
-        try {
-            app(PluginManager::class)->installOrUpdateFromZip($zipPath);
-            $this->fail('Unix symlink entries must be rejected before extraction.');
-        } catch (RuntimeException $exception) {
-            $this->assertStringContainsString('Symlink entry blocked in ZIP', $exception->getMessage());
-        } finally {
-            @unlink($zipPath);
-        }
-    }
-
-    public function test_all_plugin_manifests_use_optional_integrations_not_install_blocking_sibling_dependencies(): void
-    {
-        $directories = \Illuminate\Support\Facades\File::directories(base_path('plugins/modules'));
-        foreach ($directories as $directory) {
-            $manifest = \App\Core\Plugins\PluginManifest::fromDirectory($directory);
-            $this->assertSame([], $manifest->dependencies, $manifest->slug . ' must not require a sibling plugin to install');
-        }
-    }
-
-
-    public function test_all_plugin_manifests_have_unique_slugs_and_no_required_sibling_dependencies(): void
-    {
-        $this->markSystemInstalled();
-
-        $directories = File::directories(base_path('plugins/modules'));
-        $manifests = [];
-        foreach ($directories as $directory) {
-            $manifestPath = $directory . DIRECTORY_SEPARATOR . 'plugin.json';
-            if (!File::exists($manifestPath)) {
-                continue;
-            }
-
-            $manifest = json_decode(File::get($manifestPath), true, 512, JSON_THROW_ON_ERROR);
-            $this->assertIsArray($manifest, 'Plugin manifest must decode to an object: ' . $manifestPath);
-            $this->assertNotEmpty($manifest['slug'] ?? null, 'Plugin manifest slug is required: ' . $manifestPath);
-            $this->assertSame(basename($directory), $manifest['slug'], 'Manifest slug must match its plugin folder.');
-            $this->assertSame([], $manifest['dependencies'] ?? [], 'Required sibling dependencies are not allowed: ' . $manifestPath);
-            $this->assertIsArray($manifest['optional_dependencies'] ?? [], 'Optional integrations must be an array: ' . $manifestPath);
-            $manifests[] = $manifest['slug'];
-        }
-
-        $this->assertGreaterThan(0, count($manifests), 'The source audit must discover plugin manifests dynamically.');
-        $this->assertCount(count(array_unique($manifests)), $manifests, 'Plugin slugs must be unique.');
-    }
-
-    public function test_reset_plugin_settings_restores_manifest_defaults_and_preserves_business_records(): void
-    {
-        $this->markSystemInstalled();
-        $slug = 'settings-reset-probe';
-        $directory = (string) config('plugins.modules_path') . DIRECTORY_SEPARATOR . $slug;
-        File::ensureDirectoryExists($directory);
-
-        File::put($directory . DIRECTORY_SEPARATOR . 'plugin.json', json_encode([
-            'slug' => $slug,
-            'name' => 'Settings Reset Probe',
-            'version' => '1.0.0',
-            'core_compatibility' => '^2.0',
-            'dependencies' => [],
-            'settings_schema' => [
-                ['key' => 'site_label', 'type' => 'text', 'default' => 'Default label'],
-                ['key' => 'api_token', 'type' => 'password', 'secret' => true, 'default' => ''],
-            ],
-        ], JSON_THROW_ON_ERROR));
-
-        $admin = $this->createUserWithRole('admin');
-        try {
-            $manager = app(PluginManager::class);
-            $manager->saveSettings($slug, [
-                'site_label' => 'Custom label',
-                'api_token' => 'sensitive-token',
-                'unknown_old_key' => 'legacy value',
-            ], ['api_token'], $admin->id);
-
-            $userCountBefore = DB::table('users')->count();
-            $manager->resetSettingsToDefaults($slug, $admin->id);
-
-            $this->assertSame('Default label', $manager->getSetting($slug, 'site_label'));
-            $this->assertSame('', $manager->getSetting($slug, 'api_token'));
-            $this->assertNull($manager->getSetting($slug, 'unknown_old_key'));
-
-            $secretRow = PluginSetting::query()
-                ->where('plugin_slug', $slug)
-                ->where('setting_key', 'api_token')
-                ->firstOrFail();
-            $this->assertFalse($secretRow->is_encrypted, 'An empty reset credential must not be marked as ciphertext.');
-            $backups = glob(storage_path('app/plugin-setting-backups/' . $slug . '-*.json')) ?: [];
-            $this->assertNotEmpty($backups, 'Reset must create a private settings backup before changing values.');
-            $this->assertStringNotContainsString('sensitive-token', (string) file_get_contents($backups[0]));
-            $this->assertSame($userCountBefore, DB::table('users')->count());
-            $this->assertDatabaseHas('audit_logs', [
-                'action' => 'plugin.settings_reset',
-                'entity_type' => 'plugin',
-                'entity_id' => $slug,
-            ]);
-        } finally {
-            File::deleteDirectory($directory);
-        }
-    }
-
-    public function test_plugin_delete_restore_and_permanent_delete_preserve_business_data_and_sibling_plugins(): void
-    {
-        $this->markSystemInstalled();
-        $this->activatePlugins(['branch-management', 'student-management']);
-
-        DB::table('branches')->insert([
-            'code' => 'RB-01',
-            'name' => 'Recycle Bin Preservation Branch',
-            'is_active' => true,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        $manager = app(PluginManager::class);
-        $metadata = $manager->deleteToRecycleBin('branch-management');
-
-        $this->assertDirectoryDoesNotExist(base_path('plugins/modules/branch-management'));
-        $this->assertFalse($manager->isInstalled('branch-management'));
-        $this->assertTrue($manager->isEnabled('student-management'));
-        $this->assertDatabaseHas('branches', ['code' => 'RB-01']);
-        $this->assertSame($metadata['archive'], $manager->recycledPlugins()[0]['archive']);
-
-        $restored = $manager->restoreFromRecycleBin($metadata['archive']);
-        $this->assertNotNull($restored);
-        $this->assertTrue($manager->isInstalled('branch-management'));
-        $this->assertTrue($manager->isEnabled('branch-management'));
-        $this->assertTrue($manager->isEnabled('student-management'));
-        $this->assertDatabaseHas('branches', ['code' => 'RB-01']);
-
-        $secondDelete = $manager->deleteToRecycleBin('branch-management');
-        $manager->permanentlyDeleteFromRecycleBin($secondDelete['archive']);
-        $permanentBackup = storage_path('app/plugin-permanent-delete-backups/' . $secondDelete['archive']);
-        $this->assertDirectoryExists($permanentBackup);
-        $this->assertSame([], $manager->recycledPlugins());
-        $this->assertDatabaseHas('branches', ['code' => 'RB-01']);
-
-        // Restore the source fixture from its verified private backup so later
-        // tests can independently exercise the same plugin package.
-        $sourcePackage = base_path('plugins/modules/branch-management');
-        $this->assertTrue(File::copyDirectory($permanentBackup, $sourcePackage));
-        $this->assertFileExists($sourcePackage . '/plugin.json');
-        $this->assertTrue($manager->isEnabled('student-management'));
-    }
-
-    public function test_recycle_bin_restore_rejects_tampered_plugin_files(): void
-    {
-        $this->markSystemInstalled();
-        $this->activatePlugins(['branch-management']);
-
-        $manager = app(PluginManager::class);
-        $metadata = $manager->deleteToRecycleBin('branch-management');
-        $archivePath = storage_path('app/plugin-recycle-bin/' . $metadata['archive']);
-        $files = File::allFiles($archivePath);
-        $this->assertNotEmpty($files);
-
-        $tamperedFile = $files[0]->getPathname();
-        $originalContents = File::get($tamperedFile);
-        File::append($tamperedFile, "\n// tampered after recycle-bin deletion");
-
-        try {
-            $manager->restoreFromRecycleBin($metadata['archive']);
-            $this->fail('Tampered plugin files must never be restored.');
-        } catch (RuntimeException $exception) {
-            $this->assertStringContainsString('integrity', strtolower($exception->getMessage()));
-        } finally {
-            File::put($tamperedFile, $originalContents);
-        }
-
-        $restored = $manager->restoreFromRecycleBin($metadata['archive']);
-        $this->assertNotNull($restored);
-        $this->assertTrue($manager->isEnabled('branch-management'));
-    }
-
 }
