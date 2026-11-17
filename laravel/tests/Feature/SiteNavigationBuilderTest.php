@@ -40,7 +40,7 @@ class SiteNavigationBuilderTest extends TestCase
         $this->assertDatabaseHas('audit_logs', ['action' => 'site.navigation.updated']);
 
         $primary = app(SiteNavigationManager::class)->items('primary');
-        $this->assertSame(['Home', 'Admissions'], array_column($primary, 'label'));
+        $this->assertSame(['Home', 'Admissions', 'Partner Portal'], array_column($primary, 'label'));
         $this->assertSame('/admissions', $primary[1]['url']);
 
         $this->get('/')
