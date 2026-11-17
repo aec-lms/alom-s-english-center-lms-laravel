@@ -96,6 +96,8 @@
         if (input) input.value = value;
         const label = document.querySelector('[data-color-value="' + key + '"]');
         if (label) label.textContent = value.toUpperCase();
+        const cssVariable = '--aec-' + key.replaceAll('_', '-');
+        document.documentElement.style.setProperty(cssVariable, value);
         const map = {
             page_bg: ['backgroundColor'], text: ['color'], border: ['borderColor'],
             sidebar_bg: ['--preview-sidebar-bg'], sidebar_text: ['--preview-sidebar-text'],
