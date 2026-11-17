@@ -125,6 +125,7 @@
 
                     <p class="text-[11px] text-center text-slate-400">Instant access on Web, Apple iOS &amp; Google Android apps after enrollment.</p>
                 </div>
+                @include('public.partials.widget-area', ['area' => 'course-sidebar'])
             </aside>
         </div>
     </main>

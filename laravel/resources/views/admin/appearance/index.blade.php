@@ -21,6 +21,7 @@
         <div class="flex flex-wrap gap-2">
             <a href="{{ route('admin.site-layout.index') }}" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:border-blue-300">Header &amp; Footer Builder →</a>
             <a href="{{ route('admin.appearance.themes.index') }}" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:border-blue-300">Theme Package Manager →</a>
+            <a href="{{ route('admin.site-widgets.index') }}" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:border-blue-300">Widget Area Builder →</a>
         </div>
     </div>
 

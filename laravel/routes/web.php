@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\AppearanceController;
 use App\Http\Controllers\Admin\ThemePackageController;
 use App\Http\Controllers\Admin\SiteIdentityController;
 use App\Http\Controllers\Admin\SiteLayoutController;
+use App\Http\Controllers\Admin\SiteWidgetController;
 use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\BackupController;
 use App\Http\Controllers\Admin\DashboardController;
@@ -150,6 +151,11 @@ Route::middleware('installed')->group(function (): void {
         Route::prefix('site-layout')->name('site-layout.')->middleware('permission:core.settings.manage')->group(function (): void {
             Route::get('/', [SiteLayoutController::class, 'index'])->name('index');
             Route::post('/', [SiteLayoutController::class, 'update'])->name('update');
+        });
+
+        Route::prefix('site-widgets')->name('site-widgets.')->middleware('permission:core.settings.manage')->group(function (): void {
+            Route::get('/', [SiteWidgetController::class, 'index'])->name('index');
+            Route::post('/', [SiteWidgetController::class, 'update'])->name('update');
         });
 
         Route::prefix('appearance')->name('appearance.')->middleware('permission:core.settings.manage')->group(function (): void {
