@@ -1,14 +1,14 @@
 # Repository reconciliation and release status — 2026-11-17
 
 **Repository:** `aec-lms/alom-s-english-center-lms-laravel`  
-**Verified base:** `main` at `0464637dc7102c41daa2133576295a0ccd5a9826`  
+**Verified base:** `main` at `b2b5dd6f254d798738d6c3cfa2e38c60b4119a19`  
 **Release status:** NOT production-ready. This document reconciles merged work and open drafts; it does not certify production acceptance.
 
 ## Main branch and latest verified checks
 
-The latest main commit is the squash merge of PR #62, `feat(admin): add draggable dashboard widget ordering`.
+The latest main commit includes the squash merge of PR #67, `fix(student-activity): unify tracking and tracing storage`. Recent merged work also includes PR #66 (server-enforced exam duration and attempt limits) and PR #65 (repository reconciliation).
 
-The exact main commit has four completed successful checks:
+The PR head for the latest functional change passed all four required checks before merge: 248 tests and 3,296 assertions on both SQLite and MySQL 8, Browser Playwright E2E, and Composer dependency security audit. The Laravel job also built and verified the cPanel package (6,413 files). Main-branch checks are re-run after the squash merge.
 - Laravel SQLite test job
 - Laravel MySQL 8 test job
 - Browser Playwright E2E smoke job
@@ -27,6 +27,9 @@ Merged admin and site-management work includes:
 - #58 widget area/sidebar builder
 - #60 media library metadata, collections and recycle bin
 - #62 draggable dashboard widget ordering
+- #65 repository/release-status reconciliation
+- #66 server-enforced exam timer and configurable per-student attempt limits
+- #67 shared Student Tracking/Student Tracing storage and academic event capture
 
 Important scope limitation: PR #55 is a safe JSON design-token package manager. It is not a runtime for arbitrary PHP/Blade WordPress themes.
 
@@ -48,11 +51,16 @@ The following older drafts remain open but are based on significantly divergent 
 
 Do not merge these stale branches directly. Their changes must be checked against current main file-by-file and only genuinely missing changes should be ported onto a fresh branch from current main. Some remediations described in their summaries are already present in current main (for example attendance batch-table compatibility, public admission throttling, SMS response classification, payroll pending/approval, payment receipt review controls and branch-manager fail-closed checks). The current source and tests—not old PR descriptions—are the acceptance authority.
 
+## Recently resolved repository-level gaps
+
+- **Exam timing and retakes (PR #66):** each exam now has a configurable maximum attempt count (1–20, default 1). A server-created attempt is persisted at exam entry, refresh resumes that attempt, the server enforces the deadline, expired attempts are finalized with zero marks, and completed attempts cannot be replayed. SQLite and MySQL regression tests cover expiry, grading, resume and attempt exhaustion.
+- **Student activity storage collision (PR #67):** Student Tracking and Student Tracing previously created incompatible schemas under the same `student_activity_events` table. Forward-only migrations now converge both plugins on a shared superset schema without deleting history. Student Tracking captures trusted server-side login, enrollment, exam-submission and attendance events while remaining installable without sibling plugins.
+
 ## Confirmed remaining release blockers
 
 | Area | Current evidence | Required next action |
 |---|---|---|
-| Exam timer and attempt policy | Exam controller checks published state and exam availability window, but the current submission flow does not enforce elapsed `duration_minutes` or a configured per-student attempt limit. | Implement server-authoritative attempt start/deadline and configurable attempt limits, with race-condition and expiry tests. |
+| Exam timer and attempt policy | Implemented in PR #66 and covered by SQLite/MySQL expiry, resume, grading and attempt-limit tests. | Continue regression testing when exam workflows change; external staging remains part of final release acceptance. |
 | 44 plugin workflows | Dynamic lifecycle suite and mapped plugin-specific tests exist; external providers are stubbed. | Continue source/permission/branch-scope and browser acceptance review; close gaps with tests. |
 | Cross-LMS portability | Current plugins use Laravel providers, routes, middleware, Eloquent, migrations and Blade. | Framework-neutral contracts and host adapters are still required before claiming arbitrary LMS portability. |
 | Core update/rollback | Automated coverage and runbook exist. | Execute the complete signed update and rollback rehearsal on isolated cPanel staging; document schema rollback limitations. |
