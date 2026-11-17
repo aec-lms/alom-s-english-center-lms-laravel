@@ -89,6 +89,42 @@ class ThemePackageManagerTest extends TestCase
         }
     }
 
+    public function test_admin_can_preview_installed_theme_without_changing_active_appearance(): void
+    {
+        if (!class_exists(ZipArchive::class)) $this->markTestSkipped('PHP ZIP extension is required.');
+        $this->markSystemInstalled();
+        $admin=$this->createUserWithRole('admin');
+        SystemSetting::query()->create([
+            'key'=>'appearance.theme.global',
+            'value'=>json_encode(['primary'=>'#123456'],JSON_THROW_ON_ERROR),
+            'is_encrypted'=>false,
+            'updated_by'=>$admin->id,
+        ]);
+        $upload=$this->makeThemeZip([
+            'slug'=>'preview-ocean','name'=>'Preview Ocean','version'=>'1.0.0',
+            'author'=>'AEC','description'=>'Preview without activation',
+            'colors'=>['primary'=>'#075985','accent'=>'#38BDF8'],
+            'design'=>['font_family'=>'inter','content_width'=>'1280'],
+        ]);
+
+        try {
+            $this->actingAs($admin)->post(route('admin.appearance.themes.upload'),['theme_zip'=>$upload])
+                ->assertRedirect()->assertSessionHas('status');
+
+            $this->actingAs($admin)->get(route('admin.appearance.themes.preview','preview-ocean'))
+                ->assertOk()
+                ->assertSee('Preview Ocean')
+                ->assertSee('Read-only preview')
+                ->assertSee('#075985')
+                ->assertSee('Activate this theme');
+
+            $this->assertDatabaseMissing('system_settings',['key'=>'appearance.themes.active']);
+            $this->assertSame('#123456',app(\\App\\Core\\Appearance\\ThemeManager::class)->colors('global')['primary']);
+        } finally {
+            @unlink($upload->getRealPath());
+        }
+    }
+
     private function makeThemeZip(array $manifest,array $extra=[]): UploadedFile
     {
         $path=tempnam(sys_get_temp_dir(),'aec-theme-');
