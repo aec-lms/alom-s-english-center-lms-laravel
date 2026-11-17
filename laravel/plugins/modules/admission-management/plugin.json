@@ -33,7 +33,8 @@
             "group": "Academic & Operations",
             "label": "Admissions",
             "route": "plugins.admissions.index",
-            "order": 100
+            "order": 100,
+            "permission": "admissions.manage"
         }
     ]
 }
