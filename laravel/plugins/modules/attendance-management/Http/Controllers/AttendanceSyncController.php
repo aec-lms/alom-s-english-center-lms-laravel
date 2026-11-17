@@ -31,6 +31,7 @@ class AttendanceSyncController extends Controller
         $validated = $request->validate([
             'batch_id' => ['required', 'integer', 'exists:batches,id'],
             'attendance_date' => ['required', 'date'],
+            'source' => ['nullable', 'in:online,offline'],
             'records' => ['required', 'array', 'min:1', 'max:500'],
             'records.*.student_id' => ['required', 'integer', 'exists:students,id'],
             'records.*.status' => ['required', 'in:present,absent,late,excused'],
@@ -89,7 +90,7 @@ class AttendanceSyncController extends Controller
                     'remarks' => $item['remarks'] ?? null,
                     'marked_by' => $actor->id,
                     'sync_uuid' => $item['sync_uuid'],
-                    'source' => 'offline',
+                    'source' => $validated['source'] ?? 'offline',
                     'edited_reason' => $changed ? $item['edit_reason'] : null,
                 ]);
                 $record->save();
@@ -101,7 +102,7 @@ class AttendanceSyncController extends Controller
                     'old_status' => $oldStatus,
                     'new_status' => $record->status,
                     'reason' => $changed ? $item['edit_reason'] : null,
-                    'source' => 'offline',
+                    'source' => $validated['source'] ?? 'offline',
                     'occurred_at' => now(),
                 ]);
 
