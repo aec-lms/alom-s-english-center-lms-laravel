@@ -27,10 +27,11 @@ class PaymentController extends Controller
     public function index(Request $request): View
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $invoiceIntegrationEnabled = $this->invoiceIntegrationEnabled();
         $transactions = PaymentTransaction::query()
             ->when($invoiceIntegrationEnabled, fn ($q) => $q->with('invoice'))
-            ->when($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null, fn ($q) => $q->where('branch_id', $actor->branch_id))
+            ->when($actor && $actor->hasRole('branch_manager'), fn ($q) => $q->where('branch_id', $actor->branch_id))
             ->latest()
             ->paginate(25);
 
@@ -41,6 +42,7 @@ class PaymentController extends Controller
     {
         abort_unless($this->invoiceIntegrationEnabled(), 503, 'Enable Fees Management before recording invoice payments.');
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $validated = $request->validate([
             'invoice_id' => ['required', 'integer', 'exists:fee_invoices,id'],
             'amount' => ['required', 'numeric', 'min:1'],
@@ -54,6 +56,9 @@ class PaymentController extends Controller
 
         $tx = DB::transaction(function () use ($invoice, $validated, $actor): PaymentTransaction {
             $lockedInvoice = FeeInvoice::query()->whereKey($invoice->id)->lockForUpdate()->firstOrFail();
+            if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $lockedInvoice->branch_id) {
+                abort(403, 'Branch isolation violation.');
+            }
             $remaining = round((float) $lockedInvoice->net_amount - (float) $lockedInvoice->paid_amount, 2);
             $amount = round((float) $validated['amount'], 2);
             if ($remaining <= 0 || $amount > $remaining + 0.01) {
@@ -80,6 +85,7 @@ class PaymentController extends Controller
     public function refund(Request $request, PaymentTransaction $transaction): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $transaction->branch_id) {
             abort(403, 'Branch isolation violation.');
         }
@@ -99,6 +105,9 @@ class PaymentController extends Controller
         try {
             \Illuminate\Support\Facades\DB::transaction(function () use ($transaction, $validated, $actor): void {
                 $lockedTx = PaymentTransaction::query()->where('id', $transaction->id)->lockForUpdate()->firstOrFail();
+                if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $lockedTx->branch_id) {
+                    throw new \RuntimeException('Branch isolation violation.');
+                }
                 if ($lockedTx->status !== 'settled') {
                     throw new \RuntimeException('Only settled transactions can be refunded.');
                 }
@@ -147,6 +156,20 @@ class PaymentController extends Controller
 
         return back()->with('status', "Refund recorded for {$transaction->transaction_ref}.");
     }
+    private function ensureAssignedBranch($actor): void
+    {
+        if (!$actor || !$actor->hasRole('branch_manager')) {
+            return;
+        }
+        if ($actor->branch_id === null || !app(PluginManager::class)->isEnabled('branch-management') || !Schema::hasTable('branches')) {
+            abort(403, 'Branch manager must be assigned to an active branch.');
+        }
+        $activeBranch = DB::table('branches')->where('id', $actor->branch_id)->where('is_active', true)->exists();
+        if (!$activeBranch) {
+            abort(403, 'Branch manager access is disabled because the assigned branch is inactive.');
+        }
+    }
+
     private function invoiceIntegrationEnabled(): bool
     {
         return app(PluginManager::class)->isEnabled('fees-management')
