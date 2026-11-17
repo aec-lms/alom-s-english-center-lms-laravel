@@ -54,8 +54,8 @@
                 <span>Visit Public Site</span>
             </a>
         </div>
-        @inject('pluginManager', 'App\Core\Plugins\PluginManager')
         @php
+            $pluginManager = app(\App\Core\Plugins\PluginManager::class);
             $staticPluginRouteNames = ['plugins.meta_pixel.index', 'plugins.google_console.index', 'plugins.boost.index', 'plugins.popups.index', 'plugins.seo.index', 'plugins.sms.index', 'plugins.marketing.index', 'plugins.gmail.index', 'plugins.email_notifications.index', 'plugins.notices.index', 'plugins.branches.index', 'plugins.admissions.index', 'plugins.students.index', 'plugins.teachers.index', 'plugins.guardians.index', 'plugins.courses.index', 'plugins.enrollments.index', 'plugins.classes.index', 'plugins.batches.index', 'plugins.exams.index', 'plugins.attendance.index', 'plugins.certificates.index', 'plugins.library.index', 'plugins.hr.index', 'plugins.fees.index', 'plugins.payments.index', 'plugins.universal_payment.index', 'plugins.gateway_stripe.index', 'plugins.gateway_paypal.index', 'plugins.media.index', 'plugins.storefront.index', 'plugins.cms.index', 'plugins.page_builder.index', 'plugins.slider_builder.index', 'plugins.carousel_builder.index', 'plugins.notifications.index', 'plugins.reports.index', 'plugins.mobile_app.index', 'plugins.ai.index', 'plugins.ai.ask'];
             $dynamicPluginLinks = [];
             foreach ($pluginManager->discoverManifests() as $pluginSlug => $pluginManifest) {
