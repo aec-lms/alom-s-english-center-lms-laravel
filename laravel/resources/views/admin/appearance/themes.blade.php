@@ -38,6 +38,7 @@
                     <p class="mt-1 text-xs text-slate-400">Slug: {{ $theme['slug'] }} · Version {{ $theme['version'] }} · By {{ $theme['author'] }}</p>
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
+                    <a href="{{ route('admin.appearance.themes.preview',$theme['slug']) }}" class="rounded-lg border border-blue-200 px-3 py-2 text-xs font-bold text-blue-700">Preview</a>
                     @if($activeSlug===$theme['slug'])
                         <form method="POST" action="{{ route('admin.appearance.themes.deactivate') }}">@csrf<button class="rounded-lg border border-amber-200 px-3 py-2 text-xs font-bold text-amber-800">Deactivate</button></form>
                     @else
