@@ -1,81 +1,35 @@
 @extends('layouts.admin')
-@section('title', 'Page Builder — AEC LMS')
+@section('title','Visual Page Builder — AEC LMS')
 @section('content')
-<div class="space-y-6 max-w-5xl">
-    <div>
-        <h1 class="text-2xl font-extrabold text-slate-900">Independent Page Builder</h1>
-        <p class="text-xs text-slate-500 mt-0.5">Build, schedule, and publish custom landing pages, admission policies, and campaign pages with block layouts and SEO metadata.</p>
-    </div>
-
-    <div class="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
-        <h2 class="text-sm font-bold text-slate-900">Create New Custom Page</h2>
-        <form method="POST" action="{{ route('plugins.page_builder.store') }}" enctype="multipart/form-data" class="grid sm:grid-cols-2 gap-3 text-xs">
-            @csrf
-            <input name="title" required placeholder="Page Title (e.g. Scholarship Policy) *" class="rounded-lg border border-slate-300 px-3 py-2">
-            <input name="slug" required placeholder="URL Slug (e.g. scholarship-policy) *" class="rounded-lg border border-slate-300 px-3 py-2 font-mono">
-            <select name="template" class="rounded-lg border border-slate-300 px-3 py-2 bg-white">
-                <option value="standard">Standard Article Layout</option>
-                <option value="landing">Campaign Landing Page</option>
-                <option value="fullwidth">Full-Width Showcase</option>
-            </select>
-            <input type="file" name="banner" accept="image/*" class="rounded-lg border border-slate-300 px-2 py-1.5 bg-slate-50">
-            <input name="seo_title" placeholder="SEO Meta Title" class="rounded-lg border border-slate-300 px-3 py-2">
-            <input name="seo_description" placeholder="SEO Meta Description" class="rounded-lg border border-slate-300 px-3 py-2">
-            <input name="cta_label" placeholder="Optional CTA Button Label" class="rounded-lg border border-slate-300 px-3 py-2">
-            <input name="cta_url" placeholder="CTA URL (/courses or https://...)" class="rounded-lg border border-slate-300 px-3 py-2">
-            <textarea name="content_body" rows="5" required placeholder="Page Content / Plain Text Block *" class="sm:col-span-2 rounded-lg border border-slate-300 px-3 py-2"></textarea>
-            <div class="sm:col-span-2 flex items-center justify-between">
-                <label class="inline-flex items-center gap-2 font-semibold"><input type="checkbox" name="is_published" value="1" checked> Publish immediately</label>
-                <button type="submit" class="px-5 py-2 rounded-lg bg-[#0284C7] text-white font-bold">Publish Page</button>
-            </div>
-        </form>
-    </div>
-
-    <div class="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
-        <h2 class="text-sm font-bold text-slate-900">Published &amp; Draft Pages ({{ $pages->count() }})</h2>
-        @forelse ($pages as $page)
-            @php $body = is_array($page->blocks_json) ? ($page->blocks_json[0]['content'] ?? '') : ''; $ctaBlock = is_array($page->blocks_json) ? collect($page->blocks_json)->firstWhere('type', 'cta') : null; @endphp
-            <div class="border border-slate-200 rounded-xl p-4 space-y-3 text-xs">
-                <div class="flex items-center justify-between gap-3">
-                    <div>
-                        <div class="font-bold text-sm text-slate-900">{{ $page->title }}</div>
-                        <div class="font-mono text-slate-500">
-                            <a href="{{ route('public.custom_page', $page->slug) }}" target="_blank" class="text-[#0284C7] hover:underline">/page/{{ $page->slug }}</a>
-                            &middot; Template: {{ $page->template ?? 'standard' }} &middot; {{ $page->is_published ? 'Published' : 'Draft' }}
-                        </div>
-                    </div>
-                    <form method="POST" action="{{ route('plugins.page_builder.destroy', $page) }}" onsubmit="return confirm('Delete page?')">
-                        @csrf @method('DELETE')
-                        <button type="submit" class="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-700 font-bold">Delete</button>
-                    </form>
-                </div>
-                <details class="pt-2 border-t border-slate-100">
-                    <summary class="cursor-pointer font-semibold text-[#0284C7]">Edit Page Blocks</summary>
-                    <form method="POST" action="{{ route('plugins.page_builder.update', $page) }}" enctype="multipart/form-data" class="mt-3 grid sm:grid-cols-2 gap-3">
-                        @csrf @method('PUT')
-                        <input name="title" required value="{{ $page->title }}" class="rounded-lg border border-slate-300 px-3 py-2">
-                        <input name="slug" required value="{{ $page->slug }}" class="rounded-lg border border-slate-300 px-3 py-2 font-mono">
-                        <select name="template" class="rounded-lg border border-slate-300 px-3 py-2 bg-white">
-                            @foreach (['standard' => 'Standard Article Layout', 'landing' => 'Campaign Landing Page', 'fullwidth' => 'Full-Width Showcase'] as $key => $label)
-                                <option value="{{ $key }}" @selected(($page->template ?? 'standard') === $key)>{{ $label }}</option>
-                            @endforeach
-                        </select>
-                        <input name="seo_title" value="{{ $page->seo_title }}" placeholder="SEO Meta Title" class="rounded-lg border border-slate-300 px-3 py-2">
-                        <input name="seo_description" value="{{ $page->seo_description }}" placeholder="SEO Meta Description" class="rounded-lg border border-slate-300 px-3 py-2">
-                        <input name="cta_label" value="{{ $ctaBlock['label'] ?? '' }}" placeholder="Optional CTA Button Label" class="rounded-lg border border-slate-300 px-3 py-2">
-                        <input name="cta_url" value="{{ $ctaBlock['url'] ?? '' }}" placeholder="CTA URL (/courses or https://...)" class="rounded-lg border border-slate-300 px-3 py-2">
-                        <input type="file" name="banner" accept="image/jpeg,image/png,image/webp" class="rounded-lg border border-slate-300 px-2 py-1.5 bg-slate-50">
-                        <textarea name="content_body" rows="4" required class="sm:col-span-2 rounded-lg border border-slate-300 px-3 py-2">{{ $body }}</textarea>
-                        <div class="sm:col-span-2 flex items-center justify-between">
-                            <label class="inline-flex items-center gap-2 font-semibold"><input type="checkbox" name="is_published" value="1" @checked($page->is_published)> Published</label>
-                            <button type="submit" class="px-4 py-1.5 rounded-lg bg-slate-900 text-white font-bold">Update Page</button>
-                        </div>
-                    </form>
-                </details>
-            </div>
-        @empty
-            <p class="text-xs text-slate-400">No custom pages yet.</p>
-        @endforelse
-    </div>
-</div>
+<div class="max-w-7xl space-y-6">
+<div class="flex flex-wrap items-end justify-between gap-3"><div><h1 class="text-2xl font-extrabold text-slate-900">Visual Page Builder</h1><p class="mt-1 text-sm text-slate-500">Add content blocks, drag to reorder and preview before publishing.</p></div><span class="rounded-full bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-800">Drag &amp; Drop Block Editor</span></div>
+@if(session('status'))<div class="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">{{ session('status') }}</div>@endif
+@if($errors->any())<div class="rounded-xl bg-rose-50 p-3 text-sm text-rose-800">{{ $errors->first() }}</div>@endif
+<section class="rounded-2xl border bg-white p-5 space-y-4"><h2 class="font-bold">Create New Page</h2><form method="POST" action="{{ route('plugins.page_builder.store') }}" enctype="multipart/form-data" class="space-y-4">@csrf @include('page-builder::partials.page-fields',['page'=>null])<div class="flex justify-end"><button class="rounded-xl bg-sky-700 px-5 py-3 text-sm font-bold text-white">Save Page</button></div></form></section>
+<section class="space-y-3"><h2 class="font-bold">Pages ({{ $pages->count() }})</h2>
+@forelse($pages as $page)
+<article class="rounded-2xl border bg-white p-5"><div class="flex flex-wrap items-center justify-between gap-3"><div><h3 class="font-bold">{{ $page->title }}</h3><div class="mt-1 text-xs text-slate-500">/page/{{ $page->slug }} · {{ $page->is_published?'Published':'Draft' }}</div></div><div class="flex gap-2"><a href="{{ route('public.custom_page',$page->slug) }}" target="_blank" class="rounded-lg border px-3 py-2 text-xs font-semibold">Preview</a><form method="POST" action="{{ route('plugins.page_builder.destroy',$page) }}" onsubmit="return confirm('Move this page to Recycle Bin?')">@csrf @method('DELETE')<button class="rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700">Move to Recycle Bin</button></form></div></div>
+<details class="mt-4 border-t pt-4"><summary class="cursor-pointer text-sm font-bold text-sky-700">Edit page layout</summary><form method="POST" action="{{ route('plugins.page_builder.update',$page) }}" enctype="multipart/form-data" class="mt-4 space-y-4">@csrf @method('PUT') @include('page-builder::partials.page-fields',['page'=>$page])<div class="flex justify-end"><button class="rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-bold text-white">Update Page</button></div></form></details>
+</article>
+@empty<div class="rounded-2xl border border-dashed p-8 text-center text-sm text-slate-500">No custom pages yet.</div>@endforelse
+</section></div>
 @endsection
+@once
+@push('scripts')
+<script>
+(()=>{const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const defaults=[{type:'heading',content:'Your page heading',level:2},{type:'text',content:'Write your content here.'}];const labels={heading:'Heading',text:'Text',image:'Image',button:'Button',spacer:'Spacer'};
+document.querySelectorAll('[data-block-builder]').forEach(builder=>{const form=builder.closest('form'),hidden=form.querySelector('[name="blocks_json"]'),canvas=builder.querySelector('[data-block-canvas]'),preview=builder.querySelector('[data-block-preview]');let blocks=[];try{blocks=JSON.parse(hidden.value||'[]')}catch(e){}if(!Array.isArray(blocks)||!blocks.length)blocks=defaults.map(x=>({...x}));
+const previewBlocks=()=>{preview.innerHTML='';blocks.forEach(b=>{const n=document.createElement('div');n.className='mb-3';if(b.type==='heading'){n.textContent=b.content||'Heading';n.className+=' text-xl font-bold'}else if(['text','paragraph','rich_text'].includes(b.type)){n.textContent=b.content||b.text||'Text';n.className+=' whitespace-pre-wrap text-sm leading-6'}else if(b.type==='image'){n.textContent='Image: '+(b.url||'Add an image URL');n.className+=' rounded bg-slate-100 p-4 text-xs'}else if(['button','cta'].includes(b.type)){n.textContent=b.label||'Button';n.className+=' inline-block rounded bg-sky-700 px-4 py-2 text-white'}else{n.style.height=Math.max(16,Math.min(240,Number(b.height)||48))+'px';n.className+=' border-y border-dashed'}preview.appendChild(n)})};
+const sync=()=>{hidden.value=JSON.stringify(blocks);canvas.innerHTML='';blocks.forEach((b,i)=>{const card=document.createElement('div');card.className='rounded-xl border bg-white p-3 space-y-2';card.draggable=true;card.dataset.index=i;const field=(key,val,ph,kind)=>'<label class="block text-[11px] font-semibold text-slate-500">'+key+'<input data-field="'+key+'" type="'+(kind||'text')+'" value="'+esc(val)+'" placeholder="'+ph+'" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm"></label>';let fields='';
+if(b.type==='heading')fields=field('content',b.content,'Heading text')+'<label class="block text-xs">Alignment<select data-field="align" class="mt-1 w-full rounded border p-2"><option>left</option><option>center</option><option>right</option></select></label>';
+if(['text','paragraph','rich_text'].includes(b.type))fields='<label class="block text-xs">Text<textarea data-field="content" rows="3" class="mt-1 w-full rounded border p-2">'+esc(b.content||b.text||'')+'</textarea></label><label class="block text-xs">Alignment<select data-field="align" class="mt-1 w-full rounded border p-2"><option>left</option><option>center</option><option>right</option></select></label>';
+if(b.type==='image')fields=field('url',b.url,'/storage/media-library/image.jpg')+field('alt',b.alt,'Image description');
+if(['button','cta'].includes(b.type))fields=field('label',b.label||b.content,'Button label')+field('url',b.url,'/courses or https://...')+'<label class="block text-xs">Alignment<select data-field="align" class="mt-1 w-full rounded border p-2"><option>left</option><option>center</option><option>right</option></select></label>';
+if(b.type==='spacer')fields=field('height',b.height||48,'Height in pixels','number');
+card.innerHTML='<div class="flex justify-between"><b class="text-xs">'+(labels[b.type]||'Block')+' · '+(i+1)+'</b><button type="button" data-remove class="text-xs text-rose-700 font-bold">Remove</button></div>'+fields;
+card.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',String(i));card.classList.add('opacity-50')});card.addEventListener('dragend',()=>card.classList.remove('opacity-50'));card.addEventListener('dragover',e=>e.preventDefault());card.addEventListener('drop',e=>{e.preventDefault();const from=Number(e.dataTransfer.getData('text/plain'));if(!Number.isInteger(from)||from===i||!blocks[from])return;const moved=blocks.splice(from,1)[0];blocks.splice(i,0,moved);sync()});
+card.querySelector('[data-remove]').addEventListener('click',()=>{blocks.splice(i,1);sync()});card.querySelectorAll('[data-field]').forEach(el=>{const k=el.dataset.field;if(k==='align')el.value=b.align||'left';el.addEventListener('input',()=>{b[k]=k==='height'?Number(el.value):el.value;hidden.value=JSON.stringify(blocks);previewBlocks()})});canvas.appendChild(card)});hidden.value=JSON.stringify(blocks);previewBlocks()};
+builder.querySelectorAll('[data-add-block]').forEach(btn=>btn.addEventListener('click',()=>{const t=btn.dataset.addBlock;blocks.push(t==='heading'?{type:t,content:'New heading',align:'left'}:t==='text'?{type:t,content:'New text paragraph',align:'left'}:t==='image'?{type:t,url:'',alt:''}:t==='button'?{type:t,label:'Learn more',url:'/courses',align:'left'}:{type:t,height:48});sync()}));sync()})})();
+</script>
+@endpush
+@endonce
