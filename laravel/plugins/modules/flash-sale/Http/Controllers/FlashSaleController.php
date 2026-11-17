@@ -30,6 +30,9 @@ class FlashSaleController extends Controller
             }
         } else {
             $salesQuery->select('flash_sales.*');
+            if ($request->user()?->hasRole('branch_manager')) {
+                $salesQuery->whereRaw('1 = 0');
+            }
         }
 
         $coursesQuery = $courseIntegrationEnabled ? DB::table('courses')->orderBy('title') : null;
@@ -84,6 +87,7 @@ class FlashSaleController extends Controller
     public function toggle(Request $request, int $sale): RedirectResponse
     {
         $this->ensureAssignedBranch($request);
+        $this->ensureCourseIntegration();
         $this->assertSaleInBranch($request, $sale);
         $row = DB::table('flash_sales')->where('id', $sale)->first();
         abort_unless($row, 404);
@@ -99,6 +103,7 @@ class FlashSaleController extends Controller
     public function destroy(Request $request, int $sale): RedirectResponse
     {
         $this->ensureAssignedBranch($request);
+        $this->ensureCourseIntegration();
         $this->assertSaleInBranch($request, $sale);
         abort_unless(DB::table('flash_sales')->where('id', $sale)->exists(), 404);
         DB::table('flash_sales')->where('id', $sale)->delete();
