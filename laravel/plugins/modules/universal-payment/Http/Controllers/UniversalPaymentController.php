@@ -102,6 +102,30 @@ class UniversalPaymentController extends Controller
         return back()->with('status', "Transaction '{$tx->reference}' recorded ({$tx->gateway} · {$tx->status}).");
     }
 
+    public function downloadProof(Request $request, UniversalPaymentTransaction $transaction): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $actor = $request->user();
+        abort_unless($actor !== null, 401);
+        if ($actor->hasRole('branch_manager')) {
+            abort_unless((int) ($actor->branch_id ?? 0) > 0
+                && (int) ($transaction->branch_id ?? 0) === (int) $actor->branch_id, 404);
+        }
+
+        abort_unless(is_string($transaction->proof_path) && $transaction->proof_path !== '', 404);
+        abort_unless(Storage::disk('local')->exists($transaction->proof_path), 404);
+
+        $filename = basename($transaction->proof_path);
+        $mime = in_array($transaction->proof_mime, ['application/pdf', 'image/jpeg', 'image/png'], true)
+            ? $transaction->proof_mime
+            : 'application/octet-stream';
+
+        return Storage::disk('local')->download($transaction->proof_path, $filename, [
+            'Content-Type' => $mime,
+            'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'private, no-store, max-age=0',
+        ]);
+    }
+
     public function updateStatus(Request $request, UniversalPaymentTransaction $transaction): RedirectResponse
     {
         $actor = $request->user();
