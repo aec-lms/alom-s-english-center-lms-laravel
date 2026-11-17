@@ -249,6 +249,9 @@ class AttendanceQrController extends Controller
                     ->whereDate('attendance_date', now()->toDateString())
                     ->lockForUpdate()
                     ->first();
+                if ($legacyRecord && $legacyRecord->status !== 'present') {
+                    abort(409, 'Legacy attendance already exists with a different status. Ask the teacher to review it.');
+                }
                 if (!$legacyRecord) {
                     $legacyRecord = AttendanceRecord::query()->create([
                         'batch_id' => (int) $batch->id,
