@@ -16,7 +16,7 @@ use Plugins\Modules\PageBuilder\Models\BuilderPage;
 
 class PageBuilderController extends Controller
 {
-    private const BLOCK_TYPES = ['heading', 'text', 'image', 'button', 'spacer'];
+    private const BLOCK_TYPES = ['heading', 'text', 'image', 'button', 'spacer', 'course_grid', 'instructor_grid'];
 
     public function __construct(private readonly AuditLogger $audit) {}
 
@@ -163,6 +163,9 @@ class PageBuilderController extends Controller
                 ];
             } elseif ($type === 'spacer') {
                 $normalized[] = ['type' => 'spacer', 'height' => max(16, min(240, (int) ($block['height'] ?? 48)))];
+            }
+            } elseif (in_array($type, ['course_grid', 'instructor_grid'], true)) {
+                $normalized[] = ['type' => $type];
             }
         }
 
