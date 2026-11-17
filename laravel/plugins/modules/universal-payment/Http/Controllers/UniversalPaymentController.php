@@ -147,6 +147,16 @@ class UniversalPaymentController extends Controller
             return redirect('/ebooks/' . rawurlencode((string) $storefrontItem->slug))->with('status', 'You already have access to this e-book.');
         }
 
+        if ($storefrontItem !== null) {
+            $pendingCheckout = UniversalPaymentTransaction::query()
+                ->where('user_id', auth()->id())
+                ->where('storefront_item_id', $storefrontItem->id)
+                ->where('status', 'pending')
+                ->where('created_at', '>=', now()->subMinutes(30))
+                ->exists();
+            abort_if($pendingCheckout, 409, 'A checkout for this e-book is already pending. Wait for its result before retrying.');
+        }
+
         $tx = UniversalPaymentTransaction::query()->create([
             'reference' => 'UPAY-' . strtoupper(Str::random(8)),
             'payer_name' => $storefrontItem ? auth()->user()->name : $validated['payer_name'],
@@ -177,6 +187,16 @@ class UniversalPaymentController extends Controller
     {
         try {
             $transaction = $this->storefrontGateway->verifySslcommerz($request->all());
+            if ($transaction->status === 'risk_review') {
+                if ($transaction->learn_earn_exam_id) {
+                    return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)
+                        ->with('status', 'Payment was received but requires manual review. No additional exam access was granted.');
+                }
+                $reviewSlug = DB::table('storefront_items')->where('id', $transaction->storefront_item_id)->value('slug');
+                return $reviewSlug
+                    ? redirect('/ebooks/' . rawurlencode((string) $reviewSlug))->with('status', 'Payment was received but requires manual review. Existing access was not changed.')
+                    : redirect('/ebooks')->with('status', 'Payment was received but requires manual review.');
+            }
             if ($transaction->learn_earn_exam_id) {
                 return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)
                     ->with('status', 'Payment verified. Your paid exam is now unlocked.');
