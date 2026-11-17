@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Plugins\Modules\AttendanceManagement\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AttendanceRecord extends Model
 {
