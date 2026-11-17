@@ -6,7 +6,9 @@
     "category": "academic",
     "description": "Instructor profiles, specializations, and branch assignments.",
     "core_compatibility": "^2.0",
-    "dependencies": ["branch-management"],
+    "dependencies": [
+        "branch-management"
+    ],
     "provider": "Plugins\\Modules\\TeacherManagement\\Providers\\TeacherManagementServiceProvider",
     "permissions": [
         {
@@ -14,5 +16,13 @@
             "name": "Manage Teachers"
         }
     ],
-    "settings_schema": []
+    "settings_schema": [],
+    "admin_menu": [
+        {
+            "group": "Academic & Operations",
+            "label": "Teachers",
+            "route": "plugins.teachers.index",
+            "order": 100
+        }
+    ]
 }
