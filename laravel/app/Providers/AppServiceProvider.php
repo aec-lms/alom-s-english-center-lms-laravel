@@ -18,7 +18,7 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        $this->loadInstitutionDefaults();
+        $this->loadInstitutionDefaults();\n\n        View::composer('layouts.admin', function ($view): void {\n            try {\n                $view->with('pluginAdminMenu', Schema::hasTable('plugins') ? app(AdminMenuRegistry::class)->groups() : []);\n            } catch (\\Throwable $exception) {\n                report_if(app()->environment('production'), $exception);\n                $view->with('pluginAdminMenu', []);\n            }\n        });
 
         Gate::before(function ($user, string $ability): ?bool {
             if (method_exists($user, 'hasPermission') && $user->hasPermission($ability)) {
