@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace App\\Core\\Appearance;
+namespace App\Core\Appearance;
 
-use App\\Models\\SystemSetting;
-use Illuminate\\Support\\Facades\\Schema;
+use App\Models\SystemSetting;
+use Illuminate\Support\Facades\Schema;
 
 final class SiteIdentityManager
 {
