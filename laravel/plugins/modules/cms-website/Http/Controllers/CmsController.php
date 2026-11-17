@@ -188,6 +188,8 @@ class CmsController extends Controller
             }
         }
 
+        $oldAssets = [$post->thumbnail_path, $post->pdf_path, $post->pdf_thumbnail];
+
         $thumbPath = $post->thumbnail_path;
         if ($request->hasFile('thumbnail')) {
             $thumbPath = $this->storeUploadedFile($request->file('thumbnail'), 'posts');
@@ -225,6 +227,10 @@ class CmsController extends Controller
             'is_published' => $request->boolean('is_published'),
         ]);
 
+        foreach ([[$oldAssets[0], $thumbPath], [$oldAssets[1], $pdfPath], [$oldAssets[2], $pdfThumbPath]] as [$oldPath, $newPath]) {
+            if ($oldPath && $oldPath !== $newPath) $this->deleteUnusedUpload($oldPath, (int) $post->id);
+        }
+
         $this->audit->log('cms.post_updated', 'cms_post', (string) $post->id, ['slug' => $post->slug]);
 
         return back()->with('status', "Post '{$post->title}' updated.");
@@ -232,6 +238,9 @@ class CmsController extends Controller
 
     public function destroyPost(CmsPost $post): RedirectResponse
     {
+        foreach ([$post->thumbnail_path, $post->pdf_path, $post->pdf_thumbnail] as $assetPath) {
+            $this->deleteUnusedUpload($assetPath, (int) $post->id);
+        }
         $title = $post->title;
         $id = (string) $post->id;
         $post->delete();
@@ -386,6 +395,29 @@ class CmsController extends Controller
         $file->move($dir, $filename);
 
         return '/uploads/' . $folder . '/' . $filename;
+    }
+
+    private function deleteUnusedUpload(?string $path, ?int $ignorePostId = null): void
+    {
+        if (!$path || !str_starts_with($path, '/uploads/')) return;
+        $references = [
+            'cms_posts' => ['thumbnail_path', 'pdf_thumbnail', 'pdf_path'],
+            'courses' => ['thumbnail', 'pdf_thumbnail', 'pdf_path'],
+            'storefront_items' => ['thumbnail_path', 'pdf_thumbnail_path', 'download_url'],
+        ];
+        foreach ($references as $table => $columns) {
+            if (!Schema::hasTable($table)) continue;
+            foreach ($columns as $column) {
+                if (!Schema::hasColumn($table, $column)) continue;
+                $query = DB::table($table)->where($column, $path);
+                if ($table === 'cms_posts' && $ignorePostId) $query->where('id', '!=', $ignorePostId);
+                if ($query->exists()) return;
+            }
+        }
+        $absolute = public_path(ltrim($path, '/'));
+        $root = realpath(public_path('uploads'));
+        $file = realpath($absolute);
+        if ($root && $file && str_starts_with($file, $root . DIRECTORY_SEPARATOR) && is_file($file)) @unlink($file);
     }
 
     private function defaultHomepageConfig(): array

@@ -36,6 +36,7 @@ class BatchController extends Controller
             'batch_code' => ['required', 'string', 'max:40', 'unique:study_batches,batch_code'],
             'name' => ['required', 'string', 'max:160'],
             'course_title' => ['nullable', 'string', 'max:180'],
+            'academic_level' => ['nullable', 'string', 'max:80'],
             'schedule' => ['required', 'string', 'max:160'],
             'room_number' => ['nullable', 'string', 'max:60'],
             'max_capacity' => ['required', 'integer', 'min:1', 'max:500'],

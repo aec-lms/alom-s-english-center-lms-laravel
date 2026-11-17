@@ -3,11 +3,26 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Route;
+use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Plugins\Modules\UniversalPayment\Http\Controllers\UniversalPaymentController;
 
 Route::middleware(['web', 'installed', 'plugin:universal-payment'])
     ->post('/universal-checkout', [UniversalPaymentController::class, 'publicCheckout'])
     ->name('plugins.universal_payment.checkout');
+
+Route::middleware(['web', 'installed', 'plugin:universal-payment'])
+    ->prefix('universal-payment/sslcommerz')
+    ->name('plugins.universal_payment.sslcommerz.')
+    ->group(function (): void {
+        Route::post('/success', [UniversalPaymentController::class, 'sslcommerzSuccess'])
+            ->withoutMiddleware([VerifyCsrfToken::class])->name('success');
+        Route::post('/failed', [UniversalPaymentController::class, 'sslcommerzFailed'])
+            ->withoutMiddleware([VerifyCsrfToken::class])->name('failed');
+        Route::post('/cancelled', [UniversalPaymentController::class, 'sslcommerzCancelled'])
+            ->withoutMiddleware([VerifyCsrfToken::class])->name('cancelled');
+        Route::post('/ipn', [UniversalPaymentController::class, 'sslcommerzIpn'])
+            ->withoutMiddleware([VerifyCsrfToken::class])->name('ipn');
+    });
 
 Route::middleware(['web', 'installed', 'auth', 'plugin:universal-payment', 'permission:payments.universal.manage'])
     ->prefix('plugins/universal-payment')

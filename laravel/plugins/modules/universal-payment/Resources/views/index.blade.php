@@ -16,7 +16,7 @@
     <div>
         <div class="inline-flex items-center px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold">Independent Universal Payment Plugin · Zero Dependencies</div>
         <h1 class="text-2xl font-extrabold text-slate-900 mt-1">Universal Payment Gateway & Ledger</h1>
-        <p class="text-xs text-slate-500">Manage SSLCommerz, bKash, Nagad, Rocket, Card, PayPal, and Bank/Cash checkout & reconciliation inside one unified plugin.</p>
+        <p class="text-xs text-slate-500">Manage enabled payment methods and transaction reconciliation. Each online gateway owns its credentials and hosted-checkout integration.</p>
     </div>
 
     <div class="grid lg:grid-cols-2 gap-6">
@@ -34,7 +34,7 @@
                     @endforeach
                 </div>
             </div>
-            <div class="grid grid-cols-2 gap-3">
+            <div class="space-y-3">
                 <div>
                     <label class="font-semibold text-slate-700 block mb-1">Default Currency</label>
                     <select name="default_currency" class="w-full rounded-xl border border-slate-300 px-3 py-2 bg-white">
@@ -43,25 +43,9 @@
                         @endforeach
                     </select>
                 </div>
-                <div>
-                    <label class="font-semibold text-slate-700 block mb-1">SSLCommerz Store ID</label>
-                    <input name="sslcommerz_store_id" value="{{ $config['sslcommerz_store_id'] }}" class="w-full rounded-xl border border-slate-300 px-3 py-2 font-mono">
-                </div>
-                <div>
-                    <label class="font-semibold text-slate-700 block mb-1">SSLCommerz Password (Encrypted)</label>
-                    <input type="password" name="sslcommerz_store_password" placeholder="Leave blank to keep current" class="w-full rounded-xl border border-slate-300 px-3 py-2 font-mono">
-                </div>
-                <div>
-                    <label class="font-semibold text-slate-700 block mb-1">Nagad Merchant ID</label>
-                    <input name="nagad_merchant_id" value="{{ $config['nagad_merchant_id'] }}" class="w-full rounded-xl border border-slate-300 px-3 py-2 font-mono">
-                </div>
-                <div>
-                    <label class="font-semibold text-slate-700 block mb-1">bKash App Key (Encrypted)</label>
-                    <input type="password" name="bkash_app_key" placeholder="Leave blank to keep current" class="w-full rounded-xl border border-slate-300 px-3 py-2 font-mono">
-                </div>
-                <div>
-                    <label class="font-semibold text-slate-700 block mb-1">Stripe / Card Secret Key</label>
-                    <input type="password" name="stripe_secret_key" placeholder="sk_live_..." class="w-full rounded-xl border border-slate-300 px-3 py-2 font-mono">
+                <div class="rounded-xl border border-blue-200 bg-blue-50 p-3 text-blue-900">
+                    <strong>Gateway credentials are managed by their own plugins.</strong>
+                    <p class="mt-1">Install and configure the dedicated SSLCOMMERZ Gateway plugin under Plugin Manager. Secrets are never duplicated in this universal ledger.</p>
                 </div>
             </div>
             <button class="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold">Save Gateway Settings</button>
