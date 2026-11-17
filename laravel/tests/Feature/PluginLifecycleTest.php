@@ -29,15 +29,16 @@ class PluginLifecycleTest extends TestCase
         $this->assertTrue(VersionConstraint::matches('2.1.0', '>=2.0'));
     }
 
-    public function test_plugin_dependency_order_is_enforced(): void
+    public function test_student_management_installs_without_optional_branch_plugin(): void
     {
         $this->markSystemInstalled();
         $manager = app(PluginManager::class);
         $manager->syncCatalog();
 
-        $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('branch-management');
-        $manager->install('student-management');
+        $record = $manager->install('student-management');
+
+        $this->assertTrue($record->is_installed);
+        $this->assertFalse($manager->isInstalled('branch-management'));
     }
 
     public function test_core_cannot_be_disabled_or_uninstalled(): void
