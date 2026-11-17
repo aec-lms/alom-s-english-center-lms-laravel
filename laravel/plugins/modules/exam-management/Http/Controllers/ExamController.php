@@ -22,6 +22,7 @@ class ExamController extends Controller
     public function index(Request $request): View
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $courseIntegrationEnabled = app(\App\Core\Plugins\PluginManager::class)->isEnabled('course-management')
             && Schema::hasTable('courses');
 
@@ -44,6 +45,7 @@ class ExamController extends Controller
         public function store(Request $request): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $validated = $request->validate([
             'course_id' => ['nullable', 'integer'],
             'branch_id' => ['nullable', 'integer'],
@@ -89,6 +91,7 @@ class ExamController extends Controller
         public function update(Request $request, Exam $exam): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $exam->branch_id) {
             abort(403, 'Branch isolation violation.');
         }
@@ -129,6 +132,7 @@ class ExamController extends Controller
         public function destroy(Request $request, Exam $exam): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $exam->branch_id) {
             abort(403, 'Branch isolation violation.');
         }
@@ -144,6 +148,7 @@ class ExamController extends Controller
     public function addQuestion(Request $request, Exam $exam): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $exam->branch_id) {
             abort(403, 'Branch isolation violation.');
         }
@@ -347,4 +352,20 @@ class ExamController extends Controller
 
         return redirect()->route('portal.dashboard')->with('status', "Exam graded server-side: {$result['score']}/{$result['total']} marks.");
     }
+    private function ensureAssignedBranch($actor): void
+    {
+        if (!$actor || !$actor->hasRole('branch_manager')) {
+            return;
+        }
+
+        abort_unless(
+            (int) ($actor->branch_id ?? 0) > 0
+                && app(\App\Core\Plugins\PluginManager::class)->isEnabled('branch-management')
+                && Schema::hasTable('branches')
+                && DB::table('branches')->where('id', $actor->branch_id)->where('is_active', true)->exists(),
+            403,
+            'Branch manager must be assigned to an active branch.'
+        );
+    }
+
 }
