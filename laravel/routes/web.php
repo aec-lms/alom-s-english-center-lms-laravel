@@ -158,6 +158,7 @@ Route::middleware('installed')->group(function (): void {
             Route::post('/design', [AppearanceController::class, 'updateDesign'])->name('design');
             Route::post('/reset', [AppearanceController::class, 'reset'])->name('reset');
             Route::get('/themes', [ThemePackageController::class, 'index'])->name('themes.index');
+            Route::get('/themes/{slug}/preview', [ThemePackageController::class, 'preview'])->name('themes.preview');
             Route::post('/themes/upload', [ThemePackageController::class, 'upload'])->name('themes.upload');
             Route::post('/themes/{slug}/activate', [ThemePackageController::class, 'activate'])->name('themes.activate');
             Route::post('/themes/deactivate', [ThemePackageController::class, 'deactivate'])->name('themes.deactivate');
