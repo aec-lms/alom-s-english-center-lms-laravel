@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Panel — ' . config('app.name'))</title>
+    @if (!empty($siteIdentity['favicon_url']))<link rel="icon" href="{{ $siteIdentity['favicon_url'] }}">@endif
     @inject('themeManager', 'App\\Core\\Appearance\\ThemeManager')
     <style>
         :root { {!! $themeManager->cssVariables() !!} }
@@ -45,8 +46,15 @@
 <div class="min-h-screen flex">
     <aside id="admin-sidebar" class="fixed inset-y-0 left-0 z-40 w-64 text-slate-200 flex flex-col shrink-0 border-r border-white/10 -translate-x-full transition-transform duration-200 shadow-2xl lg:static lg:translate-x-0 lg:shadow-none">
         <div class="px-5 py-4 border-b border-white/10">
-            <div class="text-sm font-extrabold tracking-tight text-white">{{ config('app.name') }} Core</div>
-            <div class="text-[11px] text-[#38BDF8] font-medium">Core + Independent Plugins</div>
+            <div class="flex items-center gap-2">
+                @if (!empty($siteIdentity['logo_url']))
+                    <img src="{{ $siteIdentity['logo_url'] }}" alt="{{ config('app.name') }} logo" class="h-9 max-w-28 object-contain">
+                @endif
+                <div>
+                    <div class="text-sm font-extrabold tracking-tight text-white">{{ config('app.name') }}</div>
+                    <div class="text-[11px] text-[#38BDF8] font-medium">{{ $siteIdentity['tagline'] ?? 'Core + Independent Plugins' }}</div>
+                </div>
+            </div>
             <a href="{{ route('home') }}" target="_blank" rel="noopener noreferrer"
                class="mt-3 flex items-center justify-center gap-2 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15 transition-colors"
                aria-label="Visit public website (opens in a new tab)">
