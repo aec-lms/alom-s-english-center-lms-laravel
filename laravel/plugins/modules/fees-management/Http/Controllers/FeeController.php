@@ -20,18 +20,21 @@ class FeeController extends Controller
     public function index(Request $request): View
     {
         $actor = $request->user();
+        $studentIntegrationEnabled = $this->studentIntegrationEnabled();
         $invoices = FeeInvoice::query()
-            ->with(['student.user', 'category'])
+            ->when($studentIntegrationEnabled, fn ($q) => $q->with('student.user'))
+            ->with('category')
             ->when($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null, fn ($q) => $q->where('branch_id', $actor->branch_id))
             ->latest()
             ->paginate(25);
         $categories = FeeCategory::query()->orderBy('name')->get();
 
-        return view('fees-management::index', compact('invoices', 'categories'));
+        return view('fees-management::index', compact('invoices', 'categories', 'studentIntegrationEnabled'));
     }
 
     public function storeInvoice(Request $request): RedirectResponse
     {
+        abort_unless($this->studentIntegrationEnabled(), 503, 'Enable Student Management to issue student-linked invoices.');
         $actor = $request->user();
         $validated = $request->validate([
             'student_id' => ['required', 'integer', 'exists:students,id'],
@@ -68,4 +71,10 @@ class FeeController extends Controller
 
         return back()->with('status', "Invoice {$invoice->invoice_number} created.");
     }
+    private function studentIntegrationEnabled(): bool
+    {
+        return app(PluginManager::class)->isEnabled('student-management')
+            && Schema::hasTable('students');
+    }
+
 }
