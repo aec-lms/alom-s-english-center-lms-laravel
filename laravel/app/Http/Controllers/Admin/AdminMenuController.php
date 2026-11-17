@@ -43,7 +43,18 @@ class AdminMenuController extends Controller
             }
         }
 
-        $preferences = [];
+        $storedPreferences = SystemSetting::query()->where('key', 'admin.navigation.menu')->value('value');
+        try {
+            $preferences = is_string($storedPreferences) && $storedPreferences !== ''
+                ? json_decode($storedPreferences, true, 512, JSON_THROW_ON_ERROR)
+                : [];
+        } catch (\\JsonException) {
+            $preferences = [];
+        }
+        if (!is_array($preferences)) {
+            $preferences = [];
+        }
+
         foreach ($validated['items'] as $item) {
             $key = $item['key'];
             if (!isset($allowed[$key])) {
