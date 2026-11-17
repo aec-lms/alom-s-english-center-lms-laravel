@@ -5,8 +5,8 @@
     <div class="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-white/15 p-8 space-y-6">
         <div class="flex items-center justify-between border-b border-slate-100 pb-4">
             <div>
-                <span class="text-xs font-bold uppercase tracking-wider text-[#0284C7]">Fresh Database Installer</span>
-                <h1 class="text-2xl font-extrabold text-slate-900 mt-1">Install AEC LMS (Laravel 12)</h1>
+                <span class="text-xs font-bold uppercase tracking-wider text-[#0284C7]">International LMS Installer</span>
+                <h1 class="text-2xl font-extrabold text-slate-900 mt-1">Install Your LMS (Laravel 12)</h1>
                 <p class="text-xs text-slate-600 mt-1">Requires an empty fresh database. Legacy tables or old operational records are strictly never imported.</p>
             </div>
             <span class="w-10 h-10 rounded-xl bg-gradient-to-br from-[#0284C7] to-[#2563EB] text-white font-black text-base flex items-center justify-center shrink-0">A</span>
@@ -35,11 +35,31 @@
             <div class="grid sm:grid-cols-2 gap-4">
                 <label class="block">
                     <span class="text-xs font-semibold text-slate-700">Application Name</span>
-                    <input name="app_name" required value="{{ old('app_name', 'AEC LMS') }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
+                    <input name="app_name" required value="{{ old('app_name', 'My Learning Platform') }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
                 </label>
                 <label class="block">
                     <span class="text-xs font-semibold text-slate-700">Application URL</span>
-                    <input name="app_url" type="url" required value="{{ old('app_url', 'https://alomsenglishcenter.com') }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
+                    <input name="app_url" type="url" required value="{{ old('app_url', 'https://example.com') }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
+                </label>
+            </div>
+            <div class="grid sm:grid-cols-2 gap-4">
+                <label class="block">
+                    <span class="text-xs font-semibold text-slate-700">Country Code (ISO 2-letter)</span>
+                    <input name="country_code" required maxlength="2" pattern="[A-Za-z]{2}" value="{{ old('country_code', 'US') }}" placeholder="US, GB, BD" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
+                </label>
+                <label class="block">
+                    <span class="text-xs font-semibold text-slate-700">Language / Locale</span>
+                    <input name="locale" required maxlength="35" value="{{ old('locale', 'en') }}" placeholder="en, en-US, bn-BD" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
+                </label>
+            </div>
+            <div class="grid sm:grid-cols-2 gap-4">
+                <label class="block">
+                    <span class="text-xs font-semibold text-slate-700">Timezone (IANA)</span>
+                    <input name="timezone" required value="{{ old('timezone', 'UTC') }}" placeholder="UTC, Europe/London, Asia/Dhaka" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
+                </label>
+                <label class="block">
+                    <span class="text-xs font-semibold text-slate-700">Default Currency (ISO 4217)</span>
+                    <input name="currency" required maxlength="3" pattern="[A-Za-z]{3}" value="{{ old('currency', 'USD') }}" placeholder="USD, EUR, BDT" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
                 </label>
             </div>
             <div class="grid sm:grid-cols-2 gap-4">

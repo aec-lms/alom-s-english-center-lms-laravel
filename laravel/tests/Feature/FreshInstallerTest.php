@@ -110,6 +110,10 @@ class FreshInstallerTest extends TestCase
             $this->assertTrue(Hash::check('FreshStrongPassword!2026', $admin->password));
             $this->assertTrue($admin->hasRole('admin'));
             $this->assertSame('false', SystemSetting::query()->where('key', 'legacy_records_imported')->value('value'));
+            $this->assertSame('US', SystemSetting::query()->where('key', 'institution.country_code')->value('value'));
+            $this->assertSame('en', SystemSetting::query()->where('key', 'localization.locale')->value('value'));
+            $this->assertSame('UTC', SystemSetting::query()->where('key', 'localization.timezone')->value('value'));
+            $this->assertSame('USD', SystemSetting::query()->where('key', 'finance.default_currency')->value('value'));
             $this->assertSame(0, User::query()->where('email', 'legacy@example.com')->count());
 
             $savedEnv = (string) file_get_contents($envPath);
