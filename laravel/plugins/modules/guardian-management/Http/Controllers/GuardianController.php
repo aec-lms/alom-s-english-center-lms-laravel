@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Plugins\Modules\GuardianManagement\Http\Controllers;
 
 use App\Core\Security\AuditLogger;
+use App\Core\Plugins\PluginManager;
 use App\Http\Controllers\Controller;
 use App\Models\Role;
 use App\Models\User;
@@ -12,6 +13,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 use Plugins\Modules\GuardianManagement\Models\Guardian;
 use Plugins\Modules\StudentManagement\Models\Student;
