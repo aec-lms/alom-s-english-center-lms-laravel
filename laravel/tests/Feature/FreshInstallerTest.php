@@ -73,7 +73,7 @@ class FreshInstallerTest extends TestCase
 
         try {
             config(['session.driver' => 'file', 'cache.default' => 'file']);
-            $this->get('/install')->assertOk()->assertSee('International LMS Installer');
+            $this->get('/install')->assertOk()->assertSee('Fresh Database Installer');
 
             $unsafePublicPath = public_path('aec-private-leak-' . uniqid('', true));
             config(['lms.private_storage_path' => $unsafePublicPath]);
@@ -110,10 +110,6 @@ class FreshInstallerTest extends TestCase
             $this->assertTrue(Hash::check('FreshStrongPassword!2026', $admin->password));
             $this->assertTrue($admin->hasRole('admin'));
             $this->assertSame('false', SystemSetting::query()->where('key', 'legacy_records_imported')->value('value'));
-            $this->assertSame('US', SystemSetting::query()->where('key', 'institution.country_code')->value('value'));
-            $this->assertSame('en', SystemSetting::query()->where('key', 'localization.locale')->value('value'));
-            $this->assertSame('UTC', SystemSetting::query()->where('key', 'localization.timezone')->value('value'));
-            $this->assertSame('USD', SystemSetting::query()->where('key', 'finance.default_currency')->value('value'));
             $this->assertSame(0, User::query()->where('email', 'legacy@example.com')->count());
 
             $savedEnv = (string) file_get_contents($envPath);
@@ -151,7 +147,7 @@ class FreshInstallerTest extends TestCase
             'lms.install_lock_path' => $this->tempLockPath,
         ]);
 
-        $this->get('/install')->assertOk()->assertSee('International LMS Installer');
+        $this->get('/install')->assertOk()->assertSee('Fresh Database Installer');
     }
 
     public function test_installer_routes_are_locked_after_installation(): void

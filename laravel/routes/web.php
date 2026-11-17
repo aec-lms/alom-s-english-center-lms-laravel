@@ -94,7 +94,7 @@ Route::middleware('installed')->group(function (): void {
             Route::post('/', [UserRoleController::class, 'store'])->name('store');
         });
 
-        Route::prefix('appearance')->name('appearance.')->middleware('permission:core.settings.manage')->group(function (): void {
+        Route::prefix('institution-settings')->name('institution-settings.')->middleware('permission:core.settings.manage')->group(function (): void {\n            Route::get('/', [InstitutionSettingsController::class, 'edit'])->name('edit');\n            Route::post('/', [InstitutionSettingsController::class, 'update'])->name('update');\n        });\n\n        Route::prefix('appearance')->name('appearance.')->middleware('permission:core.settings.manage')->group(function (): void {
             Route::get('/', [AppearanceController::class, 'index'])->name('index');
             Route::post('/', [AppearanceController::class, 'update'])->name('update');
             Route::post('/reset', [AppearanceController::class, 'reset'])->name('reset');

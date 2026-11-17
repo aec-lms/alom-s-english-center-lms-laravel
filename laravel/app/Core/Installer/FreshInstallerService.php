@@ -12,7 +12,6 @@ use Database\Seeders\CoreRolesAndPermissionsSeeder;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use DateTimeZone;
 use PDO;
 use RuntimeException;
 
@@ -207,10 +206,6 @@ class FreshInstallerService
         $adminName = trim((string) ($config['admin_name'] ?? ''));
         $adminEmail = strtolower(trim((string) ($config['admin_email'] ?? '')));
         $adminPassword = (string) ($config['admin_password'] ?? '');
-        $countryCode = strtoupper(trim((string) ($config['country_code'] ?? 'US')));
-        $locale = trim((string) ($config['locale'] ?? 'en'));
-        $timezone = trim((string) ($config['timezone'] ?? 'UTC'));
-        $currency = strtoupper(trim((string) ($config['currency'] ?? 'USD')));
 
         if ($appName === '' || strlen($appName) > 160) {
             throw new RuntimeException('Application name is required and must be 160 characters or fewer.');
@@ -223,18 +218,6 @@ class FreshInstallerService
         }
         if (strlen($adminPassword) < 12 || strlen($adminPassword) > 255) {
             throw new RuntimeException('Administrator password must be between 12 and 255 characters.');
-        }
-        if (!preg_match('/^[A-Z]{2}$/', $countryCode)) {
-            throw new RuntimeException('Country must be a valid two-letter ISO 3166-1 alpha-2 code.');
-        }
-        if (!preg_match('/^[a-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})*$/', $locale)) {
-            throw new RuntimeException('Please provide a valid locale identifier such as en, en-US or bn-BD.');
-        }
-        if (!in_array($timezone, DateTimeZone::listIdentifiers(DateTimeZone::ALL_WITH_BC), true) && $timezone !== 'UTC') {
-            throw new RuntimeException('Please select a valid IANA timezone.');
-        }
-        if (!preg_match('/^[A-Z]{3}$/', $currency)) {
-            throw new RuntimeException('Currency must be a three-letter ISO 4217 code such as USD, EUR or BDT.');
         }
         $urlParts = parse_url($appUrl);
         if (filter_var($appUrl, FILTER_VALIDATE_URL) === false
@@ -262,15 +245,11 @@ class FreshInstallerService
             'APP_KEY' => $appKey,
             'AEC_PLUGIN_SIGNING_KEY' => $signingKey,
             'AEC_BACKUP_ENCRYPTION_KEY' => $backupKey,
-            'APP_TIMEZONE' => $timezone,
-            'APP_LOCALE' => $locale,
-            'APP_FALLBACK_LOCALE' => 'en',
         ]);
-        config(['app.timezone' => $timezone, 'app.locale' => $locale]);
 
         $this->callArtisanOrFail('migrate', ['--force' => true], 'Core database migrations');
 
-        $admin = DB::transaction(function () use ($adminName, $adminEmail, $adminPassword, $appName, $appUrl, $countryCode, $locale, $timezone, $currency): User {
+        $admin = DB::transaction(function () use ($adminName, $adminEmail, $adminPassword, $appName, $appUrl): User {
             $this->callArtisanOrFail('db:seed', ['--class' => CoreRolesAndPermissionsSeeder::class, '--force' => true], 'Core roles and permissions seeding');
 
             $admin = User::query()->create([
@@ -289,10 +268,6 @@ class FreshInstallerService
 
             SystemSetting::query()->updateOrCreate(['key' => 'site_name'], ['value' => $appName]);
             SystemSetting::query()->updateOrCreate(['key' => 'site_url'], ['value' => $appUrl]);
-            SystemSetting::query()->updateOrCreate(['key' => 'institution.country_code'], ['value' => $countryCode]);
-            SystemSetting::query()->updateOrCreate(['key' => 'localization.locale'], ['value' => $locale]);
-            SystemSetting::query()->updateOrCreate(['key' => 'localization.timezone'], ['value' => $timezone]);
-            SystemSetting::query()->updateOrCreate(['key' => 'finance.default_currency'], ['value' => $currency]);
             SystemSetting::query()->updateOrCreate(['key' => 'legacy_records_imported'], ['value' => 'false']);
 
             return $admin;
