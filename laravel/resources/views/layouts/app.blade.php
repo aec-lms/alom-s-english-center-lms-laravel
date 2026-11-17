@@ -1,19 +1,11 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    @php
-        $aecFavicon = null;
-        if (\Illuminate\Support\Facades\Schema::hasTable('system_settings')) {
-            $aecFavicon = \App\Models\SystemSetting::query()->where('key', 'branding.favicon_url')->value('value');
-        }
-    @endphp
-    @if ($aecFavicon)
-        <link rel="icon" href="{{ $aecFavicon }}">
-    @endif
-
+    <link rel="icon" href="{{ \App\Models\SystemSetting::query()->where('key', 'branding.favicon_url')->value('value') }}">
+    @if (!empty($siteIdentity['favicon_url']))<link rel="icon" href="{{ $siteIdentity['favicon_url'] }}">@endif
     @inject('pluginManager', 'App\Core\Plugins\PluginManager')
     @php
         $seoEnabled = $pluginManager->isEnabled('seo-manager');
