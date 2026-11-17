@@ -9,12 +9,44 @@
     "dependencies": [],
     "provider": "Plugins\\Modules\\SmsGateway\\Providers\\SmsGatewayServiceProvider",
     "permissions": [
-        { "slug": "communication.sms.manage", "name": "Manage SMS Gateway & Bulk Campaigns" }
+        {
+            "slug": "communication.sms.manage",
+            "name": "Manage SMS Gateway & Bulk Campaigns"
+        }
     ],
     "settings_schema": [
-        { "key": "provider", "label": "SMS Provider (greenweb/twilio/sslwireless/custom)", "type": "text", "secret": false },
-        { "key": "sender_id", "label": "Approved Sender ID", "type": "text", "secret": false },
-        { "key": "api_url", "label": "Custom Gateway Endpoint URL", "type": "text", "secret": false },
-        { "key": "api_token", "label": "API Token / Secret Key", "type": "password", "secret": true }
+        {
+            "key": "provider",
+            "label": "SMS Provider (greenweb/twilio/sslwireless/custom)",
+            "type": "text",
+            "secret": false
+        },
+        {
+            "key": "sender_id",
+            "label": "Approved Sender ID",
+            "type": "text",
+            "secret": false
+        },
+        {
+            "key": "api_url",
+            "label": "Custom Gateway Endpoint URL",
+            "type": "text",
+            "secret": false
+        },
+        {
+            "key": "api_token",
+            "label": "API Token / Secret Key",
+            "type": "password",
+            "secret": true
+        }
+    ],
+    "admin_menu": [
+        {
+            "group": "Marketing, Growth & SEO",
+            "label": "SMS Marketing",
+            "route": "plugins.sms.index",
+            "order": 100,
+            "permission": "communication.sms.manage"
+        }
     ]
 }

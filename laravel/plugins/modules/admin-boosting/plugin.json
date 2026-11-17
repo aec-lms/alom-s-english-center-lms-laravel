@@ -9,7 +9,19 @@
     "dependencies": [],
     "provider": "Plugins\\Modules\\AdminBoosting\\Providers\\AdminBoostingServiceProvider",
     "permissions": [
-        { "slug": "marketing.boost.manage", "name": "Manage Admin Boost Campaigns" }
+        {
+            "slug": "marketing.boost.manage",
+            "name": "Manage Admin Boost Campaigns"
+        }
     ],
-    "settings_schema": []
+    "settings_schema": [],
+    "admin_menu": [
+        {
+            "group": "Marketing, Growth & SEO",
+            "label": "Admin Boosting",
+            "route": "plugins.boost.index",
+            "order": 100,
+            "permission": "marketing.boost.manage"
+        }
+    ]
 }

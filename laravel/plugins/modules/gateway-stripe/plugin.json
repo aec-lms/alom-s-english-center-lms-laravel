@@ -49,5 +49,14 @@
                 "1": "Test / Sandbox"
             }
         }
+    ],
+    "admin_menu": [
+        {
+            "group": "Finance & Gateways",
+            "label": "Stripe Gateway",
+            "route": "plugins.gateway_stripe.index",
+            "order": 100,
+            "permission": "payments.stripe.manage"
+        }
     ]
 }

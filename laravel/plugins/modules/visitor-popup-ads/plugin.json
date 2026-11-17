@@ -9,7 +9,19 @@
     "dependencies": [],
     "provider": "Plugins\\Modules\\VisitorPopupAds\\Providers\\VisitorPopupAdsServiceProvider",
     "permissions": [
-        { "slug": "marketing.popups.manage", "name": "Manage Visitor Pop-Up Ads" }
+        {
+            "slug": "marketing.popups.manage",
+            "name": "Manage Visitor Pop-Up Ads"
+        }
     ],
-    "settings_schema": []
+    "settings_schema": [],
+    "admin_menu": [
+        {
+            "group": "Marketing, Growth & SEO",
+            "label": "Visitor Pop-Up Ads",
+            "route": "plugins.popups.index",
+            "order": 100,
+            "permission": "marketing.popups.manage"
+        }
+    ]
 }

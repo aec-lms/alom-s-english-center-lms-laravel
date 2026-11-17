@@ -17,5 +17,14 @@
     "settings_schema": [],
     "optional_dependencies": [
         "student-management"
+    ],
+    "admin_menu": [
+        {
+            "group": "Academic & Operations",
+            "label": "Guardians",
+            "route": "plugins.guardians.index",
+            "order": 100,
+            "permission": "guardians.manage"
+        }
     ]
 }

@@ -9,13 +9,45 @@
     "dependencies": [],
     "provider": "Plugins\\Modules\\EmailNotifications\\Providers\\EmailNotificationsServiceProvider",
     "permissions": [
-        { "slug": "email.notifications.manage", "name": "Manage Email Templates & Dispatch Logs" }
+        {
+            "slug": "email.notifications.manage",
+            "name": "Manage Email Templates & Dispatch Logs"
+        }
     ],
     "settings_schema": [
-        { "key": "smtp_host", "label": "SMTP Server Host", "encrypted": false },
-        { "key": "smtp_port", "label": "SMTP Port (587 / 465)", "encrypted": false },
-        { "key": "smtp_username", "label": "SMTP Username", "encrypted": false },
-        { "key": "smtp_password", "label": "SMTP Password / App Token", "encrypted": true },
-        { "key": "from_address", "label": "Sender Email Address", "encrypted": false }
+        {
+            "key": "smtp_host",
+            "label": "SMTP Server Host",
+            "encrypted": false
+        },
+        {
+            "key": "smtp_port",
+            "label": "SMTP Port (587 / 465)",
+            "encrypted": false
+        },
+        {
+            "key": "smtp_username",
+            "label": "SMTP Username",
+            "encrypted": false
+        },
+        {
+            "key": "smtp_password",
+            "label": "SMTP Password / App Token",
+            "encrypted": true
+        },
+        {
+            "key": "from_address",
+            "label": "Sender Email Address",
+            "encrypted": false
+        }
+    ],
+    "admin_menu": [
+        {
+            "group": "Marketing, Growth & SEO",
+            "label": "Email Notifications",
+            "route": "plugins.email_notifications.index",
+            "order": 100,
+            "permission": "email.notifications.manage"
+        }
     ]
 }

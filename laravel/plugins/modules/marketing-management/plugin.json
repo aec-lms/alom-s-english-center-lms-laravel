@@ -9,9 +9,25 @@
     "dependencies": [],
     "provider": "Plugins\\Modules\\MarketingManagement\\Providers\\MarketingManagementServiceProvider",
     "permissions": [
-        { "slug": "marketing.manage", "name": "Manage Marketing Campaigns & Promo Coupons" }
+        {
+            "slug": "marketing.manage",
+            "name": "Manage Marketing Campaigns & Promo Coupons"
+        }
     ],
     "settings_schema": [
-        { "key": "utm_default_source", "label": "Default Campaign UTM Source", "encrypted": false }
+        {
+            "key": "utm_default_source",
+            "label": "Default Campaign UTM Source",
+            "encrypted": false
+        }
+    ],
+    "admin_menu": [
+        {
+            "group": "Marketing, Growth & SEO",
+            "label": "Marketing & Coupons",
+            "route": "plugins.marketing.index",
+            "order": 100,
+            "permission": "marketing.manage"
+        }
     ]
 }

@@ -352,4 +352,41 @@ PHP;
         $this->assertNotNull($archive->fresh()->deleted_at);
     }
 
+    public function test_plugin_manifest_exposes_admin_menu_entries_for_enabled_modules(): void
+    {
+        $modulesPath = (string) config('plugins.modules_path');
+        $courseManifest = \App\Core\Plugins\PluginManifest::fromDirectory($modulesPath . DIRECTORY_SEPARATOR . 'course-management');
+        $traceManifest = \App\Core\Plugins\PluginManifest::fromDirectory($modulesPath . DIRECTORY_SEPARATOR . 'student-tracing');
+
+        $this->assertSame('plugins.courses.index', $courseManifest->adminMenu[0]['route']);
+        $this->assertSame('courses.manage', $courseManifest->adminMenu[0]['permission']);
+        $this->assertSame('plugins.student-tracing.index', $traceManifest->adminMenu[0]['route']);
+        $this->assertSame('students.trace.view', $traceManifest->adminMenu[0]['permission']);
+    }
+
+    public function test_manifest_driven_admin_menu_only_shows_enabled_plugins_to_permitted_users(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management', 'student-tracing']);
+        \Illuminate\Support\Facades\Route::get('/test-admin-courses', fn () => 'ok')->name('plugins.courses.index');
+        \Illuminate\Support\Facades\Route::get('/test-admin-student-tracing', fn () => 'ok')->name('plugins.student-tracing.index');
+        $admin = $this->createUserWithRole('admin');
+        $this->actingAs($admin);
+
+        $groups = app(\App\Core\Plugins\AdminMenuRegistry::class)->groups();
+        $allItems = array_merge([], ...array_values($groups));
+        $labels = array_column($allItems, 'label');
+
+        $this->assertContains('Courses', $labels);
+        $this->assertContains('Student Activity Trace', $labels);
+
+        app(PluginManager::class)->disable('student-tracing');
+        $groupsAfterDisable = app(\App\Core\Plugins\AdminMenuRegistry::class)->groups();
+        $allItemsAfterDisable = array_merge([], ...array_values($groupsAfterDisable));
+        $labelsAfterDisable = array_column($allItemsAfterDisable, 'label');
+
+        $this->assertNotContains('Student Activity Trace', $labelsAfterDisable);
+        $this->assertContains('Courses', $labelsAfterDisable);
+    }
+
 }

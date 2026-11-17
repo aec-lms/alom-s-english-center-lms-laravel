@@ -24,5 +24,14 @@
         "attendance-management",
         "course-management",
         "exam-management"
+    ],
+    "admin_menu": [
+        {
+            "group": "Academic & Operations",
+            "label": "Student Activity Trace",
+            "route": "plugins.student-tracing.index",
+            "permission": "students.trace.view",
+            "order": 90
+        }
     ]
 }

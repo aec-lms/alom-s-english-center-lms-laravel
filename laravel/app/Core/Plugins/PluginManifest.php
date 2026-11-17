@@ -22,6 +22,7 @@ final class PluginManifest
         public readonly array $settingsSchema,
         public readonly string $basePath,
         public readonly bool $isCore = false,
+        public readonly array $adminMenu = [],
     ) {}
 
     public static function fromDirectory(string $directory): self
@@ -68,6 +69,7 @@ final class PluginManifest
             settingsSchema: (array) ($data['settings_schema'] ?? []),
             basePath: $directory,
             isCore: (bool) ($data['is_core'] ?? false),
+            adminMenu: array_values(array_filter((array) ($data['admin_menu'] ?? []), 'is_array')),
         );
     }
 
@@ -86,6 +88,7 @@ final class PluginManifest
             'permissions' => $this->permissions,
             'settings_schema' => $this->settingsSchema,
             'is_core' => $this->isCore,
+            'admin_menu' => $this->adminMenu,
         ];
     }
 }

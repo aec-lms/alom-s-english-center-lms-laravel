@@ -18,5 +18,14 @@
             "name": "Attempt Online Exams"
         }
     ],
-    "settings_schema": []
+    "settings_schema": [],
+    "admin_menu": [
+        {
+            "group": "Academic & Operations",
+            "label": "Exams & Bank",
+            "route": "plugins.exams.index",
+            "order": 100,
+            "permission": "exams.manage"
+        }
+    ]
 }

@@ -9,13 +9,50 @@
     "dependencies": [],
     "provider": "Plugins\\Modules\\GmailMarketing\\Providers\\GmailMarketingServiceProvider",
     "permissions": [
-        { "slug": "communication.email.manage", "name": "Manage Gmail Marketing & Campaigns" }
+        {
+            "slug": "communication.email.manage",
+            "name": "Manage Gmail Marketing & Campaigns"
+        }
     ],
     "settings_schema": [
-        { "key": "gmail_address", "label": "Sender Gmail Address", "type": "text", "secret": false },
-        { "key": "sender_name", "label": "Sender Display Name", "type": "text", "secret": false },
-        { "key": "smtp_host", "label": "SMTP Host (smtp.gmail.com)", "type": "text", "secret": false },
-        { "key": "smtp_port", "label": "SMTP Port (587 / 465)", "type": "text", "secret": false },
-        { "key": "app_password", "label": "Gmail App Password / API Secret", "type": "password", "secret": true }
+        {
+            "key": "gmail_address",
+            "label": "Sender Gmail Address",
+            "type": "text",
+            "secret": false
+        },
+        {
+            "key": "sender_name",
+            "label": "Sender Display Name",
+            "type": "text",
+            "secret": false
+        },
+        {
+            "key": "smtp_host",
+            "label": "SMTP Host (smtp.gmail.com)",
+            "type": "text",
+            "secret": false
+        },
+        {
+            "key": "smtp_port",
+            "label": "SMTP Port (587 / 465)",
+            "type": "text",
+            "secret": false
+        },
+        {
+            "key": "app_password",
+            "label": "Gmail App Password / API Secret",
+            "type": "password",
+            "secret": true
+        }
+    ],
+    "admin_menu": [
+        {
+            "group": "Marketing, Growth & SEO",
+            "label": "Gmail Marketing",
+            "route": "plugins.gmail.index",
+            "order": 100,
+            "permission": "communication.email.manage"
+        }
     ]
 }

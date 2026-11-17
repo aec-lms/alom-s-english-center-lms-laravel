@@ -33,5 +33,14 @@
             "type": "password",
             "secret": true
         }
+    ],
+    "admin_menu": [
+        {
+            "group": "CMS, Builders & AI",
+            "label": "Notification Center",
+            "route": "plugins.notifications.index",
+            "order": 100,
+            "permission": "notifications.manage"
+        }
     ]
 }

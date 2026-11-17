@@ -9,11 +9,38 @@
     "dependencies": [],
     "provider": "Plugins\\Modules\\SeoManager\\Providers\\SeoManagerServiceProvider",
     "permissions": [
-        { "slug": "seo.manage", "name": "Manage SEO, Sitemap & Robots.txt" }
+        {
+            "slug": "seo.manage",
+            "name": "Manage SEO, Sitemap & Robots.txt"
+        }
     ],
     "settings_schema": [
-        { "key": "site_title_seo", "label": "Default Site Meta Title", "type": "text", "secret": false },
-        { "key": "site_meta_description", "label": "Default Meta Description", "type": "text", "secret": false },
-        { "key": "canonical_url", "label": "Canonical Base URL", "type": "text", "secret": false }
+        {
+            "key": "site_title_seo",
+            "label": "Default Site Meta Title",
+            "type": "text",
+            "secret": false
+        },
+        {
+            "key": "site_meta_description",
+            "label": "Default Meta Description",
+            "type": "text",
+            "secret": false
+        },
+        {
+            "key": "canonical_url",
+            "label": "Canonical Base URL",
+            "type": "text",
+            "secret": false
+        }
+    ],
+    "admin_menu": [
+        {
+            "group": "Marketing, Growth & SEO",
+            "label": "SEO & Sitemap",
+            "route": "plugins.seo.index",
+            "order": 100,
+            "permission": "seo.manage"
+        }
     ]
 }

@@ -49,5 +49,14 @@
             "type": "text",
             "secret": false
         }
+    ],
+    "admin_menu": [
+        {
+            "group": "CMS, Builders & AI",
+            "label": "Panel AI Assistant",
+            "route": "plugins.ai.index",
+            "order": 100,
+            "permission": "ai.assistant.use"
+        }
     ]
 }

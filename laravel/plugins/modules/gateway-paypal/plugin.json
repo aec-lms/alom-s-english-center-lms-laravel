@@ -48,5 +48,14 @@
                 "1": "Sandbox"
             }
         }
+    ],
+    "admin_menu": [
+        {
+            "group": "Finance & Gateways",
+            "label": "PayPal Gateway",
+            "route": "plugins.gateway_paypal.index",
+            "order": 100,
+            "permission": "payments.paypal.manage"
+        }
     ]
 }

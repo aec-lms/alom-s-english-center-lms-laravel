@@ -14,5 +14,14 @@
             "name": "View Reports & Export Operational Data"
         }
     ],
-    "settings_schema": []
+    "settings_schema": [],
+    "admin_menu": [
+        {
+            "group": "CMS, Builders & AI",
+            "label": "Reports & Health",
+            "route": "plugins.reports.index",
+            "order": 100,
+            "permission": "reports.view"
+        }
+    ]
 }
