@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Plugins\Modules\TeacherManagement\Http\Controllers;
 
 use App\Core\Security\AuditLogger;
+use App\Core\Plugins\PluginManager;
 use App\Http\Controllers\Controller;
 use App\Models\Role;
 use App\Models\User;
@@ -211,8 +212,13 @@ class TeacherController extends Controller
 
     private function ensureAssignedBranch($actor): void
     {
-        if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id === null) {
-            abort(403, 'Branch manager must be assigned to a branch.');
+        if ($actor && $actor->hasRole('branch_manager')) {
+            $branchAvailable = $actor->branch_id !== null
+                && app(PluginManager::class)->isEnabled('branch-management')
+                && Schema::hasTable('branches')
+                && DB::table('branches')->where('id', $actor->branch_id)->where('is_active', true)->exists();
+
+            abort_unless($branchAvailable, 403, 'Branch manager must be assigned to an active branch.');
         }
     }
 }
