@@ -45,7 +45,8 @@
             "group": "Marketing, Growth & SEO",
             "label": "Facebook Meta Pixel",
             "route": "plugins.meta_pixel.index",
-            "order": 100
+            "order": 100,
+            "permission": "marketing.pixel.manage"
         }
     ]
 }
