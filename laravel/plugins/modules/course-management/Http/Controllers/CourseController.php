@@ -355,6 +355,7 @@ class CourseController extends Controller
             'platform' => ['required', 'in:zoom,google_meet,teams'],
             'meeting_url' => ['required', 'url', 'max:255'],
             'starts_at' => ['required', 'date'],
+            'capacity' => ['nullable', 'integer', 'min:1', 'max:2000'],
         ]);
 
         $course = Course::query()->findOrFail((int) $validated['course_id']);
@@ -369,6 +370,7 @@ class CourseController extends Controller
             'platform' => $validated['platform'],
             'meeting_url' => $validated['meeting_url'],
             'starts_at' => $validated['starts_at'],
+            'capacity' => (int) ($validated['capacity'] ?? 300),
             'status' => 'upcoming',
         ]);
 
@@ -391,8 +393,10 @@ class CourseController extends Controller
             'recording_url' => ['nullable', 'url', 'max:255'],
             'starts_at' => ['required', 'date'],
             'status' => ['required', 'in:upcoming,live,completed,cancelled'],
+            'capacity' => ['nullable', 'integer', 'min:1', 'max:2000'],
         ]);
 
+        $validated['capacity'] = (int) ($validated['capacity'] ?? $liveClass->capacity ?? 300);
         $liveClass->update($validated);
 
         $this->audit->log('live_class.updated', 'live_class', (string) $liveClass->id, ['status' => $liveClass->status]);
