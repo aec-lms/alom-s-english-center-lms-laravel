@@ -22,47 +22,60 @@ class ExamController extends Controller
     public function index(Request $request): View
     {
         $actor = $request->user();
+        $courseIntegrationEnabled = app(\App\Core\Plugins\PluginManager::class)->isEnabled('course-management')
+            && Schema::hasTable('courses');
+
         $exams = Exam::query()
             ->withCount(['questions', 'attempts'])
-            ->when($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null, fn ($q) => $q->where('branch_id', $actor->branch_id))
+            ->when($actor && $actor->hasRole('branch_manager'), fn ($query) => $query->where('branch_id', $actor->branch_id ?: -1))
             ->latest()
             ->paginate(20);
-        $courses = Schema::hasTable('courses') ? DB::table('courses')->when($actor && $actor->hasRole('branch_manager'), fn ($q) => $q->where('branch_id', $actor->branch_id))->orderBy('title')->get() : collect();
 
-        return view('exam-management::index', compact('exams', 'courses'));
+        $courses = $courseIntegrationEnabled
+            ? DB::table('courses')
+                ->when($actor && $actor->hasRole('branch_manager'), fn ($query) => $query->where('branch_id', $actor->branch_id ?: -1))
+                ->orderBy('title')
+                ->get()
+            : collect();
+
+        return view('exam-management::index', compact('exams', 'courses', 'courseIntegrationEnabled'));
     }
 
-    public function store(Request $request): RedirectResponse
+        public function store(Request $request): RedirectResponse
     {
         $actor = $request->user();
         $validated = $request->validate([
-            'course_id' => ['required', 'integer', 'exists:courses,id'],
-            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
+            'course_id' => ['nullable', 'integer'],
+            'branch_id' => ['nullable', 'integer'],
             'title' => ['required', 'string', 'max:180'],
             'duration_minutes' => ['required', 'integer', 'min:5', 'max:360'],
-            'pass_marks' => ['required', 'integer', 'min:1'],
+            'pass_marks' => ['required', 'numeric', 'min:0'],
             'is_published' => ['nullable', 'boolean'],
         ]);
 
-        $course = DB::table('courses')->where('id', (int) $validated['course_id'])->first();
-        if (!$course) abort(422, 'Selected course does not exist.');
-        if ($actor && $actor->hasRole('branch_manager') && (int) $course->branch_id !== (int) $actor->branch_id) {
-            abort(403, 'Course is outside your assigned branch.');
+        $course = null;
+        if (!empty($validated['course_id'])) {
+            abort_unless(app(\App\Core\Plugins\PluginManager::class)->isEnabled('course-management') && Schema::hasTable('courses'), 503, 'Enable Course Management to attach an exam to a course.');
+            $course = DB::table('courses')->where('id', (int) $validated['course_id'])->first();
+            abort_unless($course, 422, 'Selected course does not exist.');
         }
+
         $resolvedBranchId = $actor && $actor->hasRole('branch_manager')
-            ? (int) $actor->branch_id
-            : (isset($validated['branch_id']) ? (int) $validated['branch_id'] : ($course->branch_id !== null ? (int) $course->branch_id : null));
-        if ((int) ($course->branch_id ?? 0) !== (int) ($resolvedBranchId ?? 0)) {
+            ? (int) ($actor->branch_id ?? 0)
+            : (isset($validated['branch_id']) ? (int) $validated['branch_id'] : ($course->branch_id ?? null));
+        if ($actor && $actor->hasRole('branch_manager')) {
+            abort_unless($resolvedBranchId > 0, 403, 'Your account is not assigned to an active branch.');
+        }
+        if ($course && (int) ($course->branch_id ?? 0) !== (int) ($resolvedBranchId ?? 0)) {
             abort(422, 'Exam and course must belong to the same branch.');
         }
-        $validated['branch_id'] = $resolvedBranchId;
 
         $exam = Exam::query()->create([
-            'course_id' => (int) $validated['course_id'],
-            'branch_id' => $validated['branch_id'] ?? null,
+            'course_id' => $course?->id,
+            'branch_id' => $resolvedBranchId,
             'title' => $validated['title'],
             'duration_minutes' => (int) $validated['duration_minutes'],
-            'pass_marks' => (int) $validated['pass_marks'],
+            'pass_marks' => (float) $validated['pass_marks'],
             'is_published' => $request->boolean('is_published', false),
         ]);
 
@@ -71,31 +84,36 @@ class ExamController extends Controller
         return back()->with('status', "Exam '{$exam->title}' created.");
     }
 
-    public function update(Request $request, Exam $exam): RedirectResponse
+        public function update(Request $request, Exam $exam): RedirectResponse
     {
         $actor = $request->user();
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $exam->branch_id) {
             abort(403, 'Branch isolation violation.');
         }
+
         $validated = $request->validate([
-            'course_id' => ['nullable', 'integer', 'exists:courses,id'],
+            'course_id' => ['nullable', 'integer'],
             'title' => ['required', 'string', 'max:180'],
             'duration_minutes' => ['required', 'integer', 'min:5', 'max:360'],
-            'pass_marks' => ['required', 'integer', 'min:1'],
+            'pass_marks' => ['required', 'numeric', 'min:0'],
             'is_published' => ['nullable', 'boolean'],
         ]);
 
-        $courseId = (int) ($validated['course_id'] ?? $exam->course_id);
-        $course = DB::table('courses')->where('id', $courseId)->first();
-        if (!$course || (int) $course->branch_id !== (int) $exam->branch_id) {
-            abort(422, 'Exam and course must belong to the same branch.');
+        $courseId = array_key_exists('course_id', $validated)
+            ? ($validated['course_id'] !== null ? (int) $validated['course_id'] : null)
+            : ($exam->course_id !== null ? (int) $exam->course_id : null);
+        $course = null;
+        if ($courseId !== null) {
+            abort_unless(app(\App\Core\Plugins\PluginManager::class)->isEnabled('course-management') && Schema::hasTable('courses'), 503, 'Enable Course Management to attach an exam to a course.');
+            $course = DB::table('courses')->where('id', $courseId)->first();
+            abort_unless($course && (int) ($course->branch_id ?? 0) === (int) ($exam->branch_id ?? 0), 422, 'Exam and course must belong to the same branch.');
         }
 
         $exam->update([
             'course_id' => $courseId,
             'title' => $validated['title'],
             'duration_minutes' => (int) $validated['duration_minutes'],
-            'pass_marks' => (int) $validated['pass_marks'],
+            'pass_marks' => (float) $validated['pass_marks'],
             'is_published' => $request->boolean('is_published'),
         ]);
 
@@ -104,7 +122,7 @@ class ExamController extends Controller
         return back()->with('status', "Exam '{$exam->title}' updated.");
     }
 
-    public function destroy(Request $request, Exam $exam): RedirectResponse
+        public function destroy(Request $request, Exam $exam): RedirectResponse
     {
         $actor = $request->user();
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $exam->branch_id) {
