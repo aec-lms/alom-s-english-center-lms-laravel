@@ -24,6 +24,7 @@ final class SiteIdentityManager
     public function values(): array
     {
         $values = self::DEFAULTS;
+        $stored = collect();
         if (Schema::hasTable('system_settings')) {
             $stored = SystemSetting::query()
                 ->whereIn('key', array_map(static fn (string $key): string => 'branding.' . $key, array_keys(self::DEFAULTS)))
