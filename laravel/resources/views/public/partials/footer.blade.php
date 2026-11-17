@@ -13,14 +13,24 @@
     $footerEmail = $siteIdentity['contact_email'] ?: ($footerCfg['footer_email'] ?? 'info@alomsenglishcenter.com');
     $footerYoutube = $footerCfg['footer_youtube_url'] ?? route('public.learn');
     $footerFacebook = $footerCfg['footer_facebook_url'] ?? route('public.courses');
-    $footerLayout = app(\App\Core\Appearance\SiteLayoutManager::class)->footer();
-    $showPayStrip = $footerLayout['show_payment_strip'];
+    $siteFooterLayout = app(\App\Core\Appearance\SiteLayoutManager::class)->footer();
+    $siteFooterLayout = array_replace_recursive([
+        'columns' => 4,
+        'show_payment_strip' => true,
+        'sections' => [
+            'brand' => ['order' => 10, 'visible' => true],
+            'links' => ['order' => 20, 'visible' => true],
+            'company' => ['order' => 30, 'visible' => true],
+            'contact' => ['order' => 40, 'visible' => true],
+        ],
+    ], $siteFooterLayout);
+    $showPayStrip = $siteFooterLayout['show_payment_strip'];
 @endphp
 <footer class="bg-[#F3F5F8] text-slate-600 border-t border-slate-200/90 pt-14 pb-8 px-4 sm:px-6">
     <div class="max-w-[1200px] mx-auto">
         <div class="flex flex-wrap gap-10 pb-10">
             <!-- Column 1: Brand Overview -->
-            <div class="space-y-4" style="order:{{ $footerLayout['sections']['brand']['order'] }};flex:1 1 calc(100% / {{ $footerLayout['columns'] }} - 40px);min-width:220px;display:{{ $footerLayout['sections']['brand']['visible'] ? 'block' : 'none' }}">
+            <div class="space-y-4" style="order:{{ $siteFooterLayout['sections']['brand']['order'] }};flex:1 1 calc(100% / {{ $siteFooterLayout['columns'] }} - 40px);min-width:220px;display:{{ $siteFooterLayout['sections']['brand']['visible'] ? 'block' : 'none' }}">
                 <a href="{{ route('home') }}" class="inline-flex items-center gap-2.5">
                     @if (empty($siteIdentity['logo_url']))
                     <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 shrink-0" aria-hidden="true">
@@ -58,7 +68,7 @@
             </div>
 
             <!-- Column 2: Links -->
-            <div style="order:{{ $footerLayout['sections']['links']['order'] }};flex:1 1 calc(100% / {{ $footerLayout['columns'] }} - 40px);min-width:220px;display:{{ $footerLayout['sections']['links']['visible'] ? 'block' : 'none' }}">
+            <div style="order:{{ $siteFooterLayout['sections']['links']['order'] }};flex:1 1 calc(100% / {{ $siteFooterLayout['columns'] }} - 40px);min-width:220px;display:{{ $siteFooterLayout['sections']['links']['visible'] ? 'block' : 'none' }}">
                 <h4 class="text-sm font-bold text-slate-900 mb-4">Links</h4>
                 <ul class="space-y-2.5 text-xs text-slate-600">
                     @foreach (app(\App\Core\Appearance\SiteNavigationManager::class)->items('footer') as $item)
@@ -72,7 +82,7 @@
             </div>
 
             <!-- Column 3: Company Details -->
-            <div style="order:{{ $footerLayout['sections']['company']['order'] }};flex:1 1 calc(100% / {{ $footerLayout['columns'] }} - 40px);min-width:220px;display:{{ $footerLayout['sections']['company']['visible'] ? 'block' : 'none' }}">
+            <div style="order:{{ $siteFooterLayout['sections']['company']['order'] }};flex:1 1 calc(100% / {{ $siteFooterLayout['columns'] }} - 40px);min-width:220px;display:{{ $siteFooterLayout['sections']['company']['visible'] ? 'block' : 'none' }}">
                 <h4 class="text-sm font-bold text-slate-900 mb-4">Company Details</h4>
                 <div class="space-y-3 text-xs text-slate-600">
                     <div class="flex items-start gap-2.5">
@@ -87,7 +97,7 @@
             </div>
 
             <!-- Column 4: Contact -->
-            <div style="order:{{ $footerLayout['sections']['contact']['order'] }};flex:1 1 calc(100% / {{ $footerLayout['columns'] }} - 40px);min-width:220px;display:{{ $footerLayout['sections']['contact']['visible'] ? 'block' : 'none' }}">
+            <div style="order:{{ $siteFooterLayout['sections']['contact']['order'] }};flex:1 1 calc(100% / {{ $siteFooterLayout['columns'] }} - 40px);min-width:220px;display:{{ $siteFooterLayout['sections']['contact']['visible'] ? 'block' : 'none' }}">
                 <h4 class="text-sm font-bold text-slate-900 mb-4">Contact</h4>
                 <div class="space-y-3 text-xs text-slate-600">
                     <div class="flex items-center gap-2.5">
