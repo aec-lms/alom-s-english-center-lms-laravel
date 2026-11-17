@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\StudentTracing\\Providers;
+namespace Plugins\Modules\StudentTracing\Providers;
 
-use App\\Core\\Plugins\\BasePluginServiceProvider;
-use Illuminate\\Support\\Facades\\Auth;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Facades\\Event;
-use Illuminate\\Support\\Facades\\Schema;
+use App\Core\Plugins\BasePluginServiceProvider;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Schema;
 use Throwable;
 
 class StudentTracingServiceProvider extends BasePluginServiceProvider
@@ -35,7 +35,7 @@ class StudentTracingServiceProvider extends BasePluginServiceProvider
             'deleted' => 'student.deleted',
         ] as $eloquentEvent => $traceEvent) {
             Event::listen(
-                'eloquent.' . $eloquentEvent . ': Plugins\\Modules\\StudentManagement\\Models\\Student',
+                'eloquent.' . $eloquentEvent . ': Plugins\Modules\StudentManagement\Models\Student',
                 function (object $student) use ($traceEvent): void {
                     if (!Schema::hasTable('student_activity_events') || !isset($student->id)) {
                         return;
@@ -62,7 +62,7 @@ class StudentTracingServiceProvider extends BasePluginServiceProvider
                         ]);
                     } catch (Throwable) {
                         // Tracking must never interrupt a student-management workflow.
-                        report(new \\RuntimeException('Student tracing event could not be persisted.'));
+                        report(new \RuntimeException('Student tracing event could not be persisted.'));
                     }
                 }
             );
