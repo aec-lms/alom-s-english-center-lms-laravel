@@ -9,12 +9,43 @@
     "dependencies": [],
     "provider": "Plugins\\Modules\\MetaPixel\\Providers\\MetaPixelServiceProvider",
     "permissions": [
-        { "slug": "marketing.pixel.manage", "name": "Manage Facebook Meta Pixel & Events" }
+        {
+            "slug": "marketing.pixel.manage",
+            "name": "Manage Facebook Meta Pixel & Events"
+        }
     ],
     "settings_schema": [
-        { "key": "pixel_id", "label": "Facebook Meta Pixel ID", "type": "text", "secret": false },
-        { "key": "capi_access_token", "label": "Conversions API Access Token", "type": "password", "secret": true },
-        { "key": "test_event_code", "label": "Test Event Code (Optional)", "type": "text", "secret": false },
-        { "key": "track_events", "label": "Enabled Events (PageView,Lead,InitiateCheckout,Purchase)", "type": "text", "secret": false }
+        {
+            "key": "pixel_id",
+            "label": "Facebook Meta Pixel ID",
+            "type": "text",
+            "secret": false
+        },
+        {
+            "key": "capi_access_token",
+            "label": "Conversions API Access Token",
+            "type": "password",
+            "secret": true
+        },
+        {
+            "key": "test_event_code",
+            "label": "Test Event Code (Optional)",
+            "type": "text",
+            "secret": false
+        },
+        {
+            "key": "track_events",
+            "label": "Enabled Events (PageView,Lead,InitiateCheckout,Purchase)",
+            "type": "text",
+            "secret": false
+        }
+    ],
+    "admin_menu": [
+        {
+            "group": "Marketing, Growth & SEO",
+            "label": "Facebook Meta Pixel",
+            "route": "plugins.meta_pixel.index",
+            "order": 100
+        }
     ]
 }
