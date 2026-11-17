@@ -116,7 +116,7 @@ class PaymentController extends Controller
                     $lockedTx->update(['status' => 'refunded']);
                 }
 
-                if ($this->invoiceIntegrationEnabled() && $invoice = FeeInvoice::query()->where('id', $lockedTx->invoice_id)->lockForUpdate()->first()) {
+                if ($this->invoiceIntegrationEnabled() && ($invoice = FeeInvoice::query()->where('id', $lockedTx->invoice_id)->lockForUpdate()->first())) {
                     $newPaid = max(0.0, round((float) $invoice->paid_amount - $refundAmount, 2));
                     $invoice->update([
                         'paid_amount' => $newPaid,
