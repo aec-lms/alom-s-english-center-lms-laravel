@@ -47,6 +47,8 @@ class UniversalPaymentController extends Controller
 
     public function saveGateways(Request $request): RedirectResponse
     {
+        abort_unless(!$request->user()?->hasRole('branch_manager'), 403, 'Branch managers cannot change global payment gateway settings.');
+
         $validated = $request->validate([
             'default_currency' => ['required', 'string', 'regex:/^[A-Z]{3}$/'],
             'gateways' => ['nullable', 'array'],
@@ -149,35 +151,48 @@ class UniversalPaymentController extends Controller
             'payment_reference' => ['required', 'string', 'max:120'],
         ]);
 
-        abort_unless($transaction->status === 'pending'
-            && in_array($transaction->gateway, ['bank_cash', 'offline'], true),
-            422,
-            'Only pending manual receipts can be reviewed.'
-        );
-
         $reference = trim($validated['payment_reference']);
         abort_if($reference === '', 422, 'A bank receipt or cash voucher reference is required before verification.');
 
-        $transaction->update([
-            'external_trx_id' => $reference,
-            'status' => $validated['status'],
-            'verified_by' => $validated['status'] === 'verified' ? $actor?->id : null,
-            'verified_at' => $validated['status'] === 'verified' ? now() : null,
-        ]);
+        $transaction = DB::transaction(function () use ($transaction, $validated, $reference, $actor): UniversalPaymentTransaction {
+            $lockedTransaction = UniversalPaymentTransaction::query()
+                ->whereKey($transaction->id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        // Online transactions are changed only by a verified provider callback, never by manual review.
-
-        if ($transaction->storefront_item_id && $transaction->user_id && Schema::hasTable('storefront_item_access')) {
-            if ($validated['status'] === 'verified') {
-                DB::table('storefront_item_access')->updateOrInsert(
-                    ['storefront_item_id' => $transaction->storefront_item_id, 'user_id' => $transaction->user_id],
-                    ['payment_transaction_id' => $transaction->id, 'granted_at' => now(), 'created_at' => now(), 'updated_at' => now()]
-                );
-            } else {
-                DB::table('storefront_item_access')->where('storefront_item_id', $transaction->storefront_item_id)
-                    ->where('user_id', $transaction->user_id)->delete();
+            if ($actor && $actor->hasRole('branch_manager')) {
+                abort_unless((int) ($actor->branch_id ?? 0) > 0
+                    && (int) ($lockedTransaction->branch_id ?? 0) === (int) $actor->branch_id, 404);
             }
-        }
+
+            abort_unless($lockedTransaction->status === 'pending'
+                && in_array($lockedTransaction->gateway, ['bank_cash', 'offline'], true),
+                422,
+                'Only pending manual receipts can be reviewed.'
+            );
+
+            $lockedTransaction->update([
+                'external_trx_id' => $reference,
+                'status' => $validated['status'],
+                'verified_by' => $validated['status'] === 'verified' ? $actor?->id : null,
+                'verified_at' => $validated['status'] === 'verified' ? now() : null,
+            ]);
+
+            // Online transactions are changed only by a verified provider callback, never by manual review.
+            if ($lockedTransaction->storefront_item_id && $lockedTransaction->user_id && Schema::hasTable('storefront_item_access')) {
+                if ($validated['status'] === 'verified') {
+                    DB::table('storefront_item_access')->updateOrInsert(
+                        ['storefront_item_id' => $lockedTransaction->storefront_item_id, 'user_id' => $lockedTransaction->user_id],
+                        ['payment_transaction_id' => $lockedTransaction->id, 'granted_at' => now(), 'created_at' => now(), 'updated_at' => now()]
+                    );
+                } else {
+                    DB::table('storefront_item_access')->where('storefront_item_id', $lockedTransaction->storefront_item_id)
+                        ->where('user_id', $lockedTransaction->user_id)->delete();
+                }
+            }
+
+            return $lockedTransaction->fresh();
+        });
 
         $this->audit->log('universal_payment.status_updated', 'universal_payment', $transaction->reference, ['status' => $validated['status']]);
 
