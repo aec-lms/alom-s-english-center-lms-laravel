@@ -71,13 +71,15 @@
     const template = document.getElementById('widget-template');
     const add = document.getElementById('add-widget');
     const renumber = () => list.querySelectorAll('.widget-row').forEach((row, index) => row.querySelector('.widget-number').textContent = String(index + 1));
+    let nextIndex = list.querySelectorAll('.widget-row').length;
     const addWidget = () => {
         const count = list.querySelectorAll('.widget-row').length;
         if (count >= 16) { alert('Maximum 16 widgets.'); return; }
+        const index = nextIndex++;
         const fragment = template.content.cloneNode(true);
         const row = fragment.querySelector('.widget-row');
         row.querySelectorAll('[data-field]').forEach(field => {
-            const name = 'widgets[' + count + '][' + field.dataset.field + ']';
+            const name = 'widgets[' + index + '][' + field.dataset.field + ']';
             field.name = name;
             if (field.type === 'checkbox') {
                 const hidden = document.createElement('input');
