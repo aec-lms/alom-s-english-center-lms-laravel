@@ -103,7 +103,7 @@ final class SiteNavigationManager
         return $safe;
     }
 
-    private function isSafeUrl(string $url): bool
+    public function isSafeUrl(string $url): bool
     {
         if ($url === '' || preg_match('/[\x00-\x20]/', $url) || str_contains($url, '\\')) {
             return false;
