@@ -5,7 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Route;
 use Plugins\Modules\MobileAppApi\Http\Controllers\MobileAppConfigController;
 
-Route::middleware(['web', 'installed', 'auth', 'plugin:mobile-app-api', 'permission:mobile.api.access'])
+Route::middleware(['web', 'installed', 'auth', 'plugin:mobile-app-api', 'permission:mobile.api.access', 'central.admin'])
     ->prefix('admin/mobile-app')
     ->name('plugins.mobile_app.')
     ->group(function (): void {
