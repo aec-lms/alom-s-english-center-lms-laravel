@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Core\Backup\BackupService;
 use App\Core\Updates\UniversalUpdateService;
 use App\Models\BackupRecord;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 use Tests\TestCase;
 use ZipArchive;
@@ -30,6 +31,61 @@ class BackupAndUpdateTest extends TestCase
     }
 
 
+
+    public function test_production_size_database_backup_restores_with_bounded_streaming_batches(): void
+    {
+        $this->markSystemInstalled();
+
+        $prefix = 'restore-load-' . bin2hex(random_bytes(4)) . '-';
+        $timestamp = now();
+        $passwordHash = password_hash('NotARealPassword!2026', PASSWORD_BCRYPT);
+        $expected = 12000;
+        for ($offset = 0; $offset < $expected; $offset += 50) {
+            $rows = [];
+            $limit = min($offset + 50, $expected);
+            for ($i = $offset; $i < $limit; $i++) {
+                $rows[] = [
+                    'name' => 'Production Restore Student ' . $i,
+                    'email' => $prefix . $i . '@aec.test',
+                    'phone' => null,
+                    'password' => $passwordHash,
+                    'is_active' => true,
+                    'created_at' => $timestamp,
+                    'updated_at' => $timestamp,
+                ];
+            }
+            DB::table('users')->insert($rows);
+        }
+
+        $backups = app(BackupService::class);
+        $record = $backups->createEncryptedBackup(null, false);
+
+        try {
+            $this->assertTrue($backups->verifyBackupIntegrity($record));
+            $this->assertSame(2, $record->metadata['backup_format'] ?? null);
+            $this->assertStringStartsWith('AECBK02' . "\n", file_get_contents($record->storage_path, false, null, 0, 8));
+
+            DB::table('users')->where('email', 'like', $prefix . '%')->delete();
+            DB::table('users')->insert([
+                'name' => 'Post-backup row',
+                'email' => $prefix . 'post-backup@aec.test',
+                'password' => password_hash('NotARealPassword!2026', PASSWORD_BCRYPT),
+                'is_active' => true,
+                'created_at' => $timestamp,
+                'updated_at' => $timestamp,
+            ]);
+
+            $backups->restoreEncryptedBackup($record);
+
+            $this->assertSame($expected, DB::table('users')->where('email', 'like', $prefix . '%')->count());
+            $this->assertSame('Production Restore Student 0', DB::table('users')->where('email', $prefix . '0@aec.test')->value('name'));
+            $this->assertSame('Production Restore Student 11999', DB::table('users')->where('email', $prefix . '11999@aec.test')->value('name'));
+            $this->assertFalse(DB::table('users')->where('email', $prefix . 'post-backup@aec.test')->exists());
+        } finally {
+            @unlink($record->storage_path);
+            $record->delete();
+        }
+    }
 
     public function test_encrypted_backup_restores_included_private_files(): void
     {

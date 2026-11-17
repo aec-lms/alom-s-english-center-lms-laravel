@@ -33,65 +33,55 @@ class BackupService
         $archivePath = $backupDir . DIRECTORY_SEPARATOR . "aec-backup-{$timestamp}-" . Str::lower(Str::random(8)) . '.zip';
         $encryptedPath = $archivePath . '.enc';
 
-        $snapshot = $this->exportDatabaseSnapshot();
-
+        $jsonlPath = tempnam(sys_get_temp_dir(), 'aec_backup_db_');
+        if ($jsonlPath === false) {
+            throw new RuntimeException('Unable to allocate temporary database snapshot file.');
+        }
+        $tableNames = $this->exportDatabaseJsonLines($jsonlPath);
         $zip = new ZipArchive();
         if ($zip->open($archivePath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+            @unlink($jsonlPath);
             throw new RuntimeException('Unable to create temporary backup archive.');
         }
 
-        $zip->addFromString('database.json', json_encode($snapshot, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT));
-        $zip->addFromString('manifest.json', json_encode([
-            'core_version' => config('lms.core_version'),
-            'created_at' => now()->toIso8601String(),
-            'includes_files' => $includePrivateFiles,
-            'tables' => array_keys($snapshot['tables']),
-        ], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT));
-
-        if ($includePrivateFiles) {
-            $privateDir = (string) config('lms.private_storage_path');
-            if (is_link($privateDir)) {
-                $zip->close();
-                @unlink($archivePath);
-                throw new RuntimeException('Private storage directory must not be a symbolic link.');
+        try {
+            if (!$zip->addFile($jsonlPath, 'database.jsonl')) {
+                throw new RuntimeException('Unable to add streamed database snapshot to backup archive.');
             }
-            if (is_dir($privateDir)) {
-                $this->addDirectoryToZip($zip, $privateDir, 'private-files');
+            $zip->addFromString('manifest.json', json_encode([
+                'backup_format' => 2,
+                'core_version' => config('lms.core_version'),
+                'created_at' => now()->toIso8601String(),
+                'includes_files' => $includePrivateFiles,
+                'tables' => $tableNames,
+            ], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT));
+
+            if ($includePrivateFiles) {
+                $privateDir = (string) config('lms.private_storage_path');
+                if (is_link($privateDir)) {
+                    throw new RuntimeException('Private storage directory must not be a symbolic link.');
+                }
+                if (is_dir($privateDir)) {
+                    $this->addDirectoryToZip($zip, $privateDir, 'private-files');
+                }
             }
+        } catch (\Throwable $exception) {
+            $zip->close();
+            @unlink($archivePath);
+            @unlink($jsonlPath);
+            throw $exception;
         }
-        $zip->close();
-
-        $plaintext = file_get_contents($archivePath);
-        @unlink($archivePath);
-        if ($plaintext === false) {
-            throw new RuntimeException('Failed to read backup archive for encryption.');
+        if (!$zip->close()) {
+            @unlink($archivePath);
+            @unlink($jsonlPath);
+            throw new RuntimeException('Unable to finalize backup archive.');
         }
-
-        $iv = random_bytes(16);
-        $ciphertext = openssl_encrypt($plaintext, 'AES-256-CBC', $key, OPENSSL_RAW_DATA, $iv);
-        if ($ciphertext === false) {
-            throw new RuntimeException('Backup encryption failed.');
-        }
-        $hmac = hash_hmac('sha256', $iv . $ciphertext, $key, true);
-        $temporaryEncryptedPath = tempnam($backupDir, '.aec-backup-');
-        if ($temporaryEncryptedPath === false) {
-            throw new RuntimeException('Unable to allocate temporary encrypted backup file.');
-        }
+        @unlink($jsonlPath);
 
         try {
-            $written = file_put_contents($temporaryEncryptedPath, $hmac . $iv . $ciphertext, LOCK_EX);
-            if ($written === false) {
-                throw new RuntimeException('Unable to write encrypted backup file.');
-            }
-            @chmod($temporaryEncryptedPath, 0600);
-            if (!rename($temporaryEncryptedPath, $encryptedPath)) {
-                throw new RuntimeException('Unable to atomically publish encrypted backup file.');
-            }
-            @chmod($encryptedPath, 0600);
+            $this->encryptArchiveStream($archivePath, $encryptedPath, $key);
         } finally {
-            if (is_file($temporaryEncryptedPath)) {
-                @unlink($temporaryEncryptedPath);
-            }
+            @unlink($archivePath);
         }
 
         $checksum = hash_file('sha256', $encryptedPath);
@@ -107,7 +97,7 @@ class BackupService
             'includes_files' => $includePrivateFiles,
             'size_bytes' => filesize($encryptedPath) ?: 0,
             'core_version' => (string) config('lms.core_version', '2.0.0'),
-            'metadata' => ['tables' => array_keys($snapshot['tables'])],
+            'metadata' => ['tables' => $tableNames, 'backup_format' => 2],
             'created_by' => $actorId,
         ]);
 
@@ -137,88 +127,80 @@ class BackupService
 
         $key = $this->resolveEncryptionKey();
         $safeBackupPath = $this->resolveBackupPath($backup);
-        $blob = $safeBackupPath === null ? false : file_get_contents($safeBackupPath);
-        if ($blob === false || strlen($blob) < 49) {
-            throw new RuntimeException('Corrupted or unreadable backup file.');
+        if ($safeBackupPath === null) {
+            throw new RuntimeException('Backup file path is invalid.');
         }
 
-        $hmac = substr($blob, 0, 32);
-        $iv = substr($blob, 32, 16);
-        $ciphertext = substr($blob, 48);
-        $expectedHmac = hash_hmac('sha256', $iv . $ciphertext, $key, true);
-        if (!hash_equals($expectedHmac, $hmac)) {
-            throw new RuntimeException('Backup HMAC authentication failed.');
-        }
-
-        $plaintext = openssl_decrypt($ciphertext, 'AES-256-CBC', $key, OPENSSL_RAW_DATA, $iv);
-        if ($plaintext === false) {
-            throw new RuntimeException('Backup decryption failed.');
-        }
+        $input = fopen($safeBackupPath, 'rb');
+        if ($input === false) throw new RuntimeException('Unable to open encrypted backup file.');
+        $magic = fread($input, 8);
+        fclose($input);
 
         $tempZip = tempnam(sys_get_temp_dir(), 'aec_restore_');
-        if ($tempZip === false) {
-            throw new RuntimeException('Unable to allocate temporary restore archive.');
-        }
-        file_put_contents($tempZip, $plaintext);
-
-        $zip = new ZipArchive();
-        if ($zip->open($tempZip) !== true) {
-            @unlink($tempZip);
-            throw new RuntimeException('Invalid decrypted backup archive.');
-        }
-
-        $manifestRaw = $zip->getFromName('manifest.json');
-        $dbRaw = $zip->getFromName('database.json');
-        if ($manifestRaw === false || $dbRaw === false) {
-            $zip->close();
-            @unlink($tempZip);
-            throw new RuntimeException('Backup archive missing manifest.json or database.json.');
-        }
-
-        $manifest = json_decode($manifestRaw, true, 512, JSON_THROW_ON_ERROR);
-        if (($manifest['core_version'] ?? '') !== (string) config('lms.core_version', '2.0.0')) {
-            $zip->close();
-            @unlink($tempZip);
-            throw new RuntimeException('Backup core version mismatch.');
-        }
-
-        $dbSnapshot = json_decode($dbRaw, true, 512, JSON_THROW_ON_ERROR);
-        $stagedPrivateFiles = $this->stagePrivateFiles($zip, $manifest);
+        if ($tempZip === false) throw new RuntimeException('Unable to allocate temporary restore archive.');
 
         try {
-            Schema::disableForeignKeyConstraints();
-            try {
-                DB::transaction(function () use ($dbSnapshot): void {
-                    foreach ((array) ($dbSnapshot['tables'] ?? []) as $table => $rows) {
-                        if (!is_string($table) || !Schema::hasTable($table) || $table === 'migrations') {
-                            continue;
-                        }
-                        DB::table($table)->delete();
-                        foreach (array_chunk((array) $rows, 200) as $chunk) {
-                            DB::table($table)->insert($chunk);
-                        }
-                    }
-                });
-            } finally {
-                Schema::enableForeignKeyConstraints();
+            if ($magic === "AECBK02\n") {
+                $this->decryptArchiveStream($safeBackupPath, $tempZip, $key);
+            } else {
+                // Backward compatibility with existing AES-256-CBC + HMAC backup files.
+                $blob = file_get_contents($safeBackupPath);
+                if ($blob === false || strlen($blob) < 49) throw new RuntimeException('Corrupted or unreadable backup file.');
+                $hmac = substr($blob, 0, 32);
+                $iv = substr($blob, 32, 16);
+                $ciphertext = substr($blob, 48);
+                $expectedHmac = hash_hmac('sha256', $iv . $ciphertext, $key, true);
+                if (!hash_equals($expectedHmac, $hmac)) throw new RuntimeException('Backup HMAC authentication failed.');
+                $plaintext = openssl_decrypt($ciphertext, 'AES-256-CBC', $key, OPENSSL_RAW_DATA, $iv);
+                if ($plaintext === false || file_put_contents($tempZip, $plaintext, LOCK_EX) === false) {
+                    throw new RuntimeException('Backup decryption failed.');
+                }
+                unset($blob, $ciphertext, $plaintext);
             }
 
-            if ($stagedPrivateFiles !== null) {
-                // Restore files by merging the snapshot; unrelated files are never deleted.
-                $this->restoreStagedPrivateFiles($stagedPrivateFiles);
+            $zip = new ZipArchive();
+            if ($zip->open($tempZip) !== true) throw new RuntimeException('Invalid decrypted backup archive.');
+
+            $stagedPrivateFiles = null;
+            try {
+                $manifestRaw = $zip->getFromName('manifest.json');
+                if ($manifestRaw === false) throw new RuntimeException('Backup archive missing manifest.json.');
+                $manifest = json_decode($manifestRaw, true, 512, JSON_THROW_ON_ERROR);
+                if (($manifest['core_version'] ?? '') !== (string) config('lms.core_version', '2.0.0')) {
+                    throw new RuntimeException('Backup core version mismatch.');
+                }
+
+                $stagedPrivateFiles = $this->stagePrivateFiles($zip, $manifest);
+                $jsonLinesStream = $zip->getStream('database.jsonl');
+                if (is_resource($jsonLinesStream)) {
+                    try {
+                        $this->restoreDatabaseJsonLines($jsonLinesStream);
+                    } finally {
+                        fclose($jsonLinesStream);
+                    }
+                } else {
+                    // Legacy JSON snapshots remain restorable; new backups use the streaming format.
+                    $dbRaw = $zip->getFromName('database.json');
+                    if ($dbRaw === false) throw new RuntimeException('Backup archive missing database.json or database.jsonl.');
+                    $dbSnapshot = json_decode($dbRaw, true, 512, JSON_THROW_ON_ERROR);
+                    $this->restoreLegacyDatabaseSnapshot($dbSnapshot);
+                    unset($dbRaw, $dbSnapshot);
+                }
+
+                if ($stagedPrivateFiles !== null) $this->restoreStagedPrivateFiles($stagedPrivateFiles);
+            } finally {
+                $zip->close();
+                if ($stagedPrivateFiles !== null) $this->deleteDirectoryTree($stagedPrivateFiles);
             }
         } finally {
-            $zip->close();
             @unlink($tempZip);
-            if ($stagedPrivateFiles !== null) {
-                $this->deleteDirectoryTree($stagedPrivateFiles);
-            }
         }
 
-        $this->audit->log('backup.restored', 'backup', (string) $backup->id, ['filename' => $backup->filename], $actorId);
+        $this->audit->log('backup.restored', 'backup', (string) $backup->id, [
+            'filename' => $backup->filename,
+            'backup_format' => $magic === "AECBK02\n" ? 2 : 1,
+        ], $actorId);
     }
-
-
 
     /**
      * Extract private files into an isolated staging directory after validating every ZIP entry.
@@ -233,7 +215,7 @@ class BackupService
 
         for ($i = 0; $i < $zip->numFiles; $i++) {
             $name = (string) $zip->getNameIndex($i);
-            if ($name === 'database.json' || $name === 'manifest.json') {
+            if ($name === 'database.json' || $name === 'database.jsonl' || $name === 'manifest.json') {
                 continue;
             }
             if (!str_starts_with($name, 'private-files/')) {
@@ -438,22 +420,210 @@ class BackupService
         return hash('sha256', $raw, true);
     }
 
-    private function exportDatabaseSnapshot(): array
+    /**
+     * Export rows incrementally as JSON Lines so database size does not determine PHP memory use.
+     *
+     * @return list<string>
+     */
+    private function exportDatabaseJsonLines(string $path): array
     {
-        $tables = [];
+        $stream = fopen($path, 'wb');
+        if ($stream === false) throw new RuntimeException('Unable to create streamed database snapshot.');
+
         $driver = DB::connection()->getDriverName();
         $tableNames = $driver === 'sqlite'
-            ? array_map(fn ($r) => $r->name, DB::select("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"))
-            : array_map(fn ($r) => array_values((array) $r)[0], DB::select('SHOW TABLES'));
+            ? array_map(fn ($row) => $row->name, DB::select("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"))
+            : array_map(fn ($row) => array_values((array) $row)[0], DB::select('SHOW TABLES'));
+        $tableNames = array_values(array_filter($tableNames, fn ($table) => !in_array($table, ['backups', 'migrations'], true)));
 
-        foreach ($tableNames as $table) {
-            if ($table === 'backups') {
-                continue;
+        try {
+            $header = json_encode(['_format' => 'aec-jsonl-v2', 'tables' => $tableNames], JSON_THROW_ON_ERROR);
+            if (fwrite($stream, $header . "\n") === false) throw new RuntimeException('Unable to write database snapshot header.');
+
+            foreach ($tableNames as $table) {
+                foreach (DB::table($table)->cursor() as $row) {
+                    $line = json_encode(['table' => $table, 'row' => (array) $row], JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
+                    if (fwrite($stream, $line . "\n") === false) throw new RuntimeException("Unable to write database row for table {$table}.");
+                }
             }
-            $tables[$table] = array_map(fn ($row) => (array) $row, DB::table($table)->get()->all());
+            fflush($stream);
+        } catch (\Throwable $exception) {
+            fclose($stream);
+            @unlink($path);
+            throw $exception;
+        }
+        fclose($stream);
+        return $tableNames;
+    }
+
+    /** Stream-encrypt an archive with authenticated libsodium secretstream frames. */
+    private function encryptArchiveStream(string $source, string $destination, string $key): void
+    {
+        if (!function_exists('sodium_crypto_secretstream_xchacha20poly1305_init_push')) {
+            throw new RuntimeException('The PHP sodium extension is required for production-size encrypted backups.');
+        }
+        $input = fopen($source, 'rb');
+        $output = fopen($destination, 'xb');
+        if ($input === false || $output === false) {
+            if (is_resource($input)) fclose($input);
+            if (is_resource($output)) fclose($output);
+            throw new RuntimeException('Unable to open backup streams for encryption.');
+        }
+        try {
+            [$state, $header] = sodium_crypto_secretstream_xchacha20poly1305_init_push($key);
+            fwrite($output, "AECBK02\n" . $header);
+            $chunk = fread($input, 65536);
+            if ($chunk === false) throw new RuntimeException('Unable to read temporary backup archive.');
+            do {
+                $next = fread($input, 65536);
+                if ($next === false) throw new RuntimeException('Unable to read temporary backup archive.');
+                $final = $next === '' && feof($input);
+                $tag = $final ? SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_TAG_FINAL : SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_TAG_MESSAGE;
+                $cipher = sodium_crypto_secretstream_xchacha20poly1305_push($state, $chunk, '', $tag);
+                $frame = pack('N', strlen($cipher)) . $cipher;
+                if (fwrite($output, $frame) !== strlen($frame)) throw new RuntimeException('Unable to write encrypted backup stream.');
+                if ($final) break;
+                $chunk = $next;
+            } while (true);
+            fflush($output);
+        } finally {
+            fclose($input);
+            fclose($output);
+        }
+        @chmod($destination, 0600);
+    }
+
+    /** Authenticate and decrypt a v2 backup incrementally to a temporary ZIP file. */
+    private function decryptArchiveStream(string $source, string $destination, string $key): void
+    {
+        if (!function_exists('sodium_crypto_secretstream_xchacha20poly1305_init_pull')) {
+            throw new RuntimeException('The PHP sodium extension is required to restore this production-size backup.');
+        }
+        $input = fopen($source, 'rb');
+        $output = fopen($destination, 'wb');
+        if ($input === false || $output === false) {
+            if (is_resource($input)) fclose($input);
+            if (is_resource($output)) fclose($output);
+            throw new RuntimeException('Unable to open backup streams for decryption.');
+        }
+        try {
+            if ($this->readExact($input, 8) !== "AECBK02\n") throw new RuntimeException('Unsupported encrypted backup format.');
+            $header = $this->readExact($input, SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_HEADERBYTES);
+            $state = sodium_crypto_secretstream_xchacha20poly1305_init_pull($header, $key);
+            $finished = false;
+            while (!feof($input)) {
+                $lengthBytes = fread($input, 4);
+                if ($lengthBytes === '' && feof($input)) break;
+                if ($lengthBytes === false || strlen($lengthBytes) !== 4) throw new RuntimeException('Truncated encrypted backup frame.');
+                $length = unpack('Nlength', $lengthBytes)['length'] ?? 0;
+                if ($length < SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_ABYTES || $length > 65536 + SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_ABYTES) {
+                    throw new RuntimeException('Invalid encrypted backup frame length.');
+                }
+                $cipher = $this->readExact($input, $length);
+                $pulled = sodium_crypto_secretstream_xchacha20poly1305_pull($state, $cipher);
+                if ($pulled === false) throw new RuntimeException('Backup authentication failed during streaming decryption.');
+                [$plain, $tag] = $pulled;
+                if ($plain !== '' && fwrite($output, $plain) !== strlen($plain)) throw new RuntimeException('Unable to write decrypted backup archive.');
+                if ($tag === SODIUM_CRYPTO_SECRETSTREAM_XCHACHA20POLY1305_TAG_FINAL) {
+                    $finished = true;
+                    if (fread($input, 1) !== '') throw new RuntimeException('Unexpected data after final encrypted backup frame.');
+                    break;
+                }
+            }
+            if (!$finished) throw new RuntimeException('Encrypted backup stream is incomplete.');
+            fflush($output);
+        } finally {
+            fclose($input);
+            fclose($output);
+        }
+    }
+
+    /** Read exactly the requested number of bytes from a stream. */
+    private function readExact($stream, int $length): string
+    {
+        $data = '';
+        while (strlen($data) < $length && !feof($stream)) {
+            $part = fread($stream, $length - strlen($data));
+            if ($part === false || $part === '') break;
+            $data .= $part;
+        }
+        if (strlen($data) !== $length) throw new RuntimeException('Unexpected end of encrypted backup stream.');
+        return $data;
+    }
+
+    /**
+     * Restore JSONL rows with bounded insert batches in a single database transaction.
+     *
+     * @param resource $stream
+     */
+    private function restoreDatabaseJsonLines($stream): void
+    {
+        $headerLine = fgets($stream);
+        if ($headerLine === false) throw new RuntimeException('Streamed database snapshot is empty.');
+        $header = json_decode($headerLine, true, 512, JSON_THROW_ON_ERROR);
+        if (($header['_format'] ?? null) !== 'aec-jsonl-v2' || !is_array($header['tables'] ?? null)) {
+            throw new RuntimeException('Unsupported streamed database snapshot format.');
+        }
+        $tables = [];
+        foreach ($header['tables'] as $table) {
+            if (!is_string($table) || preg_match('/^[A-Za-z0-9_]+$/', $table) !== 1
+                || in_array($table, ['migrations', 'backups'], true) || !Schema::hasTable($table)) {
+                throw new RuntimeException('Backup contains an invalid or unavailable database table.');
+            }
+            $tables[] = $table;
         }
 
-        return ['exported_at' => now()->toIso8601String(), 'tables' => $tables];
+        Schema::disableForeignKeyConstraints();
+        try {
+            DB::transaction(function () use ($stream, $tables): void {
+                foreach ($tables as $table) DB::table($table)->delete();
+                $currentTable = null;
+                $batch = [];
+                $batchSize = DB::connection()->getDriverName() === 'sqlite' ? 50 : 500;
+                while (($line = fgets($stream)) !== false) {
+                    if (trim($line) === '') continue;
+                    $record = json_decode($line, true, 512, JSON_THROW_ON_ERROR);
+                    $table = $record['table'] ?? null;
+                    $row = $record['row'] ?? null;
+                    if (!is_string($table) || !in_array($table, $tables, true) || !is_array($row) || $row === []) {
+                        throw new RuntimeException('Streamed database snapshot contains an invalid row.');
+                    }
+                    if ($currentTable !== null && $table !== $currentTable) {
+                        if ($batch !== []) DB::table($currentTable)->insert($batch);
+                        $batch = [];
+                    }
+                    $currentTable = $table;
+                    $batch[] = $row;
+                    if (count($batch) >= $batchSize) {
+                        DB::table($currentTable)->insert($batch);
+                        $batch = [];
+                    }
+                }
+                if (!feof($stream)) throw new RuntimeException('Unable to read streamed database snapshot completely.');
+                if ($currentTable !== null && $batch !== []) DB::table($currentTable)->insert($batch);
+            });
+        } finally {
+            Schema::enableForeignKeyConstraints();
+        }
+    }
+
+    /** Restore original full-JSON archives created before the streaming format. */
+    private function restoreLegacyDatabaseSnapshot(array $dbSnapshot): void
+    {
+        Schema::disableForeignKeyConstraints();
+        try {
+            DB::transaction(function () use ($dbSnapshot): void {
+                foreach ((array) ($dbSnapshot['tables'] ?? []) as $table => $rows) {
+                    if (!is_string($table) || !Schema::hasTable($table) || in_array($table, ['migrations', 'backups'], true)) continue;
+                    DB::table($table)->delete();
+                    foreach (array_chunk((array) $rows, DB::connection()->getDriverName() === 'sqlite' ? 50 : 200) as $chunk) {
+                        if ($chunk !== []) DB::table($table)->insert($chunk);
+                    }
+                }
+            });
+        } finally {
+            Schema::enableForeignKeyConstraints();
+        }
     }
 
     private function addDirectoryToZip(ZipArchive $zip, string $sourceDir, string $zipPrefix): void
