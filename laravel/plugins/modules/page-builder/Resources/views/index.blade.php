@@ -13,7 +13,7 @@
 </article>
 @empty<div class="rounded-2xl border border-dashed p-8 text-center text-sm text-slate-500">No custom pages yet.</div>@endforelse
 </section></div>
-@endsection
+
 
 <script>
 (()=>{const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const defaults=[{type:'heading',content:'Your page heading',level:2},{type:'text',content:'Write your content here.'}];const labels={heading:'Heading',text:'Text',image:'Image',button:'Button',spacer:'Spacer'};
@@ -30,4 +30,4 @@ card.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',String
 card.querySelector('[data-remove]').addEventListener('click',()=>{blocks.splice(i,1);sync()});card.querySelectorAll('[data-field]').forEach(el=>{const k=el.dataset.field;if(k==='align')el.value=b.align||'left';el.addEventListener('input',()=>{b[k]=k==='height'?Number(el.value):el.value;hidden.value=JSON.stringify(blocks);previewBlocks()})});canvas.appendChild(card)});hidden.value=JSON.stringify(blocks);previewBlocks()};
 builder.querySelectorAll('[data-add-block]').forEach(btn=>btn.addEventListener('click',()=>{const t=btn.dataset.addBlock;blocks.push(t==='heading'?{type:t,content:'New heading',align:'left'}:t==='text'?{type:t,content:'New text paragraph',align:'left'}:t==='image'?{type:t,url:'',alt:''}:t==='button'?{type:t,label:'Learn more',url:'/courses',align:'left'}:{type:t,height:48});sync()}));sync()})})();
 </script>
-
+@endsection
