@@ -60,7 +60,7 @@ class SetupWizardController extends Controller
                 'institution_currency' => ['required', 'in:BDT,USD,GBP,EUR'],
             ],
             'branding' => [
-                'logo_url' => ['nullable', 'url', 'max:2048'], 'logo_media_id' => ['nullable', 'integer'],
+                'logo_url' => ['nullable', 'url:http,https', 'max:2048'], 'logo_media_id' => ['nullable', 'integer'],
                 'favicon_url' => ['nullable', 'url', 'max:2048'], 'favicon_media_id' => ['nullable', 'integer'],
                 'primary_color' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
                 'secondary_color' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
@@ -135,6 +135,7 @@ class SetupWizardController extends Controller
         }
         if ($step === 'institution') {
             config(['app.name' => $data['institution_name'], 'app.locale' => $data['institution_locale'], 'app.timezone' => $data['institution_timezone'], 'lms.default_currency' => $data['institution_currency']]);
+            date_default_timezone_set($data['institution_timezone']);
         }
         $next = self::STEPS[array_search($step, self::STEPS, true) + 1];
         return redirect()->route('admin.setup-wizard.index', ['step' => $next])->with('status', 'ধাপের তথ্য সংরক্ষণ হয়েছে। পরে আবার এখান থেকে চালিয়ে যেতে পারবেন।');

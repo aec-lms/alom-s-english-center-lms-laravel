@@ -3,10 +3,12 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\Admin\AppearanceController;
+use App\Http\Controllers\Admin\SiteIdentityController;
 use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\BackupController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\SetupWizardController;
+use App\Http\Controllers\Admin\RolePermissionController;
 use App\Http\Controllers\Admin\AdminMenuController;
 use App\Http\Controllers\Admin\InstitutionSettingsController;
 use App\Http\Controllers\Admin\HealthMonitorController;
@@ -75,7 +77,6 @@ Route::middleware('installed')->group(function (): void {
             Route::post('/complete', [SetupWizardController::class, 'complete'])->name('complete');
             Route::post('/{step}', [SetupWizardController::class, 'save'])->name('save');
         });
-
         Route::get('/menu-editor', [AdminMenuController::class, 'index'])
             ->name('menu-editor.index')
             ->middleware('permission:core.settings.manage');
@@ -117,6 +118,12 @@ Route::middleware('installed')->group(function (): void {
             Route::post('/{backup}/restore', [BackupController::class, 'restore'])->name('restore');
         });
 
+        Route::prefix('roles')->name('roles.')->middleware('permission:core.users.manage')->group(function (): void {
+            Route::get('/', [RolePermissionController::class, 'index'])->name('index');
+            Route::post('/', [RolePermissionController::class, 'store'])->name('store');
+            Route::put('/{role}/permissions', [RolePermissionController::class, 'update'])->name('permissions.update');
+        });
+
         Route::prefix('users')->name('users.')->middleware('permission:core.users.manage')->group(function (): void {
             Route::get('/', [UserRoleController::class, 'index'])->name('index');
             Route::post('/', [UserRoleController::class, 'store'])->name('store');
@@ -125,6 +132,11 @@ Route::middleware('installed')->group(function (): void {
         Route::prefix('institution-settings')->name('institution-settings.')->middleware('permission:core.settings.manage')->group(function (): void {
             Route::get('/', [InstitutionSettingsController::class, 'edit'])->name('edit');
             Route::post('/', [InstitutionSettingsController::class, 'update'])->name('update');
+        });
+
+        Route::prefix('site-identity')->name('site-identity.')->middleware('permission:core.settings.manage')->group(function (): void {
+            Route::get('/', [SiteIdentityController::class, 'edit'])->name('edit');
+            Route::post('/', [SiteIdentityController::class, 'update'])->name('update');
         });
 
         Route::prefix('appearance')->name('appearance.')->middleware('permission:core.settings.manage')->group(function (): void {

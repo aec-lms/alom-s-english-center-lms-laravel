@@ -43,13 +43,14 @@
                     <section class="rounded-xl border p-4 space-y-3"><h3 class="font-bold">{{ $label }}</h3>
                         <label class="block text-sm">URL<input type="url" name="{{ $kind }}_url" value="{{ old($kind.'_url', $values['branding.'.$kind.'_url'] ?? '') }}" placeholder="https://example.com/{{ $kind }}.png" class="mt-1 w-full rounded-lg border p-3"></label>
                         <fieldset class="space-y-2"><legend class="text-sm font-semibold">LMS Media Library থেকে ছবি নির্বাচন</legend>
+                            @if(Route::has('plugins.media.index'))<a class="inline-flex rounded-lg border px-3 py-2 text-sm font-semibold text-blue-700" href="{{ route('plugins.media.index') }}" target="_blank" rel="noopener">Media Library খুলুন / ছবি আপলোড করুন</a>@endif
                             @if($mediaAssets->isEmpty())
                                 <p class="rounded-lg bg-slate-50 p-3 text-sm text-slate-500">লাইব্রেরিতে কোনো Public image নেই। Admin → Media Library থেকে ছবি আপলোড করুন।</p>
                             @else
                                 <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
                                     @foreach($mediaAssets as $asset)
                                         <label class="cursor-pointer rounded-xl border p-2 hover:border-blue-500">
-                                            <input type="radio" name="{{ $kind }}_media_id" value="{{ $asset->id }}" class="mb-2" @checked((string) old($kind.'_media_id') === (string) $asset->id)>
+                                            <input type="radio" name="{{ $kind }}_media_id" value="{{ $asset->id }}" class="mb-2" @checked((string) old($kind.'_media_id') === (string) $asset->id || ($values['branding.'.$kind.'_url'] ?? '') === $asset->url)>
                                             <img src="{{ $asset->url }}" alt="{{ $asset->original_name }}" class="h-20 w-full rounded-md object-contain bg-slate-50">
                                             <span class="mt-1 block truncate text-xs" title="{{ $asset->original_name }}">{{ $asset->original_name }}</span>
                                         </label>

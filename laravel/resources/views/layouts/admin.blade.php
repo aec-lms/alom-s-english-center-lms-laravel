@@ -5,17 +5,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    @php
-        $aecFavicon = null;
-        if (\Illuminate\Support\Facades\Schema::hasTable('system_settings')) {
-            $aecFavicon = \App\Models\SystemSetting::query()->where('key', 'branding.favicon_url')->value('value');
-        }
-    @endphp
-    @if ($aecFavicon)
-        <link rel="icon" href="{{ $aecFavicon }}">
-    @endif
-
     <title>@yield('title', 'Panel — ' . config('app.name'))</title>
+    @if (!empty($siteIdentity['favicon_url']))<link rel="icon" href="{{ $siteIdentity['favicon_url'] }}">@endif
     @inject('themeManager', 'App\\Core\\Appearance\\ThemeManager')
     <style>
         :root { {!! $themeManager->cssVariables() !!} }
@@ -55,8 +46,15 @@
 <div class="min-h-screen flex">
     <aside id="admin-sidebar" class="fixed inset-y-0 left-0 z-40 w-64 text-slate-200 flex flex-col shrink-0 border-r border-white/10 -translate-x-full transition-transform duration-200 shadow-2xl lg:static lg:translate-x-0 lg:shadow-none">
         <div class="px-5 py-4 border-b border-white/10">
-            <div class="flex items-center gap-2 text-sm font-extrabold tracking-tight text-white">@php($aecLogo = \App\Models\SystemSetting::query()->where('key', 'branding.logo_url')->value('value')) @if($aecLogo)<img src="{{ $aecLogo }}" alt="{{ config('app.name') }} logo" class="h-8 max-w-24 object-contain">@endif<span>{{ config('app.name') }} Core</span></div>
-            <div class="text-[11px] text-[#38BDF8] font-medium">Core + Independent Plugins</div>
+            <div class="flex items-center gap-2">
+                @if (!empty($siteIdentity['logo_url']))
+                    <img src="{{ $siteIdentity['logo_url'] }}" alt="{{ config('app.name') }} logo" class="h-9 max-w-28 object-contain">
+                @endif
+                <div>
+                    <div class="text-sm font-extrabold tracking-tight text-white">{{ config('app.name') }}</div>
+                    <div class="text-[11px] text-[#38BDF8] font-medium">{{ $siteIdentity['tagline'] ?? 'Core + Independent Plugins' }}</div>
+                </div>
+            </div>
             <a href="{{ route('home') }}" target="_blank" rel="noopener noreferrer"
                class="mt-3 flex items-center justify-center gap-2 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15 transition-colors"
                aria-label="Visit public website (opens in a new tab)">
@@ -68,12 +66,20 @@
             <div class="px-3 pt-1 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Protected Core</div>
             <a href="{{ route('admin.dashboard') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Dashboard</a>
             <a href="{{ route('admin.plugins.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Plugin Center</a>
-            <a href="{{ route('admin.users.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Users & Roles</a>
+            @if (auth()->user()?->hasPermission('core.users.manage'))
+                <a href="{{ route('admin.users.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Users & Roles</a>
+                <a href="{{ route('admin.roles.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Roles &amp; Permissions</a>
+            @endif
             <a href="{{ route('admin.updates.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Update Center</a>
             <a href="{{ route('admin.backups.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Backup & Restore</a>
             <a href="{{ route('admin.audit.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Audit Logs</a>
-            <a href="{{ route('admin.setup-wizard.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Setup Wizard</a>
+            @can('core.settings.manage')
+                <a href="{{ route('admin.setup-wizard.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Setup Wizard</a>
+            @endcan
             <a href="{{ route('admin.institution-settings.edit') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Institution &amp; Region</a>
+            @can('core.settings.manage')
+                <a href="{{ route('admin.site-identity.edit') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Site Identity &amp; Branding</a>
+            @endcan
             <a href="{{ route('admin.appearance.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Design &amp; Appearance</a>
             @can('core.settings.manage')
                 <a href="{{ route('admin.menu-editor.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Admin Menu Editor</a>
