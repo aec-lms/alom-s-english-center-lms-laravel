@@ -42,6 +42,9 @@ return new class extends Migration {
                 $table->foreignId('issued_by')->nullable()->constrained('users')->nullOnDelete();
                 $table->timestamp('expires_at')->index();
                 $table->timestamp('revoked_at')->nullable();
+                $table->decimal('geo_latitude', 10, 7)->nullable();
+                $table->decimal('geo_longitude', 10, 7)->nullable();
+                $table->unsignedInteger('geo_radius_meters')->nullable();
                 $table->timestamps();
             });
         }
@@ -54,6 +57,8 @@ return new class extends Migration {
                 $table->foreignId('attendance_record_id')->nullable()->constrained('attendance_records')->nullOnDelete();
                 $table->foreignId('gps_consent_id')->nullable()->constrained('attendance_gps_consents')->nullOnDelete();
                 $table->string('source', 16)->default('qr');
+                $table->boolean('gps_verified')->default(false);
+                $table->unsignedSmallInteger('gps_accuracy_meters')->nullable();
                 $table->timestamp('checked_in_at');
                 $table->timestamps();
                 $table->unique(['attendance_qr_session_id', 'student_id'], 'att_qr_session_student_unique');
