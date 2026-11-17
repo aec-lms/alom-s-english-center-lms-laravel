@@ -203,15 +203,67 @@ class PluginCenterController extends Controller
     {
         try {
             $item = PluginArchive::query()->findOrFail($archive);
-            File::deleteDirectory($item->archive_path);
+            $trashRoot = realpath(storage_path('app/plugin-recycle-bin'));
+            $archivePath = realpath($item->archive_path);
+            if (!$trashRoot || !$archivePath || !is_dir($archivePath)
+                || !str_starts_with($archivePath, $trashRoot . DIRECTORY_SEPARATOR)) {
+                throw new RuntimeException('Archived plugin path is missing or outside the protected recycle-bin directory.');
+            }
+
+            $backupId = 'archive-' . (int) $item->id . '-' . substr(hash('sha256', $item->plugin_slug), 0, 12);
+            $backupRoot = storage_path('app/plugin-permanent-delete-backups');
+            $backupPath = $backupRoot . DIRECTORY_SEPARATOR . $backupId;
+            if (is_dir($backupPath)) {
+                throw new RuntimeException('A private recovery snapshot already exists; resolve it before retrying.');
+            }
+
+            File::ensureDirectoryExists($backupRoot);
+            @chmod($backupRoot, 0700);
+            if (!File::copyDirectory($archivePath, $backupPath)) {
+                File::deleteDirectory($backupPath);
+                throw new RuntimeException('Permanent deletion cancelled: private recovery snapshot could not be created.');
+            }
+            @chmod($backupPath, 0700);
+
+            $sourceChecksums = $this->directoryChecksums($archivePath);
+            if ($sourceChecksums === [] || $sourceChecksums !== $this->directoryChecksums($backupPath)) {
+                File::deleteDirectory($backupPath);
+                throw new RuntimeException('Permanent deletion cancelled: private recovery snapshot failed integrity verification.');
+            }
+
+            if (!File::deleteDirectory($archivePath)) {
+                throw new RuntimeException('Private recovery snapshot was created, but the recycle-bin package could not be removed.');
+            }
+
             PluginSetting::query()->where('plugin_slug', $item->plugin_slug)->delete();
             PluginRecord::query()->where('slug', $item->plugin_slug)->where('is_core', false)->delete();
             $slug = $item->plugin_slug;
             $item->delete();
-            return back()->with('status', "Plugin '{$slug}' and its archived files were permanently deleted.");
+            app(\App\Core\Security\AuditLogger::class)->log(
+                'plugin.archive_permanently_deleted',
+                'plugin',
+                $slug,
+                ['private_backup_id' => $backupId, 'package_files_removed_from_recycle_bin' => true],
+                auth()->id(),
+            );
+
+            return back()->with('status', "Plugin '{$slug}' permanently deleted from Recycle Bin. A verified private recovery snapshot was retained.");
         } catch (\Throwable $e) {
             return back()->withErrors(['plugin' => $e->getMessage()]);
         }
+    }
+
+    private function directoryChecksums(string $directory): array
+    {
+        $checksums = [];
+        foreach (File::allFiles($directory) as $file) {
+            $relative = ltrim(str_replace($directory, '', $file->getPathname()), DIRECTORY_SEPARATOR);
+            $relative = str_replace(DIRECTORY_SEPARATOR, '/', $relative);
+            $checksums[$relative] = hash_file('sha256', $file->getPathname());
+        }
+        ksort($checksums);
+
+        return $checksums;
     }
 
     public function configure(string $slug): View
