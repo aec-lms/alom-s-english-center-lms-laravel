@@ -102,7 +102,20 @@ class PublicHomeController extends Controller
         $blocks = json_decode((string) ($page->blocks_json ?? '[]'), true);
         $body = is_array($blocks) ? (string) ($blocks[0]['content'] ?? '') : '';
 
-        return view('public.custom-page', compact('page', 'body'));
+        $ctaBlock = is_array($blocks)
+            ? collect($blocks)->first(fn ($block) => is_array($block) && ($block['type'] ?? null) === 'cta')
+            : null;
+        $ctaUrl = trim((string) ($ctaBlock['url'] ?? ''));
+        $isSafeRelativeCta = str_starts_with($ctaUrl, '/') && !str_starts_with($ctaUrl, '//');
+        $isSafeExternalCta = filter_var($ctaUrl, FILTER_VALIDATE_URL)
+            && in_array(strtolower((string) parse_url($ctaUrl, PHP_URL_SCHEME)), ['http', 'https'], true);
+        $cta = is_array($ctaBlock)
+            && trim((string) ($ctaBlock['label'] ?? '')) !== ''
+            && ($isSafeRelativeCta || $isSafeExternalCta)
+                ? ['label' => trim((string) $ctaBlock['label']), 'url' => $ctaUrl]
+                : null;
+
+        return view('public.custom-page', compact('page', 'body', 'cta'));
     }
 
     public function courses(Request $request): View
