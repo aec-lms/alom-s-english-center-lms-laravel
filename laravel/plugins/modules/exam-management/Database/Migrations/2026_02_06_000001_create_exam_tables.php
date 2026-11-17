@@ -17,6 +17,9 @@ return new class extends Migration {
                 $table->string('title', 180);
                 $table->unsignedInteger('duration_minutes')->default(30);
                 $table->unsignedInteger('pass_marks')->default(40);
+                // Optional Learn & Earn integration columns are part of the base schema so either plugin can be installed first.
+                $table->string('learn_earn_type', 12)->default('free');
+                $table->decimal('access_price', 10, 2)->default(0);
                 $table->timestamp('starts_at')->nullable();
                 $table->timestamp('ends_at')->nullable();
                 $table->boolean('is_published')->default(false);
@@ -31,7 +34,8 @@ return new class extends Migration {
                 $table->text('prompt');
                 $table->json('options');
                 $table->unsignedInteger('correct_option_index');
-                $table->unsignedInteger('marks')->default(1);
+                $table->decimal('marks', 8, 2)->default(1);
+                $table->decimal('negative_marks', 8, 2)->default(0);
                 $table->timestamps();
             });
         }
