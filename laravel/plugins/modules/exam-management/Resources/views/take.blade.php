@@ -40,7 +40,6 @@
             </div>
         </form>
     </main>
-</div>
     <script>
         (() => {
             const timer = document.getElementById("exam-countdown");
