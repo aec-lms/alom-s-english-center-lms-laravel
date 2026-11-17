@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use Illuminate\Support\Facades\DB;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\StudentManagement\Models\Student;
 use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
