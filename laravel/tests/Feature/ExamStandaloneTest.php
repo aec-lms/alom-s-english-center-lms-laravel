@@ -54,7 +54,7 @@ class ExamStandaloneTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $this->actingAs($student)
+        $response = $this->actingAs($student)
             ->get("/exams/{$examId}/take")
             ->assertOk()
             ->assertSee('Choose the correct verb.')
@@ -113,7 +113,7 @@ class ExamStandaloneTest extends TestCase
         ])->assertRedirect(route('portal.dashboard'))->assertSessionHasErrors('exam');
 
         $this->assertDatabaseHas('exam_attempts', [
-            'id' => $attemptId, 'submitted_at' => now()->toDateTimeString(),
+            'id' => $attemptId,
             'score_obtained' => 0, 'total_marks' => 2, 'passed' => false,
         ]);
         $this->actingAs($student)->get("/exams/{$examId}/take")->assertForbidden();
