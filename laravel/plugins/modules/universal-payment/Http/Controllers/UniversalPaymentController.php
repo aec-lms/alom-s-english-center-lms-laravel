@@ -65,7 +65,6 @@ class UniversalPaymentController extends Controller
             'gateway' => ['required', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,bank_cash'],
             'amount' => ['required', 'numeric', 'min:1'],
             'external_trx_id' => ['required', 'string', 'max:120'],
-            'status' => ['nullable', 'in:pending,verified,refunded'],
         ]);
 
         $tx = UniversalPaymentTransaction::query()->create([
@@ -76,10 +75,11 @@ class UniversalPaymentController extends Controller
             'gateway' => $validated['gateway'],
             'currency' => $this->plugins->getSetting('universal-payment', 'default_currency', 'BDT') ?: 'BDT',
             'amount' => $validated['amount'],
-            'external_trx_id' => $validated['external_trx_id'] ?? null,
-            'status' => $validated['status'] ?? 'pending',
-            'verified_by' => ($validated['status'] ?? 'pending') === 'verified' ? auth()->id() : null,
-            'verified_at' => ($validated['status'] ?? 'pending') === 'verified' ? now() : null,
+            'external_trx_id' => trim($validated['external_trx_id']),
+            'branch_id' => auth()->user()?->branch_id,
+            'status' => 'pending',
+            'verified_by' => null,
+            'verified_at' => null,
         ]);
 
         $this->audit->log('universal_payment.recorded', 'universal_payment', $tx->reference, ['amount' => $tx->amount, 'gateway' => $tx->gateway]);
@@ -89,15 +89,34 @@ class UniversalPaymentController extends Controller
 
     public function updateStatus(Request $request, UniversalPaymentTransaction $transaction): RedirectResponse
     {
+        $actor = $request->user();
+        if ($actor && $actor->hasRole('branch_manager')) {
+            abort_unless((int) ($actor->branch_id ?? 0) > 0
+                && (int) ($transaction->branch_id ?? 0) === (int) $actor->branch_id, 404);
+        }
+
         $validated = $request->validate([
-            'status' => ['required', 'in:pending,verified,refunded,rejected'],
+            'status' => ['required', 'in:verified,rejected'],
+            'payment_reference' => ['required', 'string', 'max:120'],
         ]);
 
+        abort_unless($transaction->status === 'pending'
+            && in_array($transaction->gateway, ['bank_cash', 'offline'], true),
+            422,
+            'Only pending manual receipts can be reviewed.'
+        );
+
+        $reference = trim($validated['payment_reference']);
+        abort_if($reference === '', 422, 'A bank receipt or cash voucher reference is required before verification.');
+
         $transaction->update([
+            'external_trx_id' => $reference,
             'status' => $validated['status'],
-            'verified_by' => auth()->id(),
-            'verified_at' => now(),
+            'verified_by' => $validated['status'] === 'verified' ? $actor?->id : null,
+            'verified_at' => $validated['status'] === 'verified' ? now() : null,
         ]);
+
+        // Online transactions are changed only by a verified provider callback, never by manual review.
 
         if ($transaction->storefront_item_id && $transaction->user_id && Schema::hasTable('storefront_item_access')) {
             if ($validated['status'] === 'verified') {
