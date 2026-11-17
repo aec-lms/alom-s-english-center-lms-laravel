@@ -1,0 +1,64 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Feature;
+
+use App\Models\Permission;
+use Illuminate\Support\Facades\DB;
+use Plugins\Modules\StudentManagement\Models\Student;
+use Tests\TestCase;
+
+class AttendanceRegisterWorkflowTest extends TestCase
+{
+    public function test_batch_attendance_is_audited_and_edits_require_a_reason(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'student-management', 'course-management', 'batch-management', 'attendance-management']);
+
+        $branch = DB::table('branches')->insertGetId(['code' => 'ATT-REG-01', 'name' => 'Attendance Register', 'created_at' => now(), 'updated_at' => now()]);
+        $admin = $this->createUserWithRole('admin', $branch);
+        $permission = Permission::query()->where('slug', 'attendance.manage')->value('id');
+        $admin->roles()->first()->permissions()->syncWithoutDetaching([$permission]);
+
+        $studentUser = $this->createUserWithRole('student', $branch);
+        $student = Student::query()->create([
+            'user_id' => $studentUser->id,
+            'branch_id' => $branch,
+            'student_code' => 'ATT-REG-STU-01',
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+        ]);
+        $batch = DB::table('study_batches')->insertGetId([
+            'branch_id' => $branch,
+            'course_title' => 'Attendance Test',
+            'batch_code' => 'ATT-REG-BATCH',
+            'name' => 'Attendance Test Batch',
+            'schedule' => 'Mon 10:00-11:00',
+            'max_capacity' => 20,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $payload = [
+            'batch_id' => $batch,
+            'attendance_date' => now()->toDateString(),
+            'source' => 'offline',
+            'records' => [['student_id' => $student->id, 'status' => 'present', 'sync_uuid' => 'd1b9e1c0-6d4a-4c51-91a0-5c5d7b2c98f1']],
+        ];
+
+        $this->actingAs($admin)->post('/admin/attendance', $payload)->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('attendance_records', ['student_id' => $student->id, 'status' => 'present', 'source' => 'offline']);
+        $this->assertDatabaseHas('attendance_audit_logs', ['new_status' => 'present', 'event' => 'created']);
+
+        $payload['records'][0]['status'] = 'late';
+        $payload['records'][0]['sync_uuid'] = null;
+        $this->actingAs($admin)->post('/admin/attendance', $payload)->assertSessionHasErrors();
+        $this->assertDatabaseHas('attendance_records', ['student_id' => $student->id, 'status' => 'present']);
+
+        $payload['records'][0]['edit_reason'] = 'Teacher corrected register';
+        $this->actingAs($admin)->post('/admin/attendance', $payload)->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('attendance_records', ['student_id' => $student->id, 'status' => 'late', 'edited_reason' => 'Teacher corrected register']);
+        $this->assertDatabaseHas('attendance_audit_logs', ['new_status' => 'late', 'event' => 'updated', 'reason' => 'Teacher corrected register']);
+    }
+}
