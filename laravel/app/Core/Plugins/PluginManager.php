@@ -1090,7 +1090,7 @@ class PluginManager
                 . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relative);
 
             if (is_file($routeFile)) {
-                require_once $routeFile;
+                require $routeFile;
             }
         }
     }
