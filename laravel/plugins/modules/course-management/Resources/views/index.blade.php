@@ -266,6 +266,7 @@
                     </select>
                     <input name="starts_at" type="datetime-local" required class="rounded-lg border border-slate-300 px-3 py-2">
                     <input name="meeting_url" type="url" required placeholder="https://zoom.us/j/... or https://meet.google.com/..." class="sm:col-span-2 rounded-lg border border-slate-300 px-3 py-2">
+                    <input name="capacity" type="number" min="1" max="2000" value="300" required placeholder="LMS join capacity (default 300)" class="rounded-lg border border-slate-300 px-3 py-2">
                     <button type="submit" class="rounded-lg bg-[#0284C7] hover:bg-[#0369A1] text-white font-bold px-4 py-2">Schedule Live Class</button>
                 </form>
             @endif
@@ -279,7 +280,7 @@
                         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                             <div>
                                 <div class="font-bold text-sm text-slate-900">{{ $live->title }}</div>
-                                <div class="text-slate-500">{{ $live->course?->title ?? 'Course' }} &middot; {{ strtoupper($live->platform) }} &middot; {{ $live->starts_at }} &middot; <strong class="uppercase text-[#0284C7]">{{ $live->status }}</strong></div>
+                                <div class="text-slate-500">{{ $live->course?->title ?? 'Course' }} &middot; {{ strtoupper($live->platform) }} &middot; {{ $live->starts_at }} &middot; LMS capacity {{ $live->capacity }} &middot; <strong class="uppercase text-[#0284C7]">{{ $live->status }}</strong></div>
                             </div>
                             <form method="POST" action="{{ route('plugins.courses.live.destroy', $live) }}" onsubmit="return confirm('Delete this live session?')">
                                 @csrf
@@ -306,6 +307,7 @@
                             <input name="meeting_url" type="url" required value="{{ $live->meeting_url }}" class="rounded-lg border border-slate-300 px-3 py-1.5">
                             <input name="recording_url" type="url" value="{{ $live->recording_url }}" placeholder="Recording Replay URL" class="rounded-lg border border-slate-300 px-3 py-1.5">
                             <input name="starts_at" type="datetime-local" required value="{{ date('Y-m-d\TH:i', strtotime((string) $live->starts_at)) }}" class="rounded-lg border border-slate-300 px-3 py-1.5">
+                            <input name="capacity" type="number" min="1" max="2000" value="{{ $live->capacity }}" required placeholder="LMS capacity" class="rounded-lg border border-slate-300 px-3 py-1.5">
                             <div class="sm:col-span-2 text-right">
                                 <button type="submit" class="px-4 py-1.5 rounded-lg bg-slate-900 text-white font-bold">Update Live Class</button>
                             </div>

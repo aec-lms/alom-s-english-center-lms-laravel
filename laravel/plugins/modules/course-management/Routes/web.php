@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Route;
 use Plugins\Modules\CourseManagement\Http\Controllers\CourseController;
 use Plugins\Modules\CourseManagement\Http\Controllers\LessonContentProtectionController;
+use Plugins\Modules\CourseManagement\Http\Controllers\LiveClassAccessController;
 
 Route::middleware(['web', 'installed', 'auth', 'plugin:course-management', 'permission:courses.manage'])
     ->prefix('admin/courses')
@@ -28,6 +29,18 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:course-management', 'perm
         Route::post('/live-classes', [CourseController::class, 'storeLiveClass'])->name('live.store');
         Route::put('/live-classes/{liveClass}', [CourseController::class, 'updateLiveClass'])->name('live.update');
         Route::delete('/live-classes/{liveClass}', [CourseController::class, 'destroyLiveClass'])->name('live.destroy');
+    });
+
+Route::middleware(['web', 'installed', 'auth', 'plugin:course-management'])
+    ->prefix('live-classes/{liveClass}')
+    ->name('plugins.live-classes.')
+    ->group(function (): void {
+        Route::post('/join', [LiveClassAccessController::class, 'join'])
+            ->middleware('throttle:10,1')->name('join');
+        Route::post('/heartbeat', [LiveClassAccessController::class, 'heartbeat'])
+            ->middleware('throttle:6,1')->name('heartbeat');
+        Route::post('/leave', [LiveClassAccessController::class, 'leave'])
+            ->middleware('throttle:10,1')->name('leave');
     });
 
 Route::middleware(['web', 'installed', 'auth', 'plugin:course-management'])->group(function (): void {

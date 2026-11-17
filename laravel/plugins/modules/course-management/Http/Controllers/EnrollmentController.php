@@ -23,7 +23,7 @@ class EnrollmentController extends Controller
     public function my(Request $request): View
     {
         $enrollments = Enrollment::query()
-            ->with(['course', 'invoice'])
+            ->with(['course.liveClasses', 'invoice'])
             ->where('user_id', $request->user()->id)
             ->latest()
             ->paginate(20);
