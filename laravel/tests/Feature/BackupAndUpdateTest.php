@@ -118,6 +118,56 @@ class BackupAndUpdateTest extends TestCase
     }
 
 
+
+    public function test_core_update_can_restore_changed_code_and_database_snapshot(): void
+    {
+        $this->markSystemInstalled();
+        config([
+            'lms.plugin_signing_key' => 'test-core-update-signing-key',
+            'lms.core_version' => '2.0.0',
+        ]);
+
+        $relativePath = 'app/Support/core-rollback-rehearsal-' . uniqid() . '.txt';
+        $absolutePath = base_path($relativePath);
+        if (!is_dir(dirname($absolutePath))) {
+            mkdir(dirname($absolutePath), 0755, true);
+        }
+        file_put_contents($absolutePath, 'before-upgrade');
+
+        $zipPath = sys_get_temp_dir() . '/aec_core_rollback_' . uniqid() . '.zip';
+        $zip = new ZipArchive();
+        $this->assertSame(true, $zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE));
+        $zip->addFromString('update-manifest.json', json_encode([
+            'target_type' => 'core',
+            'target_slug' => 'aec-lms-core',
+            'version' => '2.0.1',
+        ], JSON_THROW_ON_ERROR));
+        $zip->addFromString('files/' . $relativePath, 'after-upgrade');
+        $zip->close();
+
+        $sha = hash_file('sha256', $zipPath);
+        $signature = hash_hmac('sha256', $sha, 'test-core-update-signing-key');
+        $updates = app(UniversalUpdateService::class);
+
+        try {
+            $log = $updates->applyVerifiedUpdate($zipPath, $sha, $signature);
+            $this->assertSame('after-upgrade', file_get_contents($absolutePath));
+            $this->assertSame('applied', $log->status);
+
+            $updates->rollbackUpdate($log);
+
+            $this->assertSame('before-upgrade', file_get_contents($absolutePath));
+            $this->assertSame('rolled_back', $log->fresh()->status);
+            $this->assertDatabaseHas('update_logs', [
+                'id' => $log->id,
+                'status' => 'rolled_back',
+            ]);
+        } finally {
+            @unlink($zipPath);
+            @unlink($absolutePath);
+        }
+    }
+
     public function test_signed_update_rejects_windows_absolute_paths_in_zip_entries(): void
     {
         $this->markSystemInstalled();
