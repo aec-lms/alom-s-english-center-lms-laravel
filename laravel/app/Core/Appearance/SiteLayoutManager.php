@@ -96,7 +96,9 @@ final class SiteLayoutManager
         }
         $sections=array_values($result);
         usort($sections,static fn(array $a,array $b):int=>[$a['order'],$a['key']]<=>[$b['order'],$b['key']]);
-        return $sections;
+        $ordered=[];
+        foreach($sections as $section)$ordered[$section['key']]=$section;
+        return $ordered;
     }
 
     private function read(string $key): array
