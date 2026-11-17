@@ -63,6 +63,12 @@ class AttendanceRegisterWorkflowTest extends TestCase
             ->where('source_id', $batch)
             ->value('id');
         $this->assertNotNull($mappingId, 'Legacy course batches must have an explicit attendance identity.');
+        $this->assertDatabaseHas('attendance_entries', [
+            'attendance_batch_mapping_id' => $mappingId,
+            'student_id' => $student->id,
+            'status' => 'present',
+            'source' => 'offline',
+        ]);
         $this->assertDatabaseHas('attendance_records', [
             'student_id' => $student->id,
             'batch_id' => $batch,
