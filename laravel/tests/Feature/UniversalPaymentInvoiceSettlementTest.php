@@ -68,6 +68,17 @@ class UniversalPaymentInvoiceSettlementTest extends TestCase
         $this->assertSame('1200.00', $transaction->amount);
         $this->assertSame('BANK-RECEIPT-UPAY-001', $transaction->external_trx_id);
 
+        $this->actingAs($studentUser)->post('/universal-checkout', [
+            'payer_name' => $studentUser->name,
+            'payer_contact' => '01712345678',
+            'item_title' => 'Tuition invoice',
+            'gateway' => 'bank_cash',
+            'external_trx_id' => 'BANK-RECEIPT-UPAY-DUPLICATE',
+            'fee_invoice_id' => $invoice->id,
+        ])->assertStatus(409);
+
+        $this->assertDatabaseCount('universal_payment_transactions', 1);
+
         $admin = $this->createUserWithRole('admin');
         $this->actingAs($admin)
             ->post('/plugins/universal-payment/transactions/' . $transaction->id . '/status', [
