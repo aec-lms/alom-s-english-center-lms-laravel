@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Plugins\Modules\CourseManagement\Models\Enrollment;
 use Plugins\Modules\CourseManagement\Models\LiveClass;
 use Plugins\Modules\CourseManagement\Models\LiveClassParticipant;
