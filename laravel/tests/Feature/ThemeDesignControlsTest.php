@@ -32,7 +32,7 @@ class ThemeDesignControlsTest extends TestCase
 
         $this->actingAs($admin)->get(route('admin.appearance.index'))
             ->assertOk()
-            ->assertSee('Global Typography &amp; Layout Controls')
+            ->assertSee('Global Typography & Layout Controls')
             ->assertSee('design[font_family]');
 
         $this->actingAs($admin)->post(route('admin.appearance.design'), [
