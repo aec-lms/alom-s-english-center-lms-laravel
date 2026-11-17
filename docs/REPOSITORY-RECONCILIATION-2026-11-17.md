@@ -8,13 +8,7 @@
 
 The latest main commit includes PR #72, `feat(live-class): add 300-seat LMS capacity and protected join flow`. Recent merged work also includes PR #69 (Universal Payment branch isolation), PR #67 (shared Student Tracking/Tracing storage), PR #66 (server-enforced exam duration and attempt limits), and PR #65 (repository reconciliation).
 
-The exact main commit has four completed successful checks:
-- Laravel SQLite test job
-- Laravel MySQL 8 test job
-- Browser Playwright E2E smoke job
-- Composer lockfile validation and dependency security audit
-
-The PR #72 head passed all four checks before merge: 250 tests and 3,319 assertions on both SQLite and MySQL 8, Browser E2E, and Composer Security Audit. The Laravel job verified the 6,417-file cPanel package. The PR #62 head had also passed its four checks before merge. The Laravel workflow includes the cPanel release-package build and package-content verification.
+The PR #72 head passed all four required checks before merge: 250 tests and 3,319 assertions on both SQLite and MySQL 8, Browser E2E, and Composer Security Audit. The Laravel job verified the 6,417-file cPanel package. The PR #62 head had also passed its four checks before merge. The Laravel workflow includes the cPanel release-package build and package-content verification.
 
 Merged admin and site-management work includes:
 - #49 Bengali resumable setup wizard
