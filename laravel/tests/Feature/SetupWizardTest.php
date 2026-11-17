@@ -18,7 +18,8 @@ class SetupWizardTest extends TestCase
         $admin = User::query()->create(['name' => 'Wizard Admin', 'email' => 'wizard-admin@example.test', 'password' => 'password', 'is_active' => true]);
         $role = Role::query()->firstOrCreate(['slug' => 'admin'], ['name' => 'Administrator', 'is_system' => true]);
         $permission = Permission::query()->firstOrCreate(['slug' => 'core.settings.manage'], ['name' => 'Manage Core System Settings', 'module' => 'core']);
-        $role->permissions()->syncWithoutDetaching([$permission->id]);
+        $dashboard = Permission::query()->firstOrCreate(['slug' => 'core.dashboard.view'], ['name' => 'View Core Dashboard', 'module' => 'core']);
+        $role->permissions()->syncWithoutDetaching([$permission->id, $dashboard->id]);
         $admin->roles()->syncWithoutDetaching([$role->id]);
         return $admin;
     }
