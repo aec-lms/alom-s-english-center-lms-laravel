@@ -100,7 +100,7 @@ class EnrollmentController extends Controller
                     'discount_amount' => round($originalPrice - $price, 2),
                     'net_amount' => $price,
                     'paid_amount' => 0,
-                    'currency' => strtoupper((string) config('lms.default_currency', 'BDT')),
+                    'currency' => 'BDT',
                     'status' => 'unpaid',
                     'due_date' => now()->addDays(7)->toDateString(),
                 ]);

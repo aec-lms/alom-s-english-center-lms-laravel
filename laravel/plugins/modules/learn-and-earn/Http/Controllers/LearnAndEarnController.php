@@ -2,8 +2,8 @@
 declare(strict_types=1);
 namespace Plugins\Modules\LearnAndEarn\Http\Controllers;
 use App\Http\Controllers\Controller;
-use App\Core\Security\AuditLogger;
 use App\Core\Plugins\PluginManager;
+use App\Core\Security\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -11,15 +11,24 @@ use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
 use Plugins\Modules\ExamManagement\Models\Exam;
+use Plugins\Modules\ExamManagement\Http\Controllers\ExamController;
 use Plugins\Modules\ExamManagement\Models\ExamQuestion;
 use Plugins\Modules\LearnAndEarn\Models\LearnEarnQuestion;
 use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
 use Plugins\Modules\UniversalPayment\Services\StorefrontPaymentGatewayService;
 class LearnAndEarnController extends Controller {
- public function index(Request $r):View {
-  abort_unless(Schema::hasTable('exams')&&Schema::hasTable('learn_earn_questions'),503,'Install Exam Management and Learn & Earn migrations first.');
-  return view('learn-and-earn::index',['categories'=>DB::table('learn_earn_categories')->orderBy('name')->get(),'questions'=>LearnEarnQuestion::with('category')->latest()->paginate(50),'exams'=>Exam::withCount('questions')->when($r->user()?->hasRole('branch_manager'),fn($q)=>$q->where('branch_id',$r->user()->branch_id))->latest()->paginate(20),'courses'=>DB::table('courses')->where('status','published')->when($r->user()?->hasRole('branch_manager'),fn($q)=>$q->where('branch_id',$r->user()->branch_id))->orderBy('title')->get(['id','title'])]);
+ public function index():View {
+  $examIntegrationEnabled=app(PluginManager::class)->isEnabled('exam-management')&&Schema::hasTable('exams');
+  $courseIntegrationEnabled=app(PluginManager::class)->isEnabled('course-management')&&Schema::hasTable('courses');
+  return view('learn-and-earn::index',[
+   'categories'=>DB::table('learn_earn_categories')->orderBy('name')->get(),
+   'questions'=>LearnEarnQuestion::with('category')->latest()->paginate(50),
+   'exams'=>$examIntegrationEnabled?Exam::withCount('questions')->latest()->paginate(20):collect(),
+   'courses'=>$courseIntegrationEnabled?DB::table('courses')->where('status','published')->orderBy('title')->get(['id','title']):collect(),
+   'examIntegrationEnabled'=>$examIntegrationEnabled&&$courseIntegrationEnabled,
+  ]);
  }
+
  public function storeCategory(Request $r):RedirectResponse {
   $v=$r->validate(['name'=>['required','string','max:120'],'description'=>['nullable','string']]);$base=Str::slug($v['name']);$slug=$base;$i=1;while(DB::table('learn_earn_categories')->where('slug',$slug)->exists())$slug=$base.'-'.(++$i);
   DB::table('learn_earn_categories')->insert(['name'=>$v['name'],'slug'=>$slug,'description'=>$v['description']??null,'is_active'=>true,'created_at'=>now(),'updated_at'=>now()]);return back()->with('status','Category created.');
@@ -29,17 +38,17 @@ class LearnAndEarnController extends Controller {
   LearnEarnQuestion::create($v+['is_active'=>true]);return back()->with('status','MCQ saved.');
  }
  public function storeExam(Request $r):RedirectResponse {
+  $this->ensureExamIntegration();
   $v=$r->validate(['course_id'=>['required','integer','exists:courses,id'],'title'=>['required','string','max:180'],'question_ids'=>['required','array','min:1'],'question_ids.*'=>['required','integer','distinct','exists:learn_earn_questions,id'],'duration_minutes'=>['required','integer','min:5','max:360'],'pass_marks'=>['required','integer','min:0'],'type'=>['required','in:free,paid'],'access_price'=>['required_if:type,paid','numeric','gt:0'],'is_published'=>['nullable','boolean']]);
-  $course=DB::table('courses')->where('id',$v['course_id'])->first();abort_unless($course,422,'Selected course unavailable.');
-  $actor=$r->user();if($actor&&$actor->hasRole('branch_manager')&&(int)($course->branch_id??0)!==(int)($actor->branch_id??0))abort(403,'Course is outside your assigned branch.');
-  DB::transaction(function()use($r,$v,$course){$qs=LearnEarnQuestion::whereIn('id',$v['question_ids'])->where('is_active',true)->get();abort_if($qs->count()!==count($v['question_ids']),422,'Selected question unavailable.');
-   $exam=Exam::create(['course_id'=>$v['course_id'],'branch_id'=>$course->branch_id??null,'title'=>$v['title'],'duration_minutes'=>$v['duration_minutes'],'pass_marks'=>$v['pass_marks'],'is_published'=>$r->boolean('is_published'),'learn_earn_type'=>$v['type'],'access_price'=>$v['type']==='paid'?$v['access_price']:0]);
+  DB::transaction(function()use($r,$v){$qs=LearnEarnQuestion::whereIn('id',$v['question_ids'])->where('is_active',true)->get();abort_if($qs->count()!==count($v['question_ids']),422,'Selected question unavailable.');
+   $exam=Exam::create(['course_id'=>$v['course_id'],'title'=>$v['title'],'duration_minutes'=>$v['duration_minutes'],'pass_marks'=>$v['pass_marks'],'is_published'=>$r->boolean('is_published'),'learn_earn_type'=>$v['type'],'access_price'=>$v['type']==='paid'?$v['access_price']:0]);
    foreach($qs as $q)ExamQuestion::create(['exam_id'=>$exam->id,'prompt'=>$q->question,'options'=>$q->options,'correct_option_index'=>$q->correct_option_index,'marks'=>$q->positive_marks,'negative_marks'=>$q->negative_marks]);
   });return back()->with('status','Exam created. Paid exams remain locked until verified payment access is granted.');
  }
  public function publicExams(Request $r):View {
+  $this->ensureExamIntegration();
   abort_unless($r->user() && $r->user()->hasRole('student'),403,'Student account required.');
-  $exams=Exam::where('is_published',true)->where(function($q)use($r){$q->whereNull('branch_id')->orWhere('branch_id',$r->user()->branch_id); })->latest()->paginate(20);
+  $exams=Exam::where('is_published',true)->latest()->paginate(20);
   $accessibleExamIds = DB::table('learn_earn_exam_access')->where('user_id',$r->user()->id)->where('status','granted')->pluck('exam_id')->map(fn($id)=>(int)$id)->all();
   $canPurchase = app(PluginManager::class)->isEnabled('universal-payment')
    && app(PluginManager::class)->isEnabled('gateway-sslcommerz')
@@ -47,28 +56,30 @@ class LearnAndEarnController extends Controller {
    && Schema::hasColumn('universal_payment_transactions', 'learn_earn_exam_id');
   return view('learn-and-earn::exams',['exams'=>$exams,'canPurchase'=>$canPurchase,'accessibleExamIds'=>$accessibleExamIds]);
  }
- public function showExam(Request $r,Exam $exam):View {
+ public function showExam(Request $r,int $examId):View {
+  $this->ensureExamIntegration();
+  $exam=Exam::query()->findOrFail($examId);
   abort_unless($r->user() && $r->user()->hasRole('student'),403,'Student account required.');
   abort_unless($exam->is_published,404);
-  if($exam->branch_id!==null&&(int)$r->user()->branch_id!==(int)$exam->branch_id)abort(403,'Exam is outside your assigned branch.');
   if($exam->learn_earn_type==='paid') abort_unless(DB::table('learn_earn_exam_access')->where('exam_id',$exam->id)->where('user_id',$r->user()->id)->where('status','granted')->exists(),403,'Verified payment access is required for this exam.');
   $exam->load('questions');
   return view('learn-and-earn::take-exam',['exam'=>$exam]);
  }
 
- public function purchaseExam(Request $r, Exam $exam, StorefrontPaymentGatewayService $gateway): RedirectResponse {
+ public function purchaseExam(Request $r, int $examId, StorefrontPaymentGatewayService $gateway): RedirectResponse {
+  $this->ensureExamIntegration();
+  $exam=Exam::query()->findOrFail($examId);
   abort_unless($r->user() && $r->user()->hasRole('student'),403,'Student account required.');
   abort_unless($exam->is_published && $exam->learn_earn_type==='paid' && (float)$exam->access_price>0,404);
-  if($exam->branch_id!==null&&(int)$r->user()->branch_id!==(int)$exam->branch_id)abort(403,'Exam is outside your assigned branch.');
   abort_unless(app(PluginManager::class)->isEnabled('universal-payment')
    && app(PluginManager::class)->isEnabled('gateway-sslcommerz')
    && Schema::hasTable('universal_payment_transactions')
    && Schema::hasColumn('universal_payment_transactions','learn_earn_exam_id'),503,
    'Enable and configure Universal Payment and SSLCOMMERZ before purchasing paid exams.');
   if(DB::table('learn_earn_exam_access')->where('exam_id',$exam->id)->where('user_id',$r->user()->id)->where('status','granted')->exists()) {
-   return redirect()->route('plugins.learn_earn.student.show',$exam)->with('status','You already have access to this exam.');
+   return redirect('/learn-and-earn/exams/'.$exam->id)->with('status','You already have access to this exam.');
   }
-  $pendingCheckout=UniversalPaymentTransaction::query()
+  $pendingCheckout = UniversalPaymentTransaction::query()
    ->where('user_id',$r->user()->id)
    ->where('learn_earn_exam_id',$exam->id)
    ->where('status','pending')
@@ -83,7 +94,7 @@ class LearnAndEarnController extends Controller {
    'payer_contact'=>$v['payer_contact'],
    'item_title'=>$exam->title,
    'gateway'=>'sslcommerz',
-   'currency'=>app(PluginManager::class)->getSetting('universal-payment','default_currency',(string)config('lms.default_currency','BDT')) ?: 'BDT',
+   'currency'=>app(PluginManager::class)->getSetting('universal-payment','default_currency','BDT') ?: 'BDT',
    'amount'=>$exam->access_price,
    'status'=>'pending',
    'user_id'=>$r->user()->id,
@@ -97,12 +108,32 @@ class LearnAndEarnController extends Controller {
    return back()->withErrors(['payment'=>'Unable to start secure checkout. No exam access was granted.']);
   }
  }
- public function grantAccess(Request $r,Exam $exam):RedirectResponse {
+ public function submitAttempt(Request $r,int $examId):RedirectResponse {
+  $this->ensureExamIntegration();
+  $exam=Exam::query()->findOrFail($examId);
+  return app(ExamController::class)->submitAttempt($r,$exam);
+ }
+ public function grantAccess(Request $r,int $examId):RedirectResponse {
+  $this->ensureExamIntegration();
+  $exam=Exam::query()->findOrFail($examId);
   $v=$r->validate(['user_id'=>['required','integer','exists:users,id'],'payment_reference'=>['required','string','max:190']]);abort_unless($exam->learn_earn_type==='paid',422,'This is not a paid exam.');
-  $reference=trim($v['payment_reference']);abort_if($reference==='',422,'A verified payment or bank/cash receipt reference is required.');
-  $target=DB::table('users')->where('id',$v['user_id'])->first();$actor=$r->user();if($actor&&$actor->hasRole('branch_manager'))abort_unless($exam->branch_id!==null&&(int)$exam->branch_id===(int)$actor->branch_id&&(int)($target->branch_id??0)===(int)$actor->branch_id,403,'Access can only be granted inside your assigned branch.');
+  $reference=trim($v['payment_reference']);
+  abort_if($reference==='',422,'A verified payment or bank/cash receipt reference is required.');
   DB::table('learn_earn_exam_access')->updateOrInsert(['exam_id'=>$exam->id,'user_id'=>$v['user_id']],['status'=>'granted','payment_reference'=>$reference,'granted_at'=>now(),'created_at'=>now(),'updated_at'=>now()]);
   app(AuditLogger::class)->log('learn_earn.exam_access_manually_granted','learn_earn_exam_access',(string)$exam->id,['user_id'=>(int)$v['user_id'],'payment_reference'=>$reference]);
   return back()->with('status','Manual exam access granted and recorded for audit.');
  }
+ private function ensureExamIntegration():void {
+  abort_unless(
+   app(PluginManager::class)->isEnabled('exam-management')
+   && app(PluginManager::class)->isEnabled('course-management')
+   && Schema::hasTable('exams')
+   && Schema::hasTable('exam_questions')
+   && Schema::hasTable('courses')
+   && Schema::hasTable('learn_earn_exam_access'),
+   503,
+   'Enable the optional Course Management and Exam Management plugins to use exam delivery and paid access.'
+  );
+ }
+
 }
