@@ -49,8 +49,8 @@ final class ThemePackageManager
                 if(str_starts_with($name,'/')||preg_match('#(^|/)\.\.(/|$)#',$name)) throw new RuntimeException('Theme ZIP contains an unsafe file path.');
                 $total+=(int)($stat['size']??0);
                 if($total>5*1024*1024) throw new RuntimeException('Uncompressed theme package exceeds 5 MB.');
-                if(!in_array($name,['theme.json','README.md','preview.png','preview.jpg','preview.webp'],true)) {
-                    throw new RuntimeException('Theme packages may contain only theme.json, README.md and an optional preview image. PHP, Blade, JavaScript and CSS files are not allowed.');
+                if(!in_array($name,['theme.json'],true)) {
+                    throw new RuntimeException('Theme packages may contain only a root-level theme.json file. PHP, Blade, JavaScript, CSS and additional files are not allowed.');
                 }
             }
             $json=$zip->getFromName('theme.json');
