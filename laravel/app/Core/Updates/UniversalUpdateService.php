@@ -431,7 +431,7 @@ class UniversalUpdateService
 
         $entries = [];
         $iterator = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($sourceDir, \\FilesystemIterator::SKIP_DOTS),
+            new RecursiveDirectoryIterator($sourceDir, \FilesystemIterator::SKIP_DOTS),
             RecursiveIteratorIterator::SELF_FIRST
         );
         foreach ($iterator as $item) {
