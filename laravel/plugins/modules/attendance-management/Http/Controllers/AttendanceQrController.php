@@ -106,7 +106,7 @@ class AttendanceQrController extends Controller
             'session_id' => $sessionId,
             'token' => $token,
             'expires_at' => $expiresAt->toIso8601String(),
-            'checkin_url' => route('plugins.attendance.qr.checkin'),
+            'checkin_url' => url('/attendance/qr/check-in'),
         ]);
     }
 
