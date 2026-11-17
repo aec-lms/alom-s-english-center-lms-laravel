@@ -73,7 +73,7 @@ return new class extends Migration {
                 $table->string('reason', 255)->nullable();
                 $table->string('source', 20)->default('online');
                 $table->timestamp('occurred_at')->useCurrent();
-                $table->index(['attendance_entry_id', 'occurred_at']);
+                $table->index(['attendance_entry_id', 'occurred_at'], 'att_entry_audit_time_idx');
             });
         }
 
