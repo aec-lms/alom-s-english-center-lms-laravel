@@ -1,7 +1,7 @@
 {
     "slug": "library-management",
     "name": "Library Management",
-    "version": "2.0.0",
+    "version": "2.0.1",
     "author": "Alom's English Center",
     "category": "academic",
     "description": "Printed Book Inventory, ISBN Catalog, Issue/Return Tracking, and Late-Return Fine Calculation.",
