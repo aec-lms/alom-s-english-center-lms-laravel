@@ -62,7 +62,8 @@ class LiveClassCapacityTest extends TestCase
         $this->actingAs($studentA)
             ->postJson("/live-classes/{$liveClass->id}/heartbeat")
             ->assertOk()
-            ->assertJsonPath('active', true);
+            ->assertJsonPath('active', true)
+            ->assertJsonPath('active_count', 1);
 
         // Refreshing the join page resumes the existing seat instead of consuming another.
         $this->actingAs($studentA)->post("/live-classes/{$liveClass->id}/join")->assertOk();
