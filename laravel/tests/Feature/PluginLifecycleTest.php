@@ -332,4 +332,24 @@ PHP;
         $this->actingAs($student)->get('/learn-and-earn/exams')->assertStatus(503);
     }
 
+    public function test_plugin_recycle_bin_archive_schema_preserves_restore_metadata(): void
+    {
+        $this->markSystemInstalled();
+
+        $this->assertTrue(Schema::hasTable('plugin_archives'));
+        $archive = \App\Models\PluginArchive::query()->create([
+            'plugin_slug' => 'recycle-probe',
+            'plugin_name' => 'Recycle Probe',
+            'version' => '1.2.3',
+            'archive_path' => storage_path('app/plugin-recycle-bin/recycle-probe'),
+            'manifest_snapshot' => ['slug' => 'recycle-probe', 'version' => '1.2.3'],
+            'deleted_by' => null,
+            'deleted_at' => now(),
+        ]);
+
+        $this->assertSame('recycle-probe', $archive->fresh()->plugin_slug);
+        $this->assertSame('1.2.3', $archive->fresh()->manifest_snapshot['version']);
+        $this->assertNotNull($archive->fresh()->deleted_at);
+    }
+
 }

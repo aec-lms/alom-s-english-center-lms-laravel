@@ -7,6 +7,11 @@ namespace App\Http\Controllers\Admin;
 use App\Core\Plugins\PluginManager;
 use App\Http\Controllers\Controller;
 use App\Models\PluginRecord;
+use App\Models\PluginArchive;
+use App\Models\PluginSetting;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Schema;
+use RuntimeException;
 use Plugins\Modules\GatewayStripe\Services\StripeGatewayService;
 use Plugins\Modules\GatewayPaypal\Services\PaypalGatewayService;
 use Plugins\Modules\GatewaySslcommerz\Services\SslcommerzGatewayService;
@@ -36,7 +41,9 @@ class PluginCenterController extends Controller
             return $record;
         });
 
-        return view('admin.plugins.index', compact('records'));
+        $archives = Schema::hasTable('plugin_archives') ? PluginArchive::query()->latest('deleted_at')->get() : collect();
+
+        return view('admin.plugins.index', compact('records', 'archives'));
     }
 
     public function upload(Request $request): RedirectResponse
@@ -105,6 +112,103 @@ class PluginCenterController extends Controller
         try {
             $this->plugins->uninstall($slug, false, auth()->id());
             return back()->with('status', "Plugin '{$slug}' uninstalled cleanly. Shared LMS records remain intact.");
+        } catch (\Throwable $e) {
+            return back()->withErrors(['plugin' => $e->getMessage()]);
+        }
+    }
+
+
+    public function resetSettings(string $slug): RedirectResponse
+    {
+        try {
+            abort_unless(PluginRecord::query()->where('slug', $slug)->exists(), 404);
+            $manifest = $this->plugins->discoverManifests()[$slug] ?? abort(404);
+            PluginSetting::query()->where('plugin_slug', $slug)->delete();
+            $defaults = [];
+            $secretKeys = [];
+            foreach ($manifest->settingsSchema as $field) {
+                $key = (string) ($field['key'] ?? '');
+                if ($key === '' || !array_key_exists('default', $field)) continue;
+                $defaults[$key] = $field['default'];
+                if (!empty($field['secret'])) $secretKeys[] = $key;
+            }
+            if ($defaults !== []) $this->plugins->saveSettings($slug, $defaults, $secretKeys, auth()->id());
+            app(\App\Core\Security\AuditLogger::class)->log('plugin.settings_reset', 'plugin', $slug, ['default_keys' => array_keys($defaults)], auth()->id());
+            return back()->with('status', "Settings for '{$slug}' restored to manifest defaults.");
+        } catch (\Throwable $e) {
+            return back()->withErrors(['plugin' => $e->getMessage()]);
+        }
+    }
+
+    public function deleteToRecycleBin(string $slug): RedirectResponse
+    {
+        try {
+            $record = PluginRecord::query()->where('slug', $slug)->firstOrFail();
+            if ($record->is_core || $slug === config('plugins.core_identifier')) {
+                throw new RuntimeException('Protected Core cannot be deleted.');
+            }
+            $manifest = $this->plugins->discoverManifests()[$slug] ?? null;
+            if (!$manifest) {
+                throw new RuntimeException('Plugin files are missing; use the recovery package to restore them.');
+            }
+            if ($record->is_enabled) $this->plugins->disable($slug, auth()->id());
+            if ($record->is_installed) $this->plugins->uninstall($slug, false, auth()->id());
+
+            $archiveId = (string) \Illuminate\Support\Str::uuid();
+            $source = $manifest->basePath;
+            $destination = storage_path('app/plugin-recycle-bin/' . $archiveId);
+            File::ensureDirectoryExists(dirname($destination));
+            if (!File::moveDirectory($source, $destination)) {
+                throw new RuntimeException('Plugin files could not be moved into the recycle bin.');
+            }
+            try {
+                PluginArchive::query()->create([
+                    'plugin_slug' => $slug, 'plugin_name' => $record->name,
+                    'version' => $record->version, 'archive_path' => $destination,
+                    'manifest_snapshot' => $manifest->toArray(), 'deleted_by' => auth()->id(), 'deleted_at' => now(),
+                ]);
+            } catch (\Throwable $e) {
+                File::moveDirectory($destination, $source);
+                throw $e;
+            }
+            return back()->with('status', "Plugin '{$slug}' moved to the recycle bin. Its settings and LMS business data were preserved.");
+        } catch (\Throwable $e) {
+            return back()->withErrors(['plugin' => $e->getMessage()]);
+        }
+    }
+
+    public function restoreFromRecycleBin(string $archive): RedirectResponse
+    {
+        try {
+            $item = PluginArchive::query()->findOrFail($archive);
+            $destination = (string) config('plugins.modules_path') . DIRECTORY_SEPARATOR . $item->plugin_slug;
+            if (is_dir($destination)) throw new RuntimeException('A plugin with this slug already exists. Resolve the conflict before restoring.');
+            if (!is_dir($item->archive_path) || !File::moveDirectory($item->archive_path, $destination)) {
+                throw new RuntimeException('Archived plugin files are missing or could not be restored.');
+            }
+            try {
+                $this->plugins->install($item->plugin_slug, auth()->id());
+                $item->delete();
+            } catch (\Throwable $e) {
+                File::moveDirectory($destination, $item->archive_path);
+                throw $e;
+            }
+            return back()->with('status', "Plugin '{$item->plugin_slug}' restored and enabled.");
+        } catch (\Throwable $e) {
+            return back()->withErrors(['plugin' => $e->getMessage()]);
+        }
+    }
+
+    public function permanentlyDeleteFromRecycleBin(string $archive): RedirectResponse
+    {
+        try {
+            $item = PluginArchive::query()->findOrFail($archive);
+            File::deleteDirectory($item->archive_path);
+            PluginSetting::query()->where('plugin_slug', $item->plugin_slug)->delete();
+            PluginRecord::query()->where('slug', $item->plugin_slug)->where('is_core', false)->delete();
+            $slug = $item->plugin_slug;
+            $item->delete();
+            return back()->with('status', "Plugin '{$slug}' and its archived files were permanently deleted.");
         } catch (\Throwable $e) {
             return back()->withErrors(['plugin' => $e->getMessage()]);
         }
