@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\StudentTracing\\Providers;
+namespace Plugins\Modules\StudentTracing\Providers;
 
-use App\\Core\\Plugins\\BasePluginServiceProvider;
-use Illuminate\\Support\\Facades\\Auth;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Facades\\Event;
-use Illuminate\\Support\\Facades\\Schema;
+use App\Core\Plugins\BasePluginServiceProvider;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Schema;
 use Throwable;
 
 class StudentTracingServiceProvider extends BasePluginServiceProvider
@@ -29,10 +29,10 @@ class StudentTracingServiceProvider extends BasePluginServiceProvider
 
         // Event names keep this plugin installable without importing sibling modules.
         $sources = [
-            'Plugins\\Modules\\StudentManagement\\Models\\Student' => ['student', 'id', 'branch_id'],
-            'Plugins\\Modules\\AttendanceManagement\\Models\\AttendanceRecord' => ['attendance', 'student_id', 'branch_id'],
-            'Plugins\\Modules\\CourseManagement\\Models\\Enrollment' => ['enrollment', 'user_id', null],
-            'Plugins\\Modules\\ExamManagement\\Models\\ExamAttempt' => ['exam_attempt', 'user_id', null],
+            'Plugins\Modules\StudentManagement\Models\Student' => ['student', 'id', 'branch_id'],
+            'Plugins\Modules\AttendanceManagement\Models\AttendanceRecord' => ['attendance', 'student_id', 'branch_id'],
+            'Plugins\Modules\CourseManagement\Models\Enrollment' => ['enrollment', 'user_id', null],
+            'Plugins\Modules\ExamManagement\Models\ExamAttempt' => ['exam_attempt', 'user_id', null],
         ];
 
         foreach ($sources as $modelClass => [$source, $studentKey, $branchKey]) {
@@ -70,7 +70,7 @@ class StudentTracingServiceProvider extends BasePluginServiceProvider
                             ]);
                         } catch (Throwable) {
                             // Tracing must never interrupt an academic workflow.
-                            report(new \\RuntimeException('Student tracing event could not be persisted.'));
+                            report(new \RuntimeException('Student tracing event could not be persisted.'));
                         }
                     }
                 );
