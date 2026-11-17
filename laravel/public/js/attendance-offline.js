@@ -2,10 +2,28 @@ const initializeAttendanceOfflineSync = () => {
     const batch = document.getElementById('attendance-batch');
     const form = document.getElementById('attendance-register-form');
     const status = document.getElementById('attendance-sync-status');
+    if (!batch || !form || !status) return;
+
     const rows = document.querySelectorAll('[data-student-branch]');
     const DB_NAME = 'aec-lms-attendance-offline';
     const STORE = 'pending-sync';
+    const actorId = String(form.dataset.actorId || '');
     const announce = message => { status.textContent = message; };
+
+    const registerOfflineShell = async () => {
+        if (!('serviceWorker' in navigator)) {
+            announce('Offline saving is available, but this browser does not support reopening the Attendance page offline.');
+            return;
+        }
+        try {
+            const registration = await navigator.serviceWorker.register('/service-worker.js', { scope: '/' });
+            const ready = await navigator.serviceWorker.ready;
+            const worker = ready.active || registration.active;
+            worker?.postMessage({ type: 'CACHE_ATTENDANCE_PAGE', url: window.location.href });
+        } catch (error) {
+            announce('Offline page setup could not finish. Keep this page open while connected and try again.');
+        }
+    };
 
     const applyBranch = () => {
         const branch = batch.selectedOptions[0]?.dataset.branch;
@@ -17,6 +35,14 @@ const initializeAttendanceOfflineSync = () => {
     };
     batch.addEventListener('change', applyBranch);
     applyBranch();
+
+    if (!navigator.onLine) {
+        const dateField = form.querySelector('[name="attendance_date"]');
+        if (dateField) {
+            const now = new Date();
+            dateField.value = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
+        }
+    }
 
     const openQueue = () => new Promise((resolve, reject) => {
         const request = indexedDB.open(DB_NAME, 1);
@@ -39,7 +65,10 @@ const initializeAttendanceOfflineSync = () => {
         const db = await openQueue();
         return new Promise((resolve, reject) => {
             const request = db.transaction(STORE, 'readonly').objectStore(STORE).getAll();
-            request.onsuccess = () => { db.close(); resolve(request.result || []); };
+            request.onsuccess = () => {
+                db.close();
+                resolve((request.result || []).filter(entry => entry.actor_id === actorId));
+            };
             request.onerror = () => { db.close(); reject(request.error); };
         });
     };
@@ -74,6 +103,7 @@ const initializeAttendanceOfflineSync = () => {
                 sync_uuid: uuid()
             });
         });
+        if (!actorId) throw new Error('Your user session is missing. Reconnect and reload Attendance before saving offline.');
         if (!batchId || !date || records.length === 0) throw new Error('Select a batch with students before saving attendance.');
         return { batch_id: Number(batchId), attendance_date: date, source: navigator.onLine ? 'online' : 'offline', records };
     };
@@ -84,7 +114,7 @@ const initializeAttendanceOfflineSync = () => {
         syncing = true;
         try {
             const pending = await allPending();
-            if (!pending.length) { announce('All attendance entries are synchronized.'); return; }
+            if (!pending.length) { announce('All attendance entries for this account are synchronized.'); return; }
             announce('Syncing ' + pending.length + ' offline attendance batch(es)…');
             for (const entry of pending) {
                 const response = await fetch(form.dataset.syncUrl, {
@@ -113,18 +143,21 @@ const initializeAttendanceOfflineSync = () => {
     form.addEventListener('submit', async event => {
         event.preventDefault();
         const submit = form.querySelector('button[type="submit"]');
-        submit.disabled = true;
+        if (submit) submit.disabled = true;
         try {
-            await addPending({ id: uuid(), payload: readPayload(), created_at: new Date().toISOString() });
+            const payload = readPayload();
+            await addPending({ id: uuid(), actor_id: actorId, payload, created_at: new Date().toISOString() });
             announce('Attendance safely saved on this device. ' + (navigator.onLine ? 'Starting sync…' : 'It will sync when internet returns.'));
             await syncPending();
         } catch (error) { announce(error.message); }
-        finally { submit.disabled = false; }
+        finally { if (submit) submit.disabled = false; }
     });
     window.addEventListener('online', syncPending);
     window.addEventListener('offline', () => announce('You are offline. New attendance will be queued on this device.'));
     if (navigator.onLine) syncPending();
     else announce('You are offline. Attendance will be queued on this device.');
+
+    registerOfflineShell();
 };
 
 if (document.readyState === 'loading') {

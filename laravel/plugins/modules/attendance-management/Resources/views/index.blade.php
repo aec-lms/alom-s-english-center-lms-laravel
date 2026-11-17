@@ -7,7 +7,7 @@
         <p class="text-sm text-slate-500 mt-1">Select a batch and mark the whole class. Changes to saved attendance require a reason.</p>
     </div>
     <div id="attendance-sync-status" role="status" aria-live="polite" class="rounded-lg bg-slate-100 px-4 py-3 text-sm text-slate-700">Online sync ready. Pending offline entries are saved on this device.</div>
-    <form id="attendance-register-form" method="POST" action="{{ route('plugins.attendance.store') }}" data-sync-url="{{ route('plugins.attendance.sync') }}" class="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+    <form id="attendance-register-form" method="POST" action="{{ route('plugins.attendance.store') }}" data-sync-url="{{ route('plugins.attendance.sync') }}" data-actor-id="{{ auth()->id() }}" class="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
         @csrf
         <div class="grid gap-4 md:grid-cols-3">
             <label class="block text-sm font-semibold">Batch
@@ -63,5 +63,7 @@
         <div class="mt-4">{{ $records->links() }}</div>
     </div>
 </div>
+<link rel="manifest" href="{{ asset('attendance.webmanifest') }}">
+<link rel="stylesheet" href="{{ asset('css/attendance-offline.css') }}">
 <script src="{{ asset('js/attendance-offline.js') }}" defer></script>
 @endsection

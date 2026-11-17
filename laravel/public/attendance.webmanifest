@@ -1,0 +1,20 @@
+{
+  "id": "/admin/attendance/",
+  "name": "AEC LMS Attendance",
+  "short_name": "Attendance",
+  "description": "Offline-ready student attendance register for Alom's English Center.",
+  "start_url": "/admin/attendance/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f1f5f9",
+  "theme_color": "#022d41",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/images/attendance-pwa.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

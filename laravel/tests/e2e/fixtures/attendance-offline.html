@@ -5,10 +5,12 @@
   <meta name="csrf-token" content="test-csrf-token">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Attendance Offline Queue E2E</title>
+  <link rel="manifest" href="/attendance.webmanifest">
+  <link rel="stylesheet" href="/css/attendance-offline.css">
 </head>
 <body>
   <div id="attendance-sync-status" role="status" aria-live="polite">Online sync ready.</div>
-  <form id="attendance-register-form" data-sync-url="/admin/attendance/sync">
+  <form id="attendance-register-form" data-actor-id="42" data-sync-url="/admin/attendance/sync">
     <select id="attendance-batch" name="batch_id">
       <option value="">Select batch</option>
       <option value="17" data-branch="4" selected>Test Batch</option>
@@ -24,6 +26,6 @@
     </tbody></table>
     <button type="submit">Save attendance</button>
   </form>
-  <script src="/attendance-offline.js" defer></script>
+  <script src="/js/attendance-offline.js" defer></script>
 </body>
 </html>

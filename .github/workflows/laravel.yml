@@ -78,6 +78,9 @@ jobs:
       - name: Execute attendance offline browser E2E
         run: node tests/e2e/attendance-offline.spec.cjs
 
+      - name: Execute attendance PWA restart/offline E2E
+        run: node tests/e2e/attendance-pwa.spec.cjs
+
       - name: Build production cPanel package
         run: bash scripts/build-cpanel-package.sh
 
