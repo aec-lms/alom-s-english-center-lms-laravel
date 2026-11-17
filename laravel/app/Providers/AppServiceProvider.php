@@ -33,8 +33,8 @@ class AppServiceProvider extends ServiceProvider
 
         View::composer(['layouts.admin', 'layouts.app', 'public.partials.navbar', 'public.partials.footer', 'auth.login'], function ($view): void {
             try {
-                $view->with('siteIdentity', app(\\App\\Core\\Appearance\\SiteIdentityManager::class)->values());
-            } catch (\\Throwable $exception) {
+                $view->with('siteIdentity', app(\App\Core\Appearance\SiteIdentityManager::class)->values());
+            } catch (\Throwable $exception) {
                 report_if(app()->environment('production'), $exception);
                 $view->with('siteIdentity', []);
             }
