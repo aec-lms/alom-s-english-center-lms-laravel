@@ -50,14 +50,15 @@ final class SiteNavigationManager
         usort($items, static fn (array $a, array $b): int => [$a['order'], $a['label']] <=> [$b['order'], $b['label']]);
 
         $items = array_map(function (array $item): array {
+            $external = str_starts_with($item['url'], 'https://') || str_starts_with($item['url'], 'http://');
             $path = parse_url($item['url'], PHP_URL_PATH) ?: '/';
             $current = trim((string) request()->path(), '/');
             $target = trim($path, '/');
-            $active = $item['url'] === '/'
+            $active = !$external && ($item['url'] === '/'
                 ? $current === ''
-                : ($target !== '' && ($current === $target || str_starts_with($current, $target . '/')));
+                : ($target !== '' && ($current === $target || str_starts_with($current, $target . '/'))));
 
-            return $item + ['active' => $active, 'external' => str_starts_with($item['url'], 'https://') || str_starts_with($item['url'], 'http://')];
+            return $item + ['active' => $active, 'external' => $external];
         }, $items);
 
         return $includeHidden ? $items : array_values(array_filter($items, static fn (array $item): bool => !$item['hidden']));
