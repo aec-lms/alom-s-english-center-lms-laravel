@@ -7,6 +7,15 @@
         <p class="text-sm text-slate-500 mt-1">Select a batch and mark the whole class. Changes to saved attendance require a reason.</p>
     </div>
     <div id="attendance-sync-status" role="status" aria-live="polite" class="rounded-lg bg-slate-100 px-4 py-3 text-sm text-slate-700">Online sync ready. Pending offline entries are saved on this device.</div>
+    @if (!$attendanceReady)
+        <div role="status" class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            Attendance Management is installed independently. To create new attendance records, enable
+            @if (!$courseIntegrationEnabled)<strong>Course Management</strong>@endif
+            @if (!$courseIntegrationEnabled && !$studentIntegrationEnabled) and @endif
+            @if (!$studentIntegrationEnabled)<strong>Student Management</strong>@endif.
+            Existing attendance history remains available.
+        </div>
+    @endif
     <form id="attendance-register-form" method="POST" action="{{ route('plugins.attendance.store') }}" data-sync-url="{{ route('plugins.attendance.sync') }}" data-actor-id="{{ auth()->id() }}" class="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
         @csrf
         <div class="grid gap-4 md:grid-cols-3">
@@ -46,7 +55,7 @@
                 </tbody>
             </table>
         </div>
-        <div class="flex justify-end"><button type="submit" class="rounded-lg bg-indigo-600 text-white px-5 py-2 font-semibold">Save attendance</button></div>
+        <div class="flex justify-end"><button type="submit" @disabled(!$attendanceReady) class="rounded-lg bg-indigo-600 text-white px-5 py-2 font-semibold disabled:cursor-not-allowed disabled:opacity-50">Save attendance</button></div>
     </form>
     <div class="bg-white rounded-2xl border border-slate-200 p-5">
         <h2 class="font-bold text-lg mb-3">Recent attendance</h2>
