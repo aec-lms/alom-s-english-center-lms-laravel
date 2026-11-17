@@ -29,14 +29,16 @@ class LearnAndEarnController extends Controller {
  }
  public function storeExam(Request $r):RedirectResponse {
   $v=$r->validate(['course_id'=>['required','integer','exists:courses,id'],'title'=>['required','string','max:180'],'question_ids'=>['required','array','min:1'],'question_ids.*'=>['required','integer','distinct','exists:learn_earn_questions,id'],'duration_minutes'=>['required','integer','min:5','max:360'],'pass_marks'=>['required','integer','min:0'],'type'=>['required','in:free,paid'],'access_price'=>['required_if:type,paid','numeric','gt:0'],'is_published'=>['nullable','boolean']]);
-  DB::transaction(function()use($r,$v){$qs=LearnEarnQuestion::whereIn('id',$v['question_ids'])->where('is_active',true)->get();abort_if($qs->count()!==count($v['question_ids']),422,'Selected question unavailable.');
-   $exam=Exam::create(['course_id'=>$v['course_id'],'title'=>$v['title'],'duration_minutes'=>$v['duration_minutes'],'pass_marks'=>$v['pass_marks'],'is_published'=>$r->boolean('is_published'),'learn_earn_type'=>$v['type'],'access_price'=>$v['type']==='paid'?$v['access_price']:0]);
+  $course=DB::table('courses')->where('id',$v['course_id'])->first();abort_unless($course,422,'Selected course unavailable.');
+  $actor=$r->user();if($actor&&$actor->hasRole('branch_manager')&&(int)($course->branch_id??0)!==(int)($actor->branch_id??0))abort(403,'Course is outside your assigned branch.');
+  DB::transaction(function()use($r,$v,$course){$qs=LearnEarnQuestion::whereIn('id',$v['question_ids'])->where('is_active',true)->get();abort_if($qs->count()!==count($v['question_ids']),422,'Selected question unavailable.');
+   $exam=Exam::create(['course_id'=>$v['course_id'],'branch_id'=>$course->branch_id??null,'title'=>$v['title'],'duration_minutes'=>$v['duration_minutes'],'pass_marks'=>$v['pass_marks'],'is_published'=>$r->boolean('is_published'),'learn_earn_type'=>$v['type'],'access_price'=>$v['type']==='paid'?$v['access_price']:0]);
    foreach($qs as $q)ExamQuestion::create(['exam_id'=>$exam->id,'prompt'=>$q->question,'options'=>$q->options,'correct_option_index'=>$q->correct_option_index,'marks'=>$q->positive_marks,'negative_marks'=>$q->negative_marks]);
   });return back()->with('status','Exam created. Paid exams remain locked until verified payment access is granted.');
  }
  public function publicExams(Request $r):View {
   abort_unless($r->user() && $r->user()->hasRole('student'),403,'Student account required.');
-  $exams=Exam::where('is_published',true)->latest()->paginate(20);
+  $exams=Exam::where('is_published',true)->where(function($q)use($r){$q->whereNull('branch_id')->orWhere('branch_id',$r->user()->branch_id); })->latest()->paginate(20);
   $accessibleExamIds = DB::table('learn_earn_exam_access')->where('user_id',$r->user()->id)->where('status','granted')->pluck('exam_id')->map(fn($id)=>(int)$id)->all();
   $canPurchase = app(PluginManager::class)->isEnabled('universal-payment')
    && app(PluginManager::class)->isEnabled('gateway-sslcommerz')
@@ -47,6 +49,7 @@ class LearnAndEarnController extends Controller {
  public function showExam(Request $r,Exam $exam):View {
   abort_unless($r->user() && $r->user()->hasRole('student'),403,'Student account required.');
   abort_unless($exam->is_published,404);
+  if($exam->branch_id!==null&&(int)$r->user()->branch_id!==(int)$exam->branch_id)abort(403,'Exam is outside your assigned branch.');
   if($exam->learn_earn_type==='paid') abort_unless(DB::table('learn_earn_exam_access')->where('exam_id',$exam->id)->where('user_id',$r->user()->id)->where('status','granted')->exists(),403,'Verified payment access is required for this exam.');
   $exam->load('questions');
   return view('learn-and-earn::take-exam',['exam'=>$exam]);
@@ -55,6 +58,7 @@ class LearnAndEarnController extends Controller {
  public function purchaseExam(Request $r, Exam $exam, StorefrontPaymentGatewayService $gateway): RedirectResponse {
   abort_unless($r->user() && $r->user()->hasRole('student'),403,'Student account required.');
   abort_unless($exam->is_published && $exam->learn_earn_type==='paid' && (float)$exam->access_price>0,404);
+  if($exam->branch_id!==null&&(int)$r->user()->branch_id!==(int)$exam->branch_id)abort(403,'Exam is outside your assigned branch.');
   abort_unless(app(PluginManager::class)->isEnabled('universal-payment')
    && app(PluginManager::class)->isEnabled('gateway-sslcommerz')
    && Schema::hasTable('universal_payment_transactions')
@@ -87,6 +91,7 @@ class LearnAndEarnController extends Controller {
  }
  public function grantAccess(Request $r,Exam $exam):RedirectResponse {
   $v=$r->validate(['user_id'=>['required','integer','exists:users,id'],'payment_reference'=>['nullable','string','max:190']]);abort_unless($exam->learn_earn_type==='paid',422,'This is not a paid exam.');
+  $target=DB::table('users')->where('id',$v['user_id'])->first();$actor=$r->user();if($actor&&$actor->hasRole('branch_manager'))abort_unless($exam->branch_id!==null&&(int)$exam->branch_id===(int)$actor->branch_id&&(int)($target->branch_id??0)===(int)$actor->branch_id,403,'Access can only be granted inside your assigned branch.');
   DB::table('learn_earn_exam_access')->updateOrInsert(['exam_id'=>$exam->id,'user_id'=>$v['user_id']],['status'=>'granted','payment_reference'=>$v['payment_reference']??null,'granted_at'=>now(),'created_at'=>now(),'updated_at'=>now()]);return back()->with('status','Verified access granted.');
  }
 }
