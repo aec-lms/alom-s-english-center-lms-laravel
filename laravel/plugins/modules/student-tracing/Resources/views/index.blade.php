@@ -7,7 +7,7 @@
                 <h1 class="text-2xl font-semibold">Student Activity Trace</h1>
                 <p class="text-sm text-gray-600">Branch-scoped student lifecycle history. Personal profile values are not copied into trace metadata.</p>
             </div>
-            <a href="{{ route('plugins.student-tracing.export', request()->query()) }}" class="rounded bg-slate-900 px-4 py-2 text-white">Export CSV</a>
+            <a href="{{ url('/admin/student-tracing/export') . (request()->getQueryString() ? '?' . request()->getQueryString() : '') }}" class="rounded bg-slate-900 px-4 py-2 text-white">Export CSV</a>
         </div>
 
         <form method="GET" class="grid gap-3 rounded border p-4 md:grid-cols-4">
