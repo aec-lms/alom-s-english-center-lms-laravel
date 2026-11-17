@@ -39,7 +39,8 @@
             "group": "Marketing, Growth & SEO",
             "label": "SEO & Sitemap",
             "route": "plugins.seo.index",
-            "order": 100
+            "order": 100,
+            "permission": "seo.manage"
         }
     ]
 }
