@@ -38,6 +38,7 @@ class BackupAndUpdateTest extends TestCase
 
         $prefix = 'restore-load-' . bin2hex(random_bytes(4)) . '-';
         $timestamp = now();
+        $passwordHash = password_hash('NotARealPassword!2026', PASSWORD_BCRYPT);
         $expected = 12000;
         for ($offset = 0; $offset < $expected; $offset += 50) {
             $rows = [];
@@ -47,7 +48,7 @@ class BackupAndUpdateTest extends TestCase
                     'name' => 'Production Restore Student ' . $i,
                     'email' => $prefix . $i . '@aec.test',
                     'phone' => null,
-                    'password' => password_hash('NotARealPassword!2026', PASSWORD_BCRYPT),
+                    'password' => $passwordHash,
                     'is_active' => true,
                     'created_at' => $timestamp,
                     'updated_at' => $timestamp,
