@@ -190,10 +190,26 @@ class UniversalUpdateService
 
             return $log;
         } catch (\Throwable $e) {
-            if (is_file($snapshotDir . DIRECTORY_SEPARATOR . 'snapshot.json')) {
-                $this->restorePayloadSnapshot($snapshotDir);
+            $recoveryErrors = [];
+            try {
+                // Migrations may already have changed data. Restore the pre-update DB snapshot.
+                $this->backups->restoreEncryptedBackup($backup, $actorId, true);
+            } catch (\Throwable $recoveryError) {
+                $recoveryErrors[] = 'Database recovery failed: ' . $recoveryError->getMessage();
             }
-            $log = UpdateLog::query()->create([
+            try {
+                if (is_file($snapshotDir . DIRECTORY_SEPARATOR . 'snapshot.json')) {
+                    $this->restorePayloadSnapshot($snapshotDir);
+                }
+            } catch (\Throwable $recoveryError) {
+                $recoveryErrors[] = 'Code recovery failed: ' . $recoveryError->getMessage();
+            }
+
+            $failureMessage = 'Update failed: ' . $e->getMessage();
+            if ($recoveryErrors !== []) {
+                $failureMessage .= ' | ' . implode(' | ', $recoveryErrors);
+            }
+            UpdateLog::query()->create([
                 'target_type' => $targetType,
                 'target_slug' => $targetSlug,
                 'from_version' => $fromVersion,
@@ -202,13 +218,18 @@ class UniversalUpdateService
                 'status' => 'failed',
                 'backup_reference' => $backup->filename,
                 'notes' => json_encode([
-                    'message' => 'Failed and automatically restored overwritten files: ' . $e->getMessage(),
+                    'message' => $failureMessage,
                     'snapshot_path' => $snapshotDir,
+                    'database_recovered' => !in_array('Database recovery failed:', array_map(
+                        static fn (string $message): string => substr($message, 0, strlen('Database recovery failed:')),
+                        $recoveryErrors
+                    ), true),
+                    'recovery_errors' => $recoveryErrors,
                 ], JSON_THROW_ON_ERROR),
                 'executed_by' => $actorId,
             ]);
-            $this->audit->log('update.failed', $targetType, $targetSlug, ['error' => $e->getMessage()], $actorId);
-            throw $e;
+            $this->audit->log('update.failed', $targetType, $targetSlug, ['error' => $failureMessage], $actorId);
+            throw new RuntimeException($failureMessage, previous: $e);
         } finally {
             $this->deleteDirectory($stagingDir);
             Artisan::call('up');
