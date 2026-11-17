@@ -19,6 +19,8 @@ class ExamAttempt extends Model
         'submitted_answers' => 'array',
         'passed' => 'boolean',
         'submitted_at' => 'datetime',
+        'score_obtained' => 'decimal:2',
+        'total_marks' => 'decimal:2',
     ];
 
     public function exam(): BelongsTo
