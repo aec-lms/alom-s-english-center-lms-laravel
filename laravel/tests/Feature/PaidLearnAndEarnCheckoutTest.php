@@ -21,6 +21,7 @@ class PaidLearnAndEarnCheckoutTest extends TestCase
             'course-management',
             'exam-management',
             'learn-and-earn',
+            'branch-management',
             'student-management',
             'fees-management',
             'payment-management',
