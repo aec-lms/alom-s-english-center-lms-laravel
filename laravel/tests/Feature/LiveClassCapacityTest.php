@@ -80,6 +80,9 @@ class LiveClassCapacityTest extends TestCase
             ->post("/live-classes/{$liveClass->id}/join")
             ->assertStatus(429);
 
+        // A capacity-rejected request must not create a false joined event.
+        $this->assertDatabaseCount('student_activity_events', 1);
+
         $this->actingAs($studentA)
             ->postJson("/live-classes/{$liveClass->id}/leave")
             ->assertOk()
@@ -94,6 +97,49 @@ class LiveClassCapacityTest extends TestCase
             'user_id' => $studentA->id,
         ]);
         $this->assertSame(2, LiveClassParticipant::query()->count());
+    }
+
+    public function test_heartbeat_requires_active_enrollment_and_leave_releases_own_seat(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management']);
+
+        $course = Course::query()->create([
+            'code' => 'LIVE-HEARTBEAT-AUTH',
+            'title' => 'Heartbeat Authorization Course',
+            'slug' => 'heartbeat-authorization-course',
+            'price' => 0,
+            'status' => 'published',
+        ]);
+        $liveClass = LiveClass::query()->create([
+            'course_id' => $course->id,
+            'title' => 'Heartbeat Authorization Session',
+            'platform' => 'zoom',
+            'meeting_url' => 'https://zoom.us/j/123456789',
+            'starts_at' => now()->subMinute(),
+            'status' => 'live',
+            'capacity' => 300,
+        ]);
+
+        $student = $this->createUserWithRole('student');
+        $enrollment = Enrollment::query()->create([
+            'user_id' => $student->id,
+            'course_id' => $course->id,
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($student)->post("/live-classes/{$liveClass->id}/join")->assertOk();
+
+        $enrollment->delete();
+        $this->actingAs($student)
+            ->postJson("/live-classes/{$liveClass->id}/heartbeat")
+            ->assertForbidden();
+
+        // The owner can still release their own seat after entitlement is revoked.
+        $this->actingAs($student)
+            ->postJson("/live-classes/{$liveClass->id}/leave")
+            ->assertOk()
+            ->assertJsonPath('left', true);
     }
 
     public function test_non_enrolled_student_and_non_student_role_cannot_join_live_class(): void
