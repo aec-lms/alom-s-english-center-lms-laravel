@@ -77,6 +77,8 @@ final class ThemePackageManager
             'installed_at'=>now()->toIso8601String(),
         ];
         $this->writeSetting(self::REGISTRY_KEY,$registry,$userId);
+        // If an active package is upgraded in place, apply its new validated tokens immediately.
+        if($this->activeSlug()===$manifest['slug']) $this->activate($manifest['slug'],$userId);
         return $registry[$manifest['slug']];
     }
 
