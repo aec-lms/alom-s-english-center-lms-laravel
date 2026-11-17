@@ -20,7 +20,8 @@
             "group": "Marketing, Growth & SEO",
             "label": "Visitor Pop-Up Ads",
             "route": "plugins.popups.index",
-            "order": 100
+            "order": 100,
+            "permission": "marketing.popups.manage"
         }
     ]
 }
