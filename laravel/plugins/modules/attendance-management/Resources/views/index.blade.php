@@ -76,7 +76,7 @@
             <label class="block text-sm font-semibold">Batch identity
                 <select id="attendance-roster-batch" class="mt-1 w-full rounded-lg border-slate-300">
                     <option value="">Select batch</option>
-                    @foreach ($batches as $batch)
+                    @foreach ($qrBatches as $batch)
                         <option value="{{ $batch->attendance_batch_mapping_id }}">{{ $batch->name }}</option>
                     @endforeach
                 </select>
