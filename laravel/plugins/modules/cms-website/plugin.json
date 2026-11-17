@@ -33,7 +33,8 @@
             "group": "CMS, Builders & AI",
             "label": "Website CMS",
             "route": "plugins.cms.index",
-            "order": 100
+            "order": 100,
+            "permission": "cms.manage"
         }
     ]
 }
