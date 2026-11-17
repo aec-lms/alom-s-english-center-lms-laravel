@@ -130,6 +130,15 @@ class AttendanceQrController extends Controller
         return response()->json(['status' => 'ok', 'revoked' => true]);
     }
 
+
+    public function showCheckin(Request $request)
+    {
+        abort_unless($request->user() && $request->user()->hasRole('student'), 403);
+        $validated = $request->validate(['token' => ['required', 'string', 'size:64']]);
+
+        return view('attendance-management::qr-checkin', ['token' => $validated['token']]);
+    }
+
     public function checkin(Request $request): JsonResponse
     {
         $actor = $request->user();
