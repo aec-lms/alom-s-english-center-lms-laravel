@@ -47,7 +47,7 @@ class PluginCriticalRegressionTest extends TestCase
 
         $this->assertIsString($migration);
         $this->assertIsString($controller);
-        $this->assertStringContainsString("$table->unsignedBigInteger('batch_id')->index();", $migration);
+        $this->assertStringContainsString('$table->unsignedBigInteger(\'batch_id\')->index();', $migration);
         $this->assertStringContainsString("Schema::hasTable('study_batches')", $controller);
         $this->assertStringContainsString("Schema::hasTable('batches')", $controller);
         $this->assertStringNotContainsString("exists:batches,id", $controller);
