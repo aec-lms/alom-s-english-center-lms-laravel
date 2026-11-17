@@ -28,4 +28,49 @@ class ExamStandaloneTest extends TestCase
             'is_published' => true,
         ]);
     }
+
+    public function test_student_can_open_exam_take_ui_and_submit_server_graded_answers(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['exam-management']);
+        $student = $this->createUserWithRole('student');
+
+        $examId = \\Illuminate\\Support\\Facades\\DB::table('exams')->insertGetId([
+            'title' => 'Student Grammar Exam',
+            'duration_minutes' => 20,
+            'pass_marks' => 1,
+            'is_published' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $questionId = \\Illuminate\\Support\\Facades\\DB::table('exam_questions')->insertGetId([
+            'exam_id' => $examId,
+            'prompt' => 'Choose the correct verb.',
+            'options' => json_encode(['is', 'are']),
+            'correct_option_index' => 0,
+            'marks' => 2,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($student)
+            ->get("/exams/{$examId}/take")
+            ->assertOk()
+            ->assertSee('Choose the correct verb.')
+            ->assertSee('Submit Exam')
+            ->assertDontSee('correct_option_index');
+
+        $this->actingAs($student)
+            ->post("/exams/{$examId}/attempt", ['answers' => [$questionId => 0]])
+            ->assertRedirect(route('portal.dashboard'))
+            ->assertSessionHas('status');
+
+        $this->assertDatabaseHas('exam_attempts', [
+            'exam_id' => $examId,
+            'user_id' => $student->id,
+            'score_obtained' => 2,
+            'total_marks' => 2,
+            'passed' => true,
+        ]);
+    }
 }
