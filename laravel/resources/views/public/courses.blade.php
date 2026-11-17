@@ -36,6 +36,14 @@
                 </div>
             </div>
 
+            @if ($filteredCourses->isEmpty())
+                <div class="rounded-2xl border border-slate-200 bg-white p-10 text-center md:col-span-2 lg:col-span-3">
+                    <h2 class="text-lg font-extrabold text-slate-900">No courses found in this learning path yet</h2>
+                    <p class="mt-2 text-sm text-slate-500">Choose another category or browse all available courses.</p>
+                    <a href="{{ route('public.courses', ['category' => 'all']) }}" class="mt-4 inline-flex rounded-lg bg-[#0284C7] px-4 py-2 text-xs font-bold text-white">Browse All Courses</a>
+                </div>
+            @endif
+
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 @foreach ($filteredCourses as $course)
                     @php
