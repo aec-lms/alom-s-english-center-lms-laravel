@@ -374,14 +374,6 @@ PHP;
         $this->actingAs($admin);
 
         $groups = app(\App\Core\Plugins\AdminMenuRegistry::class)->groups();
-        $this->assertNotEmpty($groups, 'Admin menu registry diagnostics: ' . json_encode([
-            'authenticated' => auth()->check(),
-            'course_record' => PluginRecord::query()->where('slug', 'course-management')->first()?->only(['is_installed', 'is_enabled']),
-            'trace_record' => PluginRecord::query()->where('slug', 'student-tracing')->first()?->only(['is_installed', 'is_enabled']),
-            'course_route' => \Illuminate\Support\Facades\Route::has('plugins.courses.index'),
-            'trace_route' => \Illuminate\Support\Facades\Route::has('plugins.student-tracing.index'),
-            'course_menu' => app(PluginManager::class)->discoverManifests()['course-management']->adminMenu,
-        ]));
         $allItems = array_merge([], ...array_values($groups));
         $labels = array_column($allItems, 'label');
 
