@@ -65,4 +65,21 @@ class GlobalSiteSettingsCentralAdminTest extends TestCase
         $this->actingAs($manager)->get('/admin/menu-editor')->assertForbidden();
     }
 
+
+    public function test_branch_manager_cannot_access_core_global_administration_areas(): void
+    {
+        $this->markSystemInstalled();
+        $manager = $this->createUserWithRole('branch_manager');
+        $permissionIds = \Illuminate\Support\Facades\DB::table('permissions')
+            ->whereIn('slug', ['core.settings.manage', 'core.plugins.manage', 'core.backups.manage', 'core.recycle_bin.manage'])
+            ->pluck('id');
+        $this->assertCount(4, $permissionIds);
+        $manager->roles()->first()->permissions()->syncWithoutDetaching($permissionIds);
+
+        $this->actingAs($manager)->get('/admin/site-identity')->assertForbidden();
+        $this->actingAs($manager)->get('/admin/plugins')->assertForbidden();
+        $this->actingAs($manager)->get('/admin/backups')->assertForbidden();
+        $this->actingAs($manager)->get('/admin/recycle-bin')->assertForbidden();
+    }
+
 }
