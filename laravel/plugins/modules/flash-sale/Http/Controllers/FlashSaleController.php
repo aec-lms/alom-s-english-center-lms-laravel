@@ -16,6 +16,7 @@ class FlashSaleController extends Controller
 {
     public function index(Request $request): View
     {
+        $this->ensureAssignedBranch($request);
         $courseIntegrationEnabled = $this->courseIntegrationEnabled();
         $salesQuery = DB::table('flash_sales');
 
@@ -29,6 +30,9 @@ class FlashSaleController extends Controller
             }
         } else {
             $salesQuery->select('flash_sales.*');
+            if ($request->user()?->hasRole('branch_manager')) {
+                $salesQuery->whereRaw('1 = 0');
+            }
         }
 
         $coursesQuery = $courseIntegrationEnabled ? DB::table('courses')->orderBy('title') : null;
@@ -47,6 +51,7 @@ class FlashSaleController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $this->ensureAssignedBranch($request);
         $this->ensureCourseIntegration();
         $values = $this->validated($request);
         $this->assertCourseInBranch($request, (int) $values['course_id']);
@@ -63,6 +68,7 @@ class FlashSaleController extends Controller
 
     public function update(Request $request, int $sale): RedirectResponse
     {
+        $this->ensureAssignedBranch($request);
         $this->ensureCourseIntegration();
         $values = $this->validated($request);
         $this->assertSaleInBranch($request, $sale);
@@ -80,6 +86,8 @@ class FlashSaleController extends Controller
 
     public function toggle(Request $request, int $sale): RedirectResponse
     {
+        $this->ensureAssignedBranch($request);
+        $this->ensureCourseIntegration();
         $this->assertSaleInBranch($request, $sale);
         $row = DB::table('flash_sales')->where('id', $sale)->first();
         abort_unless($row, 404);
@@ -94,6 +102,8 @@ class FlashSaleController extends Controller
 
     public function destroy(Request $request, int $sale): RedirectResponse
     {
+        $this->ensureAssignedBranch($request);
+        $this->ensureCourseIntegration();
         $this->assertSaleInBranch($request, $sale);
         abort_unless(DB::table('flash_sales')->where('id', $sale)->exists(), 404);
         DB::table('flash_sales')->where('id', $sale)->delete();
@@ -209,4 +219,24 @@ class FlashSaleController extends Controller
 
         return $values;
     }
+    private function ensureAssignedBranch(Request $request): void
+    {
+        $actor = $request->user();
+        if (!$actor || !$actor->hasRole('branch_manager')) {
+            return;
+        }
+
+        abort_unless(
+            $actor->branch_id !== null
+                && app(PluginManager::class)->isEnabled('branch-management')
+                && Schema::hasTable('branches')
+                && DB::table('branches')
+                    ->where('id', $actor->branch_id)
+                    ->where('is_active', true)
+                    ->exists(),
+            403,
+            'Branch manager must be assigned to an active branch.'
+        );
+    }
+
 }
