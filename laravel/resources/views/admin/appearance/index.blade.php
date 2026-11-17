@@ -81,6 +81,54 @@
         </div>
     </form>
 
+    <section class="rounded-2xl border border-slate-200 bg-white p-5 space-y-4">
+        <div>
+            <h2 class="font-extrabold text-slate-900">Global Typography &amp; Layout Controls</h2>
+            <p class="mt-1 text-xs text-slate-500">Set safe site-wide font, text scale, content width, corner radius and spacing. Plugin scopes inherit global values unless overridden.</p>
+        </div>
+        <form method="POST" action="{{ route('admin.appearance.design') }}" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            @csrf
+            <input type="hidden" name="scope" value="{{ $scope }}">
+            <label class="block text-sm font-semibold text-slate-700">Font family
+                <select name="design[font_family]" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
+                    <option value="plus-jakarta" @selected($design['font_family'] === 'plus-jakarta')>Plus Jakarta Sans + Bengali fallback</option>
+                    <option value="inter" @selected($design['font_family'] === 'inter')>Inter + Bengali fallback</option>
+                    <option value="noto-sans" @selected($design['font_family'] === 'noto-sans')>Noto Sans Bengali</option>
+                    <option value="system" @selected($design['font_family'] === 'system')>System default</option>
+                </select>
+            </label>
+            <label class="block text-sm font-semibold text-slate-700">Base font size
+                <select name="design[font_size]" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
+                    @foreach (['14','15','16','17','18'] as $size)<option value="{{ $size }}" @selected($design['font_size'] === $size)>{{ $size }} px</option>@endforeach
+                </select>
+            </label>
+            <label class="block text-sm font-semibold text-slate-700">Heading weight
+                <select name="design[heading_weight]" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
+                    @foreach (['600','700','800','900'] as $weight)<option value="{{ $weight }}" @selected($design['heading_weight'] === $weight)>{{ $weight }}</option>@endforeach
+                </select>
+            </label>
+            <label class="block text-sm font-semibold text-slate-700">Content width
+                <select name="design[content_width]" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
+                    @foreach (['960','1120','1280','1440','1600'] as $width)<option value="{{ $width }}" @selected($design['content_width'] === $width)>{{ $width }} px</option>@endforeach
+                </select>
+            </label>
+            <label class="block text-sm font-semibold text-slate-700">Corner radius
+                <select name="design[border_radius]" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
+                    @foreach (['8','12','16','20','24'] as $radius)<option value="{{ $radius }}" @selected($design['border_radius'] === $radius)>{{ $radius }} px</option>@endforeach
+                </select>
+            </label>
+            <label class="block text-sm font-semibold text-slate-700">Interface density
+                <select name="design[density]" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
+                    <option value="comfortable" @selected($design['density'] === 'comfortable')>Comfortable</option>
+                    <option value="compact" @selected($design['density'] === 'compact')>Compact</option>
+                </select>
+            </label>
+            <div class="sm:col-span-2 lg:col-span-3 flex justify-end">
+                <button type="submit" class="rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white">Save Typography &amp; Layout</button>
+            </div>
+        </form>
+    </section>
+
     <form method="POST" action="{{ route('admin.appearance.reset') }}" onsubmit="return confirm('Reset this theme to inherited/default colors?')">
         @csrf
         <input type="hidden" name="scope" value="{{ $scope }}">
