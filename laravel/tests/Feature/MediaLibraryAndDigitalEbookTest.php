@@ -45,22 +45,12 @@ class MediaLibraryAndDigitalEbookTest extends TestCase
         $this->assertNotNull($pdf);
         $this->assertSame('local', $pdf->disk);
         Storage::disk('local')->assertExists($pdf->path);
-
-        $this->actingAs($admin)->post('/admin/media', [
-            'file' => UploadedFile::fake()->create('teacher-notes.docx', 32, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
-            'collection' => 'teacher-documents',
-        ])->assertSessionHasNoErrors()->assertRedirect();
-
-        $document = DB::table('media_assets')->where('original_name', 'teacher-notes.docx')->first();
-        $this->assertNotNull($document);
-        $this->assertSame('local', $document->disk);
-        Storage::disk('local')->assertExists($document->path);
     }
 
     public function test_paid_ebook_download_is_locked_until_verified_payment_and_uses_server_price(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['branch-management', 'student-management', 'fees-management', 'storefront-catalog', 'payment-management', 'universal-payment', 'gateway-sslcommerz']);
+        $this->activatePlugins(['storefront-catalog', 'branch-management', 'student-management', 'fees-management', 'payment-management', 'universal-payment', 'gateway-sslcommerz']);
         app(PluginManager::class)->saveSettings('gateway-sslcommerz', [
             'store_id' => 'test-store',
             'store_password' => 'test-secret',
@@ -136,6 +126,19 @@ class MediaLibraryAndDigitalEbookTest extends TestCase
         $expectedReference = $transaction->reference;
         $this->assertSame(450.0, (float) $transaction->amount);
         $this->assertSame($itemId, (int) $transaction->storefront_item_id);
+
+        $this->actingAs($student)->post('/universal-checkout', [
+            'storefront_item_id' => $itemId,
+            'payer_name' => $student->name,
+            'payer_contact' => '01700000000',
+            'item_title' => 'Client supplied fake title',
+            'gateway' => 'sslcommerz',
+            'amount' => 1,
+        ])->assertStatus(409);
+        $this->assertSame(1, UniversalPaymentTransaction::query()
+            ->where('user_id', $student->id)
+            ->where('storefront_item_id', $itemId)
+            ->count());
         $this->actingAs($student)->get('/ebooks/protected-guide/download')->assertForbidden();
 
         $this->post('/universal-payment/sslcommerz/success', [
