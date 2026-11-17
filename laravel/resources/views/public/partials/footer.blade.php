@@ -67,7 +67,7 @@
                             </a>
                         </li>
                     @endforeach
-                </ul>           </ul>
+                </ul>
             </div>
 
             <!-- Column 3: Company Details -->
