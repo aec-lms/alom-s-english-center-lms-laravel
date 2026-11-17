@@ -307,6 +307,7 @@
                             <input name="meeting_url" type="url" required value="{{ $live->meeting_url }}" class="rounded-lg border border-slate-300 px-3 py-1.5">
                             <input name="recording_url" type="url" value="{{ $live->recording_url }}" placeholder="Recording Replay URL" class="rounded-lg border border-slate-300 px-3 py-1.5">
                             <input name="starts_at" type="datetime-local" required value="{{ date('Y-m-d\TH:i', strtotime((string) $live->starts_at)) }}" class="rounded-lg border border-slate-300 px-3 py-1.5">
+                            <input name="capacity" type="number" min="1" max="2000" value="{{ $live->capacity }}" required placeholder="LMS capacity" class="rounded-lg border border-slate-300 px-3 py-1.5">
                             <div class="sm:col-span-2 text-right">
                                 <button type="submit" class="px-4 py-1.5 rounded-lg bg-slate-900 text-white font-bold">Update Live Class</button>
                             </div>
