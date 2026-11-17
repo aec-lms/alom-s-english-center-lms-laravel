@@ -51,6 +51,7 @@ class EnrollmentController extends Controller
     public function store(Request $request, Course $course): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         abort_unless($actor && $actor->hasRole('student'), 403, 'Only student accounts can request course enrollment.');
         abort_unless($course->status === 'published', 404, 'This course is not open for enrollment.');
 
