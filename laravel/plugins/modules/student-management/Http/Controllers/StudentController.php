@@ -151,6 +151,10 @@ class StudentController extends Controller
         $id = (string) $student->id;
         DB::transaction(function () use ($student): void {
             $user = $student->user;
+            if (Schema::hasColumn('students', 'deleted_user_was_active')) {
+                $student->deleted_user_was_active = (bool) ($user?->is_active ?? false);
+                $student->save();
+            }
             $student->delete();
             if ($user) {
                 $user->update(['is_active' => false]);
