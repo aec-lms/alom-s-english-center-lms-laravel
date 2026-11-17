@@ -3,6 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ $title }} — AEC LMS</title>
     <style>
         body{font-family:system-ui,sans-serif;background:#f8fafc;color:#0f172a;margin:0;padding:24px}
@@ -16,6 +17,10 @@
 <main>
     <h1>{{ $title }}</h1>
     <p class="muted">Attendance records linked to your authorized student profile.</p>
+    @if (auth()->user()?->hasRole('student'))
+        <button id="revoke-gps-consent" type="button" style="margin:0 0 16px;padding:9px 12px;border:1px solid #cbd5e1;border-radius:8px">Revoke optional GPS consent</button>
+        <span id="gps-consent-status" role="status" class="muted"></span>
+    @endif
     <div style="overflow-x:auto">
         <table>
             <thead><tr><th>Date</th><th>Batch</th><th>Status</th><th>Remarks</th></tr></thead>
@@ -35,5 +40,18 @@
     </div>
     <div style="margin-top:16px">{{ $records->links() }}</div>
 </main>
+@if (auth()->user()?->hasRole('student'))
+<script>
+document.getElementById("revoke-gps-consent")?.addEventListener("click", async () => {
+    const status = document.getElementById("gps-consent-status");
+    const response = await fetch("{{ url('/attendance/gps-consent') }}", {
+        method: "DELETE",
+        credentials: "same-origin",
+        headers: { "Accept": "application/json", "X-CSRF-TOKEN": document.querySelector("meta[name=csrf-token]").content }
+    });
+    status.textContent = response.ok ? "Optional GPS consent revoked." : "Could not revoke consent. Please retry.";
+});
+</script>
+@endif
 </body>
 </html>
