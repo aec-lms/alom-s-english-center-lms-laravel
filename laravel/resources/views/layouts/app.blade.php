@@ -102,10 +102,32 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
+    @inject('themeManager', 'App\\Core\\Appearance\\ThemeManager')
     <style>
+        :root { {!! $themeManager->cssVariables() !!} }
         body {
+            background-color:var(--aec-page-bg)!important;
+            color:var(--aec-text)!important;
             font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         }
+        .bg-white { background-color:var(--aec-surface)!important; }
+        .bg-slate-50 { background-color:var(--aec-surface-alt)!important; }
+        .text-slate-900 { color:var(--aec-text)!important; }
+        .text-slate-500,.text-slate-600 { color:var(--aec-muted)!important; }
+        .border-slate-200,.border-slate-300 { border-color:var(--aec-border)!important; }
+        .bg-blue-600 { background-color:var(--aec-primary)!important;color:var(--aec-button-text)!important; }
+        .bg-sky-500,.bg-sky-600 { background-color:var(--aec-accent)!important; }
+        .text-sky-500,.text-sky-600 { color:var(--aec-info)!important; }
+        .bg-emerald-600,.bg-green-600 { background-color:var(--aec-success)!important; }
+        .text-emerald-700,.text-green-700 { color:var(--aec-success)!important; }
+        .bg-amber-500,.bg-amber-600 { background-color:var(--aec-warning)!important; }
+        .text-amber-700,.text-yellow-700 { color:var(--aec-warning)!important; }
+        .bg-rose-600,.bg-red-600 { background-color:var(--aec-danger)!important; }
+        .text-rose-700,.text-red-700 { color:var(--aec-danger)!important; }
+        header { background-color:var(--aec-header-bg); }
+        .hover\:bg-blue-700:hover { background-color:var(--aec-primary-hover)!important; }
+        .text-blue-600,.text-blue-700 { color:var(--aec-link)!important; }
+        input:not([type=color]),select,textarea { background-color:var(--aec-input-bg);color:var(--aec-input-text);border-color:var(--aec-border); }
         @keyframes marqueeLeft {
             0% { transform: translate3d(0, 0, 0); }
             100% { transform: translate3d(-50%, 0, 0); }
@@ -160,7 +182,7 @@
                         @if ($activePopup->description)
                             <p class="text-xs text-slate-600 leading-relaxed">{{ $activePopup->description }}</p>
                         @endif
-                        <a href="{{ $activePopup->cta_url ?: '/courses' }}" id="aec-popup-cta" class="inline-flex items-center justify-center w-full py-3 rounded-xl bg-[#0057FF] hover:bg-blue-700 text-white text-sm font-bold transition-colors">
+                        <a href="{{ $activePopup->cta_url ?: '/courses' }}" id="aec-popup-cta" class="inline-flex items-center justify-center w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold transition-colors">
                             {{ $activePopup->cta_text ?: 'Claim Offer' }}
                         </a>
                     </div>

@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\Admin\AppearanceController;
 use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\BackupController;
 use App\Http\Controllers\Admin\DashboardController;
@@ -91,6 +92,12 @@ Route::middleware('installed')->group(function (): void {
         Route::prefix('users')->name('users.')->middleware('permission:core.users.manage')->group(function (): void {
             Route::get('/', [UserRoleController::class, 'index'])->name('index');
             Route::post('/', [UserRoleController::class, 'store'])->name('store');
+        });
+
+        Route::prefix('appearance')->name('appearance.')->middleware('permission:core.settings.manage')->group(function (): void {
+            Route::get('/', [AppearanceController::class, 'index'])->name('index');
+            Route::post('/', [AppearanceController::class, 'update'])->name('update');
+            Route::post('/reset', [AppearanceController::class, 'reset'])->name('reset');
         });
 
         Route::get('/audit-logs', [AuditLogController::class, 'index'])
