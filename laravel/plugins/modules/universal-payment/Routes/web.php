@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Plugins\Modules\UniversalPayment\Http\Controllers\UniversalPaymentController;
 
-Route::middleware(['web', 'installed', 'plugin:universal-payment'])
+Route::middleware(['web', 'installed', 'auth', 'plugin:universal-payment'])
     ->post('/universal-checkout', [UniversalPaymentController::class, 'publicCheckout'])->middleware('throttle:10,1')
     ->name('plugins.universal_payment.checkout');
 
