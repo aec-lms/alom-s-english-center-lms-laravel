@@ -1,5 +1,5 @@
 @inject('siteWidgetManager', 'App\\Core\\Appearance\\SiteWidgetManager')
-@php($areaWidgets = collect($siteWidgetManager->all())->where('area', $area)->sortBy('order'))
+@php($areaWidgets = collect($siteWidgetManager->all())->where('area', $area)->where('visible', true)->sortBy('order'))
 @if ($areaWidgets->isNotEmpty())
     <div class="space-y-4" data-widget-area="{{ $area }}">
         @foreach ($areaWidgets as $widget)
