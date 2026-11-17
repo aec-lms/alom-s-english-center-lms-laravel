@@ -234,7 +234,7 @@ class UniversalPaymentInvoiceSettlementTest extends TestCase
                 'status' => 'verified',
                 'payment_reference' => 'BANK-OVERPAY-VERIFY',
             ])
-            ->assertSessionHasErrors();
+            ->assertStatus(422);
 
         $this->assertDatabaseHas('fee_invoices', [
             'id' => $invoice->id,
