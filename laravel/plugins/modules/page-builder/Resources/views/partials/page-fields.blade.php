@@ -1,0 +1,13 @@
+<div class="grid gap-3 md:grid-cols-2">
+<label class="text-xs font-semibold text-slate-600">Page title<input name="title" required maxlength="180" value="{{ $page?->title }}" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm"></label>
+<label class="text-xs font-semibold text-slate-600">URL slug<input name="slug" required maxlength="160" value="{{ $page?->slug }}" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm"></label>
+<label class="text-xs font-semibold text-slate-600">Template<select name="template" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm">@foreach(['standard'=>'Standard','landing'=>'Landing page','fullwidth'=>'Full width'] as $key=>$label)<option value="{{ $key }}" @selected(($page?->template??'standard')===$key)>{{ $label }}</option>@endforeach</select></label>
+<label class="text-xs font-semibold text-slate-600">Banner image<input type="file" name="banner" accept="image/jpeg,image/png,image/webp" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm"></label>
+<label class="text-xs font-semibold text-slate-600">SEO title<input name="seo_title" maxlength="180" value="{{ $page?->seo_title }}" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm"></label>
+<label class="text-xs font-semibold text-slate-600">SEO description<input name="seo_description" maxlength="320" value="{{ $page?->seo_description }}" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm"></label></div>
+<label class="inline-flex items-center gap-2 text-xs font-semibold"><input type="checkbox" name="is_published" value="1" @checked($page?->is_published??true)> Publish page</label>
+<input type="hidden" name="blocks_json" value="{{ json_encode($page?->blocks_json??[],JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_AMP|JSON_HEX_QUOT) }}">
+<div data-block-builder class="grid gap-4 lg:grid-cols-[210px_minmax(0,1fr)_minmax(0,1fr)]">
+<aside class="rounded-xl bg-slate-50 p-3 space-y-2"><h3 class="text-xs font-extrabold uppercase text-slate-500">Add content block</h3>@foreach(['heading'=>'Heading','text'=>'Text','image'=>'Image','button'=>'Button','spacer'=>'Spacer'] as $type=>$label)<button type="button" data-add-block="{{ $type }}" class="w-full rounded-lg border bg-white px-3 py-2 text-left text-xs font-bold">+ {{ $label }}</button>@endforeach<p class="pt-2 text-[11px] text-slate-500">Drag blocks to reorder. Maximum 30 blocks.</p></aside>
+<div class="min-w-0 space-y-2"><h3 class="text-xs font-extrabold uppercase text-slate-500">Layout blocks</h3><div data-block-canvas class="space-y-2"></div></div>
+<div class="min-w-0 space-y-2"><h3 class="text-xs font-extrabold uppercase text-slate-500">Live preview</h3><div data-block-preview class="min-h-40 rounded-xl border bg-white p-4"></div></div></div>
