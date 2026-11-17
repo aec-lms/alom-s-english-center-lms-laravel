@@ -214,4 +214,46 @@ class MediaLibraryAndDigitalEbookTest extends TestCase
         app(PluginManager::class)->disable('storefront-catalog');
         $this->actingAs($student)->get('/ebooks/protected-guide/download')->assertNotFound();
     }
+
+    public function test_media_library_supports_metadata_editing_recycle_restore_and_permanent_delete(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['media-library']);
+        $admin = $this->createUserWithRole('admin');
+        Storage::fake('public');
+        Storage::fake('local');
+
+        $this->actingAs($admin)->post('/admin/media', [
+            'file' => UploadedFile::fake()->image('reusable-banner.jpg'),
+            'collection' => 'marketing',
+            'alt_text' => 'Original banner',
+        ])->assertSessionHasNoErrors();
+
+        $asset = DB::table('media_assets')->where('original_name', 'reusable-banner.jpg')->first();
+        $this->assertNotNull($asset);
+        $this->actingAs($admin)->patch('/admin/media/' . $asset->id, [
+            'collection' => 'website banners',
+            'alt_text' => 'Updated accessible banner',
+        ])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('media_assets', [
+            'id' => $asset->id,
+            'collection' => 'website banners',
+            'alt_text' => 'Updated accessible banner',
+        ]);
+
+        $this->actingAs($admin)->delete('/admin/media/' . $asset->id)->assertSessionHasNoErrors();
+        $this->assertNotNull(DB::table('media_assets')->where('id', $asset->id)->value('deleted_at'));
+        Storage::disk('public')->assertExists($asset->path);
+        $this->actingAs($admin)->get('/admin/media?view=trash')->assertOk()->assertSee('reusable-banner.jpg');
+
+        $this->actingAs($admin)->post('/admin/media/' . $asset->id . '/restore')->assertSessionHasNoErrors();
+        $this->assertNull(DB::table('media_assets')->where('id', $asset->id)->value('deleted_at'));
+
+        $this->actingAs($admin)->delete('/admin/media/' . $asset->id)->assertSessionHasNoErrors();
+        $this->actingAs($admin)->delete('/admin/media/' . $asset->id . '/permanent')->assertSessionHasNoErrors();
+        $this->assertDatabaseMissing('media_assets', ['id' => $asset->id]);
+        Storage::disk('public')->assertMissing($asset->path);
+    }
+
+
 }
