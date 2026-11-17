@@ -55,7 +55,8 @@
             "group": "CMS, Builders & AI",
             "label": "Panel AI Assistant",
             "route": "plugins.ai.index",
-            "order": 100
+            "order": 100,
+            "permission": "ai.assistant.use"
         }
     ]
 }
