@@ -18,7 +18,7 @@ class StudentTraceController extends Controller
     {
         $validated = $request->validate([
             'student_id' => ['nullable', 'integer', 'min:1'],
-            'event_type' => ['nullable', 'in:student.created,student.updated,student.deleted'],
+            'event_type' => ['nullable', 'in:student.created,student.updated,student.deleted,attendance.created,attendance.updated,attendance.deleted,enrollment.created,enrollment.updated,enrollment.deleted,exam_attempt.created,exam_attempt.updated,exam_attempt.deleted'],
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date', 'after_or_equal:from'],
         ]);
@@ -45,8 +45,11 @@ class StudentTraceController extends Controller
     public function export(Request $request): StreamedResponse
     {
         abort_unless(Schema::hasTable('student_activity_events'), 404);
-        $request->validate([
+        $validated = $request->validate([
             'student_id' => ['nullable', 'integer', 'min:1'],
+            'event_type' => ['nullable', 'in:student.created,student.updated,student.deleted,attendance.created,attendance.updated,attendance.deleted,enrollment.created,enrollment.updated,enrollment.deleted,exam_attempt.created,exam_attempt.updated,exam_attempt.deleted'],
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date', 'after_or_equal:from'],
         ]);
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
@@ -54,6 +57,9 @@ class StudentTraceController extends Controller
         $query = DB::table('student_activity_events')
             ->when($actor && $actor->hasRole('branch_manager'), fn ($q) => $q->where('branch_id', (int) $actor->branch_id))
             ->when($request->filled('student_id'), fn ($q) => $q->where('student_id', (int) $request->input('student_id')))
+            ->when($request->filled('event_type'), fn ($q) => $q->where('event_type', $validated['event_type']))
+            ->when($request->filled('from'), fn ($q) => $q->whereDate('occurred_at', '>=', $validated['from']))
+            ->when($request->filled('to'), fn ($q) => $q->whereDate('occurred_at', '<=', $validated['to']))
             ->orderByDesc('occurred_at')
             ->limit(5000);
         $events = $query->get();
