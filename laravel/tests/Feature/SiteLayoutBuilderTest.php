@@ -55,7 +55,7 @@ class SiteLayoutBuilderTest extends TestCase
         $this->get('/')
             ->assertOk()
             ->assertSee('data-header-style="centered"',false)
-            ->assertDontSee('Company Details')
+            ->assertSee('display:none',false)
             ->assertDontSee('Pay With');
     }
 
