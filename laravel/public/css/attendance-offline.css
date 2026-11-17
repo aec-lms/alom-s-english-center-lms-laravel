@@ -1,0 +1,60 @@
+/* Small local fallback styles; the attendance register remains usable without CDN styles. */
+#attendance-sync-status {
+    display: block;
+    margin: 0 0 1rem;
+    padding: .8rem 1rem;
+    border: 1px solid #cbd5e1;
+    border-radius: .65rem;
+    background: #f8fafc;
+    color: #334155;
+    font: 500 .9rem/1.45 system-ui, sans-serif;
+}
+#attendance-register-form {
+    max-width: 100%;
+    color: #0f172a;
+    font: 400 .95rem/1.5 system-ui, sans-serif;
+}
+#attendance-register-form label { display: block; margin: .4rem 0; }
+#attendance-register-form input,
+#attendance-register-form select,
+#attendance-register-form button {
+    max-width: 100%;
+    min-height: 2.5rem;
+    padding: .45rem .6rem;
+    border: 1px solid #94a3b8;
+    border-radius: .45rem;
+    background: #fff;
+    color: #0f172a;
+}
+#attendance-register-form button[type="submit"] {
+    padding: .6rem 1rem;
+    border: 0;
+    background: #4338ca;
+    color: #fff;
+    font-weight: 700;
+}
+#attendance-register-form button:disabled { opacity: .6; }
+#attendance-register-form table { width: 100%; border-collapse: collapse; }
+#attendance-register-form th,
+#attendance-register-form td { padding: .55rem .4rem; border-bottom: 1px solid #e2e8f0; text-align: left; }
+#attendance-register-form tr[hidden] { display: none !important; }
+.attendance-offline-fallback {
+    margin: 0;
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    background: #f1f5f9;
+    color: #0f172a;
+    font: 16px/1.6 system-ui, sans-serif;
+}
+.attendance-offline-fallback main {
+    max-width: 38rem;
+    margin: 1.5rem;
+    padding: 2rem;
+    border-radius: 1rem;
+    background: #fff;
+    box-shadow: 0 10px 30px rgb(15 23 42 / 8%);
+}
+@media (max-width: 640px) {
+    #attendance-register-form table { min-width: 44rem; }
+}
