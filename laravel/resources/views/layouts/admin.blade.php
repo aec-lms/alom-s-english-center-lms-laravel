@@ -198,7 +198,21 @@
             </form>
         </div>
     </aside>
-    <main class="flex-1 p-6 overflow-y-auto">
+    <main class="flex-1 min-w-0 p-4 sm:p-6 overflow-y-auto">
+        <header class="sticky top-0 z-30 -mx-4 sm:-mx-6 -mt-4 sm:-mt-6 mb-6 border-b border-slate-200 px-4 sm:px-6 py-3 shadow-sm backdrop-blur">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="min-w-0">
+                    <div class="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">ALOMS LMS Core</div>
+                    <div class="text-sm font-extrabold text-slate-900">Admin Console <span class="font-medium text-slate-500">/ Core + Independent Plugins</span></div>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <a href="{{ route('admin.plugins.index') }}" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:border-blue-300 hover:text-blue-700 transition-colors">＋ Plugin Center</a>
+                    <a href="{{ route('admin.audit.index') }}" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:border-blue-300 hover:text-blue-700 transition-colors">Audit Logs</a>
+                    <a href="{{ route('home') }}" target="_blank" rel="noopener noreferrer" class="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700 transition-colors">↗ Visit Website</a>
+                    <span class="hidden md:inline-flex rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">{{ auth()->user()?->name ?? 'Administrator' }}</span>
+                </div>
+            </div>
+        </header>
         @if (session('status'))
             <div class="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{{ session('status') }}</div>
         @endif
