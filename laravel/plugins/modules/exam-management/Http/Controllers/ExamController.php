@@ -97,6 +97,7 @@ class ExamController extends Controller
             'course_id' => ['nullable', 'integer'],
             'title' => ['required', 'string', 'max:180'],
             'duration_minutes' => ['required', 'integer', 'min:5', 'max:360'],
+            'max_attempts' => ['required', 'integer', 'min:1', 'max:20'],
             'pass_marks' => ['required', 'numeric', 'min:0'],
             'is_published' => ['nullable', 'boolean'],
         ]);
