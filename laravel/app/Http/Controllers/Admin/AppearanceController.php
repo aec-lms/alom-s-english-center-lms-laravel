@@ -2,22 +2,22 @@
 
 declare(strict_types=1);
 
-namespace App\\Http\\Controllers\\Admin;
+namespace App\Http\Controllers\Admin;
 
-use App\\Core\\Appearance\\ThemeManager;
-use App\\Http\\Controllers\\Controller;
-use App\\Models\\AuditLog;
-use App\\Models\\PluginRecord;
-use Illuminate\\Http\\RedirectResponse;
-use Illuminate\\Http\\Request;
-use Illuminate\\View\\View;
+use App\Core\Appearance\ThemeManager;
+use App\Http\Controllers\Controller;
+use App\Models\AuditLog;
+use App\Models\PluginRecord;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\View\View;
 
 class AppearanceController extends Controller
 {
     public function index(Request $request, ThemeManager $themes): View
     {
         $scope = (string) $request->query('scope', 'global');
-        abort_unless($scope === 'global' || preg_match('/^plugin\\.[a-z0-9_-]+$/', $scope), 404);
+        abort_unless($scope === 'global' || preg_match('/^plugin\.[a-z0-9_-]+$/', $scope), 404);
         $colors = $themes->colors($scope);
         $design = $themes->design($scope);
         $plugins = PluginRecord::query()->where('is_installed', true)->orderBy('name')->get(['slug', 'name']);
@@ -27,7 +27,7 @@ class AppearanceController extends Controller
     public function update(Request $request, ThemeManager $themes): RedirectResponse
     {
         $validated = $request->validate([
-            'scope' => ['required', 'string', 'regex:/^(global|plugin\\.[a-z0-9_-]+)$/'],
+            'scope' => ['required', 'string', 'regex:/^(global|plugin\.[a-z0-9_-]+)$/'],
             'colors' => ['required', 'array'],
             'colors.*' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
         ]);
@@ -41,7 +41,7 @@ class AppearanceController extends Controller
     public function updateDesign(Request $request, ThemeManager $themes): RedirectResponse
     {
         $validated = $request->validate([
-            'scope' => ['required', 'string', 'regex:/^(global|plugin\\.[a-z0-9_-]+)$/'],
+            'scope' => ['required', 'string', 'regex:/^(global|plugin\.[a-z0-9_-]+)$/'],
             'design.font_family' => ['required', 'in:plus-jakarta,inter,noto-sans,system'],
             'design.font_size' => ['required', 'in:14,15,16,17,18'],
             'design.heading_weight' => ['required', 'in:600,700,800,900'],
@@ -58,7 +58,7 @@ class AppearanceController extends Controller
 
     public function reset(Request $request, ThemeManager $themes): RedirectResponse
     {
-        $validated = $request->validate(['scope' => ['required', 'string', 'regex:/^(global|plugin\\.[a-z0-9_-]+)$/']]);
+        $validated = $request->validate(['scope' => ['required', 'string', 'regex:/^(global|plugin\.[a-z0-9_-]+)$/']]);
         $scope = $validated['scope'];
         $this->assertScopeExists($scope);
         $themes->reset($scope);
