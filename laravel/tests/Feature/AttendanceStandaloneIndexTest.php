@@ -20,7 +20,7 @@ class AttendanceStandaloneIndexTest extends TestCase
 
         $this->actingAs($admin)->get('/admin/attendance')
             ->assertOk()
-            ->assertSee('Attendance &amp; Progress Tracking')
+            ->assertSee('Attendance & Progress Tracking')
             ->assertSee('Attendance Management is installed independently.')
             ->assertSee('Course Management')
             ->assertSee('Student Management')
