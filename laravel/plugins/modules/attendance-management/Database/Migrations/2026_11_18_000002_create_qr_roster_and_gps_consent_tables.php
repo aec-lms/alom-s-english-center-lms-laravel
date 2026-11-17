@@ -53,7 +53,7 @@ return new class extends Migration {
             Schema::create('attendance_qr_checkins', function (Blueprint $table): void {
                 $table->id();
                 $table->foreignId('attendance_qr_session_id')->constrained('attendance_qr_sessions')->cascadeOnDelete();
-                $table->foreignId('student_id')->constrained('students')->cascadeOnDelete();
+                $table->unsignedBigInteger('student_id')->index();
                 $table->foreignId('attendance_record_id')->nullable()->constrained('attendance_records')->nullOnDelete();
                 $table->foreignId('gps_consent_id')->nullable()->constrained('attendance_gps_consents')->nullOnDelete();
                 $table->string('source', 16)->default('qr');
