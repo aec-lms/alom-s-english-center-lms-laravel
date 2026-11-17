@@ -39,7 +39,7 @@ class ThemeManager
     {
         $route = request()->route();
         $action = (string) ($route?->getActionName() ?? '');
-        if (preg_match('/^Plugins\\Modules\\([A-Za-z0-9]+)\\/', $action, $matches)) {
+        if (preg_match('/^Plugins\\\\Modules\\\\([A-Za-z0-9]+)\\\\/', $action, $matches)) {
             $slug = strtolower((string) preg_replace('/(?<!^)[A-Z]/', '-$0', $matches[1]));
             return 'plugin.' . $slug;
         }
