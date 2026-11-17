@@ -88,7 +88,7 @@ class StudentTraceController extends Controller
         if (!$actor || !$actor->hasRole('branch_manager')) {
             return;
         }
-        if ($actor->branch_id === null || !DB::table('branches')->where('id', $actor->branch_id)->where('is_active', true)->exists()) {
+        if ($actor->branch_id === null || !Schema::hasTable('branches') || !DB::table('branches')->where('id', $actor->branch_id)->where('is_active', true)->exists()) {
             abort(403, 'Branch manager must be assigned to an active branch.');
         }
     }
