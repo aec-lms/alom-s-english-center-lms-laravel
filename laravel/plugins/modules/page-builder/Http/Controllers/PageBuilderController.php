@@ -91,22 +91,45 @@ class PageBuilderController extends Controller
     {
         $uniqueSlug = 'unique:cms_pages,slug' . ($page ? ',' . $page->id : '');
 
-        return $request->validate([
+        $validated = $request->validate([
             'slug' => ['required', 'alpha_dash', 'max:160', $uniqueSlug],
             'title' => ['required', 'string', 'max:180'],
             'template' => ['nullable', 'in:standard,landing,fullwidth'],
             'seo_title' => ['nullable', 'string', 'max:180'],
             'seo_description' => ['nullable', 'string', 'max:320'],
-            'blocks' => ['required', 'array', 'min:1', 'max:30'],
+            'blocks' => ['required_without:content_body', 'nullable', 'array', 'min:1', 'max:30'],
             'blocks.*.type' => ['required', 'in:' . implode(',', self::BLOCK_TYPES)],
             'blocks.*.content' => ['nullable', 'string', 'max:12000'],
             'blocks.*.url' => ['nullable', 'string', 'max:2048', 'regex:#^(https?://[^\\s]+|/(?!/)[^\\s]*)$#i'],
             'blocks.*.alt' => ['nullable', 'string', 'max:180'],
             'blocks.*.align' => ['nullable', 'in:left,center,right'],
             'blocks.*.height' => ['nullable', 'integer', 'min:16', 'max:240'],
+            'content_body' => ['required_without:blocks', 'nullable', 'string', 'max:12000'],
+            'cta_label' => ['nullable', 'string', 'max:80'],
+            'cta_url' => ['nullable', 'string', 'max:255', 'regex:#^(https?://[^\\s]+|/(?!/)[^\\s]*)$#i'],
             'banner' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
             'is_published' => ['nullable', 'boolean'],
         ]);
+
+        // Preserve the original text + CTA form contract for existing integrations and tests.
+        if (empty($validated['blocks'])) {
+            $legacyBlocks = [[
+                'type' => 'text',
+                'content' => (string) ($validated['content_body'] ?? ''),
+            ]];
+
+            if (trim((string) ($validated['cta_label'] ?? '')) !== '') {
+                $legacyBlocks[] = [
+                    'type' => 'button',
+                    'content' => $validated['cta_label'],
+                    'url' => $validated['cta_url'] ?? '/courses',
+                ];
+            }
+
+            $validated['blocks'] = $legacyBlocks;
+        }
+
+        return $validated;
     }
 
     private function normalizeBlocks(array $blocks): array
