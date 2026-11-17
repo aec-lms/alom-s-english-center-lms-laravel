@@ -39,3 +39,20 @@ test('guest cannot open the Admin Recycle Bin', async ({ page }) => {
   await expect(page).toHaveURL(/\/login(?:\?|$)/);
   await expect(page.getByRole('heading', { name: 'Welcome Back!' })).toBeVisible();
 });
+
+test('admin can reorder dashboard widgets and save the layout', async ({ page }) => {
+  await page.goto('/login');
+  await page.getByPlaceholder('Email Address').fill('e2e-admin@aec.test');
+  await page.locator('#login-password-input').fill('E2E-Strong-Password-2026!');
+  await page.getByRole('button', { name: /sign in/i }).click();
+  await expect(page).toHaveURL(/\/admin(?:\/|$)/);
+  await page.getByText('Customize Dashboard').click();
+
+  const moveSystemUp = page.getByRole('button', { name: 'Move System Information up' });
+  for (let i = 0; i < 4; i++) {
+    await moveSystemUp.click();
+  }
+  await page.getByRole('button', { name: 'Save layout' }).click();
+  await expect(page.locator('[data-dashboard-widget]').first()).toHaveAttribute('data-dashboard-widget', 'system_info');
+  await expect(page.getByRole('heading', { name: 'System Information' })).toBeVisible();
+});

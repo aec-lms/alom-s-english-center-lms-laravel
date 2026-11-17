@@ -42,7 +42,7 @@ class DashboardController extends Controller
             'widgets.*' => ['required', 'string', 'distinct', 'in:' . implode(',', self::WIDGETS)],
         ]);
 
-        $widgets = array_values(array_intersect(self::WIDGETS, $validated['widgets']));
+        $widgets = array_values(array_unique(array_filter($validated['widgets'], fn ($widget) => in_array($widget, self::WIDGETS, true))));
         SystemSetting::query()->updateOrCreate(
             ['key' => $this->preferenceKey(auth()->id())],
             ['value' => json_encode($widgets, JSON_THROW_ON_ERROR), 'updated_by' => auth()->id(), 'is_encrypted' => false],
@@ -82,7 +82,7 @@ class DashboardController extends Controller
             return $defaults;
         }
 
-        return array_values(array_intersect(self::WIDGETS, array_filter($stored, 'is_string')));
+        return array_values(array_unique(array_filter($stored, fn ($widget) => is_string($widget) && in_array($widget, self::WIDGETS, true))));
     }
 
     private function preferenceKey(int|string $userId): string
