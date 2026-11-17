@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\StudentTracing\\Http\\Controllers;
+namespace Plugins\Modules\StudentTracing\Http\Controllers;
 
-use App\\Http\\Controllers\\Controller;
-use App\\Models\\User;
-use Illuminate\\Http\\Request;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Facades\\Schema;
-use Illuminate\\View\\View;
-use Symfony\\Component\\HttpFoundation\\StreamedResponse;
+use App\Http\Controllers\Controller;
+use App\Models\User;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class StudentTraceController extends Controller
 {
