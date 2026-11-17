@@ -230,6 +230,34 @@ class AttendanceRegisterWorkflowTest extends TestCase
         $this->actingAs($studentUser)->postJson('/attendance/qr/check-in', [
             'token' => $expired['token'],
         ])->assertStatus(410);
+
+        $outside = $this->actingAs($admin)->postJson("/admin/attendance/batches/{$mapping->id}/qr", [
+            'expires_in_minutes' => 5,
+            'latitude' => 23.8103,
+            'longitude' => 90.4125,
+            'radius_meters' => 100,
+        ])->assertOk()->json();
+        $this->actingAs($studentUser)->postJson('/attendance/qr/check-in', [
+            'token' => $outside['token'],
+            'gps_consent' => true,
+            'latitude' => 23.8203,
+            'longitude' => 90.4125,
+            'gps_accuracy_meters' => 5,
+        ])->assertStatus(403);
+
+        $revoked = $this->actingAs($admin)->postJson("/admin/attendance/batches/{$mapping->id}/qr", [
+            'expires_in_minutes' => 5,
+        ])->assertOk()->json();
+        $this->actingAs($admin)->deleteJson("/admin/attendance/qr-sessions/{$revoked['session_id']}")->assertOk();
+        $this->actingAs($studentUser)->postJson('/attendance/qr/check-in', [
+            'token' => $revoked['token'],
+        ])->assertStatus(410);
+
+        $this->actingAs($studentUser)->deleteJson('/attendance/gps-consent')->assertOk();
+        $this->assertDatabaseHas('attendance_gps_consents', [
+            'user_id' => $studentUser->id,
+        ]);
+        $this->assertNotNull(DB::table('attendance_gps_consents')->where('user_id', $studentUser->id)->value('revoked_at'));
     }
 
 }
