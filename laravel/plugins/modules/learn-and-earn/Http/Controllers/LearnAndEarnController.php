@@ -27,19 +27,8 @@ class LearnAndEarnController extends Controller {
    'courses'=>$courseIntegrationEnabled?DB::table('courses')->where('status','published')->orderBy('title')->get(['id','title']):collect(),
    'examIntegrationEnabled'=>$examIntegrationEnabled&&$courseIntegrationEnabled,
   ]);
-  private function ensureExamIntegration():void {
-  abort_unless(
-   app(PluginManager::class)->isEnabled('exam-management')
-   && app(PluginManager::class)->isEnabled('course-management')
-   && Schema::hasTable('exams')
-   && Schema::hasTable('exam_questions')
-   && Schema::hasTable('courses')
-   && Schema::hasTable('learn_earn_exam_access'),
-   503,
-   'Enable the optional Course Management and Exam Management plugins to use exam delivery and paid access.'
-  );
  }
-}
+
  public function storeCategory(Request $r):RedirectResponse {
   $v=$r->validate(['name'=>['required','string','max:120'],'description'=>['nullable','string']]);$base=Str::slug($v['name']);$slug=$base;$i=1;while(DB::table('learn_earn_categories')->where('slug',$slug)->exists())$slug=$base.'-'.(++$i);
   DB::table('learn_earn_categories')->insert(['name'=>$v['name'],'slug'=>$slug,'description'=>$v['description']??null,'is_active'=>true,'created_at'=>now(),'updated_at'=>now()]);return back()->with('status','Category created.');
@@ -127,4 +116,17 @@ class LearnAndEarnController extends Controller {
   app(AuditLogger::class)->log('learn_earn.exam_access_manually_granted','learn_earn_exam_access',(string)$exam->id,['user_id'=>(int)$v['user_id'],'payment_reference'=>$reference]);
   return back()->with('status','Manual exam access granted and recorded for audit.');
  }
+ private function ensureExamIntegration():void {
+  abort_unless(
+   app(PluginManager::class)->isEnabled('exam-management')
+   && app(PluginManager::class)->isEnabled('course-management')
+   && Schema::hasTable('exams')
+   && Schema::hasTable('exam_questions')
+   && Schema::hasTable('courses')
+   && Schema::hasTable('learn_earn_exam_access'),
+   503,
+   'Enable the optional Course Management and Exam Management plugins to use exam delivery and paid access.'
+  );
+ }
+
 }
