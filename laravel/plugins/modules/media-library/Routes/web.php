@@ -5,7 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Route;
 use Plugins\Modules\MediaLibrary\Http\Controllers\MediaLibraryController;
 
-Route::middleware(['web', 'installed', 'auth', 'plugin:media-library', 'permission:media.manage'])
+Route::middleware(['web', 'installed', 'auth', 'plugin:media-library', 'permission:media.manage', 'central.admin'])
     ->prefix('admin/media')
     ->name('plugins.media.')
     ->group(function (): void {
