@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class BranchManagerTrackingFailClosedTest extends TestCase
@@ -33,4 +34,21 @@ class BranchManagerTrackingFailClosedTest extends TestCase
         $this->actingAs($manager)->get('/admin/student-tracing/export')->assertForbidden();
         $this->actingAs($manager)->get('/admin/student-tracking')->assertForbidden();
     }
+    public function test_branch_manager_with_stale_assignment_is_denied_when_branch_plugin_is_not_installed(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['student-tracing']);
+
+        $manager = $this->createUserWithRole('branch_manager');
+        $manager->branch_id = 99;
+        $manager->save();
+
+        $permissionId = DB::table('permissions')->where('slug', 'students.trace.view')->value('id');
+        $this->assertNotNull($permissionId);
+        $manager->roles()->first()->permissions()->syncWithoutDetaching([$permissionId]);
+
+        $this->assertFalse(Schema::hasTable('branches'));
+        $this->actingAs($manager)->get('/admin/student-tracing')->assertForbidden();
+    }
+
 }
