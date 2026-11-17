@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\FlashSale\\Http\\Controllers;
+namespace Plugins\Modules\FlashSale\Http\Controllers;
 
-use App\\Core\\Plugins\\PluginManager;
-use App\\Http\\Controllers\\Controller;
-use Illuminate\\Http\\RedirectResponse;
-use Illuminate\\Http\\Request;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Facades\\Schema;
-use Illuminate\\View\\View;
+use App\Core\Plugins\PluginManager;
+use App\Http\Controllers\Controller;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\View\View;
 
 class FlashSaleController extends Controller
 {
