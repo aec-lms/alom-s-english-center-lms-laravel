@@ -10,7 +10,7 @@ class AttendanceRecord extends Model
 {
     protected $fillable = [
         'batch_id', 'student_id', 'branch_id', 'attendance_date',
-        'status', 'remarks', 'marked_by',
+        'status', 'remarks', 'marked_by', 'sync_uuid', 'source', 'edited_reason',
     ];
 
     protected $casts = [
