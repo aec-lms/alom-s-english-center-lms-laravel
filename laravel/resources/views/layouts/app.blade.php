@@ -111,11 +111,13 @@
         :root { {!! $themeManager->cssVariables() !!}; {!! $themeManager->cssDesignVariables() !!} }
         body { font-family:var(--aec-font-family);font-size:var(--aec-font-size); }
         main { max-width:min(100%,var(--aec-content-width));margin-inline:auto; }
+        h1,h2,h3,h4,h5,h6 { font-weight:var(--aec-heading-weight); }
+        .rounded-xl { border-radius:var(--aec-radius); }
         .rounded-xl { border-radius:var(--aec-radius); }
         body {
             background-color:var(--aec-page-bg)!important;
             color:var(--aec-text)!important;
-            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-family:var(--aec-font-family), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;font-size:var(--aec-font-size);
         }
         .bg-white { background-color:var(--aec-surface)!important; }
         .bg-slate-50 { background-color:var(--aec-surface-alt)!important; }
