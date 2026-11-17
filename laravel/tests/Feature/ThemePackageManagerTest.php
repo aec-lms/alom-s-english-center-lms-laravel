@@ -1,0 +1,102 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Feature;
+
+use App\Core\Appearance\ThemeManager;
+use App\Models\SystemSetting;
+use Illuminate\Http\UploadedFile;
+use Tests\TestCase;
+use ZipArchive;
+
+class ThemePackageManagerTest extends TestCase
+{
+    public function test_admin_can_upload_activate_and_deactivate_theme_package_restoring_previous_settings(): void
+    {
+        if (!class_exists(ZipArchive::class)) $this->markTestSkipped('PHP ZIP extension is required.');
+        $this->markSystemInstalled();
+        $admin=$this->createUserWithRole('admin');
+        SystemSetting::query()->create([
+            'key'=>'appearance.theme.global',
+            'value'=>json_encode(['primary'=>'#123456'],JSON_THROW_ON_ERROR),
+            'is_encrypted'=>false,
+            'updated_by'=>$admin->id,
+        ]);
+
+        $upload=$this->makeThemeZip([
+            'slug'=>'ocean-blue','name'=>'Ocean Blue','version'=>'1.0.0',
+            'author'=>'AEC','description'=>'A clean blue theme',
+            'colors'=>['primary'=>'#075985','accent'=>'#38BDF8'],
+            'design'=>['font_family'=>'inter','content_width'=>'1280'],
+        ]);
+
+        try {
+            $this->actingAs($admin)->post(route('admin.appearance.themes.upload'),['theme_zip'=>$upload])
+                ->assertRedirect()
+                ->assertSessionHas('status');
+            $this->assertDatabaseHas('system_settings',['key'=>'appearance.themes.installed']);
+            $this->actingAs($admin)->post(route('admin.appearance.themes.activate','ocean-blue'))
+                ->assertRedirect();
+            $this->assertSame('ocean-blue',SystemSetting::query()->where('key','appearance.themes.active')->value('value'));
+            $this->assertSame('#075985',app(ThemeManager::class)->colors('global')['primary']);
+            $this->assertSame('1280',app(ThemeManager::class)->design('global')['content_width']);
+
+            $this->actingAs($admin)->post(route('admin.appearance.themes.deactivate'))->assertRedirect();
+            $this->assertDatabaseMissing('system_settings',['key'=>'appearance.themes.active']);
+            $this->assertSame('#123456',app(ThemeManager::class)->colors('global')['primary']);
+        } finally {
+            @unlink($upload->getRealPath());
+        }
+    }
+
+    public function test_theme_package_rejects_unsafe_color_tokens(): void
+    {
+        if (!class_exists(ZipArchive::class)) $this->markTestSkipped('PHP ZIP extension is required.');
+        $this->markSystemInstalled();
+        $admin=$this->createUserWithRole('admin');
+        $upload=$this->makeThemeZip([
+            'slug'=>'unsafe-theme','name'=>'Unsafe Theme','version'=>'1.0.0',
+            'author'=>'Test','description'=>'Invalid colors',
+            'colors'=>['primary'=>'red;background:url(javascript:alert(1))'],
+            'design'=>[],
+        ]);
+        try {
+            $this->actingAs($admin)->post(route('admin.appearance.themes.upload'),['theme_zip'=>$upload])
+                ->assertSessionHasErrors('theme');
+            $this->assertDatabaseMissing('system_settings',['key'=>'appearance.themes.installed']);
+        } finally {
+            @unlink($upload->getRealPath());
+        }
+    }
+
+    public function test_theme_package_rejects_executable_and_traversal_zip_entries(): void
+    {
+        if (!class_exists(ZipArchive::class)) $this->markTestSkipped('PHP ZIP extension is required.');
+        $this->markSystemInstalled();
+        $admin=$this->createUserWithRole('admin');
+        $upload=$this->makeThemeZip([
+            'slug'=>'safe-name','name'=>'Safe Name','version'=>'1.0.0',
+            'author'=>'Test','description'=>'Safe manifest',
+            'colors'=>['primary'=>'#123456'],'design'=>[],
+        ],['../payload.php'=>'<?php echo "bad";']);
+        try {
+            $this->actingAs($admin)->post(route('admin.appearance.themes.upload'),['theme_zip'=>$upload])
+                ->assertSessionHasErrors('theme');
+            $this->assertDatabaseMissing('system_settings',['key'=>'appearance.themes.installed']);
+        } finally {
+            @unlink($upload->getRealPath());
+        }
+    }
+
+    private function makeThemeZip(array $manifest,array $extra=[]): UploadedFile
+    {
+        $path=tempnam(sys_get_temp_dir(),'aec-theme-');
+        $zip=new ZipArchive();
+        $zip->open($path,ZipArchive::CREATE|ZipArchive::OVERWRITE);
+        $zip->addFromString('theme.json',json_encode($manifest,JSON_THROW_ON_ERROR));
+        foreach($extra as $name=>$contents)$zip->addFromString($name,$contents);
+        $zip->close();
+        return new UploadedFile($path,'theme-package.zip','application/zip',null,true);
+    }
+}
