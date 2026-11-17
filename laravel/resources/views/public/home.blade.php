@@ -2,7 +2,7 @@
 @section('title', "Alom's English Center — AEC LMS")
 @section('content')
 @php
-    $pluginManager = app(\\App\\Core\\Plugins\\PluginManager::class);
+    $pluginManager = app(\App\Core\Plugins\PluginManager::class);
     $showSslcommerzStrip = $pluginManager->isEnabled('gateway-sslcommerz')
         && filled($pluginManager->getSetting('gateway-sslcommerz', 'store_id'));
 
@@ -206,7 +206,7 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             @foreach ($learningPaths as $lp)
                 @if ($lp['enabled'] ?? true)
-                <a href="{{ route('public.courses', ['category' => $lp['category'] ?? $lp['title']]) }}" data-learning-path="{{ $lp['category'] ?? $lp['title'] }}" class="rounded-2xl p-6 border transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md flex flex-col justify-between space-y-5" style="background-color: {{ $lp['bg'] ?? '#D6E9FF' }}; border-color: {{ $lp['border'] ?? '#BBD8FF'] }};">
+                <a href="{{ route('public.courses', ['category' => $lp['category'] ?? $lp['title']]) }}" data-learning-path="{{ $lp['category'] ?? $lp['title'] }}" class="rounded-2xl p-6 border transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md flex flex-col justify-between space-y-5" style="background-color: {{ $lp['bg'] ?? '#D6E9FF' }}; border-color: {{ $lp['border'] ?? '#BBD8FF' }};">
                     <div class="space-y-4">
                         <div class="w-11 h-11 rounded-xl text-white font-extrabold text-xs flex items-center justify-center shadow-xs" style="background-color: {{ $lp['accent'] ?? '#1D63FF' }}">
                             {{ $lp['abbr'] ?? 'AC' }}
