@@ -152,6 +152,12 @@
             @endif
 
             <div class="px-3 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">CMS, Builders &amp; AI</div>
+            @if ($pluginManager->isEnabled('media-library') && Route::has('plugins.media.index'))
+                <a href="{{ route('plugins.media.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Media Library</a>
+            @endif
+            @if ($pluginManager->isEnabled('storefront-catalog') && Route::has('plugins.storefront.index'))
+                <a href="{{ route('plugins.storefront.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Products &amp; E-books</a>
+            @endif
             @if ($pluginManager->isEnabled('cms-website') && Route::has('plugins.cms.index'))
                 <a href="{{ route('plugins.cms.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Website CMS</a>
             @endif
