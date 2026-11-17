@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
+use Plugins\Modules\CourseManagement\Models\Course;
+use Plugins\Modules\CourseManagement\Models\Enrollment;
 use Tests\TestCase;
 
 class BranchManagerFailClosedTest extends TestCase
@@ -69,6 +71,40 @@ class BranchManagerFailClosedTest extends TestCase
         ])->assertForbidden();
 
         $this->assertDatabaseMissing('exams', ['title' => 'Unassigned Branch Exam']);
+    }
+
+
+    public function test_unassigned_branch_manager_cannot_view_or_change_course_enrollments(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'course-management']);
+
+        $manager = $this->createUserWithRole('branch_manager');
+        $permissionIds = DB::table('permissions')->where('slug', 'enrollments.manage')->pluck('id');
+        $this->assertCount(1, $permissionIds);
+        $manager->roles()->first()->permissions()->syncWithoutDetaching($permissionIds);
+
+        $student = $this->createUserWithRole('student');
+        $course = Course::query()->create([
+            'code' => 'BRANCH-ENROLL-01',
+            'title' => 'Branch Enrollment Isolation',
+            'slug' => 'branch-enrollment-isolation',
+            'price' => 0,
+            'status' => 'published',
+        ]);
+        $enrollment = Enrollment::query()->create([
+            'user_id' => $student->id,
+            'course_id' => $course->id,
+            'branch_id' => null,
+            'status' => 'pending',
+        ]);
+
+        $this->actingAs($manager)->get('/admin/enrollments')->assertForbidden();
+        $this->actingAs($manager)->patch('/admin/enrollments/' . $enrollment->id . '/status', [
+            'status' => 'active',
+        ])->assertForbidden();
+
+        $this->assertDatabaseHas('enrollments', ['id' => $enrollment->id, 'status' => 'pending']);
     }
 
 }

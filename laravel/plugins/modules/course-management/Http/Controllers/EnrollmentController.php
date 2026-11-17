@@ -36,6 +36,7 @@ class EnrollmentController extends Controller
     public function index(Request $request): View
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $enrollments = Enrollment::query()
             ->with(['user', 'course', 'invoice'])
             ->when($actor && $actor->hasRole('branch_manager'), fn ($q) => $q->where('branch_id', $actor->branch_id))
@@ -50,6 +51,7 @@ class EnrollmentController extends Controller
     public function store(Request $request, Course $course): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         abort_unless($actor && $actor->hasRole('student'), 403, 'Only student accounts can request course enrollment.');
         abort_unless($course->status === 'published', 404, 'This course is not open for enrollment.');
 
@@ -139,6 +141,7 @@ class EnrollmentController extends Controller
     public function updateStatus(Request $request, Enrollment $enrollment): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $enrollment->branch_id) {
             abort(403, 'Branch isolation violation.');
         }
@@ -155,4 +158,23 @@ class EnrollmentController extends Controller
 
         return back()->with('status', 'Enrollment status updated.');
     }
+    private function ensureAssignedBranch($actor): void
+    {
+        if (!$actor || !$actor->hasRole('branch_manager')) {
+            return;
+        }
+
+        abort_unless(
+            $actor->branch_id !== null
+                && $this->plugins->isEnabled('branch-management')
+                && Schema::hasTable('branches')
+                && DB::table('branches')
+                    ->where('id', $actor->branch_id)
+                    ->where('is_active', true)
+                    ->exists(),
+            403,
+            'Branch manager must be assigned to an active branch.'
+        );
+    }
+
 }
