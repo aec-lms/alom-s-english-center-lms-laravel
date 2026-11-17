@@ -11,7 +11,6 @@ use Illuminate\Support\Facades\DB;
 use Plugins\Modules\CourseManagement\Models\Enrollment;
 use Plugins\Modules\CourseManagement\Models\LiveClass;
 use Plugins\Modules\CourseManagement\Models\LiveClassParticipant;
-use Symfony\Component\HttpFoundation\Response;
 use Illuminate\View\View;
 
 class LiveClassAccessController extends Controller
