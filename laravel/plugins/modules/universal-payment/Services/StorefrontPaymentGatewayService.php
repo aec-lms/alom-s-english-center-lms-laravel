@@ -171,7 +171,7 @@ class StorefrontPaymentGatewayService
                 throw new RuntimeException('The paid exam price changed or the exam is no longer available. Manual review is required.');
             }
 
-            abort_unless(DB::table('learn_earn_exam_access')->where('exam_id', $exam->id)
+            abort_if(DB::table('learn_earn_exam_access')->where('exam_id', $exam->id)
                 ->where('user_id', $locked->user_id)->where('status', 'granted')->exists(), 409,
                 'Paid exam access has already been granted by another transaction.');
 
