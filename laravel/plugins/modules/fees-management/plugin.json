@@ -17,5 +17,13 @@
     "settings_schema": [],
     "optional_dependencies": [
         "student-management"
+    ],
+    "admin_menu": [
+        {
+            "group": "Finance & Gateways",
+            "label": "Fees & Invoices",
+            "route": "plugins.fees.index",
+            "order": 100
+        }
     ]
 }
