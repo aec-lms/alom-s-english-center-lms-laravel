@@ -9,6 +9,9 @@ use App\Models\Role;
 use App\Models\SystemSetting;
 use App\Models\User;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Storage;
+use App\Core\Appearance\SiteIdentityManager;
+use Plugins\Modules\MediaLibrary\Models\MediaAsset;
 use Tests\TestCase;
 
 class SetupWizardTest extends TestCase
