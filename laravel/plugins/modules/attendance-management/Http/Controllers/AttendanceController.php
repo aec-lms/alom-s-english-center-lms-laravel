@@ -14,7 +14,6 @@ use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Plugins\Modules\AttendanceManagement\Models\AttendanceRecord;
 use Plugins\Modules\StudentManagement\Models\Student;
-use Plugins\Modules\StudentTracking\Services\StudentActivityTracker;
 
 class AttendanceController extends Controller
 {
@@ -24,7 +23,8 @@ class AttendanceController extends Controller
     {
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
-        $branchId = $actor->hasRole('branch_manager') ? (int) $actor->branch_id : null;\n        $plugins = app(PluginManager::class);\n        $hasBatches = $plugins->isEnabled('batch-management') && Schema::hasTable('study_batches');\n        $hasStudents = $plugins->isEnabled('student-management') && Schema::hasTable('students');
+        $branchId = $actor->hasRole('branch_manager') ? (int) $actor->branch_id : null;
+        $plugins = app(PluginManager::class);\n        $hasBatches = $plugins->isEnabled('batch-management') && Schema::hasTable('study_batches');\n        $hasStudents = $plugins->isEnabled('student-management') && Schema::hasTable('students');
         $records = AttendanceRecord::query()
             ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
             ->latest('attendance_date')
@@ -51,7 +51,7 @@ class AttendanceController extends Controller
         $this->ensureAssignedBranch($actor);
         $plugins = app(PluginManager::class);
         abort_unless($plugins->isEnabled('student-management') && Schema::hasTable('students'), 409, 'Enable Student Management before recording attendance.');
-        abort_unless($plugins->isEnabled('batch-management') && Schema::hasTable('study_batches'), 409, 'Enable Course Management before recording attendance.');
+        abort_unless($plugins->isEnabled('batch-management') && Schema::hasTable('study_batches'), 409, 'Enable Batch Management before recording attendance.');
 
         $validated = $request->validate([
             'batch_id' => ['required', 'integer', 'exists:study_batches,id'],
