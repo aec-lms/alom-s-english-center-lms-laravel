@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Http\Controllers\Admin\AppearanceController;
 use App\Http\Controllers\Admin\ThemePackageController;
 use App\Http\Controllers\Admin\SiteIdentityController;
+use App\Http\Controllers\Admin\SiteLayoutController;
 use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\BackupController;
 use App\Http\Controllers\Admin\DashboardController;
@@ -144,6 +145,11 @@ Route::middleware('installed')->group(function (): void {
         Route::prefix('site-identity')->name('site-identity.')->middleware('permission:core.settings.manage')->group(function (): void {
             Route::get('/', [SiteIdentityController::class, 'edit'])->name('edit');
             Route::post('/', [SiteIdentityController::class, 'update'])->name('update');
+        });
+
+        Route::prefix('site-layout')->name('site-layout.')->middleware('permission:core.settings.manage')->group(function (): void {
+            Route::get('/', [SiteLayoutController::class, 'index'])->name('index');
+            Route::post('/', [SiteLayoutController::class, 'update'])->name('update');
         });
 
         Route::prefix('appearance')->name('appearance.')->middleware('permission:core.settings.manage')->group(function (): void {
