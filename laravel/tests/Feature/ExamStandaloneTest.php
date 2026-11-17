@@ -79,8 +79,17 @@ class ExamStandaloneTest extends TestCase
             'passed' => true,
         ]);
 
+        $secondAttemptPage = $this->actingAs($student)->get("/exams/{$examId}/take")->assertOk();
+        preg_match('/name="attempt_id" value="([0-9]+)"/', $secondAttemptPage->getContent(), $secondAttemptMatch);
+        $secondAttemptId = (int) ($secondAttemptMatch[1] ?? 0);
+        $this->assertGreaterThan(0, $secondAttemptId);
         $this->actingAs($student)->get("/exams/{$examId}/take")->assertOk();
         $this->assertDatabaseCount('exam_attempts', 2);
+
+        $this->actingAs($student)->post("/exams/{$examId}/attempt", [
+            'attempt_id' => $secondAttemptId,
+            'answers' => [$questionId => 0],
+        ])->assertRedirect(route('portal.dashboard'));
         $this->actingAs($student)->get("/exams/{$examId}/take")->assertForbidden();
     }
 
