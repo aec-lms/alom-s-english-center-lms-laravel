@@ -143,7 +143,6 @@ Route::middleware('installed')->group(function (): void {
             Route::get('/', [AppearanceController::class, 'index'])->name('index');
             Route::post('/', [AppearanceController::class, 'update'])->name('update');
             Route::post('/design', [AppearanceController::class, 'updateDesign'])->name('design');
-            Route::post('/design', [AppearanceController::class, 'updateDesign'])->name('design');
             Route::post('/reset', [AppearanceController::class, 'reset'])->name('reset');
         });
 
