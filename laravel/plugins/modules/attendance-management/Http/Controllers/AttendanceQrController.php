@@ -24,6 +24,9 @@ class AttendanceQrController extends Controller
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
         $mapping = AttendanceBatchMapping::query()->findOrFail($mappingId);
+        if ($actor->hasRole('branch_manager')) {
+            abort_if((int) $mapping->branch_id !== (int) $actor->branch_id, 403, 'Branch isolation violation.');
+        }
         $validated = $request->validate([
             'student_ids' => ['present', 'array', 'max:500'],
             'student_ids.*' => ['required', 'integer', 'distinct', 'exists:students,id'],
@@ -193,6 +196,7 @@ class AttendanceQrController extends Controller
 
     public function studentHistory(Request $request)
     {
+        abort_unless($request->user()->hasRole('student'), 403);
         $student = Student::query()->where('user_id', $request->user()->id)->firstOrFail();
         $records = AttendanceRecord::query()->with('batchIdentity')->where('student_id', $student->id)->latest('attendance_date')->paginate(30);
         return view('attendance-management::history', ['records' => $records, 'title' => 'My attendance']);
@@ -200,6 +204,8 @@ class AttendanceQrController extends Controller
 
     public function guardianHistory(Request $request, int $studentId)
     {
+        abort_unless($request->user()->hasRole('guardian'), 403);
+        abort_unless(Schema::hasTable('guardians') && Schema::hasTable('guardian_student'), 409, 'Guardian Management is not enabled.');
         $guardian = Guardian::query()->where('user_id', $request->user()->id)->firstOrFail();
         $linked = DB::table('guardian_student')->where('guardian_id', $guardian->id)->where('student_id', $studentId)->exists();
         abort_unless($linked, 403, 'You are not authorized to view this student attendance.');
