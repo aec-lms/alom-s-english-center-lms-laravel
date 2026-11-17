@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Core\Plugins\PluginManager;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class StudentTracingPluginTest extends TestCase
