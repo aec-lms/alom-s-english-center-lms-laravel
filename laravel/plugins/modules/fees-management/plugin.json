@@ -1,7 +1,7 @@
 {
     "slug": "fees-management",
     "name": "Fees, Invoices & Scholarships",
-    "version": "2.0.1",
+    "version": "2.0.2",
     "author": "Alom's English Center",
     "category": "finance",
     "description": "Fee categories, student invoices, discounts/scholarships, and due balances.",
@@ -15,5 +15,8 @@
         }
     ],
     "settings_schema": [],
-    "optional_dependencies": []
+    "optional_dependencies": [
+        "student-management",
+        "branch-management"
+    ]
 }
