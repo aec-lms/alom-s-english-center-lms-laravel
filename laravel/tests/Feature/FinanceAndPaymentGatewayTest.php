@@ -438,9 +438,7 @@ class FinanceAndPaymentGatewayTest extends TestCase
             'provider_refund_reference' => 're_test_overrefund_001',
         ])->assertSessionHasErrors('refund');
 
-        // The application deliberately blocks online refunds until a verified
-        // provider refund adapter is configured. A supplied reference is not
-        // proof that the provider actually refunded the charge.
+        // Online refunds must remain fail-closed until a verified provider refund adapter exists.
         $this->actingAs($admin)->post("/admin/payments/{$tx->id}/refund", [
             'amount' => 1500,
             'reason' => 'Partial fee adjustment',
