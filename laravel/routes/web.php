@@ -10,6 +10,7 @@ use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\SetupWizardController;
 use App\Http\Controllers\Admin\RolePermissionController;
 use App\Http\Controllers\Admin\AdminMenuController;
+use App\Http\Controllers\Admin\SiteNavigationController;
 use App\Http\Controllers\Admin\InstitutionSettingsController;
 use App\Http\Controllers\Admin\HealthMonitorController;
 use App\Http\Controllers\Admin\RecycleBinController;
@@ -83,6 +84,11 @@ Route::middleware('installed')->group(function (): void {
         Route::post('/menu-editor', [AdminMenuController::class, 'update'])
             ->name('menu-editor.update')
             ->middleware('permission:core.settings.manage');
+
+        Route::prefix('site-navigation')->name('site-navigation.')->middleware('permission:core.settings.manage')->group(function (): void {
+            Route::get('/', [SiteNavigationController::class, 'index'])->name('index');
+            Route::post('/', [SiteNavigationController::class, 'update'])->name('update');
+        });
 
         Route::prefix('plugins')->name('plugins.')->middleware('permission:core.plugins.manage')->group(function (): void {
             Route::get('/', [PluginCenterController::class, 'index'])->name('index');
