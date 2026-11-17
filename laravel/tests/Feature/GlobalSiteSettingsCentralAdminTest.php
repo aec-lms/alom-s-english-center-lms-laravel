@@ -39,16 +39,17 @@ class GlobalSiteSettingsCentralAdminTest extends TestCase
     public function test_branch_manager_cannot_access_global_mobile_or_gateway_configuration_routes(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['mobile-app-api', 'gateway-stripe', 'gateway-paypal']);
+        $this->activatePlugins(['mobile-app-api', 'gateway-stripe', 'gateway-paypal', 'storefront-catalog']);
 
         $manager = $this->createUserWithRole('branch_manager');
         $permissionIds = \Illuminate\Support\Facades\DB::table('permissions')
-            ->whereIn('slug', ['mobile.api.access', 'payments.stripe.manage', 'payments.paypal.manage'])
+            ->whereIn('slug', ['mobile.api.access', 'payments.stripe.manage', 'payments.paypal.manage', 'cms.manage'])
             ->pluck('id');
-        $this->assertCount(3, $permissionIds);
+        $this->assertCount(4, $permissionIds);
         $manager->roles()->first()->permissions()->syncWithoutDetaching($permissionIds);
 
         $this->actingAs($manager)->get('/admin/mobile-app')->assertForbidden();
+        $this->actingAs($manager)->get('/admin/storefront')->assertForbidden();
         $this->actingAs($manager)->get('/admin/payments/stripe')->assertForbidden();
         $this->actingAs($manager)->get('/admin/payments/paypal')->assertForbidden();
     }
