@@ -17,6 +17,7 @@
 <header class="w-full bg-white border-b border-slate-200/80 sticky top-0 z-40 shadow-2xs">
     <div class="max-w-[1200px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-6">
         <a href="{{ route('home') }}" class="flex items-center gap-2.5 whitespace-nowrap shrink-0">
+            @if (empty($siteIdentity['logo_url']))
             <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-9 h-9 shrink-0" aria-hidden="true">
                 <circle cx="32" cy="32" r="24" stroke="#CBD5E1" stroke-width="1.6" />
                 <path d="M13.5 16.5A26.5 26.5 0 0 1 56.5 23.5" stroke="#F59E0B" stroke-width="3.2" stroke-linecap="round" />
@@ -28,10 +29,13 @@
                 <path d="M47 24.5C44.8 20.5 40.6 18 35.8 18C28.7 18 23.2 24.1 23.2 32C23.2 39.9 28.7 46 35.8 46C40.7 46 45 43.3 47.1 39.2L41.8 36.8C40.5 39.2 38.3 40.5 35.8 40.5C31.9 40.5 29.1 36.9 29.1 32C29.1 27.1 31.9 23.5 35.8 23.5C38.3 23.5 40.4 24.8 41.7 27.1L47 24.5Z" fill="#F59E0B" />
                 <path d="M44 29.5C46 28.8 48.2 29 49.5 30.2C50.8 29 53 28.8 55 29.5V36.5C53 35.8 50.8 36 49.5 37.2C48.2 36 46 35.8 44 36.5V29.5Z" fill="#FFFFFF" stroke="#64748B" stroke-width="1.3" stroke-linejoin="round" />
                 <path d="M49.5 30.2V37.2" stroke="#64748B" stroke-width="1.2" />
-            </svg>
+      
+            @else
+                <img src="{{ $siteIdentity['logo_url'] }}" alt="{{ config('app.name') }} logo" class="h-9 max-w-36 shrink-0 object-contain">
+            @endif      </svg>
             <span class="leading-[1.06]">
-                <span class="block text-[13px] sm:text-sm font-black tracking-tight text-slate-900">ALOM'S</span>
-                <span class="block text-[10px] sm:text-[11px] font-extrabold tracking-tight text-slate-800">ENGLISH CENTER</span>
+                <span class="block text-[13px] sm:text-sm font-black tracking-tight text-slate-900">{{ config('app.name') }}</span>
+                <span class="block text-[10px] sm:text-[11px] font-extrabold tracking-tight text-slate-800">{{ $siteIdentity['tagline'] ?? '' }}</span>
             </span>
         </a>
 
