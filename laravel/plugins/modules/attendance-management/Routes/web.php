@@ -16,6 +16,7 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:attendance-management', '
         Route::post('/sync', [AttendanceSyncController::class, 'sync'])->name('sync');
         Route::put('/batches/{mappingId}/roster', [AttendanceQrController::class, 'assignRoster'])->whereNumber('mappingId')->name('roster.update');
         Route::post('/batches/{mappingId}/qr', [AttendanceQrController::class, 'issue'])->whereNumber('mappingId')->name('qr.issue');
+        Route::delete('/qr-sessions/{sessionId}', [AttendanceQrController::class, 'revoke'])->whereNumber('sessionId')->name('qr.revoke');
     });
 
 Route::middleware(['web', 'installed', 'auth', 'plugin:attendance-management'])
