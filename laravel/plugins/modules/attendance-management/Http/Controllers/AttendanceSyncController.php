@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\AttendanceManagement\\Http\\Controllers;
+namespace Plugins\Modules\AttendanceManagement\Http\Controllers;
 
-use App\\Core\\Plugins\\PluginManager;
-use App\\Core\\Security\\AuditLogger;
-use App\\Http\\Controllers\\Controller;
-use Illuminate\\Http\\JsonResponse;
-use Illuminate\\Http\\Request;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Facades\\Schema;
-use Plugins\\Modules\\AttendanceManagement\\Models\\AttendanceRecord;
-use Plugins\\Modules\\StudentManagement\\Models\\Student;
+use App\Core\Plugins\PluginManager;
+use App\Core\Security\AuditLogger;
+use App\Http\Controllers\Controller;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Plugins\Modules\AttendanceManagement\Models\AttendanceRecord;
+use Plugins\Modules\StudentManagement\Models\Student;
 
 class AttendanceSyncController extends Controller
 {
