@@ -25,14 +25,14 @@ class AttendanceController extends Controller
         $this->ensureAssignedBranch($actor);
         $branchId = $actor->hasRole('branch_manager') ? (int) $actor->branch_id : null;
         $plugins = app(PluginManager::class);
-        $hasBatches = $plugins->isEnabled('course-management') && Schema::hasTable('batches');
+        $batchTable = $this->batchTable();
         $hasStudents = $plugins->isEnabled('student-management') && Schema::hasTable('students');
         $records = AttendanceRecord::query()
             ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
             ->latest('attendance_date')
             ->paginate(30);
-        $batches = $hasBatches
-            ? DB::table('batches')
+        $batches = $batchTable !== null
+            ? DB::table($batchTable)
                 ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
                 ->orderBy('name')
                 ->get()
@@ -53,10 +53,11 @@ class AttendanceController extends Controller
         $this->ensureAssignedBranch($actor);
         $plugins = app(PluginManager::class);
         abort_unless($plugins->isEnabled('student-management') && Schema::hasTable('students'), 409, 'Enable Student Management before recording attendance.');
-        abort_unless($plugins->isEnabled('course-management') && Schema::hasTable('batches'), 409, 'Enable Course Management before recording attendance.');
+        $batchTable = $this->batchTable();
+        abort_unless($batchTable !== null, 409, 'Enable Batch Management or Course Management before recording attendance.');
 
         $validated = $request->validate([
-            'batch_id' => ['required', 'integer', 'exists:batches,id'],
+            'batch_id' => ['required', 'integer'],
             'attendance_date' => ['required', 'date'],
             'source' => ['nullable', 'in:online,offline'],
             'student_id' => ['nullable', 'integer', 'exists:students,id'],
@@ -72,7 +73,7 @@ class AttendanceController extends Controller
             'records.*.edit_reason' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $batch = DB::table('batches')->where('id', (int) $validated['batch_id'])->first();
+        $batch = DB::table($batchTable)->where('id', (int) $validated['batch_id'])->first();
         abort_unless($batch, 404, 'Batch not found.');
         $items = $validated['records'] ?? [[
             'student_id' => $validated['student_id'] ?? null,
@@ -144,6 +145,21 @@ class AttendanceController extends Controller
         });
 
         return back()->with('status', 'Attendance saved.');
+    }
+
+    private function batchTable(): ?string
+    {
+        $plugins = app(PluginManager::class);
+
+        if ($plugins->isEnabled('batch-management') && Schema::hasTable('study_batches')) {
+            return 'study_batches';
+        }
+
+        if ($plugins->isEnabled('course-management') && Schema::hasTable('batches')) {
+            return 'batches';
+        }
+
+        return null;
     }
 
     private function ensureAssignedBranch($actor): void
