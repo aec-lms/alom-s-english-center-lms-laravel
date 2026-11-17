@@ -21,6 +21,8 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:exam-management'])
         Route::delete('/{exam}', [ExamController::class, 'destroy'])
             ->middleware('permission:exams.manage')
             ->name('destroy');
+        // Backward-compatible endpoint; the controller enforces the student role.
+        Route::post('/{exam}/attempt', [ExamController::class, 'submitAttempt'])->name('attempt.admin');
         Route::post('/{exam}/questions', [ExamController::class, 'addQuestion'])
             ->middleware('permission:exams.manage')
             ->name('questions.store');
