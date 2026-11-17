@@ -75,6 +75,9 @@
             <a href="{{ route('admin.audit.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Audit Logs</a>
             <a href="{{ route('admin.institution-settings.edit') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Institution &amp; Region</a>
             @can('core.settings.manage')
+                <a href="{{ route('admin.setup-wizard.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Setup Wizard</a>
+            @endcan
+            @can('core.settings.manage')
                 <a href="{{ route('admin.site-identity.edit') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Site Identity &amp; Branding</a>
             @endcan
             <a href="{{ route('admin.appearance.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Design &amp; Appearance</a>
