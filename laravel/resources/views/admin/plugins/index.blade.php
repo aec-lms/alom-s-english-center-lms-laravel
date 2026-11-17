@@ -88,10 +88,45 @@
                             <input type="hidden" name="confirm_uninstall" value="1">
                             <button class="px-3 py-1.5 rounded-lg border border-rose-300 text-rose-700 font-semibold hover:bg-rose-50">Uninstall</button>
                         </form>
+                        <form method="POST" action="{{ route('admin.plugins.reset-settings', $plugin->slug) }}" onsubmit="return confirm('Reset all settings for {{ $plugin->name }}?')">
+                            @csrf
+                            <button class="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50">Reset Settings</button>
+                        </form>
+                        <form method="POST" action="{{ route('admin.plugins.delete', $plugin->slug) }}" onsubmit="return confirm('Move {{ $plugin->name }} to the recycle bin? You can restore it later.')">
+                            @csrf
+                            <button class="px-3 py-1.5 rounded-lg border border-rose-300 text-rose-700 font-semibold hover:bg-rose-50">Move to Recycle Bin</button>
+                        </form>
                     @endif
                 </div>
             </div>
         @endforeach
     </div>
+
+    <section class="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+        <div>
+            <h2 class="text-lg font-extrabold text-slate-900">Plugin Recycle Bin</h2>
+            <p class="text-xs text-slate-500">Restore archived plugins or permanently delete their files. LMS business records are preserved during normal plugin removal.</p>
+        </div>
+        @forelse ($archives as $archive)
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 border border-slate-100 rounded-xl p-3">
+                <div>
+                    <div class="font-bold text-sm text-slate-800">{{ $archive->plugin_name }}</div>
+                    <div class="text-xs text-slate-500">{{ $archive->plugin_slug }} · v{{ $archive->version }} · Deleted {{ optional($archive->deleted_at)->format('Y-m-d H:i') }}</div>
+                </div>
+                <div class="flex gap-2">
+                    <form method="POST" action="{{ route('admin.plugins.recycle-bin.restore', $archive->id) }}">
+                        @csrf
+                        <button class="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold">Restore</button>
+                    </form>
+                    <form method="POST" action="{{ route('admin.plugins.recycle-bin.permanent-delete', $archive->id) }}" onsubmit="return confirm('Permanently delete {{ $archive->plugin_name }}? This cannot be undone.')">
+                        @csrf
+                        <button class="px-3 py-1.5 rounded-lg border border-rose-300 text-rose-700 text-xs font-semibold">Delete Permanently</button>
+                    </form>
+                </div>
+            </div>
+        @empty
+            <p class="text-sm text-slate-500">Recycle Bin is empty.</p>
+        @endforelse
+    </section>
 </div>
 @endsection
