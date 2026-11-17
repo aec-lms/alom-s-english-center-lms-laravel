@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Route;
 use Plugins\Modules\AttendanceManagement\Http\Controllers\AttendanceController;
+use Plugins\Modules\AttendanceManagement\Http\Controllers\AttendanceSyncController;
 
 Route::middleware(['web', 'installed', 'auth', 'plugin:attendance-management', 'permission:attendance.manage'])
     ->prefix('admin/attendance')
