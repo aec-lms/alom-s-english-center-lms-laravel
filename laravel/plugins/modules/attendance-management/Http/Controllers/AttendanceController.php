@@ -25,12 +25,21 @@ class AttendanceController extends Controller
     {
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
+        $branchId = $actor->hasRole('branch_manager') ? (int) $actor->branch_id : null;
         $records = AttendanceRecord::query()
-            ->when($actor->hasRole('branch_manager'), fn ($q) => $q->where('branch_id', $actor->branch_id))
+            ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
             ->latest('attendance_date')
             ->paginate(30);
+        $batches = StudyBatch::query()
+            ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
+            ->orderBy('name')
+            ->get();
+        $students = Student::query()
+            ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
+            ->orderBy('id')
+            ->get();
 
-        return view('attendance-management::index', compact('records'));
+        return view('attendance-management::index', compact('records', 'batches', 'students'));
     }
 
     public function store(Request $request): RedirectResponse
