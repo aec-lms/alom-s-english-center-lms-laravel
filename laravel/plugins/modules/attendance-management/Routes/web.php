@@ -11,4 +11,5 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:attendance-management', '
     ->group(function (): void {
         Route::get('/', [AttendanceController::class, 'index'])->name('index');
         Route::post('/', [AttendanceController::class, 'store'])->name('store');
+        Route::post('/sync', [AttendanceSyncController::class, 'sync'])->name('sync');
     });
