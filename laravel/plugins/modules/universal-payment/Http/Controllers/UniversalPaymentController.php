@@ -25,16 +25,22 @@ class UniversalPaymentController extends Controller
         private readonly StorefrontPaymentGatewayService $storefrontGateway,
     ) {}
 
-    public function index(): View
+    public function index(Request $request): View
     {
+        $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $enabledRaw = $this->plugins->getSetting('universal-payment', 'enabled_gateways', 'sslcommerz,bkash,nagad,rocket,card,bank_cash');
         $config = [
             'default_currency' => $this->plugins->getSetting('universal-payment', 'default_currency', (string) config('lms.default_currency', 'BDT')),
             'enabled_gateways' => array_filter(array_map('trim', explode(',', (string) $enabledRaw))),
         ];
-        $transactions = Schema::hasTable('universal_payment_transactions')
-            ? UniversalPaymentTransaction::query()->latest()->limit(50)->get()
-            : collect();
+        $transactionQuery = Schema::hasTable('universal_payment_transactions')
+            ? UniversalPaymentTransaction::query()->latest()
+            : null;
+        if ($transactionQuery && $actor && $actor->hasRole('branch_manager')) {
+            $transactionQuery->where('branch_id', $actor->branch_id);
+        }
+        $transactions = $transactionQuery ? $transactionQuery->limit(50)->get() : collect();
 
         return view('universal-payment::index', compact('config', 'transactions'));
     }
@@ -59,6 +65,8 @@ class UniversalPaymentController extends Controller
 
     public function storeTransaction(Request $request): RedirectResponse
     {
+        $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         $validated = $request->validate([
             'payer_name' => ['required', 'string', 'max:160'],
             'payer_contact' => ['nullable', 'string', 'max:120'],
@@ -88,7 +96,7 @@ class UniversalPaymentController extends Controller
             'currency' => $this->plugins->getSetting('universal-payment', 'default_currency', 'BDT') ?: 'BDT',
             'amount' => $validated['amount'],
             'external_trx_id' => trim($validated['external_trx_id']),
-            'branch_id' => auth()->user()?->branch_id,
+            'branch_id' => $actor?->branch_id,
             'status' => 'pending',
             'verified_by' => null,
             'verified_at' => null,
@@ -106,6 +114,7 @@ class UniversalPaymentController extends Controller
     {
         $actor = $request->user();
         abort_unless($actor !== null, 401);
+        $this->ensureAssignedBranch($actor);
         if ($actor->hasRole('branch_manager')) {
             abort_unless((int) ($actor->branch_id ?? 0) > 0
                 && (int) ($transaction->branch_id ?? 0) === (int) $actor->branch_id, 404);
@@ -129,6 +138,7 @@ class UniversalPaymentController extends Controller
     public function updateStatus(Request $request, UniversalPaymentTransaction $transaction): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         if ($actor && $actor->hasRole('branch_manager')) {
             abort_unless((int) ($actor->branch_id ?? 0) > 0
                 && (int) ($transaction->branch_id ?? 0) === (int) $actor->branch_id, 404);
@@ -352,4 +362,17 @@ class UniversalPaymentController extends Controller
         return redirect('/ebooks/' . rawurlencode((string) $slug))->with('status', 'Payment was cancelled.');
     }
 
+    private function ensureAssignedBranch($actor): void
+    {
+        if (!$actor || !$actor->hasRole('branch_manager')) {
+            return;
+        }
+        if ($actor->branch_id === null || !$this->plugins->isEnabled('branch-management') || !Schema::hasTable('branches')) {
+            abort(403, 'Branch manager must be assigned to an active branch.');
+        }
+        $activeBranch = DB::table('branches')->where('id', $actor->branch_id)->where('is_active', true)->exists();
+        if (!$activeBranch) {
+            abort(403, 'Branch manager access is disabled because the assigned branch is inactive.');
+        }
+    }
 }
