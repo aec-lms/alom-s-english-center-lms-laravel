@@ -109,7 +109,8 @@ class SetupWizardController extends Controller
                     default => 'setup.payment.'.str_replace('_', '.', $field),
                 };
                 $secret = in_array($field, ['bkash_secret', 'rocket_secret'], true);
-                $stored = $secret && filled($value) ? Crypt::encryptString((string) $value) : (string) ($value ?? '');
+                if ($secret && !filled($value)) continue;
+                $stored = $secret ? Crypt::encryptString((string) $value) : (string) ($value ?? '');
                 SystemSetting::query()->updateOrCreate(['key' => $key], [
                     'value' => $stored, 'is_encrypted' => $secret, 'updated_by' => $request->user()->id,
                 ]);
@@ -123,6 +124,11 @@ class SetupWizardController extends Controller
                 'ip_address' => $request->ip(), 'metadata' => ['step' => $step, 'fields' => array_keys($data)],
             ]);
         });
+        if ($step === 'branding') {
+            app(ThemeManager::class)->save('global', [
+                'primary' => $data['primary_color'], 'secondary' => $data['secondary_color'], 'accent' => $data['accent_color'],
+            ], $request->user()->id);
+        }
         if ($step === 'institution') {
             config(['app.name' => $data['institution_name'], 'app.locale' => $data['institution_locale'], 'app.timezone' => $data['institution_timezone'], 'lms.default_currency' => $data['institution_currency']]);
         }
@@ -132,9 +138,9 @@ class SetupWizardController extends Controller
 
     public function complete(Request $request): RedirectResponse
     {
-        $required = ['institution.name', 'academic.current_year_name', 'academic.current_year_start', 'academic.current_year_end'];
-        $missing = SystemSetting::query()->whereIn('key', $required)->pluck('key')->all();
-        if (count($missing) !== count($required)) {
+        $required = ['institution', 'branding', 'academic', 'payments'];
+        $saved = SystemSetting::query()->whereIn('key', array_map(fn ($item) => 'setup.wizard.step.'.$item, $required))->pluck('key')->all();
+        if (count($saved) !== count($required)) {
             return redirect()->route('admin.setup-wizard.index')->withErrors(['setup' => 'প্রতিষ্ঠান ও শিক্ষাবর্ষের তথ্য আগে সম্পন্ন করুন।']);
         }
         SystemSetting::query()->updateOrCreate(['key' => 'setup.wizard.completed'], [
