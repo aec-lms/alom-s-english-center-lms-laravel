@@ -45,7 +45,8 @@
             "group": "Marketing, Growth & SEO",
             "label": "SMS Marketing",
             "route": "plugins.sms.index",
-            "order": 100
+            "order": 100,
+            "permission": "communication.sms.manage"
         }
     ]
 }
