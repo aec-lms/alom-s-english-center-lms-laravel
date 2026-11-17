@@ -28,11 +28,11 @@ class SiteNavigationController extends Controller
             'menus.primary' => ['required', 'array', 'min:1', 'max:30'],
             'menus.footer' => ['required', 'array', 'min:1', 'max:30'],
             'menus.primary.*.label' => ['required', 'string', 'max:60'],
-            'menus.primary.*.url' => ['required', 'string', 'max:2048', 'regex:#^(https?://[^\\s]+|/(?!/)[^\\s]*)$#i'],
+            'menus.primary.*.url' => ['required', 'string', 'max:2048', function (string $attribute, mixed $value, \Closure $fail) use ($navigation): void { if (!$navigation->isSafeUrl((string) $value)) $fail('Use a safe same-site path or HTTP(S) URL.'); }],
             'menus.primary.*.order' => ['required', 'integer', 'between:-1000,1000'],
             'menus.primary.*.visibility' => ['required', 'in:show,hide'],
             'menus.footer.*.label' => ['required', 'string', 'max:60'],
-            'menus.footer.*.url' => ['required', 'string', 'max:2048', 'regex:#^(https?://[^\\s]+|/(?!/)[^\\s]*)$#i'],
+            'menus.footer.*.url' => ['required', 'string', 'max:2048', function (string $attribute, mixed $value, \Closure $fail) use ($navigation): void { if (!$navigation->isSafeUrl((string) $value)) $fail('Use a safe same-site path or HTTP(S) URL.'); }],
             'menus.footer.*.order' => ['required', 'integer', 'between:-1000,1000'],
             'menus.footer.*.visibility' => ['required', 'in:show,hide'],
         ]);
