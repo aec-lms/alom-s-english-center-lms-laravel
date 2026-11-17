@@ -79,6 +79,8 @@ class UniversalPaymentController extends Controller
             'proof_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
         ]);
 
+        $this->assertGatewayEnabled($validated['gateway']);
+
         if ($request->hasFile('proof_file')) {
             abort_unless(in_array($validated['gateway'], ['bank_cash', 'offline'], true), 422, 'Receipt evidence is accepted only for manual bank/cash payments.');
             abort_unless(Schema::hasColumn('universal_payment_transactions', 'proof_path')
@@ -257,6 +259,8 @@ class UniversalPaymentController extends Controller
             'storefront_item_id' => ['nullable', 'integer'],
             'fee_invoice_id' => ['nullable', 'integer'],
         ]);
+
+        $this->assertGatewayEnabled($validated['gateway']);
 
         $hasInvoice = !empty($validated['fee_invoice_id']);
         $hasStorefrontItem = !empty($validated['storefront_item_id']);
@@ -482,6 +486,22 @@ class UniversalPaymentController extends Controller
         }
         $slug = DB::table('storefront_items')->where('id', $transaction->storefront_item_id)->value('slug');
         return redirect('/ebooks/' . rawurlencode((string) $slug))->with('status', 'Payment was cancelled.');
+    }
+
+    private function assertGatewayEnabled(string $gateway): void
+    {
+        $enabledRaw = $this->plugins->getSetting(
+            'universal-payment',
+            'enabled_gateways',
+            'sslcommerz,bkash,nagad,rocket,card,bank_cash'
+        );
+        $enabled = array_filter(array_map('trim', explode(',', (string) $enabledRaw)));
+
+        abort_unless(
+            in_array($gateway, $enabled, true),
+            422,
+            'The selected payment method is currently disabled by the administrator.'
+        );
     }
 
     private function ensureAssignedBranch($actor): void
