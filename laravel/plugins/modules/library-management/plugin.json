@@ -1,18 +1,32 @@
 {
     "slug": "library-management",
     "name": "Library Management",
-    "version": "2.0.0",
+    "version": "2.0.1",
     "author": "Alom's English Center",
     "category": "academic",
     "description": "Printed Book Inventory, ISBN Catalog, Issue/Return Tracking, and Late-Return Fine Calculation.",
     "core_compatibility": "^2.0",
-    "dependencies": ["branch-management"],
+    "dependencies": [],
     "provider": "Plugins\\Modules\\LibraryManagement\\Providers\\LibraryManagementServiceProvider",
     "permissions": [
-        { "slug": "library.manage", "name": "Manage Library Catalog & Book Loans" }
+        {
+            "slug": "library.manage",
+            "name": "Manage Library Catalog & Book Loans"
+        }
     ],
     "settings_schema": [
-        { "key": "daily_fine_bdt", "label": "Overdue Fine per Day (BDT)", "encrypted": false },
-        { "key": "default_loan_days", "label": "Default Loan Duration (Days)", "encrypted": false }
+        {
+            "key": "daily_fine_bdt",
+            "label": "Overdue Fine per Day (BDT)",
+            "encrypted": false
+        },
+        {
+            "key": "default_loan_days",
+            "label": "Default Loan Duration (Days)",
+            "encrypted": false
+        }
+    ],
+    "optional_dependencies": [
+        "branch-management"
     ]
 }
