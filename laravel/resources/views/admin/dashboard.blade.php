@@ -41,23 +41,23 @@
     @if (in_array('users', $widgets, true) || in_array('plugins', $widgets, true) || in_array('backups', $widgets, true))
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             @if (in_array('users', $widgets, true))
-                <div class="rounded-2xl border border-slate-200 bg-white p-5">
+                <div data-dashboard-widget="users" class="rounded-2xl border border-slate-200 bg-white p-5">
                     <div class="text-xs text-slate-500">Registered Accounts</div>
                     <div class="mt-1 text-2xl font-extrabold">{{ $metrics['users'] }}</div>
                 </div>
             @endif
             @if (in_array('plugins', $widgets, true))
-                <div class="rounded-2xl border border-slate-200 bg-white p-5">
+                <div data-dashboard-widget="plugins" class="rounded-2xl border border-slate-200 bg-white p-5">
                     <div class="text-xs text-slate-500">Discovered Plugins</div>
                     <div class="mt-1 text-2xl font-extrabold">{{ $metrics['plugins_total'] }}</div>
                 </div>
-                <div class="rounded-2xl border border-slate-200 bg-white p-5">
+                <div data-dashboard-widget="plugins" class="rounded-2xl border border-slate-200 bg-white p-5">
                     <div class="text-xs text-slate-500">Active Plugins</div>
                     <div class="mt-1 text-2xl font-extrabold text-emerald-700">{{ $metrics['plugins_enabled'] }}</div>
                 </div>
             @endif
             @if (in_array('backups', $widgets, true))
-                <div class="rounded-2xl border border-slate-200 bg-white p-5">
+                <div data-dashboard-widget="backups" class="rounded-2xl border border-slate-200 bg-white p-5">
                     <div class="text-xs text-slate-500">Encrypted Backups</div>
                     <div class="mt-1 text-2xl font-extrabold">{{ $metrics['backups'] }}</div>
                 </div>
@@ -66,7 +66,7 @@
     @endif
 
     @if (in_array('system_info', $widgets, true))
-        <section class="rounded-2xl border border-slate-200 bg-white p-5">
+        <section data-dashboard-widget="system_info" class="rounded-2xl border border-slate-200 bg-white p-5">
             <h2 class="mb-3 text-sm font-bold text-slate-900">System Information</h2>
             <div class="grid gap-3 text-sm sm:grid-cols-2">
                 <div><span class="text-slate-500">Core version:</span> <strong>{{ $metrics['core_version'] }}</strong></div>
@@ -76,7 +76,7 @@
     @endif
 
     @if (in_array('audit_trail', $widgets, true))
-        <section class="rounded-2xl border border-slate-200 bg-white p-5">
+        <section data-dashboard-widget="audit_trail" class="rounded-2xl border border-slate-200 bg-white p-5">
             <h2 class="mb-3 text-sm font-bold text-slate-900">Recent Security Audit Trail</h2>
             <div class="overflow-x-auto">
                 <table class="w-full text-left text-xs">
