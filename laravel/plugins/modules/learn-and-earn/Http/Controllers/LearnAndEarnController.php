@@ -80,7 +80,7 @@ class LearnAndEarnController extends Controller {
   try {
    $checkout=$gateway->initiateSslcommerz($tx,$exam,$r->user(),$v['payer_contact']);
    return redirect()->away($checkout);
-  } catch(\\Throwable $e) {
+  } catch(\Throwable $e) {
    report($e);
    return back()->withErrors(['payment'=>'Unable to start secure checkout. No exam access was granted.']);
   }
