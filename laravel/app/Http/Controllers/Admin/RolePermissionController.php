@@ -47,6 +47,11 @@ class RolePermissionController extends Controller
     {
         $actor = $request->user();
         abort_if(
+            $role->slug === 'admin',
+            403,
+            'The protected Administrator role cannot be modified.'
+        );
+        abort_if(
             $role->is_system && !$actor?->hasRole('admin'),
             403,
             'Only an existing Administrator may modify system roles.'
