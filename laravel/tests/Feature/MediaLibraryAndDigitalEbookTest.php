@@ -57,6 +57,36 @@ class MediaLibraryAndDigitalEbookTest extends TestCase
             'sandbox_mode' => '1',
         ], ['store_password']);
 
+        $admin = $this->createUserWithRole('admin');
+        $publicUrlItem = StorefrontItem::query()->create([
+            'type' => 'ebook',
+            'slug' => 'free-public-guide',
+            'title' => 'Free Public Guide',
+            'category' => 'IELTS',
+            'price' => 0,
+            'original_price' => 0,
+            'is_free' => true,
+            'pages' => 10,
+            'stock_count' => 0,
+            'summary' => 'A free guide with a public download URL',
+            'download_url' => 'https://example.com/free-guide.pdf',
+            'is_active' => true,
+        ]);
+        $this->actingAs($admin)->put('/admin/storefront/' . $publicUrlItem->id, [
+            'type' => 'ebook',
+            'title' => 'Now Paid Guide',
+            'category' => 'IELTS',
+            'price' => 100,
+            'original_price' => 100,
+            'pages' => 10,
+            'stock_count' => 0,
+            'summary' => 'Attempt to retain a public file after making it paid',
+            'download_url' => '',
+            'is_free' => false,
+            'is_active' => true,
+            'is_carousel_featured' => false,
+        ])->assertSessionHasErrors('download_url');
+
         $student = $this->createUserWithRole('student');
         Storage::fake('local');
         $pdfPath = 'digital-products/private-guide.pdf';
