@@ -103,8 +103,13 @@ class LiveClassAccessController extends Controller
             ->whereNull('left_at')
             ->firstOrFail();
         $participant->update(['last_seen_at' => now()]);
+        $activeCount = LiveClassParticipant::query()
+            ->where('live_class_id', $liveClass->id)
+            ->whereNull('left_at')
+            ->where('last_seen_at', '>=', now()->subMinutes(2))
+            ->count();
 
-        return response()->json(['active' => true, 'last_seen_at' => now()->toIso8601String()]);
+        return response()->json(['active' => true, 'active_count' => $activeCount, 'last_seen_at' => now()->toIso8601String()]);
     }
 
     public function leave(Request $request, LiveClass $liveClass): JsonResponse
