@@ -100,24 +100,77 @@ class PublicHomeController extends Controller
             abort(404);
         }
 
-        $blocks = json_decode((string) ($page->blocks_json ?? '[]'), true);
-        $body = is_array($blocks) ? (string) ($blocks[0]['content'] ?? '') : '';
+        $storedBlocks = json_decode((string) ($page->blocks_json ?? '[]'), true);
+        $blocks = [];
 
-        $ctaBlock = is_array($blocks)
-            ? collect($blocks)->first(fn ($block) => is_array($block) && ($block['type'] ?? null) === 'cta')
-            : null;
-        $ctaUrl = trim((string) ($ctaBlock['url'] ?? ''));
-        $isSafeRelativeCta = str_starts_with($ctaUrl, '/') && !str_starts_with($ctaUrl, '//');
-        $isSafeExternalCta = filter_var($ctaUrl, FILTER_VALIDATE_URL)
-            && in_array(strtolower((string) parse_url($ctaUrl, PHP_URL_SCHEME)), ['http', 'https'], true);
-        $cta = is_array($ctaBlock)
-            && trim((string) ($ctaBlock['label'] ?? '')) !== ''
-            && ($isSafeRelativeCta || $isSafeExternalCta)
-                ? ['label' => trim((string) $ctaBlock['label']), 'url' => $ctaUrl]
-                : null;
+        foreach (is_array($storedBlocks) ? $storedBlocks : [] as $block) {
+            if (!is_array($block)) {
+                continue;
+            }
 
-        return view('public.custom-page', compact('page', 'body', 'cta'));
+            $type = (string) ($block['type'] ?? '');
+            if ($type === 'rich_text') {
+                $type = 'text';
+            } elseif ($type === 'cta') {
+                $type = 'button';
+            }
+
+            if (in_array($type, ['heading', 'text'], true)) {
+                $content = trim((string) ($block['content'] ?? ''));
+                if ($content !== '') {
+                    $align = $block['align'] ?? 'left';
+                    $blocks[] = [
+                        'type' => $type,
+                        'content' => $content,
+                        'align' => in_array($align, ['left', 'center', 'right'], true) ? $align : 'left',
+                    ];
+                }
+            } elseif ($type === 'image') {
+                $url = trim((string) ($block['url'] ?? ''));
+                if ($this->isSafePageBlockUrl($url)) {
+                    $blocks[] = [
+                        'type' => 'image',
+                        'url' => $url,
+                        'alt' => trim((string) ($block['alt'] ?? '')),
+                    ];
+                }
+            } elseif ($type === 'button') {
+                $url = trim((string) ($block['url'] ?? ''));
+                $label = trim((string) ($block['label'] ?? $block['content'] ?? ''));
+                if ($label !== '' && $this->isSafePageBlockUrl($url)) {
+                    $align = $block['align'] ?? 'left';
+                    $blocks[] = [
+                        'type' => 'button',
+                        'label' => $label,
+                        'url' => $url,
+                        'align' => in_array($align, ['left', 'center', 'right'], true) ? $align : 'left',
+                    ];
+                }
+            } elseif ($type === 'spacer') {
+                $blocks[] = [
+                    'type' => 'spacer',
+                    'height' => max(16, min(240, (int) ($block['height'] ?? 48))),
+                ];
+            }
+        }
+
+        return view('public.custom-page', compact('page', 'blocks'));
     }
+
+    private function isSafePageBlockUrl(string $url): bool
+    {
+        if ($url === '') {
+            return false;
+        }
+
+        if (str_starts_with($url, '/') && !str_starts_with($url, '//') && !str_contains($url, '..') && !str_contains($url, '\\')) {
+            return true;
+        }
+
+        return filter_var($url, FILTER_VALIDATE_URL)
+            && in_array(strtolower((string) parse_url($url, PHP_URL_SCHEME)), ['http', 'https'], true);
+    }
+
     public function courses(Request $request): View
     {
         $activeCategory = trim((string) $request->query('category', 'all'));
