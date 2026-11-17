@@ -64,6 +64,23 @@ class StudentTrackingServiceProvider extends BasePluginServiceProvider
                 return ['result_percent' => $total > 0 ? round(($score / $total) * 100, 2) : 0];
             },
         );
+        Event::listen('lms.live_class.joined', function (object $student, object $liveClass): void {
+            if (app(PluginManager::class)->isEnabled('student-tracking')
+                && method_exists($student, 'hasRole')
+                && $student->hasRole('student')
+                && Schema::hasTable('student_activity_events')) {
+                app(StudentActivityTracker::class)->record(
+                    (int) $student->id,
+                    'live_class_joined',
+                    'live_class',
+                    $liveClass->id ?? null,
+                    null,
+                    ['source' => 'live-class-join'],
+                    Auth::id(),
+                );
+            }
+        });
+
         $this->listenForAttendanceEvents();
     }
 
