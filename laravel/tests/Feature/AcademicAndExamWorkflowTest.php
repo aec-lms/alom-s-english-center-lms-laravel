@@ -202,8 +202,8 @@ class AcademicAndExamWorkflowTest extends TestCase
         ])->assertRedirect();
 
         $attempt = ExamAttempt::query()->firstOrFail();
-        $this->assertSame(5, $attempt->score_obtained);
-        $this->assertSame(5, $attempt->total_marks);
+        $this->assertEquals(5.0, (float) $attempt->score_obtained);
+        $this->assertEquals(5.0, (float) $attempt->total_marks);
         $this->assertTrue($attempt->passed);
     }
     public function test_paid_course_enrollment_is_activated_only_after_verified_invoice_settlement(): void
