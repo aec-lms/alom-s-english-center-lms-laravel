@@ -13,7 +13,7 @@ class Exam extends Model
     use SoftDeletes;
 
     protected $fillable = [
-        'course_id', 'branch_id', 'title', 'duration_minutes', 'pass_marks', 'learn_earn_type', 'access_price',
+        'course_id', 'branch_id', 'title', 'duration_minutes', 'max_attempts', 'pass_marks', 'learn_earn_type', 'access_price',
         'starts_at', 'ends_at', 'is_published',
     ];
 
