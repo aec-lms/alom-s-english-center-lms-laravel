@@ -18,5 +18,21 @@
             "name": "Manage Enrollments"
         }
     ],
-    "settings_schema": []
+    "settings_schema": [],
+    "admin_menu": [
+        {
+            "group": "Academic & Operations",
+            "label": "Courses",
+            "route": "plugins.courses.index",
+            "permission": "courses.manage",
+            "order": 10
+        },
+        {
+            "group": "Academic & Operations",
+            "label": "Course Enrollments",
+            "route": "plugins.enrollments.index",
+            "permission": "enrollments.manage",
+            "order": 20
+        }
+    ]
 }
