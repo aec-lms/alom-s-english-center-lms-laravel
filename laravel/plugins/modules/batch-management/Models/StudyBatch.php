@@ -5,15 +5,17 @@ declare(strict_types=1);
 namespace Plugins\Modules\BatchManagement\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class StudyBatch extends Model
 {
+    use SoftDeletes;
+
     protected $table = 'study_batches';
 
     protected $fillable = [
         'branch_id',
         'course_title',
-        'academic_level',
         'batch_code',
         'name',
         'schedule',
