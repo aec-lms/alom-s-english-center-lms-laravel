@@ -13,7 +13,7 @@ return new class extends Migration {
             Schema::create('attendance_batch_rosters', function (Blueprint $table): void {
                 $table->id();
                 $table->foreignId('attendance_batch_mapping_id')->constrained('attendance_batch_mappings')->cascadeOnDelete();
-                $table->foreignId('student_id')->constrained('students')->cascadeOnDelete();
+                $table->unsignedBigInteger('student_id')->index();
                 $table->foreignId('assigned_by')->nullable()->constrained('users')->nullOnDelete();
                 $table->boolean('is_active')->default(true);
                 $table->timestamps();

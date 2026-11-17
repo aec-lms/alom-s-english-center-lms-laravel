@@ -6,9 +6,7 @@
     "category": "payment-gateway",
     "description": "Live PayPal Orders v2 checkout and capture with OAuth credentials, server-side webhook signature verification, amount/currency matching and idempotency.",
     "core_compatibility": "^2.0",
-    "dependencies": [
-        "payment-management"
-    ],
+    "dependencies": [],
     "provider": "Plugins\\Modules\\GatewayPaypal\\Providers\\GatewayPaypalServiceProvider",
     "permissions": [
         {
@@ -57,5 +55,9 @@
             "order": 100,
             "permission": "payments.paypal.manage"
         }
+    ],
+    "optional_dependencies": [
+        "fees-management",
+        "payment-management"
     ]
 }

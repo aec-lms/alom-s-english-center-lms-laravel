@@ -1,0 +1,193 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Feature;
+
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\URL;
+use Tests\TestCase;
+
+class LessonContentProtectionTest extends TestCase
+{
+    private string $privateMediaRoot;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management']);
+        $this->privateMediaRoot = sys_get_temp_dir() . '/aec-content-protection-' . uniqid('', true);
+        config(['lms.private_storage_path' => $this->privateMediaRoot]);
+    }
+
+    protected function tearDown(): void
+    {
+        if (is_dir($this->privateMediaRoot)) {
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($this->privateMediaRoot, \FilesystemIterator::SKIP_DOTS),
+                \RecursiveIteratorIterator::CHILD_FIRST
+            );
+            foreach ($iterator as $item) {
+                $item->isDir() ? @rmdir($item->getPathname()) : @unlink($item->getPathname());
+            }
+            @rmdir($this->privateMediaRoot);
+        }
+        parent::tearDown();
+    }
+
+    public function test_active_enrolled_student_receives_short_lived_signed_media_access(): void
+    {
+        [$student, $lessonId] = $this->createProtectedLesson('active');
+
+        $response = $this->actingAs($student)->getJson(route('plugins.lesson-media.access', $lessonId));
+
+        $response->assertOk()->assertJsonPath('download_allowed', false)->assertJsonPath('download_url', null);
+        $this->assertSame(
+            $student->email . ' | ID ' . $student->id . ' | ' . now()->format('Y-m-d H:i:s'),
+            $response->json('watermark')
+        );
+
+        $url = $response->json('url');
+        $this->assertStringContainsString('signature=', $url);
+        $this->assertStringContainsString('expires=', $url);
+
+        $stream = $this->get($url);
+        $stream->assertOk();
+        $stream->assertHeader('Content-Type', 'video/mp4')
+            ->assertHeader('Content-Disposition')
+            ->assertHeader('Cache-Control');
+    }
+
+    public function test_pending_or_cancelled_enrollment_cannot_obtain_media_access(): void
+    {
+        [$student, $lessonId] = $this->createProtectedLesson('pending');
+
+        $this->actingAs($student)
+            ->getJson(route('plugins.lesson-media.access', $lessonId))
+            ->assertForbidden();
+    }
+
+    public function test_signed_media_url_is_bound_to_the_issuing_student_account(): void
+    {
+        [$student, $lessonId] = $this->createProtectedLesson('active');
+        $otherStudent = $this->createUserWithRole('student');
+
+        $url = $this->actingAs($student)
+            ->getJson(route('plugins.lesson-media.access', $lessonId))
+            ->assertOk()
+            ->json('url');
+
+        $this->actingAs($otherStudent)->get($url)->assertForbidden();
+    }
+
+    public function test_expired_signed_media_url_is_rejected(): void
+    {
+        [$student, $lessonId] = $this->createProtectedLesson('active');
+        $url = $this->actingAs($student)
+            ->getJson(route('plugins.lesson-media.access', $lessonId))
+            ->assertOk()
+            ->json('url');
+
+        $this->travel(6)->minutes();
+        $this->get($url)->assertForbidden();
+    }
+
+    public function test_media_path_traversal_is_rejected_even_for_enrolled_students(): void
+    {
+        [$student, $lessonId] = $this->createProtectedLesson('active');
+        DB::table('course_lessons')->where('id', $lessonId)->update(['media_path' => '../outside.mp4']);
+
+        $url = $this->actingAs($student)
+            ->getJson(route('plugins.lesson-media.access', $lessonId))
+            ->assertOk()
+            ->json('url');
+
+        $this->get($url)->assertNotFound();
+    }
+
+
+    public function test_download_link_is_only_issued_when_lesson_policy_allows_downloads(): void
+    {
+        [$student, $lessonId] = $this->createProtectedLesson('active');
+
+        $blocked = $this->actingAs($student)
+            ->getJson(route('plugins.lesson-media.access', $lessonId))
+            ->assertOk()
+            ->assertJsonPath('download_url', null);
+
+        $blockedUrl = URL::temporarySignedRoute(
+            'plugins.lesson-media.download',
+            now()->addMinutes(5),
+            ['lesson' => $lessonId, 'user' => $student->id]
+        );
+        $this->get($blockedUrl)->assertForbidden();
+
+        DB::table('course_lessons')->where('id', $lessonId)->update(['is_downloadable' => true]);
+        $allowedUrl = $this->getJson(route('plugins.lesson-media.access', $lessonId))
+            ->assertOk()
+            ->json('download_url');
+
+        $this->assertNotEmpty($allowedUrl);
+        $download = $this->get($allowedUrl);
+        $download->assertOk();
+        $download->assertHeader('Content-Disposition');
+    }
+
+    public function test_only_active_enrolled_student_can_open_course_player(): void
+    {
+        [$student, $lessonId] = $this->createProtectedLesson('active');
+        $courseId = (int) DB::table('course_lessons')->where('id', $lessonId)->value('course_id');
+
+        $this->actingAs($student)
+            ->get(route('plugins.lessons.course', $courseId))
+            ->assertOk()
+            ->assertSee('Protected Course')
+            ->assertSee('Open Lesson');
+
+        $otherStudent = $this->createUserWithRole('student');
+        $this->actingAs($otherStudent)
+            ->get(route('plugins.lessons.course', $courseId))
+            ->assertForbidden();
+    }
+
+    private function createProtectedLesson(string $enrollmentStatus): array
+    {
+        $student = $this->createUserWithRole('student');
+        $courseId = DB::table('courses')->insertGetId([
+            'code' => 'CP-' . strtoupper(substr(uniqid(), -8)),
+            'title' => 'Protected Course',
+            'slug' => 'protected-course-' . uniqid(),
+            'description' => 'Test course',
+            'price' => 0,
+            'status' => 'published',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $lessonId = DB::table('course_lessons')->insertGetId([
+            'course_id' => $courseId,
+            'title' => 'Protected Lesson',
+            'content' => null,
+            'sort_order' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+            'media_path' => 'course-media/' . $courseId . '/sample.mp4',
+            'media_mime' => 'video/mp4',
+            'protection_enabled' => true,
+            'is_downloadable' => false,
+        ]);
+        DB::table('enrollments')->insert([
+            'user_id' => $student->id,
+            'course_id' => $courseId,
+            'status' => $enrollmentStatus,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $directory = $this->privateMediaRoot . '/course-media/' . $courseId;
+        mkdir($directory, 0700, true);
+        file_put_contents($directory . '/sample.mp4', "\x00\x00\x00\x18ftypisom\x00\x00\x02\x00isomiso2");
+
+        return [$student, $lessonId];
+    }
+}

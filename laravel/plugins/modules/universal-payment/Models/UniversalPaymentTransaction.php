@@ -25,7 +25,11 @@ class UniversalPaymentTransaction extends Model
         'verified_at',
         'user_id',
         'storefront_item_id',
+        'fee_invoice_id',
         'learn_earn_exam_id',
+        'proof_path',
+        'proof_mime',
+        'proof_size',
     ];
 
     protected $casts = [

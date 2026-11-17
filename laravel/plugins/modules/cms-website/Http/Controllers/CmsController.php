@@ -96,7 +96,7 @@ class CmsController extends Controller
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:200'],
             'slug' => ['nullable', 'alpha_dash', 'max:180', 'unique:cms_posts,slug'],
-            'category_id' => ['nullable', 'integer'],
+            'category_id' => ['nullable', 'integer', 'exists:cms_categories,id'],
             'category' => ['nullable', 'string', 'max:100'],
             'author' => ['nullable', 'string', 'max:120'],
             'excerpt' => ['nullable', 'string', 'max:500'],
@@ -104,11 +104,11 @@ class CmsController extends Controller
             'seo_title' => ['nullable', 'string', 'max:180'],
             'seo_description' => ['nullable', 'string', 'max:320'],
             'thumbnail' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
-            'thumbnail_url' => ['nullable', 'string', 'max:255'],
+            'thumbnail_url' => ['nullable', 'string', 'max:255', function (string $attribute, mixed $value, \Closure $fail): void { if (!$this->isSafeMediaReference($value)) $fail('The thumbnail URL must be a safe HTTPS URL or local path.'); }],
             'pdf_file' => ['nullable', 'file', 'mimes:pdf', 'max:20480'],
-            'pdf_url' => ['nullable', 'string', 'max:255'],
+            'pdf_url' => ['nullable', 'string', 'max:255', function (string $attribute, mixed $value, \Closure $fail): void { if (!$this->isSafeMediaReference($value)) $fail('The PDF URL must be a safe HTTPS URL or local path.'); }],
             'pdf_thumbnail' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
-            'pdf_thumbnail_url' => ['nullable', 'string', 'max:255'],
+            'pdf_thumbnail_url' => ['nullable', 'string', 'max:255', function (string $attribute, mixed $value, \Closure $fail): void { if (!$this->isSafeMediaReference($value)) $fail('The PDF thumbnail URL must be a safe HTTPS URL or local path.'); }],
             'is_published' => ['nullable', 'boolean'],
         ]);
 
@@ -142,7 +142,7 @@ class CmsController extends Controller
             'title' => $validated['title'],
             'category_id' => $categoryId,
             'category' => $categoryName,
-            'author' => $validated['author'] ?: "Alom's English Center",
+            'author' => $validated['author'] ?? "Alom's English Center",
             'excerpt' => $validated['excerpt'] ?? Str::limit(strip_tags($validated['content']), 160),
             'content' => $validated['content'],
             'thumbnail_path' => $thumbPath,
@@ -163,7 +163,7 @@ class CmsController extends Controller
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:200'],
             'slug' => ['required', 'alpha_dash', 'max:180', 'unique:cms_posts,slug,' . $post->id],
-            'category_id' => ['nullable', 'integer'],
+            'category_id' => ['nullable', 'integer', 'exists:cms_categories,id'],
             'category' => ['nullable', 'string', 'max:100'],
             'author' => ['nullable', 'string', 'max:120'],
             'excerpt' => ['nullable', 'string', 'max:500'],
@@ -171,11 +171,11 @@ class CmsController extends Controller
             'seo_title' => ['nullable', 'string', 'max:180'],
             'seo_description' => ['nullable', 'string', 'max:320'],
             'thumbnail' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
-            'thumbnail_url' => ['nullable', 'string', 'max:255'],
+            'thumbnail_url' => ['nullable', 'string', 'max:255', function (string $attribute, mixed $value, \Closure $fail): void { if (!$this->isSafeMediaReference($value)) $fail('The thumbnail URL must be a safe HTTPS URL or local path.'); }],
             'pdf_file' => ['nullable', 'file', 'mimes:pdf', 'max:20480'],
-            'pdf_url' => ['nullable', 'string', 'max:255'],
+            'pdf_url' => ['nullable', 'string', 'max:255', function (string $attribute, mixed $value, \Closure $fail): void { if (!$this->isSafeMediaReference($value)) $fail('The PDF URL must be a safe HTTPS URL or local path.'); }],
             'pdf_thumbnail' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
-            'pdf_thumbnail_url' => ['nullable', 'string', 'max:255'],
+            'pdf_thumbnail_url' => ['nullable', 'string', 'max:255', function (string $attribute, mixed $value, \Closure $fail): void { if (!$this->isSafeMediaReference($value)) $fail('The PDF thumbnail URL must be a safe HTTPS URL or local path.'); }],
             'is_published' => ['nullable', 'boolean'],
         ]);
 
@@ -216,7 +216,7 @@ class CmsController extends Controller
             'title' => $validated['title'],
             'category_id' => $categoryId,
             'category' => $categoryName,
-            'author' => $validated['author'] ?: $post->author,
+            'author' => $validated['author'] ?? $post->author,
             'excerpt' => $validated['excerpt'] ?? $post->excerpt,
             'content' => $validated['content'],
             'thumbnail_path' => $thumbPath,
@@ -495,4 +495,21 @@ class CmsController extends Controller
 
         return is_array($decoded) ? array_merge($defaults, $decoded) : $defaults;
     }
+    private function isSafeMediaReference(mixed $value): bool
+    {
+        if ($value === null || trim((string) $value) === '') {
+            return true;
+        }
+
+        $value = trim((string) $value);
+        if (str_starts_with($value, '/') && !str_starts_with($value, '//')
+            && !str_contains($value, '..') && !str_contains($value, '\\')) {
+            return true;
+        }
+
+        return filter_var($value, FILTER_VALIDATE_URL) !== false
+            && strtolower((string) parse_url($value, PHP_URL_SCHEME)) === 'https';
+    }
+
+
 }

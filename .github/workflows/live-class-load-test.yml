@@ -1,0 +1,70 @@
+name: Live Class Load Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "HTTPS base URL of the authorized staging LMS (no trailing slash)"
+        required: true
+        type: string
+      course_slug:
+        description: "Optional published course slug to include in the test"
+        required: false
+        type: string
+      virtual_users:
+        description: "Concurrent virtual students (minimum 300)"
+        required: true
+        default: "300"
+        type: string
+      hold_duration:
+        description: "Duration to hold the target concurrency"
+        required: true
+        default: "5m"
+        type: choice
+        options:
+          - "2m"
+          - "5m"
+          - "10m"
+
+permissions:
+  contents: read
+
+jobs:
+  load-test:
+    name: k6 concurrent student load test
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Validate target and load settings
+        env:
+          BASE_URL: ${{ inputs.base_url }}
+          VUS: ${{ inputs.virtual_users }}
+        run: |
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+          url = urlparse(os.environ["BASE_URL"])
+          if url.scheme != "https" or not url.netloc or url.username or url.password:
+              raise SystemExit("BASE_URL must be a valid HTTPS URL without embedded credentials.")
+          try:
+              vus = int(os.environ["VUS"])
+          except ValueError:
+              raise SystemExit("virtual_users must be an integer.")
+          if vus < 300 or vus > 1000:
+              raise SystemExit("virtual_users must be between 300 and 1000.")
+          PY
+
+      - name: Run 300+ concurrent student load profile
+        env:
+          BASE_URL: ${{ inputs.base_url }}
+          COURSE_SLUG: ${{ inputs.course_slug }}
+          VUS: ${{ inputs.virtual_users }}
+          DURATION: ${{ inputs.hold_duration }}
+        run: |
+          docker run --rm \
+            -e BASE_URL -e COURSE_SLUG -e VUS -e DURATION \
+            -v "${{ github.workspace }}/laravel/tests/load:/scripts:ro" \
+            grafana/k6:0.54.0 run /scripts/live-class-300-vus.js

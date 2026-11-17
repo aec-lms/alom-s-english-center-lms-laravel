@@ -166,6 +166,36 @@ class ExamController extends Controller
         return back()->with('status', 'Question added to exam bank.');
     }
 
+    public function take(Request $request, Exam $exam): View
+    {
+        $actor = $request->user();
+        abort_unless($actor && $actor->hasRole('student'), 403, 'Only student accounts can take exams.');
+        abort_unless($exam->is_published, 404);
+        if ($exam->branch_id !== null && (int) $actor->branch_id !== (int) $exam->branch_id) {
+            abort(403, 'Exam is outside your assigned branch.');
+        }
+        if ($exam->starts_at && now()->lt($exam->starts_at)) {
+            abort(403, 'This exam has not started yet.');
+        }
+        if ($exam->ends_at && now()->gt($exam->ends_at)) {
+            abort(403, 'The exam submission window has closed.');
+        }
+        if (Schema::hasColumn('exams', 'learn_earn_type') && $exam->learn_earn_type === 'paid') {
+            abort_unless(
+                Schema::hasTable('learn_earn_exam_access')
+                && DB::table('learn_earn_exam_access')->where('exam_id', $exam->id)
+                    ->where('user_id', $actor->id)->where('status', 'granted')->exists(),
+                403,
+                'Payment is required before attempting this exam.'
+            );
+        }
+
+        $questions = $exam->questions()->get(['id', 'exam_id', 'prompt', 'options', 'marks']);
+        abort_if($questions->isEmpty(), 404, 'This exam has no questions yet.');
+
+        return view('exam-management::take', compact('exam', 'questions'));
+    }
+
     /**
      * Server-side authoritative exam grading; never accepts client-computed scores.
      */
@@ -228,6 +258,6 @@ class ExamController extends Controller
             'total' => $total,
         ]);
 
-        return back()->with('status', "Exam graded server-side: {$score}/{$total} marks.");
+        return redirect()->route('portal.dashboard')->with('status', "Exam graded server-side: {$score}/{$total} marks.");
     }
 }

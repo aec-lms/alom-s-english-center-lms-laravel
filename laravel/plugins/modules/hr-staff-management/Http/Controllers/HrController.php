@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Plugins\Modules\HrStaffManagement\Http\Controllers;
 
 use App\Core\Security\AuditLogger;
+use App\Core\Plugins\PluginManager;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use Plugins\Modules\HrStaffManagement\Models\StaffPayroll;
 use Plugins\Modules\HrStaffManagement\Models\StaffProfile;
@@ -53,12 +55,14 @@ class HrController extends Controller
             'email' => ['nullable', 'email', 'max:160'],
             'base_salary' => ['required', 'numeric', 'min:0'],
             'status' => ['nullable', 'in:active,on_leave,inactive'],
-            'branch_id' => ['nullable', 'integer'],
+            'branch_id' => $this->branchRule(),
         ]);
 
         if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null) {
             $validated['branch_id'] = $actor->branch_id;
         }
+
+        if (!$this->branchIntegrationAvailable()) { $validated['branch_id'] = null; }
 
         $member = StaffProfile::query()->create($validated + [
             'status' => $validated['status'] ?? 'active',
@@ -99,19 +103,72 @@ class HrController extends Controller
             'bonus' => $bonus,
             'deductions' => $deductions,
             'net_paid' => $netPaid,
-            'status' => 'paid',
-            'paid_at' => now(),
+            'status' => 'pending',
+            'paid_at' => null,
+            'payment_reference' => null,
         ]);
 
         $this->audit->log('hr.payroll_recorded', 'staff_payroll', (string) $payroll->id, ['net_paid' => $netPaid]);
 
-        return back()->with('status', "Payroll disbursed for {$member->full_name} ({$validated['payroll_month']}).");
+        return back()->with('status', "Payroll prepared for {$member->full_name} ({$validated['payroll_month']}); confirm disbursement after payment.");
+    }
+
+    public function markPayrollPaid(Request $request, StaffPayroll $payroll): RedirectResponse
+    {
+        $actor = $request->user();
+        abort_unless($actor && $actor->hasRole('admin'), 403, 'Only a central administrator can confirm payroll disbursement.');
+        $this->ensureAssignedBranch($actor);
+
+        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $payroll->branch_id) {
+            abort(403, 'Branch isolation violation.');
+        }
+        if ($payroll->status === 'paid') {
+            abort(409, 'This payroll has already been marked as paid.');
+        }
+
+        $validated = $request->validate([
+            'payment_reference' => ['required', 'string', 'max:120'],
+        ]);
+
+        $payroll->update([
+            'status' => 'paid',
+            'paid_at' => now(),
+            'payment_reference' => trim($validated['payment_reference']),
+        ]);
+
+        $this->audit->log('hr.payroll_marked_paid', 'staff_payroll', (string) $payroll->id, [
+            'payment_reference' => $payroll->payment_reference,
+        ]);
+
+        return back()->with('status', 'Payroll marked as paid with the supplied disbursement reference.');
+    }
+
+    private function branchIntegrationAvailable(): bool
+    {
+        return app(PluginManager::class)->isEnabled('branch-management') && Schema::hasTable('branches');
+    }
+
+    private function branchRule(): array
+    {
+        return $this->branchIntegrationAvailable()
+            ? ['nullable', 'integer', 'exists:branches,id']
+            : ['nullable', 'integer'];
     }
 
     private function ensureAssignedBranch($actor): void
     {
-        if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id === null) {
+        if (!$actor || !$actor->hasRole('branch_manager')) {
+            return;
+        }
+        if ($actor->branch_id === null || !$this->branchIntegrationAvailable()) {
             abort(403, 'Branch manager must be assigned to a branch.');
+        }
+        $activeBranch = \Illuminate\Support\Facades\DB::table('branches')
+            ->where('id', $actor->branch_id)
+            ->where('is_active', true)
+            ->exists();
+        if (!$activeBranch) {
+            abort(403, 'Branch manager access is disabled because the assigned branch is inactive.');
         }
     }
 }

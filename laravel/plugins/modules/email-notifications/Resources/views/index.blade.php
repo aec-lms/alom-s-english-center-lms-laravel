@@ -24,8 +24,14 @@
             <form method="POST" action="{{ route('plugins.email_notifications.send') }}" class="grid gap-3 text-xs">
                 @csrf
                 <input name="recipient_email" type="email" required placeholder="Recipient Email *" class="rounded-lg border border-slate-300 px-3 py-2">
-                <input name="subject" required placeholder="Subject Line *" class="rounded-lg border border-slate-300 px-3 py-2">
-                <textarea name="message" rows="3" required placeholder="Notification message..." class="rounded-lg border border-slate-300 px-3 py-2"></textarea>
+                <select name="template_key" class="rounded-lg border border-slate-300 px-3 py-2 bg-white">
+                    <option value="">Use custom subject and message</option>
+                    @foreach ($templates->where('is_active', true) as $template)
+                        <option value="{{ $template->template_key }}">{{ $template->template_key }} — {{ $template->subject }}</option>
+                    @endforeach
+                </select>
+                <input name="subject" placeholder="Custom Subject (required without a template)" class="rounded-lg border border-slate-300 px-3 py-2">
+                <textarea name="message" rows="3" placeholder="Custom message (required without a template)..." class="rounded-lg border border-slate-300 px-3 py-2"></textarea>
                 <button type="submit" class="px-4 py-2 rounded-lg bg-emerald-600 text-white font-bold">Send / Queue Email</button>
             </form>
         </div>
