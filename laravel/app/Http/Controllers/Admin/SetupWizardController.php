@@ -6,7 +6,7 @@ namespace App\\Http\\Controllers\\Admin;
 
 use App\\Http\\Controllers\\Controller;
 use App\\Models\\AuditLog;
-use App\\Models\\SystemSetting;
+use App\\Models\\SystemSetting;\nuse App\\Core\\Appearance\\ThemeManager;
 use DateTimeZone;
 use Illuminate\\Http\\RedirectResponse;
 use Illuminate\\Http\\Request;
