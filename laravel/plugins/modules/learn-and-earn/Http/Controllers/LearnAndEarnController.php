@@ -24,6 +24,7 @@ class LearnAndEarnController extends Controller
 {
     public function index(Request $request): View
     {
+        $this->ensureAssignedBranch($request->user());
         $examIntegrationEnabled = $this->examIntegrationEnabled();
         $courseIntegrationEnabled = $this->courseIntegrationEnabled();
         $actor = $request->user();
@@ -55,6 +56,7 @@ class LearnAndEarnController extends Controller
 
     public function storeCategory(Request $request): RedirectResponse
     {
+        $this->ensureGlobalContentAccess($request->user());
         $values = $request->validate([
             'name' => ['required', 'string', 'max:120'],
             'description' => ['nullable', 'string'],
@@ -81,6 +83,7 @@ class LearnAndEarnController extends Controller
 
     public function storeQuestion(Request $request): RedirectResponse
     {
+        $this->ensureGlobalContentAccess($request->user());
         $values = $request->validate([
             'category_id' => ['nullable', 'integer', 'exists:learn_earn_categories,id'],
             'question' => ['required', 'string'],
@@ -98,6 +101,7 @@ class LearnAndEarnController extends Controller
 
     public function storeExam(Request $request): RedirectResponse
     {
+        $this->ensureAssignedBranch($request->user());
         $this->ensureExamIntegration();
 
         $values = $request->validate([
@@ -290,6 +294,7 @@ class LearnAndEarnController extends Controller
 
     public function grantAccess(Request $request, int $examId): RedirectResponse
     {
+        $this->ensureAssignedBranch($request->user());
         $this->ensureExamIntegration();
         $exam = Exam::query()->findOrFail($examId);
         $values = $request->validate([
@@ -361,4 +366,32 @@ class LearnAndEarnController extends Controller
             abort_unless((int) $request->user()->branch_id === (int) $exam->branch_id, 403, 'Exam is outside your assigned branch.');
         }
     }
+    private function ensureGlobalContentAccess($actor): void
+    {
+        abort_unless(
+            $actor && $actor->hasRole('admin'),
+            403,
+            'Only a central administrator can modify the shared Learn & Earn question bank.'
+        );
+    }
+
+    private function ensureAssignedBranch($actor): void
+    {
+        if (!$actor || !$actor->hasRole('branch_manager')) {
+            return;
+        }
+
+        abort_unless(
+            $actor->branch_id !== null
+                && app(PluginManager::class)->isEnabled('branch-management')
+                && Schema::hasTable('branches')
+                && DB::table('branches')
+                    ->where('id', $actor->branch_id)
+                    ->where('is_active', true)
+                    ->exists(),
+            403,
+            'Branch manager must be assigned to an active branch.'
+        );
+    }
+
 }
