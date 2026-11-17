@@ -35,7 +35,7 @@ class ExamStandaloneTest extends TestCase
         $this->activatePlugins(['exam-management']);
         $student = $this->createUserWithRole('student');
 
-        $examId = \\Illuminate\\Support\\Facades\\DB::table('exams')->insertGetId([
+        $examId = \Illuminate\Support\Facades\DB::table('exams')->insertGetId([
             'title' => 'Student Grammar Exam',
             'duration_minutes' => 20,
             'pass_marks' => 1,
@@ -43,7 +43,7 @@ class ExamStandaloneTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-        $questionId = \\Illuminate\\Support\\Facades\\DB::table('exam_questions')->insertGetId([
+        $questionId = \Illuminate\Support\Facades\DB::table('exam_questions')->insertGetId([
             'exam_id' => $examId,
             'prompt' => 'Choose the correct verb.',
             'options' => json_encode(['is', 'are']),
