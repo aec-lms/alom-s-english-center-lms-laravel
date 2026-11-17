@@ -64,6 +64,9 @@
             <a href="{{ route('admin.audit.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Audit Logs</a>
             <a href="{{ route('admin.institution-settings.edit') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Institution &amp; Region</a>
             <a href="{{ route('admin.appearance.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Design &amp; Appearance</a>
+            @can('core.settings.manage')
+                <a href="{{ route('admin.menu-editor.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Admin Menu Editor</a>
+            @endcan
 
             @if (!empty($pluginAdminMenu))
                 @foreach ($pluginAdminMenu as $groupName => $menuItems)
