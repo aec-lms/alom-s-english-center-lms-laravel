@@ -6,9 +6,7 @@
     "category": "academic",
     "description": "Printed Book Inventory, ISBN Catalog, Issue/Return Tracking, and Late-Return Fine Calculation.",
     "core_compatibility": "^2.0",
-    "dependencies": [
-        "branch-management"
-    ],
+    "dependencies": [],
     "provider": "Plugins\\Modules\\LibraryManagement\\Providers\\LibraryManagementServiceProvider",
     "permissions": [
         {
@@ -36,5 +34,8 @@
             "order": 100,
             "permission": "library.manage"
         }
+    ],
+    "optional_dependencies": [
+        "branch-management"
     ]
 }

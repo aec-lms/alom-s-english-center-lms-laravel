@@ -5,7 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Route;
 use Plugins\Modules\AdminBoosting\Http\Controllers\BoostController;
 
-Route::middleware(['web', 'installed', 'plugin:admin-boosting'])
+Route::middleware(['web', 'installed', 'throttle:60,1', 'plugin:admin-boosting'])
     ->get('/boost/click/{campaign}', [BoostController::class, 'trackClick'])
     ->name('plugins.boost.click');
 

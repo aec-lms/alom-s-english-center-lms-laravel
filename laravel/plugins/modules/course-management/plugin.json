@@ -34,5 +34,9 @@
             "order": 100,
             "permission": "enrollments.manage"
         }
+    ],
+    "optional_dependencies": [
+        "fees-management",
+        "student-tracking"
     ]
 }

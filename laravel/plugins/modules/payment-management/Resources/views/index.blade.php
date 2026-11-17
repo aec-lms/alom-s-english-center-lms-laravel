@@ -10,7 +10,7 @@
                 @forelse ($transactions as $tx)
                     <tr>
                         <td class="py-2 font-mono">{{ $tx->transaction_ref }}</td>
-                        <td class="font-mono">{{ $tx->invoice?->invoice_number }}</td>
+                        <td class="font-mono">{{ $invoiceIntegrationEnabled ? ($tx->invoice?->invoice_number ?? '—') : 'Fees plugin disabled' }}</td>
                         <td>{{ $tx->gateway_slug }}</td>
                         <td>{{ $tx->currency }} {{ $tx->amount }}</td>
                         <td class="uppercase font-semibold">{{ $tx->status }}</td>

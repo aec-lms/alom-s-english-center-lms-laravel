@@ -36,9 +36,12 @@
         }
     @endphp
 
+    @php
+        $metaDescription = trim((string) $__env->yieldContent('meta_description', $seoDescription));
+    @endphp
     <title>@yield('title', $seoTitle ?: config('app.name', "Alom's English Center — AEC LMS"))</title>
-    @if ($seoDescription)
-        <meta name="description" content="{{ $seoDescription }}">
+    @if ($metaDescription !== '')
+        <meta name="description" content="{{ $metaDescription }}">
     @endif
     @if ($seoKeywords)
         <meta name="keywords" content="{{ $seoKeywords }}">
@@ -49,8 +52,8 @@
     @if ($seoEnabled)
         <meta name="robots" content="{{ $seoRobots }}">
         <meta property="og:title" content="{{ $seoTitle ?: config('app.name', 'AEC LMS') }}">
-        @if ($seoDescription)
-            <meta property="og:description" content="{{ $seoDescription }}">
+        @if ($metaDescription !== '')
+            <meta property="og:description" content="{{ $metaDescription }}">
         @endif
     @endif
 

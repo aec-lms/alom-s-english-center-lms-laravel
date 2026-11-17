@@ -38,6 +38,26 @@
                     <div class="font-bold text-sm text-slate-900">{{ $cls->name }} &mdash; {{ $cls->section }}</div>
                     <div class="text-slate-500 font-mono">{{ $cls->code }} &middot; {{ $cls->subject }} &middot; {{ $cls->day_of_week }} {{ $cls->start_time }}-{{ $cls->end_time }} &middot; {{ $cls->room_number ?: 'Online' }}</div>
                 </div>
+                <details class="text-xs">
+                    <summary class="cursor-pointer text-sky-700 font-bold">Edit</summary>
+                    <form method="POST" action="{{ route('plugins.classes.update', $cls) }}" class="grid sm:grid-cols-2 gap-2 mt-2">
+                        @csrf @method('PUT')
+                        <input name="code" value="{{ $cls->code }}" required class="rounded border px-2 py-1">
+                        <input name="name" value="{{ $cls->name }}" required class="rounded border px-2 py-1">
+                        <input name="section" value="{{ $cls->section }}" required class="rounded border px-2 py-1">
+                        <input name="subject" value="{{ $cls->subject }}" required class="rounded border px-2 py-1">
+                        <input name="instructor_name" value="{{ $cls->instructor_name }}" class="rounded border px-2 py-1">
+                        <input name="room_number" value="{{ $cls->room_number }}" class="rounded border px-2 py-1">
+                        <select name="day_of_week" class="rounded border px-2 py-1">
+                            @foreach (['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as $day)
+                                <option value="{{ $day }}" @selected($cls->day_of_week === $day)>{{ $day }}</option>
+                            @endforeach
+                        </select>
+                        <input name="start_time" value="{{ $cls->start_time }}" required class="rounded border px-2 py-1">
+                        <input name="end_time" value="{{ $cls->end_time }}" required class="rounded border px-2 py-1">
+                        <button class="rounded bg-sky-700 text-white px-3 py-1 font-bold">Save changes</button>
+                    </form>
+                </details>
                 <form method="POST" action="{{ route('plugins.classes.destroy', $cls) }}" onsubmit="return confirm('Delete class?')">
                     @csrf @method('DELETE')
                     <button type="submit" class="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-700 font-bold">Remove</button>

@@ -11,7 +11,7 @@ use Plugins\Modules\StudentManagement\Models\Student;
 class FeeInvoice extends Model
 {
     protected $fillable = [
-        'invoice_number', 'student_id', 'branch_id', 'fee_category_id',
+        'invoice_number', 'student_id', 'payer_name', 'payer_email', 'payer_phone', 'branch_id', 'fee_category_id',
         'subtotal_amount', 'discount_amount', 'net_amount', 'paid_amount',
         'currency', 'status', 'due_date',
     ];

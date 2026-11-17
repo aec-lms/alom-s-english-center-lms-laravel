@@ -43,6 +43,24 @@
                         <div class="text-slate-500 font-mono">{{ $slide->key_name }} &middot; Order {{ $slide->sort_order }} &middot; {{ $slide->is_active ? 'Active' : 'Hidden' }}</div>
                     </div>
                 </div>
+                <details class="mt-3 border-t border-slate-100 pt-3">
+                    <summary class="cursor-pointer font-semibold text-sky-700">Edit Slide</summary>
+                    <form method="POST" action="{{ route('plugins.slider_builder.update', $slide) }}" enctype="multipart/form-data" class="mt-3 grid sm:grid-cols-2 gap-2">
+                        @csrf @method('PUT')
+                        <select name="key_name" class="rounded-lg border border-slate-300 px-3 py-2">
+                            <option value="hero" @selected($slide->key_name === 'hero')>Hero Showcase</option>
+                            <option value="banner_slider" @selected($slide->key_name === 'banner_slider')>Promotional Banner</option>
+                        </select>
+                        <input name="sort_order" type="number" min="0" value="{{ $slide->sort_order }}" class="rounded-lg border border-slate-300 px-3 py-2">
+                        <input name="title" required value="{{ $slide->title }}" class="rounded-lg border border-slate-300 px-3 py-2">
+                        <input name="subtitle" value="{{ $slide->subtitle }}" class="rounded-lg border border-slate-300 px-3 py-2">
+                        <input type="file" name="image" accept="image/jpeg,image/png,image/webp" class="rounded-lg border border-slate-300 px-2 py-1.5">
+                        <input name="image_path" value="{{ $slide->image_path }}" placeholder="/assets/images/..." class="rounded-lg border border-slate-300 px-3 py-2">
+                        <input name="cta_url" value="{{ $slide->cta_url }}" placeholder="/courses or https://..." class="rounded-lg border border-slate-300 px-3 py-2">
+                        <label class="inline-flex items-center gap-2"><input type="checkbox" name="is_active" value="1" @checked($slide->is_active)> Active</label>
+                        <button type="submit" class="rounded-lg bg-slate-900 px-4 py-2 text-white font-bold">Save Slide</button>
+                    </form>
+                </details>
                 <form method="POST" action="{{ route('plugins.slider_builder.destroy', $slide) }}" onsubmit="return confirm('Delete slide?')">
                     @csrf @method('DELETE')
                     <button type="submit" class="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-700 font-bold">Delete</button>

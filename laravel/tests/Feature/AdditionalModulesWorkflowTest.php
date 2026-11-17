@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
+use Plugins\Modules\RoleAiAssistant\Services\AiAssistantService;
 use Plugins\Modules\AdmissionManagement\Models\AdmissionApplication;
+use Plugins\Modules\BranchManagement\Models\Branch;
 use Plugins\Modules\CertificateManagement\Models\CertificateRecord;
 use Plugins\Modules\LibraryManagement\Models\LibraryBook;
 use Plugins\Modules\LibraryManagement\Models\LibraryLoan;
@@ -139,7 +141,33 @@ class AdditionalModulesWorkflowTest extends TestCase
             'bonus' => 5000,
             'deductions' => 1000,
         ])->assertSessionHasNoErrors();
-        $this->assertSame(49000.0, (float) DB::table('staff_payrolls')->where('staff_profile_id', $staffId)->value('net_paid'));
+        $payroll = DB::table('staff_payrolls')->where('staff_profile_id', $staffId)->first();
+        $this->assertSame(49000.0, (float) $payroll->net_paid);
+        $this->assertSame('pending', $payroll->status);
+        $this->assertNull($payroll->paid_at);
+
+        $otherBranchId = DB::table('branches')->insertGetId([
+            'code' => 'HR-OTHER',
+            'name' => 'HR Other Branch',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $otherBranchManager = $this->createUserWithRole('branch_manager', $otherBranchId);
+        $hrPermissionId = DB::table('permissions')->where('slug', 'hr.manage')->value('id');
+        $otherBranchManager->roles()->first()->permissions()->syncWithoutDetaching([$hrPermissionId]);
+        $this->actingAs($otherBranchManager)->post("/admin/hr/payrolls/{$payroll->id}/mark-paid", [
+            'payment_reference' => 'UNAUTHORIZED-REFERENCE',
+        ])->assertForbidden();
+
+        $this->actingAs($admin)->post("/admin/hr/payrolls/{$payroll->id}/mark-paid", [
+            'payment_reference' => 'BANK-TXN-EMP-101-2026-02',
+        ])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('staff_payrolls', [
+            'id' => $payroll->id,
+            'status' => 'paid',
+            'payment_reference' => 'BANK-TXN-EMP-101-2026-02',
+        ]);
 
         // 6. Email Notifications & Marketing Coupons
         $this->actingAs($admin)->post('/admin/email-notifications/templates', [
@@ -154,6 +182,21 @@ class AdditionalModulesWorkflowTest extends TestCase
             'message' => 'Your class starts Sunday at 10 AM.',
         ])->assertSessionHasNoErrors();
         $this->assertSame(1, DB::table('email_logs')->count());
+        $this->assertDatabaseHas('email_logs', [
+            'recipient_email' => 'student@alomsenglish.com',
+            'status' => 'not_configured',
+        ]);
+
+        $this->actingAs($admin)->post('/admin/email-notifications/send', [
+            'recipient_email' => 'student@alomsenglish.com',
+            'template_key' => 'welcome_student',
+        ])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('email_logs', [
+            'recipient_email' => 'student@alomsenglish.com',
+            'subject' => 'Welcome to AEC LMS',
+            'body_excerpt' => 'Hello Student',
+            'status' => 'not_configured',
+        ]);
 
         $this->actingAs($admin)->post('/admin/marketing/campaigns', [
             'name' => 'Spring IELTS Drive',
@@ -244,6 +287,7 @@ class AdditionalModulesWorkflowTest extends TestCase
             'pass_marks' => 40,
         ])->assertSessionHasNoErrors();
         $examId = DB::table('exams')->where('title', 'Branch B Assessment')->value('id');
+        $this->assertNotNull($examId);
 
         $this->actingAs($admin)->post('/admin/certificates', [
             'student_name' => 'Branch B Learner',
@@ -296,4 +340,55 @@ class AdditionalModulesWorkflowTest extends TestCase
 
         $this->actingAs($manager)->get('/admin/students')->assertForbidden();
     }
+
+    public function test_ai_assistant_uses_only_the_configured_role_for_multi_role_users(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['role-ai-assistant']);
+
+        $admin = $this->createUserWithRole('admin');
+        $studentRoleId = DB::table('roles')->where('slug', 'student')->value('id');
+        $admin->roles()->syncWithoutDetaching([$studentRoleId]);
+
+        app(\App\Core\Plugins\PluginManager::class)->saveSettings('role-ai-assistant', [
+            'provider' => 'gemini',
+            'allowed_roles' => 'student',
+        ]);
+
+        $result = app(AiAssistantService::class)->queryAssistant($admin, 'Help me practice English grammar.');
+
+        $this->assertSame('student', $result['role']);
+        $this->assertSame('built-in', $result['assistant'] === 'AEC LMS AI Assistant'
+            ? DB::table('ai_assistant_logs')->latest('id')->value('provider')
+            : null);
+        $this->assertSame('student', DB::table('ai_assistant_logs')->latest('id')->value('role_slug'));
+
+        $adminOnly = $this->createUserWithRole('admin', null, 'ai-admin-only@example.test');
+        $this->assertFalse(app(AiAssistantService::class)->isRoleAllowed($adminOnly));
+        $this->expectException(\RuntimeException::class);
+        app(AiAssistantService::class)->queryAssistant($adminOnly, 'Show admin settings.');
+    }
+
+
+    public function test_public_admission_rejects_inactive_branch_selection(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'admission-management']);
+        $inactiveBranch = Branch::query()->create([
+            'code' => 'INACTIVE-ADMISSION',
+            'name' => 'Inactive Admission Branch',
+            'is_active' => false,
+        ]);
+
+        $this->post('/admission/apply', [
+            'applicant_name' => 'Test Applicant',
+            'email' => 'admission-test@aec.test',
+            'phone' => '01712345678',
+            'desired_course' => 'IELTS',
+            'branch_id' => $inactiveBranch->id,
+        ])->assertSessionHasErrors('branch_id');
+
+        $this->assertDatabaseCount('admission_applications', 0);
+    }
+
 }

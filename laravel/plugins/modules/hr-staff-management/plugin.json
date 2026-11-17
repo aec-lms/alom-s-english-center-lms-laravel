@@ -6,9 +6,7 @@
     "category": "operations",
     "description": "Employee & Staff Directory, Departments, Designations, Leave Status, and Monthly Payroll Ledgers.",
     "core_compatibility": "^2.0",
-    "dependencies": [
-        "branch-management"
-    ],
+    "dependencies": [],
     "provider": "Plugins\\Modules\\HrStaffManagement\\Providers\\HrStaffManagementServiceProvider",
     "permissions": [
         {
@@ -31,5 +29,8 @@
             "order": 100,
             "permission": "hr.manage"
         }
+    ],
+    "optional_dependencies": [
+        "branch-management"
     ]
 }

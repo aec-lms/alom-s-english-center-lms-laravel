@@ -14,7 +14,6 @@ use Illuminate\View\View;
 use Plugins\Modules\CourseManagement\Models\Course;
 use Plugins\Modules\CourseManagement\Models\Enrollment;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
-use Plugins\Modules\StudentManagement\Models\Student;
 use RuntimeException;
 
 class EnrollmentController extends Controller
@@ -29,7 +28,9 @@ class EnrollmentController extends Controller
             ->latest()
             ->paginate(20);
 
-        return view('course-management::my-enrollments', compact('enrollments'));
+        $feesIntegrationAvailable = $this->plugins->isEnabled('fees-management') && Schema::hasTable('fee_invoices');
+
+        return view('course-management::my-enrollments', compact('enrollments', 'feesIntegrationAvailable'));
     }
 
     public function index(Request $request): View
@@ -41,7 +42,9 @@ class EnrollmentController extends Controller
             ->latest()
             ->paginate(30);
 
-        return view('course-management::enrollments', compact('enrollments'));
+        $feesIntegrationAvailable = $this->plugins->isEnabled('fees-management') && Schema::hasTable('fee_invoices');
+
+        return view('course-management::enrollments', compact('enrollments', 'feesIntegrationAvailable'));
     }
 
     public function store(Request $request, Course $course): RedirectResponse
@@ -50,10 +53,19 @@ class EnrollmentController extends Controller
         abort_unless($actor && $actor->hasRole('student'), 403, 'Only student accounts can request course enrollment.');
         abort_unless($course->status === 'published', 404, 'This course is not open for enrollment.');
 
-        $student = Student::query()->where('user_id', $actor->id)->first();
-        abort_unless($student, 422, 'Your student profile is not ready. Contact the admissions office.');
-        if ($course->branch_id !== null && (int) $course->branch_id !== (int) $student->branch_id) {
+        $studentIntegrationEnabled = $this->plugins->isEnabled('student-management') && Schema::hasTable('students');
+        $student = $studentIntegrationEnabled
+            ? DB::table('students')->where('user_id', $actor->id)->first()
+            : null;
+        if ($studentIntegrationEnabled) {
+            abort_unless($student, 422, 'Your student profile is not ready. Contact the admissions office.');
+        }
+        $branchId = $student->branch_id ?? $actor->branch_id ?? $course->branch_id;
+        if ($course->branch_id !== null && (int) $course->branch_id !== (int) $branchId) {
             abort(403, 'This course is not available in your assigned branch.');
+        }
+        if ($actor->hasRole('branch_manager') && (int) ($actor->branch_id ?? 0) !== (int) ($course->branch_id ?? $actor->branch_id ?? 0)) {
+            abort(403, 'This course is outside your assigned branch.');
         }
 
         $existing = Enrollment::query()->where('user_id', $actor->id)->where('course_id', $course->id)->first();
@@ -87,15 +99,18 @@ class EnrollmentController extends Controller
             abort(503, 'The Fees & Invoicing plugin must be enabled before paid course enrollment can be opened.');
         }
 
-        DB::transaction(function () use ($actor, $student, $course, $originalPrice, $price, $paidCourse): void {
+        DB::transaction(function () use ($actor, $student, $branchId, $course, $originalPrice, $price, $paidCourse): void {
             $invoice = null;
             $status = 'active';
 
             if ($paidCourse) {
                 $invoice = FeeInvoice::query()->create([
                     'invoice_number' => 'ENR-' . strtoupper(substr(bin2hex(random_bytes(6)), 0, 10)),
-                    'student_id' => $student->id,
-                    'branch_id' => $student->branch_id,
+                    'student_id' => $student->id ?? null,
+                    'payer_name' => $student->id ?? null ? null : $actor->name,
+                    'payer_email' => $student->id ?? null ? null : $actor->email,
+                    'payer_phone' => $student->id ?? null ? null : ($actor->phone ?? null),
+                    'branch_id' => $branchId,
                     'subtotal_amount' => $originalPrice,
                     'discount_amount' => round($originalPrice - $price, 2),
                     'net_amount' => $price,
@@ -110,7 +125,7 @@ class EnrollmentController extends Controller
             Enrollment::query()->create([
                 'user_id' => $actor->id,
                 'course_id' => $course->id,
-                'branch_id' => $student->branch_id,
+                'branch_id' => $branchId,
                 'invoice_id' => $invoice?->id,
                 'status' => $status,
             ]);

@@ -6,11 +6,7 @@
     "category": "academic",
     "description": "Canonical attendance across course and study batches, roster assignment, QR check-in, consent-based GPS verification, offline synchronization, audit history, and student/guardian attendance views.",
     "core_compatibility": "^2.0",
-    "dependencies": [
-        "branch-management",
-        "student-management",
-        "course-management"
-    ],
+    "dependencies": [],
     "provider": "Plugins\\Modules\\AttendanceManagement\\Providers\\AttendanceManagementServiceProvider",
     "permissions": [
         {
@@ -31,5 +27,13 @@
             "order": 100,
             "permission": "attendance.manage"
         }
+    ],
+    "optional_dependencies": [
+        "batch-management",
+        "branch-management",
+        "course-management",
+        "guardian-management",
+        "student-management",
+        "student-tracking"
     ]
 }
