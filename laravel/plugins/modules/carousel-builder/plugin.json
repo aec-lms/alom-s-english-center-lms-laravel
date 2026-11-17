@@ -27,5 +27,13 @@
             "type": "text",
             "secret": false
         }
+    ],
+    "admin_menu": [
+        {
+            "group": "CMS, Builders & AI",
+            "label": "Carousel Builder",
+            "route": "plugins.carousel_builder.index",
+            "order": 100
+        }
     ]
 }
