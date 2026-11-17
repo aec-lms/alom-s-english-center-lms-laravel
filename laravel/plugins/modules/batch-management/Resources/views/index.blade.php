@@ -14,6 +14,7 @@
             <input name="batch_code" required placeholder="Batch Code (e.g. IELTS-M1) *" class="rounded-lg border border-slate-300 px-3 py-2 font-mono">
             <input name="name" required placeholder="Batch Title *" class="rounded-lg border border-slate-300 px-3 py-2">
             <input name="course_title" placeholder="Linked Course Name" class="rounded-lg border border-slate-300 px-3 py-2">
+            <input name="academic_level" placeholder="Academic Level (e.g. IELTS Foundation)" class="rounded-lg border border-slate-300 px-3 py-2">
             <input name="schedule" required placeholder="Schedule (e.g. Sun, Tue 10 AM) *" class="rounded-lg border border-slate-300 px-3 py-2">
             <input name="room_number" placeholder="Room / Online Link" class="rounded-lg border border-slate-300 px-3 py-2">
             <input name="max_capacity" type="number" min="1" value="30" required class="rounded-lg border border-slate-300 px-3 py-2">
@@ -33,7 +34,7 @@
             <div class="border border-slate-200 rounded-xl p-4 flex items-center justify-between gap-3">
                 <div>
                     <div class="font-bold text-sm text-slate-900">{{ $batch->name }} <span class="text-xs font-mono text-sky-700">[{{ $batch->batch_code }}]</span></div>
-                    <div class="text-slate-500">{{ $batch->schedule }} &middot; Capacity {{ $batch->enrolled_count }}/{{ $batch->max_capacity }} &middot; <span class="uppercase font-semibold">{{ $batch->status }}</span></div>
+                    <div class="text-slate-500">{{ $batch->course_title ?? "—" }} &middot; {{ $batch->academic_level ?? "Level not set" }} &middot; {{ $batch->schedule }} &middot; Capacity {{ $batch->enrolled_count }}/{{ $batch->max_capacity }} &middot; <span class="uppercase font-semibold">{{ $batch->status }}</span></div>
                 </div>
                 <form method="POST" action="{{ route('plugins.batches.destroy', $batch) }}" onsubmit="return confirm('Remove batch?')">
                     @csrf @method('DELETE')
