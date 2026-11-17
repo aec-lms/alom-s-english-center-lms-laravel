@@ -141,7 +141,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
         if (!batchId || !date || records.length === 0) throw new Error('Select a batch with students before saving attendance.');
-        return { batch_id: Number(batchId), attendance_date: date, records };
+        return { batch_id: Number(batchId), attendance_date: date, source: navigator.onLine ? 'online' : 'offline', records };
     };
 
     let syncing = false;
