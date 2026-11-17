@@ -86,9 +86,9 @@ class PluginLifecycleTest extends TestCase
         $this->assertFalse($manager->isEnabled('branch-management'));
         $this->assertFalse($manager->isEnabled('student-management'));
         $this->assertFalse($manager->isEnabled('course-management'));
-        $this->assertFalse(\\Illuminate\\Support\\Facades\\Schema::hasTable('students'));
-        $this->assertFalse(\\Illuminate\\Support\\Facades\\Schema::hasTable('branches'));
-        $this->assertFalse(\\Illuminate\\Support\\Facades\\Schema::hasTable('courses'));
+        $this->assertFalse(\Illuminate\\Support\\Facades\\Schema::hasTable('students'));
+        $this->assertFalse(\Illuminate\\Support\\Facades\\Schema::hasTable('branches'));
+        $this->assertFalse(\Illuminate\\Support\\Facades\\Schema::hasTable('courses'));
 
         $manager->install('student-management');
         $manager->install('teacher-management');
@@ -113,11 +113,11 @@ class PluginLifecycleTest extends TestCase
             'teachers',
             'universal_payment_transactions',
         ] as $table) {
-            $this->assertTrue(\\Illuminate\\Support\\Facades\\Schema::hasTable($table), "Expected standalone schema table {$table}.");
+            $this->assertTrue(\Illuminate\\Support\\Facades\\Schema::hasTable($table), "Expected standalone schema table {$table}.");
         }
 
         $admin = $this->createUserWithRole('admin');
-        $permissionIds = \\Illuminate\\Support\\Facades\\DB::table('permissions')
+        $permissionIds = \Illuminate\\Support\\Facades\\DB::table('permissions')
             ->whereIn('slug', [
                 'students.manage',
                 'teachers.manage',
