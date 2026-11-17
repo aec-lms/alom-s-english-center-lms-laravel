@@ -9,7 +9,18 @@
     "dependencies": [],
     "provider": "Plugins\\Modules\\ClassManagement\\Providers\\ClassManagementServiceProvider",
     "permissions": [
-        { "slug": "classes.manage", "name": "Manage Academic Classes & Routines" }
+        {
+            "slug": "classes.manage",
+            "name": "Manage Academic Classes & Routines"
+        }
     ],
-    "settings_schema": []
+    "settings_schema": [],
+    "admin_menu": [
+        {
+            "group": "Academic & Operations",
+            "label": "Classes & Routines",
+            "route": "plugins.classes.index",
+            "order": 100
+        }
+    ]
 }
