@@ -183,6 +183,7 @@ class PublicHomeController extends Controller
     public function courses(Request $request): View
     {
         $activeCategory = trim((string) $request->query('category', 'all'));
+        $searchTerm = mb_substr(trim((string) $request->query('q', '')), 0, 100);
         $courses = $this->catalogCourses();
 
         $categories = $courses->pluck('category')->filter()->unique()->values();
@@ -190,7 +191,19 @@ class PublicHomeController extends Controller
             ? $courses
             : $courses->filter(fn ($c) => strcasecmp((string) ($c->category ?? ''), $activeCategory) === 0)->values();
 
-        return view('public.courses', compact('courses', 'categories', 'filteredCourses', 'activeCategory'));
+        if ($searchTerm !== '') {
+            $needle = mb_strtolower($searchTerm);
+            $filteredCourses = $filteredCourses->filter(function ($course) use ($needle): bool {
+                $haystack = mb_strtolower(implode(' ', [
+                    (string) ($course->title ?? ''),
+                    (string) ($course->category ?? ''),
+                    strip_tags((string) ($course->description ?? '')),
+                ]));
+                return str_contains($haystack, $needle);
+            })->values();
+        }
+
+        return view('public.courses', compact('courses', 'categories', 'filteredCourses', 'activeCategory', 'searchTerm'));
     }
 
     public function courseShow(string $slug): View
