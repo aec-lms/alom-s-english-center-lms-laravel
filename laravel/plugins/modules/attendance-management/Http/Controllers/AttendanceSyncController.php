@@ -139,7 +139,7 @@ class AttendanceSyncController extends Controller
                     'event' => $isEdit ? ($changed ? 'updated' : 'reconfirmed') : 'created',
                     'old_status' => $oldStatus,
                     'new_status' => $entry->status,
-                    'reason' => $changed ? $reason : null,
+                    'reason' => $changed ? ($item['edit_reason'] ?? null) : null,
                     'source' => $validated['source'] ?? 'online',
                     'occurred_at' => now(),
                 ]);
