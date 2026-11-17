@@ -157,7 +157,7 @@ class AcademicAndExamWorkflowTest extends TestCase
             'student_id' => $student->id,
             'attendance_date' => now()->toDateString(),
             'status' => 'present',
-        ])->assertStatus(422);
+        ])->assertForbidden();
 
         $this->assertDatabaseCount('attendance_records', 0);
     }
