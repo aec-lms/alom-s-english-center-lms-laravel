@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use Plugins\Modules\AttendanceManagement\Models\AttendanceBatchMapping;
 use Plugins\Modules\AttendanceManagement\Models\AttendanceRecord;
 use Plugins\Modules\StudentManagement\Models\Student;
 use Plugins\Modules\StudentTracking\Services\StudentActivityTracker;
