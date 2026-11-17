@@ -47,6 +47,12 @@
         <div class="px-5 py-4 border-b border-white/10">
             <div class="text-sm font-extrabold tracking-tight text-white">{{ config('app.name') }} Core</div>
             <div class="text-[11px] text-[#38BDF8] font-medium">Core + Independent Plugins</div>
+            <a href="{{ route('home') }}" target="_blank" rel="noopener noreferrer"
+               class="mt-3 flex items-center justify-center gap-2 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15 transition-colors"
+               aria-label="Visit public website (opens in a new tab)">
+                <span aria-hidden="true">↗</span>
+                <span>Visit Public Site</span>
+            </a>
         </div>
         @inject('pluginManager', 'App\Core\Plugins\PluginManager')
         <nav class="flex-1 p-3 space-y-1 text-sm overflow-y-auto">
