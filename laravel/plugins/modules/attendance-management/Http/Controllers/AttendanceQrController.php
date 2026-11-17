@@ -73,7 +73,14 @@ class AttendanceQrController extends Controller
             abort_if((int) $actor->branch_id !== (int) $batch->branch_id, 403, 'Branch isolation violation.');
         }
 
-        $validated = $request->validate(['expires_in_minutes' => ['nullable', 'integer', 'min:1', 'max:30']]);
+        $validated = $request->validate([
+            'expires_in_minutes' => ['nullable', 'integer', 'min:1', 'max:30'],
+            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'radius_meters' => ['nullable', 'integer', 'min:20', 'max:2000'],
+        ]);
+        $geoFields = array_filter(['latitude', 'longitude', 'radius_meters'], fn ($key) => array_key_exists($key, $validated) && $validated[$key] !== null);
+        abort_if(count($geoFields) !== 0 && count($geoFields) !== 3, 422, 'Provide latitude, longitude and radius together to enable GPS verification.');
         $token = bin2hex(random_bytes(32));
         $expiresAt = now()->addMinutes((int) ($validated['expires_in_minutes'] ?? 5));
         $sessionId = DB::table('attendance_qr_sessions')->insertGetId([
@@ -82,6 +89,9 @@ class AttendanceQrController extends Controller
             'token_hash' => hash('sha256', $token),
             'issued_by' => $actor->id,
             'expires_at' => $expiresAt,
+            'geo_latitude' => $validated['latitude'] ?? null,
+            'geo_longitude' => $validated['longitude'] ?? null,
+            'geo_radius_meters' => $validated['radius_meters'] ?? null,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
@@ -127,6 +137,9 @@ class AttendanceQrController extends Controller
         $validated = $request->validate([
             'token' => ['required', 'string', 'size:64'],
             'gps_consent' => ['nullable', 'boolean'],
+            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'gps_accuracy_meters' => ['nullable', 'integer', 'min:1', 'max:1000'],
         ]);
         $student = Student::query()->where('user_id', $actor->id)->firstOrFail();
         $tokenHash = hash('sha256', $validated['token']);
@@ -152,6 +165,24 @@ class AttendanceQrController extends Controller
             abort_unless($batch && (int) $batch->branch_id === (int) $student->branch_id, 403, 'Batch membership is no longer valid.');
 
             $gpsConsentId = null;
+            $gpsVerified = false;
+            $gpsAccuracy = null;
+            $hasCoordinates = isset($validated['latitude'], $validated['longitude']);
+            abort_if($hasCoordinates && !(bool) ($validated['gps_consent'] ?? false), 422, 'GPS coordinates require explicit consent.');
+            if ($session->geo_radius_meters !== null) {
+                abort_unless((bool) ($validated['gps_consent'] ?? false) && $hasCoordinates, 422, 'This attendance session requires consent-based GPS verification.');
+                $gpsAccuracy = (int) ($validated['gps_accuracy_meters'] ?? 1000);
+                abort_if($gpsAccuracy > 100, 422, 'GPS accuracy is insufficient for this attendance session.');
+                $earthRadius = 6371000;
+                $lat1 = deg2rad((float) $session->geo_latitude);
+                $lat2 = deg2rad((float) $validated['latitude']);
+                $deltaLat = deg2rad((float) $validated['latitude'] - (float) $session->geo_latitude);
+                $deltaLon = deg2rad((float) $validated['longitude'] - (float) $session->geo_longitude);
+                $a = sin($deltaLat / 2) ** 2 + cos($lat1) * cos($lat2) * sin($deltaLon / 2) ** 2;
+                $distance = 2 * $earthRadius * atan2(sqrt($a), sqrt(1 - $a));
+                abort_if($distance > (int) $session->geo_radius_meters, 403, 'You are outside the allowed attendance location.');
+                $gpsVerified = true;
+            }
             if ((bool) ($validated['gps_consent'] ?? false)) {
                 $gpsConsentId = DB::table('attendance_gps_consents')->insertGetId([
                     'user_id' => $actor->id,
@@ -201,6 +232,8 @@ class AttendanceQrController extends Controller
                 'student_id' => $student->id,
                 'attendance_record_id' => $record->id,
                 'gps_consent_id' => $gpsConsentId,
+                'gps_verified' => $gpsVerified,
+                'gps_accuracy_meters' => $gpsVerified ? $gpsAccuracy : null,
                 'source' => 'qr',
                 'checked_in_at' => now(),
                 'created_at' => now(),
