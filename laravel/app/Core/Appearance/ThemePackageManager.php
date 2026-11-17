@@ -7,6 +7,7 @@ namespace App\Core\Appearance;
 use App\Models\SystemSetting;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 use ZipArchive;
 
@@ -82,15 +83,17 @@ final class ThemePackageManager
     public function activate(string $slug, ?int $userId=null): void
     {
         $manifest=$this->manifest($slug);
-        if($this->activeSlug()===null){
+        DB::transaction(function () use ($manifest,$slug,$userId): void {
+            // Switching themes first restores the user's original custom appearance.
+            if($this->activeSlug()!==null) $this->deactivate($userId);
             $this->writeSetting(self::BACKUP_KEY,[
                 'colors'=>SystemSetting::query()->where('key','appearance.theme.global')->value('value'),
                 'design'=>SystemSetting::query()->where('key','appearance.design.global')->value('value'),
             ],$userId);
-        }
-        $this->themes->save('global',array_merge(ThemeManager::DEFAULTS,$manifest['colors']),$userId);
-        $this->themes->saveDesign('global',array_merge(ThemeManager::DESIGN_DEFAULTS,$manifest['design']),$userId);
-        $this->writeSetting(self::ACTIVE_KEY,$slug,$userId);
+            $this->themes->save('global',array_merge($this->themes->colors('global'),$manifest['colors']),$userId);
+            $this->themes->saveDesign('global',array_merge($this->themes->design('global'),$manifest['design']),$userId);
+            $this->writeSetting(self::ACTIVE_KEY,$slug,$userId);
+        });
     }
 
     public function deactivate(?int $userId=null): void
