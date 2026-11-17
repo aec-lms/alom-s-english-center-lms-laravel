@@ -259,7 +259,11 @@ class PluginCenterController extends Controller
         foreach (File::allFiles($directory) as $file) {
             $relative = ltrim(str_replace($directory, '', $file->getPathname()), DIRECTORY_SEPARATOR);
             $relative = str_replace(DIRECTORY_SEPARATOR, '/', $relative);
-            $checksums[$relative] = hash_file('sha256', $file->getPathname());
+            $checksum = hash_file('sha256', $file->getPathname());
+            if (!is_string($checksum) || $checksum === '') {
+                throw new RuntimeException('Could not verify a plugin archive file checksum.');
+            }
+            $checksums[$relative] = $checksum;
         }
         ksort($checksums);
 
