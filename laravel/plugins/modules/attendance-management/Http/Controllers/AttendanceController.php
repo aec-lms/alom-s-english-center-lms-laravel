@@ -68,10 +68,6 @@ class AttendanceController extends Controller
 
         $batch = DB::table('batches')->where('id', (int) $validated['batch_id'])->first();
         abort_unless($batch, 404, 'Batch not found.');
-        if ($actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $batch->branch_id) {
-            abort(403, 'Branch isolation violation.');
-        }
-
         $items = $validated['records'] ?? [[
             'student_id' => $validated['student_id'] ?? null,
             'status' => $validated['status'] ?? null,
