@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\Admin\AppearanceController;
+use App\Http\Controllers\Admin\SiteIdentityController;
 use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\BackupController;
 use App\Http\Controllers\Admin\DashboardController;
@@ -125,6 +126,11 @@ Route::middleware('installed')->group(function (): void {
         Route::prefix('institution-settings')->name('institution-settings.')->middleware('permission:core.settings.manage')->group(function (): void {
             Route::get('/', [InstitutionSettingsController::class, 'edit'])->name('edit');
             Route::post('/', [InstitutionSettingsController::class, 'update'])->name('update');
+        });
+
+        Route::prefix('site-identity')->name('site-identity.')->middleware('permission:core.settings.manage')->group(function (): void {
+            Route::get('/', [SiteIdentityController::class, 'edit'])->name('edit');
+            Route::post('/', [SiteIdentityController::class, 'update'])->name('update');
         });
 
         Route::prefix('appearance')->name('appearance.')->middleware('permission:core.settings.manage')->group(function (): void {
