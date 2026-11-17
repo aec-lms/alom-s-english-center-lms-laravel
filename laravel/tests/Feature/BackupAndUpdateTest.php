@@ -129,6 +129,12 @@ class BackupAndUpdateTest extends TestCase
 
         $relativePath = 'app/Support/core-rollback-rehearsal-' . uniqid() . '.txt';
         $absolutePath = base_path($relativePath);
+        $table = 'core_rollback_rehearsal_' . strtolower(str_replace('.', '', uniqid('', true)));
+        Schema::create($table, function ($blueprint): void {
+            $blueprint->string('code')->primary();
+            $blueprint->string('value');
+        });
+        DB::table($table)->insert(['code' => 'fixture', 'value' => 'before-upgrade']);
         if (!is_dir(dirname($absolutePath))) {
             mkdir(dirname($absolutePath), 0755, true);
         }
@@ -153,10 +159,12 @@ class BackupAndUpdateTest extends TestCase
             $log = $updates->applyVerifiedUpdate($zipPath, $sha, $signature);
             $this->assertSame('after-upgrade', file_get_contents($absolutePath));
             $this->assertSame('applied', $log->status);
+            DB::table($table)->update(['value' => 'after-upgrade']);
 
             $updates->rollbackUpdate($log);
 
             $this->assertSame('before-upgrade', file_get_contents($absolutePath));
+            $this->assertDatabaseHas($table, ['code' => 'fixture', 'value' => 'before-upgrade']);
             $this->assertSame('rolled_back', $log->fresh()->status);
             $this->assertDatabaseHas('update_logs', [
                 'id' => $log->id,
@@ -165,6 +173,7 @@ class BackupAndUpdateTest extends TestCase
         } finally {
             @unlink($zipPath);
             @unlink($absolutePath);
+            Schema::dropIfExists($table);
         }
     }
 
