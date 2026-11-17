@@ -37,11 +37,12 @@ class LearnAndEarnController extends Controller {
  public function publicExams(Request $r):View {
   abort_unless($r->user() && $r->user()->hasRole('student'),403,'Student account required.');
   $exams=Exam::where('is_published',true)->latest()->paginate(20);
+  $accessibleExamIds = DB::table('learn_earn_exam_access')->where('user_id',$r->user()->id)->where('status','granted')->pluck('exam_id')->map(fn($id)=>(int)$id)->all();
   $canPurchase = app(PluginManager::class)->isEnabled('universal-payment')
    && app(PluginManager::class)->isEnabled('gateway-sslcommerz')
    && Schema::hasTable('universal_payment_transactions')
    && Schema::hasColumn('universal_payment_transactions', 'learn_earn_exam_id');
-  return view('learn-and-earn::exams',['exams'=>$exams,'canPurchase'=>$canPurchase]);
+  return view('learn-and-earn::exams',['exams'=>$exams,'canPurchase'=>$canPurchase,'accessibleExamIds'=>$accessibleExamIds]);
  }
  public function showExam(Request $r,Exam $exam):View {
   abort_unless($r->user() && $r->user()->hasRole('student'),403,'Student account required.');
