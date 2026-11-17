@@ -48,15 +48,15 @@ class StudentTracingPluginTest extends TestCase
         DB::table('students')->insert(['id' => 903, 'user_id' => 904, 'branch_id' => 14]);
 
         Event::dispatch(
-            'eloquent.created: Plugins\\Modules\\AttendanceManagement\\Models\\AttendanceRecord',
+            'eloquent.created: Plugins\Modules\AttendanceManagement\Models\AttendanceRecord',
             [(object) ['id' => 905, 'student_id' => 903, 'branch_id' => 14]]
         );
         Event::dispatch(
-            'eloquent.created: Plugins\\Modules\\CourseManagement\\Models\\Enrollment',
+            'eloquent.created: Plugins\Modules\CourseManagement\Models\Enrollment',
             [(object) ['id' => 906, 'user_id' => 904]]
         );
         Event::dispatch(
-            'eloquent.created: Plugins\\Modules\\ExamManagement\\Models\\ExamAttempt',
+            'eloquent.created: Plugins\Modules\ExamManagement\Models\ExamAttempt',
             [(object) ['id' => 907, 'user_id' => 904]]
         );
 
