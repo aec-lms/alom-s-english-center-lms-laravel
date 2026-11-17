@@ -48,11 +48,11 @@ class RolePermissionController extends Controller
         abort_if($role->slug === 'admin', 403, 'The protected Administrator role cannot be modified.');
 
         $validated = $request->validate([
-            'permissions' => ['present', 'array', 'max:500'],
+            'permissions' => ['sometimes', 'array', 'max:500'],
             'permissions.*' => ['required', 'integer', 'distinct', 'exists:permissions,id'],
         ]);
 
-        $permissionIds = array_map('intval', $validated['permissions']);
+        $permissionIds = array_map('intval', $validated['permissions'] ?? []);
         DB::transaction(function () use ($role, $permissionIds): void {
             $role->permissions()->sync($permissionIds);
             $this->audit('admin.role.permissions.updated', $role, [
