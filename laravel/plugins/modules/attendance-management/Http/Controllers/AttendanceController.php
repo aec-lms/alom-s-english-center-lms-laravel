@@ -86,7 +86,7 @@ class AttendanceController extends Controller
         abort_unless($plugins->isEnabled('course-management') && Schema::hasTable('batches'), 409, 'Enable Course Management before recording attendance.');
 
         $validated = $request->validate([
-            'batch_id' => ['required', 'integer', 'exists:batches,id'],
+            'batch_id' => ['required', 'integer'],
             'attendance_date' => ['required', 'date'],
             'source' => ['nullable', 'in:online,offline'],
             'student_id' => ['nullable', 'integer', 'exists:students,id'],
@@ -102,6 +102,8 @@ class AttendanceController extends Controller
             'records.*.edit_reason' => ['nullable', 'string', 'max:255'],
         ]);
 
+        abort_unless(Schema::hasTable('batches')
+            && DB::table('batches')->where('id', (int) $validated['batch_id'])->exists(), 404, 'Selected course batch was not found.');
         $batch = DB::table('batches')->where('id', (int) $validated['batch_id'])->first();
         abort_unless($batch, 404, 'Batch not found.');
         $batchMappingId = AttendanceBatchMapping::resolve(
