@@ -42,7 +42,7 @@ class SiteIdentityBrandingTest extends TestCase
 
         $this->actingAs($admin)->get(route('admin.site-identity.edit'))
             ->assertOk()
-            ->assertSee('Site Identity &amp; Branding');
+            ->assertSee('Site Identity & Branding');
 
         $this->actingAs($admin)->post(route('admin.site-identity.update'), [
             'tagline' => 'English learning for everyone',
