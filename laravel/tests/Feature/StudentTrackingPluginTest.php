@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Core\Plugins\PluginManager;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Schema;
 use Plugins\Modules\StudentTracking\Models\StudentActivityEvent;
 use Plugins\Modules\StudentTracking\Services\StudentActivityTracker;
 use Tests\TestCase;
@@ -60,6 +63,68 @@ class StudentTrackingPluginTest extends TestCase
             ->assertSee('My Learning Activity')
             ->assertSee('SSC English Grammar')
             ->assertDontSee('Other Student Private Course');
+    }
+
+
+    public function test_tracking_and_tracing_plugins_share_a_compatible_schema_and_capture_academic_events(): void
+    {
+        $this->markSystemInstalled();
+        // Install Tracking first to exercise the legacy table-creation order.
+        $this->activatePlugins([
+            'student-tracking',
+            'student-tracing',
+            'student-management',
+            'attendance-management',
+            'course-management',
+            'exam-management',
+        ]);
+
+        foreach (['user_id', 'student_id', 'branch_id', 'actor_id', 'event_type', 'subject_type', 'subject_id', 'duration_seconds', 'metadata', 'occurred_at'] as $column) {
+            $this->assertTrue(Schema::hasColumn('student_activity_events', $column), "Shared activity table is missing {$column}.");
+        }
+
+        $studentUser = $this->createUserWithRole('student');
+        $studentId = DB::table('students')->insertGetId([
+            'user_id' => $studentUser->id,
+            'student_code' => 'TRACK-TRACE-001',
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        Event::dispatch('eloquent.created: Plugins\\Modules\\AttendanceManagement\\Models\\AttendanceRecord', [
+            (object) ['id' => 701, 'student_id' => $studentId, 'status' => 'present'],
+        ]);
+        Event::dispatch('eloquent.created: Plugins\\Modules\\CourseManagement\\Models\\Enrollment', [
+            (object) ['id' => 702, 'user_id' => $studentUser->id, 'course_id' => 91],
+        ]);
+        Event::dispatch('eloquent.created: Plugins\\Modules\\ExamManagement\\Models\\ExamAttempt', [
+            (object) ['id' => 703, 'user_id' => $studentUser->id, 'exam_id' => 92, 'score_obtained' => 8, 'total_marks' => 10],
+        ]);
+        Event::dispatch('eloquent.created: Plugins\\Modules\\StudentManagement\\Models\\Student', [
+            (object) ['id' => $studentId, 'branch_id' => null],
+        ]);
+
+        $this->assertDatabaseHas('student_activity_events', [
+            'user_id' => $studentUser->id,
+            'event_type' => 'attendance_marked',
+            'subject_id' => '701',
+        ]);
+        $this->assertDatabaseHas('student_activity_events', [
+            'user_id' => $studentUser->id,
+            'event_type' => 'course_enrolled',
+            'subject_id' => '91',
+        ]);
+        $this->assertDatabaseHas('student_activity_events', [
+            'user_id' => $studentUser->id,
+            'event_type' => 'quiz_submitted',
+            'subject_id' => '92',
+        ]);
+        $this->assertDatabaseHas('student_activity_events', [
+            'student_id' => $studentId,
+            'event_type' => 'student.created',
+        ]);
     }
 
     public function test_student_tracking_rejects_unknown_event_types(): void
