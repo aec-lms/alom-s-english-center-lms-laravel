@@ -36,7 +36,7 @@ class StudentTracingServiceProvider extends BasePluginServiceProvider
         ] as $eloquentEvent => $traceEvent) {
             Event::listen(
                 'eloquent.' . $eloquentEvent . ': Plugins\Modules\StudentManagement\Models\Student',
-                function (object $student) use ($traceEvent): void {
+                function (object $student) use ($traceEvent, $eloquentEvent): void {
                     if (!Schema::hasTable('student_activity_events') || !isset($student->id)) {
                         return;
                     }
