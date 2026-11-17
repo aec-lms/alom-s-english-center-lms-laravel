@@ -119,7 +119,7 @@ class ThemePackageManagerTest extends TestCase
                 ->assertSee('Activate this theme');
 
             $this->assertDatabaseMissing('system_settings',['key'=>'appearance.themes.active']);
-            $this->assertSame('#123456',app(\\App\\Core\\Appearance\\ThemeManager::class)->colors('global')['primary']);
+            $this->assertSame('#123456',app(\App\Core\Appearance\ThemeManager::class)->colors('global')['primary']);
         } finally {
             @unlink($upload->getRealPath());
         }
