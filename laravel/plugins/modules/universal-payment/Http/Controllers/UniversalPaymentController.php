@@ -68,15 +68,6 @@ class UniversalPaymentController extends Controller
             'status' => ['required', 'in:pending,verified,refunded'],
         ]);
 
-        if ($storefrontItem !== null && $validated['gateway'] !== 'sslcommerz') {
-            return back()->withErrors(['gateway' => 'Choose SSLCOMMERZ for secure automatic e-book checkout.'])->withInput();
-        }
-
-        if ($storefrontItem !== null && DB::table('storefront_item_access')
-            ->where('storefront_item_id', $storefrontItem->id)->where('user_id', auth()->id())->exists()) {
-            return redirect('/ebooks/' . rawurlencode((string) $storefrontItem->slug))->with('status', 'You already have access to this e-book.');
-        }
-
         $tx = UniversalPaymentTransaction::query()->create([
             'reference' => 'UPAY-' . strtoupper(Str::random(8)),
             'payer_name' => $validated['payer_name'],
