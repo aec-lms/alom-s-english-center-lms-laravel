@@ -107,7 +107,9 @@
                     <div><span class="font-semibold">Text</span><p class="text-xs text-slate-500">Paragraphs and descriptions</p></div>
                     <div><span class="font-semibold">Image</span><p class="text-xs text-slate-500">Public image URL with accessible alt text</p></div>
                     <div><span class="font-semibold">Button</span><p class="text-xs text-slate-500">Calls to action linking to LMS pages or HTTPS URLs</p></div>
-                    <div><span class="font-semibold">Spacing</span><p class="text-xs text-slate-500">Control vertical space between sections</p></div>\n                    <div><span class="font-semibold">Course Grid</span><p class="text-xs text-slate-500">Automatically show published LMS courses</p></div>\n                    <div><span class="font-semibold">Instructor Grid</span><p class="text-xs text-slate-500">Automatically show active teachers</p></div>
+                    <div><span class="font-semibold">Spacing</span><p class="text-xs text-slate-500">Control vertical space between sections</p></div>
+                    <div><span class="font-semibold">Course Grid</span><p class="text-xs text-slate-500">Automatically show published LMS courses</p></div>
+                    <div><span class="font-semibold">Instructor Grid</span><p class="text-xs text-slate-500">Automatically show active teachers</p></div>
                 </div>
             </div>
             <div class="rounded-2xl border border-blue-100 bg-blue-50 p-5">
