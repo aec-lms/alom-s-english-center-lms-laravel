@@ -122,9 +122,19 @@ class PluginCenterController extends Controller
     {
         try {
             abort_unless(PluginRecord::query()->where('slug', $slug)->exists(), 404);
+            $manifest = $this->plugins->discoverManifests()[$slug] ?? abort(404);
             PluginSetting::query()->where('plugin_slug', $slug)->delete();
-            app(\App\Core\Security\AuditLogger::class)->log('plugin.settings_reset', 'plugin', $slug, [], auth()->id());
-            return back()->with('status', "Settings for '{$slug}' restored to their defaults.");
+            $defaults = [];
+            $secretKeys = [];
+            foreach ($manifest->settingsSchema as $field) {
+                $key = (string) ($field['key'] ?? '');
+                if ($key === '' || !array_key_exists('default', $field)) continue;
+                $defaults[$key] = $field['default'];
+                if (!empty($field['secret'])) $secretKeys[] = $key;
+            }
+            if ($defaults !== []) $this->plugins->saveSettings($slug, $defaults, $secretKeys, auth()->id());
+            app(\App\Core\Security\AuditLogger::class)->log('plugin.settings_reset', 'plugin', $slug, ['default_keys' => array_keys($defaults)], auth()->id());
+            return back()->with('status', "Settings for '{$slug}' restored to manifest defaults.");
         } catch (\Throwable $e) {
             return back()->withErrors(['plugin' => $e->getMessage()]);
         }
