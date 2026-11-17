@@ -178,22 +178,26 @@ class AttendanceController extends Controller
                 ]);
                 $record->save();
 
-                $entry = AttendanceEntry::query()->updateOrCreate(
-                    [
-                        'attendance_batch_mapping_id' => (int) $batchMappingId,
-                        'student_id' => (int) $student->id,
-                        'attendance_date' => $validated['attendance_date'],
-                    ],
-                    [
-                        'branch_id' => (int) $student->branch_id,
-                        'status' => $record->status,
-                        'remarks' => $record->remarks,
-                        'marked_by' => $actor->id,
-                        'sync_uuid' => $record->sync_uuid,
-                        'source' => $record->source ?? 'online',
-                        'edited_reason' => $record->edited_reason,
-                    ]
-                );
+                $entry = AttendanceEntry::query()
+                    ->where('attendance_batch_mapping_id', (int) $batchMappingId)
+                    ->where('student_id', (int) $student->id)
+                    ->whereDate('attendance_date', $validated['attendance_date'])
+                    ->lockForUpdate()
+                    ->first();
+                $entry ??= new AttendanceEntry();
+                $entry->fill([
+                    'attendance_batch_mapping_id' => (int) $batchMappingId,
+                    'student_id' => (int) $student->id,
+                    'branch_id' => (int) $student->branch_id,
+                    'attendance_date' => $validated['attendance_date'],
+                    'status' => $record->status,
+                    'remarks' => $record->remarks,
+                    'marked_by' => $actor->id,
+                    'sync_uuid' => $record->sync_uuid,
+                    'source' => $record->source ?? 'online',
+                    'edited_reason' => $record->edited_reason,
+                ]);
+                $entry->save();
 
                 DB::table('attendance_entry_audit_logs')->insert([
                     'attendance_entry_id' => $entry->id,
