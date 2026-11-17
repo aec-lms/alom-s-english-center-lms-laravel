@@ -84,7 +84,7 @@ class AttendanceRegisterWorkflowTest extends TestCase
     public function test_offline_sync_is_idempotent_and_records_offline_source(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['branch-management', 'student-management', 'course-management', 'attendance-management']);
+        $this->activatePlugins(['branch-management', 'student-management', 'course-management', 'batch-management', 'attendance-management']);
 
         $branch = DB::table('branches')->insertGetId([
             'code' => 'ATT-SYNC-01',
@@ -258,6 +258,45 @@ class AttendanceRegisterWorkflowTest extends TestCase
             'user_id' => $studentUser->id,
         ]);
         $this->assertNotNull(DB::table('attendance_gps_consents')->where('user_id', $studentUser->id)->value('revoked_at'));
+
+        // The study-batch table may reuse the same numeric ID as a course batch.
+        // The explicit source discriminator must keep those identities separate.
+        $studyBatch = DB::table('study_batches')->insertGetId([
+            'branch_id' => $branch,
+            'course_title' => 'QR Study Batch',
+            'batch_code' => 'ATT-QR-STUDY-01',
+            'name' => 'QR Study Batch',
+            'schedule' => 'Sun/Tue 10:00',
+            'max_capacity' => 20,
+            'enrolled_count' => 1,
+            'status' => 'ongoing',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $studyMapping = AttendanceBatchMapping::resolve('study_batch', $studyBatch, $branch, 'QR Study Batch');
+        $this->assertSame($mapping->source_id, $studyMapping->source_id);
+        $this->assertNotSame($mapping->id, $studyMapping->id);
+
+        $this->actingAs($admin)->putJson("/admin/attendance/batches/{$studyMapping->id}/roster", [
+            'student_ids' => [$student->id],
+        ])->assertOk();
+        $studyQr = $this->actingAs($admin)->postJson("/admin/attendance/batches/{$studyMapping->id}/qr", [
+            'expires_in_minutes' => 5,
+        ])->assertOk()->json();
+        $this->actingAs($studentUser)->postJson('/attendance/qr/check-in', [
+            'token' => $studyQr['token'],
+        ])->assertOk();
+
+        $this->assertDatabaseHas('attendance_entries', [
+            'attendance_batch_mapping_id' => $studyMapping->id,
+            'student_id' => $student->id,
+            'status' => 'present',
+            'source' => 'qr',
+        ]);
+        $this->assertDatabaseHas('attendance_qr_checkins', [
+            'student_id' => $student->id,
+            'attendance_record_id' => null,
+        ]);
     }
 
 }
