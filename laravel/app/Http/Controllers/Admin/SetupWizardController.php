@@ -92,6 +92,7 @@ class SetupWizardController extends Controller
                     abort_unless(Schema::hasTable('media_assets'), 422, 'Media Library is not available.');
                     $asset = DB::table('media_assets')->where('id', $id)->where('mime_type', 'like', 'image/%')->where('mime_type', '<>', 'image/svg+xml')->first();
                     abort_unless($asset && $asset->disk === 'public', 422, 'Select a public image from LMS Media Library.');
+                    abort_unless(\Illuminate\Support\Facades\Storage::disk('public')->exists($asset->path), 422, 'The selected Media Library file is missing.');
                     $data[$kind.'_url'] = \Illuminate\Support\Facades\Storage::disk('public')->url($asset->path);
                 }
             }
