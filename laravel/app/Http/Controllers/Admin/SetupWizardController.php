@@ -8,7 +8,6 @@ use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\SystemSetting;
 use App\Core\Appearance\ThemeManager;
-use DateTimeZone;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
@@ -61,7 +60,7 @@ class SetupWizardController extends Controller
             ],
             'branding' => [
                 'logo_url' => ['nullable', 'url:http,https', 'max:2048'], 'logo_media_id' => ['nullable', 'integer'],
-                'favicon_url' => ['nullable', 'url', 'max:2048'], 'favicon_media_id' => ['nullable', 'integer'],
+                'favicon_url' => ['nullable', 'url:http,https', 'max:2048'], 'favicon_media_id' => ['nullable', 'integer'],
                 'primary_color' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
                 'secondary_color' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
                 'accent_color' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
