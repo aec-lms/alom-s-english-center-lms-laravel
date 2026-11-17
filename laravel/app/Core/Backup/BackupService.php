@@ -129,7 +129,7 @@ class BackupService
             && hash_equals(strtolower((string) $backup->checksum_sha256), strtolower($checksum));
     }
 
-    public function restoreEncryptedBackup(BackupRecord $backup, ?int $actorId = null): void
+    public function restoreEncryptedBackup(BackupRecord $backup, ?int $actorId = null, bool $allowCoreVersionMismatch = false): void
     {
         if (!$this->verifyBackupIntegrity($backup)) {
             throw new RuntimeException('Backup integrity checksum verification failed.');
@@ -176,7 +176,7 @@ class BackupService
         }
 
         $manifest = json_decode($manifestRaw, true, 512, JSON_THROW_ON_ERROR);
-        if (($manifest['core_version'] ?? '') !== (string) config('lms.core_version', '2.0.0')) {
+        if (!$allowCoreVersionMismatch && ($manifest['core_version'] ?? '') !== (string) config('lms.core_version', '2.0.0')) {
             $zip->close();
             @unlink($tempZip);
             throw new RuntimeException('Backup core version mismatch.');
@@ -190,7 +190,7 @@ class BackupService
             try {
                 DB::transaction(function () use ($dbSnapshot): void {
                     foreach ((array) ($dbSnapshot['tables'] ?? []) as $table => $rows) {
-                        if (!is_string($table) || !Schema::hasTable($table) || $table === 'migrations') {
+                        if (!is_string($table) || !Schema::hasTable($table) || in_array($table, ['migrations', 'backups', 'update_logs'], true)) {
                             continue;
                         }
                         DB::table($table)->delete();
