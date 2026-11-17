@@ -16,6 +16,12 @@ class StudentTraceController extends Controller
 {
     public function index(Request $request): View
     {
+        $validated = $request->validate([
+            'student_id' => ['nullable', 'integer', 'min:1'],
+            'event_type' => ['nullable', 'in:student.created,student.updated,student.deleted'],
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date', 'after_or_equal:from'],
+        ]);
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
 
@@ -38,6 +44,10 @@ class StudentTraceController extends Controller
 
     public function export(Request $request): StreamedResponse
     {
+        abort_unless(Schema::hasTable('student_activity_events'), 404);
+        $request->validate([
+            'student_id' => ['nullable', 'integer', 'min:1'],
+        ]);
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
 
