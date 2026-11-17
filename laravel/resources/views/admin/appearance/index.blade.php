@@ -13,9 +13,12 @@
     ];
 @endphp
 <div class="max-w-6xl space-y-6">
-    <div>
-        <h1 class="text-2xl font-extrabold text-slate-900">Design &amp; Appearance</h1>
-        <p class="mt-1 text-sm text-slate-500">Change LMS Core, admin panel, public website and portal colors without coding.</p>
+    <div class="flex flex-wrap items-end justify-between gap-3">
+        <div>
+            <h1 class="text-2xl font-extrabold text-slate-900">Design &amp; Appearance</h1>
+            <p class="mt-1 text-sm text-slate-500">Change LMS Core, admin panel, public website and portal colors without coding.</p>
+        </div>
+        <a href="{{ route('admin.appearance.themes.index') }}" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:border-blue-300">Theme Package Manager →</a>
     </div>
 
     <section class="rounded-2xl border border-slate-200 bg-white p-5 space-y-4">
