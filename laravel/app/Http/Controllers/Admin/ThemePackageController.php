@@ -32,6 +32,17 @@ class ThemePackageController extends Controller
         }catch(Throwable $e){return back()->withErrors(['theme'=>$e->getMessage()]);}
     }
 
+    public function preview(string $slug,ThemePackageManager $themes): View
+    {
+        try {
+            $theme=$themes->manifest($slug);
+        } catch (Throwable $e) {
+            abort(404,'Theme preview is unavailable.');
+        }
+
+        return view('admin.appearance.theme-preview',compact('theme'));
+    }
+
     public function activate(string $slug,ThemePackageManager $themes,AuditLogger $audit): RedirectResponse
     {
         try{
