@@ -140,6 +140,8 @@ class StudentTracingPluginTest extends TestCase
         $this->activatePlugins(['student-tracing']);
 
         $manager = $this->createUserWithRole('branch_manager');
+        $manager->branch_id = 99;
+        $manager->save();
         $permissionId = DB::table('permissions')->where('slug', 'students.trace.view')->value('id');
         $this->assertNotNull($permissionId);
         $manager->roles()->first()->permissions()->syncWithoutDetaching([$permissionId]);
