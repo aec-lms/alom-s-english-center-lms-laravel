@@ -352,4 +352,16 @@ PHP;
         $this->assertNotNull($archive->fresh()->deleted_at);
     }
 
+    public function test_plugin_manifest_exposes_admin_menu_entries_for_enabled_modules(): void
+    {
+        $modulesPath = (string) config('plugins.modules_path');
+        $courseManifest = \\App\\Core\\Plugins\\PluginManifest::fromDirectory($modulesPath . DIRECTORY_SEPARATOR . 'course-management');
+        $traceManifest = \\App\\Core\\Plugins\\PluginManifest::fromDirectory($modulesPath . DIRECTORY_SEPARATOR . 'student-tracing');
+
+        $this->assertSame('plugins.courses.index', $courseManifest->adminMenu[0]['route']);
+        $this->assertSame('courses.manage', $courseManifest->adminMenu[0]['permission']);
+        $this->assertSame('plugins.student-tracing.index', $traceManifest->adminMenu[0]['route']);
+        $this->assertSame('students.trace.view', $traceManifest->adminMenu[0]['permission']);
+    }
+
 }
