@@ -55,7 +55,8 @@
             "group": "Finance & Gateways",
             "label": "Stripe Gateway",
             "route": "plugins.gateway_stripe.index",
-            "order": 100
+            "order": 100,
+            "permission": "payments.stripe.manage"
         }
     ]
 }
