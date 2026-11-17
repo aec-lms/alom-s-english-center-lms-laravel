@@ -18,7 +18,7 @@
         'title' => $s->title,
         'subtitle' => $s->subtitle ?? '',
         'image' => $s->image_path ?: asset('assets/images/hero_educator_studio_1794552233836.jpg'),
-        'cta_url' => $s->cta_url ?: '#learning-paths',
+        'cta_url' => is_string($s->cta_url) && preg_match('~^(https?://\\S+|/(?!/)\\S*|#[A-Za-z][A-Za-z0-9_-]*)$~i', $s->cta_url) ? $s->cta_url : '#learning-paths',
     ])->values()->all() : [
         [
             'title' => 'IELTS & English All in One',
