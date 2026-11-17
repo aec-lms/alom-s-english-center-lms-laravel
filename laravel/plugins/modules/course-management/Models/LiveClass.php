@@ -7,6 +7,7 @@ namespace Plugins\Modules\CourseManagement\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class LiveClass extends Model
 {
@@ -24,7 +25,7 @@ class LiveClass extends Model
         'status',
     ];
 
-    public function participants(): \\Illuminate\\Database\\Eloquent\\Relations\\HasMany
+    public function participants(): HasMany
     {
         return $this->hasMany(LiveClassParticipant::class);
     }
