@@ -1,16 +1,12 @@
 @php
-    $navLinks = [
-        ['label' => 'Home', 'route' => 'home', 'active' => request()->routeIs('home')],
-        ['label' => 'Courses', 'route' => 'public.courses', 'active' => request()->routeIs('public.courses')],
-        ['label' => 'Learn', 'route' => 'public.learn', 'active' => request()->routeIs('public.learn')],
-        ['label' => 'Instructors', 'route' => 'public.instructors', 'active' => request()->routeIs('public.instructors')],
-        ['label' => 'Exams', 'route' => 'public.exams', 'active' => request()->routeIs('public.exams')],
-        ['label' => 'Products', 'route' => 'public.products', 'active' => request()->routeIs('public.products')],
-        ['label' => 'E-Books', 'route' => 'public.ebooks*', 'urlRoute' => 'public.ebooks', 'active' => request()->routeIs('public.ebooks*')],
-        ['label' => 'Result', 'route' => 'public.result', 'active' => request()->routeIs('public.result')],
-    ];
+    $navLinks = app(\App\Core\Appearance\SiteNavigationManager::class)->items('primary');
     if (auth()->check() && auth()->user()->hasRole('student') && app(\App\Core\Plugins\PluginManager::class)->isEnabled('student-tracking') && Route::has('plugins.student-tracking.mine')) {
-        $navLinks[] = ['label' => 'My Activity', 'route' => 'plugins.student-tracking.mine', 'urlRoute' => 'plugins.student-tracking.mine', 'active' => request()->routeIs('plugins.student-tracking.mine')];
+        $navLinks[] = [
+            'label' => 'My Activity',
+            'url' => route('plugins.student-tracking.mine'),
+            'active' => request()->routeIs('plugins.student-tracking.mine'),
+            'external' => false,
+        ];
     }
 @endphp
 
@@ -42,7 +38,7 @@
         <nav class="hidden lg:flex items-center gap-7 text-[13px] font-medium text-slate-600">
             @foreach ($navLinks as $item)
                 <a
-                    href="{{ route($item['urlRoute'] ?? $item['route']) }}"
+                    href="{{ $item['url'] }}" @if (!empty($item['external'])) target="_blank" rel="noopener noreferrer" @endif
                     class="whitespace-nowrap shrink-0 py-1.5 transition-colors {{ $item['active'] ? 'text-[#0284C7] font-semibold' : 'hover:text-slate-900' }}"
                 >
                     {{ $item['label'] }}
@@ -77,7 +73,7 @@
     <div id="public-mobile-menu" class="hidden lg:hidden bg-white border-t border-slate-200 px-4 py-3 space-y-1 shadow-md">
         @foreach ($navLinks as $item)
             <a
-                href="{{ route($item['urlRoute'] ?? $item['route']) }}"
+                href="{{ $item['url'] }}" @if (!empty($item['external'])) target="_blank" rel="noopener noreferrer" @endif
                 class="block px-3 py-2.5 rounded-lg text-sm font-medium transition-colors {{ $item['active'] ? 'bg-[#EEF2FF] text-[#0284C7] font-semibold' : 'text-slate-600 hover:bg-slate-50 hover:text-[#0284C7]' }}"
             >
                 {{ $item['label'] }}

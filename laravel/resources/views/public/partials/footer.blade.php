@@ -60,14 +60,13 @@
             <div>
                 <h4 class="text-sm font-bold text-slate-900 mb-4">Links</h4>
                 <ul class="space-y-2.5 text-xs text-slate-600">
-                    <li><a href="{{ route('home') }}" class="inline-flex items-center gap-2 hover:text-[#0284C7] transition-colors"><span class="text-slate-400">&rarr;</span><span>Home</span></a></li>
-                    <li><a href="{{ route('public.courses') }}" class="inline-flex items-center gap-2 hover:text-[#0284C7] transition-colors"><span class="text-slate-400">&rarr;</span><span>Courses</span></a></li>
-                    <li><a href="{{ route('public.instructors') }}" class="inline-flex items-center gap-2 hover:text-[#0284C7] transition-colors"><span class="text-slate-400">&rarr;</span><span>Instructors</span></a></li>
-                    <li><a href="{{ route('public.ebooks') }}" class="inline-flex items-center gap-2 hover:text-[#0284C7] transition-colors"><span class="text-slate-400">&rarr;</span><span>E-Books</span></a></li>
-                    <li><a href="{{ route('public.products') }}" class="inline-flex items-center gap-2 hover:text-[#0284C7] transition-colors"><span class="text-slate-400">&rarr;</span><span>Products</span></a></li>
-                    <li><a href="{{ route('public.board_result') }}" class="inline-flex items-center gap-2 hover:text-[#0284C7] transition-colors"><span class="text-slate-400">&rarr;</span><span>Board Result</span></a></li>
-                    <li><a href="{{ route('public.about') }}" class="inline-flex items-center gap-2 hover:text-[#0284C7] transition-colors"><span class="text-slate-400">&rarr;</span><span>About Us</span></a></li>
-                    <li><a href="{{ route('public.contact') }}" class="inline-flex items-center gap-2 hover:text-[#0284C7] transition-colors"><span class="text-slate-400">&rarr;</span><span>Contact Us</span></a></li>
+                    @foreach (app(\App\Core\Appearance\SiteNavigationManager::class)->items('footer') as $item)
+                        <li>
+                            <a href="{{ $item['url'] }}" @if (!empty($item['external'])) target="_blank" rel="noopener noreferrer" @endif class="inline-flex items-center gap-2 hover:text-[#0284C7] transition-colors">
+                                <span class="text-slate-400">&rarr;</span><span>{{ $item['label'] }}</span>
+                            </a>
+                        </li>
+                    @endforeach
                 </ul>
             </div>
 
