@@ -33,7 +33,8 @@
             "group": "Academic & Operations",
             "label": "Certificates",
             "route": "plugins.certificates.index",
-            "order": 100
+            "order": 100,
+            "permission": "certificates.manage"
         }
     ]
 }
