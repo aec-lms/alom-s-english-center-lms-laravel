@@ -9,10 +9,10 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\View\View;
 use Plugins\Modules\CourseManagement\Models\Enrollment;
 use Plugins\Modules\CourseManagement\Models\LiveClass;
 use Plugins\Modules\CourseManagement\Models\LiveClassParticipant;
-use Illuminate\View\View;
 
 class LiveClassAccessController extends Controller
 {
@@ -22,20 +22,14 @@ class LiveClassAccessController extends Controller
         abort_unless($student && $student->hasRole('student'), 403, 'Only enrolled students can join a live class.');
 
         $course = $liveClass->course()->firstOrFail();
-        abort_unless(
-            Enrollment::query()->where('user_id', $student->id)
-                ->where('course_id', $course->id)
-                ->where('status', 'active')
-                ->exists(),
-            403,
-            'An active course enrollment is required to join this live class.'
-        );
+        $this->assertEligibleStudent($student, $course->id, $course->branch_id);
 
-        if ($course->branch_id !== null && (int) $student->branch_id !== (int) $course->branch_id) {
-            abort(403, 'This live class is outside your assigned branch.');
-        }
         abort_unless(in_array($liveClass->status, ['upcoming', 'live'], true), 403, 'This live class is not available.');
-        abort_if($liveClass->starts_at && now()->lt($liveClass->starts_at->copy()->subMinutes(15)), 403, 'Live class access opens 15 minutes before the scheduled start.');
+        abort_if(
+            $liveClass->starts_at && now()->lt($liveClass->starts_at->copy()->subMinutes(15)),
+            403,
+            'Live class access opens 15 minutes before the scheduled start.'
+        );
 
         $participant = DB::transaction(function () use ($liveClass, $student): LiveClassParticipant {
             $lockedClass = LiveClass::query()->whereKey($liveClass->id)->lockForUpdate()->firstOrFail();
@@ -49,33 +43,41 @@ class LiveClassAccessController extends Controller
                 ->lockForUpdate()
                 ->first();
 
+            // A repeat request from an already-present student refreshes their seat.
             if ($participant && $participant->left_at === null && $participant->last_seen_at && $participant->last_seen_at->greaterThanOrEqualTo($cutoff)) {
                 $participant->update(['last_seen_at' => $now]);
                 return $participant->fresh();
             }
 
-            Event::dispatch('lms.live_class.joined', [$student, $liveClass]);
-
-        $activeCount = LiveClassParticipant::query()
+            $activeCount = LiveClassParticipant::query()
                 ->where('live_class_id', $lockedClass->id)
                 ->whereNull('left_at')
                 ->where('last_seen_at', '>=', $cutoff)
                 ->count();
 
-            abort_if($activeCount >= max(1, (int) $lockedClass->capacity), 429, 'This live class has reached its LMS join capacity. Please try again shortly.');
+            abort_if(
+                $activeCount >= max(1, (int) $lockedClass->capacity),
+                429,
+                'This live class has reached its LMS join capacity. Please try again shortly.'
+            );
 
             if ($participant) {
                 $participant->update(['joined_at' => $now, 'last_seen_at' => $now, 'left_at' => null]);
-                return $participant->fresh();
+                $participant = $participant->fresh();
+            } else {
+                $participant = LiveClassParticipant::query()->create([
+                    'live_class_id' => $lockedClass->id,
+                    'user_id' => $student->id,
+                    'joined_at' => $now,
+                    'last_seen_at' => $now,
+                    'left_at' => null,
+                ]);
             }
 
-            return LiveClassParticipant::query()->create([
-                'live_class_id' => $lockedClass->id,
-                'user_id' => $student->id,
-                'joined_at' => $now,
-                'last_seen_at' => $now,
-                'left_at' => null,
-            ]);
+            // Record a join only after a seat has actually been granted.
+            Event::dispatch('lms.live_class.joined', [$student, $lockedClass]);
+
+            return $participant;
         });
 
         $activeCount = LiveClassParticipant::query()
@@ -97,11 +99,18 @@ class LiveClassAccessController extends Controller
     {
         $student = $request->user();
         abort_unless($student && $student->hasRole('student'), 403);
+
+        $course = $liveClass->course()->firstOrFail();
+        $this->assertEligibleStudent($student, $course->id, $course->branch_id);
+
+        abort_unless(in_array($liveClass->status, ['upcoming', 'live'], true), 403, 'This live class is not available.');
+
         $participant = LiveClassParticipant::query()
             ->where('live_class_id', $liveClass->id)
             ->where('user_id', $student->id)
             ->whereNull('left_at')
             ->firstOrFail();
+
         $participant->update(['last_seen_at' => now()]);
         $activeCount = LiveClassParticipant::query()
             ->where('live_class_id', $liveClass->id)
@@ -109,13 +118,20 @@ class LiveClassAccessController extends Controller
             ->where('last_seen_at', '>=', now()->subMinutes(2))
             ->count();
 
-        return response()->json(['active' => true, 'active_count' => $activeCount, 'last_seen_at' => now()->toIso8601String()]);
+        return response()->json([
+            'active' => true,
+            'active_count' => $activeCount,
+            'last_seen_at' => now()->toIso8601String(),
+        ]);
     }
 
     public function leave(Request $request, LiveClass $liveClass): JsonResponse
     {
         $student = $request->user();
         abort_unless($student && $student->hasRole('student'), 403);
+
+        // A participant may always release their own seat, including after a
+        // course access change or when the live class has just ended.
         LiveClassParticipant::query()
             ->where('live_class_id', $liveClass->id)
             ->where('user_id', $student->id)
@@ -123,5 +139,22 @@ class LiveClassAccessController extends Controller
             ->update(['left_at' => now(), 'last_seen_at' => now()]);
 
         return response()->json(['left' => true]);
+    }
+
+    private function assertEligibleStudent(object $student, int $courseId, ?int $courseBranchId): void
+    {
+        abort_unless(
+            Enrollment::query()
+                ->where('user_id', $student->id)
+                ->where('course_id', $courseId)
+                ->where('status', 'active')
+                ->exists(),
+            403,
+            'An active course enrollment is required to access this live class.'
+        );
+
+        if ($courseBranchId !== null && (int) $student->branch_id !== (int) $courseBranchId) {
+            abort(403, 'This live class is outside your assigned branch.');
+        }
     }
 }
