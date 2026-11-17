@@ -9,7 +9,7 @@
         @php($hasAccess = in_array((int)$exam->id, $accessibleExamIds ?? [], true))
         <div class="card mb-3"><div class="card-body">
             <h4>{{ $exam->title }}</h4>
-            <p>{{ $paid ? 'Paid' : 'Free' }} exam · {{ $exam->duration_minutes }} minutes · Pass marks {{ $exam->pass_marks }} @if($paid) · ৳{{ number_format((float)$exam->access_price,2) }} @endif</p>
+            <p>{{ $paid ? 'Paid' : 'Free' }} exam · {{ $exam->duration_minutes }} minutes · Pass marks {{ $exam->pass_marks }} @if($paid) · {{ $currency }} {{ number_format((float)$exam->access_price,2) }} @endif</p>
             @if(!$paid || $hasAccess)
                 <a class="btn btn-primary" href="{{ route('plugins.learn_earn.student.show',$exam) }}">Open Exam</a>
             @elseif($canPurchase)
