@@ -20,7 +20,8 @@
             "group": "CMS, Builders & AI",
             "label": "Media Library",
             "route": "plugins.media.index",
-            "order": 100
+            "order": 100,
+            "permission": "media.manage"
         }
     ]
 }
