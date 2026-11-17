@@ -85,7 +85,9 @@ class PluginCriticalRegressionTest extends TestCase
         $this->assertStringContainsString("'throttle:10,1'", $routeFile);
         $this->assertStringContainsString('$isInvoiceOwner', $controller);
         $this->assertStringContainsString('$invoice->payer_email', $controller);
-        $this->assertStringContainsString("'exists:fee_invoices,id'", $controller);
+        $this->assertStringContainsString("'fee_invoice_id' => ['nullable', 'integer']", $controller);
+        $this->assertStringContainsString("Schema::hasTable('fee_invoices')", $controller);
+        $this->assertStringNotContainsString("'exists:fee_invoices,id'", $controller);
         $checkoutMethod = substr($controller, strpos($controller, 'public function publicCheckout'));
         $this->assertStringNotContainsString("'amount' => ['required'", $checkoutMethod);
         $this->assertStringContainsString("'enabled_gateways'", $controller);
