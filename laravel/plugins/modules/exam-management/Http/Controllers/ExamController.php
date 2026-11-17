@@ -132,6 +132,7 @@ class ExamController extends Controller
         public function destroy(Request $request, Exam $exam): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $exam->branch_id) {
             abort(403, 'Branch isolation violation.');
         }
@@ -147,6 +148,7 @@ class ExamController extends Controller
     public function addQuestion(Request $request, Exam $exam): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $exam->branch_id) {
             abort(403, 'Branch isolation violation.');
         }
@@ -358,7 +360,7 @@ class ExamController extends Controller
 
         abort_unless(
             (int) ($actor->branch_id ?? 0) > 0
-                && app(\\App\\Core\\Plugins\\PluginManager::class)->isEnabled('branch-management')
+                && app(\App\Core\Plugins\PluginManager::class)->isEnabled('branch-management')
                 && Schema::hasTable('branches')
                 && DB::table('branches')->where('id', $actor->branch_id)->where('is_active', true)->exists(),
             403,
