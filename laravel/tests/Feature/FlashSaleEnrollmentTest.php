@@ -24,10 +24,17 @@ class FlashSaleEnrollmentTest extends TestCase
             'flash-sale',
         ]);
 
-        $studentUser = $this->createUserWithRole('student');
+        $branchId = DB::table('branches')->insertGetId([
+            'code' => 'FLASH-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'name' => 'Flash Sale Branch',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $studentUser = $this->createUserWithRole('student', $branchId);
         Student::query()->create([
             'user_id' => $studentUser->id,
-            'branch_id' => null,
+            'branch_id' => $branchId,
             'student_code' => 'FLASH-' . strtoupper(substr(bin2hex(random_bytes(4)), 0, 8)),
             'admission_date' => today(),
             'status' => 'active',
