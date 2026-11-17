@@ -143,19 +143,9 @@ class BackupService
             if ($magic === "AECBK02\n") {
                 $this->decryptArchiveStream($safeBackupPath, $tempZip, $key);
             } else {
-                // Backward compatibility with existing AES-256-CBC + HMAC backup files.
-                $blob = file_get_contents($safeBackupPath);
-                if ($blob === false || strlen($blob) < 49) throw new RuntimeException('Corrupted or unreadable backup file.');
-                $hmac = substr($blob, 0, 32);
-                $iv = substr($blob, 32, 16);
-                $ciphertext = substr($blob, 48);
-                $expectedHmac = hash_hmac('sha256', $iv . $ciphertext, $key, true);
-                if (!hash_equals($expectedHmac, $hmac)) throw new RuntimeException('Backup HMAC authentication failed.');
-                $plaintext = openssl_decrypt($ciphertext, 'AES-256-CBC', $key, OPENSSL_RAW_DATA, $iv);
-                if ($plaintext === false || file_put_contents($tempZip, $plaintext, LOCK_EX) === false) {
-                    throw new RuntimeException('Backup decryption failed.');
-                }
-                unset($blob, $ciphertext, $plaintext);
+                // Legacy AES-CBC backups are authenticated in a first streaming pass,
+                // then decrypted in bounded, block-aligned chunks.
+                $this->decryptLegacyAesBackupStream($safeBackupPath, $tempZip, $key);
             }
 
             $zip = new ZipArchive();
@@ -535,6 +525,82 @@ class BackupService
         } finally {
             fclose($input);
             fclose($output);
+        }
+    }
+
+    /**
+     * Authenticate and decrypt the legacy [HMAC][IV][AES-CBC] format without loading
+     * the encrypted backup or plaintext ZIP into PHP memory.
+     */
+    private function decryptLegacyAesBackupStream(string $source, string $destination, string $key): void
+    {
+        $input = fopen($source, 'rb');
+        if ($input === false) throw new RuntimeException('Unable to open legacy encrypted backup.');
+
+        $output = null;
+        try {
+            $fileSize = filesize($source);
+            if ($fileSize === false || $fileSize < 64 || (($fileSize - 48) % 16) !== 0) {
+                throw new RuntimeException('Corrupted or truncated legacy AES backup.');
+            }
+
+            $storedHmac = $this->readExact($input, 32);
+            $iv = $this->readExact($input, 16);
+            $hmac = hash_init('sha256', HASH_HMAC, $key);
+            hash_update($hmac, $iv);
+
+            while (!feof($input)) {
+                $chunk = fread($input, 65536);
+                if ($chunk === false) throw new RuntimeException('Unable to read legacy backup for authentication.');
+                if ($chunk === '') break;
+                hash_update($hmac, $chunk);
+            }
+            if (!hash_equals($storedHmac, hash_final($hmac, true))) {
+                throw new RuntimeException('Backup HMAC authentication failed.');
+            }
+
+            if (fseek($input, 48, SEEK_SET) !== 0) throw new RuntimeException('Unable to rewind legacy backup stream.');
+            $output = fopen($destination, 'wb');
+            if ($output === false) throw new RuntimeException('Unable to create decrypted legacy backup archive.');
+
+            $previousCipherBlock = $iv;
+            $remaining = $fileSize - 48;
+            while ($remaining > 0) {
+                $readLength = min(65536, $remaining);
+                $readLength -= $readLength % 16;
+                $cipherChunk = $this->readExact($input, $readLength);
+                $plainChunk = openssl_decrypt(
+                    $cipherChunk,
+                    'AES-256-CBC',
+                    $key,
+                    OPENSSL_RAW_DATA | OPENSSL_ZERO_PADDING,
+                    $previousCipherBlock
+                );
+                if ($plainChunk === false || strlen($plainChunk) !== strlen($cipherChunk)) {
+                    throw new RuntimeException('Legacy AES backup decryption failed.');
+                }
+
+                $previousCipherBlock = substr($cipherChunk, -16);
+                $remaining -= $readLength;
+
+                if ($remaining === 0) {
+                    $padding = ord($plainChunk[strlen($plainChunk) - 1]);
+                    if ($padding < 1 || $padding > 16
+                        || substr($plainChunk, -$padding) !== str_repeat(chr($padding), $padding)) {
+                        throw new RuntimeException('Legacy AES backup padding validation failed.');
+                    }
+                    $plainChunk = substr($plainChunk, 0, -$padding);
+                }
+
+                if ($plainChunk !== '' && fwrite($output, $plainChunk) !== strlen($plainChunk)) {
+                    throw new RuntimeException('Unable to write decrypted legacy backup archive.');
+                }
+            }
+            fflush($output);
+            @chmod($destination, 0600);
+        } finally {
+            fclose($input);
+            if (is_resource($output)) fclose($output);
         }
     }
 
