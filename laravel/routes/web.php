@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\Admin\AppearanceController;
+use App\Http\Controllers\Admin\ThemePackageController;
 use App\Http\Controllers\Admin\SiteIdentityController;
 use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\BackupController;
@@ -144,6 +145,11 @@ Route::middleware('installed')->group(function (): void {
             Route::post('/', [AppearanceController::class, 'update'])->name('update');
             Route::post('/design', [AppearanceController::class, 'updateDesign'])->name('design');
             Route::post('/reset', [AppearanceController::class, 'reset'])->name('reset');
+            Route::get('/themes', [ThemePackageController::class, 'index'])->name('themes.index');
+            Route::post('/themes/upload', [ThemePackageController::class, 'upload'])->name('themes.upload');
+            Route::post('/themes/{slug}/activate', [ThemePackageController::class, 'activate'])->name('themes.activate');
+            Route::post('/themes/deactivate', [ThemePackageController::class, 'deactivate'])->name('themes.deactivate');
+            Route::delete('/themes/{slug}', [ThemePackageController::class, 'uninstall'])->name('themes.uninstall');
         });
 
         Route::prefix('recycle-bin')->name('recycle-bin.')->middleware('permission:core.recycle_bin.manage')->group(function (): void {
