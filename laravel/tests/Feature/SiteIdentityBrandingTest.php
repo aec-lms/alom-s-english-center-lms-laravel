@@ -73,7 +73,7 @@ class SiteIdentityBrandingTest extends TestCase
             ->assertOk()
             ->assertSee('Welcome to Example Academy')
             ->assertSee('English learning for everyone')
-            ->assertSee('Example Academy logo');
+            ->assertSee('class="h-10 max-w-36 object-contain"', false);
     }
 
     public function test_admin_can_remove_brand_assets_without_touching_unrelated_uploads(): void
