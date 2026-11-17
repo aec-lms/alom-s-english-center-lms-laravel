@@ -14,5 +14,13 @@
             "name": "Publish & Manage Notices"
         }
     ],
-    "settings_schema": []
+    "settings_schema": [],
+    "admin_menu": [
+        {
+            "group": "Marketing, Growth & SEO",
+            "label": "Notice Board",
+            "route": "plugins.notices.index",
+            "order": 100
+        }
+    ]
 }
