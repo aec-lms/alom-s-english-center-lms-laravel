@@ -2,7 +2,7 @@ name: Laravel
 
 on:
   push:
-    branches: ["main", "fix/laravel-ci-php83"]
+    branches: ["main", "fix/laravel-ci-php83", "feature/**"]
   pull_request:
     branches: ["main"]
 
