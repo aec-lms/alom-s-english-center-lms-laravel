@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
@@ -50,6 +51,18 @@ class GlobalSiteSettingsCentralAdminTest extends TestCase
         $this->actingAs($manager)->get('/admin/mobile-app')->assertForbidden();
         $this->actingAs($manager)->get('/admin/payments/stripe')->assertForbidden();
         $this->actingAs($manager)->get('/admin/payments/paypal')->assertForbidden();
+    }
+
+    public function test_branch_manager_cannot_view_global_menu_editor_even_with_settings_permission(): void
+    {
+        $this->markSystemInstalled();
+
+        $manager = $this->createUserWithRole('branch_manager');
+        $permissionId = DB::table('permissions')->where('slug', 'core.settings.manage')->value('id');
+        $this->assertNotNull($permissionId);
+        $manager->roles()->first()->permissions()->syncWithoutDetaching([$permissionId]);
+
+        $this->actingAs($manager)->get('/admin/menu-editor')->assertForbidden();
     }
 
 }
