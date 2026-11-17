@@ -22,9 +22,8 @@ class ThemeAppearanceTest extends TestCase
             'password' => 'password',
             'is_active' => true,
         ]);
-        $role = Role::query()->create(['slug' => 'admin', 'name' => 'Administrator', 'is_system' => true]);
-        $permission = Permission::query()->create([
-            'slug' => 'core.settings.manage',
+        $role = Role::query()->firstOrCreate(['slug' => 'admin'], ['name' => 'Administrator', 'is_system' => true]);
+        $permission = Permission::query()->firstOrCreate(['slug' => 'core.settings.manage'], [
             'name' => 'Manage Core System Settings',
             'module' => 'core',
         ]);
@@ -81,9 +80,8 @@ class ThemeAppearanceTest extends TestCase
             'password' => 'password',
             'is_active' => true,
         ]);
-        $role = Role::query()->create(['slug' => 'admin', 'name' => 'Administrator', 'is_system' => true]);
-        $permission = Permission::query()->create([
-            'slug' => 'core.settings.manage',
+        $role = Role::query()->firstOrCreate(['slug' => 'admin'], ['name' => 'Administrator', 'is_system' => true]);
+        $permission = Permission::query()->firstOrCreate(['slug' => 'core.settings.manage'], [
             'name' => 'Manage Core System Settings',
             'module' => 'core',
         ]);
@@ -128,9 +126,8 @@ class ThemeAppearanceTest extends TestCase
             'password' => 'password',
             'is_active' => true,
         ]);
-        $role = Role::query()->create(['slug' => 'admin', 'name' => 'Administrator', 'is_system' => true]);
-        $permission = Permission::query()->create([
-            'slug' => 'core.settings.manage',
+        $role = Role::query()->firstOrCreate(['slug' => 'admin'], ['name' => 'Administrator', 'is_system' => true]);
+        $permission = Permission::query()->firstOrCreate(['slug' => 'core.settings.manage'], [
             'name' => 'Manage Core System Settings',
             'module' => 'core',
         ]);
