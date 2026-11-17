@@ -45,7 +45,8 @@
             "group": "Marketing, Growth & SEO",
             "label": "Google Console & GA4",
             "route": "plugins.google_console.index",
-            "order": 100
+            "order": 100,
+            "permission": "marketing.google_console.manage"
         }
     ]
 }
