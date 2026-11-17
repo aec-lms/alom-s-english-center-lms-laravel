@@ -23,7 +23,8 @@
             "group": "Finance & Gateways",
             "label": "Payments & Ledger",
             "route": "plugins.payments.index",
-            "order": 100
+            "order": 100,
+            "permission": "payments.manage"
         }
     ]
 }
