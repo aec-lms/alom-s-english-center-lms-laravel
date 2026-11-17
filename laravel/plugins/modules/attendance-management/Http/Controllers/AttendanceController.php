@@ -27,14 +27,21 @@ class AttendanceController extends Controller
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
         $branchId = $actor->hasRole('branch_manager') ? (int) $actor->branch_id : null;
+        $plugins = app(PluginManager::class);
+        $courseIntegrationEnabled = $plugins->isEnabled('course-management') && Schema::hasTable('batches');
+        $studentIntegrationEnabled = $plugins->isEnabled('student-management') && Schema::hasTable('students');
+        $attendanceReady = $courseIntegrationEnabled && $studentIntegrationEnabled;
+
         $records = AttendanceEntry::query()->with('batchIdentity')
             ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
             ->latest('attendance_date')
             ->paginate(30);
-        $batches = DB::table('batches')
-            ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
-            ->orderBy('name')
-            ->get();
+        $batches = $courseIntegrationEnabled
+            ? DB::table('batches')
+                ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
+                ->orderBy('name')
+                ->get()
+            : collect();
         $batches->each(function ($batch): void {
             $batch->attendance_batch_mapping_id = AttendanceBatchMapping::resolve(
                 'course_batch',
@@ -69,12 +76,14 @@ class AttendanceController extends Controller
                 ]);
             }
         }
-        $students = Student::query()
-            ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
-            ->orderBy('id')
-            ->get();
+        $students = $studentIntegrationEnabled
+            ? Student::query()
+                ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
+                ->orderBy('id')
+                ->get()
+            : collect();
 
-        return view('attendance-management::index', compact('records', 'batches', 'qrBatches', 'students'));
+        return view('attendance-management::index', compact('records', 'batches', 'qrBatches', 'students', 'attendanceReady', 'courseIntegrationEnabled', 'studentIntegrationEnabled'));
     }
 
     public function store(Request $request): RedirectResponse
