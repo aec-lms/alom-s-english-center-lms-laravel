@@ -190,7 +190,7 @@ class UniversalUpdateService
 
             return $log;
         } catch (\Throwable $e) {
-            if (is_dir($snapshotDir)) {
+            if (is_file($snapshotDir . DIRECTORY_SEPARATOR . 'snapshot.json')) {
                 $this->restorePayloadSnapshot($snapshotDir);
             }
             $log = UpdateLog::query()->create([
