@@ -18,6 +18,8 @@
     "optional_dependencies": [
         "branch-management",
         "student-management",
-        "course-management"
+        "course-management",
+        "batch-management",
+        "student-tracking"
     ]
 }
