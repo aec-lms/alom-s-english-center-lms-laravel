@@ -2,9 +2,9 @@
 @section('title', 'Theme Preview — '.$theme['name'])
 @section('content')
 @php
-    $defaults = \\App\\Core\\Appearance\\ThemeManager::DEFAULTS;
+    $defaults = \App\Core\Appearance\ThemeManager::DEFAULTS;
     $colors = array_merge($defaults, $theme['colors']);
-    $design = array_merge(\\App\\Core\\Appearance\\ThemeManager::DESIGN_DEFAULTS, $theme['design']);
+    $design = array_merge(\App\Core\Appearance\ThemeManager::DESIGN_DEFAULTS, $theme['design']);
     $fontStacks = [
         'plus-jakarta' => "'Plus Jakarta Sans', 'Noto Sans Bengali', sans-serif",
         'inter' => "Inter, 'Noto Sans Bengali', sans-serif",
