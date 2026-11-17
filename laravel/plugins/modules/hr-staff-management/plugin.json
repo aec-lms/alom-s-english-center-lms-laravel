@@ -28,7 +28,8 @@
             "group": "Academic & Operations",
             "label": "HR & Payroll",
             "route": "plugins.hr.index",
-            "order": 100
+            "order": 100,
+            "permission": "hr.manage"
         }
     ]
 }
