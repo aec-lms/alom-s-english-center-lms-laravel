@@ -11,6 +11,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
@@ -65,7 +66,18 @@ class UniversalPaymentController extends Controller
             'gateway' => ['required', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,bank_cash'],
             'amount' => ['required', 'numeric', 'min:1'],
             'external_trx_id' => ['required', 'string', 'max:120'],
+            'proof_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
         ]);
+
+        if ($request->hasFile('proof_file')) {
+            abort_unless(in_array($validated['gateway'], ['bank_cash', 'offline'], true), 422, 'Receipt evidence is accepted only for manual bank/cash payments.');
+            abort_unless(Schema::hasColumn('universal_payment_transactions', 'proof_path')
+                && Schema::hasColumn('universal_payment_transactions', 'proof_mime')
+                && Schema::hasColumn('universal_payment_transactions', 'proof_size'), 503, 'Receipt evidence storage is not available until the payment migration is applied.');
+        }
+
+        $proofFile = $request->file('proof_file');
+        $proofPath = $proofFile?->store('universal-payment-proofs', 'local');
 
         $tx = UniversalPaymentTransaction::query()->create([
             'reference' => 'UPAY-' . strtoupper(Str::random(8)),
@@ -80,6 +92,9 @@ class UniversalPaymentController extends Controller
             'status' => 'pending',
             'verified_by' => null,
             'verified_at' => null,
+            'proof_path' => $proofPath,
+            'proof_mime' => $proofFile?->getMimeType(),
+            'proof_size' => $proofFile?->getSize(),
         ]);
 
         $this->audit->log('universal_payment.recorded', 'universal_payment', $tx->reference, ['amount' => $tx->amount, 'gateway' => $tx->gateway]);
