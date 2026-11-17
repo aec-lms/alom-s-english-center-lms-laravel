@@ -45,7 +45,12 @@ class RolePermissionController extends Controller
 
     public function update(Request $request, Role $role): RedirectResponse
     {
-        abort_if($role->slug === 'admin', 403, 'The protected Administrator role cannot be modified.');
+        $actor = $request->user();
+        abort_if(
+            $role->is_system && !$actor?->hasRole('admin'),
+            403,
+            'Only an existing Administrator may modify system roles.'
+        );
 
         $validated = $request->validate([
             'permissions' => ['sometimes', 'array', 'max:500'],
@@ -53,6 +58,13 @@ class RolePermissionController extends Controller
         ]);
 
         $permissionIds = array_map('intval', $validated['permissions'] ?? []);
+        if (!$actor?->hasRole('admin') && Permission::query()
+            ->whereIn('id', $permissionIds)
+            ->where('module', 'core')
+            ->where('slug', '!=', 'core.dashboard.view')
+            ->exists()) {
+            abort(403, 'Only an existing Administrator may grant protected Core permissions.');
+        }
         DB::transaction(function () use ($role, $permissionIds): void {
             $role->permissions()->sync($permissionIds);
             $this->audit('admin.role.permissions.updated', $role, [
