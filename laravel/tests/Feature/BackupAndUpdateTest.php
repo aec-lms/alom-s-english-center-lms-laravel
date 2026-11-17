@@ -87,6 +87,101 @@ class BackupAndUpdateTest extends TestCase
         }
     }
 
+    public function test_legacy_aes_encrypted_backup_restores_using_streamed_decryption(): void
+    {
+        $this->markSystemInstalled();
+
+        $prefix = 'legacy-restore-' . bin2hex(random_bytes(4)) . '-';
+        $timestamp = now();
+        $passwordHash = password_hash('LegacyFixturePassword!2026', PASSWORD_BCRYPT);
+        for ($offset = 0; $offset < 2000; $offset += 50) {
+            $rows = [];
+            for ($i = $offset; $i < $offset + 50; $i++) {
+                $rows[] = [
+                    'name' => 'Legacy Production Restore Student ' . str_pad((string) $i, 5, '0', STR_PAD_LEFT),
+                    'email' => $prefix . $i . '@aec.test',
+                    'phone' => null,
+                    'password' => $passwordHash,
+                    'is_active' => true,
+                    'created_at' => $timestamp,
+                    'updated_at' => $timestamp,
+                ];
+            }
+            DB::table('users')->insert($rows);
+        }
+
+        $snapshot = [
+            'tables' => [
+                'users' => DB::table('users')->get()->map(fn ($row) => (array) $row)->all(),
+            ],
+        ];
+        $archivePath = tempnam(sys_get_temp_dir(), 'aec_legacy_fixture_');
+        $zip = new ZipArchive();
+        $this->assertSame(true, $zip->open($archivePath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true);
+        $zip->addFromString('manifest.json', json_encode([
+            'core_version' => config('lms.core_version', '2.0.0'),
+            'created_at' => now()->toIso8601String(),
+            'includes_files' => false,
+            'tables' => ['users'],
+        ], JSON_THROW_ON_ERROR));
+        $zip->addFromString('database.json', json_encode($snapshot, JSON_THROW_ON_ERROR));
+        $zip->setCompressionName('database.json', ZipArchive::CM_STORE);
+        $zip->close();
+
+        $rawKey = (string) (config('lms.backup_encryption_key') ?: config('app.key'));
+        if (str_starts_with($rawKey, 'base64:')) {
+            $decodedKey = base64_decode(substr($rawKey, 7), true);
+            $this->assertNotFalse($decodedKey);
+            $rawKey = $decodedKey;
+        }
+        $key = hash('sha256', $rawKey, true);
+        $iv = random_bytes(16);
+        $archiveBytes = file_get_contents($archivePath);
+        $ciphertext = openssl_encrypt($archiveBytes, 'AES-256-CBC', $key, OPENSSL_RAW_DATA, $iv);
+        $this->assertNotFalse($ciphertext);
+
+        $backupDir = (string) config('lms.backup_path');
+        if (!is_dir($backupDir)) mkdir($backupDir, 0750, true);
+        $legacyPath = $backupDir . '/legacy-' . bin2hex(random_bytes(8)) . '.zip.enc';
+        $hmac = hash_hmac('sha256', $iv . $ciphertext, $key, true);
+        file_put_contents($legacyPath, $hmac . $iv . $ciphertext, LOCK_EX);
+
+        $record = BackupRecord::query()->create([
+            'filename' => basename($legacyPath),
+            'storage_path' => $legacyPath,
+            'checksum_sha256' => hash_file('sha256', $legacyPath),
+            'is_encrypted' => true,
+            'includes_files' => false,
+            'size_bytes' => filesize($legacyPath),
+            'core_version' => (string) config('lms.core_version', '2.0.0'),
+            'metadata' => ['tables' => ['users'], 'backup_format' => 1],
+        ]);
+
+        try {
+            $this->assertGreaterThan(65536, filesize($legacyPath));
+            $this->assertFileExists($legacyPath);
+            $this->assertSame(basename($legacyPath), $record->filename);
+            $this->assertTrue(app(BackupService::class)->verifyBackupIntegrity($record));
+            DB::table('users')->where('email', 'like', $prefix . '%')->delete();
+
+            app(BackupService::class)->restoreEncryptedBackup($record);
+
+            $this->assertSame(2000, DB::table('users')->where('email', 'like', $prefix . '%')->count());
+            $this->assertSame(
+                'Legacy Production Restore Student 00000',
+                DB::table('users')->where('email', $prefix . '0@aec.test')->value('name')
+            );
+            $this->assertSame(
+                'Legacy Production Restore Student 01999',
+                DB::table('users')->where('email', $prefix . '1999@aec.test')->value('name')
+            );
+        } finally {
+            @unlink($archivePath);
+            @unlink($legacyPath);
+            $record->delete();
+        }
+    }
+
     public function test_encrypted_backup_restores_included_private_files(): void
     {
         $this->markSystemInstalled();

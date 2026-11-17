@@ -53,3 +53,8 @@ GitHub Actions tests the Laravel application using PHP 8.3 and the committed `la
 ## Release status
 
 **Not yet production-ready.** A passing CI suite proves only the tests currently in the repository. Several plugin modules still need complete business workflows and acceptance coverage; payment-provider sandbox/live callbacks, cPanel deployment, full restore verification, browser E2E and operational smoke checks remain release gates. See `docs/RELEASE-READINESS-AUDIT.md` and `docs/LARAVEL-CPANEL-DEPLOYMENT.md`.
+
+
+## Production backup and restore rehearsal
+
+See [Production backup requirements and restore rehearsal](docs/PRODUCTION-BACKUP-RESTORE.md) for cPanel PHP extension setup, runtime verification, and the isolated restore rehearsal procedure.
