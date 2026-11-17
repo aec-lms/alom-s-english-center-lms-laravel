@@ -10,6 +10,10 @@ use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Support\Facades\Http;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
+use Plugins\Modules\GatewaySslcommerz\Services\SslcommerzGatewayService;
+use Plugins\Modules\GatewayStripe\Services\StripeGatewayService;
+use Plugins\Modules\GatewayPaypal\Services\PaypalGatewayService;
+use RuntimeException;
 use Plugins\Modules\StudentManagement\Models\Student;
 use Plugins\Modules\UniversalPayment\Services\UniversalPaymentOrchestrator;
 use Tests\TestCase;
@@ -142,7 +146,7 @@ class FinanceAndPaymentGatewayTest extends TestCase
                 'status' => 'VALID',
                 'tran_id' => $sslTransactionRef,
                 'val_id' => 'SSL-VALIDATION-001',
-                'amount' => '1200.00',
+                'amount' => (($request->data()['val_id'] ?? '') === 'SSL-VALIDATION-WRONG' ? '1199.00' : '1200.00'),
                 'currency' => 'BDT',
                 'bank_tran_id' => 'BANK-SSL-001',
                 'risk_level' => '0',
@@ -159,6 +163,18 @@ class FinanceAndPaymentGatewayTest extends TestCase
         $sslTransaction = PaymentTransaction::query()
             ->where('transaction_ref', $sslSession['transaction_ref'])
             ->firstOrFail();
+
+        try {
+            app(SslcommerzGatewayService::class)->verifyAndSettleIpn([
+                'tran_id' => $sslTransaction->transaction_ref,
+                'val_id' => 'SSL-VALIDATION-WRONG',
+                'status' => 'VALID',
+            ]);
+            $this->fail('SSLCOMMERZ must reject a callback with the wrong amount.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('amount', strtolower($exception->getMessage()));
+        }
+        $this->assertSame('unpaid', $sslInvoice->fresh()->status);
 
         $this->postJson('/payments/sslcommerz/ipn', [
             'tran_id' => $sslTransaction->transaction_ref,
@@ -326,6 +342,24 @@ class FinanceAndPaymentGatewayTest extends TestCase
         $ts = (string) time();
         $stripeSig = 't=' . $ts . ',v1=' . hash_hmac('sha256', $ts . '.' . $stripePayload, 'whsec_stripe_abc');
 
+        $stripeEvent = json_decode($stripePayload, true, 512, JSON_THROW_ON_ERROR);
+        $stripeEvent['data']['object']['amount_received'] = 449999;
+        $wrongAmountPayload = json_encode($stripeEvent, JSON_THROW_ON_ERROR);
+        $wrongAmountSignature = 't=' . $ts . ',v1=' . hash_hmac('sha256', $ts . '.' . $wrongAmountPayload, 'whsec_stripe_abc');
+        try {
+            app(StripeGatewayService::class)->verifyAndSettleWebhook($wrongAmountPayload, $wrongAmountSignature);
+            $this->fail('Stripe must reject a PaymentIntent with the wrong amount.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('amount', strtolower($exception->getMessage()));
+        }
+        try {
+            app(StripeGatewayService::class)->verifyAndSettleWebhook($stripePayload, 't=' . $ts . ',v1=invalid-signature');
+            $this->fail('Stripe must reject an invalid webhook signature.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('signature', strtolower($exception->getMessage()));
+        }
+        $this->assertSame('unpaid', $stripeInvoice->fresh()->status);
+
         $this->call(
             'POST',
             '/payments/stripe/webhook',
@@ -337,6 +371,10 @@ class FinanceAndPaymentGatewayTest extends TestCase
         )->assertOk();
 
         $this->assertSame('paid', $stripeInvoice->fresh()->status);
+        $this->assertSame(
+            'settled',
+            app(StripeGatewayService::class)->verifyAndSettleWebhook($stripePayload, $stripeSig)->status
+        );
 
         // PayPal hosted order + signed webhook
         $paypalRes = $this->actingAs($admin)->postJson('/payments/paypal/create-order', [
@@ -355,6 +393,23 @@ class FinanceAndPaymentGatewayTest extends TestCase
             ],
         ], JSON_THROW_ON_ERROR);
 
+        $paypalHeaders = [
+            'auth_algo' => 'SHA256withRSA',
+            'cert_url' => 'https://api-m.sandbox.paypal.com/cert',
+            'transmission_id' => 'transmission-test-001',
+            'transmission_sig' => 'signature-test',
+            'transmission_time' => now()->toIso8601String(),
+        ];
+        $wrongPaypalEvent = json_decode($paypalPayload, true, 512, JSON_THROW_ON_ERROR);
+        $wrongPaypalEvent['resource']['amount']['value'] = '2499.00';
+        try {
+            app(PaypalGatewayService::class)->verifyAndSettleWebhook($paypalHeaders, $wrongPaypalEvent);
+            $this->fail('PayPal must reject a capture with the wrong amount.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('amount', strtolower($exception->getMessage()));
+        }
+        $this->assertSame('unpaid', $paypalInvoice->fresh()->status);
+
         $this->call(
             'POST',
             '/payments/paypal/webhook',
@@ -366,7 +421,7 @@ class FinanceAndPaymentGatewayTest extends TestCase
                 'HTTP_PAYPAL_CERT_URL' => 'https://api-m.sandbox.paypal.com/cert',
                 'HTTP_PAYPAL_TRANSMISSION_ID' => 'transmission-test-001',
                 'HTTP_PAYPAL_TRANSMISSION_SIG' => 'signature-test',
-                'HTTP_PAYPAL_TRANSMISSION_TIME' => now()->toIso8601String(),
+                'HTTP_PAYPAL_TRANSMISSION_TIME' => $paypalHeaders['transmission_time'],
                 'CONTENT_TYPE' => 'application/json',
             ],
             $paypalPayload
