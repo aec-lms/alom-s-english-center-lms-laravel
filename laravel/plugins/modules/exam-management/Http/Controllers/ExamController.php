@@ -49,7 +49,7 @@ class ExamController extends Controller
             'branch_id' => ['nullable', 'integer'],
             'title' => ['required', 'string', 'max:180'],
             'duration_minutes' => ['required', 'integer', 'min:5', 'max:360'],
-            'max_attempts' => ['required', 'integer', 'min:1', 'max:20'],
+            'max_attempts' => ['nullable', 'integer', 'min:1', 'max:20'],
             'pass_marks' => ['required', 'numeric', 'min:0'],
             'is_published' => ['nullable', 'boolean'],
         ]);
@@ -76,7 +76,7 @@ class ExamController extends Controller
             'branch_id' => $resolvedBranchId,
             'title' => $validated['title'],
             'duration_minutes' => (int) $validated['duration_minutes'],
-            'max_attempts' => (int) $validated['max_attempts'],
+            'max_attempts' => (int) ($validated['max_attempts'] ?? 1),
             'pass_marks' => (float) $validated['pass_marks'],
             'is_published' => $request->boolean('is_published', false),
         ]);
@@ -97,7 +97,7 @@ class ExamController extends Controller
             'course_id' => ['nullable', 'integer'],
             'title' => ['required', 'string', 'max:180'],
             'duration_minutes' => ['required', 'integer', 'min:5', 'max:360'],
-            'max_attempts' => ['required', 'integer', 'min:1', 'max:20'],
+            'max_attempts' => ['nullable', 'integer', 'min:1', 'max:20'],
             'pass_marks' => ['required', 'numeric', 'min:0'],
             'is_published' => ['nullable', 'boolean'],
         ]);
@@ -116,7 +116,7 @@ class ExamController extends Controller
             'course_id' => $courseId,
             'title' => $validated['title'],
             'duration_minutes' => (int) $validated['duration_minutes'],
-            'max_attempts' => (int) $validated['max_attempts'],
+            'max_attempts' => (int) ($validated['max_attempts'] ?? $exam->max_attempts ?? 1),
             'pass_marks' => (float) $validated['pass_marks'],
             'is_published' => $request->boolean('is_published'),
         ]);
