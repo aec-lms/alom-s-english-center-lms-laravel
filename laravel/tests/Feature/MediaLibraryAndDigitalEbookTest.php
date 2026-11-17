@@ -45,6 +45,16 @@ class MediaLibraryAndDigitalEbookTest extends TestCase
         $this->assertNotNull($pdf);
         $this->assertSame('local', $pdf->disk);
         Storage::disk('local')->assertExists($pdf->path);
+
+        $this->actingAs($admin)->post('/admin/media', [
+            'file' => UploadedFile::fake()->create('teacher-notes.docx', 32, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
+            'collection' => 'documents',
+        ])->assertSessionHasNoErrors()->assertRedirect();
+
+        $docx = DB::table('media_assets')->where('original_name', 'teacher-notes.docx')->first();
+        $this->assertNotNull($docx);
+        $this->assertSame('local', $docx->disk);
+        Storage::disk('local')->assertExists($docx->path);
     }
 
     public function test_paid_ebook_download_is_locked_until_verified_payment_and_uses_server_price(): void
