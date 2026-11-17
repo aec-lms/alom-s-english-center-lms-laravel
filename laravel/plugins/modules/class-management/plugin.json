@@ -20,7 +20,8 @@
             "group": "Academic & Operations",
             "label": "Classes & Routines",
             "route": "plugins.classes.index",
-            "order": 100
+            "order": 100,
+            "permission": "classes.manage"
         }
     ]
 }
