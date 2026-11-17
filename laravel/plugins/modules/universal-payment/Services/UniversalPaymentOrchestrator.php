@@ -38,7 +38,7 @@ class UniversalPaymentOrchestrator
             $adapterRequired = (bool) ($definition['adapter_required'] ?? false);
             $methodEnabled = in_array($methodBySlug[$slug] ?? '', $enabledMethods, true);
             $available = $methodEnabled && $enabled && $missing === [] && !$adapterRequired;
-            $status = !$methodEnabled ? 'disabled_in_universal_payment' : (!$enabled ? 'disabled' : ($adapterRequired ? 'processor_adapter_required' : ($missing !== [] ? 'not_configured' : 'ready')));
+            $status = $adapterRequired ? 'processor_adapter_required' : (!$methodEnabled ? 'disabled_in_universal_payment' : (!$enabled ? 'disabled' : ($missing !== [] ? 'not_configured' : 'ready')));
 
             $statuses[$slug] = [
                 'label' => $definition['label'],
