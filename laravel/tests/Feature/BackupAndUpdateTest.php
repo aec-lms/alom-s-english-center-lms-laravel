@@ -14,6 +14,37 @@ use ZipArchive;
 
 class BackupAndUpdateTest extends TestCase
 {
+    public function test_restore_rehearsal_refuses_live_default_and_unconfigured_targets(): void
+    {
+        $this->markSystemInstalled();
+
+        $record = BackupRecord::query()->create([
+            'filename' => 'rehearsal-safety-fixture.zip.enc',
+            'storage_path' => storage_path('app/backups/rehearsal-safety-fixture.zip.enc'),
+            'checksum_sha256' => hash('sha256', 'not-a-real-backup'),
+            'is_encrypted' => true,
+            'includes_files' => false,
+            'size_bytes' => 17,
+            'core_version' => (string) config('lms.core_version', '2.0.0'),
+            'metadata' => ['tables' => ['users']],
+        ]);
+
+        $this->artisan('lms:backup:rehearse', [
+            'backup' => $record->id,
+            '--connection' => (string) config('database.default'),
+        ])->assertExitCode(1)
+            ->expectsOutputToContain('different from the live default connection');
+
+        config(['database.connections.missing_rehearsal' => null]);
+        $this->artisan('lms:backup:rehearse', [
+            'backup' => $record->id,
+            '--connection' => 'missing_rehearsal',
+        ])->assertExitCode(1)
+            ->expectsOutputToContain('not fully configured');
+
+        $record->delete();
+    }
+
     public function test_encrypted_backup_creation_and_integrity_verification(): void
     {
         $this->markSystemInstalled();
