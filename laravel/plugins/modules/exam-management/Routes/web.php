@@ -24,7 +24,12 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:exam-management'])
         Route::post('/{exam}/questions', [ExamController::class, 'addQuestion'])
             ->middleware('permission:exams.manage')
             ->name('questions.store');
-        Route::post('/{exam}/attempt', [ExamController::class, 'submitAttempt'])
-            ->middleware('permission:exams.attempt')
-            ->name('attempt');
+    });
+
+Route::middleware(['web', 'installed', 'auth', 'plugin:exam-management'])
+    ->group(function (): void {
+        Route::get('/exams/{exam}/take', [ExamController::class, 'take'])
+            ->name('plugins.exams.take')->middleware('throttle:20,1');
+        Route::post('/exams/{exam}/attempt', [ExamController::class, 'submitAttempt'])
+            ->name('plugins.exams.attempt')->middleware('throttle:5,1');
     });
