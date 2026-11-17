@@ -52,12 +52,59 @@ class SetupWizardTest extends TestCase
         $admin = $this->setupAdmin();
         $this->actingAs($admin)->post(route('admin.setup-wizard.save', 'payments'), [
             'bkash_enabled' => '1', 'bkash_number' => '01700000000', 'bkash_secret' => 'merchant-secret',
+            'nagad_enabled' => '1', 'nagad_number' => '01800000000', 'nagad_secret' => 'nagad-merchant-secret',
             'manual_enabled' => '1', 'manual_instructions' => 'Send payment and share transaction ID.',
         ])->assertRedirect(route('admin.setup-wizard.index', ['step' => 'review']));
         $stored = SystemSetting::query()->where('key', 'setup.payment.bkash.secret')->value('value');
         $this->assertNotSame('merchant-secret', $stored);
         $this->assertSame('merchant-secret', Crypt::decryptString($stored));
         $this->assertDatabaseHas('system_settings', ['key' => 'setup.payment.bkash.enabled', 'value' => '1']);
+        $nagadStored = SystemSetting::query()->where('key', 'setup.payment.nagad.secret')->value('value');
+        $this->assertNotSame('nagad-merchant-secret', $nagadStored);
+        $this->assertSame('nagad-merchant-secret', Crypt::decryptString($nagadStored));
+
+        $html = $this->actingAs($admin)->get(route('admin.setup-wizard.index', ['step' => 'payments']))
+            ->assertOk()
+            ->assertSee('নগদ')
+            ->assertSee('আগের secret নিরাপদে সংরক্ষিত আছে')
+            ->getContent();
+        $this->assertStringNotContainsString('merchant-secret', $html);
+    }
+
+    public function test_setup_wizard_completion_requires_all_steps_and_persists_completion_flag(): void
+    {
+        $this->markSystemInstalled();
+        $admin = $this->setupAdmin();
+
+        $this->actingAs($admin)->post(route('admin.setup-wizard.complete'))
+            ->assertRedirect(route('admin.setup-wizard.index'))
+            ->assertSessionHasErrors('setup');
+
+        $this->actingAs($admin)->post(route('admin.setup-wizard.save', 'institution'), [
+            'institution_name' => 'Aloms English Center',
+            'institution_country' => 'BD',
+            'institution_locale' => 'bn',
+            'institution_timezone' => 'Asia/Dhaka',
+            'institution_currency' => 'BDT',
+        ])->assertRedirect();
+        $this->actingAs($admin)->post(route('admin.setup-wizard.save', 'branding'), [
+            'primary_color' => '#0057FF',
+            'secondary_color' => '#022D41',
+            'accent_color' => '#38BDF8',
+        ])->assertRedirect();
+        $this->actingAs($admin)->post(route('admin.setup-wizard.save', 'academic'), [
+            'academic_year_name' => '২০২৬ শিক্ষাবর্ষ',
+            'academic_year_start' => '2026-01-01',
+            'academic_year_end' => '2026-12-31',
+        ])->assertRedirect();
+        $this->actingAs($admin)->post(route('admin.setup-wizard.save', 'payments'), [
+            'manual_enabled' => '1',
+            'manual_instructions' => 'Contact the office for payment instructions.',
+        ])->assertRedirect();
+
+        $this->actingAs($admin)->post(route('admin.setup-wizard.complete'))
+            ->assertRedirect(route('admin.dashboard'));
+        $this->assertDatabaseHas('system_settings', ['key' => 'setup.wizard.completed', 'value' => '1']);
     }
 
     public function test_dashboard_reminds_admin_when_setup_is_incomplete(): void
