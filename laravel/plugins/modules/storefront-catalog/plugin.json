@@ -28,7 +28,8 @@
             "group": "CMS, Builders & AI",
             "label": "Products & E-books",
             "route": "plugins.storefront.index",
-            "order": 100
+            "order": 100,
+            "permission": "cms.manage"
         }
     ]
 }
