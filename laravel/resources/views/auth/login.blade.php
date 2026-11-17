@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', "Sign In — Alom's English Center")
+@section('title', 'Sign In — ' . config('app.name'))
 @section('content')
 <div class="min-h-screen flex flex-col">
     @include('public.partials.navbar')
@@ -7,18 +7,20 @@
     <main class="flex-1 flex items-center justify-center px-4 py-12 sm:py-16" style="background: linear-gradient(135deg, #EAE9FF 0%, #F2F3FF 45%, #E5F4FE 100%)">
         <section class="w-full max-w-[440px] rounded-2xl bg-white border border-white/90 px-7 sm:px-9 py-9 shadow-[0_20px_50px_-15px_rgba(15,23,42,0.12)]">
             <a href="{{ route('home') }}" class="mx-auto mb-5 flex items-center justify-center gap-2.5">
-                <span class="w-10 h-10 rounded-xl bg-gradient-to-br from-[#0284C7] to-[#4F46E5] text-white font-black text-base flex items-center justify-center shadow-sm">
-                    A
-                </span>
+                @if (!empty($siteIdentity['logo_url']))
+                    <img src="{{ $siteIdentity['logo_url'] }}" alt="{{ config('app.name') }} logo" class="h-10 max-w-36 object-contain">
+                @else
+                    <span class="w-10 h-10 rounded-xl bg-gradient-to-br from-[#0284C7] to-[#4F46E5] text-white font-black text-base flex items-center justify-center shadow-sm">A</span>
+                @endif
                 <span class="text-left leading-[1.05]">
-                    <span class="block text-base font-black tracking-tight text-slate-900">ALOM'S</span>
-                    <span class="block text-xs font-extrabold tracking-tight text-slate-800">ENGLISH CENTER</span>
+                    <span class="block text-base font-black tracking-tight text-slate-900">{{ config('app.name') }}</span>
+                    <span class="block text-xs font-extrabold tracking-tight text-slate-800">{{ $siteIdentity['tagline'] ?? '' }}</span>
                 </span>
             </a>
 
             <div class="text-center mb-6">
-                <h1 class="text-xl sm:text-[22px] font-extrabold text-slate-900 tracking-tight">Welcome Back!</h1>
-                <p class="mt-1 text-xs text-slate-500">Please sign in to continue</p>
+                <h1 class="text-xl sm:text-[22px] font-extrabold text-slate-900 tracking-tight">{{ $siteIdentity['login_title'] ?? 'Welcome Back!' }}</h1>
+                <p class="mt-1 text-xs text-slate-500">{{ $siteIdentity['login_message'] ?? 'Please sign in to continue' }}</p>
             </div>
 
             @if (session('status'))

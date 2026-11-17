@@ -8,9 +8,9 @@
     }
     $footerDesc = $footerCfg['footer_description'] ?? "Alom's English Center is a structured online and campus learning platform providing IELTS, Spoken English, and Grammar programs delivered by certified educators nationwide.";
     $footerLicense = $footerCfg['footer_license_no'] ?? 'TRAD/DNCC/044200/2026';
-    $footerAddress = $footerCfg['footer_address'] ?? 'Plot 14, Sector 6, Mirpur 10 Roundabout, Dhaka-1216';
-    $footerPhone = $footerCfg['footer_phone'] ?? '+880 1712 345678';
-    $footerEmail = $footerCfg['footer_email'] ?? 'info@alomsenglishcenter.com';
+    $footerAddress = $siteIdentity['address'] ?: ($footerCfg['footer_address'] ?? 'Plot 14, Sector 6, Mirpur 10 Roundabout, Dhaka-1216');
+    $footerPhone = $siteIdentity['contact_phone'] ?: ($footerCfg['footer_phone'] ?? '+880 1712 345678');
+    $footerEmail = $siteIdentity['contact_email'] ?: ($footerCfg['footer_email'] ?? 'info@alomsenglishcenter.com');
     $footerYoutube = $footerCfg['footer_youtube_url'] ?? route('public.learn');
     $footerFacebook = $footerCfg['footer_facebook_url'] ?? route('public.courses');
     $showPayStrip = $footerCfg['footer_payment_strip'] ?? true;
@@ -21,6 +21,7 @@
             <!-- Column 1: Brand Overview -->
             <div class="space-y-4">
                 <a href="{{ route('home') }}" class="inline-flex items-center gap-2.5">
+                    @if (empty($siteIdentity['logo_url']))
                     <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 shrink-0" aria-hidden="true">
                         <circle cx="32" cy="32" r="24" stroke="#CBD5E1" stroke-width="1.6" />
                         <path d="M13.5 16.5A26.5 26.5 0 0 1 56.5 23.5" stroke="#F59E0B" stroke-width="3.2" stroke-linecap="round" />
@@ -33,7 +34,10 @@
                         <path d="M44 29.5C46 28.8 48.2 29 49.5 30.2C50.8 29 53 28.8 55 29.5V36.5C53 35.8 50.8 36 49.5 37.2C48.2 36 46 35.8 44 36.5V29.5Z" fill="#FFFFFF" stroke="#64748B" stroke-width="1.3" stroke-linejoin="round" />
                         <path d="M49.5 30.2V37.2" stroke="#64748B" stroke-width="1.2" />
                     </svg>
-                    <span class="text-base font-extrabold text-slate-900 tracking-tight">Alom's English Center</span>
+                    @else
+                        <img src="{{ $siteIdentity['logo_url'] }}" alt="{{ config('app.name') }} logo" class="h-8 max-w-32 object-contain">
+                    @endif
+                    <span class="text-base font-extrabold text-slate-900 tracking-tight">{{ config('app.name') }}</span>
                 </a>
                 <p class="text-xs leading-relaxed text-slate-500">{{ $footerDesc }}</p>
                 <div class="flex items-center gap-2.5 pt-1">
@@ -129,7 +133,7 @@
         @endif
 
         <div class="mt-8 pt-5 border-t border-slate-300/70 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
-            <div>&copy; {{ date('Y') }} Alom's English Center (alomsenglishcenter.com). All Rights Reserved.</div>
+            <div>{{ $siteIdentity['footer_text'] ?: ('© ' . date('Y') . ' ' . config('app.name') . '. All Rights Reserved.') }}</div>
             <div class="flex items-center gap-5">
                 <a href="{{ route('public.terms') }}" class="hover:text-slate-900">Terms &amp; Conditions</a>
                 <a href="{{ route('public.privacy') }}" class="hover:text-slate-900">Privacy Policy</a>
