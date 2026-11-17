@@ -32,7 +32,12 @@ class TeacherController extends Controller
             ->when($actor && $actor->hasRole('branch_manager'), fn ($query) => $query->where('branch_id', $actor->branch_id))
             ->latest()
             ->paginate(25);
-        $branches = Schema::hasTable('branches') ? DB::table('branches')->orderBy('name')->get() : collect();
+        $branches = Schema::hasTable('branches')
+            ? DB::table('branches')
+                ->when($actor && $actor->hasRole('branch_manager'), fn ($query) => $query->where('id', $actor->branch_id))
+                ->orderBy('name')
+                ->get()
+            : collect();
 
         return view('teacher-management::index', compact('teachers', 'branches'));
     }

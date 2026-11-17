@@ -31,7 +31,12 @@ class StudentController extends Controller
             $query->where('branch_id', $actor->branch_id);
         }
         $students = $query->paginate(25);
-        $branches = Schema::hasTable('branches') ? DB::table('branches')->orderBy('name')->get() : collect();
+        $branches = Schema::hasTable('branches')
+            ? DB::table('branches')
+                ->when($actor && $actor->hasRole('branch_manager'), fn ($query) => $query->where('id', $actor->branch_id))
+                ->orderBy('name')
+                ->get()
+            : collect();
 
         return view('student-management::index', compact('students', 'branches'));
     }
