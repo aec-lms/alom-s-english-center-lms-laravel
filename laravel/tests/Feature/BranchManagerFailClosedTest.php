@@ -15,6 +15,7 @@ class BranchManagerFailClosedTest extends TestCase
         $this->activatePlugins([
             'branch-management',
             'teacher-management',
+            'student-management',
             'guardian-management',
             'hr-staff-management',
         ]);
