@@ -7,6 +7,8 @@ use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\BackupController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\InstitutionSettingsController;
+use App\Http\Controllers\Admin\HealthMonitorController;
+use App\Http\Controllers\Admin\RecycleBinController;
 use App\Http\Controllers\Admin\PluginCenterController;
 use App\Http\Controllers\Admin\UpdateCenterController;
 use App\Http\Controllers\Admin\UserRoleController;
@@ -70,6 +72,10 @@ Route::middleware('installed')->group(function (): void {
             Route::post('/{slug}/update', [PluginCenterController::class, 'update'])->name('update');
             Route::post('/{slug}/enable', [PluginCenterController::class, 'enable'])->name('enable');
             Route::post('/{slug}/disable', [PluginCenterController::class, 'disable'])->name('disable');
+            Route::post('/{slug}/reset-settings', [PluginCenterController::class, 'resetSettings'])->name('reset-settings');
+            Route::post('/{slug}/delete', [PluginCenterController::class, 'deleteToRecycleBin'])->name('delete');
+            Route::post('/recycle-bin/{archive}/restore', [PluginCenterController::class, 'restoreFromRecycleBin'])->name('recycle-bin.restore');
+            Route::post('/recycle-bin/{archive}/permanent-delete', [PluginCenterController::class, 'permanentlyDeleteFromRecycleBin'])->name('recycle-bin.permanent-delete');
             Route::post('/{slug}/uninstall', [PluginCenterController::class, 'uninstall'])->name('uninstall');
             Route::get('/{slug}/configure', [PluginCenterController::class, 'configure'])->name('configure');
             Route::post('/{slug}/configure', [PluginCenterController::class, 'saveConfiguration'])->name('configure.save');
@@ -83,6 +89,9 @@ Route::middleware('installed')->group(function (): void {
             Route::post('/check', [UpdateCenterController::class, 'checkFeed'])->name('check');
             Route::post('/{log}/rollback', [UpdateCenterController::class, 'rollback'])->name('rollback');
         });
+
+        Route::get('/health', [HealthMonitorController::class, 'index'])->name('health.index')->middleware('permission:core.dashboard.view');
+        Route::post('/health/check', [HealthMonitorController::class, 'check'])->name('health.check')->middleware('permission:core.dashboard.view');
 
         Route::prefix('backups')->name('backups.')->middleware('permission:core.backups.manage')->group(function (): void {
             Route::get('/', [BackupController::class, 'index'])->name('index');
@@ -104,6 +113,28 @@ Route::middleware('installed')->group(function (): void {
             Route::get('/', [AppearanceController::class, 'index'])->name('index');
             Route::post('/', [AppearanceController::class, 'update'])->name('update');
             Route::post('/reset', [AppearanceController::class, 'reset'])->name('reset');
+        });
+
+        Route::prefix('recycle-bin')->name('recycle-bin.')->middleware('permission:core.recycle_bin.manage')->group(function (): void {
+            Route::get('/', [RecycleBinController::class, 'index'])->name('index');
+            Route::post('/{type}/{recordId}/permanent-delete', [RecycleBinController::class, 'permanentlyDelete'])->whereNumber('recordId')->name('permanent-delete');
+            Route::post('/students/{student}/restore', [RecycleBinController::class, 'restoreStudent'])->name('students.restore');
+            Route::post('/teachers/{teacher}/restore', [RecycleBinController::class, 'restoreTeacher'])->name('teachers.restore');
+            Route::post('/courses/{recordId}/restore', [RecycleBinController::class, 'restoreCourse'])->name('courses.restore');
+            Route::post('/course-categories/{recordId}/restore', [RecycleBinController::class, 'restoreCourseCategory'])->name('course-categories.restore');
+            Route::post('/live-classes/{recordId}/restore', [RecycleBinController::class, 'restoreLiveClass'])->name('live-classes.restore');
+            Route::post('/exams/{recordId}/restore', [RecycleBinController::class, 'restoreExam'])->name('exams.restore');
+            Route::post('/batches/{recordId}/restore', [RecycleBinController::class, 'restoreBatch'])->name('batches.restore');
+            Route::post('/classes/{recordId}/restore', [RecycleBinController::class, 'restoreClass'])->name('classes.restore');
+            Route::post('/boost-campaigns/{recordId}/restore', [RecycleBinController::class, 'restoreBoostCampaign'])->name('boost-campaigns.restore');
+            Route::post('/branches/{recordId}/restore', [RecycleBinController::class, 'restoreBranch'])->name('branches.restore');
+            Route::post('/carousel-items/{recordId}/restore', [RecycleBinController::class, 'restoreCarouselItem'])->name('carousel-items.restore');
+            Route::post('/cms-categories/{recordId}/restore', [RecycleBinController::class, 'restoreCmsCategory'])->name('cms-categories.restore');
+            Route::post('/cms-posts/{recordId}/restore', [RecycleBinController::class, 'restoreCmsPost'])->name('cms-posts.restore');
+            Route::post('/builder-pages/{recordId}/restore', [RecycleBinController::class, 'restoreBuilderPage'])->name('builder-pages.restore');
+            Route::post('/hero-sliders/{recordId}/restore', [RecycleBinController::class, 'restoreHeroSlider'])->name('hero-sliders.restore');
+            Route::post('/sms-campaigns/{recordId}/restore', [RecycleBinController::class, 'restoreSmsCampaign'])->name('sms-campaigns.restore');
+            Route::post('/visitor-popups/{recordId}/restore', [RecycleBinController::class, 'restoreVisitorPopup'])->name('visitor-popups.restore');
         });
 
         Route::get('/audit-logs', [AuditLogController::class, 'index'])
