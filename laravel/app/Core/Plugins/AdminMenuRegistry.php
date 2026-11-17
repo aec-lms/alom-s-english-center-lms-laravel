@@ -50,8 +50,13 @@ final class AdminMenuRegistry
                     continue;
                 }
 
-                if ($permission !== null && $permission !== '' && !$user->can($permission)) {
-                    continue;
+                if ($permission !== null && $permission !== '') {
+                    $allowed = method_exists($user, 'hasPermission')
+                        ? $user->hasPermission($permission)
+                        : $user->can($permission);
+                    if (!$allowed) {
+                        continue;
+                    }
                 }
 
                 $groups[$group][] = [
