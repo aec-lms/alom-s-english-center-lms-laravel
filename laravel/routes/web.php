@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\SiteIdentityController;
 use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\BackupController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\SetupWizardController;
 use App\Http\Controllers\Admin\RolePermissionController;
 use App\Http\Controllers\Admin\AdminMenuController;
 use App\Http\Controllers\Admin\InstitutionSettingsController;
@@ -71,6 +72,11 @@ Route::middleware('installed')->group(function (): void {
         Route::post('/dashboard/widgets', [DashboardController::class, 'saveWidgets'])
             ->name('dashboard.widgets')
             ->middleware('permission:core.dashboard.view');
+        Route::prefix('setup-wizard')->name('setup-wizard.')->middleware('permission:core.settings.manage')->group(function (): void {
+            Route::get('/', [SetupWizardController::class, 'index'])->name('index');
+            Route::post('/complete', [SetupWizardController::class, 'complete'])->name('complete');
+            Route::post('/{step}', [SetupWizardController::class, 'save'])->name('save');
+        });
         Route::get('/menu-editor', [AdminMenuController::class, 'index'])
             ->name('menu-editor.index')
             ->middleware('permission:core.settings.manage');

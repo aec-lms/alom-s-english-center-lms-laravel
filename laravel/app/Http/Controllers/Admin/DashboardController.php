@@ -30,8 +30,9 @@ class DashboardController extends Controller
         ];
         $recentAudits = AuditLog::query()->with('user')->latest()->limit(10)->get();
         $widgets = $this->widgetsFor(auth()->id());
+        $setupIncomplete = SystemSetting::query()->where('key', 'setup.wizard.completed')->value('value') !== '1';
 
-        return view('admin.dashboard', compact('metrics', 'recentAudits', 'widgets'));
+        return view('admin.dashboard', compact('metrics', 'recentAudits', 'widgets', 'setupIncomplete'));
     }
 
     public function saveWidgets(Request $request): RedirectResponse
