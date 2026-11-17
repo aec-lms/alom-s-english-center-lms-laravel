@@ -255,12 +255,21 @@ class UniversalPaymentController extends Controller
             'gateway' => ['required', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,bank_cash'],
             'external_trx_id' => ['nullable', 'string', 'max:120'],
             'storefront_item_id' => ['nullable', 'integer'],
-            'fee_invoice_id' => ['nullable', 'integer', 'exists:fee_invoices,id'],
+            'fee_invoice_id' => ['nullable', 'integer'],
         ]);
 
+        $hasInvoice = !empty($validated['fee_invoice_id']);
+        $hasStorefrontItem = !empty($validated['storefront_item_id']);
+        abort_unless(
+            $hasInvoice xor $hasStorefrontItem,
+            422,
+            'Choose exactly one fee invoice or paid e-book to pay.'
+        );
+
         $invoice = null;
-        if (!empty($validated['fee_invoice_id'])) {
-            abort_unless(auth()->check() && Schema::hasTable('fee_invoices'), 401, 'Sign in to pay an invoice.');
+        if ($hasInvoice) {
+            abort_unless(auth()->check(), 401, 'Sign in to pay an invoice.');
+            abort_unless(Schema::hasTable('fee_invoices'), 503, 'Fee invoice payments are not currently available.');
             $invoice = DB::table('fee_invoices')->where('id', $validated['fee_invoice_id'])->first();
             $isInvoiceOwner = $invoice !== null
                 && filled($invoice->payer_email)
