@@ -5,7 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Route;
 use Plugins\Modules\SliderBuilder\Http\Controllers\SliderBuilderController;
 
-Route::middleware(['web', 'installed', 'auth', 'plugin:slider-builder', 'permission:slider_builder.manage'])
+Route::middleware(['web', 'installed', 'auth', 'plugin:slider-builder', 'permission:slider_builder.manage', 'central.admin'])
     ->prefix('admin/slider-builder')
     ->name('plugins.slider_builder.')
     ->group(function (): void {
