@@ -9,6 +9,9 @@
         'audit_trail' => 'Security Audit Trail',
         'system_info' => 'System Information',
     ];
+    if (auth()->user()?->hasRole('branch_manager')) {
+        $widgetLabels = array_intersect_key($widgetLabels, ['users' => true]);
+    }
 @endphp
 <div class="space-y-6">
     @if($setupIncomplete)
@@ -34,15 +37,17 @@
                 <p class="mb-3 text-[11px] text-slate-500">Drag rows or use the arrows. Uncheck widgets you want to hide.</p>
                 <ol id="dashboard-widget-order" class="space-y-2">
                     @foreach ($widgetLabels as $key => $label)
-                        <li draggable="true" data-widget-row class="flex items-center gap-2 rounded-lg border border-slate-200 p-2 cursor-move">
-                            <span aria-hidden="true" class="text-slate-400">⠿</span>
-                            <label class="flex min-w-0 flex-1 items-center gap-2 text-sm text-slate-700">
-                                <input type="checkbox" name="widgets[]" value="{{ $key }}" @checked(in_array($key, $widgets, true)) class="rounded border-slate-300">
-                                <span>{{ $label }}</span>
-                            </label>
-                            <button type="button" data-move="up" aria-label="Move {{ $label }} up" class="rounded border px-2 py-1 text-xs">↑</button>
-                            <button type="button" data-move="down" aria-label="Move {{ $label }} down" class="rounded border px-2 py-1 text-xs">↓</button>
-                        </li>
+                        @if (!$isBranchManager || $key === 'users')
+                            <li draggable="true" data-widget-row class="flex items-center gap-2 rounded-lg border border-slate-200 p-2 cursor-move">
+                                <span aria-hidden="true" class="text-slate-400">⠿</span>
+                                <label class="flex min-w-0 flex-1 items-center gap-2 text-sm text-slate-700">
+                                    <input type="checkbox" name="widgets[]" value="{{ $key }}" @checked(in_array($key, $widgets, true)) class="rounded border-slate-300">
+                                    <span>{{ $label }}</span>
+                                </label>
+                                <button type="button" data-move="up" aria-label="Move {{ $label }} up" class="rounded border px-2 py-1 text-xs">↑</button>
+                                <button type="button" data-move="down" aria-label="Move {{ $label }} down" class="rounded border px-2 py-1 text-xs">↓</button>
+                            </li>
+                        @endif
                     @endforeach
                 </ol>
                 <div class="mt-4 flex items-center justify-between gap-2">
