@@ -156,7 +156,7 @@ class PageBuilderController extends Controller
             return false;
         }
 
-        if (str_starts_with($url, '/') && !str_starts_with($url, '//') && !str_contains($url, '..') && !str_contains($url, '\\\\')) {
+        if (str_starts_with($url, '/') && !str_starts_with($url, '//') && !str_contains($url, '..') && !str_contains($url, '\\')) {
             return true;
         }
 
