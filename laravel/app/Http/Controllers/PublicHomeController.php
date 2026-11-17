@@ -11,6 +11,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
 class PublicHomeController extends Controller
@@ -289,7 +290,54 @@ class PublicHomeController extends Controller
         $ebook = $allBooks->firstWhere('slug', $slug);
         if ($ebook === null) abort(404);
 
-        return view('public.ebook-show', compact('ebook'));
+        $hasAccess = (bool) $ebook['is_free'];
+        if (!$hasAccess && Auth::check() && Schema::hasTable('storefront_item_access')) {
+            $hasAccess = DB::table('storefront_item_access')
+                ->where('storefront_item_id', $ebook['id'])
+                ->where('user_id', Auth::id())
+                ->exists();
+        }
+
+        $canPurchase = !empty($ebook['download_url']) && str_starts_with((string) $ebook['download_url'], 'private:');
+
+        return view('public.ebook-show', compact('ebook', 'hasAccess', 'canPurchase'));
+    }
+
+    public function ebookDownload(string $slug)
+    {
+        abort_unless(Schema::hasTable('storefront_items'), 404);
+        $item = DB::table('storefront_items')->where('slug', $slug)->where('type', 'ebook')->where('is_active', true)->first();
+        abort_if($item === null || empty($item->download_url), 404);
+
+        $isFree = (bool) $item->is_free || (float) $item->price <= 0;
+        if (!$isFree) {
+            abort_unless(Auth::check(), 403, 'Please sign in to access this purchased e-book.');
+            abort_unless(
+                Schema::hasTable('storefront_item_access')
+                    && DB::table('storefront_item_access')->where('storefront_item_id', $item->id)->where('user_id', Auth::id())->exists(),
+                403,
+                'Payment verification is required before downloading this e-book.'
+            );
+        }
+
+        $storedPath = (string) $item->download_url;
+        if (str_starts_with($storedPath, 'private:')) {
+            $path = substr($storedPath, 8);
+            abort_unless(Storage::disk('local')->exists($path), 404);
+            return Storage::disk('local')->download($path, \Illuminate\Support\Str::slug($item->title) . '.pdf');
+        }
+
+        if ($isFree && filter_var($storedPath, FILTER_VALIDATE_URL)) {
+            return redirect()->away($storedPath);
+        }
+
+        if ($isFree && str_starts_with($storedPath, '/uploads/')) {
+            $absolute = public_path(ltrim($storedPath, '/'));
+            abort_unless(is_file($absolute), 404);
+            return response()->download($absolute, \Illuminate\Support\Str::slug($item->title) . '.pdf');
+        }
+
+        abort(403, 'This e-book does not have a protected downloadable file configured.');
     }
 
     public function result(Request $request): View
@@ -529,6 +577,7 @@ class PublicHomeController extends Controller
             ->values()
             ->map(function ($row, $index) use ($gradients) {
                 return [
+                    'id' => $row->id,
                     'slug' => $row->slug,
                     'title' => $row->title,
                     'category' => $row->category ?: 'Digital E-Book',
