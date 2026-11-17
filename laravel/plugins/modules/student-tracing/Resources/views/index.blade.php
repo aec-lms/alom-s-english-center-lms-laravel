@@ -1,4 +1,6 @@
-<x-app-layout>
+@extends('layouts.admin')
+@section('title', 'Student Activity Trace')
+@section('content')
     <div class="mx-auto max-w-7xl space-y-6 p-6">
         <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -56,4 +58,4 @@
             @endif
         </div>
     </div>
-</x-app-layout>
+@endsection
