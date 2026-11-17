@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\StudentManagement\Models\Student;
 use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class UniversalPaymentInvoiceSettlementTest extends TestCase
@@ -161,7 +162,7 @@ class UniversalPaymentInvoiceSettlementTest extends TestCase
         $this->activatePlugins(['universal-payment']);
 
         $studentUser = $this->createUserWithRole('student');
-        $this->assertFalse(\\Illuminate\\Support\\Facades\\Schema::hasTable('fee_invoices'));
+        $this->assertFalse(Schema::hasTable('fee_invoices'));
 
         $this->actingAs($studentUser)->post('/universal-checkout', [
             'payer_name' => $studentUser->name,
