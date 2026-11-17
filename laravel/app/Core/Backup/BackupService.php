@@ -194,7 +194,7 @@ class BackupService
                             continue;
                         }
                         DB::table($table)->delete();
-                        foreach (array_chunk((array) $rows, 200) as $chunk) {
+                        foreach (array_chunk((array) $rows, DB::connection()->getDriverName() === 'sqlite' ? 50 : 200) as $chunk) {
                             DB::table($table)->insert($chunk);
                         }
                     }
