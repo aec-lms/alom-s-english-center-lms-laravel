@@ -2,19 +2,19 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\FeesManagement\\Http\\Controllers;
+namespace Plugins\Modules\FeesManagement\Http\Controllers;
 
-use App\\Core\\Security\\AuditLogger;
-use App\\Core\\Plugins\\PluginManager;
-use App\\Http\\Controllers\\Controller;
-use Illuminate\\Http\\RedirectResponse;
-use Illuminate\\Http\\Request;
-use Illuminate\\View\\View;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Facades\\Schema;
-use Plugins\\Modules\\FeesManagement\\Models\\FeeCategory;
-use Plugins\\Modules\\FeesManagement\\Models\\FeeInvoice;
-use Plugins\\Modules\\StudentManagement\\Models\\Student;
+use App\Core\Security\AuditLogger;
+use App\Core\Plugins\PluginManager;
+use App\Http\Controllers\Controller;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\View\View;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Plugins\Modules\FeesManagement\Models\FeeCategory;
+use Plugins\Modules\FeesManagement\Models\FeeInvoice;
+use Plugins\Modules\StudentManagement\Models\Student;
 
 class FeeController extends Controller
 {
