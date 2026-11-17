@@ -24,7 +24,9 @@ class AttendanceController extends Controller
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
         $branchId = $actor->hasRole('branch_manager') ? (int) $actor->branch_id : null;
-        $plugins = app(PluginManager::class);\n        $hasBatches = $plugins->isEnabled('course-management') && Schema::hasTable('batches');\n        $hasStudents = $plugins->isEnabled('student-management') && Schema::hasTable('students');
+        $plugins = app(PluginManager::class);
+        $hasBatches = $plugins->isEnabled('course-management') && Schema::hasTable('batches');
+        $hasStudents = $plugins->isEnabled('student-management') && Schema::hasTable('students');
         $records = AttendanceRecord::query()
             ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
             ->latest('attendance_date')
