@@ -110,10 +110,10 @@
     <style>
         :root { {!! $themeManager->cssVariables() !!}; {!! $themeManager->cssDesignVariables() !!} }
         body { font-family:var(--aec-font-family);font-size:var(--aec-font-size); }
-        main { max-width:min(100%,var(--aec-content-width));margin-inline:auto; }
+        .max-w-7xl,.max-w-6xl { max-width:min(var(--aec-content-width),calc(100% - 2rem))!important; }
         h1,h2,h3,h4,h5,h6 { font-weight:var(--aec-heading-weight); }
         .rounded-xl { border-radius:var(--aec-radius); }
-        .rounded-xl { border-radius:var(--aec-radius); }
+        .space-y-6 > :not([hidden]) ~ :not([hidden]) { margin-top:calc(1.5rem * var(--aec-density)); }
         body {
             background-color:var(--aec-page-bg)!important;
             color:var(--aec-text)!important;
