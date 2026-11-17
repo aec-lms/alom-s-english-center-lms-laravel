@@ -38,6 +38,15 @@
         </details>
     </div>
 
+    @unless($setupCompleted)
+        <section class="rounded-2xl border border-amber-300 bg-amber-50 p-5" data-setup-reminder>
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div><h2 class="font-bold text-amber-950">আপনার LMS সেটআপ অসম্পূর্ণ</h2><p class="mt-1 text-sm text-amber-800">প্রতিষ্ঠানের তথ্য, লোগো, শিক্ষাবর্ষ ও পেমেন্ট পদ্ধতি সম্পন্ন করুন।</p></div>
+                <a href="{{ route('admin.setup.index') }}" class="rounded-lg bg-amber-700 px-4 py-2 text-sm font-bold text-white">Setup Wizard চালু করুন</a>
+            </div>
+        </section>
+    @endunless
+
     @if (in_array('users', $widgets, true) || in_array('plugins', $widgets, true) || in_array('backups', $widgets, true))
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             @if (in_array('users', $widgets, true))

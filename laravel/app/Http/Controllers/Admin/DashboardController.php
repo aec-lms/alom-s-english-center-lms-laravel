@@ -20,6 +20,7 @@ class DashboardController extends Controller
 
     public function index(): View
     {
+        $setupCompleted = SystemSetting::query()->where('key', 'setup_wizard.completed')->value('value') === '1';
         $metrics = [
             'users' => User::query()->count(),
             'plugins_total' => PluginRecord::query()->count(),
@@ -31,7 +32,7 @@ class DashboardController extends Controller
         $recentAudits = AuditLog::query()->with('user')->latest()->limit(10)->get();
         $widgets = $this->widgetsFor(auth()->id());
 
-        return view('admin.dashboard', compact('metrics', 'recentAudits', 'widgets'));
+        return view('admin.dashboard', compact('metrics', 'recentAudits', 'widgets', 'setupCompleted'));
     }
 
     public function saveWidgets(Request $request): RedirectResponse
