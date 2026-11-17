@@ -17,7 +17,7 @@ use Plugins\Modules\UniversalPayment\Services\StorefrontPaymentGatewayService;
 class LearnAndEarnController extends Controller {
  public function index():View {
   abort_unless(Schema::hasTable('exams')&&Schema::hasTable('learn_earn_questions'),503,'Install Exam Management and Learn & Earn migrations first.');
-  return view('learn-and-earn::index',['categories'=>DB::table('learn_earn_categories')->orderBy('name')->get(),'questions'=>LearnEarnQuestion::with('category')->latest()->paginate(50),'exams'=>Exam::withCount('questions')->latest()->paginate(20)]);
+  return view('learn-and-earn::index',['categories'=>DB::table('learn_earn_categories')->orderBy('name')->get(),'questions'=>LearnEarnQuestion::with('category')->latest()->paginate(50),'exams'=>Exam::withCount('questions')->latest()->paginate(20),'courses'=>DB::table('courses')->where('status','published')->orderBy('title')->get(['id','title'])]);
  }
  public function storeCategory(Request $r):RedirectResponse {
   $v=$r->validate(['name'=>['required','string','max:120'],'description'=>['nullable','string']]);$base=Str::slug($v['name']);$slug=$base;$i=1;while(DB::table('learn_earn_categories')->where('slug',$slug)->exists())$slug=$base.'-'.(++$i);
@@ -28,9 +28,9 @@ class LearnAndEarnController extends Controller {
   LearnEarnQuestion::create($v+['is_active'=>true]);return back()->with('status','MCQ saved.');
  }
  public function storeExam(Request $r):RedirectResponse {
-  $v=$r->validate(['title'=>['required','string','max:180'],'question_ids'=>['required','array','min:1'],'question_ids.*'=>['required','integer','distinct','exists:learn_earn_questions,id'],'duration_minutes'=>['required','integer','min:5','max:360'],'pass_marks'=>['required','integer','min:0'],'type'=>['required','in:free,paid'],'access_price'=>['required_if:type,paid','numeric','gt:0'],'is_published'=>['nullable','boolean']]);
+  $v=$r->validate(['course_id'=>['required','integer','exists:courses,id'],'title'=>['required','string','max:180'],'question_ids'=>['required','array','min:1'],'question_ids.*'=>['required','integer','distinct','exists:learn_earn_questions,id'],'duration_minutes'=>['required','integer','min:5','max:360'],'pass_marks'=>['required','integer','min:0'],'type'=>['required','in:free,paid'],'access_price'=>['required_if:type,paid','numeric','gt:0'],'is_published'=>['nullable','boolean']]);
   DB::transaction(function()use($r,$v){$qs=LearnEarnQuestion::whereIn('id',$v['question_ids'])->where('is_active',true)->get();abort_if($qs->count()!==count($v['question_ids']),422,'Selected question unavailable.');
-   $exam=Exam::create(['title'=>$v['title'],'duration_minutes'=>$v['duration_minutes'],'pass_marks'=>$v['pass_marks'],'is_published'=>$r->boolean('is_published'),'learn_earn_type'=>$v['type'],'access_price'=>$v['type']==='paid'?$v['access_price']:0]);
+   $exam=Exam::create(['course_id'=>$v['course_id'],'title'=>$v['title'],'duration_minutes'=>$v['duration_minutes'],'pass_marks'=>$v['pass_marks'],'is_published'=>$r->boolean('is_published'),'learn_earn_type'=>$v['type'],'access_price'=>$v['type']==='paid'?$v['access_price']:0]);
    foreach($qs as $q)ExamQuestion::create(['exam_id'=>$exam->id,'prompt'=>$q->question,'options'=>$q->options,'correct_option_index'=>$q->correct_option_index,'marks'=>$q->positive_marks,'negative_marks'=>$q->negative_marks]);
   });return back()->with('status','Exam created. Paid exams remain locked until verified payment access is granted.');
  }
