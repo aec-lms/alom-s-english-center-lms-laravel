@@ -2,6 +2,7 @@
 declare(strict_types=1);
 namespace Plugins\Modules\LearnAndEarn\Http\Controllers;
 use App\Http\Controllers\Controller;
+use App\Core\Plugins\PluginManager;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -11,6 +12,8 @@ use Illuminate\Http\RedirectResponse;
 use Plugins\Modules\ExamManagement\Models\Exam;
 use Plugins\Modules\ExamManagement\Models\ExamQuestion;
 use Plugins\Modules\LearnAndEarn\Models\LearnEarnQuestion;
+use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
+use Plugins\Modules\UniversalPayment\Services\StorefrontPaymentGatewayService;
 class LearnAndEarnController extends Controller {
  public function index():View {
   abort_unless(Schema::hasTable('exams')&&Schema::hasTable('learn_earn_questions'),503,'Install Exam Management and Learn & Earn migrations first.');
