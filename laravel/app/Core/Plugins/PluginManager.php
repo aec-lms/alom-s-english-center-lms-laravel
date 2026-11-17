@@ -145,6 +145,7 @@ class PluginManager
                 $instance = $this->resolvePluginInstance($manifest);
                 if ($instance) {
                     app()->register($instance);
+                    $this->loadPluginRoutes($manifest);
                     $instance->onInstall();
                     $instance->onEnable();
                 }
@@ -377,6 +378,7 @@ class PluginManager
             $provider = $this->resolvePluginInstance($manifest);
             if ($provider) {
                 app()->register($provider);
+                $this->loadPluginRoutes($manifest);
                 $provider->onEnable();
             }
             $this->audit->log('plugin.enabled', 'plugin', $slug, [], $actorId);
@@ -1073,6 +1075,24 @@ class PluginManager
         }
 
         return null;
+    }
+
+    /**
+     * Ensure a plugin installed/enabled after the application booted exposes its
+     * routes to the next request in this process (including test and admin flows).
+     * require_once prevents duplicate route registration when the service provider
+     * already loaded the same route file during boot.
+     */
+    private function loadPluginRoutes(PluginManifest $manifest): void
+    {
+        foreach (['Routes/web.php', 'Routes/api.php'] as $relative) {
+            $routeFile = rtrim($manifest->basePath, DIRECTORY_SEPARATOR)
+                . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relative);
+
+            if (is_file($routeFile)) {
+                require_once $routeFile;
+            }
+        }
     }
 
     private function resolvePluginInstance(PluginManifest $manifest): ?PluginInterface
