@@ -177,6 +177,68 @@ class BackupAndUpdateTest extends TestCase
         }
     }
 
+    public function test_failed_core_migration_restores_pre_update_database_and_code(): void
+    {
+        $this->markSystemInstalled();
+        config([
+            'lms.plugin_signing_key' => 'test-core-update-signing-key',
+            'lms.core_version' => '2.0.0',
+        ]);
+
+        $relativePath = 'app/Support/core-failed-update-' . uniqid() . '.txt';
+        $absolutePath = base_path($relativePath);
+        $table = 'core_failed_update_' . strtolower(str_replace('.', '', uniqid('', true)));
+        Schema::create($table, function ($blueprint): void {
+            $blueprint->string('code')->primary();
+            $blueprint->string('value');
+        });
+        DB::table($table)->insert(['code' => 'fixture', 'value' => 'before-update']);
+        if (!is_dir(dirname($absolutePath))) {
+            mkdir(dirname($absolutePath), 0755, true);
+        }
+        file_put_contents($absolutePath, 'before-update');
+
+        $zipPath = sys_get_temp_dir() . '/aec_core_failed_update_' . uniqid() . '.zip';
+        $zip = new ZipArchive();
+        $this->assertSame(true, $zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE));
+        $zip->addFromString('update-manifest.json', json_encode([
+            'target_type' => 'core',
+            'target_slug' => 'aec-lms-core',
+            'version' => '2.0.1',
+        ], JSON_THROW_ON_ERROR));
+        $zip->addFromString('files/' . $relativePath, 'after-update');
+        $zip->close();
+
+        $sha = hash_file('sha256', $zipPath);
+        $signature = hash_hmac('sha256', $sha, 'test-core-update-signing-key');
+
+        Artisan::shouldReceive('call')->once()->with('down')->andReturn(0);
+        Artisan::shouldReceive('call')->once()->with('migrate', ['--force' => true])->andReturn(1);
+        Artisan::shouldReceive('call')->once()->with('up')->andReturn(0);
+
+        try {
+            try {
+                app(UniversalUpdateService::class)->applyVerifiedUpdate($zipPath, $sha, $signature);
+                $this->fail('A non-zero migration exit code must fail the update.');
+            } catch (RuntimeException $exception) {
+                $this->assertStringContainsString('Database migrations failed', $exception->getMessage());
+            }
+
+            $this->assertSame('before-update', file_get_contents($absolutePath));
+            $this->assertDatabaseHas($table, ['code' => 'fixture', 'value' => 'before-update']);
+            $this->assertDatabaseHas('update_logs', [
+                'target_type' => 'core',
+                'target_slug' => 'aec-lms-core',
+                'to_version' => '2.0.1',
+                'status' => 'failed',
+            ]);
+        } finally {
+            @unlink($zipPath);
+            @unlink($absolutePath);
+            Schema::dropIfExists($table);
+        }
+    }
+
     public function test_signed_update_rejects_windows_absolute_paths_in_zip_entries(): void
     {
         $this->markSystemInstalled();
