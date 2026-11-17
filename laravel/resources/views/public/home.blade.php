@@ -4,7 +4,9 @@
 @php
     $pluginManager = app(\App\Core\Plugins\PluginManager::class);
     $showSslcommerzStrip = $pluginManager->isEnabled('gateway-sslcommerz')
-        && filled($pluginManager->getSetting('gateway-sslcommerz', 'store_id'));
+        && \\Illuminate\\Support\\Facades\\Schema::hasTable('plugin_settings')
+        && filled($pluginManager->getSetting('gateway-sslcommerz', 'store_id'))
+        && filled($pluginManager->getSetting('gateway-sslcommerz', 'store_password'));
     $iosAppUrl = trim((string) ($homepage['app_ios_url'] ?? ''));
     $androidAppUrl = trim((string) ($homepage['app_android_url'] ?? ''));
     $iosAppAvailable = filter_var($iosAppUrl, FILTER_VALIDATE_URL)
