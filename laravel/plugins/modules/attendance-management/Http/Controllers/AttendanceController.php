@@ -34,6 +34,14 @@ class AttendanceController extends Controller
             ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
             ->orderBy('name')
             ->get();
+        $batches->each(function ($batch): void {
+            $batch->attendance_batch_mapping_id = AttendanceBatchMapping::resolve(
+                'course_batch',
+                (int) $batch->id,
+                isset($batch->branch_id) ? (int) $batch->branch_id : null,
+                $batch->name ?? null,
+            )->id;
+        });
         $students = Student::query()
             ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
             ->orderBy('id')
@@ -88,8 +96,21 @@ class AttendanceController extends Controller
             foreach ($items as $item) {
                 $student = Student::query()->findOrFail((int) $item['student_id']);
                 abort_if((int) ($batch->branch_id ?? 0) !== (int) ($student->branch_id ?? 0), 422, 'Student and batch must belong to the same branch.');
+                abort_if($item['status'] === 'excused' && !$actor->hasPermission('attendance.excuse'), 403, 'You do not have permission to excuse attendance.');
                 if ($actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $student->branch_id) {
                     abort(403, 'Branch isolation violation.');
+                }
+
+                $rosterConfigured = DB::table('attendance_batch_rosters')
+                    ->where('attendance_batch_mapping_id', $batchMappingId)
+                    ->where('is_active', true)
+                    ->exists();
+                if ($rosterConfigured) {
+                    abort_unless(DB::table('attendance_batch_rosters')
+                        ->where('attendance_batch_mapping_id', $batchMappingId)
+                        ->where('student_id', $student->id)
+                        ->where('is_active', true)
+                        ->exists(), 403, 'Student is not assigned to this batch roster.');
                 }
 
                 if (!empty($item['sync_uuid'])) {
