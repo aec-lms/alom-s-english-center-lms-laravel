@@ -73,7 +73,7 @@
     <div id="public-mobile-menu" class="hidden lg:hidden bg-white border-t border-slate-200 px-4 py-3 space-y-1 shadow-md">
         @foreach ($navLinks as $item)
             <a
-                href="{{ route($item['urlRoute'] ?? $item['route']) }}"
+                href="{{ $item['url'] }}" @if (!empty($item['external'])) target="_blank" rel="noopener noreferrer" @endif
                 class="block px-3 py-2.5 rounded-lg text-sm font-medium transition-colors {{ $item['active'] ? 'bg-[#EEF2FF] text-[#0284C7] font-semibold' : 'text-slate-600 hover:bg-slate-50 hover:text-[#0284C7]' }}"
             >
                 {{ $item['label'] }}
