@@ -70,7 +70,7 @@
                 <section class="rounded-xl border p-4 space-y-3"><label class="flex items-center gap-2 font-bold"><input type="checkbox" name="manual_enabled" value="1" @checked(($values['setup.payment.manual.enabled'] ?? '0') === '1')> ম্যানুয়াল পেমেন্ট চালু</label><textarea name="manual_instructions" rows="3" placeholder="পেমেন্টের নির্দেশনা লিখুন" class="w-full rounded-lg border p-3">{{ $values['setup.payment.manual.instructions'] ?? '' }}</textarea></section>
             @endif
             <div class="flex flex-wrap justify-between gap-3 border-t pt-4">
-                @if($step !== 'institution')<a href="{{ route('admin.setup-wizard.index', ['step' => $steps[array_search($step, array_keys($steps), true)-1] ?? 'institution']) }}" class="rounded-lg border px-4 py-2 text-sm font-semibold">পেছনে</a>@else<span></span>@endif
+                @if($step !== 'institution')<a href="{{ route('admin.setup-wizard.index', ['step' => array_keys($steps)[array_search($step, array_keys($steps), true)-1]]) }}" class="rounded-lg border px-4 py-2 text-sm font-semibold">পেছনে</a>@else<span></span>@endif
                 <button type="submit" class="rounded-lg bg-blue-600 px-5 py-3 text-sm font-bold text-white">সংরক্ষণ করে পরের ধাপে যান</button>
             </div>
         </form>
