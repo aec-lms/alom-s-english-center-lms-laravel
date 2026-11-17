@@ -16,7 +16,7 @@ The feature test `BackupAndUpdateTest::test_core_update_can_restore_changed_code
 
 The updater snapshots only files included in the update payload. This avoids recursively copying the application root into `storage/app/update-snapshots` during a Core update. The snapshot manifest records whether each target file existed before the update; rollback restores overwritten files and removes newly introduced files. Snapshot paths are checked to remain under the private update-snapshot directory and target paths remain under the application root.
 
-The backup restore path used by updater rollback permits the pre-upgrade Core version and preserves the `update_logs` audit table, so the rollback event is not erased by the restored database snapshot.
+A non-zero exit code from `artisan migrate --force` is treated as an update failure. The failure-recovery path attempts to restore both the pre-update database data snapshot and the touched code files, and records any recovery failure in the Update Log. The backup restore path used by updater rollback permits the pre-upgrade Core version and preserves the `update_logs` audit table, so the rollback event is not erased by the restored database snapshot.
 
 ## Staging rehearsal checklist
 
@@ -34,6 +34,6 @@ The backup restore path used by updater rollback permits the pre-upgrade Core ve
 ## Important limits
 
 - The automated test is an isolated application-level rehearsal, not proof of a real cPanel upgrade.
-- Database restore replaces rows in existing tables but deliberately does not restore the `migrations` table or reverse schema changes. Core migrations must therefore be backward-compatible with the previous code during the rollback window. If a migration is not backward-compatible, do not deploy that Core release until a separately tested forward-recovery plan exists.
+- Database restore replaces rows in existing tables but deliberately does not restore the `migrations` table or reverse schema changes, and it does not drop tables introduced by a failed migration. Core migrations must therefore be backward-compatible with the previous code during the rollback window. If a migration is not backward-compatible, do not deploy that Core release until a separately tested forward-recovery plan exists. A database recovery attempt is not proof that schema rollback occurred.
 - Private file restoration and database restoration are not one atomic transaction. A filesystem failure after database restoration requires manual recovery from the retained staging backup.
 - The real cPanel rehearsal, production-sized MySQL restore, queue/cron check and provider integration checks remain release gates.
