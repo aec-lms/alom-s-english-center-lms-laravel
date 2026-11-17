@@ -25,7 +25,7 @@ class InstitutionSettingsTest extends TestCase
     {
         $this->markSystemInstalled();
         $admin = $this->settingsAdmin();
-        $this->actingAs($admin)->get(route('admin.institution-settings.edit'))->assertOk()->assertSee('Institution &amp; Regional Settings');
+        $this->actingAs($admin)->get(route('admin.institution-settings.edit'))->assertOk()->assertSee('Institution & Regional Settings');
         $this->actingAs($admin)->post(route('admin.institution-settings.update'), [
             'name' => 'Example Academy', 'website' => 'https://academy.example',
             'country_code' => 'GB', 'locale' => 'en-GB', 'timezone' => 'Europe/London', 'currency' => 'GBP',
