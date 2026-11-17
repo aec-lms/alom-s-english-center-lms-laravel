@@ -2,7 +2,6 @@
 declare(strict_types=1);
 use Illuminate\Support\Facades\Route;
 use Plugins\Modules\LearnAndEarn\Http\Controllers\LearnAndEarnController;
-use Plugins\Modules\ExamManagement\Http\Controllers\ExamController;
 Route::middleware(['web','installed','auth','plugin:learn-and-earn','permission:learn_earn.manage'])->prefix('admin/learn-and-earn')->name('plugins.learn_earn.')->group(function(){
  Route::get('/',[LearnAndEarnController::class,'index'])->name('index');
  Route::post('/categories',[LearnAndEarnController::class,'storeCategory'])->name('categories.store');
@@ -14,5 +13,5 @@ Route::middleware(['web','installed','auth','plugin:learn-and-earn'])->prefix('l
  Route::get('/',[LearnAndEarnController::class,'publicExams'])->name('index');
  Route::get('/{exam}',[LearnAndEarnController::class,'showExam'])->name('show');
  Route::post('/{exam}/checkout',[LearnAndEarnController::class,'purchaseExam'])->name('checkout');
- Route::post('/{exam}/attempt',[ExamController::class,'submitAttempt'])->name('attempt');
+ Route::post('/{exam}/attempt',[LearnAndEarnController::class,'submitAttempt'])->name('attempt');
 });
