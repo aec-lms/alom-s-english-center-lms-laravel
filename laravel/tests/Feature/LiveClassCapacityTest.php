@@ -76,7 +76,7 @@ class LiveClassCapacityTest extends TestCase
             'status' => 'active',
         ]);
 
-        $eventsBeforeRejectedJoin = \\Illuminate\\Support\\Facades\\DB::table('student_activity_events')->count();
+        $eventsBeforeRejectedJoin = app('db')->table('student_activity_events')->count();
 
         $this->actingAs($studentB)
             ->post("/live-classes/{$liveClass->id}/join")
@@ -85,7 +85,7 @@ class LiveClassCapacityTest extends TestCase
         // A capacity-rejected request must not create a false joined event.
         $this->assertSame(
             $eventsBeforeRejectedJoin,
-            \\Illuminate\\Support\\Facades\\DB::table('student_activity_events')->count()
+            app('db')->table('student_activity_events')->count()
         );
 
         $this->actingAs($studentA)
