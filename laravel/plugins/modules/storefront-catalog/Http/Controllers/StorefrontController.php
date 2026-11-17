@@ -193,6 +193,36 @@ class StorefrontController extends Controller
         return back()->with('status', "'{$title}' removed.");
     }
 
+    public function downloadEbook(Request $request, string $slug)
+    {
+        $item = StorefrontItem::query()
+            ->where('slug', $slug)
+            ->where('type', 'ebook')
+            ->where('is_active', true)
+            ->firstOrFail();
+
+        $downloadUrl = (string) $item->download_url;
+        abort_unless(str_starts_with($downloadUrl, 'private:'), 404, 'This e-book does not have a protected PDF file.');
+
+        $path = substr($downloadUrl, 8);
+        abort_unless($path !== '' && Storage::disk('local')->exists($path), 404, 'The protected e-book file is unavailable.');
+
+        $isPaid = !(bool) $item->is_free && (float) $item->price > 0;
+        if ($isPaid) {
+            abort_unless(
+                Schema::hasTable('storefront_item_access')
+                    && DB::table('storefront_item_access')
+                        ->where('storefront_item_id', $item->id)
+                        ->where('user_id', $request->user()->id)
+                        ->exists(),
+                403,
+                'Verified payment access is required to download this e-book.'
+            );
+        }
+
+        return Storage::disk('local')->download($path, Str::slug($item->title) . '.pdf');
+    }
+
     private function deleteUnusedPublicUpload(?string $path, ?int $ignoreStorefrontItemId = null): void
     {
         if (!$path || !str_starts_with($path, '/uploads/')) return;
