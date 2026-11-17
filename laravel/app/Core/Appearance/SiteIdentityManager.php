@@ -27,7 +27,7 @@ final class SiteIdentityManager
         $stored = collect();
         if (Schema::hasTable('system_settings')) {
             $stored = SystemSetting::query()
-                ->whereIn('key', array_map(static fn (string $key): string => 'branding.' . $key, array_keys(self::DEFAULTS)))
+                ->whereIn('key', array_merge(array_map(static fn (string $key): string => 'branding.' . $key, array_keys(self::DEFAULTS)), ['branding.logo_url', 'branding.favicon_url']))
                 ->pluck('value', 'key');
 
             foreach (self::DEFAULTS as $key => $default) {
