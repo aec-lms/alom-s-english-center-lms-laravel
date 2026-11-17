@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="csrf-token" content="test-csrf-token">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Attendance Offline Queue E2E</title>
+</head>
+<body>
+  <div id="attendance-sync-status" role="status" aria-live="polite">Online sync ready.</div>
+  <form id="attendance-register-form" data-sync-url="/admin/attendance/sync">
+    <select id="attendance-batch" name="batch_id">
+      <option value="">Select batch</option>
+      <option value="17" data-branch="4" selected>Test Batch</option>
+    </select>
+    <input type="date" name="attendance_date" value="2026-11-17">
+    <table><tbody>
+      <tr data-student-branch="4">
+        <td><input type="hidden" name="records[0][student_id]" value="91"></td>
+        <td><select name="records[0][status]"><option value="present" selected>Present</option><option value="absent">Absent</option><option value="late">Late</option><option value="excused">Excused</option></select></td>
+        <td><input name="records[0][remarks]" value="offline test"></td>
+        <td><input name="records[0][edit_reason]" value=""></td>
+      </tr>
+    </tbody></table>
+    <button type="submit">Save attendance</button>
+  </form>
+  <script src="/attendance-offline.js" defer></script>
+</body>
+</html>
