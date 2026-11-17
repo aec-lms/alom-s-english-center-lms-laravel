@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Models\Permission;
 use Illuminate\Support\Facades\DB;
 use Plugins\Modules\AttendanceManagement\Models\AttendanceBatchMapping;
+use Plugins\Modules\GuardianManagement\Models\Guardian;
 use Plugins\Modules\StudentManagement\Models\Student;
 use Tests\TestCase;
 
@@ -15,7 +16,7 @@ class AttendanceRegisterWorkflowTest extends TestCase
     public function test_batch_attendance_is_audited_and_edits_require_a_reason(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['branch-management', 'student-management', 'course-management', 'batch-management', 'attendance-management']);
+        $this->activatePlugins(['branch-management', 'student-management', 'course-management', 'batch-management', 'guardian-management', 'attendance-management']);
 
         $branch = DB::table('branches')->insertGetId(['code' => 'ATT-REG-01', 'name' => 'Attendance Register', 'created_at' => now(), 'updated_at' => now()]);
         $admin = $this->createUserWithRole('admin', $branch);
@@ -326,6 +327,30 @@ class AttendanceRegisterWorkflowTest extends TestCase
             'source' => 'offline',
             'sync_uuid' => 'b0e6bdf8-45d2-4f7c-bf1f-9a3d77a0a001',
         ]);
+
+        $guardianUser = $this->createUserWithRole('guardian', $branch);
+        $guardian = Guardian::query()->create([
+            'user_id' => $guardianUser->id,
+            'branch_id' => $branch,
+            'relationship' => 'parent',
+        ]);
+        DB::table('guardian_student')->insert([
+            'guardian_id' => $guardian->id,
+            'student_id' => $student->id,
+            'is_primary' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->actingAs($guardianUser)->get("/attendance/guardian/{$student->id}")->assertOk()->assertSee('QR Study Batch');
+        $otherStudentUser = $this->createUserWithRole('student', $branch);
+        $otherStudent = Student::query()->create([
+            'user_id' => $otherStudentUser->id,
+            'branch_id' => $branch,
+            'student_code' => 'ATT-QR-STU-02',
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+        ]);
+        $this->actingAs($guardianUser)->get("/attendance/guardian/{$otherStudent->id}")->assertForbidden();
     }
 
 }
