@@ -26,17 +26,19 @@ class PaymentController extends Controller
     public function index(Request $request): View
     {
         $actor = $request->user();
+        $invoiceIntegrationEnabled = $this->invoiceIntegrationEnabled();
         $transactions = PaymentTransaction::query()
-            ->with('invoice')
+            ->when($invoiceIntegrationEnabled, fn ($q) => $q->with('invoice'))
             ->when($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null, fn ($q) => $q->where('branch_id', $actor->branch_id))
             ->latest()
             ->paginate(25);
 
-        return view('payment-management::index', compact('transactions'));
+        return view('payment-management::index', compact('transactions', 'invoiceIntegrationEnabled'));
     }
 
     public function recordOffline(Request $request): RedirectResponse
     {
+        abort_unless($this->invoiceIntegrationEnabled(), 503, 'Enable Fees Management before recording invoice payments.');
         $actor = $request->user();
         $validated = $request->validate([
             'invoice_id' => ['required', 'integer', 'exists:fee_invoices,id'],
@@ -113,7 +115,7 @@ class PaymentController extends Controller
                     $lockedTx->update(['status' => 'refunded']);
                 }
 
-                if ($invoice = FeeInvoice::query()->where('id', $lockedTx->invoice_id)->lockForUpdate()->first()) {
+                if ($this->invoiceIntegrationEnabled() && $invoice = FeeInvoice::query()->where('id', $lockedTx->invoice_id)->lockForUpdate()->first()) {
                     $newPaid = max(0.0, round((float) $invoice->paid_amount - $refundAmount, 2));
                     $invoice->update([
                         'paid_amount' => $newPaid,
@@ -138,4 +140,10 @@ class PaymentController extends Controller
 
         return back()->with('status', "Refund recorded for {$transaction->transaction_ref}.");
     }
+    private function invoiceIntegrationEnabled(): bool
+    {
+        return app(PluginManager::class)->isEnabled('fees-management')
+            && Schema::hasTable('fee_invoices');
+    }
+
 }
