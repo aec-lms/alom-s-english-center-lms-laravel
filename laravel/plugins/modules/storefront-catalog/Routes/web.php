@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Route;
 use Plugins\Modules\StorefrontCatalog\Http\Controllers\StorefrontController;
 
 
-Route::middleware(['web', 'installed', 'auth', 'plugin:storefront-catalog', 'permission:cms.manage'])
+Route::middleware(['web', 'installed', 'auth', 'plugin:storefront-catalog', 'permission:cms.manage', 'central.admin'])
     ->prefix('admin/storefront')
     ->name('plugins.storefront.')
     ->group(function (): void {
