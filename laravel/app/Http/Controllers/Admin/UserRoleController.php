@@ -35,6 +35,13 @@ class UserRoleController extends Controller
             'branch_id' => ['nullable', 'integer'],
         ]);
 
+        $targetRole = Role::query()->findOrFail((int) $validated['role_id']);
+        abort_if(
+            $targetRole->slug === 'admin' && !$request->user()?->hasRole('admin'),
+            403,
+            'Only an existing Administrator may grant the protected Administrator role.'
+        );
+
         $user = User::query()->create([
             'name' => $validated['name'],
             'email' => strtolower($validated['email']),
