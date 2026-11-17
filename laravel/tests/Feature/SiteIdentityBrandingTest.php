@@ -68,6 +68,7 @@ class SiteIdentityBrandingTest extends TestCase
         $this->assertFileExists(public_path(ltrim($logo, '/')));
         $this->assertFileExists(public_path(ltrim($favicon, '/')));
 
+        $this->post(route('logout'));
         $this->get('/login')
             ->assertOk()
             ->assertSee('Welcome to Example Academy')
