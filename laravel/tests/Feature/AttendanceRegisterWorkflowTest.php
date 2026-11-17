@@ -63,6 +63,11 @@ class AttendanceRegisterWorkflowTest extends TestCase
             ->where('source_id', $batch)
             ->value('id');
         $this->assertNotNull($mappingId, 'Legacy course batches must have an explicit attendance identity.');
+        // Re-run the additive upgrade migration after removing the canonical copy;
+        // it must reconstruct the canonical history from the untouched legacy row.
+        DB::table('attendance_entries')->where('attendance_batch_mapping_id', $mappingId)->delete();
+        $upgradeMigration = require base_path('plugins/modules/attendance-management/Database/Migrations/2026_11_18_000003_create_canonical_attendance_entries.php');
+        $upgradeMigration->up();
         $this->assertDatabaseHas('attendance_entries', [
             'attendance_batch_mapping_id' => $mappingId,
             'student_id' => $student->id,
