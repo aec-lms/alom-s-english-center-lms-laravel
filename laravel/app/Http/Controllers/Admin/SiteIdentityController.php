@@ -59,6 +59,13 @@ class SiteIdentityController extends Controller
             $values[$key] = trim((string) ($validated[$field] ?? ''));
         }
 
+        // An uploaded/replaced file takes precedence over a previously configured URL.
+        foreach (['logo', 'favicon'] as $field) {
+            if ($request->hasFile($field) || $request->boolean('remove_' . $field)) {
+                $values['branding.' . $field . '_url'] = '';
+            }
+        }
+
         foreach (['logo', 'favicon'] as $field) {
             $pathKey = 'branding.' . $field . '_path';
             $oldPath = (string) ($old[$field . '_path'] ?? '');
