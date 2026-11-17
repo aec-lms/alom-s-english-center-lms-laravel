@@ -71,6 +71,8 @@ jobs:
           vus, capacity = int(os.environ["VUS"]), int(os.environ["CAPACITY"])
           if not 300 <= vus <= 1000 or not 300 <= capacity <= 1000:
               raise SystemExit("VUs and capacity must each be between 300 and 1000.")
+          if capacity < vus:
+              raise SystemExit("expected_capacity must be greater than or equal to virtual_users for a full-seat acceptance run.")
           print("Input validation passed. Confirm distinct active student accounts are pre-created and enrolled.")
           PY
       - name: Run authenticated 300+ student live-class test
