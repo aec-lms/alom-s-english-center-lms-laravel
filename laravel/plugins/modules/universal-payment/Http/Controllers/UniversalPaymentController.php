@@ -295,6 +295,7 @@ class UniversalPaymentController extends Controller
         }
 
         abort_unless($invoice !== null || $storefrontItem !== null, 422, 'Choose an invoice or paid e-book to continue checkout.');
+        abort_if($invoice !== null && $storefrontItem !== null, 422, 'Choose one checkout item at a time.');
 
         if ($storefrontItem !== null && $validated['gateway'] !== 'sslcommerz') {
             return back()->withErrors(['gateway' => 'Choose SSLCOMMERZ for secure automatic e-book checkout.'])->withInput();
