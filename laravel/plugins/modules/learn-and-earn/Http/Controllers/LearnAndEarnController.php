@@ -75,7 +75,7 @@ class LearnAndEarnController extends Controller {
    'payer_contact'=>$v['payer_contact'],
    'item_title'=>$exam->title,
    'gateway'=>'sslcommerz',
-   'currency'=>app(PluginManager::class)->getSetting('universal-payment','default_currency','BDT') ?: 'BDT',
+   'currency'=>app(PluginManager::class)->getSetting('universal-payment','default_currency',(string)config('lms.default_currency','BDT')) ?: 'BDT',
    'amount'=>$exam->access_price,
    'status'=>'pending',
    'user_id'=>$r->user()->id,
