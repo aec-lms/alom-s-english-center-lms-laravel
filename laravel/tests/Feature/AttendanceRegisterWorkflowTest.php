@@ -57,6 +57,16 @@ class AttendanceRegisterWorkflowTest extends TestCase
 
         $this->actingAs($admin)->post('/admin/attendance', $payload)->assertRedirect()->assertSessionHasNoErrors();
         $this->assertDatabaseHas('attendance_records', ['student_id' => $student->id, 'status' => 'present', 'source' => 'offline']);
+        $mappingId = DB::table('attendance_batch_mappings')
+            ->where('source_type', 'course_batch')
+            ->where('source_id', $batch)
+            ->value('id');
+        $this->assertNotNull($mappingId, 'Legacy course batches must have an explicit attendance identity.');
+        $this->assertDatabaseHas('attendance_records', [
+            'student_id' => $student->id,
+            'batch_id' => $batch,
+            'attendance_batch_mapping_id' => $mappingId,
+        ]);
         $this->assertDatabaseHas('attendance_audit_logs', ['new_status' => 'present', 'event' => 'created']);
 
         $payload['records'][0]['status'] = 'late';
