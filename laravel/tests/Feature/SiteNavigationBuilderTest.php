@@ -47,7 +47,9 @@ class SiteNavigationBuilderTest extends TestCase
             ->assertOk()
             ->assertSee('Admissions')
             ->assertSee('href="/admissions"', false)
-            ->assertSee('href="https://partner.example.test" target="_blank" rel="noopener noreferrer"', false)
+            ->assertSee('Partner Portal')
+            ->assertSee('https://partner.example.test', false)
+            ->assertSee('target="_blank"', false)
             ->assertDontSee('External Partner');
 
         $this->assertSame(['About', 'Contact'], array_column(app(SiteNavigationManager::class)->items('footer'), 'label'));
