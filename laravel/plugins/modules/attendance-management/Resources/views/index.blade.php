@@ -14,7 +14,7 @@
                 <select id="attendance-batch" name="batch_id" required class="mt-1 w-full rounded-lg border-slate-300">
                     <option value="">Select batch</option>
                     @foreach ($batches as $batch)
-                        <option value="{{ $batch->id }}" data-branch="{{ $batch->branch_id }}">{{ $batch->name }}</option>
+                        <option value="{{ $batch->id }}" data-branch="{{ $batch->branch_id }}" data-mapping="{{ $batch->attendance_batch_mapping_id }}">{{ $batch->name }}</option>
                     @endforeach
                 </select>
             </label>
