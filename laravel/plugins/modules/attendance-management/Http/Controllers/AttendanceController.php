@@ -13,7 +13,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Plugins\Modules\AttendanceManagement\Models\AttendanceRecord;
-use Plugins\Modules\BatchManagement\Models\StudyBatch;
 use Plugins\Modules\StudentManagement\Models\Student;
 use Plugins\Modules\StudentTracking\Services\StudentActivityTracker;
 
@@ -30,7 +29,7 @@ class AttendanceController extends Controller
             ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
             ->latest('attendance_date')
             ->paginate(30);
-        $batches = StudyBatch::query()
+        $batches = DB::table('batches')
             ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
             ->orderBy('name')
             ->get();
@@ -48,10 +47,10 @@ class AttendanceController extends Controller
         $this->ensureAssignedBranch($actor);
         $plugins = app(PluginManager::class);
         abort_unless($plugins->isEnabled('student-management') && Schema::hasTable('students'), 409, 'Enable Student Management before recording attendance.');
-        abort_unless($plugins->isEnabled('batch-management') && Schema::hasTable('study_batches'), 409, 'Enable Batch Management before recording attendance.');
+        abort_unless($plugins->isEnabled('course-management') && Schema::hasTable('batches'), 409, 'Enable Course Management before recording attendance.');
 
         $validated = $request->validate([
-            'batch_id' => ['required', 'integer', 'exists:study_batches,id'],
+            'batch_id' => ['required', 'integer', 'exists:batches,id'],
             'attendance_date' => ['required', 'date'],
             'source' => ['nullable', 'in:online,offline'],
             'student_id' => ['nullable', 'integer', 'exists:students,id'],
@@ -67,7 +66,8 @@ class AttendanceController extends Controller
             'records.*.edit_reason' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $batch = StudyBatch::query()->findOrFail((int) $validated['batch_id']);
+        $batch = DB::table('batches')->where('id', (int) $validated['batch_id'])->first();
+        abort_unless($batch, 404, 'Batch not found.');
         if ($actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $batch->branch_id) {
             abort(403, 'Branch isolation violation.');
         }
