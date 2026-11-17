@@ -39,18 +39,11 @@ class TeacherController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $actor = $request->user();
-        $this->ensureAssignedBranch($actor);
-
-        $branchIntegration = app(PluginManager::class)->isEnabled('branch-management') && Schema::hasTable('branches');
-        $branchRule = $branchIntegration
-            ? ['nullable', 'integer', 'exists:branches,id,is_active,1']
-            : ['nullable', 'integer'];
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:150'],
             'email' => ['required', 'email', 'max:190', 'unique:users,email'],
             'password' => ['nullable', 'string', 'min:6'],
-            'branch_id' => $branchRule,
+            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
             'employee_code' => ['required', 'string', 'max:60', 'unique:teachers,employee_code'],
             'specialization' => ['required', 'string', 'max:160'],
             'credentials' => ['nullable', 'string', 'max:255'],
@@ -62,7 +55,8 @@ class TeacherController extends Controller
             'is_active' => ['nullable', 'boolean'],
         ]);
 
-        if (!$branchIntegration) { $validated['branch_id'] = null; }
+        $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         if ($actor && $actor->hasRole('branch_manager')) {
             if (isset($validated['branch_id']) && (int) $validated['branch_id'] !== (int) $actor->branch_id) {
                 abort(403, 'Branch isolation violation.');
@@ -78,7 +72,7 @@ class TeacherController extends Controller
             $user = User::query()->create([
                 'name' => $validated['name'],
                 'email' => strtolower($validated['email']),
-                'password' => Hash::make(($validated['password'] ?? null) ?: Str::random(12)),
+                'password' => Hash::make($validated['password'] ?: Str::random(12)),
                 'branch_id' => $validated['branch_id'] ?? null,
                 'is_active' => $request->boolean('is_active', true),
             ]);
@@ -115,14 +109,10 @@ class TeacherController extends Controller
             abort(403, 'Branch isolation violation.');
         }
 
-        $branchIntegration = app(PluginManager::class)->isEnabled('branch-management') && Schema::hasTable('branches');
-        $branchRule = $branchIntegration
-            ? ['nullable', 'integer', 'exists:branches,id,is_active,1']
-            : ['nullable', 'integer'];
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:150'],
             'email' => ['nullable', 'email', 'max:190'],
-            'branch_id' => $branchRule,
+            'branch_id' => ['nullable', 'integer'],
             'employee_code' => ['required', 'string', 'max:60', 'unique:teachers,employee_code,' . $teacher->id],
             'specialization' => ['required', 'string', 'max:160'],
             'credentials' => ['nullable', 'string', 'max:255'],
@@ -134,7 +124,6 @@ class TeacherController extends Controller
             'is_active' => ['nullable', 'boolean'],
         ]);
 
-        if (!$branchIntegration) { $validated['branch_id'] = null; }
         if ($actor && $actor->hasRole('branch_manager')) {
             if (isset($validated['branch_id']) && (int) $validated['branch_id'] !== (int) $actor->branch_id) {
                 abort(403, 'Branch isolation violation.');
@@ -197,17 +186,15 @@ class TeacherController extends Controller
         $user = $teacher->user;
 
         DB::transaction(function () use ($teacher, $user): void {
-            $teacher->deleted_user_was_active = (bool) $user?->is_active;
-            $teacher->save();
-            if ($user) {
-                $user->update(['is_active' => false]);
-            }
             $teacher->delete();
+            if ($user) {
+                $user->delete();
+            }
         });
 
-        $this->audit->log('teacher.trashed', 'teacher', $id, ['code' => $code]);
+        $this->audit->log('teacher.deleted', 'teacher', $id, ['code' => $code]);
 
-        return back()->with('status', "Instructor '{$code}' moved to the Admin Recycle Bin. Account and course history have been preserved.");
+        return back()->with('status', "Instructor '{$code}' removed without affecting shared LMS courses.");
     }
 
     private function storePhoto(UploadedFile $file): string
@@ -225,21 +212,13 @@ class TeacherController extends Controller
 
     private function ensureAssignedBranch($actor): void
     {
-        if (!$actor || !$actor->hasRole('branch_manager')) {
-            return;
-        }
-        if ($actor->branch_id === null
-            || !app(PluginManager::class)->isEnabled('branch-management')
-            || !Schema::hasTable('branches')
-        ) {
-            abort(403, 'Branch manager must be assigned to an active branch.');
-        }
-        $activeBranch = \Illuminate\Support\Facades\DB::table('branches')
-            ->where('id', $actor->branch_id)
-            ->where('is_active', true)
-            ->exists();
-        if (!$activeBranch) {
-            abort(403, 'Branch manager access is disabled because the assigned branch is inactive.');
+        if ($actor && $actor->hasRole('branch_manager')) {
+            $branchAvailable = $actor->branch_id !== null
+                && app(PluginManager::class)->isEnabled('branch-management')
+                && Schema::hasTable('branches')
+                && DB::table('branches')->where('id', $actor->branch_id)->where('is_active', true)->exists();
+
+            abort_unless($branchAvailable, 403, 'Branch manager must be assigned to an active branch.');
         }
     }
 }
