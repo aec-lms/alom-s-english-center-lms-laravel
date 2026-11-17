@@ -51,7 +51,8 @@
             "group": "Marketing, Growth & SEO",
             "label": "Gmail Marketing",
             "route": "plugins.gmail.index",
-            "order": 100
+            "order": 100,
+            "permission": "communication.email.manage"
         }
     ]
 }
