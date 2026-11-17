@@ -1,14 +1,12 @@
 {
     "slug": "gateway-stripe",
     "name": "Stripe Payment Gateway",
-    "version": "2.0.1",
+    "version": "2.0.2",
     "author": "Alom's English Center",
     "category": "payment-gateway",
     "description": "Live Stripe PaymentIntents integration with Stripe.js PaymentMethod tokens, idempotency, signed webhook verification and encrypted credentials.",
     "core_compatibility": "^2.0",
-    "dependencies": [
-        "payment-management"
-    ],
+    "dependencies": [],
     "provider": "Plugins\\Modules\\GatewayStripe\\Providers\\GatewayStripeServiceProvider",
     "permissions": [
         {
@@ -49,5 +47,8 @@
                 "1": "Test / Sandbox"
             }
         }
+    ],
+    "optional_dependencies": [
+        "payment-management"
     ]
 }
