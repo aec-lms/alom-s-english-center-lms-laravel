@@ -53,7 +53,9 @@ class LiveClassAccessController extends Controller
                 return $participant->fresh();
             }
 
-            $activeCount = LiveClassParticipant::query()
+            Event::dispatch('lms.live_class.joined', [$student, $liveClass]);
+
+        $activeCount = LiveClassParticipant::query()
                 ->where('live_class_id', $lockedClass->id)
                 ->whereNull('left_at')
                 ->where('last_seen_at', '>=', $cutoff)
