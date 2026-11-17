@@ -2,17 +2,16 @@
 
 declare(strict_types=1);
 
-namespace App\\Http\\Controllers\\Admin;
+namespace App\Http\Controllers\Admin;
 
-use App\\Http\\Controllers\\Controller;
-use App\\Models\\AuditLog;
-use App\\Models\\SystemSetting;
+use App\Http\Controllers\Controller;
+use App\Models\AuditLog;
+use App\Models\SystemSetting;
 use DateTimeZone;
-use Illuminate\\Http\\RedirectResponse;
-use Illuminate\\Http\\Request;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Facades\\Schema;
-use Illuminate\\View\\View;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\View\View;
 
 class InstitutionSettingsController extends Controller
 {
@@ -76,8 +75,6 @@ class InstitutionSettingsController extends Controller
             ]);
         });
 
-        // Apply immediately for the current request. AppServiceProvider reloads
-        // the persisted profile on subsequent requests and after process restart.
         config([
             'app.name' => $validated['name'],
             'app.url' => $validated['website'] ?: config('app.url'),

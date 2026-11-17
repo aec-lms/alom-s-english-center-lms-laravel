@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Models\SystemSetting;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -16,11 +18,64 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        $this->loadInstitutionDefaults();
+
         Gate::before(function ($user, string $ability): ?bool {
             if (method_exists($user, 'hasPermission') && $user->hasPermission($ability)) {
                 return true;
             }
             return null;
         });
+    }
+
+    private function loadInstitutionDefaults(): void
+    {
+        try {
+            if (!Schema::hasTable('system_settings')) {
+                return;
+            }
+
+            $settings = SystemSetting::query()
+                ->whereIn('key', [
+                    'institution.name',
+                    'institution.website',
+                    'localization.locale',
+                    'localization.timezone',
+                    'finance.default_currency',
+                ])
+                ->pluck('value', 'key');
+
+            $name = $settings->get('institution.name');
+            $website = $settings->get('institution.website');
+            $locale = $settings->get('localization.locale');
+            $timezone = $settings->get('localization.timezone');
+            $currency = $settings->get('finance.default_currency');
+
+            $config = [];
+            if (is_string($name) && $name !== '') {
+                $config['app.name'] = $name;
+            }
+            if (is_string($website) && filter_var($website, FILTER_VALIDATE_URL)) {
+                $config['app.url'] = $website;
+            }
+            if (is_string($locale) && preg_match('/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/', $locale)) {
+                $config['app.locale'] = $locale;
+            }
+            if (is_string($timezone)
+                && (in_array($timezone, \DateTimeZone::listIdentifiers(\DateTimeZone::ALL_WITH_BC), true) || $timezone === 'UTC')) {
+                $config['app.timezone'] = $timezone;
+                date_default_timezone_set($timezone);
+            }
+            if (is_string($currency) && preg_match('/^[A-Z]{3}$/', $currency)) {
+                $config['lms.default_currency'] = $currency;
+            }
+
+            if ($config !== []) {
+                config($config);
+            }
+        } catch (\Throwable $exception) {
+            // Fresh installation and test environments may not have settings yet.
+            report_if(app()->environment('production'), $exception);
+        }
     }
 }

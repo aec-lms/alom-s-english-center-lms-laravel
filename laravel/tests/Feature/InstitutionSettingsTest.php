@@ -2,13 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use App\\Models\\Permission;
-use App\\Models\\Role;
-use App\\Models\\SystemSetting;
-use App\\Models\\User;
-use Tests\\TestCase;
+use App\Models\Permission;
+use App\Models\Role;
+use App\Models\User;
+use Tests\TestCase;
 
 class InstitutionSettingsTest extends TestCase
 {
