@@ -292,6 +292,7 @@ class CourseController extends Controller
 
     public function storeCategory(Request $request): RedirectResponse
     {
+        $this->ensureGlobalCategoryAccess($request->user());
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:120'],
             'slug' => ['nullable', 'alpha_dash', 'max:140', 'unique:course_categories,slug'],
@@ -318,6 +319,7 @@ class CourseController extends Controller
 
     public function updateCategory(Request $request, CourseCategory $category): RedirectResponse
     {
+        $this->ensureGlobalCategoryAccess($request->user());
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:120'],
             'slug' => ['required', 'alpha_dash', 'max:140', 'unique:course_categories,slug,' . $category->id],
@@ -341,6 +343,7 @@ class CourseController extends Controller
 
     public function destroyCategory(CourseCategory $category): RedirectResponse
     {
+        $this->ensureGlobalCategoryAccess(request()->user());
         $name = $category->name;
         $id = (string) $category->id;
         $category->delete();
@@ -414,6 +417,7 @@ class CourseController extends Controller
     public function destroyLiveClass(Request $request, LiveClass $liveClass): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $liveClass->course?->branch_id) {
             abort(403, 'Branch isolation violation.');
         }
@@ -424,6 +428,15 @@ class CourseController extends Controller
         $this->audit->log('live_class.deleted', 'live_class', $id, ['title' => $title]);
 
         return back()->with('status', "Live class '{$title}' removed.");
+    }
+
+    private function ensureGlobalCategoryAccess($actor): void
+    {
+        abort_unless(
+            $actor && $actor->hasRole('admin'),
+            403,
+            'Only a central administrator can manage global course categories.'
+        );
     }
 
     private function deleteUnusedUpload(?string $path, ?int $ignoreCourseId = null): void
