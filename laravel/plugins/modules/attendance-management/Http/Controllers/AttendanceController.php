@@ -27,7 +27,7 @@ class AttendanceController extends Controller
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
         $branchId = $actor->hasRole('branch_manager') ? (int) $actor->branch_id : null;
-        $records = AttendanceRecord::query()
+        $records = AttendanceEntry::query()->with('batchIdentity')
             ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
             ->latest('attendance_date')
             ->paginate(30);
