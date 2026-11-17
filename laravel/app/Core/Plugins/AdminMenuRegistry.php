@@ -31,6 +31,8 @@ final class AdminMenuRegistry
         );
 
         $groups = [];
+        $routes = Route::getRoutes();
+        $routes->refreshNameLookups();
         foreach (app(PluginManager::class)->discoverManifests() as $slug => $manifest) {
             if (!isset($enabled[$slug])) {
                 continue;
@@ -46,7 +48,7 @@ final class AdminMenuRegistry
                 $route = trim((string) ($entry['route'] ?? ''));
                 $permission = isset($entry['permission']) ? trim((string) $entry['permission']) : null;
 
-                if ($group === '' || $label === '' || $route === '' || !Route::has($route)) {
+                if ($group === '' || $label === '' || $route === '' || !$routes->getByName($route)) {
                     continue;
                 }
 
