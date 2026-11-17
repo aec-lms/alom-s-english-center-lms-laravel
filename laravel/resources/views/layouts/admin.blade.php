@@ -190,6 +190,14 @@
                 <a href="{{ route('plugins.ai.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Panel AI Assistant</a>
             @endif
 
+            @if (!empty($pluginAdminMenu))
+                @foreach ($pluginAdminMenu as $groupName => $menuItems)
+                    <div class="px-3 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">{{ $groupName }}</div>
+                    @foreach ($menuItems as $menuItem)
+                        <a href="{{ route($menuItem['route']) }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">{{ $menuItem['label'] }}</a>
+                    @endforeach
+                @endforeach
+            @endif
         </nav>
         <div class="p-3 border-t border-slate-800">
             <form method="POST" action="{{ route('logout') }}">
