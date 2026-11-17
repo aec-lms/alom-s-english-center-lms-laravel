@@ -6,7 +6,9 @@
     "category": "academic",
     "description": "Guardian profiles and branch-scoped student-guardian relationship management.",
     "core_compatibility": "^2.0",
-    "dependencies": [],
+    "dependencies": [
+        "student-management"
+    ],
     "provider": "Plugins\\Modules\\GuardianManagement\\Providers\\GuardianManagementServiceProvider",
     "permissions": [
         {

@@ -58,3 +58,10 @@ GitHub Actions tests the Laravel application using PHP 8.3 and the committed `la
 ## Production backup and restore rehearsal
 
 See [Production backup requirements and restore rehearsal](docs/PRODUCTION-BACKUP-RESTORE.md) for cPanel PHP extension setup, runtime verification, and the isolated restore rehearsal procedure.
+
+
+## Release rehearsal runbooks
+
+- [External staging release gates](docs/EXTERNAL-STAGING-REHEARSAL.md)
+- [Core update and rollback rehearsal](docs/CORE-UPGRADE-ROLLBACK-REHEARSAL.md)
+- [Production backup and restore rehearsal](docs/PRODUCTION-BACKUP-RESTORE.md)
