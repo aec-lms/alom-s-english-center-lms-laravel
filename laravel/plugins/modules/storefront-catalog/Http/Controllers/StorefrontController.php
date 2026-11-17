@@ -202,13 +202,10 @@ class StorefrontController extends Controller
             ->firstOrFail();
 
         $downloadUrl = (string) $item->download_url;
-        abort_unless(str_starts_with($downloadUrl, 'private:'), 404, 'This e-book does not have a protected PDF file.');
+        abort_if($downloadUrl === '', 404, 'The e-book file is unavailable.');
+        $isFree = (bool) $item->is_free || (float) $item->price <= 0;
 
-        $path = substr($downloadUrl, 8);
-        abort_unless($path !== '' && Storage::disk('local')->exists($path), 404, 'The protected e-book file is unavailable.');
-
-        $isPaid = !(bool) $item->is_free && (float) $item->price > 0;
-        if ($isPaid) {
+        if (!$isFree) {
             abort_unless(
                 Schema::hasTable('storefront_item_access')
                     && DB::table('storefront_item_access')
@@ -220,7 +217,26 @@ class StorefrontController extends Controller
             );
         }
 
-        return Storage::disk('local')->download($path, Str::slug($item->title) . '.pdf');
+        if (str_starts_with($downloadUrl, 'private:')) {
+            $path = substr($downloadUrl, 8);
+            abort_unless($path !== '' && Storage::disk('local')->exists($path), 404, 'The protected e-book file is unavailable.');
+            return Storage::disk('local')->download($path, Str::slug($item->title) . '.pdf');
+        }
+
+        if ($isFree && filter_var($downloadUrl, FILTER_VALIDATE_URL)) {
+            $scheme = strtolower((string) parse_url($downloadUrl, PHP_URL_SCHEME));
+            abort_unless(in_array($scheme, ['https', 'http'], true), 403, 'Unsupported e-book URL scheme.');
+            return redirect()->away($downloadUrl);
+        }
+
+        if ($isFree && str_starts_with($downloadUrl, '/uploads/')) {
+            $root = realpath(public_path('uploads'));
+            $file = realpath(public_path(ltrim($downloadUrl, '/')));
+            abort_unless($root && $file && str_starts_with($file, $root . DIRECTORY_SEPARATOR) && is_file($file), 404);
+            return response()->download($file, Str::slug($item->title) . '.pdf');
+        }
+
+        abort(403, 'This e-book does not have an allowed downloadable file configured.');
     }
 
     private function deleteUnusedPublicUpload(?string $path, ?int $ignoreStorefrontItemId = null): void
