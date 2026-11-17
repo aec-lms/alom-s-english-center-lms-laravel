@@ -5,7 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Route;
 use Plugins\Modules\EmailNotifications\Http\Controllers\EmailNotificationController;
 
-Route::middleware(['web', 'installed', 'auth', 'plugin:email-notifications', 'permission:email.notifications.manage'])
+Route::middleware(['web', 'installed', 'auth', 'plugin:email-notifications', 'permission:email.notifications.manage', 'central.admin'])
     ->prefix('admin/email-notifications')
     ->name('plugins.email_notifications.')
     ->group(function (): void {
