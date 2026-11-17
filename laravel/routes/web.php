@@ -10,6 +10,7 @@ use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\SetupWizardController;
 use App\Http\Controllers\Admin\RolePermissionController;
 use App\Http\Controllers\Admin\AdminMenuController;
+use App\Http\Controllers\Admin\SiteNavigationController;
 use App\Http\Controllers\Admin\InstitutionSettingsController;
 use App\Http\Controllers\Admin\HealthMonitorController;
 use App\Http\Controllers\Admin\RecycleBinController;
