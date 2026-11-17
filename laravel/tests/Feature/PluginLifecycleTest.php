@@ -10,6 +10,7 @@ use App\Models\PluginRecord;
 use App\Models\PluginSetting;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 use Tests\TestCase;
 use ZipArchive;
