@@ -84,6 +84,9 @@ jobs:
       - name: Execute attendance PWA restart/offline E2E
         run: node tests/e2e/attendance-pwa.spec.cjs
 
+      - name: Execute attendance QR expiry/replay browser E2E
+        run: node tests/e2e/attendance-qr-checkin.spec.cjs
+
       - name: Build production cPanel package
         run: bash scripts/build-cpanel-package.sh
 
