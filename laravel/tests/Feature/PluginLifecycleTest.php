@@ -364,4 +364,26 @@ PHP;
         $this->assertSame('students.trace.view', $traceManifest->adminMenu[0]['permission']);
     }
 
+    public function test_manifest_driven_admin_menu_only_shows_enabled_plugins_to_permitted_users(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management', 'student-tracing']);
+        $admin = $this->createUserWithRole('admin');
+        $this->actingAs($admin);
+
+        $groups = app(\App\Core\Plugins\AdminMenuRegistry::class)->groups();
+        $academicItems = $groups['Academic & Operations'] ?? [];
+        $labels = array_column($academicItems, 'label');
+
+        $this->assertContains('Courses', $labels);
+        $this->assertContains('Student Activity Trace', $labels);
+
+        app(PluginManager::class)->disable('student-tracing');
+        $groupsAfterDisable = app(\App\Core\Plugins\AdminMenuRegistry::class)->groups();
+        $labelsAfterDisable = array_column($groupsAfterDisable['Academic & Operations'] ?? [], 'label');
+
+        $this->assertNotContains('Student Activity Trace', $labelsAfterDisable);
+        $this->assertContains('Courses', $labelsAfterDisable);
+    }
+
 }
