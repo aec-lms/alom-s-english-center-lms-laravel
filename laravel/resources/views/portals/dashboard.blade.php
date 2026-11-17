@@ -15,6 +15,9 @@
             @endif
             @if ($role === 'student' && Route::has('plugins.enrollments.my'))
                 <a href="{{ route('plugins.enrollments.my') }}" class="rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-bold text-white">My Enrollments</a>
+                @if (Route::has('public.exams'))
+                    <a href="{{ route('public.exams') }}" class="rounded-lg border border-indigo-200 px-4 py-2.5 text-sm font-bold text-indigo-700">Available Exams</a>
+                @endif
             @elseif (in_array($role, ['branch_manager', 'accountant']) && Route::has('plugins.enrollments.index'))
                 <a href="{{ route('plugins.enrollments.index') }}" class="rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-bold text-white">Course Enrollments</a>
             @endif
