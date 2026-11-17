@@ -77,4 +77,63 @@ class FlashSaleEnrollmentTest extends TestCase
         $this->assertEquals(250.00, (float) $invoice->discount_amount);
         $this->assertEquals(750.00, (float) $invoice->net_amount);
     }
+
+    public function test_admin_can_view_edit_toggle_and_delete_flash_sale_campaigns(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'course-management', 'flash-sale']);
+
+        $admin = $this->createUserWithRole('admin');
+        $course = Course::query()->create([
+            'code' => 'FLASH-ADMIN-01',
+            'title' => 'Admin Flash Course',
+            'slug' => 'admin-flash-course',
+            'price' => 500,
+            'status' => 'published',
+        ]);
+        $saleId = DB::table('flash_sales')->insertGetId([
+            'course_id' => $course->id,
+            'title' => 'Admin Campaign',
+            'discount_type' => 'percent',
+            'discount_value' => 10,
+            'starts_at' => now()->subMinute(),
+            'ends_at' => now()->addDay(),
+            'is_published' => true,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($admin)->get('/admin/flash-sales')
+            ->assertOk()
+            ->assertSee('Admin Campaign')
+            ->assertSee('Edit');
+
+        $this->actingAs($admin)->put('/admin/flash-sales/' . $saleId, [
+            'course_id' => $course->id,
+            'title' => 'Updated Campaign',
+            'discount_type' => 'fixed',
+            'discount_value' => 75,
+            'starts_at' => now()->subMinute()->format('Y-m-d H:i:s'),
+            'ends_at' => now()->addDay()->format('Y-m-d H:i:s'),
+            'is_published' => 1,
+            'is_active' => 1,
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('flash_sales', [
+            'id' => $saleId,
+            'title' => 'Updated Campaign',
+            'discount_type' => 'fixed',
+            'discount_value' => 75,
+        ]);
+
+        $this->actingAs($admin)->post('/admin/flash-sales/' . $saleId . '/toggle')
+            ->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('flash_sales', ['id' => $saleId, 'is_active' => false]);
+
+        $this->actingAs($admin)->delete('/admin/flash-sales/' . $saleId)
+            ->assertSessionHasNoErrors();
+        $this->assertDatabaseMissing('flash_sales', ['id' => $saleId]);
+    }
+
 }
