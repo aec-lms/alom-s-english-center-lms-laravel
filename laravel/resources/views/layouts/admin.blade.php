@@ -43,7 +43,7 @@
 </head>
 <body class="bg-slate-100 text-slate-900 antialiased">
 <div class="min-h-screen flex">
-    <aside class="w-64 text-slate-200 flex flex-col shrink-0 border-r border-white/10">
+    <aside id="admin-sidebar" class="fixed inset-y-0 left-0 z-40 w-64 text-slate-200 flex flex-col shrink-0 border-r border-white/10 -translate-x-full transition-transform duration-200 shadow-2xl lg:static lg:translate-x-0 lg:shadow-none">
         <div class="px-5 py-4 border-b border-white/10">
             <div class="text-sm font-extrabold tracking-tight text-white">{{ config('app.name') }} Core</div>
             <div class="text-[11px] text-[#38BDF8] font-medium">Core + Independent Plugins</div>
@@ -54,7 +54,6 @@
                 <span>Visit Public Site</span>
             </a>
         </div>
-        @inject('pluginManager', 'App\Core\Plugins\PluginManager')
         <nav class="flex-1 p-3 space-y-1 text-sm overflow-y-auto">
             <div class="px-3 pt-1 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Protected Core</div>
             <a href="{{ route('admin.dashboard') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Dashboard</a>
@@ -67,129 +66,130 @@
             <a href="{{ route('admin.appearance.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Design &amp; Appearance</a>
 
             <div class="px-3 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Marketing, Growth & SEO</div>
-            @if ($pluginManager->isEnabled('meta-pixel') && Route::has('plugins.meta_pixel.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('meta-pixel') && Route::has('plugins.meta_pixel.index'))
                 <a href="{{ route('plugins.meta_pixel.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Facebook Meta Pixel</a>
             @endif
-            @if ($pluginManager->isEnabled('google-console') && Route::has('plugins.google_console.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('google-console') && Route::has('plugins.google_console.index'))
                 <a href="{{ route('plugins.google_console.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Google Console & GA4</a>
             @endif
-            @if ($pluginManager->isEnabled('admin-boosting') && Route::has('plugins.boost.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('admin-boosting') && Route::has('plugins.boost.index'))
                 <a href="{{ route('plugins.boost.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Admin Boosting</a>
             @endif
-            @if ($pluginManager->isEnabled('visitor-popup-ads') && Route::has('plugins.popups.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('visitor-popup-ads') && Route::has('plugins.popups.index'))
                 <a href="{{ route('plugins.popups.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Visitor Pop-Up Ads</a>
             @endif
-            @if ($pluginManager->isEnabled('seo-manager') && Route::has('plugins.seo.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('seo-manager') && Route::has('plugins.seo.index'))
                 <a href="{{ route('plugins.seo.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">SEO & Sitemap</a>
             @endif
-            @if ($pluginManager->isEnabled('sms-gateway') && Route::has('plugins.sms.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('sms-gateway') && Route::has('plugins.sms.index'))
                 <a href="{{ route('plugins.sms.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">SMS Marketing</a>
             @endif
-            @if ($pluginManager->isEnabled('marketing-management') && Route::has('plugins.marketing.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('marketing-management') && Route::has('plugins.marketing.index'))
                 <a href="{{ route('plugins.marketing.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Marketing &amp; Coupons</a>
             @endif
-            @if ($pluginManager->isEnabled('gmail-marketing') && Route::has('plugins.gmail.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('gmail-marketing') && Route::has('plugins.gmail.index'))
                 <a href="{{ route('plugins.gmail.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Gmail Marketing</a>
             @endif
-            @if ($pluginManager->isEnabled('email-notifications') && Route::has('plugins.email_notifications.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('email-notifications') && Route::has('plugins.email_notifications.index'))
                 <a href="{{ route('plugins.email_notifications.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Email Notifications</a>
             @endif
-            @if ($pluginManager->isEnabled('notice-board') && Route::has('plugins.notices.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('notice-board') && Route::has('plugins.notices.index'))
                 <a href="{{ route('plugins.notices.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Notice Board</a>
             @endif
 
             <div class="px-3 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Academic &amp; Operations</div>
-            @if ($pluginManager->isEnabled('branch-management') && Route::has('plugins.branches.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('branch-management') && Route::has('plugins.branches.index'))
                 <a href="{{ route('plugins.branches.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Branches</a>
             @endif
-            @if ($pluginManager->isEnabled('admission-management') && Route::has('plugins.admissions.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('admission-management') && Route::has('plugins.admissions.index'))
                 <a href="{{ route('plugins.admissions.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Admissions</a>
             @endif
-            @if ($pluginManager->isEnabled('student-management') && Route::has('plugins.students.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('student-management') && Route::has('plugins.students.index'))
                 <a href="{{ route('plugins.students.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Students</a>
             @endif
-            @if ($pluginManager->isEnabled('teacher-management') && Route::has('plugins.teachers.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('teacher-management') && Route::has('plugins.teachers.index'))
                 <a href="{{ route('plugins.teachers.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Teachers</a>
             @endif
-            @if ($pluginManager->isEnabled('guardian-management') && Route::has('plugins.guardians.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('guardian-management') && Route::has('plugins.guardians.index'))
                 <a href="{{ route('plugins.guardians.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Guardians</a>
             @endif
-            @if ($pluginManager->isEnabled('course-management') && Route::has('plugins.courses.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('course-management') && Route::has('plugins.courses.index'))
                 <a href="{{ route('plugins.courses.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Courses</a>
             @endif
-            @if ($pluginManager->isEnabled('course-management') && Route::has('plugins.enrollments.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('course-management') && Route::has('plugins.enrollments.index'))
                 <a href="{{ route('plugins.enrollments.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Course Enrollments</a>
             @endif
-            @if ($pluginManager->isEnabled('class-management') && Route::has('plugins.classes.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('class-management') && Route::has('plugins.classes.index'))
                 <a href="{{ route('plugins.classes.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Classes &amp; Routines</a>
             @endif
-            @if ($pluginManager->isEnabled('batch-management') && Route::has('plugins.batches.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('batch-management') && Route::has('plugins.batches.index'))
                 <a href="{{ route('plugins.batches.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Batches &amp; Seats</a>
             @endif
-            @if ($pluginManager->isEnabled('exam-management') && Route::has('plugins.exams.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('exam-management') && Route::has('plugins.exams.index'))
                 <a href="{{ route('plugins.exams.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Exams &amp; Bank</a>
             @endif
-            @if ($pluginManager->isEnabled('attendance-management') && Route::has('plugins.attendance.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('attendance-management') && Route::has('plugins.attendance.index'))
                 <a href="{{ route('plugins.attendance.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Attendance</a>
             @endif
-            @if ($pluginManager->isEnabled('certificate-management') && Route::has('plugins.certificates.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('certificate-management') && Route::has('plugins.certificates.index'))
                 <a href="{{ route('plugins.certificates.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Certificates</a>
             @endif
-            @if ($pluginManager->isEnabled('library-management') && Route::has('plugins.library.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('library-management') && Route::has('plugins.library.index'))
                 <a href="{{ route('plugins.library.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Library &amp; Loans</a>
             @endif
-            @if ($pluginManager->isEnabled('hr-staff-management') && Route::has('plugins.hr.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('hr-staff-management') && Route::has('plugins.hr.index'))
                 <a href="{{ route('plugins.hr.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">HR &amp; Payroll</a>
             @endif
 
             <div class="px-3 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Finance &amp; Gateways</div>
-            @if ($pluginManager->isEnabled('fees-management') && Route::has('plugins.fees.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('fees-management') && Route::has('plugins.fees.index'))
                 <a href="{{ route('plugins.fees.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Fees &amp; Invoices</a>
             @endif
-            @if ($pluginManager->isEnabled('payment-management') && Route::has('plugins.payments.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('payment-management') && Route::has('plugins.payments.index'))
                 <a href="{{ route('plugins.payments.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Payments &amp; Ledger</a>
             @endif
-            @if ($pluginManager->isEnabled('universal-payment') && Route::has('plugins.universal_payment.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('universal-payment') && Route::has('plugins.universal_payment.index'))
                 <a href="{{ route('plugins.universal_payment.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Universal Payment</a>
             @endif
-            @if ($pluginManager->isEnabled('gateway-stripe') && Route::has('plugins.gateway_stripe.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('gateway-stripe') && Route::has('plugins.gateway_stripe.index'))
                 <a href="{{ route('plugins.gateway_stripe.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Stripe Gateway</a>
             @endif
-            @if ($pluginManager->isEnabled('gateway-paypal') && Route::has('plugins.gateway_paypal.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('gateway-paypal') && Route::has('plugins.gateway_paypal.index'))
                 <a href="{{ route('plugins.gateway_paypal.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">PayPal Gateway</a>
             @endif
 
             <div class="px-3 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">CMS, Builders &amp; AI</div>
-            @if ($pluginManager->isEnabled('media-library') && Route::has('plugins.media.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('media-library') && Route::has('plugins.media.index'))
                 <a href="{{ route('plugins.media.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Media Library</a>
             @endif
-            @if ($pluginManager->isEnabled('storefront-catalog') && Route::has('plugins.storefront.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('storefront-catalog') && Route::has('plugins.storefront.index'))
                 <a href="{{ route('plugins.storefront.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Products &amp; E-books</a>
             @endif
-            @if ($pluginManager->isEnabled('cms-website') && Route::has('plugins.cms.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('cms-website') && Route::has('plugins.cms.index'))
                 <a href="{{ route('plugins.cms.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Website CMS</a>
             @endif
-            @if ($pluginManager->isEnabled('page-builder') && Route::has('plugins.page_builder.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('page-builder') && Route::has('plugins.page_builder.index'))
                 <a href="{{ route('plugins.page_builder.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Page Builder</a>
             @endif
-            @if ($pluginManager->isEnabled('slider-builder') && Route::has('plugins.slider_builder.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('slider-builder') && Route::has('plugins.slider_builder.index'))
                 <a href="{{ route('plugins.slider_builder.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Slider Builder</a>
             @endif
-            @if ($pluginManager->isEnabled('carousel-builder') && Route::has('plugins.carousel_builder.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('carousel-builder') && Route::has('plugins.carousel_builder.index'))
                 <a href="{{ route('plugins.carousel_builder.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Carousel Builder</a>
             @endif
-            @if ($pluginManager->isEnabled('notification-center') && Route::has('plugins.notifications.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('notification-center') && Route::has('plugins.notifications.index'))
                 <a href="{{ route('plugins.notifications.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Notification Center</a>
             @endif
-            @if ($pluginManager->isEnabled('reports-analytics') && Route::has('plugins.reports.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('reports-analytics') && Route::has('plugins.reports.index'))
                 <a href="{{ route('plugins.reports.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Reports &amp; Health</a>
             @endif
-            @if ($pluginManager->isEnabled('mobile-app-api') && Route::has('plugins.mobile_app.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('mobile-app-api') && Route::has('plugins.mobile_app.index'))
                 <a href="{{ route('plugins.mobile_app.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Mobile App (iOS &amp; Android)</a>
             @endif
-            @if ($pluginManager->isEnabled('role-ai-assistant') && Route::has('plugins.ai.index'))
+            @if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('role-ai-assistant') && Route::has('plugins.ai.index'))
                 <a href="{{ route('plugins.ai.index') }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">Panel AI Assistant</a>
             @endif
+
         </nav>
         <div class="p-3 border-t border-slate-800">
             <form method="POST" action="{{ route('logout') }}">
@@ -198,7 +198,25 @@
             </form>
         </div>
     </aside>
-    <main class="flex-1 p-6 overflow-y-auto">
+    <button type="button" id="admin-sidebar-backdrop" class="hidden fixed inset-0 z-30 bg-slate-950/50 lg:hidden" aria-label="Close navigation menu"></button>
+    <main class="flex-1 min-w-0 p-4 sm:p-6 overflow-y-auto">
+        <header class="sticky top-0 z-30 -mx-4 sm:-mx-6 -mt-4 sm:-mt-6 mb-6 border-b border-slate-200 px-4 sm:px-6 py-3 shadow-sm backdrop-blur">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="min-w-0">
+                    <div class="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">ALOMS LMS Core</div>
+                    <div class="flex items-center gap-2">
+                        <button type="button" id="admin-sidebar-toggle" aria-controls="admin-sidebar" aria-expanded="false" class="inline-flex lg:hidden h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700" aria-label="Open navigation menu">☰</button>
+                        <div class="text-sm font-extrabold text-slate-900">Admin Console <span class="font-medium text-slate-500">/ Core + Independent Plugins</span></div>
+                    </div>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <a href="{{ route('admin.plugins.index') }}" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:border-blue-300 hover:text-blue-700 transition-colors">＋ Plugin Center</a>
+                    <a href="{{ route('admin.audit.index') }}" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:border-blue-300 hover:text-blue-700 transition-colors">Audit Logs</a>
+                    <a href="{{ route('home') }}" target="_blank" rel="noopener noreferrer" class="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700 transition-colors">↗ Visit Website</a>
+                    <span class="hidden md:inline-flex rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">{{ auth()->user()?->name ?? 'Administrator' }}</span>
+                </div>
+            </div>
+        </header>
         @if (session('status'))
             <div class="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{{ session('status') }}</div>
         @endif
@@ -215,8 +233,36 @@
     </main>
 </div>
 
-@if ($pluginManager->isEnabled('role-ai-assistant') && Route::has('plugins.ai.ask'))
+@if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('role-ai-assistant') && Route::has('plugins.ai.ask'))
     @includeIf('role-ai-assistant::partials.widget')
 @endif
+<script>
+(function () {
+    const sidebar = document.getElementById('admin-sidebar');
+    const toggle = document.getElementById('admin-sidebar-toggle');
+    const backdrop = document.getElementById('admin-sidebar-backdrop');
+    if (!sidebar || !toggle || !backdrop) return;
+
+    const closeMenu = () => {
+        sidebar.classList.add('-translate-x-full');
+        backdrop.classList.add('hidden');
+        toggle.setAttribute('aria-expanded', 'false');
+    };
+    const openMenu = () => {
+        sidebar.classList.remove('-translate-x-full');
+        backdrop.classList.remove('hidden');
+        toggle.setAttribute('aria-expanded', 'true');
+    };
+
+    toggle.addEventListener('click', () => {
+        if (sidebar.classList.contains('-translate-x-full')) openMenu();
+        else closeMenu();
+    });
+    backdrop.addEventListener('click', closeMenu);
+    window.addEventListener('resize', () => {
+        if (window.innerWidth >= 1024) closeMenu();
+    });
+})();
+</script>
 </body>
 </html>

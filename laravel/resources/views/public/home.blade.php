@@ -2,6 +2,18 @@
 @section('title', "Alom's English Center — AEC LMS")
 @section('content')
 @php
+    $pluginManager = app(\App\Core\Plugins\PluginManager::class);
+    $showSslcommerzStrip = $pluginManager->isEnabled('gateway-sslcommerz')
+        && \Illuminate\Support\Facades\Schema::hasTable('plugin_settings')
+        && filled($pluginManager->getSetting('gateway-sslcommerz', 'store_id'))
+        && filled($pluginManager->getSetting('gateway-sslcommerz', 'store_password'));
+    $iosAppUrl = trim((string) ($homepage['app_ios_url'] ?? ''));
+    $androidAppUrl = trim((string) ($homepage['app_android_url'] ?? ''));
+    $iosAppAvailable = filter_var($iosAppUrl, FILTER_VALIDATE_URL)
+        && parse_url($iosAppUrl, PHP_URL_HOST) === 'apps.apple.com';
+    $androidAppAvailable = filter_var($androidAppUrl, FILTER_VALIDATE_URL)
+        && parse_url($androidAppUrl, PHP_URL_HOST) === 'play.google.com';
+
     $heroSlides = $sliders->isNotEmpty() ? $sliders->map(fn ($s) => [
         'title' => $s->title,
         'subtitle' => $s->subtitle ?? '',
@@ -202,7 +214,7 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             @foreach ($learningPaths as $lp)
                 @if ($lp['enabled'] ?? true)
-                <a href="{{ $lp['url'] ?? '/courses' }}" class="rounded-2xl p-6 border transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md flex flex-col justify-between space-y-5" style="background-color: {{ $lp['bg'] ?? '#D6E9FF' }}; border-color: {{ $lp['border'] ?? '#BBD8FF' }};">
+                <a href="{{ route('public.courses', ['category' => $lp['category'] ?? $lp['title']]) }}" data-learning-path="{{ $lp['category'] ?? $lp['title'] }}" class="rounded-2xl p-6 border transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md flex flex-col justify-between space-y-5" style="background-color: {{ $lp['bg'] ?? '#D6E9FF' }}; border-color: {{ $lp['border'] ?? '#BBD8FF' }};">
                     <div class="space-y-4">
                         <div class="w-11 h-11 rounded-xl text-white font-extrabold text-xs flex items-center justify-center shadow-xs" style="background-color: {{ $lp['accent'] ?? '#1D63FF' }}">
                             {{ $lp['abbr'] ?? 'AC' }}
@@ -363,21 +375,47 @@
         </div>
 
         <div class="flex flex-wrap items-center justify-center gap-4 shrink-0">
-            <a href="{{ $homepage['app_ios_url'] ?? 'https://apps.apple.com/app/aloms-english-center' }}" target="_blank" rel="noopener" class="px-5 py-3 rounded-xl bg-slate-950 hover:bg-black border border-white/20 flex items-center gap-3 shadow-lg transition-colors">
-                <svg class="w-6 h-6 text-white fill-current shrink-0" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.33c.67-.81 1.12-1.94.99-3.07-.96.04-2.13.64-2.82 1.45-.61.71-1.15 1.86-1.01 2.97 1.07.08 2.17-.55 2.84-1.35z"/></svg>
+            @if ($iosAppAvailable)
+            <a href="{{ $iosAppUrl }}" target="_blank" rel="noopener noreferrer" class="px-5 py-3 rounded-xl bg-slate-950 hover:bg-black border border-white/20 flex items-center gap-3 shadow-lg transition-colors">
+                <svg class="w-6 h-6 text-white fill-current shrink-0" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.33c.67-.81 1.12-1.94.99-3.07-.96.04-2.13.64-2.82 1.45-.61.71-1.15 1.86-1.01 2.97 1.07.08 2.13-.55 2.84-1.35z"/></svg>
                 <div class="text-left leading-tight">
                     <div class="text-[10px] text-slate-300">Download on the</div>
                     <div class="text-sm font-extrabold">Apple App Store</div>
                 </div>
             </a>
+            @else
+            <span class="px-5 py-3 rounded-xl bg-slate-950/70 border border-white/20 text-sm font-bold text-white">Apple App Store — Coming Soon</span>
+            @endif
 
-            <a href="{{ $homepage['app_android_url'] ?? 'https://play.google.com/store/apps/details?id=com.alomsenglishcenter.app' }}" target="_blank" rel="noopener" class="px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 border border-white/20 flex items-center gap-3 shadow-lg transition-colors">
+            @if ($androidAppAvailable)
+            <a href="{{ $androidAppUrl }}" target="_blank" rel="noopener noreferrer" class="px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 border border-white/20 flex items-center gap-3 shadow-lg transition-colors">
                 <svg class="w-6 h-6 text-white fill-current shrink-0" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20.5v-17c0-.59.34-1.11.84-1.35L13.69 12l-9.85 9.85c-.5-.25-.84-.76-.84-1.35zm13.81-5.38L6.05 21.34l8.49-8.49 2.27 2.27zm.91-.91l2.7-1.56c.62-.36.62-1.24 0-1.6l-2.7-1.56-2.46 2.46 2.46 2.46zM6.05 2.66l10.76 6.22-2.27 2.27-8.49-8.49z"/></svg>
                 <div class="text-left leading-tight">
                     <div class="text-[10px] text-emerald-100">GET IT ON</div>
                     <div class="text-sm font-extrabold">Google Play Android</div>
                 </div>
             </a>
+            @else
+            <span class="px-5 py-3 rounded-xl bg-emerald-700/70 border border-white/20 text-sm font-bold text-white">Google Play — Coming Soon</span>
+            @endif
+        </div>
+    </div>
+</section>
+@endif
+
+@if ($showSslcommerzStrip)
+<section aria-label="Secure payment methods" class="border-t border-slate-200 bg-white py-6 px-4 sm:px-6">
+    <div class="max-w-[1100px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div class="text-center sm:text-left">
+            <p class="text-sm font-extrabold text-slate-900">Pay securely with SSLCOMMERZ</p>
+            <p class="text-xs text-slate-500 mt-1">Secure checkout for card, mobile banking and internet banking payments.</p>
+        </div>
+        <div class="flex flex-wrap justify-center items-center gap-2" aria-label="Supported payment channels">
+            <span class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-extrabold tracking-wide text-slate-700">VISA</span>
+            <span class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-extrabold text-slate-700">Mastercard</span>
+            <span class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-bold text-slate-700">Mobile Banking</span>
+            <span class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-bold text-slate-700">Internet Banking</span>
+            <span class="rounded-lg bg-[#0B6B55] px-4 py-2 text-xs font-extrabold text-white">SSLCOMMERZ</span>
         </div>
     </div>
 </section>
