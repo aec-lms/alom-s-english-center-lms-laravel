@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\AppearanceController;
 use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\BackupController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\InstitutionSettingsController;
 use App\Http\Controllers\Admin\PluginCenterController;
 use App\Http\Controllers\Admin\UpdateCenterController;
 use App\Http\Controllers\Admin\UserRoleController;
@@ -92,6 +93,11 @@ Route::middleware('installed')->group(function (): void {
         Route::prefix('users')->name('users.')->middleware('permission:core.users.manage')->group(function (): void {
             Route::get('/', [UserRoleController::class, 'index'])->name('index');
             Route::post('/', [UserRoleController::class, 'store'])->name('store');
+        });
+
+        Route::prefix('institution-settings')->name('institution-settings.')->middleware('permission:core.settings.manage')->group(function (): void {
+            Route::get('/', [InstitutionSettingsController::class, 'edit'])->name('edit');
+            Route::post('/', [InstitutionSettingsController::class, 'update'])->name('update');
         });
 
         Route::prefix('appearance')->name('appearance.')->middleware('permission:core.settings.manage')->group(function (): void {
