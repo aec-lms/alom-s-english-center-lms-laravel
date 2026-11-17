@@ -186,12 +186,20 @@ class UniversalPaymentController extends Controller
     {
         try {
             $transaction = $this->storefrontGateway->verifySslcommerz($request->all());
+            if ($transaction->learn_earn_exam_id) {
+                return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)
+                    ->with('status', 'Payment verified. Your paid exam is now unlocked.');
+            }
             $slug = DB::table('storefront_items')->where('id', $transaction->storefront_item_id)->value('slug');
             return redirect('/ebooks/' . rawurlencode((string) $slug))->with('status', 'Payment verified. Your e-book download is now available.');
         } catch (\Throwable $exception) {
             report($exception);
             $reference = trim((string) $request->input('tran_id', ''));
             $transaction = UniversalPaymentTransaction::query()->where('reference', $reference)->first();
+            if ($transaction?->learn_earn_exam_id) {
+                return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)
+                    ->withErrors(['payment' => 'Payment could not yet be verified. No exam access has been granted.']);
+            }
             $slug = $transaction?->storefront_item_id
                 ? DB::table('storefront_items')->where('id', $transaction->storefront_item_id)->value('slug')
                 : null;
@@ -215,6 +223,9 @@ class UniversalPaymentController extends Controller
     public function sslcommerzFailed(Request $request): RedirectResponse
     {
         $transaction = $this->storefrontGateway->markSslcommerzFailed($request->all(), 'failed');
+        if ($transaction->learn_earn_exam_id) {
+            return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)->withErrors(['payment' => 'Payment was not completed. You can try again.']);
+        }
         $slug = DB::table('storefront_items')->where('id', $transaction->storefront_item_id)->value('slug');
         return redirect('/ebooks/' . rawurlencode((string) $slug))->withErrors(['payment' => 'Payment was not completed. You can try again.']);
     }
@@ -222,6 +233,9 @@ class UniversalPaymentController extends Controller
     public function sslcommerzCancelled(Request $request): RedirectResponse
     {
         $transaction = $this->storefrontGateway->markSslcommerzFailed($request->all(), 'cancelled');
+        if ($transaction->learn_earn_exam_id) {
+            return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)->with('status', 'Payment was cancelled.');
+        }
         $slug = DB::table('storefront_items')->where('id', $transaction->storefront_item_id)->value('slug');
         return redirect('/ebooks/' . rawurlencode((string) $slug))->with('status', 'Payment was cancelled.');
     }
