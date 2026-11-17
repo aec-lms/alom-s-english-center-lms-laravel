@@ -100,6 +100,26 @@ class AttendanceQrController extends Controller
         ]);
     }
 
+
+    public function revoke(Request $request, int $sessionId): JsonResponse
+    {
+        $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
+        $session = DB::table('attendance_qr_sessions')->where('id', $sessionId)->first();
+        abort_unless($session, 404);
+        if ($actor->hasRole('branch_manager')) {
+            abort_if((int) $session->branch_id !== (int) $actor->branch_id, 403, 'Branch isolation violation.');
+        }
+
+        DB::table('attendance_qr_sessions')->where('id', $sessionId)->whereNull('revoked_at')->update([
+            'revoked_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->audit->log('attendance.qr.revoked', 'attendance_qr_session', (string) $sessionId, [], $actor->id);
+
+        return response()->json(['status' => 'ok', 'revoked' => true]);
+    }
+
     public function checkin(Request $request): JsonResponse
     {
         $actor = $request->user();
