@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Core\Plugins\PluginManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -305,7 +306,7 @@ class PublicHomeController extends Controller
 
     public function ebookDownload(string $slug)
     {
-        abort_unless(Schema::hasTable('storefront_items'), 404);
+        abort_unless(app(PluginManager::class)->isEnabled('storefront-catalog') && Schema::hasTable('storefront_items'), 404);
         $item = DB::table('storefront_items')->where('slug', $slug)->where('type', 'ebook')->where('is_active', true)->first();
         abort_if($item === null || empty($item->download_url), 404);
 

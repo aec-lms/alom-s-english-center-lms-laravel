@@ -6,10 +6,6 @@ use Illuminate\Support\Facades\Route;
 use Plugins\Modules\StorefrontCatalog\Http\Controllers\StorefrontController;
 
 
-Route::middleware(['web', 'installed', 'auth', 'plugin:storefront-catalog'])
-    ->get('/ebooks/{slug}/download', [StorefrontController::class, 'downloadEbook'])
-    ->name('plugins.storefront.ebooks.download');
-
 Route::middleware(['web', 'installed', 'auth', 'plugin:storefront-catalog', 'permission:cms.manage'])
     ->prefix('admin/storefront')
     ->name('plugins.storefront.')
