@@ -177,4 +177,60 @@ class LiveClassCapacityTest extends TestCase
 
         $this->assertDatabaseCount('live_class_participants', 0);
     }
+
+    public function test_expired_heartbeat_cannot_reclaim_a_full_live_class_seat(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management']);
+
+        $course = Course::query()->create([
+            'code' => 'LIVE-STALE-HEARTBEAT',
+            'title' => 'Stale Heartbeat Capacity Test',
+            'slug' => 'stale-heartbeat-capacity-test',
+            'price' => 0,
+            'status' => 'published',
+        ]);
+        $liveClass = LiveClass::query()->create([
+            'course_id' => $course->id,
+            'title' => 'Single Seat Stale Heartbeat Session',
+            'platform' => 'zoom',
+            'meeting_url' => 'https://zoom.us/j/123456789',
+            'starts_at' => now()->subMinute(),
+            'status' => 'live',
+            'capacity' => 1,
+        ]);
+
+        $studentA = $this->createUserWithRole('student');
+        $studentB = $this->createUserWithRole('student');
+        foreach ([$studentA, $studentB] as $student) {
+            Enrollment::query()->create([
+                'user_id' => $student->id,
+                'course_id' => $course->id,
+                'status' => 'active',
+            ]);
+        }
+
+        $this->actingAs($studentA)->post("/live-classes/{$liveClass->id}/join")->assertOk();
+        LiveClassParticipant::query()
+            ->where('live_class_id', $liveClass->id)
+            ->where('user_id', $studentA->id)
+            ->update(['last_seen_at' => now()->subMinutes(3)]);
+
+        // Student B takes the seat after A's two-minute presence lease expires.
+        $this->actingAs($studentB)->post("/live-classes/{$liveClass->id}/join")->assertOk();
+
+        // A stale heartbeat must not silently reclaim the now-occupied seat.
+        $this->actingAs($studentA)
+            ->postJson("/live-classes/{$liveClass->id}/heartbeat")
+            ->assertStatus(429);
+
+        $this->assertSame(
+            1,
+            LiveClassParticipant::query()
+                ->where('live_class_id', $liveClass->id)
+                ->whereNull('left_at')
+                ->where('last_seen_at', '>=', now()->subMinutes(2))
+                ->count()
+        );
+    }
 }
