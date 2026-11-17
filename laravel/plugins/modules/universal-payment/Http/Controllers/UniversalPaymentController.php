@@ -261,7 +261,7 @@ class UniversalPaymentController extends Controller
         $hasInvoice = !empty($validated['fee_invoice_id']);
         $hasStorefrontItem = !empty($validated['storefront_item_id']);
         abort_unless(
-            $hasInvoice xor $hasStorefrontItem,
+            $hasInvoice !== $hasStorefrontItem,
             422,
             'Choose exactly one fee invoice or paid e-book to pay.'
         );
