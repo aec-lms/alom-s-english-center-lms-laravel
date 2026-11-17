@@ -155,4 +155,39 @@ class UniversalPaymentInvoiceSettlementTest extends TestCase
             'status' => 'rejected',
         ]);
     }
+    public function test_invoice_checkout_fails_closed_when_fee_plugin_storage_is_absent(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['universal-payment']);
+
+        $studentUser = $this->createUserWithRole('student');
+        $this->assertFalse(\\Illuminate\\Support\\Facades\\Schema::hasTable('fee_invoices'));
+
+        $this->actingAs($studentUser)->post('/universal-checkout', [
+            'payer_name' => $studentUser->name,
+            'payer_contact' => '01712345678',
+            'item_title' => 'Tuition invoice',
+            'gateway' => 'bank_cash',
+            'external_trx_id' => 'BANK-NO-FEES-TABLE',
+            'fee_invoice_id' => 999,
+        ])->assertStatus(503);
+    }
+
+    public function test_checkout_rejects_ambiguous_invoice_and_ebook_targets(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['student-management', 'fees-management', 'universal-payment']);
+
+        $studentUser = $this->createUserWithRole('student');
+        $this->actingAs($studentUser)->post('/universal-checkout', [
+            'payer_name' => $studentUser->name,
+            'payer_contact' => '01712345678',
+            'item_title' => 'Ambiguous checkout',
+            'gateway' => 'bank_cash',
+            'external_trx_id' => 'BANK-AMBIGUOUS-001',
+            'fee_invoice_id' => 999,
+            'storefront_item_id' => 999,
+        ])->assertStatus(422);
+    }
+
 }
