@@ -93,7 +93,7 @@ class ThemePackageManagerTest extends TestCase
     {
         $path=tempnam(sys_get_temp_dir(),'aec-theme-');
         $zip=new ZipArchive();
-        $zip->open($path,ZipArchive::OVERWRITE);
+        $zip->open($path,ZipArchive::CREATE|ZipArchive::OVERWRITE);
         $zip->addFromString('theme.json',json_encode($manifest,JSON_THROW_ON_ERROR));
         foreach($extra as $name=>$contents)$zip->addFromString($name,$contents);
         $zip->close();
