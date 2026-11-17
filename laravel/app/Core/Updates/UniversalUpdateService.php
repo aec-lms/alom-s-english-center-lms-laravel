@@ -141,7 +141,7 @@ class UniversalUpdateService
         // Create encrypted pre-update backup
         $backup = $this->backups->createEncryptedBackup($actorId, false);
         $stagingDir = storage_path('app/update-staging/' . Str::uuid()->toString());
-        $snapshotDir = storage_path('app/update-snapshots/' . Str::slug($targetSlug) . '-' . now()->format('YmdHis'));
+        $snapshotDir = storage_path('app/update-snapshots/' . Str::slug($targetSlug) . '-' . Str::uuid()->toString());
 
         Artisan::call('down');
 
@@ -149,14 +149,15 @@ class UniversalUpdateService
             $this->extractToStaging($packagePath, $stagingDir);
 
             $targetDir = $this->resolveTargetDirectory($targetType, $targetSlug);
-            if ($targetDir !== null && is_dir($targetDir)) {
-                $this->copyDirectory($targetDir, $snapshotDir);
-            }
 
-            // Determine payload root inside staging ('files/' subfolder if present, otherwise root excluding manifest)
+            // Determine payload root inside staging ('files/' subfolder if present, otherwise root excluding manifest).
             $payloadRoot = is_dir($stagingDir . DIRECTORY_SEPARATOR . 'files')
                 ? $stagingDir . DIRECTORY_SEPARATOR . 'files'
                 : $stagingDir;
+
+            // Snapshot only files that this update will overwrite/create. Never recursively copy
+            // base_path() into storage/app, which is itself inside base_path().
+            $this->snapshotPayloadFiles($payloadRoot, (string) $targetDir, $snapshotDir);
 
             if ($targetDir !== null) {
                 $this->deployStagedFiles($payloadRoot, $targetDir);
@@ -179,7 +180,10 @@ class UniversalUpdateService
                 'package_checksum' => $expectedSha256,
                 'status' => 'applied',
                 'backup_reference' => $backup->filename,
-                'notes' => 'Signed update staged, verified, migrated, and applied with pre-update backup.',
+                'notes' => json_encode([
+                    'message' => 'Signed update staged, verified, migrated, and applied with pre-update backup.',
+                    'snapshot_path' => $snapshotDir,
+                ], JSON_THROW_ON_ERROR),
                 'executed_by' => $actorId,
             ]);
             $this->audit->log('update.applied', $targetType, $targetSlug, ['to' => $toVersion], $actorId);
@@ -187,10 +191,7 @@ class UniversalUpdateService
             return $log;
         } catch (\Throwable $e) {
             if (is_dir($snapshotDir)) {
-                $targetDir = $this->resolveTargetDirectory($targetType, $targetSlug);
-                if ($targetDir !== null) {
-                    $this->copyDirectory($snapshotDir, $targetDir);
-                }
+                $this->restorePayloadSnapshot($snapshotDir);
             }
             $log = UpdateLog::query()->create([
                 'target_type' => $targetType,
@@ -200,7 +201,10 @@ class UniversalUpdateService
                 'package_checksum' => $expectedSha256,
                 'status' => 'failed',
                 'backup_reference' => $backup->filename,
-                'notes' => 'Failed & auto-reverted files: ' . $e->getMessage(),
+                'notes' => json_encode([
+                    'message' => 'Failed and automatically restored overwritten files: ' . $e->getMessage(),
+                    'snapshot_path' => $snapshotDir,
+                ], JSON_THROW_ON_ERROR),
                 'executed_by' => $actorId,
             ]);
             $this->audit->log('update.failed', $targetType, $targetSlug, ['error' => $e->getMessage()], $actorId);
@@ -222,13 +226,36 @@ class UniversalUpdateService
             throw new RuntimeException("Referenced backup archive {$log->backup_reference} was not found.");
         }
 
-        $this->backups->restoreEncryptedBackup($backup, $actorId);
-        $log->update([
-            'status' => 'rolled_back',
-            'notes' => trim(($log->notes ?? '') . ' Rolled back to backup ' . $backup->filename),
-        ]);
-        Artisan::call('optimize:clear');
-        $this->audit->log('update.rolled_back', $log->target_type, $log->target_slug, ['backup' => $backup->filename], $actorId);
+        $metadata = json_decode((string) $log->notes, true);
+        $snapshotPath = is_array($metadata) ? (string) ($metadata['snapshot_path'] ?? '') : '';
+        $snapshotRoot = realpath(storage_path('app/update-snapshots'));
+        $resolvedSnapshot = $snapshotPath !== '' ? realpath($snapshotPath) : false;
+        if ($snapshotRoot === false || $resolvedSnapshot === false
+            || !str_starts_with($resolvedSnapshot, $snapshotRoot . DIRECTORY_SEPARATOR)
+            || !is_file($resolvedSnapshot . DIRECTORY_SEPARATOR . 'snapshot.json')
+        ) {
+            throw new RuntimeException('Verified pre-update code snapshot is missing; rollback was stopped before changing the database.');
+        }
+
+        Artisan::call('down');
+        try {
+            // Preserve UpdateLog audit history while restoring application data.
+            $this->backups->restoreEncryptedBackup($backup, $actorId, true);
+            $this->restorePayloadSnapshot($resolvedSnapshot);
+            Artisan::call('optimize:clear');
+            $log->refresh();
+            $log->update([
+                'status' => 'rolled_back',
+                'notes' => json_encode([
+                    'message' => 'Rolled back code and database to pre-update snapshot.',
+                    'snapshot_path' => $resolvedSnapshot,
+                    'backup' => $backup->filename,
+                ], JSON_THROW_ON_ERROR),
+            ]);
+            $this->audit->log('update.rolled_back', $log->target_type, $log->target_slug, ['backup' => $backup->filename], $actorId);
+        } finally {
+            Artisan::call('up');
+        }
     }
 
     public function getRemoteFeedUrl(): string
@@ -387,6 +414,91 @@ class UniversalUpdateService
         }
 
         return base_path();
+    }
+
+    /**
+     * Capture exactly the files an update will touch. The snapshot lives outside the
+     * application tree so Core updates cannot recursively snapshot their own archive.
+     */
+    private function snapshotPayloadFiles(string $sourceDir, string $targetDir, string $snapshotDir): void
+    {
+        if (!is_dir($sourceDir) || $targetDir === '') {
+            throw new RuntimeException('Update payload or target directory is unavailable.');
+        }
+        if (!is_dir($snapshotDir) && !mkdir($snapshotDir, 0700, true) && !is_dir($snapshotDir)) {
+            throw new RuntimeException('Unable to create private pre-update snapshot directory.');
+        }
+
+        $entries = [];
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($sourceDir, \\FilesystemIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::SELF_FIRST
+        );
+        foreach ($iterator as $item) {
+            if (!$item->isFile()) {
+                continue;
+            }
+            $relative = ltrim(substr($item->getPathname(), strlen($sourceDir)), DIRECTORY_SEPARATOR);
+            if ($relative === 'update-manifest.json' || str_starts_with($relative, '.env')) {
+                continue;
+            }
+            $destination = $targetDir . DIRECTORY_SEPARATOR . $relative;
+            $existed = is_file($destination) && !is_link($destination);
+            if (is_link($destination) || (file_exists($destination) && !$existed)) {
+                throw new RuntimeException("Unsafe update destination rejected: {$relative}");
+            }
+            if ($existed) {
+                $backupFile = $snapshotDir . DIRECTORY_SEPARATOR . 'files' . DIRECTORY_SEPARATOR . $relative;
+                if (!is_dir(dirname($backupFile)) && !mkdir(dirname($backupFile), 0700, true) && !is_dir(dirname($backupFile))) {
+                    throw new RuntimeException('Unable to create code snapshot directory.');
+                }
+                if (!copy($destination, $backupFile)) {
+                    throw new RuntimeException("Unable to snapshot existing update file: {$relative}");
+                }
+            }
+            $entries[] = ['path' => str_replace(DIRECTORY_SEPARATOR, '/', $relative), 'existed' => $existed];
+        }
+
+        file_put_contents(
+            $snapshotDir . DIRECTORY_SEPARATOR . 'snapshot.json',
+            json_encode(['target_dir' => $targetDir, 'entries' => $entries], JSON_THROW_ON_ERROR),
+            LOCK_EX
+        );
+        @chmod($snapshotDir . DIRECTORY_SEPARATOR . 'snapshot.json', 0600);
+    }
+
+    private function restorePayloadSnapshot(string $snapshotDir): void
+    {
+        $manifestPath = $snapshotDir . DIRECTORY_SEPARATOR . 'snapshot.json';
+        $manifest = json_decode((string) file_get_contents($manifestPath), true, 512, JSON_THROW_ON_ERROR);
+        $targetDir = (string) ($manifest['target_dir'] ?? '');
+        $allowedRoot = realpath(base_path());
+        $resolvedTarget = realpath($targetDir);
+        if ($allowedRoot === false || $resolvedTarget === false
+            || ($resolvedTarget !== $allowedRoot && !str_starts_with($resolvedTarget, $allowedRoot . DIRECTORY_SEPARATOR))
+        ) {
+            throw new RuntimeException('Code snapshot target directory is outside the application root.');
+        }
+
+        foreach ((array) ($manifest['entries'] ?? []) as $entry) {
+            $relative = (string) ($entry['path'] ?? '');
+            $this->assertSafeZipEntryPath($relative);
+            $destination = $resolvedTarget . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relative);
+            $backupFile = $snapshotDir . DIRECTORY_SEPARATOR . 'files' . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relative);
+            if (!empty($entry['existed'])) {
+                if (!is_file($backupFile) || is_link($backupFile)) {
+                    throw new RuntimeException("Code snapshot file is missing: {$relative}");
+                }
+                if (!is_dir(dirname($destination)) && !mkdir(dirname($destination), 0755, true) && !is_dir(dirname($destination))) {
+                    throw new RuntimeException('Unable to recreate directory during code rollback.');
+                }
+                if (!copy($backupFile, $destination)) {
+                    throw new RuntimeException("Unable to restore code file: {$relative}");
+                }
+            } elseif (is_file($destination) && !is_link($destination)) {
+                @unlink($destination);
+            }
+        }
     }
 
     private function deployStagedFiles(string $sourceDir, string $targetDir): void
