@@ -17,8 +17,9 @@ class MarketingController extends Controller
 {
     public function __construct(private readonly AuditLogger $audit) {}
 
-    public function index(): View
+    public function index(Request $request): View
     {
+        $this->ensureCentralAdmin($request->user());
         $campaigns = Schema::hasTable('marketing_campaigns')
             ? MarketingCampaign::query()->orderByDesc('id')->get()
             : collect();
@@ -32,6 +33,7 @@ class MarketingController extends Controller
 
     public function storeCampaign(Request $request): RedirectResponse
     {
+        $this->ensureCentralAdmin($request->user());
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:160'],
             'channel' => ['required', 'string', 'max:60'],
@@ -48,6 +50,7 @@ class MarketingController extends Controller
 
     public function storeCoupon(Request $request): RedirectResponse
     {
+        $this->ensureCentralAdmin($request->user());
         $validated = $request->validate([
             'code' => ['required', 'string', 'max:40', 'unique:promo_coupons,code'],
             'discount_percent' => ['required', 'integer', 'min:1', 'max:100'],
@@ -68,4 +71,9 @@ class MarketingController extends Controller
 
         return back()->with('status', "Promo coupon '{$coupon->code}' ({$coupon->discount_percent}% OFF) created.");
     }
+    private function ensureCentralAdmin($actor): void
+    {
+        abort_unless($actor && $actor->hasRole('admin'), 403, 'Only a central administrator can manage global marketing campaigns and coupons.');
+    }
+
 }
