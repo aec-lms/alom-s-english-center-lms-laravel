@@ -33,7 +33,11 @@ class BackupService
         $archivePath = $backupDir . DIRECTORY_SEPARATOR . "aec-backup-{$timestamp}-" . Str::lower(Str::random(8)) . '.zip';
         $encryptedPath = $archivePath . '.enc';
 
-        $tableNames = $this->exportDatabaseJsonLines($jsonlPath = tempnam(sys_get_temp_dir(), 'aec_backup_db_'));
+        $jsonlPath = tempnam(sys_get_temp_dir(), 'aec_backup_db_');
+        if ($jsonlPath === false) {
+            throw new RuntimeException('Unable to allocate temporary database snapshot file.');
+        }
+        $tableNames = $this->exportDatabaseJsonLines($jsonlPath);
         $zip = new ZipArchive();
         if ($zip->open($archivePath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
             @unlink($jsonlPath);
