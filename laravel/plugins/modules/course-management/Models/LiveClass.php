@@ -13,6 +13,8 @@ class LiveClass extends Model
 {
     use SoftDeletes;
 
+    protected $casts = ['starts_at' => 'datetime'];
+
     protected $fillable = [
         'course_id',
         'title',
