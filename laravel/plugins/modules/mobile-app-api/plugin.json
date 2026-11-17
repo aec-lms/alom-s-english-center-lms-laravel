@@ -14,5 +14,13 @@
             "name": "Access Mobile App REST API"
         }
     ],
-    "settings_schema": []
+    "settings_schema": [],
+    "admin_menu": [
+        {
+            "group": "CMS, Builders & AI",
+            "label": "Mobile App (iOS & Android)",
+            "route": "plugins.mobile_app.index",
+            "order": 100
+        }
+    ]
 }
