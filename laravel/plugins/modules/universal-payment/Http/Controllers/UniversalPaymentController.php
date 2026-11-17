@@ -184,7 +184,20 @@ class UniversalPaymentController extends Controller
             'amount' => ['required', 'numeric', 'min:0.01'],
             'external_trx_id' => ['nullable', 'string', 'max:120'],
             'storefront_item_id' => ['nullable', 'integer'],
+            'fee_invoice_id' => ['nullable', 'integer', 'exists:fee_invoices,id'],
         ]);
+
+        $invoice = null;
+        if (!empty($validated['fee_invoice_id'])) {
+            abort_unless(auth()->check() && Schema::hasTable('fee_invoices'), 401, 'Sign in to pay an invoice.');
+            $invoice = DB::table('fee_invoices')->where('id', $validated['fee_invoice_id'])->first();
+            $isInvoiceOwner = $invoice !== null
+                && filled($invoice->payer_email)
+                && hash_equals(strtolower((string) $invoice->payer_email), strtolower((string) auth()->user()->email));
+            abort_unless($isInvoiceOwner, 403, 'You can only pay an invoice issued to your account.');
+            $invoiceBalance = max(0, (float) $invoice->net_amount - (float) $invoice->paid_amount);
+            abort_if($invoiceBalance <= 0, 422, 'This invoice has no outstanding balance.');
+        }
 
         $storefrontItem = null;
         if (!empty($validated['storefront_item_id'])) {
@@ -195,6 +208,8 @@ class UniversalPaymentController extends Controller
             abort_if($storefrontItem === null || (bool) $storefrontItem->is_free || (float) $storefrontItem->price <= 0, 422, 'This is not a paid active e-book.');
             abort_if(empty($storefrontItem->download_url) || !str_starts_with((string) $storefrontItem->download_url, 'private:'), 422, 'The e-book PDF must be privately uploaded before it can be sold.');
         }
+
+        abort_unless($invoice !== null || $storefrontItem !== null, 422, 'Choose an invoice or paid e-book to continue checkout.');
 
         if ($storefrontItem !== null && $validated['gateway'] !== 'sslcommerz') {
             return back()->withErrors(['gateway' => 'Choose SSLCOMMERZ for secure automatic e-book checkout.'])->withInput();
@@ -219,15 +234,20 @@ class UniversalPaymentController extends Controller
             'reference' => 'UPAY-' . strtoupper(Str::random(8)),
             'payer_name' => $storefrontItem ? auth()->user()->name : $validated['payer_name'],
             'payer_contact' => $validated['payer_contact'],
-            'item_title' => $storefrontItem?->title ?? $validated['item_title'],
+            'item_title' => $invoice ? ('Invoice ' . $invoice->invoice_number) : ($storefrontItem?->title ?? $validated['item_title']),
             'gateway' => $validated['gateway'],
             'currency' => $this->plugins->getSetting('universal-payment', 'default_currency', 'BDT') ?: 'BDT',
-            'amount' => $storefrontItem ? (float) $storefrontItem->price : $validated['amount'],
+            'amount' => $invoice ? $invoiceBalance : (float) $storefrontItem->price,
             'external_trx_id' => $validated['external_trx_id'] ?? null,
-            'user_id' => $storefrontItem ? auth()->id() : null,
+            'user_id' => auth()->id(),
+            'fee_invoice_id' => $invoice?->id,
             'storefront_item_id' => $storefrontItem?->id,
             'status' => 'pending',
         ]);
+
+        if ($invoice !== null) {
+            return back()->with('status', "Invoice payment submitted! Reference: {$tx->reference}. Access will be updated after payment verification.");
+        }
 
         if ($storefrontItem !== null) {
             try {
