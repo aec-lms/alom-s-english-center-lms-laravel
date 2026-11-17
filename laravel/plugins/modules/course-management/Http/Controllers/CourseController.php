@@ -210,6 +210,8 @@ class CourseController extends Controller
             }
         }
 
+        $oldAssets = [$course->thumbnail, $course->pdf_path, $course->pdf_thumbnail];
+
         $thumbPath = $course->thumbnail;
         if ($request->hasFile('thumbnail')) {
             $thumbPath = $this->storeUploadedFile($request->file('thumbnail'), 'courses');
@@ -256,6 +258,10 @@ class CourseController extends Controller
             'status' => $validated['status'],
         ]);
 
+        foreach ([[$oldAssets[0], $thumbPath], [$oldAssets[1], $pdfPath], [$oldAssets[2], $pdfThumbPath]] as [$oldPath, $newPath]) {
+            if ($oldPath && $oldPath !== $newPath) $this->deleteUnusedUpload($oldPath, (int) $course->id);
+        }
+
         $this->audit->log('course.updated', 'course', (string) $course->id, ['code' => $course->code]);
 
         return back()->with('status', "Course '{$course->title}' updated.");
@@ -266,6 +272,9 @@ class CourseController extends Controller
         $actor = $request->user();
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $course->branch_id) {
             abort(403, 'Branch isolation violation.');
+        }
+        foreach ([$course->thumbnail, $course->pdf_path, $course->pdf_thumbnail] as $assetPath) {
+            $this->deleteUnusedUpload($assetPath, (int) $course->id);
         }
         $title = $course->title;
         $id = (string) $course->id;
@@ -404,6 +413,29 @@ class CourseController extends Controller
         $this->audit->log('live_class.deleted', 'live_class', $id, ['title' => $title]);
 
         return back()->with('status', "Live class '{$title}' removed.");
+    }
+
+    private function deleteUnusedUpload(?string $path, ?int $ignoreCourseId = null): void
+    {
+        if (!$path || !str_starts_with($path, '/uploads/')) return;
+        $references = [
+            'cms_posts' => ['thumbnail_path', 'pdf_thumbnail', 'pdf_path'],
+            'courses' => ['thumbnail', 'pdf_thumbnail', 'pdf_path'],
+            'storefront_items' => ['thumbnail_path', 'pdf_thumbnail_path', 'download_url'],
+        ];
+        foreach ($references as $table => $columns) {
+            if (!Schema::hasTable($table)) continue;
+            foreach ($columns as $column) {
+                if (!Schema::hasColumn($table, $column)) continue;
+                $query = DB::table($table)->where($column, $path);
+                if ($table === 'courses' && $ignoreCourseId) $query->where('id', '!=', $ignoreCourseId);
+                if ($query->exists()) return;
+            }
+        }
+        $absolute = public_path(ltrim($path, '/'));
+        $root = realpath(public_path('uploads'));
+        $file = realpath($absolute);
+        if ($root && $file && str_starts_with($file, $root . DIRECTORY_SEPARATOR) && is_file($file)) @unlink($file);
     }
 
     private function parseSyllabusLines(string $raw): array
