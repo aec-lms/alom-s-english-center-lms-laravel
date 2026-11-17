@@ -20,14 +20,14 @@ final class AdminMenuRegistry
     {
         $groups = [];
         $manager = app(PluginManager::class);
-        $user = auth()->user();
+        $user = auth()->user();\n        $enabled = array_fill_keys(PluginRecord::query()->where('is_installed', true)->where('is_enabled', true)->pluck('slug')->all(), true);
 
         if (!$user) {
             return [];
         }
 
         foreach ($manager->discoverManifests() as $slug => $manifest) {
-            if (!$manager->isEnabled($slug)) {
+            if (!isset($enabled[$slug])) {
                 continue;
             }
 
