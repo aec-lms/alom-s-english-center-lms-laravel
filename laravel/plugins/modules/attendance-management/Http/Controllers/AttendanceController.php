@@ -6,8 +6,9 @@ namespace Plugins\Modules\AttendanceManagement\Http\Controllers;
 
 use App\Core\Security\AuditLogger;
 use App\Core\Plugins\PluginManager;
-use Illuminate\Support\Facades\Schema;
 use App\Http\Controllers\Controller;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -25,7 +26,7 @@ class AttendanceController extends Controller
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
         $records = AttendanceRecord::query()
-            ->when($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null, fn ($q) => $q->where('branch_id', $actor->branch_id))
+            ->when($actor->hasRole('branch_manager'), fn ($q) => $q->where('branch_id', $actor->branch_id))
             ->latest('attendance_date')
             ->paginate(30);
 
@@ -37,52 +38,103 @@ class AttendanceController extends Controller
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
         $plugins = app(PluginManager::class);
-        abort_unless(
-            $plugins->isEnabled('student-management') && Schema::hasTable('students'),
-            409,
-            'Enable Student Management before recording attendance.'
-        );
-        abort_unless(
-            $plugins->isEnabled('batch-management') && Schema::hasTable('study_batches'),
-            409,
-            'Enable Batch Management before recording attendance.'
-        );
+        abort_unless($plugins->isEnabled('student-management') && Schema::hasTable('students'), 409, 'Enable Student Management before recording attendance.');
+        abort_unless($plugins->isEnabled('batch-management') && Schema::hasTable('study_batches'), 409, 'Enable Batch Management before recording attendance.');
+
         $validated = $request->validate([
             'batch_id' => ['required', 'integer', 'exists:study_batches,id'],
-            'student_id' => ['required', 'integer', 'exists:students,id'],
             'attendance_date' => ['required', 'date'],
-            'status' => ['required', 'in:present,absent,late,excused'],
+            'source' => ['nullable', 'in:online,offline'],
+            'student_id' => ['nullable', 'integer', 'exists:students,id'],
+            'status' => ['nullable', 'in:present,absent,late,excused'],
             'remarks' => ['nullable', 'string', 'max:255'],
+            'sync_uuid' => ['nullable', 'uuid'],
+            'edit_reason' => ['nullable', 'string', 'max:255'],
+            'records' => ['nullable', 'array', 'min:1', 'max:500'],
+            'records.*.student_id' => ['required_with:records', 'integer', 'exists:students,id'],
+            'records.*.status' => ['required_with:records', 'in:present,absent,late,excused'],
+            'records.*.remarks' => ['nullable', 'string', 'max:255'],
+            'records.*.sync_uuid' => ['nullable', 'uuid'],
+            'records.*.edit_reason' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $student = Student::query()->findOrFail((int) $validated['student_id']);
         $batch = StudyBatch::query()->findOrFail((int) $validated['batch_id']);
-        if ((int) ($batch->branch_id ?? 0) !== (int) ($student->branch_id ?? 0)) {
-            abort(422, 'Student and batch must belong to the same branch.');
-        }
-        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $student->branch_id) {
+        if ($actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $batch->branch_id) {
             abort(403, 'Branch isolation violation.');
         }
 
-        $record = AttendanceRecord::query()->updateOrCreate(
-            [
-                'batch_id' => (int) $validated['batch_id'],
-                'student_id' => (int) $validated['student_id'],
-                'attendance_date' => $validated['attendance_date'],
-            ],
-            [
-                'branch_id' => (int) $student->branch_id,
-                'status' => $validated['status'],
-                'remarks' => $validated['remarks'] ?? null,
-                'marked_by' => $actor?->id,
-            ]
-        );
+        $items = $validated['records'] ?? [[
+            'student_id' => $validated['student_id'] ?? null,
+            'status' => $validated['status'] ?? null,
+            'remarks' => $validated['remarks'] ?? null,
+            'sync_uuid' => $validated['sync_uuid'] ?? null,
+            'edit_reason' => $validated['edit_reason'] ?? null,
+        ]];
+        abort_if(empty($items[0]['student_id']) || empty($items[0]['status']), 422, 'At least one student and attendance status are required.');
 
-        if ($plugins->isEnabled('student-tracking')) {
-            app(StudentActivityTracker::class)->record((int) $student->user_id, 'attendance_marked', 'attendance', (int) $record->id, null, ['attendance_status' => $record->status, 'source' => 'attendance-register'], (int) ($actor?->id ?? $student->user_id));
-        }
+        DB::transaction(function () use ($items, $batch, $validated, $actor, $plugins): void {
+            foreach ($items as $item) {
+                $student = Student::query()->findOrFail((int) $item['student_id']);
+                abort_if((int) ($batch->branch_id ?? 0) !== (int) ($student->branch_id ?? 0), 422, 'Student and batch must belong to the same branch.');
+                if ($actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $student->branch_id) {
+                    abort(403, 'Branch isolation violation.');
+                }
 
-        $this->audit->log('attendance.marked', 'attendance', (string) $record->id, ['status' => $record->status]);
+                if (!empty($item['sync_uuid'])) {
+                    $duplicate = AttendanceRecord::query()->where('sync_uuid', $item['sync_uuid'])->first();
+                    if ($duplicate) {
+                        abort_if((int) $duplicate->student_id !== (int) $student->id || (int) $duplicate->batch_id !== (int) $batch->id, 409, 'Sync identifier was already used for another attendance record.');
+                        continue;
+                    }
+                }
+
+                $record = AttendanceRecord::query()
+                    ->where('batch_id', $batch->id)
+                    ->where('student_id', $student->id)
+                    ->whereDate('attendance_date', $validated['attendance_date'])
+                    ->lockForUpdate()
+                    ->first();
+
+                $oldStatus = $record?->status;
+                $oldRemarks = $record?->remarks;
+                $isEdit = $record !== null;
+                $changed = $isEdit && ($oldStatus !== $item['status'] || $oldRemarks !== ($item['remarks'] ?? null));
+                $reason = $item['edit_reason'] ?? null;
+                abort_if($changed && blank($reason), 422, 'An edit reason is required when changing saved attendance.');
+
+                $record ??= new AttendanceRecord();
+                $record->fill([
+                    'batch_id' => (int) $batch->id,
+                    'student_id' => (int) $student->id,
+                    'branch_id' => (int) $student->branch_id,
+                    'attendance_date' => $validated['attendance_date'],
+                    'status' => $item['status'],
+                    'remarks' => $item['remarks'] ?? null,
+                    'marked_by' => $actor->id,
+                    'sync_uuid' => $item['sync_uuid'] ?? null,
+                    'source' => $validated['source'] ?? 'online',
+                    'edited_reason' => $changed ? $reason : null,
+                ]);
+                $record->save();
+
+                DB::table('attendance_audit_logs')->insert([
+                    'attendance_record_id' => $record->id,
+                    'actor_id' => $actor->id,
+                    'event' => $isEdit ? ($changed ? 'updated' : 'reconfirmed') : 'created',
+                    'old_status' => $oldStatus,
+                    'new_status' => $record->status,
+                    'reason' => $changed ? $reason : null,
+                    'source' => $validated['source'] ?? 'online',
+                    'occurred_at' => now(),
+                ]);
+
+                if ($plugins->isEnabled('student-tracking')) {
+                    app(StudentActivityTracker::class)->record((int) $student->user_id, 'attendance_marked', 'attendance', (int) $record->id, null, ['attendance_status' => $record->status, 'source' => $validated['source'] ?? 'online'], (int) $actor->id);
+                }
+
+                $this->audit->log($isEdit ? 'attendance.updated' : 'attendance.marked', 'attendance', (string) $record->id, ['status' => $record->status, 'source' => $validated['source'] ?? 'online', 'reason' => $changed ? $reason : null]);
+            }
+        });
 
         return back()->with('status', 'Attendance saved.');
     }
@@ -95,10 +147,7 @@ class AttendanceController extends Controller
         if ($actor->branch_id === null || !app(PluginManager::class)->isEnabled('branch-management') || !Schema::hasTable('branches')) {
             abort(403, 'Branch manager must be assigned to an active branch.');
         }
-        $activeBranch = app('db')->table('branches')
-            ->where('id', $actor->branch_id)
-            ->where('is_active', true)
-            ->exists();
+        $activeBranch = DB::table('branches')->where('id', $actor->branch_id)->where('is_active', true)->exists();
         if (!$activeBranch) {
             abort(403, 'Branch manager access is disabled because the assigned branch is inactive.');
         }
