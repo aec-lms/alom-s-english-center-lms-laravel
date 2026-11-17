@@ -14,7 +14,7 @@ return new class extends Migration {
             Schema::create('attendance_entries', function (Blueprint $table): void {
                 $table->id();
                 $table->foreignId('attendance_batch_mapping_id')->constrained('attendance_batch_mappings')->cascadeOnDelete();
-                $table->foreignId('student_id')->constrained('students')->cascadeOnDelete();
+                $table->unsignedBigInteger('student_id')->index();
                 $table->unsignedBigInteger('branch_id')->index();
                 $table->date('attendance_date');
                 $table->string('status', 20)->default('present');
