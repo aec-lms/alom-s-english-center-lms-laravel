@@ -61,12 +61,12 @@ class StorefrontController extends Controller
             : ($validated['pdf_thumbnail_url'] ?? null);
 
         $isFree = $request->boolean('is_free') || (float) $validated['price'] <= 0;
-        if ($validated['type'] === 'ebook' && !$isFree && !empty($validated['download_url']) && !$request->hasFile('pdf_file')) {
-            return back()->withErrors(['download_url' => 'Paid e-books must use a privately uploaded PDF, not a public URL.'])->withInput();
-        }
         $downloadUrl = $request->hasFile('pdf_file')
             ? $this->storePrivatePdf($request->file('pdf_file'))
             : ($validated['download_url'] ?? null);
+        if ($validated['type'] === 'ebook' && !$isFree && !str_starts_with((string) $downloadUrl, 'private:')) {
+            return back()->withErrors(['download_url' => 'Paid e-books require a privately uploaded PDF.'])->withInput();
+        }
 
         $isFree = $request->boolean('is_free') || (float) $validated['price'] <= 0;
 
@@ -136,9 +136,6 @@ class StorefrontController extends Controller
         $downloadUrl = $item->download_url;
         $previousDownloadUrl = $item->download_url;
         $isFree = $request->boolean('is_free') || (float) $validated['price'] <= 0;
-        if ($validated['type'] === 'ebook' && !$isFree && !empty($validated['download_url']) && !$request->hasFile('pdf_file')) {
-            return back()->withErrors(['download_url' => 'Paid e-books must use a privately uploaded PDF, not a public URL.'])->withInput();
-        }
         if ($request->hasFile('pdf_file')) {
             $downloadUrl = $this->storePrivatePdf($request->file('pdf_file'));
         } elseif (!empty($validated['download_url'])) {
@@ -146,6 +143,9 @@ class StorefrontController extends Controller
         }
 
         $isFree = $request->boolean('is_free') || (float) $validated['price'] <= 0;
+        if ($validated['type'] === 'ebook' && !$isFree && !str_starts_with((string) $downloadUrl, 'private:')) {
+            return back()->withErrors(['download_url' => 'Paid e-books require a privately uploaded PDF.'])->withInput();
+        }
 
         $item->update([
             'type' => $validated['type'],
