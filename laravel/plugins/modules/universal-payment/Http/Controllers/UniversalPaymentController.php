@@ -79,6 +79,8 @@ class UniversalPaymentController extends Controller
             'proof_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
         ]);
 
+        $this->assertGatewayEnabled($validated['gateway']);
+
         if ($request->hasFile('proof_file')) {
             abort_unless(in_array($validated['gateway'], ['bank_cash', 'offline'], true), 422, 'Receipt evidence is accepted only for manual bank/cash payments.');
             abort_unless(Schema::hasColumn('universal_payment_transactions', 'proof_path')
@@ -171,6 +173,53 @@ class UniversalPaymentController extends Controller
                 'Only pending manual receipts can be reviewed.'
             );
 
+            // A fee-invoice receipt is settled atomically with its invoice ledger.
+            // Only the manual bank/cash workflow may update an invoice here; online
+            // gateways must use their own verified provider callback adapters.
+            if ($lockedTransaction->fee_invoice_id !== null) {
+                abort_unless(
+                    Schema::hasTable('fee_invoices')
+                        && Schema::hasColumn('fee_invoices', 'paid_amount')
+                        && Schema::hasColumn('fee_invoices', 'net_amount')
+                        && Schema::hasColumn('fee_invoices', 'status'),
+                    503,
+                    'Fee invoice storage is unavailable; the payment was not changed.'
+                );
+
+                $invoice = DB::table('fee_invoices')
+                    ->where('id', $lockedTransaction->fee_invoice_id)
+                    ->lockForUpdate()
+                    ->first();
+
+                abort_unless($invoice !== null, 404, 'The linked fee invoice no longer exists.');
+
+                if ($actor && $actor->hasRole('branch_manager')) {
+                    abort_unless((int) ($invoice->branch_id ?? 0) === (int) $actor->branch_id, 404);
+                }
+
+                if ($validated['status'] === 'verified') {
+                    $remaining = round((float) $invoice->net_amount - (float) $invoice->paid_amount, 2);
+                    $amount = round((float) $lockedTransaction->amount, 2);
+                    abort_if($remaining <= 0 || $amount > $remaining + 0.01, 422, 'This receipt exceeds the remaining invoice balance.');
+
+                    $newPaid = round((float) $invoice->paid_amount + $amount, 2);
+                    DB::table('fee_invoices')->where('id', $invoice->id)->update([
+                        'paid_amount' => $newPaid,
+                        'status' => $newPaid + 0.01 >= (float) $invoice->net_amount ? 'paid' : 'partial',
+                        'updated_at' => now(),
+                    ]);
+
+                    if ($newPaid + 0.01 >= (float) $invoice->net_amount
+                        && Schema::hasTable('enrollments')
+                        && Schema::hasColumn('enrollments', 'invoice_id')) {
+                        DB::table('enrollments')
+                            ->where('invoice_id', $invoice->id)
+                            ->where('status', 'pending')
+                            ->update(['status' => 'active', 'updated_at' => now()]);
+                    }
+                }
+            }
+
             $lockedTransaction->update([
                 'external_trx_id' => $reference,
                 'status' => $validated['status'],
@@ -208,17 +257,42 @@ class UniversalPaymentController extends Controller
             'gateway' => ['required', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,bank_cash'],
             'external_trx_id' => ['nullable', 'string', 'max:120'],
             'storefront_item_id' => ['nullable', 'integer'],
-            'fee_invoice_id' => ['nullable', 'integer', 'exists:fee_invoices,id'],
+            'fee_invoice_id' => ['nullable', 'integer'],
         ]);
 
+        $this->assertGatewayEnabled($validated['gateway']);
+
+        $hasInvoice = !empty($validated['fee_invoice_id']);
+        $hasStorefrontItem = !empty($validated['storefront_item_id']);
+        abort_unless(
+            $hasInvoice !== $hasStorefrontItem,
+            422,
+            'Choose exactly one fee invoice or paid e-book to pay.'
+        );
+
         $invoice = null;
-        if (!empty($validated['fee_invoice_id'])) {
-            abort_unless(auth()->check() && Schema::hasTable('fee_invoices'), 401, 'Sign in to pay an invoice.');
+        if ($hasInvoice) {
+            abort_unless(auth()->check(), 401, 'Sign in to pay an invoice.');
+            abort_unless(Schema::hasTable('fee_invoices'), 503, 'Fee invoice payments are not currently available.');
             $invoice = DB::table('fee_invoices')->where('id', $validated['fee_invoice_id'])->first();
             $isInvoiceOwner = $invoice !== null
                 && filled($invoice->payer_email)
                 && hash_equals(strtolower((string) $invoice->payer_email), strtolower((string) auth()->user()->email));
             abort_unless($isInvoiceOwner, 403, 'You can only pay an invoice issued to your account.');
+            abort_unless(
+                $validated['gateway'] === 'bank_cash',
+                422,
+                'Fee invoices currently accept bank transfer or cash receipts only. Use the dedicated payment gateway checkout for supported online gateways.'
+            );
+            abort_if(trim((string) ($validated['external_trx_id'] ?? '')) === '', 422, 'Enter the bank transaction ID or cash receipt reference.');
+            abort_if(
+                UniversalPaymentTransaction::query()
+                    ->where('fee_invoice_id', $invoice->id)
+                    ->where('status', 'pending')
+                    ->exists(),
+                409,
+                'A payment receipt for this invoice is already awaiting verification.'
+            );
             $invoiceBalance = max(0, (float) $invoice->net_amount - (float) $invoice->paid_amount);
             abort_if($invoiceBalance <= 0, 422, 'This invoice has no outstanding balance.');
         }
@@ -234,6 +308,7 @@ class UniversalPaymentController extends Controller
         }
 
         abort_unless($invoice !== null || $storefrontItem !== null, 422, 'Choose an invoice or paid e-book to continue checkout.');
+        abort_if($invoice !== null && $storefrontItem !== null, 422, 'Choose one checkout item at a time.');
 
         if ($storefrontItem !== null && $validated['gateway'] !== 'sslcommerz') {
             return back()->withErrors(['gateway' => 'Choose SSLCOMMERZ for secure automatic e-book checkout.'])->withInput();
@@ -254,20 +329,56 @@ class UniversalPaymentController extends Controller
             abort_if($pendingCheckout, 409, 'A checkout for this e-book is already pending. Wait for its result before retrying.');
         }
 
-        $tx = UniversalPaymentTransaction::query()->create([
-            'reference' => 'UPAY-' . strtoupper(Str::random(8)),
-            'payer_name' => $storefrontItem ? auth()->user()->name : $validated['payer_name'],
-            'payer_contact' => $validated['payer_contact'],
-            'item_title' => $invoice ? ('Invoice ' . $invoice->invoice_number) : ($storefrontItem?->title ?? $validated['item_title']),
-            'gateway' => $validated['gateway'],
-            'currency' => $this->plugins->getSetting('universal-payment', 'default_currency', 'BDT') ?: 'BDT',
-            'amount' => $invoice ? $invoiceBalance : (float) $storefrontItem->price,
-            'external_trx_id' => $validated['external_trx_id'] ?? null,
-            'user_id' => auth()->id(),
-            'fee_invoice_id' => $invoice?->id,
-            'storefront_item_id' => $storefrontItem?->id,
-            'status' => 'pending',
-        ]);
+        if ($invoice !== null) {
+            $tx = DB::transaction(function () use ($invoice, $validated): UniversalPaymentTransaction {
+                $lockedInvoice = DB::table('fee_invoices')->where('id', $invoice->id)->lockForUpdate()->first();
+                abort_unless($lockedInvoice !== null, 404, 'The fee invoice no longer exists.');
+                $isStillOwner = filled($lockedInvoice->payer_email)
+                    && hash_equals(strtolower((string) $lockedInvoice->payer_email), strtolower((string) auth()->user()->email));
+                abort_unless($isStillOwner, 403, 'You can only pay an invoice issued to your account.');
+
+                abort_if(
+                    UniversalPaymentTransaction::query()
+                        ->where('fee_invoice_id', $lockedInvoice->id)
+                        ->where('status', 'pending')
+                        ->exists(),
+                    409,
+                    'A payment receipt for this invoice is already awaiting verification.'
+                );
+
+                $balance = round((float) $lockedInvoice->net_amount - (float) $lockedInvoice->paid_amount, 2);
+                abort_if($balance <= 0, 422, 'This invoice has no outstanding balance.');
+
+                return UniversalPaymentTransaction::query()->create([
+                    'reference' => 'UPAY-' . strtoupper(Str::random(8)),
+                    'payer_name' => $validated['payer_name'],
+                    'payer_contact' => $validated['payer_contact'],
+                    'item_title' => 'Invoice ' . $lockedInvoice->invoice_number,
+                    'gateway' => 'bank_cash',
+                    'currency' => (string) ($lockedInvoice->currency ?: 'BDT'),
+                    'amount' => $balance,
+                    'external_trx_id' => trim((string) $validated['external_trx_id']),
+                    'user_id' => auth()->id(),
+                    'branch_id' => $lockedInvoice->branch_id ?? null,
+                    'fee_invoice_id' => $lockedInvoice->id,
+                    'status' => 'pending',
+                ]);
+            });
+        } else {
+            $tx = UniversalPaymentTransaction::query()->create([
+                'reference' => 'UPAY-' . strtoupper(Str::random(8)),
+                'payer_name' => auth()->user()->name,
+                'payer_contact' => $validated['payer_contact'],
+                'item_title' => $storefrontItem->title,
+                'gateway' => $validated['gateway'],
+                'currency' => $this->plugins->getSetting('universal-payment', 'default_currency', 'BDT') ?: 'BDT',
+                'amount' => (float) $storefrontItem->price,
+                'external_trx_id' => null,
+                'user_id' => auth()->id(),
+                'storefront_item_id' => $storefrontItem->id,
+                'status' => 'pending',
+            ]);
+        }
 
         if ($invoice !== null) {
             return back()->with('status', "Invoice payment submitted! Reference: {$tx->reference}. Access will be updated after payment verification.");
@@ -375,6 +486,22 @@ class UniversalPaymentController extends Controller
         }
         $slug = DB::table('storefront_items')->where('id', $transaction->storefront_item_id)->value('slug');
         return redirect('/ebooks/' . rawurlencode((string) $slug))->with('status', 'Payment was cancelled.');
+    }
+
+    private function assertGatewayEnabled(string $gateway): void
+    {
+        $enabledRaw = $this->plugins->getSetting(
+            'universal-payment',
+            'enabled_gateways',
+            'sslcommerz,bkash,nagad,rocket,card,bank_cash'
+        );
+        $enabled = array_filter(array_map('trim', explode(',', (string) $enabledRaw)));
+
+        abort_unless(
+            in_array($gateway, $enabled, true),
+            422,
+            'The selected payment method is currently disabled by the administrator.'
+        );
     }
 
     private function ensureAssignedBranch($actor): void

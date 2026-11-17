@@ -24,6 +24,7 @@ class UniversalPaymentTransaction extends Model
         'verified_by',
         'verified_at',
         'user_id',
+        'branch_id',
         'storefront_item_id',
         'fee_invoice_id',
         'learn_earn_exam_id',
