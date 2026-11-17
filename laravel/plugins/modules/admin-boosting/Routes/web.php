@@ -9,7 +9,7 @@ Route::middleware(['web', 'installed', 'throttle:60,1', 'plugin:admin-boosting']
     ->get('/boost/click/{campaign}', [BoostController::class, 'trackClick'])
     ->name('plugins.boost.click');
 
-Route::middleware(['web', 'installed', 'auth', 'plugin:admin-boosting', 'permission:marketing.boost.manage'])
+Route::middleware(['web', 'installed', 'auth', 'plugin:admin-boosting', 'permission:marketing.boost.manage', 'central.admin'])
     ->prefix('plugins/boost')
     ->name('plugins.boost.')
     ->group(function (): void {
