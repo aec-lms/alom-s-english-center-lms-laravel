@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Core\Plugins\AdminMenuRegistry;
 use App\Models\SystemSetting;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -18,7 +20,16 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        $this->loadInstitutionDefaults();\n\n        View::composer('layouts.admin', function ($view): void {\n            try {\n                $view->with('pluginAdminMenu', Schema::hasTable('plugins') ? app(AdminMenuRegistry::class)->groups() : []);\n            } catch (\\Throwable $exception) {\n                report_if(app()->environment('production'), $exception);\n                $view->with('pluginAdminMenu', []);\n            }\n        });
+        $this->loadInstitutionDefaults();
+
+        View::composer('layouts.admin', function ($view): void {
+            try {
+                $view->with('pluginAdminMenu', Schema::hasTable('plugins') ? app(AdminMenuRegistry::class)->groups() : []);
+            } catch (\Throwable $exception) {
+                report_if(app()->environment('production'), $exception);
+                $view->with('pluginAdminMenu', []);
+            }
+        });
 
         Gate::before(function ($user, string $ability): ?bool {
             if (method_exists($user, 'hasPermission') && $user->hasPermission($ability)) {
