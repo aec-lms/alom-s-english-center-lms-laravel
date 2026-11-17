@@ -13,10 +13,10 @@ The sole production application is Laravel 12 under `/laravel`. The production d
 - [PR #1](https://github.com/aec-lms/alom-s-english-center-lms-laravel/pull/1) is **merged** (squash merge); it is no longer open.
 - The merged PR's final CI run [43817535568](https://github.com/aec-lms/alom-s-english-center-lms-laravel/actions/runs/43817535568) completed successfully: PHP 8.3 setup, locked Composer install, Composer security audit, Laravel test command, cPanel package build, package-content verification and artifact upload all passed.
 - `laravel/composer.lock` is committed and CI uses it for reproducible dependency installation.
-- The passing workflow proves only the checks currently implemented in CI; it does not establish complete acceptance of all 39 plugins or production readiness.
+- The passing workflow proves only the checks currently implemented in CI; it does not establish complete acceptance of all 40 plugins or production readiness.
 - This audit refresh is being prepared on `chore/release-audit-and-plugin-matrix`; it does not change `main` until reviewed and merged.
 - [PR #2](https://github.com/aec-lms/alom-s-english-center-lms-laravel/pull/2) remains **open and unmerged** on `chore/release-audit-and-plugin-matrix`; no production deployment has occurred.
-- Latest fully green PHP 8.3 CI [43858321888](https://github.com/aec-lms/alom-s-english-center-lms-laravel/actions/runs/43858321888) passed **129 tests (1,011 assertions) on SQLite and MySQL 8**, PHP syntax lint across core/plugins/routes/tests/public, Composer security audit, and cPanel package verification (**6,284 files**). Artifact: [aec-lms-cpanel-release](https://github.com/aec-lms/alom-s-english-center-lms-laravel/actions/runs/43858321888/artifacts/14222661024), SHA-256 `4ae9169a9ab35d3c8554c0dea104e458a326dad929414292579492a699a98188`.
+- Latest branch CI [44017802867](https://github.com/aec-lms/alom-s-english-center-lms-laravel/actions/runs/44017802867) completed successfully on commit `d61714cd4953c27582fac4b1fe89e0aeac504137`: **205 tests (3,027 assertions)** passed on SQLite and MySQL 8.0.46, including dynamic discovery of all plugin manifests. Browser smoke E2E [44017802839](https://github.com/aec-lms/alom-s-english-center-lms-laravel/actions/runs/44017802839) and Composer Security Audit [44017802833](https://github.com/aec-lms/alom-s-english-center-lms-laravel/actions/runs/44017802833) also passed. These runs do not prove production-sized restore, full browser workflows, provider sandbox acceptance or cPanel installation.
 
 A green CI run is evidence only for the automated checks that exist. It is not proof of production deployment readiness.
 
@@ -34,11 +34,11 @@ A green CI run is evidence only for the automated checks that exist. It is not p
 - Reproducible Composer dependency lock, Composer vulnerability audit and a Laravel-only cPanel package builder with private runtime exclusions.
 - Manual Universal Payment receipt evidence accepts validated PDF/JPG/PNG files on private local storage; proof downloads require finance permission and enforce branch ownership, and receipt review uses a row lock.
 - Public Mobile API ebook/product catalog payloads omit private download URLs; paid lesson endpoints require Sanctum authentication and active enrollment.
-- All 39 plugin manifests have empty required-sibling dependency lists; a PHP namespace scan checks direct sibling references against optional integration declarations, and standalone regression tests cover Course Management without optional finance/student modules.
+- All 40 plugin manifests have empty required-sibling dependency lists; a PHP namespace scan checks direct sibling references against optional integration declarations, and standalone regression tests cover Course Management without optional finance/student modules.
 
-## Plugin catalog — 39 entries
+## Plugin catalog — 40 entries (feature branch)
 
-The repository currently contains 39 plugin manifests: Branch, Student, Teacher, Guardian, Admission, Course, Class, Batch, Exam, Attendance, Certificate, Library, HR/Staff, Fees, Payment Management, Visa/Mastercard, SSLCOMMERZ, Stripe, PayPal, Universal Payment, SMS, Email Notifications, Notice Board, Notification Center, Reports/Analytics, SEO, Marketing, Gmail Marketing, Meta Pixel, Google Search Console, Admin Boosting, Visitor Popup Ads, Website CMS, Page Builder, Slider Builder, Carousel Builder, Storefront Catalog, Mobile App API and Role-based AI Assistant.
+The feature branch currently contains 40 plugin manifests: Branch, Student, Student Tracking, Teacher, Guardian, Admission, Course, Class, Batch, Exam, Attendance, Certificate, Library, HR/Staff, Fees, Payment Management, Visa/Mastercard, SSLCOMMERZ, Stripe, PayPal, Universal Payment, SMS, Email Notifications, Notice Board, Notification Center, Reports/Analytics, SEO, Marketing, Gmail Marketing, Meta Pixel, Google Search Console, Admin Boosting, Visitor Popup Ads, Website CMS, Page Builder, Slider Builder, Carousel Builder, Storefront Catalog, Mobile App API and Role-based AI Assistant.
 
 **A manifest/catalog entry is not proof of a complete module.** The modules need individual acceptance criteria, complete CRUD/workflows, authorization/branch-scope checks, UI validation, integration tests and end-to-end tests. Page Builder, Slider Builder, Carousel Builder and each payment gateway are separate plugins by design.
 
@@ -80,7 +80,7 @@ Do not point the main domain at an unverified build or import operational data b
 
 ## Repository inventory review (2026-11-16)
 
-- The current `main` tree contains 39 plugin directories under `laravel/plugins/modules/`.
+- The `main` tree at the audit baseline contains 39 plugin directories; the current feature branch contains 40 plugin directories under `laravel/plugins/modules/`.
 - Static inventory confirms each directory has a `plugin.json`, controller, routes and Blade view. Most also have a model and migration; gateway and integration-style plugins differ by design.
 - This is a file-presence inventory only. It is **not** a pass/fail functional test and must not be represented as module completion.
 - See [PLUGIN-ACCEPTANCE-MATRIX.md](PLUGIN-ACCEPTANCE-MATRIX.md) for the per-plugin inventory and required acceptance evidence.
@@ -94,3 +94,14 @@ The current feature branch now contains a permission-gated Admin Recycle Bin wit
 ## Browser E2E status
 
 A dedicated Playwright/Chromium GitHub Actions workflow runs against an isolated SQLite database and test-only Admin fixture. The current smoke suite checks public home/login/register/forgot-password rendering, password visibility, Admin authentication and navigation to the dashboard, Recycle Bin and Plugin Center, plus guest denial of the Admin Recycle Bin. Three browser tests are present; this is a useful smoke baseline, not comprehensive end-to-end acceptance of the LMS.
+
+
+## Latest CI verification (2026-11-17)
+
+- Dynamic manifest discovery test and the full Laravel suite passed: 205 tests, 3,027 assertions on SQLite.
+- MySQL 8.0.46 integration suite passed: 205 tests, 3,027 assertions.
+- Browser Playwright smoke workflow passed.
+- Composer dependency security audit passed.
+- The feature branch remains PR #2, open and draft. The main branch and production domain were not changed.
+- The PR branch is substantially divergent from the recorded main baseline and must receive a careful base/history review before merge; a green CI run alone is not merge authorization.
+- Remaining external release gates include a production-sized SQL restore into a disposable database, a real clean cPanel staging install, complete Core upgrade/rollback rehearsal on staging, provider sandbox callbacks/reconciliation, and a validated 300+ live-class provider/load test. These cannot be truthfully marked complete from CI-only tests.
