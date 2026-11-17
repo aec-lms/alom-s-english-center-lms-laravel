@@ -189,6 +189,7 @@ class AttendanceQrController extends Controller
                 $deltaLat = deg2rad((float) $validated['latitude'] - (float) $session->geo_latitude);
                 $deltaLon = deg2rad((float) $validated['longitude'] - (float) $session->geo_longitude);
                 $a = sin($deltaLat / 2) ** 2 + cos($lat1) * cos($lat2) * sin($deltaLon / 2) ** 2;
+                $a = min(1.0, max(0.0, $a));
                 $distance = 2 * $earthRadius * atan2(sqrt($a), sqrt(1 - $a));
                 abort_if($distance > (int) $session->geo_radius_meters, 403, 'You are outside the allowed attendance location.');
                 $gpsVerified = true;
