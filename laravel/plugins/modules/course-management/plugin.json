@@ -18,5 +18,11 @@
             "name": "Manage Enrollments"
         }
     ],
-    "settings_schema": []
+    "settings_schema": [],
+    "optional_dependencies": [
+        "branch-management",
+        "fees-management",
+        "student-management",
+        "student-tracking"
+    ]
 }

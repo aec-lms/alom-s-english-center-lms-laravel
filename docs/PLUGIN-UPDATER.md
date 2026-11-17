@@ -2,6 +2,10 @@
 
 This document applies to the Laravel 12 application under `/laravel`. The earlier root-level JSON-only plugin updater is superseded and is not the Laravel plugin runtime.
 
+## Mandatory plugin-first policy
+
+All future feature requests and updates follow [`PLUGIN-FIRST-UPDATE-POLICY.md`](PLUGIN-FIRST-UPDATE-POLICY.md). New business capabilities, provider integrations, reports, automations and optional UI modules must be separate plugins whenever reasonably isolatable. Core changes are limited to foundational runtime/security/extension contracts and require a documented exception rationale. A shared lifecycle test alone does not constitute feature acceptance; each plugin needs feature-specific tests and release evidence.
+
 ## Plugin Center
 
 The Admin Plugin Center is available at:

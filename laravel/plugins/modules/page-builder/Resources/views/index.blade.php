@@ -21,7 +21,9 @@
             <input type="file" name="banner" accept="image/*" class="rounded-lg border border-slate-300 px-2 py-1.5 bg-slate-50">
             <input name="seo_title" placeholder="SEO Meta Title" class="rounded-lg border border-slate-300 px-3 py-2">
             <input name="seo_description" placeholder="SEO Meta Description" class="rounded-lg border border-slate-300 px-3 py-2">
-            <textarea name="content_body" rows="5" required placeholder="Page Content / Rich HTML or Text Block *" class="sm:col-span-2 rounded-lg border border-slate-300 px-3 py-2"></textarea>
+            <input name="cta_label" placeholder="Optional CTA Button Label" class="rounded-lg border border-slate-300 px-3 py-2">
+            <input name="cta_url" placeholder="CTA URL (/courses or https://...)" class="rounded-lg border border-slate-300 px-3 py-2">
+            <textarea name="content_body" rows="5" required placeholder="Page Content / Plain Text Block *" class="sm:col-span-2 rounded-lg border border-slate-300 px-3 py-2"></textarea>
             <div class="sm:col-span-2 flex items-center justify-between">
                 <label class="inline-flex items-center gap-2 font-semibold"><input type="checkbox" name="is_published" value="1" checked> Publish immediately</label>
                 <button type="submit" class="px-5 py-2 rounded-lg bg-[#0284C7] text-white font-bold">Publish Page</button>
@@ -32,7 +34,7 @@
     <div class="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
         <h2 class="text-sm font-bold text-slate-900">Published &amp; Draft Pages ({{ $pages->count() }})</h2>
         @forelse ($pages as $page)
-            @php $body = is_array($page->blocks_json) ? ($page->blocks_json[0]['content'] ?? '') : ''; @endphp
+            @php $body = is_array($page->blocks_json) ? ($page->blocks_json[0]['content'] ?? '') : ''; $ctaBlock = is_array($page->blocks_json) ? collect($page->blocks_json)->firstWhere('type', 'cta') : null; @endphp
             <div class="border border-slate-200 rounded-xl p-4 space-y-3 text-xs">
                 <div class="flex items-center justify-between gap-3">
                     <div>
@@ -53,6 +55,16 @@
                         @csrf @method('PUT')
                         <input name="title" required value="{{ $page->title }}" class="rounded-lg border border-slate-300 px-3 py-2">
                         <input name="slug" required value="{{ $page->slug }}" class="rounded-lg border border-slate-300 px-3 py-2 font-mono">
+                        <select name="template" class="rounded-lg border border-slate-300 px-3 py-2 bg-white">
+                            @foreach (['standard' => 'Standard Article Layout', 'landing' => 'Campaign Landing Page', 'fullwidth' => 'Full-Width Showcase'] as $key => $label)
+                                <option value="{{ $key }}" @selected(($page->template ?? 'standard') === $key)>{{ $label }}</option>
+                            @endforeach
+                        </select>
+                        <input name="seo_title" value="{{ $page->seo_title }}" placeholder="SEO Meta Title" class="rounded-lg border border-slate-300 px-3 py-2">
+                        <input name="seo_description" value="{{ $page->seo_description }}" placeholder="SEO Meta Description" class="rounded-lg border border-slate-300 px-3 py-2">
+                        <input name="cta_label" value="{{ $ctaBlock['label'] ?? '' }}" placeholder="Optional CTA Button Label" class="rounded-lg border border-slate-300 px-3 py-2">
+                        <input name="cta_url" value="{{ $ctaBlock['url'] ?? '' }}" placeholder="CTA URL (/courses or https://...)" class="rounded-lg border border-slate-300 px-3 py-2">
+                        <input type="file" name="banner" accept="image/jpeg,image/png,image/webp" class="rounded-lg border border-slate-300 px-2 py-1.5 bg-slate-50">
                         <textarea name="content_body" rows="4" required class="sm:col-span-2 rounded-lg border border-slate-300 px-3 py-2">{{ $body }}</textarea>
                         <div class="sm:col-span-2 flex items-center justify-between">
                             <label class="inline-flex items-center gap-2 font-semibold"><input type="checkbox" name="is_published" value="1" @checked($page->is_published)> Published</label>

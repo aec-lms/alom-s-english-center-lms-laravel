@@ -6,6 +6,7 @@ namespace Plugins\Modules\GatewaySslcommerz\Services;
 
 use App\Core\Plugins\PluginManager;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
 use Plugins\Modules\PaymentManagement\Services\PaymentSettlementService;
@@ -27,12 +28,18 @@ class SslcommerzGatewayService
             throw new RuntimeException('SSLCOMMERZ credentials are not configured.');
         }
 
-        $invoice->loadMissing('student.user');
-        $customer = $invoice->student?->user;
-        if (!$customer || trim((string) $customer->name) === '' || !filter_var($customer->email, FILTER_VALIDATE_EMAIL)) {
-            throw new RuntimeException('The invoice must be linked to a customer with a valid name and email.');
+        $studentIntegration = $this->plugins->isEnabled('student-management') && Schema::hasTable('students');
+        if ($studentIntegration) {
+            $invoice->loadMissing('student.user');
         }
-        $phone = preg_replace('/[^0-9+]/', '', (string) $customer->phone);
+        $customer = $studentIntegration ? $invoice->student?->user : null;
+        $customerName = trim((string) ($customer?->name ?? $invoice->payer_name));
+        $customerEmail = (string) ($customer?->email ?? $invoice->payer_email);
+        $customerPhone = (string) ($customer?->phone ?? $invoice->payer_phone);
+        if ($customerName === '' || !filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
+            throw new RuntimeException('The invoice must include a valid payer name and email (or be linked to a Student profile).');
+        }
+        $phone = preg_replace('/[^0-9+]/', '', $customerPhone);
         if (!$phone || strlen(preg_replace('/\D/', '', $phone)) < 7) {
             throw new RuntimeException('Add a valid customer phone number before starting SSLCOMMERZ checkout.');
         }
@@ -67,8 +74,8 @@ class SslcommerzGatewayService
             'fail_url' => url('/payments/sslcommerz/failed'),
             'cancel_url' => url('/payments/sslcommerz/cancelled'),
             'ipn_url' => url('/payments/sslcommerz/ipn'),
-            'cus_name' => mb_substr((string) $customer->name, 0, 50),
-            'cus_email' => mb_substr((string) $customer->email, 0, 50),
+            'cus_name' => mb_substr($customerName, 0, 50),
+            'cus_email' => mb_substr($customerEmail, 0, 50),
             'cus_add1' => 'N/A',
             'cus_city' => 'N/A',
             'cus_postcode' => '0000',
@@ -253,10 +260,10 @@ class SslcommerzGatewayService
             ->where('gateway_slug', 'gateway-sslcommerz')
             ->firstOrFail();
 
-        if ($tx->status !== 'settled') {
-            $tx->update(['status' => $status]);
-        }
-
-        return $tx->fresh();
+        // Browser return URLs are not authenticated by SSLCOMMERZ. A caller can
+        // forge failed/cancelled callbacks for a known transaction reference, so
+        // these callbacks must never mutate payment state. Only a verified IPN
+        // or validation-server response may settle a transaction.
+        return $tx;
     }
 }

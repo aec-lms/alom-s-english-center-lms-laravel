@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Plugins\Modules\GuardianManagement\Http\Controllers;
 
 use App\Core\Security\AuditLogger;
+use App\Core\Plugins\PluginManager;
 use App\Http\Controllers\Controller;
 use App\Models\Role;
 use App\Models\User;
@@ -12,6 +13,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 use Plugins\Modules\GuardianManagement\Models\Guardian;
 use Plugins\Modules\StudentManagement\Models\Student;
@@ -24,50 +26,75 @@ class GuardianController extends Controller
     {
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
-        $query = Guardian::query()->with(['user', 'students.user'])->latest();
+        $studentIntegration = app(PluginManager::class)->isEnabled('student-management')
+            && Schema::hasTable('students')
+            && Schema::hasTable('guardian_student');
+        $query = Guardian::query()->with('user')->latest();
+        if ($studentIntegration) {
+            $query->with('students.user');
+        }
         if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null) {
             $query->where('branch_id', $actor->branch_id);
         }
         $guardians = $query->paginate(25);
-        $students = Student::query()->with('user')
-            ->when($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null, fn ($q) => $q->where('branch_id', $actor->branch_id))
-            ->get();
+        $students = $studentIntegration
+            ? Student::query()->with('user')
+                ->when($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null, fn ($q) => $q->where('branch_id', $actor->branch_id))
+                ->get()
+            : collect();
 
-        return view('guardian-management::index', compact('guardians', 'students'));
+        return view('guardian-management::index', compact('guardians', 'students', 'studentIntegration'));
     }
 
     public function store(Request $request): RedirectResponse
     {
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
+        $studentIntegration = app(PluginManager::class)->isEnabled('student-management')
+            && Schema::hasTable('students')
+            && Schema::hasTable('guardian_student');
+        $branchIntegration = app(PluginManager::class)->isEnabled('branch-management') && Schema::hasTable('branches');
+        $branchRule = $branchIntegration
+            ? ['nullable', 'integer', 'exists:branches,id,is_active,1']
+            : ['nullable', 'integer'];
+        $studentRule = $studentIntegration
+            ? ['nullable', 'integer', 'exists:students,id']
+            : ['nullable', 'integer'];
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:120'],
             'email' => ['required', 'email', 'unique:users,email'],
             'phone' => ['nullable', 'string', 'max:32'],
             'password' => ['required', 'string', 'min:12'],
-            'branch_id' => ['required', 'integer', 'exists:branches,id'],
+            'branch_id' => $branchRule,
             'relationship' => ['required', 'string', 'max:60'],
-            'student_id' => ['nullable', 'integer', 'exists:students,id'],
+            'student_id' => $studentRule,
         ]);
 
-        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $validated['branch_id']) {
-            abort(403, 'Branch isolation violation.');
+        if (!$branchIntegration) {
+            $validated['branch_id'] = null;
         }
 
-        if (!empty($validated['student_id'])) {
+        if ($actor && $actor->hasRole('branch_manager')) {
+            if (isset($validated['branch_id']) && (int) $actor->branch_id !== (int) $validated['branch_id']) {
+                abort(403, 'Branch isolation violation.');
+            }
+            $validated['branch_id'] = $actor->branch_id;
+        }
+
+        if ($studentIntegration && !empty($validated['student_id'])) {
             $student = Student::query()->findOrFail((int) $validated['student_id']);
-            if ((int) $student->branch_id !== (int) $validated['branch_id']) {
+            if ($branchIntegration && (int) $student->branch_id !== (int) $validated['branch_id']) {
                 abort(422, 'Guardian and linked student must belong to the same branch.');
             }
         }
 
-        $guardian = DB::transaction(function () use ($validated): Guardian {
+        $guardian = DB::transaction(function () use ($validated, $studentIntegration): Guardian {
             $user = User::query()->create([
                 'name' => $validated['name'],
                 'email' => strtolower($validated['email']),
                 'phone' => $validated['phone'] ?? null,
                 'password' => Hash::make($validated['password']),
-                'branch_id' => (int) $validated['branch_id'],
+                'branch_id' => isset($validated['branch_id']) ? (int) $validated['branch_id'] : null,
                 'is_active' => true,
             ]);
             if ($role = Role::query()->where('slug', 'guardian')->first()) {
@@ -75,11 +102,11 @@ class GuardianController extends Controller
             }
             $guardian = Guardian::query()->create([
                 'user_id' => $user->id,
-                'branch_id' => (int) $validated['branch_id'],
+                'branch_id' => isset($validated['branch_id']) ? (int) $validated['branch_id'] : null,
                 'relationship' => $validated['relationship'],
                 'emergency_phone' => $validated['phone'] ?? null,
             ]);
-            if (!empty($validated['student_id'])) {
+            if ($studentIntegration && !empty($validated['student_id'])) {
                 $guardian->students()->syncWithoutDetaching([(int) $validated['student_id'] => ['is_primary' => true]]);
             }
             return $guardian;
@@ -92,8 +119,18 @@ class GuardianController extends Controller
 
     private function ensureAssignedBranch($actor): void
     {
-        if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id === null) {
+        if (!$actor || !$actor->hasRole('branch_manager')) {
+            return;
+        }
+        if ($actor->branch_id === null || !app(PluginManager::class)->isEnabled('branch-management') || !Schema::hasTable('branches')) {
             abort(403, 'Branch manager must be assigned to a branch.');
+        }
+        $activeBranch = \Illuminate\Support\Facades\DB::table('branches')
+            ->where('id', $actor->branch_id)
+            ->where('is_active', true)
+            ->exists();
+        if (!$activeBranch) {
+            abort(403, 'Branch manager access is disabled because the assigned branch is inactive.');
         }
     }
 }

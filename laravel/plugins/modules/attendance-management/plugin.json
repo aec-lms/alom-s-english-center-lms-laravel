@@ -1,12 +1,13 @@
 {
     "slug": "attendance-management",
     "name": "Attendance & Progress Tracking",
-    "version": "2.0.0",
+    "version": "2.0.1",
     "author": "Alom's English Center",
     "category": "academic",
     "description": "Batch daily attendance registers, student progress tracking, and attendance summary analytics.",
     "core_compatibility": "^2.0",
-    "dependencies": ["branch-management", "student-management", "course-management"],
+    "dependencies": [],
+    "optional_dependencies": ["branch-management", "student-management", "course-management", "batch-management", "student-tracking"],
     "provider": "Plugins\\Modules\\AttendanceManagement\\Providers\\AttendanceManagementServiceProvider",
     "permissions": [
         {

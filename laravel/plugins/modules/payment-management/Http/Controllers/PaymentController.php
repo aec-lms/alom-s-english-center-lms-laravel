@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Plugins\Modules\PaymentManagement\Http\Controllers;
 
 use App\Core\Security\AuditLogger;
+use App\Core\Plugins\PluginManager;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -21,23 +22,28 @@ class PaymentController extends Controller
     public function __construct(
         private readonly PaymentSettlementService $settlement,
         private readonly AuditLogger $audit,
+        private readonly PluginManager $plugins,
     ) {}
 
     public function index(Request $request): View
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
+        $feeIntegration = $this->feeIntegrationAvailable();
         $transactions = PaymentTransaction::query()
-            ->with('invoice')
+            ->when($feeIntegration, fn ($query) => $query->with('invoice'))
             ->when($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null, fn ($q) => $q->where('branch_id', $actor->branch_id))
             ->latest()
             ->paginate(25);
 
-        return view('payment-management::index', compact('transactions'));
+        return view('payment-management::index', compact('transactions', 'feeIntegration'));
     }
 
     public function recordOffline(Request $request): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
+        abort_unless($this->feeIntegrationAvailable(), 409, 'Enable Fees Management to record invoice payments.');
         $validated = $request->validate([
             'invoice_id' => ['required', 'integer', 'exists:fee_invoices,id'],
             'amount' => ['required', 'numeric', 'min:1'],
@@ -77,8 +83,16 @@ class PaymentController extends Controller
     public function refund(Request $request, PaymentTransaction $transaction): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
+        abort_unless($this->feeIntegrationAvailable(), 409, 'Enable Fees Management before refunding invoice payments.');
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $transaction->branch_id) {
             abort(403, 'Branch isolation violation.');
+        }
+
+        if ($transaction->gateway_slug !== 'offline') {
+            return back()->withErrors([
+                'refund' => 'Online refunds are disabled until this gateway has a verified provider refund adapter. No refund record or invoice balance was changed.',
+            ]);
         }
 
         $validated = $request->validate([
@@ -137,5 +151,27 @@ class PaymentController extends Controller
         $this->audit->log('payment.refunded', 'payment_transaction', (string) $transaction->id, ['amount' => $validated['amount']], $actor?->id);
 
         return back()->with('status', "Refund recorded for {$transaction->transaction_ref}.");
+    }
+
+    private function feeIntegrationAvailable(): bool
+    {
+        return $this->plugins->isEnabled('fees-management') && Schema::hasTable('fee_invoices');
+    }
+
+    private function ensureAssignedBranch($actor): void
+    {
+        if (!$actor || !$actor->hasRole('branch_manager')) {
+            return;
+        }
+        if ($actor->branch_id === null || !$this->plugins->isEnabled('branch-management') || !Schema::hasTable('branches')) {
+            abort(403, 'Branch manager must be assigned to a branch.');
+        }
+        $activeBranch = app('db')->table('branches')
+            ->where('id', $actor->branch_id)
+            ->where('is_active', true)
+            ->exists();
+        if (!$activeBranch) {
+            abort(403, 'Branch manager access is disabled because the assigned branch is inactive.');
+        }
     }
 }

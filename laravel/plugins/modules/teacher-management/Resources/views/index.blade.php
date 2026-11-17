@@ -5,16 +5,16 @@
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
             <h1 class="text-2xl font-extrabold text-slate-900">Our Expert Instructors &amp; Teachers</h1>
-            <p class="text-xs text-slate-500 mt-0.5">Add, edit, upload portraits, toggle status, or remove instructors shown on the public Instructors page.</p>
+            <p class="text-xs text-slate-500 mt-0.5">Add, edit, upload portraits, toggle status, or move instructors to the Admin Recycle Bin on the public Instructors page.</p>
         </div>
-        <a href="{{ route('public.instructors') }}" target="_blank" class="px-4 py-2 rounded-lg bg-white border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-50">
+        <a href="/instructors" target="_blank" class="px-4 py-2 rounded-lg bg-white border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-50">
             Preview Instructors Page &rarr;
         </a>
     </div>
 
     <div class="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
         <h2 class="text-sm font-bold text-slate-900">Add New Instructor</h2>
-        <form method="POST" action="{{ route('plugins.teachers.store') }}" enctype="multipart/form-data" class="grid sm:grid-cols-3 gap-3 text-xs">
+        <form method="POST" action="/admin/teachers" enctype="multipart/form-data" class="grid sm:grid-cols-3 gap-3 text-xs">
             @csrf
             <input name="name" required placeholder="Full Name *" class="rounded-lg border border-slate-300 px-3 py-2">
             <input name="email" type="email" required placeholder="Email Address *" class="rounded-lg border border-slate-300 px-3 py-2">
@@ -64,16 +64,16 @@
                                 <div class="text-[11px] font-mono text-slate-400">{{ $teacher->employee_code }} &middot; {{ $teacher->user?->email }} &middot; {{ $teacher->is_active ? 'Active' : 'Inactive' }}</div>
                             </div>
                         </div>
-                        <form method="POST" action="{{ route('plugins.teachers.destroy', $teacher) }}" onsubmit="return confirm('Delete this instructor? Courses and students remain safe.')">
+                        <form method="POST" action="/admin/teachers/{{ $teacher->id }}" onsubmit="return confirm('Move this instructor to the Admin Recycle Bin? You can restore them later.')">
                             @csrf
                             @method('DELETE')
-                            <button type="submit" class="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-700 font-bold hover:bg-rose-50">Delete</button>
+                            <button type="submit" class="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-700 font-bold hover:bg-rose-50">Move to Recycle Bin</button>
                         </form>
                     </div>
 
                     <details class="pt-2 border-t border-slate-100">
                         <summary class="cursor-pointer font-semibold text-[#0284C7]">Edit Profile &amp; Upload Portrait</summary>
-                        <form method="POST" action="{{ route('plugins.teachers.update', $teacher) }}" enctype="multipart/form-data" class="mt-3 grid sm:grid-cols-3 gap-3">
+                        <form method="POST" action="/admin/teachers/{{ $teacher->id }}" enctype="multipart/form-data" class="mt-3 grid sm:grid-cols-3 gap-3">
                             @csrf
                             @method('PUT')
                             <input name="name" required value="{{ $teacher->user?->name }}" class="rounded-lg border border-slate-300 px-3 py-2">

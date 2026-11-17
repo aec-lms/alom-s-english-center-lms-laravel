@@ -25,6 +25,8 @@ class UniversalPaymentOrchestrator
     /** @return array<string, array{label:string,available:bool,status:string,missing_credentials:array<int,string>}> */
     public function gatewayStatus(): array
     {
+        $enabledMethods = array_values(array_filter(array_map('trim', explode(',', (string) $this->plugins->getSetting('universal-payment', 'enabled_gateways', 'sslcommerz,stripe,paypal')))));
+        $methodBySlug = ['gateway-sslcommerz' => 'sslcommerz', 'gateway-stripe' => 'stripe', 'gateway-paypal' => 'paypal', 'gateway-card' => 'card'];
         $statuses = [];
         foreach (self::GATEWAYS as $slug => $definition) {
             $enabled = $this->plugins->isEnabled($slug);
@@ -34,8 +36,9 @@ class UniversalPaymentOrchestrator
             }
 
             $adapterRequired = (bool) ($definition['adapter_required'] ?? false);
-            $available = $enabled && $missing === [] && !$adapterRequired;
-            $status = !$enabled ? 'disabled' : ($adapterRequired ? 'processor_adapter_required' : ($missing !== [] ? 'not_configured' : 'ready'));
+            $methodEnabled = in_array($methodBySlug[$slug] ?? '', $enabledMethods, true);
+            $available = $methodEnabled && $enabled && $missing === [] && !$adapterRequired;
+            $status = !$methodEnabled ? 'disabled_in_universal_payment' : (!$enabled ? 'disabled' : ($adapterRequired ? 'processor_adapter_required' : ($missing !== [] ? 'not_configured' : 'ready')));
 
             $statuses[$slug] = [
                 'label' => $definition['label'],
@@ -52,6 +55,7 @@ class UniversalPaymentOrchestrator
         $status = $this->gatewayStatus()[$slug] ?? throw new RuntimeException('Unsupported payment gateway.');
         if (!$status['available']) {
             $reason = match ($status['status']) {
+                'disabled_in_universal_payment' => 'Gateway is disabled in Universal Payment settings.',
                 'disabled' => 'Gateway plugin is not enabled.',
                 'processor_adapter_required' => 'Visa/Mastercard requires a compatible acquiring-bank or PSP adapter. Use Stripe for supported card processing until that adapter is installed.',
                 default => 'Missing credentials: ' . implode(', ', $status['missing_credentials']),

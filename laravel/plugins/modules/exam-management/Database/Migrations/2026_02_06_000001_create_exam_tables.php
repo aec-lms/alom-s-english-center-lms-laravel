@@ -12,7 +12,7 @@ return new class extends Migration {
         if (!Schema::hasTable('exams')) {
             Schema::create('exams', function (Blueprint $table): void {
                 $table->id();
-                $table->foreignId('course_id')->constrained('courses')->cascadeOnDelete();
+                $table->unsignedBigInteger('course_id')->nullable();
                 $table->unsignedBigInteger('branch_id')->nullable()->index();
                 $table->string('title', 180);
                 $table->unsignedInteger('duration_minutes')->default(30);

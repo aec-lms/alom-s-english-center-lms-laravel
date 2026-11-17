@@ -54,6 +54,15 @@
                 <div class="text-right">
                     <div class="font-extrabold text-emerald-700 text-sm">৳{{ $pay->net_paid }}</div>
                     <div class="text-[11px] uppercase text-slate-500">{{ $pay->status }}</div>
+                    @if ($pay->status !== 'paid')
+                        <form method="POST" action="{{ route('plugins.hr.payrolls.mark_paid', $pay) }}" class="mt-2 flex flex-col gap-2">
+                            @csrf
+                            <input name="payment_reference" required maxlength="120" placeholder="Bank / cash reference" class="rounded border border-slate-300 px-2 py-1 text-xs">
+                            <button type="submit" class="rounded bg-emerald-600 px-3 py-1 text-xs font-bold text-white">Confirm Paid</button>
+                        </form>
+                    @else
+                        <div class="mt-1 text-[10px] text-slate-500">{{ $pay->paid_at?->format('Y-m-d H:i') }} · {{ $pay->payment_reference }}</div>
+                    @endif
                 </div>
             </div>
         @empty
