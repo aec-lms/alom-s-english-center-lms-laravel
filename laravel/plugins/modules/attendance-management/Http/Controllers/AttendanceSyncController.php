@@ -42,8 +42,13 @@ class AttendanceSyncController extends Controller
 
         $batch = DB::table('batches')->where('id', (int) $validated['batch_id'])->first();
         abort_unless($batch, 404, 'Batch not found.');
+        $batchMappingId = DB::table('attendance_batch_mappings')
+            ->where('source_type', 'course_batch')
+            ->where('source_id', (int) $batch->id)
+            ->value('id');
+        abort_unless($batchMappingId, 409, 'Attendance batch identity has not been initialized.');
 
-        $result = DB::transaction(function () use ($validated, $batch, $actor): array {
+        $result = DB::transaction(function () use ($validated, $batch, $batchMappingId, $actor): array {
             $synced = 0;
             $duplicates = 0;
 
@@ -83,6 +88,7 @@ class AttendanceSyncController extends Controller
                 $record ??= new AttendanceRecord();
                 $record->fill([
                     'batch_id' => (int) $batch->id,
+                    'attendance_batch_mapping_id' => (int) $batchMappingId,
                     'student_id' => (int) $student->id,
                     'branch_id' => (int) $student->branch_id,
                     'attendance_date' => $validated['attendance_date'],
