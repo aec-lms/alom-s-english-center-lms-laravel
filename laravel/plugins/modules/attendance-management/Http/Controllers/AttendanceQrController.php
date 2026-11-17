@@ -67,7 +67,9 @@ class AttendanceQrController extends Controller
         $mapping = AttendanceBatchMapping::query()->findOrFail($mappingId);
         abort_unless(in_array($mapping->source_type, ['course_batch', 'study_batch'], true), 422, 'Unsupported attendance batch source.');
         $sourceTable = $mapping->source_type === 'course_batch' ? 'batches' : 'study_batches';
-        $batch = DB::table($sourceTable)->where('id', $mapping->source_id)->first();
+        $batch = DB::table($sourceTable)->where('id', $mapping->source_id)
+            ->when(Schema::hasColumn($sourceTable, 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))
+            ->first();
         abort_unless($batch && $batch->branch_id !== null, 422, 'Assign this batch to an active branch before issuing QR attendance.');
         if ($actor->hasRole('branch_manager')) {
             abort_if((int) $actor->branch_id !== (int) $batch->branch_id, 403, 'Branch isolation violation.');
@@ -160,7 +162,7 @@ class AttendanceQrController extends Controller
             abort_if(now()->greaterThanOrEqualTo($session->expires_at), 410, 'QR session has expired.');
             abort_if((int) $session->branch_id !== (int) $student->branch_id, 403, 'Student is outside this batch branch.');
 
-            $mapping = AttendanceBatchMapping::query()->findOrFail((int) $session->attendance_batch_mapping_id);
+            $mapping = AttendanceBatchMapping::query()->whereKey((int) $session->attendance_batch_mapping_id)->lockForUpdate()->firstOrFail();
             abort_unless(in_array($mapping->source_type, ['course_batch', 'study_batch'], true), 422, 'Unsupported attendance batch source.');
             $roster = DB::table('attendance_batch_rosters')
                 ->where('attendance_batch_mapping_id', $mapping->id)
@@ -171,7 +173,9 @@ class AttendanceQrController extends Controller
             abort_if(DB::table('attendance_qr_checkins')->where('attendance_qr_session_id', $session->id)->where('student_id', $student->id)->exists(), 409, 'This QR session has already been used by this student.');
 
             $sourceTable = $mapping->source_type === 'course_batch' ? 'batches' : 'study_batches';
-            $batch = DB::table($sourceTable)->where('id', $mapping->source_id)->first();
+            $batch = DB::table($sourceTable)->where('id', $mapping->source_id)
+                ->when(Schema::hasColumn($sourceTable, 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))
+                ->first();
             abort_unless($batch && (int) $batch->branch_id === (int) $student->branch_id, 403, 'Batch membership is no longer valid.');
 
             $gpsConsentId = null;
@@ -321,6 +325,8 @@ class AttendanceQrController extends Controller
         $guardian = Guardian::query()->where('user_id', $request->user()->id)->firstOrFail();
         $linked = DB::table('guardian_student')->where('guardian_id', $guardian->id)->where('student_id', $studentId)->exists();
         abort_unless($linked, 403, 'You are not authorized to view this student attendance.');
+        $linkedStudent = Student::query()->findOrFail($studentId);
+        abort_if($guardian->branch_id !== null && (int) $guardian->branch_id !== (int) $linkedStudent->branch_id, 403, 'Guardian and student branch do not match.');
 
         $records = AttendanceEntry::query()->with('batchIdentity')
             ->where('student_id', $studentId)
