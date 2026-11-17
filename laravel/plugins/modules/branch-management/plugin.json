@@ -20,7 +20,8 @@
             "group": "Academic & Operations",
             "label": "Branches",
             "route": "plugins.branches.index",
-            "order": 100
+            "order": 100,
+            "permission": "branches.manage"
         }
     ]
 }
