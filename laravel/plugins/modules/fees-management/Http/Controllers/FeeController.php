@@ -36,43 +36,58 @@ class FeeController extends Controller
 
     public function storeInvoice(Request $request): RedirectResponse
     {
-        abort_unless($this->studentIntegrationEnabled(), 503, 'Enable Student Management to issue student-linked invoices.');
+        $studentIntegrationEnabled = $this->studentIntegrationEnabled();
         $actor = $request->user();
+
         $validated = $request->validate([
-            'student_id' => ['required', 'integer', 'exists:students,id'],
+            'student_id' => [$studentIntegrationEnabled ? 'nullable' : 'prohibited', 'integer'],
+            'payer_name' => ['required_without:student_id', 'nullable', 'string', 'max:160'],
+            'payer_email' => ['required_without:student_id', 'nullable', 'email', 'max:180'],
+            'payer_phone' => ['required_without:student_id', 'nullable', 'string', 'max:40'],
             'fee_category_id' => ['nullable', 'integer', 'exists:fee_categories,id'],
-            'subtotal_amount' => ['required', 'numeric', 'min:1'],
+            'subtotal_amount' => ['required', 'numeric', 'min:0.01'],
             'discount_amount' => ['nullable', 'numeric', 'min:0'],
             'due_date' => ['nullable', 'date'],
         ]);
 
-        $student = Student::query()->findOrFail((int) $validated['student_id']);
-        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $student->branch_id) {
-            abort(403, 'Branch isolation violation.');
+        $student = null;
+        if (!empty($validated['student_id'])) {
+            abort_unless($studentIntegrationEnabled, 503, 'Enable Student Management before linking an invoice to a student.');
+            $student = Student::query()->with('user')->findOrFail((int) $validated['student_id']);
+        }
+
+        $branchId = $student?->branch_id ?? $actor?->branch_id;
+        if ($actor && $actor->hasRole('branch_manager')) {
+            abort_unless((int) ($actor->branch_id ?? 0) > 0, 403, 'Branch manager must be assigned to a branch.');
+            abort_unless($student === null || (int) $student->branch_id === (int) $actor->branch_id, 403, 'Branch isolation violation.');
+            $branchId = $actor->branch_id;
         }
 
         $subtotal = round((float) $validated['subtotal_amount'], 2);
         $discount = min($subtotal, round((float) ($validated['discount_amount'] ?? 0), 2));
         $net = round($subtotal - $discount, 2);
-
         $invoice = FeeInvoice::query()->create([
             'invoice_number' => 'INV-' . strtoupper(substr(bin2hex(random_bytes(5)), 0, 10)),
-            'student_id' => $student->id,
-            'branch_id' => $student->branch_id,
+            'student_id' => $student?->id,
+            'payer_name' => $student?->user?->name ?? trim((string) ($validated['payer_name'] ?? '')),
+            'payer_email' => $student?->user?->email ?? strtolower(trim((string) ($validated['payer_email'] ?? ''))),
+            'payer_phone' => $student?->user?->phone ?? trim((string) ($validated['payer_phone'] ?? '')),
+            'branch_id' => $branchId,
             'fee_category_id' => $validated['fee_category_id'] ?? null,
             'subtotal_amount' => $subtotal,
             'discount_amount' => $discount,
             'net_amount' => $net,
             'paid_amount' => 0,
-            'currency' => 'BDT',
+            'currency' => strtoupper((string) config('lms.default_currency', 'BDT')),
             'status' => 'unpaid',
             'due_date' => $validated['due_date'] ?? now()->addDays(7)->toDateString(),
         ]);
 
-        $this->audit->log('fees.invoice_created', 'fee_invoice', (string) $invoice->id, ['net_amount' => $net]);
+        $this->audit->log('fees.invoice_created', 'fee_invoice', (string) $invoice->id, ['net_amount' => $net, 'student_id' => $student?->id]);
 
         return back()->with('status', "Invoice {$invoice->invoice_number} created.");
     }
+
     private function studentIntegrationEnabled(): bool
     {
         return app(PluginManager::class)->isEnabled('student-management')
