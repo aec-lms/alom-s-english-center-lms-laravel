@@ -14,7 +14,6 @@ use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Plugins\Modules\AttendanceManagement\Models\AttendanceRecord;
 use Plugins\Modules\StudentManagement\Models\Student;
-use Plugins\Modules\StudentTracking\Services\StudentActivityTracker;
 
 class AttendanceController extends Controller
 {
@@ -25,18 +24,25 @@ class AttendanceController extends Controller
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
         $branchId = $actor->hasRole('branch_manager') ? (int) $actor->branch_id : null;
+        $plugins = app(PluginManager::class);
+        $hasBatches = $plugins->isEnabled('course-management') && Schema::hasTable('batches');
+        $hasStudents = $plugins->isEnabled('student-management') && Schema::hasTable('students');
         $records = AttendanceRecord::query()
             ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
             ->latest('attendance_date')
             ->paginate(30);
-        $batches = DB::table('batches')
-            ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
-            ->orderBy('name')
-            ->get();
-        $students = Student::query()
-            ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
-            ->orderBy('id')
-            ->get();
+        $batches = $hasBatches
+            ? DB::table('batches')
+                ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
+                ->orderBy('name')
+                ->get()
+            : collect();
+        $students = $hasStudents
+            ? Student::query()
+                ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
+                ->orderBy('id')
+                ->get()
+            : collect();
 
         return view('attendance-management::index', compact('records', 'batches', 'students'));
     }
@@ -77,7 +83,7 @@ class AttendanceController extends Controller
         ]];
         abort_if(empty($items[0]['student_id']) || empty($items[0]['status']), 422, 'At least one student and attendance status are required.');
 
-        DB::transaction(function () use ($items, $batch, $validated, $actor, $plugins): void {
+        DB::transaction(function () use ($items, $batch, $validated, $actor): void {
             foreach ($items as $item) {
                 $student = Student::query()->findOrFail((int) $item['student_id']);
                 abort_if((int) ($batch->branch_id ?? 0) !== (int) ($student->branch_id ?? 0), 422, 'Student and batch must belong to the same branch.');
@@ -132,10 +138,6 @@ class AttendanceController extends Controller
                     'source' => $validated['source'] ?? 'online',
                     'occurred_at' => now(),
                 ]);
-
-                if ($plugins->isEnabled('student-tracking')) {
-                    app(StudentActivityTracker::class)->record((int) $student->user_id, 'attendance_marked', 'attendance', (int) $record->id, null, ['attendance_status' => $record->status, 'source' => $validated['source'] ?? 'online'], (int) $actor->id);
-                }
 
                 $this->audit->log($isEdit ? 'attendance.updated' : 'attendance.marked', 'attendance', (string) $record->id, ['status' => $record->status, 'source' => $validated['source'] ?? 'online', 'reason' => $changed ? $reason : null]);
             }
