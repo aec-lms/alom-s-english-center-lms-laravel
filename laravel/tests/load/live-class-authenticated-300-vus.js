@@ -21,6 +21,7 @@ if (!emailPattern.includes('{vu}')) throw new Error('STUDENT_EMAIL_PATTERN must 
 if (!password) throw new Error('STUDENT_PASSWORD is required.');
 if (!Number.isInteger(vus) || vus < 300 || vus > 1000) throw new Error('VUS must be between 300 and 1000.');
 if (!Number.isInteger(capacity) || capacity < 300 || capacity > 1000) throw new Error('CAPACITY must be between 300 and 1000.');
+if (capacity < vus) throw new Error('CAPACITY must be greater than or equal to VUS for a full-seat acceptance run.');
 
 export const options = {
   scenarios: {
