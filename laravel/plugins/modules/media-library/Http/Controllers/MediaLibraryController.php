@@ -37,9 +37,10 @@ class MediaLibraryController extends Controller
         ]);
 
         $file = $request->file('file');
-        $isPdf = $file->getMimeType() === 'application/pdf';
-        $disk = $isPdf ? 'local' : 'public';
-        $folder = $isPdf ? 'media-library/private' : 'media-library';
+        // Only raster images are public. Office files, PDFs, archives and text files stay private.
+        $isImage = str_starts_with((string) $file->getMimeType(), 'image/');
+        $disk = $isImage ? 'public' : 'local';
+        $folder = $isImage ? 'media-library' : 'media-library/private';
         $path = $file->store($folder, $disk);
 
         $asset = MediaAsset::query()->create([

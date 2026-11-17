@@ -35,6 +35,7 @@ Route::middleware('installed')->group(function (): void {
     Route::get('/product/{slug}', [PublicHomeController::class, 'productShow'])->name('public.products.show');
     Route::get('/ebooks', [PublicHomeController::class, 'ebooks'])->name('public.ebooks');
     Route::get('/ebooks/{slug}', [PublicHomeController::class, 'ebookShow'])->name('public.ebooks.show');
+    Route::get('/ebooks/{slug}/download', [PublicHomeController::class, 'ebookDownload'])->name('public.ebooks.download');
     Route::get('/result', [PublicHomeController::class, 'result'])->name('public.result');
     Route::get('/board-result', [PublicHomeController::class, 'result'])->name('public.board_result');
     Route::get('/page/{slug}', [PublicHomeController::class, 'customPage'])->name('public.custom_page');

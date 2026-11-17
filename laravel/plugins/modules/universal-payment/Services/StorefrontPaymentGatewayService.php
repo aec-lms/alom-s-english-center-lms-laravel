@@ -171,20 +171,31 @@ class StorefrontPaymentGatewayService
                 throw new RuntimeException('The paid exam price changed or the exam is no longer available. Manual review is required.');
             }
 
-            abort_if(DB::table('learn_earn_exam_access')->where('exam_id', $exam->id)
-                ->where('user_id', $locked->user_id)->where('status', 'granted')->exists(), 409,
-                'Paid exam access has already been granted by another transaction.');
+            $existingAccess = DB::table('learn_earn_exam_access')
+                ->where('exam_id', $exam->id)
+                ->where('user_id', $locked->user_id)
+                ->first();
 
-            DB::table('learn_earn_exam_access')->updateOrInsert(
-                ['exam_id' => $exam->id, 'user_id' => $locked->user_id],
-                [
+            if (!$existingAccess) {
+                DB::table('learn_earn_exam_access')->insert([
+                    'exam_id' => $exam->id,
+                    'user_id' => $locked->user_id,
                     'status' => 'granted',
                     'payment_reference' => $locked->reference,
                     'granted_at' => now(),
                     'created_at' => now(),
                     'updated_at' => now(),
-                ]
-            );
+                ]);
+            } elseif ($existingAccess->status !== 'granted') {
+                DB::table('learn_earn_exam_access')
+                    ->where('id', $existingAccess->id)
+                    ->update([
+                        'status' => 'granted',
+                        'payment_reference' => $locked->reference,
+                        'granted_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+            }
 
             $locked->update([
                 'status' => 'verified',
@@ -208,7 +219,7 @@ class StorefrontPaymentGatewayService
             }
 
             $item = DB::table('storefront_items')->where('id', $locked->storefront_item_id)->where('type', 'ebook')->where('is_active', true)->first();
-            if (!$item || (float) $item->price <= 0 || (float) $item->price - (float) $locked->amount > 0.01) {
+            if (!$item || (float) $item->price <= 0 || abs((float) $item->price - (float) $locked->amount) > 0.01) {
                 throw new RuntimeException('The e-book price changed or the item is no longer available. Manual review is required.');
             }
 

@@ -28,7 +28,7 @@ class UniversalPaymentController extends Controller
     {
         $enabledRaw = $this->plugins->getSetting('universal-payment', 'enabled_gateways', 'sslcommerz,bkash,nagad,rocket,card,bank_cash');
         $config = [
-            'default_currency' => $this->plugins->getSetting('universal-payment', 'default_currency', (string) config('lms.default_currency', 'BDT')),
+            'default_currency' => $this->plugins->getSetting('universal-payment', 'default_currency', 'BDT'),
             'enabled_gateways' => array_filter(array_map('trim', explode(',', (string) $enabledRaw))),
         ];
         $transactions = Schema::hasTable('universal_payment_transactions')
@@ -41,13 +41,13 @@ class UniversalPaymentController extends Controller
     public function saveGateways(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'default_currency' => ['required', 'string', 'regex:/^[A-Z]{3}$/'],
+            'default_currency' => ['required', 'in:BDT,USD,EUR,GBP'],
             'gateways' => ['nullable', 'array'],
             'gateways.*' => ['string', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,bank_cash'],
         ]);
 
         $values = [
-            'default_currency' => strtoupper($validated['default_currency']),
+            'default_currency' => $validated['default_currency'],
             'enabled_gateways' => implode(',', $validated['gateways'] ?? []),
         ];
 
@@ -67,6 +67,15 @@ class UniversalPaymentController extends Controller
             'external_trx_id' => ['nullable', 'string', 'max:120'],
             'status' => ['required', 'in:pending,verified,refunded'],
         ]);
+
+        if ($storefrontItem !== null && $validated['gateway'] !== 'sslcommerz') {
+            return back()->withErrors(['gateway' => 'Choose SSLCOMMERZ for secure automatic e-book checkout.'])->withInput();
+        }
+
+        if ($storefrontItem !== null && DB::table('storefront_item_access')
+            ->where('storefront_item_id', $storefrontItem->id)->where('user_id', auth()->id())->exists()) {
+            return redirect('/ebooks/' . rawurlencode((string) $storefrontItem->slug))->with('status', 'You already have access to this e-book.');
+        }
 
         $tx = UniversalPaymentTransaction::query()->create([
             'reference' => 'UPAY-' . strtoupper(Str::random(8)),
