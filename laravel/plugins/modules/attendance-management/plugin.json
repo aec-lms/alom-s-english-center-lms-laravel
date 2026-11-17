@@ -1,7 +1,7 @@
 {
     "slug": "attendance-management",
     "name": "Attendance & Progress Tracking",
-    "version": "2.0.1",
+    "version": "2.0.2",
     "author": "Alom's English Center",
     "category": "academic",
     "description": "Batch daily attendance registers, student progress tracking, and attendance summary analytics.",
@@ -18,6 +18,7 @@
     "optional_dependencies": [
         "branch-management",
         "student-management",
-        "course-management"
+        "course-management",
+        "batch-management"
     ]
 }
