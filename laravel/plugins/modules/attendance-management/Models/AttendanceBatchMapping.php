@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\AttendanceManagement\\Models;
+namespace Plugins\Modules\AttendanceManagement\Models;
 
-use Illuminate\\Database\\Eloquent\\Model;
+use Illuminate\Database\Eloquent\Model;
 
 class AttendanceBatchMapping extends Model
 {
