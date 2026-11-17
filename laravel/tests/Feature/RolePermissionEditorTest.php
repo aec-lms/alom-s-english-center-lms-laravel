@@ -36,6 +36,11 @@ class RolePermissionEditorTest extends TestCase
         ])->assertRedirect(route('admin.roles.index'));
 
         $this->assertTrue($role->fresh()->permissions->contains('id', $permission->id));
+
+        $this->actingAs($admin)->put(route('admin.roles.permissions.update', $role), [])
+            ->assertRedirect(route('admin.roles.index'));
+        $this->assertCount(0, $role->fresh()->permissions);
+
         $this->assertDatabaseHas('audit_logs', ['action' => 'admin.role.created']);
         $this->assertDatabaseHas('audit_logs', ['action' => 'admin.role.permissions.updated']);
     }
