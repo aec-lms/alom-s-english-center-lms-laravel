@@ -108,7 +108,7 @@ class AttendanceSyncController extends Controller
 
                 $this->audit->log($isEdit ? 'attendance.updated' : 'attendance.marked', 'attendance', (string) $record->id, [
                     'status' => $record->status,
-                    'source' => 'offline',
+                    'source' => $validated['source'] ?? 'offline',
                     'reason' => $changed ? $item['edit_reason'] : null,
                 ]);
 
