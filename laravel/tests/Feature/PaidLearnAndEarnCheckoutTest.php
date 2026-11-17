@@ -88,6 +88,14 @@ class PaidLearnAndEarnCheckoutTest extends TestCase
         $this->assertSame(150.0, (float) $transaction->amount);
         $this->assertSame('pending', $transaction->status);
 
+        $this->actingAs($student)->post("/learn-and-earn/exams/{$exam->id}/checkout", [
+            'payer_contact' => '01700000000',
+        ])->assertStatus(409);
+        $this->assertSame(1, UniversalPaymentTransaction::query()
+            ->where('user_id', $student->id)
+            ->where('learn_earn_exam_id', $exam->id)
+            ->count());
+
         $this->actingAs($student)->get("/learn-and-earn/exams/{$exam->id}")->assertForbidden();
 
         $this->post('/universal-payment/sslcommerz/success', [
