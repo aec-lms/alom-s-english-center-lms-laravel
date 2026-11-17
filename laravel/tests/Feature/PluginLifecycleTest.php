@@ -307,4 +307,28 @@ PHP;
             File::deleteDirectory($targetDir);
         }
     }
+
+    public function test_flash_sale_and_learn_and_earn_install_without_optional_course_or_exam_plugins(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['flash-sale', 'learn-and-earn']);
+
+        $manager = app(PluginManager::class);
+        $this->assertTrue($manager->isEnabled('flash-sale'));
+        $this->assertTrue($manager->isEnabled('learn-and-earn'));
+        $this->assertFalse($manager->isEnabled('course-management'));
+        $this->assertFalse($manager->isEnabled('exam-management'));
+
+        $this->assertTrue(Schema::hasTable('flash_sales'));
+        $this->assertTrue(Schema::hasTable('learn_earn_categories'));
+        $this->assertTrue(Schema::hasTable('learn_earn_questions'));
+        $this->assertTrue(Schema::hasTable('learn_earn_exam_access'));
+        $this->assertFalse(Schema::hasTable('courses'));
+        $this->assertFalse(Schema::hasTable('exams'));
+
+        $this->get('/flash-sale')->assertStatus(503);
+        $student = $this->createUserWithRole('student');
+        $this->actingAs($student)->get('/learn-and-earn/exams')->assertStatus(503);
+    }
+
 }
