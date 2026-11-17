@@ -131,7 +131,7 @@ class PluginLifecycleTest extends TestCase
         }
 
         $admin = $this->createUserWithRole('admin');
-        $permissionIds = \Illuminate\\Support\\Facades\\DB::table('permissions')
+        $permissionIds = \Illuminate\Support\Facades\DB::table('permissions')
             ->whereIn('slug', [
                 'students.manage',
                 'teachers.manage',
