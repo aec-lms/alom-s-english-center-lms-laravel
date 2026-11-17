@@ -17,6 +17,7 @@ class FlashSaleEnrollmentTest extends TestCase
     {
         $this->markSystemInstalled();
         $this->activatePlugins([
+            'branch-management',
             'student-management',
             'fees-management',
             'course-management',
