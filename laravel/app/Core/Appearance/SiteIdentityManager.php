@@ -71,7 +71,7 @@ final class SiteIdentityManager
         return $validHost ? $url : null;
     }
 
-    private function publicUrl(string $path)
+    private function publicUrl(string $path): ?string
     {
         if ($path === '' || !preg_match('~^/uploads/site-branding/[A-Za-z0-9._-]+$~', $path)) {
             return null;
