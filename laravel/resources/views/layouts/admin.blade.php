@@ -87,6 +87,7 @@
             <a href="{{ route('admin.appearance.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Design &amp; Appearance</a>
             @can('core.settings.manage')
                 <a href="{{ route('admin.menu-editor.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Admin Menu Editor</a>
+                <a href="{{ route('admin.site-navigation.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Website Navigation Builder</a>
             @endcan
 
             @if (!empty($pluginAdminMenu))
