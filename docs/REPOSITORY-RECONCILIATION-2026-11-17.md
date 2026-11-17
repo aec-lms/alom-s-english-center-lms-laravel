@@ -1,75 +1,85 @@
-# Repository reconciliation and release status — 2026-11-17
+# Aloms English Center LMS — Repository Reconciliation and Release Status
 
 **Repository:** `aec-lms/alom-s-english-center-lms-laravel`  
-**Verified base:** `main` at `757281577e11a6118b7e8652f57e21fcfac7a30c`  
-**Release status:** NOT production-ready. This document separates merged repository work from external release acceptance; it does not certify a production deployment.
+**Verified main commit at this document update:** `7efb8f6dba61a0fbb9c3cf4f49e78ff35e9ef685`  
+**Release status:** Not yet production-ready. Repository CI and code-level acceptance are not substitutes for real cPanel staging, external provider, backup-restore, and load-test evidence.
 
-## Latest merged work
+## Recently merged work
 
-The latest main commit is PR #72, `feat(live-class): add 300-seat LMS capacity and protected join flow`.
+Recent PRs merged after the initial 300-seat LMS join work include:
 
-Recent merged work includes:
-- #49 Bengali resumable setup wizard
-- #50 global typography and layout controls
-- #51 visual page builder
-- #52 public navigation builder
-- #54 content block library
-- #55 safe theme-token package manager
-- #56 visual header/footer builder
-- #58 widget area/sidebar builder
-- #60 media library metadata, collections and recycle bin
-- #62 draggable dashboard widget ordering
-- #65 repository/release-status reconciliation
-- #66 server-enforced exam duration and configurable per-student attempt limits
-- #67 shared Student Tracking/Student Tracing storage and academic event capture
-- #69 Universal Payment branch-isolation enforcement
-- #71 atomic manual-payment review and protection of global gateway settings
-- #72 300-seat LMS join capacity, protected enrollment/branch-aware join flow, participant heartbeat/leave and Student Tracking join events
+- **#77 — Live-class authorization:** join events are recorded only after a seat is granted; heartbeat requires active enrollment and branch eligibility.
+- **#78 — Fees branch isolation:** unassigned or inactive branch managers cannot view or create fee invoices.
+- **#79 — Exam branch isolation:** branch-manager exam workflows fail closed without an active assigned branch.
+- **#82 — Load-test scope documentation:** explicitly distinguishes public-page k6 testing from authenticated live-class stress testing.
+- **#83 — Enrollment branch isolation:** unassigned branch managers cannot view or change enrollments.
+- **#84 — Course branch isolation:** branch-manager access is checked for course/live-class workflows; global course categories are restricted to central admins; unassigned branch managers cannot delete global live classes.
+- **#86 — Live-class stale-heartbeat capacity:** a participant whose presence lease expired cannot reclaim a seat after another student has taken it.
+- **#87 — Attendance/Tracking/Tracing branch security:** attendance QR, Student Tracking and Student Tracing fail closed if Branch Management is absent or the assigned branch is invalid.
+- **#88 — Branch selectors:** student and teacher forms show branch managers only their own assigned branch.
+- **#89 — Admin plugin recycle-bin acceptance:** admin delete, restore and permanent-delete flows receive explicit feature-test coverage.
+- **#90 — Flash Sale and Learn & Earn branch security:** branch managers require an active branch; orphaned flash sales are hidden/immutable when Course Management is disabled; shared Learn & Earn question-bank changes are central-admin-only.
+- **#91 — Course media access:** branch-scoped course media access requires the Branch Management integration to be enabled.
+- **#92 — Authenticated 300+ live-class load workflow:** adds a staging-only k6 workflow that logs in as distinct enrolled students, joins a live class and sends participant heartbeats.
+- **#93 — Admin permanent-delete recovery:** the admin recycle-bin permanent-delete action now creates a private 0700 recovery copy and verifies SHA-256 checksums before removing the archived package.
+- **#94 — Marketing global-data security:** global marketing campaigns and coupons are central-admin-only.
 
-PR #62, #71 and #72 each passed the four PR checks: Laravel SQLite, Laravel MySQL 8, Browser E2E and Composer lockfile/security audit. PR #72's CI validates the LMS application join/capacity workflow; it is not a real 300-concurrent-user load test or proof of the conferencing provider's own meeting capacity. The latest main-branch workflow run after #72 merge must also finish successfully before treating that exact main commit as fully CI-verified.
+Earlier merged CMS/admin work includes Bengali setup wizard, global typography/layout controls, visual page builder, navigation builder, content blocks, header/footer builder, widget/sidebar builder, safe theme-token packages, media library/recycle bin, dashboard widget ordering, role/permission editor, menu editor, site identity and branding.
 
-## Admin and CMS scope
+## CI and plugin acceptance
 
-The merged admin/site-management features include the visual page builder, navigation builder, content blocks, header/footer builder, sidebar/widget builder, global typography/layout settings, media library recycle bin and dashboard widget ordering.
+The repository contains **44 plugin manifests** under `laravel/plugins/modules`.
 
-Important limitation: PR #55 installs validated JSON design-token packages. It is not an unrestricted runtime for arbitrary PHP/Blade WordPress themes. The LMS provides WordPress-like admin controls for supported features, not a claim that every WordPress plugin/theme can run unchanged.
+`AllPluginsIndependentAcceptanceTest` discovers all manifests dynamically and exercises each plugin's provider/manifest validity, no required sibling dependencies, install/enable, checksum-verified ZIP update, disable/re-enable, uninstall/reinstall, settings reset to declared defaults, recycle-bin delete/restore, and permanent-delete recovery snapshot. Dedicated feature suites cover plugin-specific workflows. The admin recycle-bin acceptance tests separately exercise the actual admin routes.
 
-## Plugin inventory and acceptance coverage
+The required CI checks are:
+1. Laravel SQLite tests
+2. Laravel MySQL 8 tests
+3. Browser E2E
+4. Composer lockfile/security audit
 
-The current main branch contains 44 plugin manifests under `laravel/plugins/modules`. `AllPluginsIndependentAcceptanceTest` discovers plugin manifests dynamically and exercises shared lifecycle behavior: provider/manifest validation, no required sibling dependency, install/enable, checksum-verified ZIP update, disable/re-enable, uninstall/reinstall, settings reset, recycle-bin delete and restore, and verified recovery before permanent recycle deletion.
+Each of the recently merged PR heads listed above passed all four checks before merge. The latest main commit recorded at the top of this document has a new main-branch CI run in progress; wait for all four checks on that exact commit before treating it as fully CI-verified.
 
-The feature acceptance matrix maps plugin-specific workflows to dedicated test suites. This is automated coverage evidence, not proof that every feature is complete in a real browser or production environment. CI provider integrations are simulated/stubbed; they do not establish live merchant approval, settlement, SMS/email delivery, or Google/Meta account connectivity. Continue source-level review of all 44 modules, their permissions, branch scopes, failure paths and optional integrations.
+**Scope limitation:** plugin independence means independently installable/manageable modules inside this Laravel 12 AEC LMS runtime. It does not mean a Laravel plugin can run unchanged on WordPress, CodeIgniter, or an arbitrary non-Laravel LMS. Framework-neutral contracts and host adapters remain separate work.
 
-The independence guarantee currently means independent installation/lifecycle within this Laravel 12 AEC LMS runtime. It does **not** mean the same plugin package can run unchanged on arbitrary WordPress, CodeIgniter, or non-Laravel LMS platforms. Framework-neutral contracts and host adapters remain a separate roadmap item.
+## WordPress-like admin scope
 
-## Older open drafts — reconciliation required
+Supported CMS/admin features include visual page building, reusable content blocks, public navigation/menu management, header/footer layout, widget/sidebar areas, global typography and layout settings, site identity/branding, media library, dashboard widget ordering, role/permission management and plugin lifecycle controls.
 
-The following old drafts are based on significantly divergent histories and must not be merged wholesale:
-- #31 — optional sibling integrations / independent plugin installation
-- #29 — lifecycle, branch security, notifications and recycle-bin hardening
-- #3 — critical plugin audit remediations
-- #2 — plugin lifecycle, branch security, attendance and payments
+The theme package manager accepts validated JSON design-token packages; it is **not** an unrestricted PHP/Blade theme runtime. This project should not be described as full WordPress feature/plugin/theme parity.
 
-Their changes must be checked against current main file-by-file; only missing changes should be ported onto a fresh branch. Several previously described remediations are already present in current main, including Attendance batch-table compatibility, public admission throttling, SMS response classification, payroll pending/approval, Payment Management branch fail-closed checks, Universal Payment branch isolation, manual review locking, and exam timer/attempt enforcement. Current source and tests—not old PR descriptions—are the acceptance authority.
+## 300+ live-class test status
+
+The LMS now has an authenticated student join/presence workflow with:
+- Active enrollment and branch checks
+- Configurable LMS seat capacity (default 300)
+- Serialized seat allocation
+- Join, heartbeat and leave handling
+- Two-minute presence expiry
+- Capacity re-check when an expired participant attempts to resume via heartbeat
+
+PR #92 adds an authenticated k6 workflow for **300–1,000 distinct pre-provisioned student accounts**. It requires an authorized HTTPS staging LMS, a live class, active enrollments, a unique email pattern, and the GitHub Actions secret `AEC_LIVE_CLASS_TEST_PASSWORD`. It requires configured capacity to be at least the virtual-user count.
+
+**The workflow exists but has not been run against the user's staging site.** A separate provider-side test is still required to prove that the chosen Zoom/Google Meet/Teams licence supports 300 real media participants. The public-page k6 workflow only measures course-page performance and is not evidence of authenticated join capacity.
 
 ## Remaining release blockers
 
-| Area | Current evidence | Required next action |
+| Area | Current evidence | Required before production |
 |---|---|---|
-| 44 plugin workflows | Dynamic lifecycle suite and mapped plugin-specific tests exist; external providers are stubbed. | Continue full source/permission/branch-scope and browser acceptance review; close any remaining gaps with regression tests. |
-| Cross-LMS portability | Current plugins use Laravel providers, routes, middleware, Eloquent, migrations and Blade. | Build framework-neutral contracts and host adapters before claiming arbitrary LMS portability. |
-| Core update/rollback | Automated coverage and runbook exist. | Execute signed update and rollback rehearsal on isolated cPanel staging; document schema rollback limitations. |
-| Backup/restore | Automated backup tests and runbook exist. | Restore a representative large backup into a separate disposable database and verify private-file checksums. |
-| Clean cPanel installation | Release ZIP build/content checks pass in CI. | Install the exact candidate ZIP on disposable PHP 8.3+ cPanel staging. |
-| Payment integrations | Simulated adapter/contract tests exist; manual review now uses locking. | Run official sandbox callbacks, replay/amount/currency/idempotency/refund scenarios for each configured provider. |
-| 300+ live class | LMS join admission supports a configurable 300-seat default and participant presence. | Run a controlled 300+ virtual-user load test against authorized staging; separately verify the selected conferencing provider's real meeting capacity and stability. |
-| Email/SMS and marketing | Provider contracts and tests exist. | Verify real SMTP/SMS credentials, delivery responses, Meta/Google account connections and consent behavior in staging. |
-| Security/privacy | Automated security and role/branch regression coverage exists. | Complete a full permission matrix, privacy/retention review and staging penetration/regression pass. |
+| 44 plugin workflows | Dynamic lifecycle suite plus plugin-specific tests; provider APIs are stubbed/simulated in CI. | Finish source/permission/branch-scope review and verify configured real provider sandbox flows. |
+| Clean cPanel install | CI builds and verifies a cPanel release package. | Install the exact candidate ZIP on a disposable PHP 8.3+ cPanel staging site using File Manager; verify storage, permissions, cron and queues. |
+| Core update/rollback | Automated coverage and runbook exist. | Execute update and rollback rehearsal on isolated cPanel staging, including database/schema compatibility. |
+| Backup/restore | Automated backup tests and runbook exist; plugin permanent-delete backup is checksum-verified. | Restore a representative large backup into a separate disposable database and verify private-file checksums and permissions. |
+| Authenticated 300+ live class | Workflow and script exist; no staging execution evidence yet. | Run the workflow with at least 300 distinct test students; record join/heartbeat success, p95, seat counts, DB locks and host metrics. |
+| External meeting provider | LMS seat admission is enforced. | Separately verify 300 real test participants with the selected provider's plan/licence. |
+| Payment providers | Adapter/contract tests exist; live credentials/merchant approvals are not present in CI. | Run official sandbox callback, replay, amount/currency, idempotency and refund tests for each configured provider. |
+| SMS/email/marketing | Provider contracts and security checks exist; live account delivery is not verified by CI. | Verify actual SMTP/SMS delivery responses, Meta/Google account connections, consent and privacy settings. |
+| Security/privacy | Automated permission, branch-scope and lifecycle regression coverage exists. | Complete staging penetration/regression checks, data retention/privacy review and role-by-role acceptance. |
+| Cross-LMS portability | Laravel-native modules and contracts exist. | Build framework-neutral plugin contracts/adapters before claiming compatibility with arbitrary LMS platforms. |
 
-## Safe execution policy
+## Safe release policy
 
-- Do not merge stale draft PRs just to clear the open-PR list.
-- Do not declare a plugin accepted from manifest presence or a test-matrix row alone.
-- Do not declare a production install, large restore, live provider, or 300+ meeting test complete without evidence from the actual external environment.
-- Continue repository-only work from a fresh branch based on current `main`; require SQLite, MySQL 8, Browser E2E and Composer security checks before merging.
-- Keep the production domain and production database untouched until all external release gates pass.
+- Do not merge stale, highly diverged drafts (#31, #29, #3, #2) wholesale. Reconcile their changes against current main and port only missing fixes onto a fresh branch.
+- Do not call a plugin accepted from manifest presence alone; require its feature and security tests.
+- Do not claim a production cPanel install, large restore, live payment/SMS/email provider, or 300+ meeting test without evidence from the actual external environment.
+- Do not touch the production domain or production database until all external release gates pass.
