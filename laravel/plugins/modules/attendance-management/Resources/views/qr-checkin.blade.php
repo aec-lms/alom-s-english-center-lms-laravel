@@ -13,59 +13,13 @@
     </style>
 </head>
 <body>
-<main>
+<main id="attendance-qr-checkin" data-token="{{ $token }}" data-endpoint="{{ url('/attendance/qr/check-in') }}">
     <h1>Confirm attendance</h1>
     <p>Submit this check-in only when you are physically present in your class.</p>
     <label><input type="checkbox" id="gps-consent"> I consent to one-time GPS verification for this attendance check-in.</label>
     <button id="checkin" type="button">Check in</button>
     <div id="result" role="status" aria-live="polite">Ready to verify your attendance.</div>
 </main>
-<script>
-(() => {
-    const token = @json($token);
-    const button = document.getElementById('checkin');
-    const result = document.getElementById('result');
-    const consent = document.getElementById('gps-consent');
-    const csrf = document.querySelector('meta[name="csrf-token"]').content;
-
-    const submit = async (location = null) => {
-        const payload = { token, gps_consent: consent.checked };
-        if (location) {
-            payload.latitude = location.coords.latitude;
-            payload.longitude = location.coords.longitude;
-            payload.gps_accuracy_meters = Math.max(1, Math.ceil(location.coords.accuracy));
-        }
-        const response = await fetch(@json(url('/attendance/qr/check-in')), {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrf },
-            body: JSON.stringify(payload)
-        });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.message || 'Attendance check-in failed.');
-        result.textContent = 'Attendance confirmed at ' + data.checked_in_at;
-        button.disabled = true;
-    };
-
-    button.addEventListener('click', async () => {
-        button.disabled = true;
-        result.textContent = 'Verifying attendance…';
-        try {
-            if (consent.checked) {
-                if (!navigator.geolocation) throw new Error('This browser does not support GPS verification.');
-                const location = await new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, {
-                    enableHighAccuracy: true, timeout: 10000, maximumAge: 0
-                }));
-                await submit(location);
-            } else {
-                await submit();
-            }
-        } catch (error) {
-            result.textContent = error.message || 'Could not verify your location.';
-            button.disabled = false;
-        }
-    });
-})();
-</script>
+<script src="{{ asset('js/attendance-qr-checkin.js') }}" defer></script>
 </body>
 </html>
