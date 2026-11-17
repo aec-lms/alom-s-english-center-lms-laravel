@@ -46,7 +46,15 @@ final class SiteIdentityManager
 
     private function safeUrl(mixed $url): ?string
     {
-        if (!is_string($url) || !filter_var($url, FILTER_VALIDATE_URL)) {
+        if (!is_string($url) || $url === '') {
+            return null;
+        }
+
+        if (str_starts_with($url, '/storage/media-library/') && !str_contains($url, '..')) {
+            return $url;
+        }
+
+        if (!filter_var($url, FILTER_VALIDATE_URL)) {
             return null;
         }
 
