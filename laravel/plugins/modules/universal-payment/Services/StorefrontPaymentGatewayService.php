@@ -130,10 +130,16 @@ class StorefrontPaymentGatewayService
             throw new RuntimeException('SSLCOMMERZ flagged this payment for manual risk review. E-book access was not granted.');
         }
 
-        return $this->grantEbookAccess($transaction, $validationId, [
+        $providerDetails = [
             'bank_transaction_id' => (string) ($data['bank_tran_id'] ?? ''),
             'validation_status' => strtoupper((string) $data['status']),
-        ]);
+        ];
+
+        if ($transaction->learn_earn_exam_id) {
+            return $this->grantExamAccess($transaction, $validationId, $providerDetails);
+        }
+
+        return $this->grantEbookAccess($transaction, $validationId, $providerDetails);
     }
 
     public function markSslcommerzFailed(array $callback, string $status): UniversalPaymentTransaction
@@ -145,6 +151,50 @@ class StorefrontPaymentGatewayService
             $transaction->update(['status' => $status]);
         }
         return $transaction->fresh();
+    }
+
+ 
+    private function grantExamAccess(UniversalPaymentTransaction $transaction, string $externalReference, array $providerDetails): UniversalPaymentTransaction
+    {
+        return DB::transaction(function () use ($transaction, $externalReference, $providerDetails): UniversalPaymentTransaction {
+            $locked = UniversalPaymentTransaction::query()->whereKey($transaction->id)->lockForUpdate()->firstOrFail();
+            if ($locked->status === 'verified') return $locked;
+
+            if (!$locked->learn_earn_exam_id || !$locked->user_id) {
+                throw new RuntimeException('This payment is not linked to a registered paid-exam student.');
+            }
+
+            $exam = DB::table('exams')->where('id', $locked->learn_earn_exam_id)->where('is_published', true)->first();
+            if (!$exam || ($exam->learn_earn_type ?? 'free') !== 'paid'
+                || (float) $exam->access_price <= 0
+                || abs((float) $exam->access_price - (float) $locked->amount) > 0.01) {
+                throw new RuntimeException('The paid exam price changed or the exam is no longer available. Manual review is required.');
+            }
+
+            abort_unless(DB::table('learn_earn_exam_access')->where('exam_id', $exam->id)
+                ->where('user_id', $locked->user_id)->where('status', 'granted')->exists(), 409,
+                'Paid exam access has already been granted by another transaction.');
+
+            DB::table('learn_earn_exam_access')->updateOrInsert(
+                ['exam_id' => $exam->id, 'user_id' => $locked->user_id],
+                [
+                    'status' => 'granted',
+                    'payment_reference' => $locked->reference,
+                    'granted_at' => now(),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]
+            );
+
+            $locked->update([
+                'status' => 'verified',
+                'external_trx_id' => $externalReference,
+                'verified_at' => now(),
+                'notes' => json_encode(array_merge(['provider' => $locked->gateway, 'purpose' => 'learn_earn_exam'], $providerDetails), JSON_THROW_ON_ERROR),
+            ]);
+
+            return $locked->fresh();
+        });
     }
 
     private function grantEbookAccess(UniversalPaymentTransaction $transaction, string $externalReference, array $providerDetails): UniversalPaymentTransaction
