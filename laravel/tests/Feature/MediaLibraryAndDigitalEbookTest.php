@@ -45,6 +45,16 @@ class MediaLibraryAndDigitalEbookTest extends TestCase
         $this->assertNotNull($pdf);
         $this->assertSame('local', $pdf->disk);
         Storage::disk('local')->assertExists($pdf->path);
+
+        $this->actingAs($admin)->post('/admin/media', [
+            'file' => UploadedFile::fake()->create('teacher-notes.docx', 32, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
+            'collection' => 'documents',
+        ])->assertSessionHasNoErrors()->assertRedirect();
+
+        $docx = DB::table('media_assets')->where('original_name', 'teacher-notes.docx')->first();
+        $this->assertNotNull($docx);
+        $this->assertSame('local', $docx->disk);
+        Storage::disk('local')->assertExists($docx->path);
     }
 
     public function test_paid_ebook_download_is_locked_until_verified_payment_and_uses_server_price(): void
@@ -56,6 +66,36 @@ class MediaLibraryAndDigitalEbookTest extends TestCase
             'store_password' => 'test-secret',
             'sandbox_mode' => '1',
         ], ['store_password']);
+
+        $admin = $this->createUserWithRole('admin');
+        $publicUrlItem = StorefrontItem::query()->create([
+            'type' => 'ebook',
+            'slug' => 'free-public-guide',
+            'title' => 'Free Public Guide',
+            'category' => 'IELTS',
+            'price' => 0,
+            'original_price' => 0,
+            'is_free' => true,
+            'pages' => 10,
+            'stock_count' => 0,
+            'summary' => 'A free guide with a public download URL',
+            'download_url' => 'https://example.com/free-guide.pdf',
+            'is_active' => true,
+        ]);
+        $this->actingAs($admin)->put('/admin/storefront/' . $publicUrlItem->id, [
+            'type' => 'ebook',
+            'title' => 'Now Paid Guide',
+            'category' => 'IELTS',
+            'price' => 100,
+            'original_price' => 100,
+            'pages' => 10,
+            'stock_count' => 0,
+            'summary' => 'Attempt to retain a public file after making it paid',
+            'download_url' => '',
+            'is_free' => false,
+            'is_active' => true,
+            'is_carousel_featured' => false,
+        ])->assertSessionHasErrors('download_url');
 
         $student = $this->createUserWithRole('student');
         Storage::fake('local');
@@ -170,5 +210,8 @@ class MediaLibraryAndDigitalEbookTest extends TestCase
         $this->assertSame('verified', $transaction->fresh()->status);
 
         $this->actingAs($student)->get('/ebooks/protected-guide/download')->assertOk();
+
+        app(PluginManager::class)->disable('storefront-catalog');
+        $this->actingAs($student)->get('/ebooks/protected-guide/download')->assertNotFound();
     }
 }
