@@ -28,7 +28,7 @@ class UniversalPaymentController extends Controller
     {
         $enabledRaw = $this->plugins->getSetting('universal-payment', 'enabled_gateways', 'sslcommerz,bkash,nagad,rocket,card,bank_cash');
         $config = [
-            'default_currency' => $this->plugins->getSetting('universal-payment', 'default_currency', 'BDT'),
+            'default_currency' => $this->plugins->getSetting('universal-payment', 'default_currency', (string) config('lms.default_currency', 'BDT')),
             'enabled_gateways' => array_filter(array_map('trim', explode(',', (string) $enabledRaw))),
         ];
         $transactions = Schema::hasTable('universal_payment_transactions')
@@ -41,13 +41,13 @@ class UniversalPaymentController extends Controller
     public function saveGateways(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'default_currency' => ['required', 'in:BDT,USD,EUR,GBP'],
+            'default_currency' => ['required', 'string', 'regex:/^[A-Z]{3}$/'],
             'gateways' => ['nullable', 'array'],
             'gateways.*' => ['string', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,bank_cash'],
         ]);
 
         $values = [
-            'default_currency' => $validated['default_currency'],
+            'default_currency' => strtoupper($validated['default_currency']),
             'enabled_gateways' => implode(',', $validated['gateways'] ?? []),
         ];
 
@@ -67,15 +67,6 @@ class UniversalPaymentController extends Controller
             'external_trx_id' => ['nullable', 'string', 'max:120'],
             'status' => ['required', 'in:pending,verified,refunded'],
         ]);
-
-        if ($storefrontItem !== null && $validated['gateway'] !== 'sslcommerz') {
-            return back()->withErrors(['gateway' => 'Choose SSLCOMMERZ for secure automatic e-book checkout.'])->withInput();
-        }
-
-        if ($storefrontItem !== null && DB::table('storefront_item_access')
-            ->where('storefront_item_id', $storefrontItem->id)->where('user_id', auth()->id())->exists()) {
-            return redirect('/ebooks/' . rawurlencode((string) $storefrontItem->slug))->with('status', 'You already have access to this e-book.');
-        }
 
         $tx = UniversalPaymentTransaction::query()->create([
             'reference' => 'UPAY-' . strtoupper(Str::random(8)),
@@ -156,6 +147,16 @@ class UniversalPaymentController extends Controller
             return redirect('/ebooks/' . rawurlencode((string) $storefrontItem->slug))->with('status', 'You already have access to this e-book.');
         }
 
+        if ($storefrontItem !== null) {
+            $pendingCheckout = UniversalPaymentTransaction::query()
+                ->where('user_id', auth()->id())
+                ->where('storefront_item_id', $storefrontItem->id)
+                ->where('status', 'pending')
+                ->where('created_at', '>=', now()->subMinutes(30))
+                ->exists();
+            abort_if($pendingCheckout, 409, 'A checkout for this e-book is already pending. Wait for its result before retrying.');
+        }
+
         $tx = UniversalPaymentTransaction::query()->create([
             'reference' => 'UPAY-' . strtoupper(Str::random(8)),
             'payer_name' => $storefrontItem ? auth()->user()->name : $validated['payer_name'],
@@ -186,6 +187,16 @@ class UniversalPaymentController extends Controller
     {
         try {
             $transaction = $this->storefrontGateway->verifySslcommerz($request->all());
+            if ($transaction->status === 'risk_review') {
+                if ($transaction->learn_earn_exam_id) {
+                    return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)
+                        ->with('status', 'Payment was received but requires manual review. No additional exam access was granted.');
+                }
+                $reviewSlug = DB::table('storefront_items')->where('id', $transaction->storefront_item_id)->value('slug');
+                return $reviewSlug
+                    ? redirect('/ebooks/' . rawurlencode((string) $reviewSlug))->with('status', 'Payment was received but requires manual review. Existing access was not changed.')
+                    : redirect('/ebooks')->with('status', 'Payment was received but requires manual review.');
+            }
             if ($transaction->learn_earn_exam_id) {
                 return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)
                     ->with('status', 'Payment verified. Your paid exam is now unlocked.');
@@ -223,6 +234,18 @@ class UniversalPaymentController extends Controller
     public function sslcommerzFailed(Request $request): RedirectResponse
     {
         $transaction = $this->storefrontGateway->markSslcommerzFailed($request->all(), 'failed');
+        if (in_array($transaction->status, ['verified', 'risk_review'], true)) {
+            $message = $transaction->status === 'verified'
+                ? 'Payment was already verified; your access remains available.'
+                : 'Payment was received but remains under manual review; no additional access was granted.';
+            if ($transaction->learn_earn_exam_id) {
+                return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)->with('status', $message);
+            }
+            $reviewSlug = DB::table('storefront_items')->where('id', $transaction->storefront_item_id)->value('slug');
+            return $reviewSlug
+                ? redirect('/ebooks/' . rawurlencode((string) $reviewSlug))->with('status', $message)
+                : redirect('/ebooks')->with('status', $message);
+        }
         if ($transaction->learn_earn_exam_id) {
             return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)->withErrors(['payment' => 'Payment was not completed. You can try again.']);
         }
@@ -233,6 +256,18 @@ class UniversalPaymentController extends Controller
     public function sslcommerzCancelled(Request $request): RedirectResponse
     {
         $transaction = $this->storefrontGateway->markSslcommerzFailed($request->all(), 'cancelled');
+        if (in_array($transaction->status, ['verified', 'risk_review'], true)) {
+            $message = $transaction->status === 'verified'
+                ? 'Payment was already verified; your access remains available.'
+                : 'Payment was received but remains under manual review; no additional access was granted.';
+            if ($transaction->learn_earn_exam_id) {
+                return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)->with('status', $message);
+            }
+            $reviewSlug = DB::table('storefront_items')->where('id', $transaction->storefront_item_id)->value('slug');
+            return $reviewSlug
+                ? redirect('/ebooks/' . rawurlencode((string) $reviewSlug))->with('status', $message)
+                : redirect('/ebooks')->with('status', $message);
+        }
         if ($transaction->learn_earn_exam_id) {
             return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)->with('status', 'Payment was cancelled.');
         }
