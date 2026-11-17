@@ -28,6 +28,18 @@
                         <div class="text-sm font-bold {{ $enrollment->status === 'active' ? 'text-emerald-700' : 'text-amber-700' }}">
                             {{ $enrollment->status === 'active' ? 'Course access active' : ($enrollment->status === 'pending' ? 'Awaiting payment / approval' : ucfirst($enrollment->status)) }}
                         </div>
+                        @if ($enrollment->status === 'active')
+                            @foreach (($enrollment->course?->liveClasses?->whereIn('status', ['upcoming', 'live']) ?? collect()) as $liveClass)
+                                <div class="mt-3 rounded-lg border border-sky-200 bg-sky-50 p-3">
+                                    <p class="text-xs font-bold text-slate-900">{{ $liveClass->title }}</p>
+                                    <p class="text-xs text-slate-600 mt-1">{{ $liveClass->starts_at }} · {{ strtoupper($liveClass->platform) }} · {{ $liveClass->capacity }} LMS seats</p>
+                                    <form method="POST" action="{{ route('plugins.live-classes.join', $liveClass) }}" class="mt-2">
+                                        @csrf
+                                        <button type="submit" class="rounded-lg bg-sky-600 px-3 py-2 text-xs font-bold text-white hover:bg-sky-700">Join Live Class</button>
+                                    </form>
+                                </div>
+                            @endforeach
+                        @endif
                     </div>
                 </article>
             @empty
