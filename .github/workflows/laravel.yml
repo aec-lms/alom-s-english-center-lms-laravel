@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   laravel-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
       DB_CONNECTION: sqlite
@@ -63,6 +63,20 @@ jobs:
           QUEUE_CONNECTION: sync
           MAIL_MAILER: array
         run: php artisan test
+
+      - name: Setup Node.js for browser E2E
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+
+      - name: Install Playwright
+        run: npm install --no-save --no-package-lock playwright@1.52.0
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Execute attendance offline browser E2E
+        run: node tests/e2e/attendance-offline.spec.cjs
 
       - name: Build production cPanel package
         run: bash scripts/build-cpanel-package.sh

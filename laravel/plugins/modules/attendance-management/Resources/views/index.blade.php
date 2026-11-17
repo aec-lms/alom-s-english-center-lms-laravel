@@ -6,7 +6,8 @@
         <h1 class="text-2xl font-extrabold text-slate-900">Attendance & Progress Tracking</h1>
         <p class="text-sm text-slate-500 mt-1">Select a batch and mark the whole class. Changes to saved attendance require a reason.</p>
     </div>
-    <form method="POST" action="{{ route('plugins.attendance.store') }}" class="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+    <div id="attendance-sync-status" role="status" aria-live="polite" class="rounded-lg bg-slate-100 px-4 py-3 text-sm text-slate-700">Online sync ready. Pending offline entries are saved on this device.</div>
+    <form id="attendance-register-form" method="POST" action="{{ route('plugins.attendance.store') }}" data-sync-url="{{ route('plugins.attendance.sync') }}" class="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
         @csrf
         <div class="grid gap-4 md:grid-cols-3">
             <label class="block text-sm font-semibold">Batch
@@ -62,20 +63,5 @@
         <div class="mt-4">{{ $records->links() }}</div>
     </div>
 </div>
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-    const batch = document.getElementById('attendance-batch');
-    const rows = document.querySelectorAll('[data-student-branch]');
-    const applyBranch = () => {
-        const branch = batch.selectedOptions[0]?.dataset.branch;
-        rows.forEach((row) => {
-            const visible = Boolean(branch) && row.dataset.studentBranch === branch;
-            row.hidden = !visible;
-            row.querySelectorAll('input, select').forEach((field) => { field.disabled = !visible; });
-        });
-    };
-    batch.addEventListener('change', applyBranch);
-    applyBranch();
-});
-</script>
+<script src="{{ asset('js/attendance-offline.js') }}" defer></script>
 @endsection
