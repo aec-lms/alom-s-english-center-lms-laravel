@@ -57,6 +57,11 @@ class PluginLifecycleTest extends TestCase
         $this->assertTrue(Schema::hasTable('learn_earn_exam_access'));
         $this->assertFalse(Schema::hasTable('courses'));
         $this->assertFalse(Schema::hasTable('exams'));
+
+        // The plugins remain installable; course/exam screens fail closed until optional integrations are enabled.
+        $this->get('/flash-sale')->assertStatus(503);
+        $student = $this->createUserWithRole('student');
+        $this->actingAs($student)->get('/learn-and-earn/exams')->assertStatus(503);
     }
 
     public function test_core_cannot_be_disabled_or_uninstalled(): void
