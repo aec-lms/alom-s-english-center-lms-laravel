@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use App\\Models\\Permission;
-use App\\Models\\Role;
-use App\\Models\\SystemSetting;
-use App\\Models\\User;
-use Illuminate\\Support\\Facades\\Crypt;
-use Tests\\TestCase;
+use App\Models\Permission;
+use App\Models\Role;
+use App\Models\SystemSetting;
+use App\Models\User;
+use Illuminate\Support\Facades\Crypt;
+use Tests\TestCase;
 
 class SetupWizardTest extends TestCase
 {
