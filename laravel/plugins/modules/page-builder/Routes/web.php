@@ -5,7 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Route;
 use Plugins\Modules\PageBuilder\Http\Controllers\PageBuilderController;
 
-Route::middleware(['web', 'installed', 'auth', 'plugin:page-builder', 'permission:page_builder.manage'])
+Route::middleware(['web', 'installed', 'auth', 'plugin:page-builder', 'permission:page_builder.manage', 'central.admin'])
     ->prefix('admin/page-builder')
     ->name('plugins.page_builder.')
     ->group(function (): void {

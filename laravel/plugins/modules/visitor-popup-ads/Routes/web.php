@@ -9,7 +9,7 @@ Route::middleware(['web', 'installed', 'plugin:visitor-popup-ads', 'throttle:60,
     ->post('/popup-ads/{popup}/click', [PopupController::class, 'trackClick'])
     ->name('plugins.popups.click');
 
-Route::middleware(['web', 'installed', 'auth', 'plugin:visitor-popup-ads', 'permission:marketing.popups.manage'])
+Route::middleware(['web', 'installed', 'auth', 'plugin:visitor-popup-ads', 'permission:marketing.popups.manage', 'central.admin'])
     ->prefix('plugins/visitor-popups')
     ->name('plugins.popups.')
     ->group(function (): void {

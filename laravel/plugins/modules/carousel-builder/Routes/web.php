@@ -5,7 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Route;
 use Plugins\Modules\CarouselBuilder\Http\Controllers\CarouselBuilderController;
 
-Route::middleware(['web', 'installed', 'auth', 'plugin:carousel-builder', 'permission:carousel_builder.manage'])
+Route::middleware(['web', 'installed', 'auth', 'plugin:carousel-builder', 'permission:carousel_builder.manage', 'central.admin'])
     ->prefix('admin/carousel-builder')
     ->name('plugins.carousel_builder.')
     ->group(function (): void {

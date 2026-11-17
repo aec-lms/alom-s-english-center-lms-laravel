@@ -5,7 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Route;
 use Plugins\Modules\CmsWebsite\Http\Controllers\CmsController;
 
-Route::middleware(['web', 'installed', 'auth', 'plugin:cms-website', 'permission:cms.manage'])
+Route::middleware(['web', 'installed', 'auth', 'plugin:cms-website', 'permission:cms.manage', 'central.admin'])
     ->prefix('admin/cms')
     ->name('plugins.cms.')
     ->group(function (): void {

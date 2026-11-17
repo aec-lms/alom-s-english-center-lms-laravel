@@ -76,24 +76,24 @@ Route::middleware('installed')->group(function (): void {
         Route::post('/dashboard/widgets', [DashboardController::class, 'saveWidgets'])
             ->name('dashboard.widgets')
             ->middleware('permission:core.dashboard.view');
-        Route::prefix('setup-wizard')->name('setup-wizard.')->middleware('permission:core.settings.manage')->group(function (): void {
+        Route::prefix('setup-wizard')->name('setup-wizard.')->middleware(['permission:core.settings.manage', 'central.admin'])->group(function (): void {
             Route::get('/', [SetupWizardController::class, 'index'])->name('index');
             Route::post('/complete', [SetupWizardController::class, 'complete'])->name('complete');
             Route::post('/{step}', [SetupWizardController::class, 'save'])->name('save');
         });
         Route::get('/menu-editor', [AdminMenuController::class, 'index'])
             ->name('menu-editor.index')
-            ->middleware('permission:core.settings.manage');
+            ->middleware(['permission:core.settings.manage', 'central.admin']);
         Route::post('/menu-editor', [AdminMenuController::class, 'update'])
             ->name('menu-editor.update')
-            ->middleware('permission:core.settings.manage');
+            ->middleware(['permission:core.settings.manage', 'central.admin']);
 
-        Route::prefix('site-navigation')->name('site-navigation.')->middleware('permission:core.settings.manage')->group(function (): void {
+        Route::prefix('site-navigation')->name('site-navigation.')->middleware(['permission:core.settings.manage', 'central.admin'])->group(function (): void {
             Route::get('/', [SiteNavigationController::class, 'index'])->name('index');
             Route::post('/', [SiteNavigationController::class, 'update'])->name('update');
         });
 
-        Route::prefix('plugins')->name('plugins.')->middleware('permission:core.plugins.manage')->group(function (): void {
+        Route::prefix('plugins')->name('plugins.')->middleware(['permission:core.plugins.manage', 'central.admin'])->group(function (): void {
             Route::get('/', [PluginCenterController::class, 'index'])->name('index');
             Route::post('/upload', [PluginCenterController::class, 'upload'])->name('upload');
             Route::post('/{slug}/install', [PluginCenterController::class, 'install'])->name('install');
@@ -110,7 +110,7 @@ Route::middleware('installed')->group(function (): void {
             Route::post('/{slug}/test-connection', [PluginCenterController::class, 'testConnection'])->name('test-connection');
         });
 
-        Route::prefix('updates')->name('updates.')->middleware('permission:core.updates.manage')->group(function (): void {
+        Route::prefix('updates')->name('updates.')->middleware(['permission:core.updates.manage', 'central.admin'])->group(function (): void {
             Route::get('/', [UpdateCenterController::class, 'index'])->name('index');
             Route::post('/', [UpdateCenterController::class, 'apply'])->name('apply');
             Route::post('/feed', [UpdateCenterController::class, 'saveFeed'])->name('feed');
@@ -118,47 +118,47 @@ Route::middleware('installed')->group(function (): void {
             Route::post('/{log}/rollback', [UpdateCenterController::class, 'rollback'])->name('rollback');
         });
 
-        Route::get('/health', [HealthMonitorController::class, 'index'])->name('health.index')->middleware('permission:core.dashboard.view');
-        Route::post('/health/check', [HealthMonitorController::class, 'check'])->name('health.check')->middleware('permission:core.dashboard.view');
+        Route::get('/health', [HealthMonitorController::class, 'index'])->name('health.index')->middleware(['permission:core.dashboard.view', 'central.admin']);
+        Route::post('/health/check', [HealthMonitorController::class, 'check'])->name('health.check')->middleware(['permission:core.dashboard.view', 'central.admin']);
 
-        Route::prefix('backups')->name('backups.')->middleware('permission:core.backups.manage')->group(function (): void {
+        Route::prefix('backups')->name('backups.')->middleware(['permission:core.backups.manage', 'central.admin'])->group(function (): void {
             Route::get('/', [BackupController::class, 'index'])->name('index');
             Route::post('/', [BackupController::class, 'store'])->name('store');
             Route::post('/{backup}/restore', [BackupController::class, 'restore'])->name('restore');
         });
 
-        Route::prefix('roles')->name('roles.')->middleware('permission:core.users.manage')->group(function (): void {
+        Route::prefix('roles')->name('roles.')->middleware(['permission:core.users.manage', 'central.admin'])->group(function (): void {
             Route::get('/', [RolePermissionController::class, 'index'])->name('index');
             Route::post('/', [RolePermissionController::class, 'store'])->name('store');
             Route::put('/{role}/permissions', [RolePermissionController::class, 'update'])->name('permissions.update');
         });
 
-        Route::prefix('users')->name('users.')->middleware('permission:core.users.manage')->group(function (): void {
+        Route::prefix('users')->name('users.')->middleware(['permission:core.users.manage', 'central.admin'])->group(function (): void {
             Route::get('/', [UserRoleController::class, 'index'])->name('index');
             Route::post('/', [UserRoleController::class, 'store'])->name('store');
         });
 
-        Route::prefix('institution-settings')->name('institution-settings.')->middleware('permission:core.settings.manage')->group(function (): void {
+        Route::prefix('institution-settings')->name('institution-settings.')->middleware(['permission:core.settings.manage', 'central.admin'])->group(function (): void {
             Route::get('/', [InstitutionSettingsController::class, 'edit'])->name('edit');
             Route::post('/', [InstitutionSettingsController::class, 'update'])->name('update');
         });
 
-        Route::prefix('site-identity')->name('site-identity.')->middleware('permission:core.settings.manage')->group(function (): void {
+        Route::prefix('site-identity')->name('site-identity.')->middleware(['permission:core.settings.manage', 'central.admin'])->group(function (): void {
             Route::get('/', [SiteIdentityController::class, 'edit'])->name('edit');
             Route::post('/', [SiteIdentityController::class, 'update'])->name('update');
         });
 
-        Route::prefix('site-layout')->name('site-layout.')->middleware('permission:core.settings.manage')->group(function (): void {
+        Route::prefix('site-layout')->name('site-layout.')->middleware(['permission:core.settings.manage', 'central.admin'])->group(function (): void {
             Route::get('/', [SiteLayoutController::class, 'index'])->name('index');
             Route::post('/', [SiteLayoutController::class, 'update'])->name('update');
         });
 
-        Route::prefix('site-widgets')->name('site-widgets.')->middleware('permission:core.settings.manage')->group(function (): void {
+        Route::prefix('site-widgets')->name('site-widgets.')->middleware(['permission:core.settings.manage', 'central.admin'])->group(function (): void {
             Route::get('/', [SiteWidgetController::class, 'index'])->name('index');
             Route::post('/', [SiteWidgetController::class, 'update'])->name('update');
         });
 
-        Route::prefix('appearance')->name('appearance.')->middleware('permission:core.settings.manage')->group(function (): void {
+        Route::prefix('appearance')->name('appearance.')->middleware(['permission:core.settings.manage', 'central.admin'])->group(function (): void {
             Route::get('/', [AppearanceController::class, 'index'])->name('index');
             Route::post('/', [AppearanceController::class, 'update'])->name('update');
             Route::post('/design', [AppearanceController::class, 'updateDesign'])->name('design');
@@ -171,7 +171,7 @@ Route::middleware('installed')->group(function (): void {
             Route::delete('/themes/{slug}', [ThemePackageController::class, 'uninstall'])->name('themes.uninstall');
         });
 
-        Route::prefix('recycle-bin')->name('recycle-bin.')->middleware('permission:core.recycle_bin.manage')->group(function (): void {
+        Route::prefix('recycle-bin')->name('recycle-bin.')->middleware(['permission:core.recycle_bin.manage', 'central.admin'])->group(function (): void {
             Route::get('/', [RecycleBinController::class, 'index'])->name('index');
             Route::post('/{type}/{recordId}/permanent-delete', [RecycleBinController::class, 'permanentlyDelete'])->whereNumber('recordId')->name('permanent-delete');
             Route::post('/students/{student}/restore', [RecycleBinController::class, 'restoreStudent'])->name('students.restore');
@@ -195,6 +195,6 @@ Route::middleware('installed')->group(function (): void {
 
         Route::get('/audit-logs', [AuditLogController::class, 'index'])
             ->name('audit.index')
-            ->middleware('permission:core.audit.view');
+            ->middleware(['permission:core.audit.view', 'central.admin']);
     });
 });
