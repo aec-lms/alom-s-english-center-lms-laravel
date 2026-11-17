@@ -87,6 +87,9 @@ class PaidLearnAndEarnCheckoutTest extends TestCase
         $expectedReference = $transaction->reference;
         $this->assertSame(150.0, (float) $transaction->amount);
         $this->assertSame('pending', $transaction->status);
+        $this->actingAs($student)->post("/learn-and-earn/exams/{$exam->id}/checkout", [
+            'payer_contact' => '01700000000',
+        ])->assertStatus(409);
 
         $this->actingAs($student)->get("/learn-and-earn/exams/{$exam->id}")->assertForbidden();
 
@@ -102,6 +105,9 @@ class PaidLearnAndEarnCheckoutTest extends TestCase
             'payment_reference' => $transaction->reference,
         ]);
         $this->assertSame('verified', $transaction->fresh()->status);
+        $this->actingAs($student)->post("/learn-and-earn/exams/{$exam->id}/checkout", [
+            'payer_contact' => '01700000000',
+        ])->assertRedirect("/learn-and-earn/exams/{$exam->id}");
 
         $this->actingAs($student)->get("/learn-and-earn/exams/{$exam->id}")->assertOk();
 
