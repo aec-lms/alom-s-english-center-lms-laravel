@@ -151,10 +151,19 @@ class PublicHomeController extends Controller
                     'type' => 'spacer',
                     'height' => max(16, min(240, (int) ($block['height'] ?? 48))),
                 ];
+            } elseif (in_array($type, ['course_grid', 'instructor_grid'], true)) {
+                $blocks[] = ['type' => $type];
             }
         }
 
-        return view('public.custom-page', compact('page', 'blocks'));
+        $courseCards = collect($blocks)->contains('type', 'course_grid')
+            ? $this->catalogCourses()->take(6)
+            : collect();
+        $instructorCards = collect($blocks)->contains('type', 'instructor_grid')
+            ? $this->catalogInstructors()
+            : [];
+
+        return view('public.custom-page', compact('page', 'blocks', 'courseCards', 'instructorCards'));
     }
 
     private function isSafePageBlockUrl(string $url): bool
