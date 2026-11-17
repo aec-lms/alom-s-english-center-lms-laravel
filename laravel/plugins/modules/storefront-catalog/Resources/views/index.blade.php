@@ -130,4 +130,6 @@
         </div>
     </div>
 </div>
+@includeIf('media-library::partials.editor-tools')
+
 @endsection
