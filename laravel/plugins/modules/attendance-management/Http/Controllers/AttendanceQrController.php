@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Plugins\Modules\AttendanceManagement\Models\AttendanceBatchMapping;
+use Plugins\Modules\AttendanceManagement\Models\AttendanceEntry;
 use Plugins\Modules\AttendanceManagement\Models\AttendanceRecord;
 use Plugins\Modules\GuardianManagement\Models\Guardian;
 use Plugins\Modules\StudentManagement\Models\Student;
@@ -64,11 +65,10 @@ class AttendanceQrController extends Controller
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
         $mapping = AttendanceBatchMapping::query()->findOrFail($mappingId);
-        // The legacy attendance_records.batch_id is a required FK to batches.
-        // Never write a study_batches ID into that legacy column.
-        abort_unless($mapping->source_type === 'course_batch', 422, 'QR attendance is not enabled for this batch source yet.');
-        $batch = DB::table('batches')->where('id', $mapping->source_id)->first();
-        abort_unless($batch, 404, 'Course batch not found.');
+        abort_unless(in_array($mapping->source_type, ['course_batch', 'study_batch'], true), 422, 'Unsupported attendance batch source.');
+        $sourceTable = $mapping->source_type === 'course_batch' ? 'batches' : 'study_batches';
+        $batch = DB::table($sourceTable)->where('id', $mapping->source_id)->first();
+        abort_unless($batch && $batch->branch_id !== null, 422, 'Assign this batch to an active branch before issuing QR attendance.');
         if ($actor->hasRole('branch_manager')) {
             abort_if((int) $actor->branch_id !== (int) $batch->branch_id, 403, 'Branch isolation violation.');
         }
@@ -161,7 +161,7 @@ class AttendanceQrController extends Controller
             abort_if((int) $session->branch_id !== (int) $student->branch_id, 403, 'Student is outside this batch branch.');
 
             $mapping = AttendanceBatchMapping::query()->findOrFail((int) $session->attendance_batch_mapping_id);
-            abort_unless($mapping->source_type === 'course_batch', 422, 'Unsupported attendance batch source.');
+            abort_unless(in_array($mapping->source_type, ['course_batch', 'study_batch'], true), 422, 'Unsupported attendance batch source.');
             $roster = DB::table('attendance_batch_rosters')
                 ->where('attendance_batch_mapping_id', $mapping->id)
                 ->where('student_id', $student->id)
@@ -170,7 +170,8 @@ class AttendanceQrController extends Controller
 
             abort_if(DB::table('attendance_qr_checkins')->where('attendance_qr_session_id', $session->id)->where('student_id', $student->id)->exists(), 409, 'This QR session has already been used by this student.');
 
-            $batch = DB::table('batches')->where('id', $mapping->source_id)->first();
+            $sourceTable = $mapping->source_type === 'course_batch' ? 'batches' : 'study_batches';
+            $batch = DB::table($sourceTable)->where('id', $mapping->source_id)->first();
             abort_unless($batch && (int) $batch->branch_id === (int) $student->branch_id, 403, 'Batch membership is no longer valid.');
 
             $gpsConsentId = null;
@@ -203,16 +204,17 @@ class AttendanceQrController extends Controller
                 ]);
             }
 
-            $record = AttendanceRecord::query()
-                ->where('batch_id', $batch->id)->where('student_id', $student->id)
-                ->whereDate('attendance_date', now()->toDateString())->lockForUpdate()->first();
-            if ($record && $record->status !== 'present') {
+            $entry = AttendanceEntry::query()
+                ->where('attendance_batch_mapping_id', $mapping->id)
+                ->where('student_id', $student->id)
+                ->whereDate('attendance_date', now()->toDateString())
+                ->lockForUpdate()
+                ->first();
+            if ($entry && $entry->status !== 'present') {
                 abort(409, 'Attendance already exists with a different status. Ask the teacher to review it.');
             }
-
-            if (!$record) {
-                $record = AttendanceRecord::query()->create([
-                    'batch_id' => (int) $batch->id,
+            if (!$entry) {
+                $entry = AttendanceEntry::query()->create([
                     'attendance_batch_mapping_id' => (int) $mapping->id,
                     'student_id' => (int) $student->id,
                     'branch_id' => (int) $student->branch_id,
@@ -222,9 +224,42 @@ class AttendanceQrController extends Controller
                     'marked_by' => $session->issued_by,
                     'source' => 'qr',
                 ]);
+                DB::table('attendance_entry_audit_logs')->insert([
+                    'attendance_entry_id' => $entry->id,
+                    'actor_id' => $actor->id,
+                    'event' => 'qr_checkin',
+                    'old_status' => null,
+                    'new_status' => 'present',
+                    'reason' => null,
+                    'source' => 'qr',
+                    'occurred_at' => now(),
+                ]);
+            }
+
+            $legacyRecord = null;
+            if ($mapping->source_type === 'course_batch') {
+                $legacyRecord = AttendanceRecord::query()
+                    ->where('batch_id', $batch->id)
+                    ->where('student_id', $student->id)
+                    ->whereDate('attendance_date', now()->toDateString())
+                    ->lockForUpdate()
+                    ->first();
+                if (!$legacyRecord) {
+                    $legacyRecord = AttendanceRecord::query()->create([
+                        'batch_id' => (int) $batch->id,
+                        'attendance_batch_mapping_id' => (int) $mapping->id,
+                        'student_id' => (int) $student->id,
+                        'branch_id' => (int) $student->branch_id,
+                        'attendance_date' => now()->toDateString(),
+                        'status' => 'present',
+                        'remarks' => 'QR check-in',
+                        'marked_by' => $session->issued_by,
+                        'source' => 'qr',
+                    ]);
+                }
                 if (Schema::hasTable('attendance_audit_logs')) {
                     DB::table('attendance_audit_logs')->insert([
-                        'attendance_record_id' => $record->id,
+                        'attendance_record_id' => $legacyRecord->id,
                         'actor_id' => $actor->id,
                         'event' => 'qr_checkin',
                         'old_status' => null,
@@ -239,7 +274,8 @@ class AttendanceQrController extends Controller
             DB::table('attendance_qr_checkins')->insert([
                 'attendance_qr_session_id' => $session->id,
                 'student_id' => $student->id,
-                'attendance_record_id' => $record->id,
+                'attendance_record_id' => $legacyRecord?->id,
+                'attendance_entry_id' => $entry->id,
                 'gps_consent_id' => $gpsConsentId,
                 'gps_verified' => $gpsVerified,
                 'gps_accuracy_meters' => $gpsVerified ? $gpsAccuracy : null,
@@ -249,10 +285,10 @@ class AttendanceQrController extends Controller
                 'updated_at' => now(),
             ]);
 
-            return ['record_id' => $record->id, 'checked_in_at' => now()->toIso8601String()];
+            return ['record_id' => $legacyRecord?->id, 'entry_id' => $entry->id, 'checked_in_at' => now()->toIso8601String()];
         });
 
-        $this->audit->log('attendance.qr.checked_in', 'attendance_record', (string) $result['record_id'], ['student_id' => $student->id], $actor->id);
+        $this->audit->log('attendance.qr.checked_in', 'attendance_entry', (string) $result['entry_id'], ['student_id' => $student->id], $actor->id);
         return response()->json(['status' => 'ok'] + $result);
     }
 
@@ -273,7 +309,7 @@ class AttendanceQrController extends Controller
     {
         abort_unless($request->user()->hasRole('student'), 403);
         $student = Student::query()->where('user_id', $request->user()->id)->firstOrFail();
-        $records = AttendanceRecord::query()->with('batchIdentity')->where('student_id', $student->id)->latest('attendance_date')->paginate(30);
+        $records = AttendanceEntry::query()->with('batchIdentity')->where('student_id', $student->id)->latest('attendance_date')->paginate(30);
         return view('attendance-management::history', ['records' => $records, 'title' => 'My attendance']);
     }
 
@@ -285,7 +321,7 @@ class AttendanceQrController extends Controller
         $linked = DB::table('guardian_student')->where('guardian_id', $guardian->id)->where('student_id', $studentId)->exists();
         abort_unless($linked, 403, 'You are not authorized to view this student attendance.');
 
-        $records = AttendanceRecord::query()->with('batchIdentity')
+        $records = AttendanceEntry::query()->with('batchIdentity')
             ->where('student_id', $studentId)
             ->when($guardian->branch_id !== null, fn ($query) => $query->where('branch_id', $guardian->branch_id))
             ->latest('attendance_date')->paginate(30);
