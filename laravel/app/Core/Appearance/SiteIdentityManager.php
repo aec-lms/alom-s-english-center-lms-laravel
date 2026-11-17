@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace App\Core\Appearance;
+namespace App\\Core\\Appearance;
 
-use App\Models\SystemSetting;
-use Illuminate\Support\Facades\Schema;
+use App\\Models\\SystemSetting;
+use Illuminate\\Support\\Facades\\Schema;
 
 final class SiteIdentityManager
 {
@@ -54,11 +54,21 @@ final class SiteIdentityManager
             return $url;
         }
 
-        if (!filter_var($url, FILTER_VALIDATE_URL)) {
+        $parts = parse_url($url);
+        if (!is_array($parts)
+            || !in_array(strtolower((string) ($parts['scheme'] ?? '')), ['http', 'https'], true)
+            || empty($parts['host'])
+            || isset($parts['user'])
+            || isset($parts['pass'])) {
             return null;
         }
 
-        return in_array(strtolower((string) parse_url($url, PHP_URL_SCHEME)), ['http', 'https'], true) ? $url : null;
+        $host = strtolower((string) $parts['host']);
+        $validHost = $host === 'localhost'
+            || filter_var($host, FILTER_VALIDATE_IP) !== false
+            || filter_var($host, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) !== false;
+
+        return $validHost ? $url : null;
     }
 
     private function publicUrl(string $path)
