@@ -24,6 +24,7 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:attendance-management'])
     ->name('plugins.attendance.')
     ->group(function (): void {
         Route::post('/qr/check-in', [AttendanceQrController::class, 'checkin'])->name('qr.checkin');
+        Route::delete('/gps-consent', [AttendanceQrController::class, 'revokeGpsConsent'])->name('gps-consent.revoke');
         Route::get('/my-history', [AttendanceQrController::class, 'studentHistory'])->name('student.history');
         Route::get('/guardian/{studentId}', [AttendanceQrController::class, 'guardianHistory'])->whereNumber('studentId')->name('guardian.history');
     });
