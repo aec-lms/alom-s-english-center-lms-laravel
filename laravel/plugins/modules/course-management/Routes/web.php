@@ -30,6 +30,18 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:course-management', 'perm
         Route::delete('/live-classes/{liveClass}', [CourseController::class, 'destroyLiveClass'])->name('live.destroy');
     });
 
+Route::middleware(['web', 'installed', 'auth', 'plugin:course-management'])
+    ->prefix('live-classes/{liveClass}')
+    ->name('plugins.live-classes.')
+    ->group(function (): void {
+        Route::post('/join', [\\Plugins\\Modules\\CourseManagement\\Http\\Controllers\\LiveClassAccessController::class, 'join'])
+            ->middleware('throttle:10,1')->name('join');
+        Route::post('/heartbeat', [\\Plugins\\Modules\\CourseManagement\\Http\\Controllers\\LiveClassAccessController::class, 'heartbeat'])
+            ->middleware('throttle:6,1')->name('heartbeat');
+        Route::post('/leave', [\\Plugins\\Modules\\CourseManagement\\Http\\Controllers\\LiveClassAccessController::class, 'leave'])
+            ->middleware('throttle:10,1')->name('leave');
+    });
+
 Route::middleware(['web', 'installed', 'auth', 'plugin:course-management'])->group(function (): void {
     Route::get('/my-learning/enrollments', [\Plugins\Modules\CourseManagement\Http\Controllers\EnrollmentController::class, 'my'])
         ->name('plugins.enrollments.my');
