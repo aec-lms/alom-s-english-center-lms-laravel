@@ -163,7 +163,6 @@ class PageBuilderController extends Controller
                 ];
             } elseif ($type === 'spacer') {
                 $normalized[] = ['type' => 'spacer', 'height' => max(16, min(240, (int) ($block['height'] ?? 48)))];
-            }
             } elseif (in_array($type, ['course_grid', 'instructor_grid'], true)) {
                 $normalized[] = ['type' => $type];
             }
