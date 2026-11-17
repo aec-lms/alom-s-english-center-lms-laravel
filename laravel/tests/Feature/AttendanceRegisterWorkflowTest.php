@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use App\Models\Permission;
 use Illuminate\Support\Facades\DB;
+use Plugins\Modules\AttendanceManagement\Models\AttendanceBatchMapping;
 use Plugins\Modules\StudentManagement\Models\Student;
 use Tests\TestCase;
 
