@@ -48,7 +48,7 @@ class AdminMenuController extends Controller
             $preferences = is_string($storedPreferences) && $storedPreferences !== ''
                 ? json_decode($storedPreferences, true, 512, JSON_THROW_ON_ERROR)
                 : [];
-        } catch (\\JsonException) {
+        } catch (\JsonException) {
             $preferences = [];
         }
         if (!is_array($preferences)) {
