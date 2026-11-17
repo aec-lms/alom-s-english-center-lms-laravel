@@ -17,5 +17,13 @@
     "settings_schema": [],
     "optional_dependencies": [
         "fees-management"
+    ],
+    "admin_menu": [
+        {
+            "group": "Finance & Gateways",
+            "label": "Payments & Ledger",
+            "route": "plugins.payments.index",
+            "order": 100
+        }
     ]
 }
