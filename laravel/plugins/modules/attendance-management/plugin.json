@@ -1,16 +1,18 @@
 {
     "slug": "attendance-management",
     "name": "Attendance & Progress Tracking",
-    "version": "2.1.0",
+    "version": "2.0.0",
     "author": "Alom's English Center",
     "category": "academic",
-    "description": "Online and offline batch attendance, GPS check-in, short-lived QR attendance, audit history and student/guardian reports.",
+    "description": "Batch daily attendance registers, student progress tracking, and attendance summary analytics.",
     "core_compatibility": "^2.0",
-    "dependencies": ["branch-management", "student-management", "batch-management"],
+    "dependencies": ["branch-management", "student-management", "course-management"],
     "provider": "Plugins\\Modules\\AttendanceManagement\\Providers\\AttendanceManagementServiceProvider",
     "permissions": [
-        {"slug": "attendance.manage", "name": "Record & View Student Attendance"},
-        {"slug": "attendance.excuse", "name": "Mark Excused Attendance"}
+        {
+            "slug": "attendance.manage",
+            "name": "Record & View Student Attendance"
+        }
     ],
     "settings_schema": []
 }
