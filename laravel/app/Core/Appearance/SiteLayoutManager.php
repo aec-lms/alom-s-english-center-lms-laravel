@@ -43,8 +43,9 @@ final class SiteLayoutManager
     public function footer(): array
     {
         $saved=$this->read('site.layout.footer');
+        $columns=(int)($saved['columns']??4);
         return [
-            'columns'=>in_array((int)($saved['columns']??4),[2,3,4],true)?(int)$saved['columns']:4,
+            'columns'=>in_array($columns,[2,3,4],true)?$columns:4,
             'show_payment_strip'=>(bool)($saved['show_payment_strip']??true),
             'sections'=>$this->sections($saved['sections']??[],self::FOOTER_DEFAULTS['sections']),
         ];
