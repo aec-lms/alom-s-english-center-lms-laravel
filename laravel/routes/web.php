@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\AppearanceController;
 use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\BackupController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\RolePermissionController;
 use App\Http\Controllers\Admin\AdminMenuController;
 use App\Http\Controllers\Admin\InstitutionSettingsController;
 use App\Http\Controllers\Admin\HealthMonitorController;
@@ -108,6 +109,12 @@ Route::middleware('installed')->group(function (): void {
             Route::get('/', [BackupController::class, 'index'])->name('index');
             Route::post('/', [BackupController::class, 'store'])->name('store');
             Route::post('/{backup}/restore', [BackupController::class, 'restore'])->name('restore');
+        });
+
+        Route::prefix('roles')->name('roles.')->middleware('permission:core.users.manage')->group(function (): void {
+            Route::get('/', [RolePermissionController::class, 'index'])->name('index');
+            Route::post('/', [RolePermissionController::class, 'store'])->name('store');
+            Route::put('/{role}/permissions', [RolePermissionController::class, 'update'])->name('permissions.update');
         });
 
         Route::prefix('users')->name('users.')->middleware('permission:core.users.manage')->group(function (): void {
