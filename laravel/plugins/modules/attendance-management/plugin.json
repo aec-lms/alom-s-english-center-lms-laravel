@@ -28,7 +28,8 @@
             "group": "Academic & Operations",
             "label": "Attendance",
             "route": "plugins.attendance.index",
-            "order": 100
+            "order": 100,
+            "permission": "attendance.manage"
         }
     ]
 }
