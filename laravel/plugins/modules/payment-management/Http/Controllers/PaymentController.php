@@ -84,6 +84,12 @@ class PaymentController extends Controller
             abort(403, 'Branch isolation violation.');
         }
 
+        if ($transaction->gateway_slug !== 'offline') {
+            return back()->withErrors([
+                'refund' => 'Online refunds are disabled until this gateway has a verified provider refund adapter. No refund record or invoice balance was changed.',
+            ]);
+        }
+
         $validated = $request->validate([
             'amount' => ['required', 'numeric', 'min:0.01'],
             'reason' => ['required', 'string', 'max:255'],
