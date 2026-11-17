@@ -199,10 +199,16 @@ class AttendanceRegisterWorkflowTest extends TestCase
 
         $issued = $this->actingAs($admin)->postJson("/admin/attendance/batches/{$mapping->id}/qr", [
             'expires_in_minutes' => 5,
+            'latitude' => 23.8103,
+            'longitude' => 90.4125,
+            'radius_meters' => 100,
         ])->assertOk()->json();
         $this->actingAs($studentUser)->postJson('/attendance/qr/check-in', [
             'token' => $issued['token'],
             'gps_consent' => true,
+            'latitude' => 23.8103,
+            'longitude' => 90.4125,
+            'gps_accuracy_meters' => 5,
         ])->assertOk()->assertJson(['status' => 'ok']);
 
         $this->assertDatabaseHas('attendance_records', [
@@ -212,6 +218,7 @@ class AttendanceRegisterWorkflowTest extends TestCase
             'source' => 'qr',
         ]);
         $this->assertDatabaseHas('attendance_gps_consents', ['user_id' => $studentUser->id, 'policy_version' => 'attendance-gps-v1']);
+        $this->assertDatabaseHas('attendance_qr_checkins', ['student_id' => $student->id, 'gps_verified' => true, 'gps_accuracy_meters' => 5]);
         $this->actingAs($studentUser)->postJson('/attendance/qr/check-in', [
             'token' => $issued['token'],
         ])->assertStatus(409);
