@@ -165,7 +165,7 @@
 </div>
 
 <template id="page-block-template">
-    <div data-block class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+    <div data-block draggable="true" class="rounded-xl border border-slate-200 bg-slate-50 p-4">
         <div class="mb-3 flex items-center justify-between gap-2"><span data-block-label class="text-xs font-bold text-slate-700">New block</span><div class="flex items-center gap-3"><button type="button" data-move-up class="text-xs font-semibold text-slate-600">↑ Up</button><button type="button" data-move-down class="text-xs font-semibold text-slate-600">↓ Down</button><button type="button" data-remove-block class="text-xs font-semibold text-rose-600">Remove</button></div></div>
         <label class="text-xs font-semibold text-slate-600">Block type<select data-name="type" data-block-type class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"><option value="text">Text</option><option value="heading">Heading</option><option value="image">Image</option><option value="button">Button</option><option value="spacer">Spacing</option></select></label>
         <div data-field="content" class="mt-3"><label class="text-xs font-semibold text-slate-600">Text / Heading / Button label<textarea data-name="content" rows="3" maxlength="12000" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></textarea></label></div>
