@@ -20,7 +20,8 @@
             "group": "CMS, Builders & AI",
             "label": "Mobile App (iOS & Android)",
             "route": "plugins.mobile_app.index",
-            "order": 100
+            "order": 100,
+            "permission": "mobile.api.access"
         }
     ]
 }
