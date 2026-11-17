@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Middleware\EnsureCentralAdmin;
 use App\Http\Middleware\EnsureInstalled;
 use App\Http\Middleware\EnsureNotInstalled;
 use App\Http\Middleware\EnsurePluginEnabled;
@@ -23,6 +24,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'not.installed' => EnsureNotInstalled::class,
             'plugin' => EnsurePluginEnabled::class,
             'permission' => RolePermissionMiddleware::class,
+            'central.admin' => EnsureCentralAdmin::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
