@@ -105,23 +105,53 @@ class LiveClassAccessController extends Controller
 
         abort_unless(in_array($liveClass->status, ['upcoming', 'live'], true), 403, 'This live class is not available.');
 
-        $participant = LiveClassParticipant::query()
-            ->where('live_class_id', $liveClass->id)
-            ->where('user_id', $student->id)
-            ->whereNull('left_at')
-            ->firstOrFail();
+        $now = now();
+        $presence = DB::transaction(function () use ($liveClass, $student, $now): array {
+            // Use the same class-row lock as join() so a stale heartbeat cannot
+            // reclaim an expired seat concurrently with another student's join.
+            $lockedClass = LiveClass::query()->whereKey($liveClass->id)->lockForUpdate()->firstOrFail();
+            abort_unless(in_array($lockedClass->status, ['upcoming', 'live'], true), 403, 'This live class is not available.');
 
-        $participant->update(['last_seen_at' => now()]);
-        $activeCount = LiveClassParticipant::query()
-            ->where('live_class_id', $liveClass->id)
-            ->whereNull('left_at')
-            ->where('last_seen_at', '>=', now()->subMinutes(2))
-            ->count();
+            $participant = LiveClassParticipant::query()
+                ->where('live_class_id', $lockedClass->id)
+                ->where('user_id', $student->id)
+                ->whereNull('left_at')
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $cutoff = $now->copy()->subMinutes(2);
+            $wasPresent = $participant->last_seen_at && $participant->last_seen_at->greaterThanOrEqualTo($cutoff);
+
+            if (!$wasPresent) {
+                $activeCount = LiveClassParticipant::query()
+                    ->where('live_class_id', $lockedClass->id)
+                    ->whereNull('left_at')
+                    ->where('last_seen_at', '>=', $cutoff)
+                    ->count();
+
+                abort_if(
+                    $activeCount >= max(1, (int) $lockedClass->capacity),
+                    429,
+                    'This live class has reached its LMS join capacity. Please rejoin when a seat is available.'
+                );
+            }
+
+            $participant->update(['last_seen_at' => $now]);
+
+            return [
+                'active_count' => LiveClassParticipant::query()
+                    ->where('live_class_id', $lockedClass->id)
+                    ->whereNull('left_at')
+                    ->where('last_seen_at', '>=', $cutoff)
+                    ->count(),
+                'last_seen_at' => $now->toIso8601String(),
+            ];
+        });
 
         return response()->json([
             'active' => true,
-            'active_count' => $activeCount,
-            'last_seen_at' => now()->toIso8601String(),
+            'active_count' => $presence['active_count'],
+            'last_seen_at' => $presence['last_seen_at'],
         ]);
     }
 
