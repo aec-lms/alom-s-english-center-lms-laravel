@@ -38,8 +38,8 @@ export const options = {
   thresholds: {
     http_req_failed: ['rate<0.01'],
     http_req_duration: ['p(95)<5000'],
-    aec_auth_success: ['rate>0.99'],
-    aec_join_success: ['rate>0.99'],
+    aec_auth_success: ['rate==1'],
+    aec_join_success: ['rate==1'],
     aec_heartbeat_success: ['rate>0.99'],
     aec_seat_overflow: ['count==0'],
   },
