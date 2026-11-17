@@ -21,6 +21,7 @@ final class PluginManifest
         public readonly array $permissions,
         public readonly array $settingsSchema,
         public readonly string $basePath,
+        public readonly array $optionalDependencies = [],
         public readonly bool $isCore = false,
         public readonly array $adminMenu = [],
     ) {}
@@ -68,6 +69,7 @@ final class PluginManifest
             permissions: (array) ($data['permissions'] ?? []),
             settingsSchema: (array) ($data['settings_schema'] ?? []),
             basePath: $directory,
+            optionalDependencies: array_values(array_filter((array) ($data['optional_dependencies'] ?? []), 'is_string')),
             isCore: (bool) ($data['is_core'] ?? false),
             adminMenu: array_values(array_filter((array) ($data['admin_menu'] ?? []), 'is_array')),
         );
@@ -84,6 +86,7 @@ final class PluginManifest
             'description' => $this->description,
             'core_compatibility' => $this->coreCompatibility,
             'dependencies' => $this->dependencies,
+            'optional_dependencies' => $this->optionalDependencies,
             'provider' => $this->providerClass,
             'permissions' => $this->permissions,
             'settings_schema' => $this->settingsSchema,
