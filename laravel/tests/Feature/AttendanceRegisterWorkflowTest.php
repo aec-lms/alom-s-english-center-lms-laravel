@@ -29,13 +29,21 @@ class AttendanceRegisterWorkflowTest extends TestCase
             'admission_date' => now()->toDateString(),
             'status' => 'active',
         ]);
-        $batch = DB::table('study_batches')->insertGetId([
+        $course = DB::table('courses')->insertGetId([
             'branch_id' => $branch,
-            'course_title' => 'Attendance Test',
-            'batch_code' => 'ATT-REG-BATCH',
+            'code' => 'ATT-REG-COURSE',
+            'title' => 'Attendance Test Course',
+            'slug' => 'attendance-test-course',
+            'price' => 0,
+            'status' => 'published',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $batch = DB::table('batches')->insertGetId([
+            'course_id' => $course,
+            'branch_id' => $branch,
             'name' => 'Attendance Test Batch',
-            'schedule' => 'Mon 10:00-11:00',
-            'max_capacity' => 20,
+            'capacity' => 20,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
