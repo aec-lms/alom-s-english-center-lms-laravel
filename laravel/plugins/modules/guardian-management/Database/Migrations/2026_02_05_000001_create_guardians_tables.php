@@ -21,11 +21,12 @@ return new class extends Migration {
             });
         }
 
-        if (!Schema::hasTable('guardian_student')) {
+        // Student links are optional: do not create a pivot table when Student Management is absent.
+        if (Schema::hasTable('students') && !Schema::hasTable('guardian_student')) {
             Schema::create('guardian_student', function (Blueprint $table): void {
                 $table->id();
                 $table->foreignId('guardian_id')->constrained('guardians')->cascadeOnDelete();
-                $table->unsignedBigInteger('student_id')->index();
+                $table->foreignId('student_id')->constrained('students')->cascadeOnDelete();
                 $table->boolean('is_primary')->default(true);
                 $table->timestamps();
                 $table->unique(['guardian_id', 'student_id']);
