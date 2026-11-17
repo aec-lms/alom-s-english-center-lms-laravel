@@ -17,7 +17,7 @@
         .border-slate-200,.border-slate-300 { border-color:var(--aec-border)!important; }
         .text-blue-600,.text-blue-700 { color:var(--aec-link)!important; }
         .bg-blue-600 { background-color:var(--aec-primary)!important; }
-        .hover\\:bg-blue-700:hover { background-color:var(--aec-primary-hover)!important; }
+        .hover\:bg-blue-700:hover { background-color:var(--aec-primary-hover)!important; }
         input:not([type=color]),select,textarea { background-color:var(--aec-input-bg);color:var(--aec-input-text);border-color:var(--aec-border); }
         aside { background-color:var(--aec-sidebar-bg)!important;color:var(--aec-sidebar-text)!important; }
         aside > div:first-child { background-color:var(--aec-secondary)!important; }

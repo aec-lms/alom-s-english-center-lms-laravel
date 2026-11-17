@@ -27,7 +27,7 @@ class ThemeAppearanceTest extends TestCase
             'name' => 'Manage Core System Settings',
             'module' => 'core',
         ]);
-        $role->permissions()->sync([$permission->id]);
+        $role->permissions()->syncWithoutDetaching([$permission->id]);
         $admin->roles()->attach($role);
 
         $this->actingAs($admin)->get(route('admin.appearance.index'))
@@ -85,7 +85,7 @@ class ThemeAppearanceTest extends TestCase
             'name' => 'Manage Core System Settings',
             'module' => 'core',
         ]);
-        $role->permissions()->sync([$permission->id]);
+        $role->permissions()->syncWithoutDetaching([$permission->id]);
         $admin->roles()->attach($role);
         PluginRecord::query()->create([
             'slug' => 'student-management',
@@ -131,7 +131,7 @@ class ThemeAppearanceTest extends TestCase
             'name' => 'Manage Core System Settings',
             'module' => 'core',
         ]);
-        $role->permissions()->sync([$permission->id]);
+        $role->permissions()->syncWithoutDetaching([$permission->id]);
         $admin->roles()->attach($role);
 
         $this->actingAs($admin)->from(route('admin.appearance.index'))->post(route('admin.appearance.update'), [

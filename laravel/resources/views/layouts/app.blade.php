@@ -116,7 +116,7 @@
         .text-slate-500,.text-slate-600 { color:var(--aec-muted)!important; }
         .border-slate-200,.border-slate-300 { border-color:var(--aec-border)!important; }
         .bg-blue-600 { background-color:var(--aec-primary)!important; }
-        .hover\\:bg-blue-700:hover { background-color:var(--aec-primary-hover)!important; }
+        .hover\:bg-blue-700:hover { background-color:var(--aec-primary-hover)!important; }
         .text-blue-600,.text-blue-700 { color:var(--aec-link)!important; }
         input:not([type=color]),select,textarea { background-color:var(--aec-input-bg);color:var(--aec-input-text);border-color:var(--aec-border); }
         @keyframes marqueeLeft {
