@@ -23,7 +23,8 @@
             "group": "Academic & Operations",
             "label": "Guardians",
             "route": "plugins.guardians.index",
-            "order": 100
+            "order": 100,
+            "permission": "guardians.manage"
         }
     ]
 }
