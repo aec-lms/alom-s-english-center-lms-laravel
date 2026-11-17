@@ -153,7 +153,7 @@ class AttendanceRegisterWorkflowTest extends TestCase
     public function test_qr_checkin_requires_roster_and_rejects_replay_and_expired_tokens(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['branch-management', 'student-management', 'course-management', 'attendance-management']);
+        $this->activatePlugins(['branch-management', 'student-management', 'course-management', 'batch-management', 'attendance-management']);
 
         $branch = DB::table('branches')->insertGetId([
             'code' => 'ATT-QR-01',
