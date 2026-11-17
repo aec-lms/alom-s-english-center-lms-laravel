@@ -12,8 +12,8 @@ return new class extends Migration {
         if (!Schema::hasTable('attendance_records')) {
             Schema::create('attendance_records', function (Blueprint $table): void {
                 $table->id();
-                $table->unsignedBigInteger('batch_id');
-                $table->unsignedBigInteger('student_id');
+                $table->unsignedBigInteger('batch_id')->index();
+                $table->unsignedBigInteger('student_id')->index();
                 $table->unsignedBigInteger('branch_id')->nullable()->index();
                 $table->date('attendance_date');
                 $table->string('status', 20)->default('present'); // present, absent, late, excused
