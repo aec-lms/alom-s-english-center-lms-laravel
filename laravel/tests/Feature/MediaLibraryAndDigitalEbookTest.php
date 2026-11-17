@@ -126,6 +126,19 @@ class MediaLibraryAndDigitalEbookTest extends TestCase
         $expectedReference = $transaction->reference;
         $this->assertSame(450.0, (float) $transaction->amount);
         $this->assertSame($itemId, (int) $transaction->storefront_item_id);
+
+        $this->actingAs($student)->post('/universal-checkout', [
+            'storefront_item_id' => $itemId,
+            'payer_name' => $student->name,
+            'payer_contact' => '01700000000',
+            'item_title' => 'Client supplied fake title',
+            'gateway' => 'sslcommerz',
+            'amount' => 1,
+        ])->assertStatus(409);
+        $this->assertSame(1, UniversalPaymentTransaction::query()
+            ->where('user_id', $student->id)
+            ->where('storefront_item_id', $itemId)
+            ->count());
         $this->actingAs($student)->get('/ebooks/protected-guide/download')->assertForbidden();
 
         $this->post('/universal-payment/sslcommerz/success', [
