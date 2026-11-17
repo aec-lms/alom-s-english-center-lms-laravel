@@ -9,12 +9,43 @@
     "dependencies": [],
     "provider": "Plugins\\Modules\\GoogleConsole\\Providers\\GoogleConsoleServiceProvider",
     "permissions": [
-        { "slug": "marketing.google_console.manage", "name": "Manage Google Search Console & Analytics" }
+        {
+            "slug": "marketing.google_console.manage",
+            "name": "Manage Google Search Console & Analytics"
+        }
     ],
     "settings_schema": [
-        { "key": "gsc_verification_token", "label": "Search Console Verification Meta Token", "type": "text", "secret": false },
-        { "key": "ga4_measurement_id", "label": "Google Analytics 4 Measurement ID (G-...)", "type": "text", "secret": false },
-        { "key": "gtm_container_id", "label": "Google Tag Manager Container ID (GTM-...)", "type": "text", "secret": false },
-        { "key": "auto_inject", "label": "Enable Public Tag Injection (1/0)", "type": "text", "secret": false }
+        {
+            "key": "gsc_verification_token",
+            "label": "Search Console Verification Meta Token",
+            "type": "text",
+            "secret": false
+        },
+        {
+            "key": "ga4_measurement_id",
+            "label": "Google Analytics 4 Measurement ID (G-...)",
+            "type": "text",
+            "secret": false
+        },
+        {
+            "key": "gtm_container_id",
+            "label": "Google Tag Manager Container ID (GTM-...)",
+            "type": "text",
+            "secret": false
+        },
+        {
+            "key": "auto_inject",
+            "label": "Enable Public Tag Injection (1/0)",
+            "type": "text",
+            "secret": false
+        }
+    ],
+    "admin_menu": [
+        {
+            "group": "Marketing, Growth & SEO",
+            "label": "Google Console & GA4",
+            "route": "plugins.google_console.index",
+            "order": 100
+        }
     ]
 }
