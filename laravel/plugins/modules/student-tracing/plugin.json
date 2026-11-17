@@ -1,7 +1,7 @@
 {
     "slug": "student-tracing",
     "name": "Student Activity & Progress Trace",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "author": "Alom's English Center",
     "category": "academic",
     "description": "Privacy-conscious, branch-scoped student activity timeline with searchable lifecycle events and CSV export.",
@@ -9,8 +9,20 @@
     "dependencies": [],
     "provider": "Plugins\\Modules\\StudentTracing\\Providers\\StudentTracingServiceProvider",
     "permissions": [
-        { "slug": "students.trace.view", "name": "View Student Activity Trace" },
-        { "slug": "students.trace.export", "name": "Export Student Activity Trace" }
+        {
+            "slug": "students.trace.view",
+            "name": "View Student Activity Trace"
+        },
+        {
+            "slug": "students.trace.export",
+            "name": "Export Student Activity Trace"
+        }
     ],
-    "settings_schema": []
+    "settings_schema": [],
+    "optional_dependencies": [
+        "student-management",
+        "attendance-management",
+        "course-management",
+        "exam-management"
+    ]
 }
