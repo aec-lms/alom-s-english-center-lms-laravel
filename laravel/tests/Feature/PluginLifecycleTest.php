@@ -10,6 +10,7 @@ use App\Models\PluginRecord;
 use App\Models\PluginSetting;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 use Tests\TestCase;
 use ZipArchive;
@@ -37,6 +38,25 @@ class PluginLifecycleTest extends TestCase
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('branch-management');
         $manager->install('student-management');
+    }
+
+    public function test_flash_sale_and_learn_and_earn_install_without_optional_course_or_exam_plugins(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['flash-sale', 'learn-and-earn']);
+
+        $manager = app(PluginManager::class);
+        $this->assertTrue($manager->isEnabled('flash-sale'));
+        $this->assertTrue($manager->isEnabled('learn-and-earn'));
+        $this->assertFalse($manager->isEnabled('course-management'));
+        $this->assertFalse($manager->isEnabled('exam-management'));
+
+        $this->assertTrue(Schema::hasTable('flash_sales'));
+        $this->assertTrue(Schema::hasTable('learn_earn_categories'));
+        $this->assertTrue(Schema::hasTable('learn_earn_questions'));
+        $this->assertTrue(Schema::hasTable('learn_earn_exam_access'));
+        $this->assertFalse(Schema::hasTable('courses'));
+        $this->assertFalse(Schema::hasTable('exams'));
     }
 
     public function test_core_cannot_be_disabled_or_uninstalled(): void
