@@ -13,6 +13,7 @@ class StudyBatch extends Model
     protected $fillable = [
         'branch_id',
         'course_title',
+        'academic_level',
         'batch_code',
         'name',
         'schedule',

@@ -64,13 +64,30 @@ class EnrollmentController extends Controller
             abort(409, 'This course enrollment was previously closed. Contact the admissions office to reopen it.');
         }
 
-        $price = round((float) $course->price, 2);
+        $originalPrice = round((float) $course->price, 2);
+        $price = $originalPrice;
+        if ($this->plugins->isEnabled('flash-sale') && Schema::hasTable('flash_sales')) {
+            $sale = DB::table('flash_sales')
+                ->where('course_id', $course->id)
+                ->where('is_published', true)
+                ->where('is_active', true)
+                ->where('starts_at', '<=', now())
+                ->where('ends_at', '>', now())
+                ->orderByDesc('id')
+                ->first();
+            if ($sale) {
+                $discount = $sale->discount_type === 'percent'
+                    ? $originalPrice * ((float) $sale->discount_value / 100)
+                    : (float) $sale->discount_value;
+                $price = round(max(0, $originalPrice - min($originalPrice, $discount)), 2);
+            }
+        }
         $paidCourse = $price > 0;
         if ($paidCourse && (!$this->plugins->isEnabled('fees-management') || !Schema::hasTable('fee_invoices'))) {
             abort(503, 'The Fees & Invoicing plugin must be enabled before paid course enrollment can be opened.');
         }
 
-        DB::transaction(function () use ($actor, $student, $course, $price, $paidCourse): void {
+        DB::transaction(function () use ($actor, $student, $course, $originalPrice, $price, $paidCourse): void {
             $invoice = null;
             $status = 'active';
 
@@ -79,11 +96,11 @@ class EnrollmentController extends Controller
                     'invoice_number' => 'ENR-' . strtoupper(substr(bin2hex(random_bytes(6)), 0, 10)),
                     'student_id' => $student->id,
                     'branch_id' => $student->branch_id,
-                    'subtotal_amount' => $price,
-                    'discount_amount' => 0,
+                    'subtotal_amount' => $originalPrice,
+                    'discount_amount' => round($originalPrice - $price, 2),
                     'net_amount' => $price,
                     'paid_amount' => 0,
-                    'currency' => 'BDT',
+                    'currency' => strtoupper((string) config('lms.default_currency', 'BDT')),
                     'status' => 'unpaid',
                     'due_date' => now()->addDays(7)->toDateString(),
                 ]);

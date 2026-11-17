@@ -98,17 +98,36 @@
                         @endif
                     </div>
 
-                    @if ($ebook['is_free'] && !empty($ebook['download_url']))
-                        <a href="{{ $ebook['download_url'] }}" target="_blank" rel="noopener" class="w-full py-3.5 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold flex items-center justify-center gap-2 shadow-sm transition-colors">
-                            <span>Download Free PDF Now</span>
+                    @if (($hasAccess ?? false) && !empty($ebook['download_url']))
+                        <a href="{{ route('public.ebooks.download', $ebook['slug']) }}" class="w-full py-3.5 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold flex items-center justify-center gap-2 shadow-sm transition-colors">
+                            <span>{{ $ebook['is_free'] ? 'Download Free PDF Now' : 'Download Purchased PDF' }}</span>
                         </a>
+                    @elseif ($ebook['is_free'])
+                        <p class="text-sm text-slate-500">The free PDF has not been uploaded yet.</p>
+                    @elseif (Auth::check() && !($canPurchase ?? false))
+                        <p class="text-sm text-amber-700">A protected PDF must be uploaded before this e-book can be sold.</p>
+                    @elseif (Auth::check() && Route::has('plugins.universal_payment.checkout'))
+                        <form method="POST" action="{{ route('plugins.universal_payment.checkout') }}" class="space-y-3">
+                            @csrf
+                            <input type="hidden" name="storefront_item_id" value="{{ $ebook['id'] }}">
+                            <input type="hidden" name="item_title" value="{{ $ebook['title'] }}">
+                            <input type="hidden" name="amount" value="{{ $ebook['price'] }}">
+                            <input type="hidden" name="payer_name" value="{{ Auth::user()->name }}">
+                            <label class="block text-xs font-semibold text-slate-600">Payment method</label>
+                            <input type="hidden" name="gateway" value="sslcommerz">
+                            <div class="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+                                <strong>Secure Hosted Checkout</strong>
+                                <p class="mt-1 text-xs">Pay using Visa, Mastercard, mobile banking or supported channels available through SSLCOMMERZ. Your PDF unlocks automatically after server-side payment validation.</p>
+                            </div>
+                            <input name="payer_contact" required value="{{ Auth::user()->phone ?? '' }}" placeholder="Your mobile number (required)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                            <button type="submit" class="w-full py-3.5 px-5 rounded-xl bg-[#0077CC] hover:bg-[#0060A8] text-white text-sm font-bold">Pay ৳{{ number_format($ebook['price'], 2) }} Securely Payment</button>
+                            <p class="text-[11px] text-slate-500">Access is enabled after the payment is verified by the administrator.</p>
+                        </form>
                     @elseif (Auth::check())
-                        <a href="{{ route('admin.dashboard') }}" class="w-full py-3.5 px-5 rounded-xl bg-[#0077CC] hover:bg-[#0060A8] text-white text-sm font-bold flex items-center justify-center gap-2 shadow-sm transition-colors">
-                            <span>{{ $ebook['is_free'] ? 'Access Download in Portal' : 'Unlock in Portal' }}</span>
-                        </a>
+                        <p class="text-sm text-amber-700">Universal Payment plugin must be enabled to purchase this e-book.</p>
                     @else
                         <a href="{{ route('login') }}" class="w-full py-3.5 px-5 rounded-xl bg-[#0077CC] hover:bg-[#0060A8] text-white text-sm font-bold flex items-center justify-center gap-2 shadow-sm transition-colors">
-                            <span>Sign in to download</span>
+                            <span>Sign in to purchase</span>
                         </a>
                     @endif
 
