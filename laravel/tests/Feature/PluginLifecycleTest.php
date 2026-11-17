@@ -368,12 +368,8 @@ PHP;
     {
         $this->markSystemInstalled();
         $this->activatePlugins(['course-management', 'student-tracing']);
-        if (!\Illuminate\Support\Facades\Route::has('plugins.courses.index')) {
-            \Illuminate\Support\Facades\Route::get('/test-admin-courses', fn () => 'ok')->name('plugins.courses.index');
-        }
-        if (!\Illuminate\Support\Facades\Route::has('plugins.student-tracing.index')) {
-            \Illuminate\Support\Facades\Route::get('/test-admin-student-tracing', fn () => 'ok')->name('plugins.student-tracing.index');
-        }
+        \Illuminate\Support\Facades\Route::get('/test-admin-courses', fn () => 'ok')->name('plugins.courses.index');
+        \Illuminate\Support\Facades\Route::get('/test-admin-student-tracing', fn () => 'ok')->name('plugins.student-tracing.index');
         $admin = $this->createUserWithRole('admin');
         $this->actingAs($admin);
 
