@@ -79,8 +79,8 @@
                         <button type="button" data-add-block class="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white">＋ Add block</button>
                     </div>
                     <div data-block-list class="space-y-3">
-                        <div data-block class="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                            <div class="mb-3 flex items-center justify-between"><span class="text-xs font-bold text-slate-700">Block 1</span><button type="button" data-remove-block class="text-xs font-semibold text-rose-600">Remove</button></div>
+                        <div data-block draggable="true" class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                            <div class="mb-3 flex items-center justify-between gap-2"><span class="text-xs font-bold text-slate-700">Block 1 · drag to reorder</span><div class="flex items-center gap-3"><button type="button" data-move-up class="text-xs font-semibold text-slate-600">↑ Up</button><button type="button" data-move-down class="text-xs font-semibold text-slate-600">↓ Down</button><button type="button" data-remove-block class="text-xs font-semibold text-rose-600">Remove</button></div></div>
                             <label class="text-xs font-semibold text-slate-600">Block type
                                 <select name="blocks[0][type]" data-block-type class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"><option value="text">Text</option><option value="heading">Heading</option><option value="image">Image</option><option value="button">Button</option><option value="spacer">Spacing</option></select>
                             </label>
@@ -140,7 +140,7 @@
                         <div class="space-y-3" data-block-list>
                             @foreach ($blocks as $index => $block)
                                 <div data-block class="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                                    <div class="mb-3 flex items-center justify-between"><span class="text-xs font-bold text-slate-700">Block {{ $index + 1 }}</span><button type="button" data-remove-block class="text-xs font-semibold text-rose-600">Remove</button></div>
+                                    <div class="mb-3 flex items-center justify-between gap-2"><span class="text-xs font-bold text-slate-700">Block {{ $index + 1 }} · drag to reorder</span><div class="flex items-center gap-3"><button type="button" data-move-up class="text-xs font-semibold text-slate-600">↑ Up</button><button type="button" data-move-down class="text-xs font-semibold text-slate-600">↓ Down</button><button type="button" data-remove-block class="text-xs font-semibold text-rose-600">Remove</button></div></div>
                                     <label class="text-xs font-semibold text-slate-600">Block type<select name="blocks[{{ $index }}][type]" data-block-type class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">@foreach (['text'=>'Text','heading'=>'Heading','image'=>'Image','button'=>'Button','spacer'=>'Spacing'] as $key=>$label)<option value="{{ $key }}" @selected($block['type'] === $key)>{{ $label }}</option>@endforeach</select></label>
                                     <div data-field="content" class="mt-3 {{ $block['type'] === 'spacer' || $block['type'] === 'image' ? 'hidden' : '' }}"><label class="text-xs font-semibold text-slate-600">Text / Heading / Button label<textarea name="blocks[{{ $index }}][content]" rows="3" maxlength="12000" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">{{ $block['content'] }}</textarea></label></div>
                                     <div data-field="url" class="mt-3 {{ in_array($block['type'], ['image','button'], true) ? '' : 'hidden' }}"><label class="text-xs font-semibold text-slate-600">Image or button URL<input name="blocks[{{ $index }}][url]" maxlength="2048" value="{{ $block['url'] }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></label></div>
@@ -205,7 +205,7 @@
                 const label = block.querySelector('[data-block-label]');
                 if (label) label.textContent = 'Block ' + (index + 1);
                 const existingLabel = block.querySelector(':scope > div:first-child > span');
-                if (existingLabel) existingLabel.textContent = 'Block ' + (index + 1);
+                if (existingLabel) existingLabel.textContent = 'Block ' + (index + 1) + ' · drag to reorder';\n                const up = block.querySelector('[data-move-up]');\n                const down = block.querySelector('[data-move-down]');\n                if (up) up.disabled = index === 0;\n                if (down) down.disabled = index === list.querySelectorAll('[data-block]').length - 1;
             });
         };
         list.querySelectorAll('[data-block]').forEach((block) => {
