@@ -23,7 +23,8 @@
             "group": "Finance & Gateways",
             "label": "Fees & Invoices",
             "route": "plugins.fees.index",
-            "order": 100
+            "order": 100,
+            "permission": "fees.manage"
         }
     ]
 }
