@@ -39,7 +39,7 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:course-management'])
             ->middleware('throttle:10,1')->name('join');
         Route::post('/heartbeat', [LiveClassAccessController::class, 'heartbeat'])
             ->middleware('throttle:6,1')->name('heartbeat');
-        Route::post('/leave', [\\Plugins\\Modules\\CourseManagement\\Http\\Controllers\\LiveClassAccessController::class, 'leave'])
+        Route::post('/leave', [LiveClassAccessController::class, 'leave'])
             ->middleware('throttle:10,1')->name('leave');
     });
 
