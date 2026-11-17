@@ -22,7 +22,8 @@
             "group": "Academic & Operations",
             "label": "Teachers",
             "route": "plugins.teachers.index",
-            "order": 100
+            "order": 100,
+            "permission": "teachers.manage"
         }
     ]
 }
