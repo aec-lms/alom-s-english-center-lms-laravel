@@ -6,6 +6,7 @@ namespace Plugins\Modules\CourseManagement\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Course extends Model
 {
@@ -33,6 +34,11 @@ class Course extends Model
         'duration_weeks',
         'status',
     ];
+
+    public function liveClasses(): HasMany
+    {
+        return $this->hasMany(LiveClass::class);
+    }
 
     protected function casts(): array
     {
