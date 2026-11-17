@@ -170,5 +170,8 @@ class MediaLibraryAndDigitalEbookTest extends TestCase
         $this->assertSame('verified', $transaction->fresh()->status);
 
         $this->actingAs($student)->get('/ebooks/protected-guide/download')->assertOk();
+
+        app(PluginManager::class)->disable('storefront-catalog');
+        $this->actingAs($student)->get('/ebooks/protected-guide/download')->assertNotFound();
     }
 }
