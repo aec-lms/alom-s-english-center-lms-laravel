@@ -5,6 +5,11 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    @if (\Illuminate\Support\Facades\Schema::hasTable('system_settings'))
+        @php($aecFavicon = \App\Models\SystemSetting::query()->where('key', 'branding.favicon_url')->value('value'))
+        @if ($aecFavicon)<link rel="icon" href="{{ $aecFavicon }}">@endif
+    @endif
+
     <title>@yield('title', 'Panel — ' . config('app.name'))</title>
     @inject('themeManager', 'App\\Core\\Appearance\\ThemeManager')
     <style>
@@ -45,7 +50,7 @@
 <div class="min-h-screen flex">
     <aside id="admin-sidebar" class="fixed inset-y-0 left-0 z-40 w-64 text-slate-200 flex flex-col shrink-0 border-r border-white/10 -translate-x-full transition-transform duration-200 shadow-2xl lg:static lg:translate-x-0 lg:shadow-none">
         <div class="px-5 py-4 border-b border-white/10">
-            <div class="text-sm font-extrabold tracking-tight text-white">{{ config('app.name') }} Core</div>
+            <div class="flex items-center gap-2 text-sm font-extrabold tracking-tight text-white">@php($aecLogo = \App\Models\SystemSetting::query()->where('key', 'branding.logo_url')->value('value')) @if($aecLogo)<img src="{{ $aecLogo }}" alt="{{ config('app.name') }} logo" class="h-8 max-w-24 object-contain">@endif<span>{{ config('app.name') }} Core</span></div>
             <div class="text-[11px] text-[#38BDF8] font-medium">Core + Independent Plugins</div>
             <a href="{{ route('home') }}" target="_blank" rel="noopener noreferrer"
                class="mt-3 flex items-center justify-center gap-2 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15 transition-colors"
