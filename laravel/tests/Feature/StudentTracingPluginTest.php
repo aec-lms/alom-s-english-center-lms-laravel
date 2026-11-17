@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use App\\Core\\Plugins\\PluginManager;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Facades\\Event;
-use Tests\\TestCase;
+use App\Core\Plugins\PluginManager;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
+use Tests\TestCase;
 
 class StudentTracingPluginTest extends TestCase
 {
@@ -29,7 +29,7 @@ class StudentTracingPluginTest extends TestCase
 
         $student = (object) ['id' => 901, 'branch_id' => 12];
         Event::dispatch(
-            'eloquent.created: Plugins\\Modules\\StudentManagement\\Models\\Student',
+            'eloquent.created: Plugins\Modules\StudentManagement\Models\Student',
             [$student]
         );
 
