@@ -106,7 +106,7 @@ class PaymentController extends Controller
             \Illuminate\Support\Facades\DB::transaction(function () use ($transaction, $validated, $actor): void {
                 $lockedTx = PaymentTransaction::query()->where('id', $transaction->id)->lockForUpdate()->firstOrFail();
                 if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $lockedTx->branch_id) {
-                    throw new \\RuntimeException('Branch isolation violation.');
+                    throw new \RuntimeException('Branch isolation violation.');
                 }
                 if ($lockedTx->status !== 'settled') {
                     throw new \RuntimeException('Only settled transactions can be refunded.');
