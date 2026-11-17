@@ -28,15 +28,89 @@ class PluginLifecycleTest extends TestCase
         $this->assertTrue(VersionConstraint::matches('2.1.0', '>=2.0'));
     }
 
-    public function test_plugin_dependency_order_is_enforced(): void
+    public function test_explicit_required_plugin_dependencies_are_still_enforced(): void
     {
         $this->markSystemInstalled();
         $manager = app(PluginManager::class);
-        $manager->syncCatalog();
+        $slug = 'required-dependency-probe';
+        $pluginDir = (string) config('plugins.modules_path') . DIRECTORY_SEPARATOR . $slug;
+        File::ensureDirectoryExists($pluginDir);
 
-        $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('branch-management');
-        $manager->install('student-management');
+        file_put_contents($pluginDir . DIRECTORY_SEPARATOR . 'plugin.json', json_encode([
+            'slug' => $slug,
+            'name' => 'Required Dependency Probe',
+            'version' => '1.0.0',
+            'core_compatibility' => '^2.0',
+            'dependencies' => ['branch-management'],
+            'provider' => 'Plugins\\Modules\\BranchManagement\\Providers\\BranchManagementServiceProvider',
+        ], JSON_THROW_ON_ERROR));
+
+        try {
+            $manager->syncCatalog();
+            try {
+                $manager->install($slug);
+                $this->fail('A missing explicitly-required plugin dependency must block installation.');
+            } catch (RuntimeException $exception) {
+                $this->assertStringContainsString('branch-management', $exception->getMessage());
+            }
+        } finally {
+            File::deleteDirectory($pluginDir);
+        }
+    }
+
+    public function test_academic_and_finance_plugins_install_without_optional_sibling_plugins(): void
+    {
+        $this->markSystemInstalled();
+        $slugs = [
+            'admission-management',
+            'attendance-management',
+            'certificate-management',
+            'fees-management',
+            'gateway-paypal',
+            'gateway-stripe',
+            'guardian-management',
+            'hr-staff-management',
+            'library-management',
+            'payment-management',
+            'student-management',
+            'teacher-management',
+            'universal-payment',
+        ];
+
+        $this->activatePlugins($slugs);
+        $manager = app(PluginManager::class);
+
+        foreach ($slugs as $slug) {
+            $this->assertTrue($manager->isEnabled($slug), "{$slug} should install without required sibling plugins.");
+            $this->assertSame([], $manager->discoverManifests()[$slug]->dependencies, "{$slug} must not require another LMS plugin.");
+        }
+
+        foreach (['branch-management', 'student-management', 'course-management', 'fees-management', 'payment-management'] as $optional) {
+            if (!in_array($optional, $slugs, true)) {
+                $this->assertFalse($manager->isEnabled($optional));
+            }
+        }
+
+        foreach ([
+            'admission_applications',
+            'attendance_records',
+            'certificates',
+            'fee_categories',
+            'fee_invoices',
+            'guardians',
+            'guardian_student',
+            'staff_profiles',
+            'staff_payrolls',
+            'library_books',
+            'library_loans',
+            'payment_transactions',
+            'payment_refunds',
+            'students',
+            'teachers',
+            'universal_payment_transactions',
+        ] as $table) {
+            $this->assertTrue(\\Illuminate\\Support\\Facades\\Schema::hasTable($table), "Expected standalone schema table {$table}.");
+        }
     }
 
     public function test_core_cannot_be_disabled_or_uninstalled(): void
