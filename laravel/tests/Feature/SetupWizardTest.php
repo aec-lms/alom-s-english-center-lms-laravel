@@ -114,6 +114,50 @@ class SetupWizardTest extends TestCase
         $this->actingAs($admin)->get(route('admin.dashboard'))->assertOk()->assertSee('আপনার LMS Setup এখনো সম্পন্ন হয়নি');
     }
 
+
+    public function test_branding_accepts_media_library_images_and_external_urls(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['media-library']);
+        $admin = $this->createUserWithRole('admin');
+
+        Storage::fake('public');
+        Storage::disk('public')->put('media-library/center-logo.png', 'fake-image-bytes');
+        $asset = MediaAsset::query()->create([
+            'uploaded_by' => $admin->id,
+            'disk' => 'public',
+            'path' => 'media-library/center-logo.png',
+            'original_name' => 'center-logo.png',
+            'mime_type' => 'image/png',
+            'size_bytes' => 17,
+            'collection' => 'branding',
+        ]);
+
+        $this->actingAs($admin)->post(route('admin.setup-wizard.save', 'branding'), [
+            'logo_media_id' => $asset->id,
+            'favicon_media_id' => $asset->id,
+            'primary_color' => '#123456',
+            'secondary_color' => '#234567',
+            'accent_color' => '#345678',
+        ])->assertRedirect(route('admin.setup-wizard.index', ['step' => 'academic']));
+
+        $mediaUrl = Storage::disk('public')->url($asset->path);
+        $this->assertDatabaseHas('system_settings', ['key' => 'branding.logo_url', 'value' => $mediaUrl]);
+        $this->assertSame($mediaUrl, app(SiteIdentityManager::class)->values()['logo_url']);
+
+        $this->actingAs($admin)->post(route('admin.setup-wizard.save', 'branding'), [
+            'logo_url' => 'https://cdn.example.test/brand/logo.png',
+            'favicon_url' => 'https://cdn.example.test/brand/favicon.png',
+            'primary_color' => '#123456',
+            'secondary_color' => '#234567',
+            'accent_color' => '#345678',
+        ])->assertRedirect(route('admin.setup-wizard.index', ['step' => 'academic']));
+
+        $identity = app(SiteIdentityManager::class)->values();
+        $this->assertSame('https://cdn.example.test/brand/logo.png', $identity['logo_url']);
+        $this->assertSame('https://cdn.example.test/brand/favicon.png', $identity['favicon_url']);
+    }
+
     public function test_setup_wizard_requires_settings_permission(): void
     {
         $this->markSystemInstalled();
