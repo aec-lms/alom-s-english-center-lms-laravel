@@ -38,6 +38,30 @@ class StudentTracingPluginTest extends TestCase
             'branch_id' => 12,
             'event_type' => 'student.created',
         ]);
+
+        Schema::create('students', function ($table): void {
+            $table->id();
+            $table->unsignedBigInteger('user_id');
+            $table->unsignedBigInteger('branch_id')->nullable();
+        });
+        DB::table('students')->insert(['id' => 903, 'user_id' => 904, 'branch_id' => 14]);
+
+        Event::dispatch(
+            'eloquent.created: Plugins\\Modules\\AttendanceManagement\\Models\\AttendanceRecord',
+            [(object) ['id' => 905, 'student_id' => 903, 'branch_id' => 14]]
+        );
+        Event::dispatch(
+            'eloquent.created: Plugins\\Modules\\CourseManagement\\Models\\Enrollment',
+            [(object) ['id' => 906, 'user_id' => 904]]
+        );
+        Event::dispatch(
+            'eloquent.created: Plugins\\Modules\\ExamManagement\\Models\\ExamAttempt',
+            [(object) ['id' => 907, 'user_id' => 904]]
+        );
+
+        $this->assertDatabaseHas('student_activity_events', ['student_id' => 903, 'event_type' => 'attendance.created']);
+        $this->assertDatabaseHas('student_activity_events', ['student_id' => 903, 'event_type' => 'enrollment.created']);
+        $this->assertDatabaseHas('student_activity_events', ['student_id' => 903, 'event_type' => 'exam_attempt.created']);
     }
 
     public function test_student_trace_uninstall_preserves_history(): void
