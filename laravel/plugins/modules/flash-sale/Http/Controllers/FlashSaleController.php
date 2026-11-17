@@ -26,7 +26,7 @@ class FlashSaleController extends Controller
             ->paginate(25);
 
         $courses = $courseIntegrationEnabled
-            ? DB::table('courses')->whereNull('deleted_at')->orderBy('title')->get()
+            ? DB::table('courses')->orderBy('title')->get()
             : collect();
 
         return view('flash-sale::index', [
