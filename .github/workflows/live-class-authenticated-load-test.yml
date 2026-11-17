@@ -1,0 +1,92 @@
+name: Authenticated Live Class 300+ Load Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "HTTPS URL of the authorized staging LMS (no trailing slash)"
+        required: true
+        type: string
+      live_class_id:
+        description: "ID of a live class already marked live"
+        required: true
+        type: string
+      student_email_pattern:
+        description: "Unique student email pattern; use {vu}, e.g. aec-load-{vu}@example.test"
+        required: true
+        type: string
+      virtual_users:
+        description: "Distinct concurrent student accounts (minimum 300)"
+        required: true
+        default: "300"
+        type: string
+      expected_capacity:
+        description: "Configured LMS seat capacity for this live class"
+        required: true
+        default: "300"
+        type: string
+      hold_duration:
+        description: "Time to keep students joined and sending heartbeats"
+        required: true
+        default: "5m"
+        type: choice
+        options:
+          - "2m"
+          - "5m"
+          - "10m"
+
+permissions:
+  contents: read
+
+jobs:
+  authenticated-live-class-load:
+    name: Authenticated student join and heartbeat stress test
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Validate staging target and pre-provisioned test accounts
+        env:
+          BASE_URL: ${{ inputs.base_url }}
+          LIVE_CLASS_ID: ${{ inputs.live_class_id }}
+          EMAIL_PATTERN: ${{ inputs.student_email_pattern }}
+          VUS: ${{ inputs.virtual_users }}
+          CAPACITY: ${{ inputs.expected_capacity }}
+          STUDENT_PASSWORD: ${{ secrets.AEC_LIVE_CLASS_TEST_PASSWORD }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          from urllib.parse import urlparse
+          url = urlparse(os.environ["BASE_URL"])
+          if url.scheme != "https" or not url.netloc or url.username or url.password:
+              raise SystemExit("BASE_URL must be valid HTTPS without embedded credentials.")
+          if not re.fullmatch(r"[1-9][0-9]*", os.environ["LIVE_CLASS_ID"]):
+              raise SystemExit("LIVE_CLASS_ID must be a positive integer.")
+          if "{vu}" not in os.environ["EMAIL_PATTERN"]:
+              raise SystemExit("student_email_pattern must include {vu}.")
+          if not os.environ["STUDENT_PASSWORD"]:
+              raise SystemExit("Set the Actions secret AEC_LIVE_CLASS_TEST_PASSWORD first.")
+          vus, capacity = int(os.environ["VUS"]), int(os.environ["CAPACITY"])
+          if not 300 <= vus <= 1000 or not 300 <= capacity <= 1000:
+              raise SystemExit("VUs and capacity must each be between 300 and 1000.")
+          if capacity < vus:
+              raise SystemExit("expected_capacity must be greater than or equal to virtual_users for a full-seat acceptance run.")
+          print("Input validation passed. Confirm distinct active student accounts are pre-created and enrolled.")
+          PY
+      - name: Run authenticated 300+ student live-class test
+        env:
+          BASE_URL: ${{ inputs.base_url }}
+          LIVE_CLASS_ID: ${{ inputs.live_class_id }}
+          STUDENT_EMAIL_PATTERN: ${{ inputs.student_email_pattern }}
+          STUDENT_PASSWORD: ${{ secrets.AEC_LIVE_CLASS_TEST_PASSWORD }}
+          VUS: ${{ inputs.virtual_users }}
+          CAPACITY: ${{ inputs.expected_capacity }}
+          DURATION: ${{ inputs.hold_duration }}
+        run: |
+          docker run --rm \
+            -e BASE_URL -e LIVE_CLASS_ID -e STUDENT_EMAIL_PATTERN \
+            -e STUDENT_PASSWORD -e VUS -e CAPACITY -e DURATION \
+            -v "${{ github.workspace }}/laravel/tests/load:/scripts:ro" \
+            grafana/k6:0.54.0 run /scripts/live-class-authenticated-300-vus.js
