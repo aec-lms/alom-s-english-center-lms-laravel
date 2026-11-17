@@ -33,10 +33,10 @@
                         <path d="M47 24.5C44.8 20.5 40.6 18 35.8 18C28.7 18 23.2 24.1 23.2 32C23.2 39.9 28.7 46 35.8 46C40.7 46 45 43.3 47.1 39.2L41.8 36.8C40.5 39.2 38.3 40.5 35.8 40.5C31.9 40.5 29.1 36.9 29.1 32C29.1 27.1 31.9 23.5 35.8 23.5C38.3 23.5 40.4 24.8 41.7 27.1L47 24.5Z" fill="#F59E0B" />
                         <path d="M44 29.5C46 28.8 48.2 29 49.5 30.2C50.8 29 53 28.8 55 29.5V36.5C53 35.8 50.8 36 49.5 37.2C48.2 36 46 35.8 44 36.5V29.5Z" fill="#FFFFFF" stroke="#64748B" stroke-width="1.3" stroke-linejoin="round" />
                         <path d="M49.5 30.2V37.2" stroke="#64748B" stroke-width="1.2" />
-      
+                    </svg>
                     @else
                         <img src="{{ $siteIdentity['logo_url'] }}" alt="{{ config('app.name') }} logo" class="h-8 max-w-32 object-contain">
-                    @endif              </svg>
+                    @endif
                     <span class="text-base font-extrabold text-slate-900 tracking-tight">{{ config('app.name') }}</span>
                 </a>
                 <p class="text-xs leading-relaxed text-slate-500">{{ $footerDesc }}</p>
