@@ -118,10 +118,11 @@ class PublicHomeController extends Controller
             if (in_array($type, ['heading', 'text'], true)) {
                 $content = trim((string) ($block['content'] ?? ''));
                 if ($content !== '') {
+                    $align = $block['align'] ?? 'left';
                     $blocks[] = [
                         'type' => $type,
                         'content' => $content,
-                        'align' => in_array($block['align'] ?? 'left', ['left', 'center', 'right'], true) ? $block['align'] : 'left',
+                        'align' => in_array($align, ['left', 'center', 'right'], true) ? $align : 'left',
                     ];
                 }
             } elseif ($type === 'image') {
@@ -137,11 +138,12 @@ class PublicHomeController extends Controller
                 $url = trim((string) ($block['url'] ?? ''));
                 $label = trim((string) ($block['label'] ?? $block['content'] ?? ''));
                 if ($label !== '' && $this->isSafePageBlockUrl($url)) {
+                    $align = $block['align'] ?? 'left';
                     $blocks[] = [
                         'type' => 'button',
                         'label' => $label,
                         'url' => $url,
-                        'align' => in_array($block['align'] ?? 'left', ['left', 'center', 'right'], true) ? $block['align'] : 'left',
+                        'align' => in_array($align, ['left', 'center', 'right'], true) ? $align : 'left',
                     ];
                 }
             } elseif ($type === 'spacer') {
