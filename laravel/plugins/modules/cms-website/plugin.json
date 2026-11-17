@@ -27,5 +27,13 @@
             "type": "text",
             "secret": false
         }
+    ],
+    "admin_menu": [
+        {
+            "group": "CMS, Builders & AI",
+            "label": "Website CMS",
+            "route": "plugins.cms.index",
+            "order": 100
+        }
     ]
 }
