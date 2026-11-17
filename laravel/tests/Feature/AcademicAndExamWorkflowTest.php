@@ -195,8 +195,15 @@ class AcademicAndExamWorkflowTest extends TestCase
             \App\Models\Permission::query()->where('slug', 'exams.attempt')->value('id'),
         ]);
 
-        // Even if client sends tampered score=999, server ignores it and computes exact 5/5.
+        // The server creates the timed attempt on exam entry. Even if the client
+        // sends a tampered score, the server ignores it and computes exact 5/5.
+        $attemptPage = $this->actingAs($student)->get("/exams/{$exam->id}/take")->assertOk();
+        preg_match('/name="attempt_id" value="([0-9]+)"/', $attemptPage->getContent(), $attemptMatch);
+        $attemptId = (int) ($attemptMatch[1] ?? 0);
+        $this->assertGreaterThan(0, $attemptId);
+
         $this->actingAs($student)->post("/admin/exams/{$exam->id}/attempt", [
+            'attempt_id' => $attemptId,
             'score_obtained' => 999,
             'answers' => [(string) $q1->id => 1],
         ])->assertRedirect();

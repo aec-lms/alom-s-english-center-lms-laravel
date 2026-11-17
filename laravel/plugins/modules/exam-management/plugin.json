@@ -1,7 +1,7 @@
 {
     "slug": "exam-management",
     "name": "Exam, Question Bank & Assessment Engine",
-    "version": "2.0.0",
+    "version": "2.1.0",
     "author": "Alom's English Center",
     "category": "academic",
     "description": "Exam schedules, question bank, online exam attempts with strict server-side grading, and results.",

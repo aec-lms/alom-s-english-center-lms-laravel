@@ -23,9 +23,10 @@
                     <option value="{{ $course->id }}">{{ $course->title }}</option>
                 @endforeach
             </select>
-            <div class="grid grid-cols-2 gap-2">
+            <div class="grid grid-cols-3 gap-2">
                 <input name="duration_minutes" type="number" min="5" value="45" required placeholder="Minutes" class="rounded-lg border border-slate-300 px-3 py-2">
-                <input name="pass_marks" type="number" min="1" value="20" required placeholder="Pass" class="rounded-lg border border-slate-300 px-3 py-2">
+                <input name="pass_marks" type="number" min="0" value="20" required placeholder="Pass" class="rounded-lg border border-slate-300 px-3 py-2">
+                <input name="max_attempts" type="number" min="1" max="20" value="1" required placeholder="Attempts" class="rounded-lg border border-slate-300 px-3 py-2">
             </div>
             <div class="sm:col-span-4 flex items-center justify-between">
                 <label class="inline-flex items-center gap-2 font-semibold">
@@ -45,7 +46,7 @@
                         <div>
                             <div class="font-bold text-sm text-slate-900">{{ $exam->title }}</div>
                             <div class="text-slate-500 font-mono">
-                                {{ $exam->duration_minutes }} min &middot; Pass: {{ $exam->pass_marks }} &middot; Questions: {{ $exam->questions_count }} &middot; Attempts: {{ $exam->attempts_count }} &middot;
+                                {{ $exam->duration_minutes }} min &middot; Max attempts: {{ $exam->max_attempts }} &middot; Pass: {{ $exam->pass_marks }} &middot; Questions: {{ $exam->questions_count }} &middot; Attempts: {{ $exam->attempts_count }} &middot;
                                 <span class="{{ $exam->is_published ? 'text-emerald-700 font-bold' : 'text-amber-700 font-bold' }}">{{ $exam->is_published ? 'Published' : 'Draft' }}</span>
                             </div>
                         </div>
@@ -64,7 +65,8 @@
                                 @method('PUT')
                                 <input name="title" required value="{{ $exam->title }}" class="sm:col-span-2 rounded-lg border border-slate-300 px-3 py-2 bg-white">
                                 <input name="duration_minutes" type="number" min="5" value="{{ $exam->duration_minutes }}" class="rounded-lg border border-slate-300 px-3 py-2 bg-white">
-                                <input name="pass_marks" type="number" min="1" value="{{ $exam->pass_marks }}" class="rounded-lg border border-slate-300 px-3 py-2 bg-white">
+                                <input name="pass_marks" type="number" min="0" value="{{ $exam->pass_marks }}" class="rounded-lg border border-slate-300 px-3 py-2 bg-white">
+                                <input name="max_attempts" type="number" min="1" max="20" value="{{ $exam->max_attempts }}" required placeholder="Max attempts" class="rounded-lg border border-slate-300 px-3 py-2 bg-white">
                                 <div class="sm:col-span-4 flex items-center justify-between">
                                     <label class="inline-flex items-center gap-2 font-semibold">
                                         <input type="checkbox" name="is_published" value="1" @checked($exam->is_published)> Published
