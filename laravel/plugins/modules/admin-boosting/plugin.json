@@ -20,7 +20,8 @@
             "group": "Marketing, Growth & SEO",
             "label": "Admin Boosting",
             "route": "plugins.boost.index",
-            "order": 100
+            "order": 100,
+            "permission": "marketing.boost.manage"
         }
     ]
 }
