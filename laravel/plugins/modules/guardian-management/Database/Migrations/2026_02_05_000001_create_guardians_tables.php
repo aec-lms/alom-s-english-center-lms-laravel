@@ -13,7 +13,7 @@ return new class extends Migration {
             Schema::create('guardians', function (Blueprint $table): void {
                 $table->id();
                 $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
-                $table->unsignedBigInteger('branch_id')->index();
+                $table->unsignedBigInteger('branch_id')->nullable()->index();
                 $table->string('relationship', 60)->default('parent');
                 $table->string('occupation', 120)->nullable();
                 $table->string('emergency_phone', 32)->nullable();
