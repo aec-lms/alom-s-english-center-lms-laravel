@@ -140,7 +140,7 @@ class BackupAndUpdateTest extends TestCase
         $ciphertext = openssl_encrypt($archiveBytes, 'AES-256-CBC', $key, OPENSSL_RAW_DATA, $iv);
         $this->assertNotFalse($ciphertext);
 
-        $backupDir = storage_path('app/backups');
+        $backupDir = (string) config('lms.backup_path');
         if (!is_dir($backupDir)) mkdir($backupDir, 0750, true);
         $legacyPath = $backupDir . '/legacy-' . bin2hex(random_bytes(8)) . '.zip.enc';
         $hmac = hash_hmac('sha256', $iv . $ciphertext, $key, true);
@@ -159,6 +159,8 @@ class BackupAndUpdateTest extends TestCase
 
         try {
             $this->assertGreaterThan(65536, filesize($legacyPath));
+            $this->assertFileExists($legacyPath);
+            $this->assertSame(basename($legacyPath), $record->filename);
             $this->assertTrue(app(BackupService::class)->verifyBackupIntegrity($record));
             DB::table('users')->where('email', 'like', $prefix . '%')->delete();
 
