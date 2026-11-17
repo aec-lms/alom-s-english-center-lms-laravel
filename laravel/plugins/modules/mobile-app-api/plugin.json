@@ -23,5 +23,8 @@
             "order": 100,
             "permission": "mobile.api.access"
         }
+    ],
+    "optional_dependencies": [
+        "course-management"
     ]
 }
