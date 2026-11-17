@@ -27,7 +27,8 @@
             "group": "CMS, Builders & AI",
             "label": "Slider Builder",
             "route": "plugins.slider_builder.index",
-            "order": 100
+            "order": 100,
+            "permission": "slider_builder.manage"
         }
     ]
 }
