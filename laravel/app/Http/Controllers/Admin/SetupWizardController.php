@@ -72,16 +72,16 @@ class SetupWizardController extends Controller
                 'academic_year_end' => ['required', 'date', 'after:academic_year_start'],
             ],
             'payments' => [
-                'bkash_enabled' => ['nullable', 'boolean'], 'bkash_number' => ['nullable', 'string', 'max:40'],
+                'bkash_enabled' => ['nullable', 'boolean'], 'bkash_number' => ['required_if:bkash_enabled,1', 'nullable', 'string', 'max:40'],
                 'bkash_secret' => ['nullable', 'string', 'max:255'],
-                'rocket_enabled' => ['nullable', 'boolean'], 'rocket_number' => ['nullable', 'string', 'max:40'],
+                'rocket_enabled' => ['nullable', 'boolean'], 'rocket_number' => ['required_if:rocket_enabled,1', 'nullable', 'string', 'max:40'],
                 'rocket_secret' => ['nullable', 'string', 'max:255'],
-                'nagad_enabled' => ['nullable', 'boolean'], 'nagad_number' => ['nullable', 'string', 'max:40'],
+                'nagad_enabled' => ['nullable', 'boolean'], 'nagad_number' => ['required_if:nagad_enabled,1', 'nullable', 'string', 'max:40'],
                 'nagad_secret' => ['nullable', 'string', 'max:255'],
-                'bank_enabled' => ['nullable', 'boolean'], 'bank_name' => ['nullable', 'string', 'max:160'],
-                'bank_account_name' => ['nullable', 'string', 'max:160'], 'bank_account_number' => ['nullable', 'string', 'max:80'],
+                'bank_enabled' => ['nullable', 'boolean'], 'bank_name' => ['required_if:bank_enabled,1', 'nullable', 'string', 'max:160'],
+                'bank_account_name' => ['required_if:bank_enabled,1', 'nullable', 'string', 'max:160'], 'bank_account_number' => ['required_if:bank_enabled,1', 'nullable', 'string', 'max:80'],
                 'bank_branch' => ['nullable', 'string', 'max:120'], 'manual_enabled' => ['nullable', 'boolean'],
-                'manual_instructions' => ['nullable', 'string', 'max:2000'],
+                'manual_instructions' => ['required_if:manual_enabled,1', 'nullable', 'string', 'max:2000'],
             ],
         };
         $data = $request->validate($rules);
