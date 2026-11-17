@@ -31,7 +31,7 @@ final class SiteIdentityManager
 
             foreach (self::DEFAULTS as $key => $default) {
                 $value = $stored->get('branding.' . $key);
-                if (is_string($value) && $value !== '') {
+                if (is_string($value)) {
                     $values[$key] = $value;
                 }
             }
