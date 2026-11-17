@@ -38,6 +38,9 @@
         try {
             const response = await fetch(panel.dataset.heartbeatUrl, {method: 'POST', headers, credentials: 'same-origin'});
             if (!response.ok) throw new Error('presence refresh failed');
+            const data = await response.json();
+            const count = document.getElementById('active-count');
+            if (count && Number.isInteger(data.active_count)) count.textContent = String(data.active_count);
             status.textContent = 'Seat presence is active.';
         } catch (error) {
             status.textContent = 'Presence refresh failed. Reopen this page before rejoining if the meeting continues.';
