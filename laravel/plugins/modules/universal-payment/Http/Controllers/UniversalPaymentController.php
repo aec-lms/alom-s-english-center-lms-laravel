@@ -181,7 +181,6 @@ class UniversalPaymentController extends Controller
             'payer_contact' => ['required', 'string', 'max:120'],
             'item_title' => ['required', 'string', 'max:200'],
             'gateway' => ['required', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,bank_cash'],
-            'amount' => ['required', 'numeric', 'min:0.01'],
             'external_trx_id' => ['nullable', 'string', 'max:120'],
             'storefront_item_id' => ['nullable', 'integer'],
             'fee_invoice_id' => ['nullable', 'integer', 'exists:fee_invoices,id'],
