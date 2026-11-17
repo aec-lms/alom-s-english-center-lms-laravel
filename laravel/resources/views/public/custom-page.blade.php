@@ -44,6 +44,45 @@
                         </div>
                     @elseif ($block['type'] === 'spacer')
                         <div aria-hidden="true" style="height:{{ $block['height'] }}px"></div>
+                    @elseif ($block['type'] === 'course_grid')
+                        <section class="space-y-4">
+                            <h2 class="text-xl sm:text-2xl font-extrabold text-slate-900">Explore our courses</h2>
+                            @if ($courseCards->isEmpty())
+                                <p class="rounded-xl bg-slate-50 p-5 text-sm text-slate-500">Published courses will appear here automatically.</p>
+                            @else
+                                <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                    @foreach ($courseCards as $course)
+                                        <article class="flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                                            <span class="text-[11px] font-bold uppercase tracking-wide text-sky-700">{{ $course->category ?? 'English Course' }}</span>
+                                            <h3 class="mt-2 text-base font-extrabold text-slate-900">{{ $course->title }}</h3>
+                                            <p class="mt-2 flex-1 text-xs leading-6 text-slate-500">{{ \Illuminate\Support\Str::limit(strip_tags((string) ($course->description ?? '')), 120) }}</p>
+                                            <div class="mt-4 flex items-center justify-between gap-2">
+                                                <span class="text-sm font-bold text-slate-900">{{ number_format((float) ($course->price ?? 0), 2) }}</span>
+                                                <a href="{{ route('public.courses.show', $course->slug) }}" class="rounded-lg bg-sky-600 px-3 py-2 text-xs font-bold text-white">View course</a>
+                                            </div>
+                                        </article>
+                                    @endforeach
+                                </div>
+                            @endif
+                        </section>
+                    @elseif ($block['type'] === 'instructor_grid')
+                        <section class="space-y-4">
+                            <h2 class="text-xl sm:text-2xl font-extrabold text-slate-900">Meet our instructors</h2>
+                            @if (empty($instructorCards))
+                                <p class="rounded-xl bg-slate-50 p-5 text-sm text-slate-500">Active instructors will appear here automatically.</p>
+                            @else
+                                <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                    @foreach ($instructorCards as $instructor)
+                                        <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                                            <h3 class="font-extrabold text-slate-900">{{ $instructor['name'] }}</h3>
+                                            <p class="mt-1 text-xs font-semibold text-sky-700">{{ $instructor['subject'] }}</p>
+                                            <p class="mt-2 text-xs leading-6 text-slate-500">{{ \Illuminate\Support\Str::limit(strip_tags((string) ($instructor['role'] ?? '')), 100) }}</p>
+                                            <a href="{{ route('public.instructors.show', $instructor['id']) }}" class="mt-4 inline-flex text-xs font-bold text-sky-700">View instructor →</a>
+                                        </article>
+                                    @endforeach
+                                </div>
+                            @endif
+                        </section>
                     @endif
                 @endforeach
             </div>
