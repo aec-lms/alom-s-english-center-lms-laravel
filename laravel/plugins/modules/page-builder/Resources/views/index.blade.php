@@ -139,7 +139,7 @@
                         </div>
                         <div class="space-y-3" data-block-list>
                             @foreach ($blocks as $index => $block)
-                                <div data-block class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                <div data-block draggable="true" class="rounded-xl border border-slate-200 bg-slate-50 p-4">
                                     <div class="mb-3 flex items-center justify-between gap-2"><span class="text-xs font-bold text-slate-700">Block {{ $index + 1 }} · drag to reorder</span><div class="flex items-center gap-3"><button type="button" data-move-up class="text-xs font-semibold text-slate-600">↑ Up</button><button type="button" data-move-down class="text-xs font-semibold text-slate-600">↓ Down</button><button type="button" data-remove-block class="text-xs font-semibold text-rose-600">Remove</button></div></div>
                                     <label class="text-xs font-semibold text-slate-600">Block type<select name="blocks[{{ $index }}][type]" data-block-type class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">@foreach (['text'=>'Text','heading'=>'Heading','image'=>'Image','button'=>'Button','spacer'=>'Spacing'] as $key=>$label)<option value="{{ $key }}" @selected($block['type'] === $key)>{{ $label }}</option>@endforeach</select></label>
                                     <div data-field="content" class="mt-3 {{ $block['type'] === 'spacer' || $block['type'] === 'image' ? 'hidden' : '' }}"><label class="text-xs font-semibold text-slate-600">Text / Heading / Button label<textarea name="blocks[{{ $index }}][content]" rows="3" maxlength="12000" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">{{ $block['content'] }}</textarea></label></div>
@@ -166,7 +166,7 @@
 
 <template id="page-block-template">
     <div data-block class="rounded-xl border border-slate-200 bg-slate-50 p-4">
-        <div class="mb-3 flex items-center justify-between"><span data-block-label class="text-xs font-bold text-slate-700">New block</span><button type="button" data-remove-block class="text-xs font-semibold text-rose-600">Remove</button></div>
+        <div class="mb-3 flex items-center justify-between gap-2"><span data-block-label class="text-xs font-bold text-slate-700">New block</span><div class="flex items-center gap-3"><button type="button" data-move-up class="text-xs font-semibold text-slate-600">↑ Up</button><button type="button" data-move-down class="text-xs font-semibold text-slate-600">↓ Down</button><button type="button" data-remove-block class="text-xs font-semibold text-rose-600">Remove</button></div></div>
         <label class="text-xs font-semibold text-slate-600">Block type<select data-name="type" data-block-type class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"><option value="text">Text</option><option value="heading">Heading</option><option value="image">Image</option><option value="button">Button</option><option value="spacer">Spacing</option></select></label>
         <div data-field="content" class="mt-3"><label class="text-xs font-semibold text-slate-600">Text / Heading / Button label<textarea data-name="content" rows="3" maxlength="12000" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></textarea></label></div>
         <div data-field="url" class="mt-3 hidden"><label class="text-xs font-semibold text-slate-600">Image or button URL<input data-name="url" maxlength="2048" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="/storage/... or https://..."></label></div>
@@ -196,30 +196,77 @@
             });
         };
         const renumber = () => {
-            [...list.querySelectorAll('[data-block]')].forEach((block, index) => {
+            const blocks = [...list.querySelectorAll('[data-block]')];
+            blocks.forEach((block, index) => {
                 block.querySelectorAll('[data-name]').forEach((input) => {
                     input.name = 'blocks[' + index + '][' + input.dataset.name + ']';
                 });
                 const type = block.querySelector('[data-block-type]');
                 if (type) type.name = 'blocks[' + index + '][type]';
-                const label = block.querySelector('[data-block-label]');
-                if (label) label.textContent = 'Block ' + (index + 1);
-                const existingLabel = block.querySelector(':scope > div:first-child > span');
-                if (existingLabel) existingLabel.textContent = 'Block ' + (index + 1) + ' · drag to reorder';\n                const up = block.querySelector('[data-move-up]');\n                const down = block.querySelector('[data-move-down]');\n                if (up) up.disabled = index === 0;\n                if (down) down.disabled = index === list.querySelectorAll('[data-block]').length - 1;
+                const label = block.querySelector('[data-block-label]') || block.querySelector(':scope > div:first-child > span');
+                if (label) label.textContent = 'Block ' + (index + 1) + ' · drag to reorder';
+                const up = block.querySelector('[data-move-up]');
+                const down = block.querySelector('[data-move-down]');
+                if (up) up.disabled = index === 0;
+                if (down) down.disabled = index === blocks.length - 1;
             });
         };
+
         list.querySelectorAll('[data-block]').forEach((block) => {
             block.querySelector('[data-block-type]')?.addEventListener('change', () => sync(block));
             sync(block);
         });
+        renumber();
+
         list.addEventListener('click', (event) => {
+            const current = event.target.closest('[data-block]');
+            if (event.target.closest('[data-move-up]') && current?.previousElementSibling) {
+                list.insertBefore(current, current.previousElementSibling);
+                renumber();
+                return;
+            }
+            if (event.target.closest('[data-move-down]') && current?.nextElementSibling) {
+                list.insertBefore(current.nextElementSibling, current);
+                renumber();
+                return;
+            }
             if (event.target.closest('[data-remove-block]')) {
                 const blocks = list.querySelectorAll('[data-block]');
                 if (blocks.length <= 1) return;
-                event.target.closest('[data-block]').remove();
+                current?.remove();
                 renumber();
             }
         });
+
+        let dragged = null;
+        list.addEventListener('dragstart', (event) => {
+            dragged = event.target.closest('[data-block]');
+            if (dragged) {
+                event.dataTransfer.effectAllowed = 'move';
+                event.dataTransfer.setData('text/plain', 'page-block');
+                dragged.classList.add('opacity-50');
+            }
+        });
+        list.addEventListener('dragover', (event) => {
+            if (!dragged) return;
+            event.preventDefault();
+            const target = event.target.closest('[data-block]');
+            if (!target || target === dragged) return;
+            const bounds = target.getBoundingClientRect();
+            const after = event.clientY > bounds.top + bounds.height / 2;
+            list.insertBefore(dragged, after ? target.nextElementSibling : target);
+        });
+        list.addEventListener('drop', () => {
+            if (dragged) dragged.classList.remove('opacity-50');
+            dragged = null;
+            renumber();
+        });
+        list.addEventListener('dragend', () => {
+            if (dragged) dragged.classList.remove('opacity-50');
+            dragged = null;
+            renumber();
+        });
+
         addButton?.addEventListener('click', () => {
             const fragment = template.content.cloneNode(true);
             const block = fragment.querySelector('[data-block]');
