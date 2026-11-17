@@ -20,7 +20,8 @@
             "group": "Marketing, Growth & SEO",
             "label": "Notice Board",
             "route": "plugins.notices.index",
-            "order": 100
+            "order": 100,
+            "permission": "notices.manage"
         }
     ]
 }
