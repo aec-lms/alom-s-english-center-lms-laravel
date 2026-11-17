@@ -34,7 +34,11 @@ class LearnAndEarnController extends Controller {
  public function publicExams(Request $r):View {
   abort_unless($r->user() && $r->user()->hasRole('student'),403,'Student account required.');
   $exams=Exam::where('is_published',true)->latest()->paginate(20);
-  return view('learn-and-earn::exams',['exams'=>$exams]);
+  $canPurchase = app(PluginManager::class)->isEnabled('universal-payment')
+   && app(PluginManager::class)->isEnabled('gateway-sslcommerz')
+   && Schema::hasTable('universal_payment_transactions')
+   && Schema::hasColumn('universal_payment_transactions', 'learn_earn_exam_id');
+  return view('learn-and-earn::exams',['exams'=>$exams,'canPurchase'=>$canPurchase]);
  }
  public function showExam(Request $r,Exam $exam):View {
   abort_unless($r->user() && $r->user()->hasRole('student'),403,'Student account required.');
@@ -42,6 +46,40 @@ class LearnAndEarnController extends Controller {
   if($exam->learn_earn_type==='paid') abort_unless(DB::table('learn_earn_exam_access')->where('exam_id',$exam->id)->where('user_id',$r->user()->id)->where('status','granted')->exists(),403,'Verified payment access is required for this exam.');
   $exam->load('questions');
   return view('learn-and-earn::take-exam',['exam'=>$exam]);
+ }
+
+ public function purchaseExam(Request $r, Exam $exam, StorefrontPaymentGatewayService $gateway): RedirectResponse {
+  abort_unless($r->user() && $r->user()->hasRole('student'),403,'Student account required.');
+  abort_unless($exam->is_published && $exam->learn_earn_type==='paid' && (float)$exam->access_price>0,404);
+  abort_unless(app(PluginManager::class)->isEnabled('universal-payment')
+   && app(PluginManager::class)->isEnabled('gateway-sslcommerz')
+   && Schema::hasTable('universal_payment_transactions')
+   && Schema::hasColumn('universal_payment_transactions','learn_earn_exam_id'),503,
+   'Enable and configure Universal Payment and SSLCOMMERZ before purchasing paid exams.');
+  if(DB::table('learn_earn_exam_access')->where('exam_id',$exam->id)->where('user_id',$r->user()->id)->where('status','granted')->exists()) {
+   return redirect()->route('plugins.learn_earn.student.show',$exam)->with('status','You already have access to this exam.');
+  }
+  $v=$r->validate(['payer_contact'=>['required','string','max:120']]);
+  abort_unless(filter_var((string)$r->user()->email,FILTER_VALIDATE_EMAIL),422,'A valid account email is required for checkout.');
+  $tx=UniversalPaymentTransaction::query()->create([
+   'reference'=>'UPAY-'.strtoupper(Str::random(10)),
+   'payer_name'=>$r->user()->name,
+   'payer_contact'=>$v['payer_contact'],
+   'item_title'=>$exam->title,
+   'gateway'=>'sslcommerz',
+   'currency'=>app(PluginManager::class)->getSetting('universal-payment','default_currency','BDT') ?: 'BDT',
+   'amount'=>$exam->access_price,
+   'status'=>'pending',
+   'user_id'=>$r->user()->id,
+   'learn_earn_exam_id'=>$exam->id,
+  ]);
+  try {
+   $checkout=$gateway->initiateSslcommerz($tx,$exam,$r->user(),$v['payer_contact']);
+   return redirect()->away($checkout);
+  } catch(\\Throwable $e) {
+   report($e);
+   return back()->withErrors(['payment'=>'Unable to start secure checkout. No exam access was granted.']);
+  }
  }
  public function grantAccess(Request $r,Exam $exam):RedirectResponse {
   $v=$r->validate(['user_id'=>['required','integer','exists:users,id'],'payment_reference'=>['nullable','string','max:190']]);abort_unless($exam->learn_earn_type==='paid',422,'This is not a paid exam.');
