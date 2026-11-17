@@ -217,6 +217,9 @@ class UniversalUpdateService
 
     public function rollbackUpdate(UpdateLog $log, ?int $actorId = null): void
     {
+        if (!in_array($log->status, ['applied'], true)) {
+            throw new RuntimeException('Only an applied update can be rolled back.');
+        }
         if (!$log->backup_reference) {
             throw new RuntimeException('No backup reference recorded for this update log.');
         }
