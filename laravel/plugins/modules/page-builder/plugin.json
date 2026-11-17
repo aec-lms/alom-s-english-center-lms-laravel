@@ -27,7 +27,8 @@
             "group": "CMS, Builders & AI",
             "label": "Page Builder",
             "route": "plugins.page_builder.index",
-            "order": 100
+            "order": 100,
+            "permission": "page_builder.manage"
         }
     ]
 }
