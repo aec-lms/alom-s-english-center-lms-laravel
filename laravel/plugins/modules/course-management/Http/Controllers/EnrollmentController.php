@@ -28,7 +28,9 @@ class EnrollmentController extends Controller
             ->latest()
             ->paginate(20);
 
-        return view('course-management::my-enrollments', compact('enrollments'));
+        $feesIntegrationAvailable = $this->plugins->isEnabled('fees-management') && Schema::hasTable('fee_invoices');
+
+        return view('course-management::my-enrollments', compact('enrollments', 'feesIntegrationAvailable'));
     }
 
     public function index(Request $request): View
@@ -105,6 +107,9 @@ class EnrollmentController extends Controller
                 $invoice = FeeInvoice::query()->create([
                     'invoice_number' => 'ENR-' . strtoupper(substr(bin2hex(random_bytes(6)), 0, 10)),
                     'student_id' => $student->id ?? null,
+                    'payer_name' => $student->id ?? null ? null : $actor->name,
+                    'payer_email' => $student->id ?? null ? null : $actor->email,
+                    'payer_phone' => $student->id ?? null ? null : ($actor->phone ?? null),
                     'branch_id' => $branchId,
                     'subtotal_amount' => $originalPrice,
                     'discount_amount' => round($originalPrice - $price, 2),
