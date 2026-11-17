@@ -115,7 +115,7 @@ Route::middleware('installed')->group(function (): void {
             Route::post('/', [UserRoleController::class, 'store'])->name('store');
         });
 
-        Route::prefix('institution-settings')->name('institution-settings.')->middleware('permission:core.settings.manage')->group(function (): void {
+        Route::prefix('setup')->name('setup.')->middleware('permission:core.settings.manage')->group(function (): void {\n            Route::get('/', [SetupWizardController::class, 'index'])->name('index');\n            Route::post('/{step}', [SetupWizardController::class, 'save'])->name('save');\n        });\n\n        Route::prefix('institution-settings')->name('institution-settings.')->middleware('permission:core.settings.manage')->group(function (): void {
             Route::get('/', [InstitutionSettingsController::class, 'edit'])->name('edit');
             Route::post('/', [InstitutionSettingsController::class, 'update'])->name('update');
         });
