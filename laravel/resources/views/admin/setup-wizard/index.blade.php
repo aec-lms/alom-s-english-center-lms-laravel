@@ -72,10 +72,11 @@
                 </div>
             @elseif($step === 'payments')
                 <p class="text-sm text-slate-600">এখানে পেমেন্ট পদ্ধতির নির্দেশনা ও মার্চেন্ট তথ্য সংরক্ষণ হবে। API credentials এনক্রিপ্ট করে রাখা হয়; প্রকৃত gateway callback/merchant onboarding আলাদাভাবে সম্পন্ন করতে হবে।</p>
-                @foreach(['bkash' => 'বিকাশ', 'rocket' => 'রকেট'] as $provider => $label)
+                @foreach(['bkash' => 'বিকাশ', 'nagad' => 'নগদ', 'rocket' => 'রকেট'] as $provider => $label)
                     <section class="rounded-xl border p-4 space-y-3"><label class="flex items-center gap-2 font-bold"><input type="checkbox" name="{{ $provider }}_enabled" value="1" @checked(($values['setup.payment.'. $provider .'.enabled'] ?? '0') === '1')> {{ $label }} চালু</label>
                         <label class="block text-sm">মার্চেন্ট/পেমেন্ট নম্বর<input name="{{ $provider }}_number" value="{{ $values['setup.payment.'. $provider .'.number'] ?? '' }}" class="mt-1 w-full rounded-lg border p-3"></label>
                         <label class="block text-sm">Secret / API key (ঐচ্ছিক)<input type="password" name="{{ $provider }}_secret" autocomplete="new-password" class="mt-1 w-full rounded-lg border p-3" placeholder="নতুন secret দিলে সংরক্ষণ হবে"></label>
+                        @if(($values['setup.payment.'.$provider.'.secret.configured'] ?? false))<p class="text-xs text-emerald-700">আগের secret নিরাপদে সংরক্ষিত আছে। পরিবর্তন না করলে খালি রাখুন।</p>@endif
                     </section>
                 @endforeach
                 <section class="rounded-xl border p-4 space-y-3"><label class="flex items-center gap-2 font-bold"><input type="checkbox" name="bank_enabled" value="1" @checked(($values['setup.payment.bank.enabled'] ?? '0') === '1')> ব্যাংক ট্রান্সফার চালু</label>
