@@ -145,10 +145,13 @@ class PluginManager
                 $instance = $this->resolvePluginInstance($manifest);
                 if ($instance) {
                     app()->register($instance);
-                    $this->loadPluginRoutes($manifest);
                     $instance->onInstall();
                     $instance->onEnable();
                 }
+
+                // Routes must be available even for headless plugins without a provider class.
+                // require_once is safe when the provider already loaded these routes at boot.
+                $this->loadPluginRoutes($manifest);
 
                 $this->audit->log('plugin.installed', 'plugin', $manifest->slug, ['version' => $manifest->version], $actorId);
 
@@ -378,9 +381,12 @@ class PluginManager
             $provider = $this->resolvePluginInstance($manifest);
             if ($provider) {
                 app()->register($provider);
-                $this->loadPluginRoutes($manifest);
                 $provider->onEnable();
             }
+
+            // Runtime activation must expose routes regardless of optional provider presence.
+            $this->loadPluginRoutes($manifest);
+
             $this->audit->log('plugin.enabled', 'plugin', $slug, [], $actorId);
 
             return $record->fresh();
@@ -1090,7 +1096,7 @@ class PluginManager
                 . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relative);
 
             if (is_file($routeFile)) {
-                require $routeFile;
+                require_once $routeFile;
             }
         }
     }
