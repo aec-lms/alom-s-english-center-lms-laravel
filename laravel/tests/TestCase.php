@@ -14,7 +14,9 @@ use Illuminate\Support\Facades\Hash;
 
 abstract class TestCase extends BaseTestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase {
+        refreshDatabase as protected refreshDatabaseUsingTrait;
+    }
 
     protected string $tempLockPath;
 
@@ -28,7 +30,7 @@ abstract class TestCase extends BaseTestCase
             return;
         }
 
-        parent::refreshDatabase();
+        $this->refreshDatabaseUsingTrait();
     }
 
     protected function setUp(): void
