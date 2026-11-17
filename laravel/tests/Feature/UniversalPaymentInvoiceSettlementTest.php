@@ -191,4 +191,60 @@ class UniversalPaymentInvoiceSettlementTest extends TestCase
         ])->assertStatus(422);
     }
 
+    public function test_overpayment_receipt_cannot_be_verified_against_remaining_invoice_balance(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['student-management', 'fees-management', 'universal-payment']);
+
+        $studentUser = $this->createUserWithRole('student');
+        Student::query()->create([
+            'user_id' => $studentUser->id,
+            'student_code' => 'UPAY-OVER-' . $studentUser->id,
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+        ]);
+        $invoice = FeeInvoice::query()->create([
+            'invoice_number' => 'UPAY-OVER-INV-' . $studentUser->id,
+            'payer_name' => $studentUser->name,
+            'payer_email' => $studentUser->email,
+            'subtotal_amount' => 1000,
+            'discount_amount' => 0,
+            'net_amount' => 1000,
+            'paid_amount' => 800,
+            'currency' => 'BDT',
+            'status' => 'partial',
+        ]);
+        $transaction = UniversalPaymentTransaction::query()->create([
+            'reference' => 'UPAY-OVER-' . $studentUser->id,
+            'payer_name' => $studentUser->name,
+            'payer_contact' => '01712345678',
+            'item_title' => 'Invoice ' . $invoice->invoice_number,
+            'gateway' => 'bank_cash',
+            'currency' => 'BDT',
+            'amount' => 300,
+            'external_trx_id' => 'BANK-OVERPAY-001',
+            'user_id' => $studentUser->id,
+            'fee_invoice_id' => $invoice->id,
+            'status' => 'pending',
+        ]);
+
+        $admin = $this->createUserWithRole('admin');
+        $this->actingAs($admin)
+            ->post('/plugins/universal-payment/transactions/' . $transaction->id . '/status', [
+                'status' => 'verified',
+                'payment_reference' => 'BANK-OVERPAY-VERIFY',
+            ])
+            ->assertSessionHasErrors();
+
+        $this->assertDatabaseHas('fee_invoices', [
+            'id' => $invoice->id,
+            'paid_amount' => 800,
+            'status' => 'partial',
+        ]);
+        $this->assertDatabaseHas('universal_payment_transactions', [
+            'id' => $transaction->id,
+            'status' => 'pending',
+        ]);
+    }
+
 }
