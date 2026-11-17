@@ -43,12 +43,38 @@ class AttendanceController extends Controller
                 $batch->name ?? null,
             )->id;
         });
+
+        $qrBatches = $batches->map(fn ($batch) => (object) [
+            'attendance_batch_mapping_id' => $batch->attendance_batch_mapping_id,
+            'name' => $batch->name,
+            'source_type' => 'course_batch',
+        ]);
+        if (app(PluginManager::class)->isEnabled('batch-management') && Schema::hasTable('study_batches')) {
+            $studyBatches = DB::table('study_batches')
+                ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
+                ->when(Schema::hasColumn('study_batches', 'deleted_at'), fn ($q) => $q->whereNull('deleted_at'))
+                ->orderBy('name')
+                ->get();
+            foreach ($studyBatches as $studyBatch) {
+                $mapping = AttendanceBatchMapping::resolve(
+                    'study_batch',
+                    (int) $studyBatch->id,
+                    isset($studyBatch->branch_id) ? (int) $studyBatch->branch_id : null,
+                    $studyBatch->name ?? $studyBatch->course_title ?? null,
+                );
+                $qrBatches->push((object) [
+                    'attendance_batch_mapping_id' => $mapping->id,
+                    'name' => $studyBatch->name . ' (Study Batch)',
+                    'source_type' => 'study_batch',
+                ]);
+            }
+        }
         $students = Student::query()
             ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
             ->orderBy('id')
             ->get();
 
-        return view('attendance-management::index', compact('records', 'batches', 'students'));
+        return view('attendance-management::index', compact('records', 'batches', 'qrBatches', 'students'));
     }
 
     public function store(Request $request): RedirectResponse
