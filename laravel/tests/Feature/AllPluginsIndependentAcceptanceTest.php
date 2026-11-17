@@ -16,21 +16,22 @@ class AllPluginsIndependentAcceptanceTest extends TestCase
 {
     public static function pluginSlugs(): array
     {
-        return [
-            ['admin-boosting'], ['admission-management'], ['attendance-management'],
-            ['batch-management'], ['branch-management'], ['carousel-builder'],
-            ['certificate-management'], ['class-management'], ['cms-website'],
-            ['course-management'], ['email-notifications'], ['exam-management'],
-            ['fees-management'], ['gateway-card'], ['gateway-paypal'],
-            ['gateway-sslcommerz'], ['gateway-stripe'], ['gmail-marketing'],
-            ['google-console'], ['guardian-management'], ['hr-staff-management'],
-            ['library-management'], ['marketing-management'], ['meta-pixel'],
-            ['mobile-app-api'], ['notice-board'], ['notification-center'],
-            ['page-builder'], ['payment-management'], ['reports-analytics'],
-            ['role-ai-assistant'], ['seo-manager'], ['student-tracking'], ['slider-builder'],
-            ['sms-gateway'], ['storefront-catalog'], ['student-management'],
-            ['teacher-management'], ['universal-payment'], ['visitor-popup-ads'],
-        ];
+        // Discover every module manifest so newly added plugins are automatically
+        // included in the full lifecycle acceptance suite without editing a list.
+        $modulesPath = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'plugins' . DIRECTORY_SEPARATOR . 'modules';
+        $manifests = glob($modulesPath . DIRECTORY_SEPARATOR . '*' . DIRECTORY_SEPARATOR . 'plugin.json') ?: [];
+        $slugs = [];
+
+        foreach ($manifests as $manifestPath) {
+            $slug = basename(dirname($manifestPath));
+            if (preg_match('/^[a-z0-9][a-z0-9-]{1,79}$/', $slug) === 1) {
+                $slugs[] = [$slug];
+            }
+        }
+
+        usort($slugs, static fn (array $left, array $right): int => strcmp($left[0], $right[0]));
+
+        return $slugs;
     }
 
     #[DataProvider('pluginSlugs')]
