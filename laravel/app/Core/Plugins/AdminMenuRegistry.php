@@ -67,6 +67,7 @@ final class AdminMenuRegistry
                     'route' => $route,
                     'permission' => $permission,
                     'plugin' => $slug,
+                    'group' => $group,
                     'order' => (int) ($entry['order'] ?? 100),
                 ];
             }
