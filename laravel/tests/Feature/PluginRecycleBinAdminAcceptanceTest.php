@@ -70,6 +70,7 @@ class PluginRecycleBinAdminAcceptanceTest extends TestCase
         $slug = 'permanent-delete-probe-' . strtolower(substr(bin2hex(random_bytes(4)), 0, 8));
         $modulePath = $this->createProbePlugin($slug);
         $archivePath = null;
+        $backupPath = null;
 
         try {
             $manager = app(PluginManager::class);
@@ -90,6 +91,10 @@ class PluginRecycleBinAdminAcceptanceTest extends TestCase
                 ->assertSessionHas('status');
 
             $this->assertDirectoryDoesNotExist($archivePath);
+            $backupId = 'archive-' . (int) $archive->id . '-' . substr(hash('sha256', $slug), 0, 12);
+            $backupPath = storage_path('app/plugin-permanent-delete-backups/' . $backupId);
+            $this->assertDirectoryExists($backupPath);
+            $this->assertFileExists($backupPath . '/plugin.json');
             $this->assertDatabaseMissing('plugin_archives', ['id' => $archive->id]);
             $this->assertDatabaseMissing('plugins', ['slug' => $slug]);
             $this->assertDatabaseMissing('plugin_settings', ['plugin_slug' => $slug]);
@@ -97,6 +102,9 @@ class PluginRecycleBinAdminAcceptanceTest extends TestCase
             File::deleteDirectory($modulePath);
             if ($archivePath && is_dir($archivePath)) {
                 File::deleteDirectory($archivePath);
+            }
+            if ($backupPath && is_dir($backupPath)) {
+                File::deleteDirectory($backupPath);
             }
         }
     }
