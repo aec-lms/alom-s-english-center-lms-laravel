@@ -12,5 +12,8 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:media-library', 'permissi
         Route::get('/', [MediaLibraryController::class, 'index'])->name('index');
         Route::post('/', [MediaLibraryController::class, 'store'])->name('store');
         Route::get('/{asset}/download', [MediaLibraryController::class, 'download'])->name('download');
+        Route::patch('/{asset}', [MediaLibraryController::class, 'update'])->name('update');
+        Route::post('/{asset}/restore', [MediaLibraryController::class, 'restore'])->name('restore');
+        Route::delete('/{asset}/permanent', [MediaLibraryController::class, 'permanentlyDelete'])->name('permanent');
         Route::delete('/{asset}', [MediaLibraryController::class, 'destroy'])->name('destroy');
     });

@@ -20,12 +20,16 @@ class MediaLibraryController extends Controller
 
     public function index(Request $request): View
     {
-        $assets = MediaAsset::query()
+        $trash = $request->query('view') === 'trash';
+        $query = $trash ? MediaAsset::onlyTrashed() : MediaAsset::query();
+        $assets = $query
             ->when($request->filled('q'), fn ($q) => $q->where('original_name', 'like', '%' . $request->string('q') . '%'))
             ->when($request->filled('type'), fn ($q) => $q->where('mime_type', 'like', $request->string('type') . '/%'))
+            ->when($request->filled('collection'), fn ($q) => $q->where('collection', $request->string('collection')))
             ->latest()->paginate(36)->withQueryString();
+        $collections = MediaAsset::withTrashed()->select('collection')->distinct()->orderBy('collection')->pluck('collection');
 
-        return view('media-library::index', compact('assets'));
+        return view('media-library::index', compact('assets', 'collections', 'trash'));
     }
 
     public function store(Request $request): RedirectResponse
@@ -37,7 +41,6 @@ class MediaLibraryController extends Controller
         ]);
 
         $file = $request->file('file');
-        // Only raster images are public. Office files, PDFs, archives and text files stay private.
         $isImage = str_starts_with((string) $file->getMimeType(), 'image/');
         $disk = $isImage ? 'public' : 'local';
         $folder = $isImage ? 'media-library' : 'media-library/private';
@@ -61,39 +64,75 @@ class MediaLibraryController extends Controller
         return back()->with('status', 'Media uploaded to the central library.');
     }
 
+    public function update(Request $request, MediaAsset $asset): RedirectResponse
+    {
+        $validated = $request->validate([
+            'collection' => ['required', 'string', 'max:80', 'regex:/^[a-zA-Z0-9 _-]+$/'],
+            'alt_text' => ['nullable', 'string', 'max:255'],
+        ]);
+        $asset->update($validated);
+        $this->audit->log('media.asset_metadata_updated', 'media_asset', (string) $asset->id, [
+            'collection' => $asset->collection, 'alt_text_updated' => true,
+        ]);
+
+        return back()->with('status', 'Media details updated.');
+    }
+
     public function download(MediaAsset $asset)
     {
         abort_unless(Storage::disk($asset->disk)->exists($asset->path), 404);
-
         return Storage::disk($asset->disk)->download($asset->path, $asset->original_name);
     }
 
     public function destroy(MediaAsset $asset): RedirectResponse
     {
-        $reference = $asset->disk === 'public'
-            ? Storage::disk('public')->url($asset->path)
-            : 'private:' . $asset->path;
+        if ($this->isReferenced($asset)) {
+            return back()->withErrors(['media' => 'This file is currently used by content. Unlink it before moving it to the recycle bin.']);
+        }
+        $asset->delete();
+        $this->audit->log('media.asset_trashed', 'media_asset', (string) $asset->id, []);
+        return back()->with('status', 'Media asset moved to the recycle bin.');
+    }
 
+    public function restore(string $asset): RedirectResponse
+    {
+        $record = MediaAsset::withTrashed()->findOrFail($asset);
+        abort_unless($record->trashed(), 404);
+        $record->restore();
+        $this->audit->log('media.asset_restored', 'media_asset', (string) $record->id, []);
+        return back()->with('status', 'Media asset restored.');
+    }
+
+    public function permanentlyDelete(string $asset): RedirectResponse
+    {
+        $record = MediaAsset::withTrashed()->findOrFail($asset);
+        abort_unless($record->trashed(), 404);
+        if ($this->isReferenced($record)) {
+            return back()->withErrors(['media' => 'This file is still referenced by content and cannot be permanently deleted.']);
+        }
+        Storage::disk($record->disk)->delete($record->path);
+        $id = (string) $record->id;
+        $record->forceDelete();
+        $this->audit->log('media.asset_permanently_deleted', 'media_asset', $id, []);
+        return back()->with('status', 'Media file permanently deleted.');
+    }
+
+    private function isReferenced(MediaAsset $asset): bool
+    {
+        $values = $asset->disk === 'public'
+            ? [$asset->path, Storage::disk('public')->url($asset->path)]
+            : [$asset->path, 'private:' . $asset->path];
         $columns = [
             'cms_posts' => ['thumbnail_path', 'pdf_thumbnail', 'pdf_path'],
             'courses' => ['thumbnail', 'pdf_thumbnail', 'pdf_path'],
             'storefront_items' => ['thumbnail_path', 'pdf_thumbnail_path', 'download_url'],
         ];
-
         foreach ($columns as $table => $fields) {
             if (!Schema::hasTable($table)) continue;
             foreach ($fields as $field) {
-                if (Schema::hasColumn($table, $field) && DB::table($table)->where($field, $reference)->exists()) {
-                    return back()->withErrors(['media' => 'This file is currently used by published content. Replace or unlink it before deleting.']);
-                }
+                if (Schema::hasColumn($table, $field) && DB::table($table)->whereIn($field, $values)->exists()) return true;
             }
         }
-
-        Storage::disk($asset->disk)->delete($asset->path);
-        $id = (string) $asset->id;
-        $asset->delete();
-        $this->audit->log('media.asset_deleted', 'media_asset', $id, []);
-
-        return back()->with('status', 'Media asset deleted.');
+        return false;
     }
 }
