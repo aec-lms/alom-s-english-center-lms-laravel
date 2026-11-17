@@ -10,11 +10,23 @@ return new class extends Migration {
     public function up(): void
     {
         if (Schema::hasTable('attendance_records')) {
-            Schema::table('attendance_records', function (Blueprint $table): void {
-                $table->uuid('sync_uuid')->nullable()->unique();
-                $table->string('source', 20)->default('online');
-                $table->string('edited_reason', 255)->nullable();
-            });
+            $addSyncUuid = !Schema::hasColumn('attendance_records', 'sync_uuid');
+            $addSource = !Schema::hasColumn('attendance_records', 'source');
+            $addEditedReason = !Schema::hasColumn('attendance_records', 'edited_reason');
+
+            if ($addSyncUuid || $addSource || $addEditedReason) {
+                Schema::table('attendance_records', function (Blueprint $table) use ($addSyncUuid, $addSource, $addEditedReason): void {
+                    if ($addSyncUuid) {
+                        $table->uuid('sync_uuid')->nullable()->unique();
+                    }
+                    if ($addSource) {
+                        $table->string('source', 20)->default('online');
+                    }
+                    if ($addEditedReason) {
+                        $table->string('edited_reason', 255)->nullable();
+                    }
+                });
+            }
         }
 
         if (!Schema::hasTable('attendance_audit_logs')) {
