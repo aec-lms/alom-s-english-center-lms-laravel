@@ -214,6 +214,19 @@ class AttendanceQrController extends Controller
         return response()->json(['status' => 'ok'] + $result);
     }
 
+
+    public function revokeGpsConsent(Request $request): JsonResponse
+    {
+        $actor = $request->user();
+        DB::table('attendance_gps_consents')
+            ->where('user_id', $actor->id)
+            ->whereNull('revoked_at')
+            ->update(['revoked_at' => now(), 'updated_at' => now()]);
+        $this->audit->log('attendance.gps_consent.revoked', 'user', (string) $actor->id, [], $actor->id);
+
+        return response()->json(['status' => 'ok', 'consent_revoked' => true]);
+    }
+
     public function studentHistory(Request $request)
     {
         abort_unless($request->user()->hasRole('student'), 403);
