@@ -13,7 +13,7 @@ return new class extends Migration {
             Schema::create('payment_transactions', function (Blueprint $table): void {
                 $table->id();
                 $table->string('transaction_ref', 80)->unique();
-                $table->foreignId('invoice_id')->constrained('fee_invoices')->cascadeOnDelete();
+                $table->unsignedBigInteger('invoice_id')->index();
                 $table->unsignedBigInteger('branch_id')->index();
                 $table->string('gateway_slug', 64); // offline, gateway-sslcommerz, gateway-card
                 $table->decimal('amount', 10, 2);
