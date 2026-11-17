@@ -9,7 +9,18 @@
     "dependencies": [],
     "provider": "Plugins\\Modules\\BatchManagement\\Providers\\BatchManagementServiceProvider",
     "permissions": [
-        { "slug": "batches.manage", "name": "Manage Study Batches & Cohorts" }
+        {
+            "slug": "batches.manage",
+            "name": "Manage Study Batches & Cohorts"
+        }
     ],
-    "settings_schema": []
+    "settings_schema": [],
+    "admin_menu": [
+        {
+            "group": "Academic & Operations",
+            "label": "Batches & Seats",
+            "route": "plugins.batches.index",
+            "order": 100
+        }
+    ]
 }
