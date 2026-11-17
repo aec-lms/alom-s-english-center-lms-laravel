@@ -2,6 +2,10 @@
 @section('title', "Alom's English Center — AEC LMS")
 @section('content')
 @php
+    $pluginManager = app(\\App\\Core\\Plugins\\PluginManager::class);
+    $showSslcommerzStrip = $pluginManager->isEnabled('gateway-sslcommerz')
+        && filled($pluginManager->getSetting('gateway-sslcommerz', 'store_id'));
+
     $heroSlides = $sliders->isNotEmpty() ? $sliders->map(fn ($s) => [
         'title' => $s->title,
         'subtitle' => $s->subtitle ?? '',
@@ -202,7 +206,7 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             @foreach ($learningPaths as $lp)
                 @if ($lp['enabled'] ?? true)
-                <a href="{{ $lp['url'] ?? '/courses' }}" class="rounded-2xl p-6 border transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md flex flex-col justify-between space-y-5" style="background-color: {{ $lp['bg'] ?? '#D6E9FF' }}; border-color: {{ $lp['border'] ?? '#BBD8FF' }};">
+                <a href="{{ route('public.courses', ['category' => $lp['category'] ?? $lp['title']]) }}" data-learning-path="{{ $lp['category'] ?? $lp['title'] }}" class="rounded-2xl p-6 border transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md flex flex-col justify-between space-y-5" style="background-color: {{ $lp['bg'] ?? '#D6E9FF' }}; border-color: {{ $lp['border'] ?? '#BBD8FF'] }};">
                     <div class="space-y-4">
                         <div class="w-11 h-11 rounded-xl text-white font-extrabold text-xs flex items-center justify-center shadow-xs" style="background-color: {{ $lp['accent'] ?? '#1D63FF' }}">
                             {{ $lp['abbr'] ?? 'AC' }}
@@ -378,6 +382,24 @@
                     <div class="text-sm font-extrabold">Google Play Android</div>
                 </div>
             </a>
+        </div>
+    </div>
+</section>
+@endif
+
+@if ($showSslcommerzStrip)
+<section aria-label="Secure payment methods" class="border-t border-slate-200 bg-white py-6 px-4 sm:px-6">
+    <div class="max-w-[1100px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div class="text-center sm:text-left">
+            <p class="text-sm font-extrabold text-slate-900">Pay securely with SSLCOMMERZ</p>
+            <p class="text-xs text-slate-500 mt-1">Secure checkout for card, mobile banking and internet banking payments.</p>
+        </div>
+        <div class="flex flex-wrap justify-center items-center gap-2" aria-label="Supported payment channels">
+            <span class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-extrabold tracking-wide text-slate-700">VISA</span>
+            <span class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-extrabold text-slate-700">Mastercard</span>
+            <span class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-bold text-slate-700">Mobile Banking</span>
+            <span class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-bold text-slate-700">Internet Banking</span>
+            <span class="rounded-lg bg-[#0B6B55] px-4 py-2 text-xs font-extrabold text-white">SSLCOMMERZ</span>
         </div>
     </div>
 </section>
