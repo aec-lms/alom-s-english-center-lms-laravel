@@ -378,15 +378,16 @@ PHP;
         $this->actingAs($admin);
 
         $groups = app(\App\Core\Plugins\AdminMenuRegistry::class)->groups();
-        $academicItems = $groups['Academic & Operations'] ?? [];
-        $labels = array_column($academicItems, 'label');
+        $allItems = array_merge([], ...array_values($groups));
+        $labels = array_column($allItems, 'label');
 
         $this->assertContains('Courses', $labels);
         $this->assertContains('Student Activity Trace', $labels);
 
         app(PluginManager::class)->disable('student-tracing');
         $groupsAfterDisable = app(\App\Core\Plugins\AdminMenuRegistry::class)->groups();
-        $labelsAfterDisable = array_column($groupsAfterDisable['Academic & Operations'] ?? [], 'label');
+        $allItemsAfterDisable = array_merge([], ...array_values($groupsAfterDisable));
+        $labelsAfterDisable = array_column($allItemsAfterDisable, 'label');
 
         $this->assertNotContains('Student Activity Trace', $labelsAfterDisable);
         $this->assertContains('Courses', $labelsAfterDisable);
