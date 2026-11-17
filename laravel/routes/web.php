@@ -65,6 +65,9 @@ Route::middleware('installed')->group(function (): void {
         Route::get('/', [DashboardController::class, 'index'])
             ->name('dashboard')
             ->middleware('permission:core.dashboard.view');
+        Route::post('/dashboard/widgets', [DashboardController::class, 'saveWidgets'])
+            ->name('dashboard.widgets')
+            ->middleware('permission:core.dashboard.view');
 
         Route::prefix('plugins')->name('plugins.')->middleware('permission:core.plugins.manage')->group(function (): void {
             Route::get('/', [PluginCenterController::class, 'index'])->name('index');
