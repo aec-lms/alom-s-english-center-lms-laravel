@@ -27,6 +27,13 @@ class AdminCourseContentStudioController extends Controller
         return view('course-content-studio::admin-index', compact('posts','categories','courses'));
     }
 
+    public function edit(int $post): View
+    {
+        $record=CourseContentPost::query()->with('categories')->findOrFail($post);
+        $categories=CourseContentCategory::query()->orderBy('sort_order')->orderBy('name')->get();
+        return view('course-content-studio::edit',compact('record','categories'));
+    }
+
     public function storeCategory(Request $request): RedirectResponse
     {
         $data=$request->validate(['name'=>['required','string','max:120'],'description'=>['nullable','string','max:320']]);
@@ -52,7 +59,7 @@ class AdminCourseContentStudioController extends Controller
                 $data['content_file_mime']=$file->getMimeType();
                 $data['content_file_size']=$file->getSize();
             }
-            $data['slug']=$this->uniqueSlug($data['slug']?:$data['title']);
+            $data['slug']=$this->uniqueSlug(($data['slug']??'')?:$data['title']);
             $data['tags']=$this->tags($data['tags']??'');
             $data['published_at']=$data['status']==='published'?($data['published_at']??now()):null;
             $post=CourseContentPost::query()->create($data);
@@ -74,7 +81,7 @@ class AdminCourseContentStudioController extends Controller
         $newFile=$request->hasFile('content_file')?$request->file('content_file')->store('course-content/private','local'):null;
         if($newThumbnail)$data['thumbnail_path']=$newThumbnail;
         if($newFile){$file=$request->file('content_file');$data['content_file_path']=$newFile;$data['content_file_name']=$file->getClientOriginalName();$data['content_file_mime']=$file->getMimeType();$data['content_file_size']=$file->getSize();}
-        $data['slug']=$this->uniqueSlug($data['slug']?:$data['title'],$record->id);
+        $data['slug']=$this->uniqueSlug(($data['slug']??'')?:$data['title'],$record->id);
         $data['tags']=$this->tags($data['tags']??'');
         $data['published_at']=$data['status']==='published'?($data['published_at']??$record->published_at??now()):null;
         $record->update($data);
