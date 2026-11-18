@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\Phonetics\\Services;
+namespace Plugins\Modules\Phonetics\Services;
 
-use Illuminate\\Database\\Query\\Builder;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Facades\\Schema;
-use Illuminate\\Support\\Str;
-use Symfony\\Component\\HttpKernel\\Exception\\AccessDeniedHttpException;
-use Symfony\\Component\\HttpKernel\\Exception\\ServiceUnavailableHttpException;
+use Illuminate\Database\Query\Builder;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException;
 
 /**
  * Host-LMS bridge. The plugin stores only opaque host IDs and never alters
