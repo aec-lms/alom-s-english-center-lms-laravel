@@ -131,15 +131,16 @@ class PortalController extends Controller
                 ? DB::table('teachers')->where('user_id', $user->id)->first()
                 : null;
             if (Schema::hasTable('courses')) {
-                $assignedCourseIds = Schema::hasTable('course_teacher_assignments')
+                $hasTeacherAssignmentTable = Schema::hasTable('course_teacher_assignments');
+                $assignedCourseIds = $hasTeacherAssignmentTable
                     ? DB::table('course_teacher_assignments')
                         ->where('teacher_user_id', $user->id)
                         ->pluck('course_id')
                     : collect();
 
                 $courses = DB::table('courses')
-                    ->where(function ($query) use ($user, $assignedCourseIds): void {
-                        if ($assignedCourseIds->isNotEmpty()) {
+                    ->where(function ($query) use ($user, $assignedCourseIds, $hasTeacherAssignmentTable): void {
+                        if ($hasTeacherAssignmentTable) {
                             $query->whereIn('id', $assignedCourseIds)
                                 ->orWhere(function ($legacy) use ($user): void {
                                     // Keep legacy name-based assignments only when the course

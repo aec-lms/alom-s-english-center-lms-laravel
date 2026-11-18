@@ -45,6 +45,23 @@ class RoleDashboardLiveMetricsTest extends TestCase
         $this->assertContains($legacyCourse, $courseIds, 'Legacy instructor-name assignments must remain visible during migration.');
         $this->assertNotContains($unassignedCourse, $courseIds);
         $this->assertNotContains($assignedToOtherTeacher, $courseIds, 'A legacy name match must not override another teacher\'s normalized assignment.');
+
+        $legacyCollisionTeacher = $this->createUserWithRole('teacher', null, 'legacy-collision-' . bin2hex(random_bytes(3)) . '@aec.test');
+        $legacyCollisionTeacher->forceFill(['name' => $otherTeacher->name])->save();
+        $unassignedLegacyCollision = $this->createCourse('LEGACYCOLLISION-' . strtoupper(bin2hex(random_bytes(3))), 'Legacy Collision', $otherTeacher->name);
+        DB::table('course_teacher_assignments')->insert([
+            'course_id' => $unassignedLegacyCollision,
+            'teacher_user_id' => $otherTeacher->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $collisionResponse = $this->actingAs($legacyCollisionTeacher)->get('/dashboard')->assertOk();
+        $this->assertNotContains(
+            $unassignedLegacyCollision,
+            $collisionResponse->viewData('courses')->pluck('id')->all(),
+            'Legacy name matching must never reveal a course assigned to another teacher, even when this teacher has no normalized assignments.'
+        );
     }
 
     public function test_branch_manager_dashboard_counts_only_attendance_from_the_assigned_branch(): void
