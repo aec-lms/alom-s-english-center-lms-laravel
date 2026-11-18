@@ -6,6 +6,7 @@ namespace Plugins\Modules\MediaLibrary\Http\Controllers;
 
 use App\Core\Security\AuditLogger;
 use App\Http\Controllers\Controller;
+use App\Core\Security\BranchAccess;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,12 +17,13 @@ use Plugins\Modules\MediaLibrary\Models\MediaAsset;
 
 class MediaLibraryController extends Controller
 {
-    public function __construct(private readonly AuditLogger $audit) {}
+    public function __construct(private readonly AuditLogger $audit, private readonly BranchAccess $branches) {}
 
     public function index(Request $request): View
     {
         $trash = $request->query('view') === 'trash';
         $query = $trash ? MediaAsset::onlyTrashed() : MediaAsset::query();
+        $this->branches->scope($query, $request->user());
         $assets = $query
             ->when($request->filled('q'), fn ($q) => $q->where('original_name', 'like', '%' . $request->string('q') . '%'))
             ->when($request->filled('type'), fn ($q) => $q->where('mime_type', 'like', $request->string('type') . '/%'))
@@ -48,6 +50,7 @@ class MediaLibraryController extends Controller
 
         $asset = MediaAsset::query()->create([
             'uploaded_by' => $request->user()?->id,
+            'branch_id' => $this->branches->assignedBranchId($request->user()),
             'disk' => $disk,
             'path' => $path,
             'original_name' => $file->getClientOriginalName(),
@@ -66,6 +69,7 @@ class MediaLibraryController extends Controller
 
     public function update(Request $request, MediaAsset $asset): RedirectResponse
     {
+        $this->branches->assertRecord($request->user(), $asset);
         $validated = $request->validate([
             'collection' => ['required', 'string', 'max:80', 'regex:/^[a-zA-Z0-9 _-]+$/'],
             'alt_text' => ['nullable', 'string', 'max:255'],
@@ -78,14 +82,16 @@ class MediaLibraryController extends Controller
         return back()->with('status', 'Media details updated.');
     }
 
-    public function download(MediaAsset $asset)
+    public function download(Request $request, MediaAsset $asset)
     {
+        $this->branches->assertRecord($request->user(), $asset);
         abort_unless(Storage::disk($asset->disk)->exists($asset->path), 404);
         return Storage::disk($asset->disk)->download($asset->path, $asset->original_name);
     }
 
-    public function destroy(MediaAsset $asset): RedirectResponse
+    public function destroy(Request $request, MediaAsset $asset): RedirectResponse
     {
+        $this->branches->assertRecord($request->user(), $asset);
         if ($this->isReferenced($asset)) {
             return back()->withErrors(['media' => 'This file is currently used by content. Unlink it before moving it to the recycle bin.']);
         }
@@ -94,18 +100,20 @@ class MediaLibraryController extends Controller
         return back()->with('status', 'Media asset moved to the recycle bin.');
     }
 
-    public function restore(string $asset): RedirectResponse
+    public function restore(Request $request, string $asset): RedirectResponse
     {
         $record = MediaAsset::withTrashed()->findOrFail($asset);
+        $this->branches->assertRecord($request->user(), $record);
         abort_unless($record->trashed(), 404);
         $record->restore();
         $this->audit->log('media.asset_restored', 'media_asset', (string) $record->id, []);
         return back()->with('status', 'Media asset restored.');
     }
 
-    public function permanentlyDelete(string $asset): RedirectResponse
+    public function permanentlyDelete(Request $request, string $asset): RedirectResponse
     {
         $record = MediaAsset::withTrashed()->findOrFail($asset);
+        $this->branches->assertRecord($request->user(), $record);
         abort_unless($record->trashed(), 404);
         if ($this->isReferenced($record)) {
             return back()->withErrors(['media' => 'This file is still referenced by content and cannot be permanently deleted.']);
