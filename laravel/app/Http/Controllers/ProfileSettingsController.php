@@ -12,6 +12,8 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -94,7 +96,7 @@ class ProfileSettingsController extends Controller
             'bio' => ['nullable', 'string', 'max:1200'],
             'location' => ['nullable', 'string', 'max:120'],
             'website' => ['nullable', 'url', 'regex:/^https?:\\/\\//i', 'max:2048'],
-            'profile_is_public' => ['nullable', 'boolean'],
+            'profile_is_public' => ['sometimes', 'boolean'],
             'avatar' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:3072'],
             'cover' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
             'social_links' => ['nullable', 'array:facebook,instagram,youtube,linkedin,tiktok,x,whatsapp,telegram,github'],
@@ -113,6 +115,9 @@ class ProfileSettingsController extends Controller
 
         $changedFields = [];
         foreach (['username', 'display_name', 'headline', 'bio', 'location', 'website'] as $field) {
+            if (!array_key_exists($field, $validated)) {
+                continue;
+            }
             $value = $validated[$field] ?? null;
             if ($user->{$field} !== $value) {
                 $changedFields[] = $field;
@@ -120,23 +125,27 @@ class ProfileSettingsController extends Controller
             $user->{$field} = $value;
         }
 
-        $publicVisibility = $request->boolean('profile_is_public');
-        if ((bool) $user->profile_is_public !== $publicVisibility) {
-            $changedFields[] = 'profile_is_public';
-        }
-        $user->profile_is_public = $publicVisibility;
-
-        $links = [];
-        foreach (self::SOCIAL_PLATFORMS as $platform) {
-            $url = trim((string) data_get($validated, 'social_links.' . $platform, ''));
-            if ($url !== '') {
-                $links[$platform] = $url;
+        if (array_key_exists('profile_is_public', $validated)) {
+            $publicVisibility = $request->boolean('profile_is_public');
+            if ((bool) $user->profile_is_public !== $publicVisibility) {
+                $changedFields[] = 'profile_is_public';
             }
+            $user->profile_is_public = $publicVisibility;
         }
-        if (($user->social_links ?? []) !== $links) {
-            $changedFields[] = 'social_links';
+
+        if (array_key_exists('social_links', $validated)) {
+            $links = [];
+            foreach (self::SOCIAL_PLATFORMS as $platform) {
+                $url = trim((string) data_get($validated, 'social_links.' . $platform, ''));
+                if ($url !== '') {
+                    $links[$platform] = $url;
+                }
+            }
+            if (($user->social_links ?? []) !== $links) {
+                $changedFields[] = 'social_links';
+            }
+            $user->social_links = $links;
         }
-        $user->social_links = $links;
 
         $replacedFiles = [];
         foreach (['avatar' => 'avatar_path', 'cover' => 'cover_path'] as $input => $column) {
@@ -163,6 +172,7 @@ class ProfileSettingsController extends Controller
         $passwordChanged = filled($validated['new_password'] ?? null);
         if ($passwordChanged) {
             $user->password = $validated['new_password'];
+            $user->setRememberToken(Str::random(60));
         }
 
         $user->save();
@@ -192,8 +202,21 @@ class ProfileSettingsController extends Controller
                 $otherSessionsRevoked = true;
             }
 
+            if (Schema::hasTable('sessions') && Schema::hasColumn('sessions', 'user_id')) {
+                DB::table('sessions')->where('user_id', $user->id)
+                    ->where('id', '!=', session()->getId())->delete();
+                $otherSessionsRevoked = true;
+            }
+
+            if (Schema::hasTable('personal_access_tokens')) {
+                $user->tokens()->delete();
+                $otherSessionsRevoked = true;
+            }
+
             $this->audit->log('security.password_changed', 'user', (string) $user->id, [
                 'other_sessions_revoked' => $otherSessionsRevoked,
+                'remember_token_rotated' => true,
+                'api_tokens_revoked' => Schema::hasTable('personal_access_tokens'),
             ], (int) $user->id);
         }
 
