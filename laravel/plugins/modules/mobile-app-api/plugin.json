@@ -1,10 +1,10 @@
 {
     "slug": "mobile-app-api",
     "name": "Mobile App & Learner REST API",
-    "version": "2.0.1",
+    "version": "2.1.0",
     "author": "Alom's English Center",
     "category": "integration",
-    "description": "Sanctum-authenticated Laravel REST API, device registration and app-version controls for separately built iOS and Android native clients; store listings remain disabled until real app releases are configured.",
+    "description": "Sanctum-authenticated REST API for student and instructor clients, device verification, course assignment, attendance, teaching workflows and app-version controls.",
     "core_compatibility": "^2.0",
     "dependencies": [],
     "provider": "Plugins\\Modules\\MobileAppApi\\Providers\\MobileAppApiServiceProvider",
@@ -25,6 +25,11 @@
         }
     ],
     "optional_dependencies": [
-        "course-management"
+        "course-management",
+        "teacher-management",
+        "assignment-management",
+        "exam-management",
+        "attendance-management",
+        "notice-board"
     ]
 }
