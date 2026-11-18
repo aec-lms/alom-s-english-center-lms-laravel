@@ -19,7 +19,7 @@ void main() {
       accuracyMeters: 12,
     );
 
-    expect(payload.keys, ['token']);
+    expect(payload.keys.toList(), ['token']);
     expect(payload.containsKey('latitude'), isFalse);
     expect(payload.containsKey('gps_consent'), isFalse);
   });
