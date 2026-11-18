@@ -60,7 +60,7 @@ class ProfileSettingsTest extends TestCase
         $this->assertNotEmpty($fresh->avatar_path);
         $this->assertNotEmpty($fresh->cover_path);
         Storage::disk('local')->assertExists($fresh->avatar_path);
-        Storage::disk('public')->assertExists($fresh->cover_path);
+        Storage::disk('local')->assertExists($fresh->cover_path);
     }
 
     public function test_duplicate_usernames_are_rejected_and_role_branch_and_email_cannot_be_changed(): void
