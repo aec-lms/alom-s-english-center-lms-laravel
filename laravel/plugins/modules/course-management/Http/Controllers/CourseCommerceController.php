@@ -745,8 +745,12 @@ class CourseCommerceController extends Controller
     {
         abort_unless($this->plugins->isEnabled('fees-management')
             && Schema::hasTable('fee_invoices')
-            && Schema::hasTable('enrollments'), 503,
-            'Enable Fees Management and invoice-linked enrollments before purchasing courses.');
+            && Schema::hasTable('enrollments')
+            && Schema::hasTable('course_carts')
+            && Schema::hasTable('course_cart_items')
+            && Schema::hasTable('course_cart_orders')
+            && Schema::hasTable('course_cart_order_items'), 503,
+            'Enable Fees Management and apply the Course Commerce migrations before purchasing courses.');
     }
 
     private function assertGatewayCheckoutReady(): void
