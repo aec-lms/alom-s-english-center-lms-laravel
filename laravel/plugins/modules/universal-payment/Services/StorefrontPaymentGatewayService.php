@@ -471,6 +471,14 @@ class StorefrontPaymentGatewayService
             $sender = DB::table('users')->where('id', $gift->sender_user_id)->first();
             if (!$sender) throw new RuntimeException('Gift sender account could not be found.');
             $studentProfile = Schema::hasTable('students') ? DB::table('students')->where('user_id', $sender->id)->first() : null;
+            $senderBranchId = $studentProfile?->branch_id ?? ($sender->branch_id ?? null);
+            if (($course->branch_id ?? null) !== null
+                && (int) ($senderBranchId ?? 0) !== (int) $course->branch_id) {
+                $locked->update(['status' => 'risk_review', 'external_trx_id' => $externalReference,
+                    'notes' => json_encode(array_merge($notes, ['risk_review' => true, 'reason' => 'gift_sender_branch_changed']), JSON_THROW_ON_ERROR)]);
+                DB::table('course_gifts')->where('id', $giftId)->update(['status' => 'risk_review', 'updated_at' => now()]);
+                return $locked->fresh();
+            }
             $invoice = FeeInvoice::query()->create([
                 'invoice_number' => 'GIFT-' . strtoupper(substr(bin2hex(random_bytes(6)), 0, 10)),
                 'student_id' => $studentProfile->id ?? null,
