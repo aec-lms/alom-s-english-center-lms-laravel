@@ -30,7 +30,7 @@ final class PhoneticsAdminController extends Controller {
   foreach($oldPaths as $path)$this->deleteMedia($path);
   return back()->with('status','Phonetic entry updated.');
  }
- public function destroy(PhoneticEntry $entry){$paths=[$entry->uk_audio_path,$entry->us_audio_path,$entry->card_bg_image_path];$entry->delete();foreach($paths as $path)if($path)$this->deleteMedia($path);return back()->with('status','Entry deleted.');}
+ public function destroy(PhoneticEntry $entry){$paths=[$entry->uk_audio_path,$entry->us_audio_path,$entry->card_bg_image_path];if($entry->delete())foreach($paths as $path)if($path)$this->deleteMedia($path);return back()->with('status','Entry deleted.');}
  private function storeMedia(UploadedFile $file,string $subDir):string{
   $mime=(string)$file->getMimeType();
   $extension=match($mime){'audio/mpeg','audio/mp3'=>'mp3','audio/wav','audio/x-wav'=>'wav','audio/ogg','application/ogg'=>'ogg','audio/mp4'=>'m4a','audio/webm','video/webm'=>'webm','image/jpeg'=>'jpg','image/png'=>'png','image/webp'=>'webp',default=>strtolower((string)$file->guessExtension())};
