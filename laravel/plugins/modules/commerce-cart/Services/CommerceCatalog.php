@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Plugins\Modules\CommerceCart\Services;
 
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
@@ -17,25 +18,27 @@ class CommerceCatalog
      *
      * @return array{type:string,id:int,title:string,price:float,currency:string,metadata:array}
      */
-    public function resolve(string $type, int $id): array
+    public function resolve(string $type, int $id, ?Authenticatable $user = null): array
     {
         $type = strtolower(trim($type));
         return match ($type) {
-            'course' => $this->course($id),
-            'ebook' => $this->ebook($id),
-            'mock_test', 'exam' => $this->exam($id),
-            'subscription', 'live_class', 'other' => $this->sellable($type, $id),
+            'course' => $this->course($id, $user),
+            'ebook' => $this->ebook($id, $user),
+            'mock_test', 'exam' => $this->exam($id, $user),
+            'subscription', 'live_class', 'other' => $this->sellable($type, $id, $user),
             default => throw ValidationException::withMessages(['item' => 'This item type is not available in the unified store.']),
         };
     }
 
-    private function course(int $id): array
+    private function course(int $id, ?Authenticatable $user): array
     {
         $this->requireTable('courses');
         $course = DB::table('courses')->where('id', $id)->first();
         if (!$course || ($course->status ?? null) !== 'published') {
             throw ValidationException::withMessages(['item' => 'This course is not currently available for purchase.']);
         }
+        $courseBranchId = Schema::hasColumn('courses', 'branch_id') ? ($course->branch_id ?? null) : null;
+        $this->assertBranchAccess($user, $courseBranchId);
         $price = round((float) ($course->price ?? 0), 2);
         if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('flash-sale') && Schema::hasTable('flash_sales')) {
             $sale = DB::table('flash_sales')->where('course_id', $id)->where('is_published', true)
@@ -52,7 +55,7 @@ class CommerceCatalog
         return $this->snapshot('course', $id, (string) $course->title, $price, ['course_id' => $id]);
     }
 
-    private function ebook(int $id): array
+    private function ebook(int $id, ?Authenticatable $user): array
     {
         $this->requireTable('storefront_items');
         $item = DB::table('storefront_items')->where('id', $id)->where('type', 'ebook')->where('is_active', true)->first();
@@ -60,14 +63,21 @@ class CommerceCatalog
             || !str_starts_with((string) ($item->download_url ?? ''), 'private:')) {
             throw ValidationException::withMessages(['item' => 'This paid eBook is unavailable or does not have a protected private PDF.']);
         }
+        $itemBranchId = Schema::hasColumn('storefront_items', 'branch_id') ? ($item->branch_id ?? null) : null;
+        $this->assertBranchAccess($user, $itemBranchId);
         return $this->snapshot('ebook', $id, (string) $item->title, (float) $item->price, ['storefront_item_id' => $id]);
     }
 
-    private function exam(int $id): array
+    private function exam(int $id, ?Authenticatable $user): array
     {
         $this->requireTable('exams');
         $exam = DB::table('exams')->where('id', $id)->where('is_published', true)->first();
         if (!$exam) throw ValidationException::withMessages(['item' => 'This mock test is not currently available.']);
+        $examBranchId = Schema::hasColumn('exams', 'branch_id') ? ($exam->branch_id ?? null) : null;
+        if ($examBranchId === null && isset($exam->course_id) && Schema::hasTable('courses') && Schema::hasColumn('courses', 'branch_id')) {
+            $examBranchId = DB::table('courses')->where('id', $exam->course_id)->value('branch_id');
+        }
+        $this->assertBranchAccess($user, $examBranchId);
         if (!Schema::hasTable('learn_earn_exam_access')) {
             throw new RuntimeException('The Learn & Earn exam access module must be installed before selling paid mock tests.');
         }
@@ -79,16 +89,22 @@ class CommerceCatalog
         return $this->snapshot('mock_test', $id, (string) $exam->title, $price, ['exam_id' => $id]);
     }
 
-    private function sellable(string $type, int $id): array
+    private function sellable(string $type, int $id, ?Authenticatable $user): array
     {
         $this->requireTable('commerce_sellables');
         $item = DB::table('commerce_sellables')->where('id', $id)->where('type', $type)->where('is_active', true)->first();
         if (!$item || (float) $item->price <= 0) {
             throw ValidationException::withMessages(['item' => 'This paid service is not currently available.']);
         }
+        $sellableBranchId = Schema::hasColumn('commerce_sellables', 'branch_id') ? ($item->branch_id ?? null) : null;
+        $this->assertBranchAccess($user, $sellableBranchId);
         if ($type === 'live_class' && (!$item->resource_id || !Schema::hasTable('live_classes')
             || !DB::table('live_classes')->where('id', $item->resource_id)->exists())) {
             throw ValidationException::withMessages(['item' => 'This live-class pass must be linked to an existing Live Class ID by an administrator.']);
+        }
+        if ($type === 'live_class' && Schema::hasColumn('live_classes', 'branch_id')) {
+            $liveClassBranchId = DB::table('live_classes')->where('id', $item->resource_id)->value('branch_id');
+            $this->assertBranchAccess($user, $liveClassBranchId);
         }
         if ($item->available_from && now()->lt($item->available_from)) {
             throw ValidationException::withMessages(['item' => 'This service is not available yet.']);
@@ -104,6 +120,17 @@ class CommerceCatalog
             'currency' => strtoupper((string) $item->currency),
             'metadata' => ['sellable_id' => $id, 'resource_id' => $item->resource_id ? (int) $item->resource_id : null, 'entitlement' => json_decode((string) ($item->entitlement ?? '{}'), true) ?: []],
         ];
+    }
+
+    private function assertBranchAccess(?Authenticatable $user, mixed $resourceBranchId): void
+    {
+        if ($resourceBranchId === null) {
+            return; // Platform-wide catalogue items remain available to every branch.
+        }
+        $userBranchId = $user && method_exists($user, 'getAttribute') ? $user->getAttribute('branch_id') : null;
+        if ($userBranchId === null || (int) $userBranchId !== (int) $resourceBranchId) {
+            throw ValidationException::withMessages(['item' => 'This item is not available to your assigned branch.']);
+        }
     }
 
     private function snapshot(string $type, int $id, string $title, float $price, array $metadata): array
