@@ -21,6 +21,6 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:assignment-management'])
     ->group(function (): void {
         Route::get('/', [AssignmentController::class, 'studentIndex'])->name('index');
         Route::get('/{assignment}', [AssignmentController::class, 'show'])->whereNumber('assignment')->name('show');
-        Route::post('/{assignment}/submit', [AssignmentController::class, 'submit'])->whereNumber('assignment')->name('submit');
+        Route::post('/{assignment}/submit', [AssignmentController::class, 'submit'])->whereNumber('assignment')->middleware('throttle:10,1')->name('submit');
         Route::get('/submissions/{submission}/attachment', [AssignmentController::class, 'downloadOwnSubmission'])->whereNumber('submission')->name('attachment');
     });
