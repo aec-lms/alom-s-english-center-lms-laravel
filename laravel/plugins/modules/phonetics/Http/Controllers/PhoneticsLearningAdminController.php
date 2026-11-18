@@ -31,8 +31,8 @@ final class PhoneticsLearningAdminController extends Controller
             'students' => $this->studentOptions(),
             'batchMembers' => PhoneticBatchMembership::query()->with('user')->where('lms_driver', $this->catalog->driver())->latest()->paginate(20, ['*'], 'members'),
             'words' => PhoneticEntry::query()->where('is_active', true)->orderBy('word')->get(),
-            'assignments' => PhoneticLearningAssignment::query()->with('word')->latest()->paginate(20, ['*'], 'assignments'),
-            'exams' => PhoneticExam::query()->withCount('questions')->latest()->paginate(20, ['*'], 'exams'),
+            'assignments' => PhoneticLearningAssignment::query()->where('lms_driver', $this->catalog->driver())->with('word')->latest()->paginate(20, ['*'], 'assignments'),
+            'exams' => PhoneticExam::query()->where('lms_driver', $this->catalog->driver())->withCount('questions')->latest()->paginate(20, ['*'], 'exams'),
         ]);
     }
 
@@ -71,6 +71,7 @@ final class PhoneticsLearningAdminController extends Controller
             'available_from' => ['nullable', 'date'],
             'available_until' => ['nullable', 'date', 'after_or_equal:available_from'],
         ]);
+        abort_unless(PhoneticEntry::query()->whereKey($data['word_id'])->where('is_active', true)->exists(), 422, 'Only active vocabulary words can be assigned.');
         $this->validateScope($data);
         abort_if(
             empty($data['course_ref']) && empty($data['course_category_ref']),
@@ -135,6 +136,7 @@ final class PhoneticsLearningAdminController extends Controller
 
     public function destroyAssignment(Request $request, PhoneticLearningAssignment $assignment)
     {
+        abort_unless($assignment->lms_driver === $this->catalog->driver(), 404);
         $id = (string) $assignment->id;
         $assignment->delete();
         $this->audit($request, 'phonetics.assignment.removed', 'learning_assignment', $id);
@@ -240,6 +242,7 @@ final class PhoneticsLearningAdminController extends Controller
 
     public function updateExamStatus(Request $request, PhoneticExam $exam)
     {
+        abort_unless($exam->lms_driver === $this->catalog->driver(), 404);
         $data = $request->validate(['status' => ['required', 'in:draft,published,archived']]);
         $exam->update(['status' => $data['status']]);
         $this->audit($request, 'phonetics.exam.status_updated', 'exam', (string) $exam->id, ['status' => $exam->status]);
