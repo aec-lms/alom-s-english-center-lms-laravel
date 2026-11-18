@@ -16,19 +16,37 @@ class ReferralIncomeController extends Controller
 {
     public function __construct(private readonly ReferralIncomeService $referrals) {}
 
+    public function track(string $code): RedirectResponse
+    {
+        $valid = DB::table('referral_codes')->where('code', strtoupper($code))->where('is_active', true)->exists();
+        if (!$valid) return redirect('/register')->withErrors(['referral_code' => 'This referral link is invalid or inactive.']);
+        session(['referral_income_code' => strtoupper($code)]);
+        return redirect('/register')->with('status', 'Referral link saved. Complete registration, then sign in to apply it.');
+    }
+
     public function dashboard(Request $request): View
     {
         $user = $request->user();
         abort_unless($user->hasRole('student') || $user->hasRole('teacher'), 403);
         $code = $this->referrals->createOrGetCode($user);
+        $pendingReferralCode = $request->session()->pull('referral_income_code');
+        if ($pendingReferralCode) {
+            try {
+                $this->referrals->applyCode($user, $pendingReferralCode);
+            } catch (\Illuminate\Validation\ValidationException $exception) {
+                // Existing attribution, self-referral or an ineligible account: keep the account safe.
+            }
+        }
+        $referralUrl = url('/r/' . $code);
         $commissions = DB::table('referral_commissions')->where('referrer_user_id', $user->id)->latest('id')->paginate(20);
         $stats = DB::table('referral_commissions')->where('referrer_user_id', $user->id)
             ->selectRaw("SUM(CASE WHEN status IN ('approved','payout_requested','paid') THEN commission_amount ELSE 0 END) as earned")
             ->selectRaw("SUM(CASE WHEN status = 'pending' THEN commission_amount ELSE 0 END) as pending")
-            ->selectRaw("SUM(CASE WHEN status = 'paid' THEN commission_amount ELSE 0 END) as paid")->first();
+            ->selectRaw("SUM(CASE WHEN status = 'paid' THEN commission_amount ELSE 0 END) as paid")
+            ->selectRaw("SUM(CASE WHEN status = 'approved' THEN commission_amount ELSE 0 END) as available")->first();
         $referralCount = DB::table('referral_attributions')->where('referrer_user_id', $user->id)->where('status', 'active')->count();
         $payouts = DB::table('referral_payout_requests')->where('user_id', $user->id)->latest('id')->limit(10)->get();
-        return view('referral-income::dashboard', compact('code', 'commissions', 'stats', 'referralCount', 'payouts'));
+        return view('referral-income::dashboard', compact('code', 'referralUrl', 'commissions', 'stats', 'referralCount', 'payouts'));
     }
 
     public function apply(Request $request): RedirectResponse
@@ -54,6 +72,14 @@ class ReferralIncomeController extends Controller
             ->select('referral_commissions.*', 'users.name as referrer_name')->latest('referral_commissions.id')->paginate(30, ['*'], 'commissions_page');
         $payouts = DB::table('referral_payout_requests')->join('users', 'users.id', '=', 'referral_payout_requests.user_id')
             ->select('referral_payout_requests.*', 'users.name as owner_name')->latest('referral_payout_requests.id')->paginate(30, ['*'], 'payouts_page');
+        $payouts->getCollection()->transform(function ($payout) {
+            try {
+                $payout->account_details = Crypt::decryptString($payout->account_details_encrypted);
+            } catch (\Throwable $exception) {
+                $payout->account_details = '[Unable to decrypt payout destination]';
+            }
+            return $payout;
+        });
         $rules = DB::table('referral_income_rules')->orderBy('referrer_type')->get();
         return view('referral-income::admin', compact('commissions', 'payouts', 'rules'));
     }
