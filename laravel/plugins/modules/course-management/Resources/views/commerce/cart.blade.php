@@ -60,6 +60,13 @@
                 <h2 class="text-lg font-extrabold text-slate-900">Order summary</h2>
                 <div class="mt-4 flex justify-between text-sm text-slate-600"><span>Courses ({{ $items->count() }})</span><span>৳{{ number_format($subtotal, 2) }}</span></div>
                 <div class="mt-3 border-t border-slate-100 pt-3 flex justify-between text-base font-black text-slate-900"><span>Subtotal</span><span>৳{{ number_format($subtotal, 2) }}</span></div>
+                @if ($walletBalance > 0)
+                    <div class="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                        <div class="flex justify-between gap-3 text-sm"><span class="font-bold text-emerald-900">Gift wallet balance</span><strong class="text-emerald-800">৳{{ number_format($walletBalance, 2) }}</strong></div>
+                        <p class="mt-1 text-[11px] text-emerald-800">Your available gift balance is applied automatically at checkout.</p>
+                    </div>
+                @endif
+                <a href="{{ route('course-commerce.vouchers.form') }}" class="mt-3 block text-center text-xs font-bold text-emerald-700 hover:underline">Buy a Gift Voucher</a>
 
                 <form method="POST" action="{{ route('course-commerce.checkout') }}" class="mt-5 space-y-3">
                     @csrf
