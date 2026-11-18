@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\ExpenseManagement\\Providers;
+namespace Plugins\Modules\ExpenseManagement\Providers;
 
-use App\\Core\\Plugins\\BasePluginServiceProvider;
+use App\Core\Plugins\BasePluginServiceProvider;
 
 class ExpenseManagementServiceProvider extends BasePluginServiceProvider
 {
