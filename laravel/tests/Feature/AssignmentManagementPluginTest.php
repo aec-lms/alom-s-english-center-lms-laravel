@@ -81,6 +81,168 @@ class AssignmentManagementPluginTest extends TestCase
         ]);
     }
 
+    public function test_course_assignment_is_visible_and_submittable_only_with_active_enrollment(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management', 'assignment-management']);
+        $teacher = $this->createUserWithRole('teacher');
+        $student = $this->createUserWithRole('student');
+        $otherStudent = $this->createUserWithRole('student');
+
+        $courseId = DB::table('courses')->insertGetId([
+            'code' => 'ASG-ENROLL-01',
+            'title' => 'Enrollment Scoped Course',
+            'slug' => 'enrollment-scoped-course',
+            'description' => 'Test course.',
+            'price' => 0,
+            'status' => 'published',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $assignmentId = DB::table('assignment_tasks')->insertGetId([
+            'course_id' => $courseId,
+            'created_by' => $teacher->id,
+            'title' => 'Enrolled students only',
+            'instructions' => 'Submit a short answer.',
+            'max_score' => 10,
+            'status' => 'published',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('enrollments')->insert([
+            'user_id' => $student->id,
+            'course_id' => $courseId,
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($otherStudent)->get('/student/assignments')
+            ->assertOk()->assertDontSee('Enrolled students only');
+        $this->actingAs($otherStudent)->get("/student/assignments/{$assignmentId}")->assertNotFound();
+        $this->actingAs($otherStudent)->post("/student/assignments/{$assignmentId}/submit", [
+            'answer_text' => 'I am not enrolled.',
+        ])->assertNotFound();
+        $otherToken = $otherStudent->createToken('assignment-scope-other')->plainTextToken;
+        $this->withHeader('Authorization', 'Bearer ' . $otherToken)
+            ->getJson('/api/v1/my/assignments')->assertOk()->assertJsonMissing(['title' => 'Enrolled students only']);
+        $this->withHeader('Authorization', 'Bearer ' . $otherToken)
+            ->getJson("/api/v1/my/assignments/{$assignmentId}")->assertNotFound();
+        $this->withHeader('Authorization', 'Bearer ' . $otherToken)
+            ->postJson("/api/v1/my/assignments/{$assignmentId}/submit", ['answer_text' => 'Not enrolled.'])
+            ->assertNotFound();
+
+        $this->actingAs($student)->get("/student/assignments/{$assignmentId}")->assertOk();
+        $studentToken = $student->createToken('assignment-scope-student')->plainTextToken;
+        $this->withHeader('Authorization', 'Bearer ' . $studentToken)
+            ->getJson("/api/v1/my/assignments/{$assignmentId}")->assertOk();
+        $this->withHeader('Authorization', 'Bearer ' . $studentToken)
+            ->postJson("/api/v1/my/assignments/{$assignmentId}/submit", ['answer_text' => 'Submitted from mobile.'])
+            ->assertCreated();
+        $this->actingAs($student)->post("/student/assignments/{$assignmentId}/submit", [
+            'answer_text' => 'I am actively enrolled.',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('assignment_submissions', [
+            'assignment_id' => $assignmentId,
+            'student_id' => $student->id,
+            'status' => 'submitted',
+        ]);
+    }
+
+    public function test_teacher_cannot_create_assignments_for_another_branch_and_admin_branch_is_validated(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'assignment-management']);
+        $branchA = DB::table('branches')->insertGetId([
+            'code' => 'ASG-A', 'name' => 'Assignment A', 'is_active' => true,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $branchB = DB::table('branches')->insertGetId([
+            'code' => 'ASG-B', 'name' => 'Assignment B', 'is_active' => true,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $teacher = $this->createUserWithRole('teacher', $branchA);
+        $payload = [
+            'title' => 'Branch Scoped Assignment',
+            'instructions' => 'Write a paragraph.',
+            'max_score' => 10,
+            'status' => 'published',
+        ];
+
+        $this->actingAs($teacher)->post('/admin/assignments', $payload + ['branch_id' => $branchB])
+            ->assertForbidden();
+        $this->actingAs($teacher)->post('/admin/assignments', $payload + ['branch_id' => $branchA])
+            ->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('assignment_tasks', [
+            'title' => 'Branch Scoped Assignment',
+            'branch_id' => $branchA,
+        ]);
+
+        $studentB = $this->createUserWithRole('student', $branchB);
+        $otherBranchAssignment = DB::table('assignment_tasks')->insertGetId([
+            'branch_id' => $branchB,
+            'created_by' => $teacher->id,
+            'title' => 'Other branch assignment',
+            'instructions' => 'Private branch task.',
+            'max_score' => 10,
+            'status' => 'published',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $otherBranchSubmission = DB::table('assignment_submissions')->insertGetId([
+            'assignment_id' => $otherBranchAssignment,
+            'student_id' => $studentB->id,
+            'answer_text' => 'Branch B answer.',
+            'submitted_at' => now(),
+            'status' => 'submitted',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->actingAs($teacher)->post("/admin/assignments/submissions/{$otherBranchSubmission}/grade", [
+            'score' => 5,
+        ])->assertForbidden();
+
+        $admin = $this->createUserWithRole('admin');
+        $this->actingAs($admin)->post('/admin/assignments', $payload + ['branch_id' => 999999])
+            ->assertStatus(422);
+    }
+
+    public function test_replacing_an_ungraded_submission_removes_the_previous_private_attachment(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['assignment-management']);
+        Storage::fake('local');
+        $teacher = $this->createUserWithRole('teacher');
+        $student = $this->createUserWithRole('student');
+        $assignmentId = DB::table('assignment_tasks')->insertGetId([
+            'created_by' => $teacher->id,
+            'title' => 'Revision Task',
+            'instructions' => 'Upload a file.',
+            'max_score' => 10,
+            'status' => 'published',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($student)->post("/student/assignments/{$assignmentId}/submit", [
+            'answer_text' => 'First version.',
+            'attachment' => UploadedFile::fake()->create('first.pdf', 100, 'application/pdf'),
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $firstPath = DB::table('assignment_submissions')->where('assignment_id', $assignmentId)->value('attachment_path');
+        $this->assertNotNull($firstPath);
+        Storage::disk('local')->assertExists($firstPath);
+
+        $this->actingAs($student)->post("/student/assignments/{$assignmentId}/submit", [
+            'answer_text' => 'Revised version.',
+            'attachment' => UploadedFile::fake()->create('revised.pdf', 120, 'application/pdf'),
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $secondPath = DB::table('assignment_submissions')->where('assignment_id', $assignmentId)->value('attachment_path');
+        $this->assertNotSame($firstPath, $secondPath);
+        Storage::disk('local')->assertMissing($firstPath);
+        Storage::disk('local')->assertExists($secondPath);
+    }
+
     public function test_student_cannot_read_another_students_submission(): void
     {
         $this->markSystemInstalled();
@@ -257,5 +419,4 @@ class AssignmentManagementPluginTest extends TestCase
             ])
             ->assertStatus(409);
     }
-
 }
