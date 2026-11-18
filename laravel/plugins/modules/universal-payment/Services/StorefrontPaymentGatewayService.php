@@ -229,7 +229,7 @@ class StorefrontPaymentGatewayService
             $order = DB::table('course_cart_orders')->where('id', $orderId)->lockForUpdate()->first();
             if (!$order || (int) $order->payment_transaction_id !== (int) $locked->id
                 || (int) $order->user_id !== (int) $locked->user_id
-                || abs((float) $order->net_amount - (float) $locked->amount) > 0.01
+                || abs(max(0, (float) $order->net_amount - (float) ($order->wallet_credit_amount ?? 0)) - (float) $locked->amount) > 0.01
                 || strtoupper((string) $order->currency) !== strtoupper((string) $locked->currency)) {
                 throw new RuntimeException('Course cart order and verified payment details do not match.');
             }
@@ -337,6 +337,10 @@ class StorefrontPaymentGatewayService
                 'updated_at' => now(),
             ]);
             DB::table('course_carts')->where('id', $order->cart_id)->update(['status' => 'completed', 'updated_at' => now()]);
+            if (filled($order->wallet_reservation_key) && Schema::hasTable('course_gift_wallet_transactions')) {
+                DB::table('course_gift_wallet_transactions')->where('reference', $order->wallet_reservation_key)
+                    ->where('status', 'reserved')->update(['status' => 'completed', 'updated_at' => now()]);
+            }
 
             app(\Plugins\Modules\UniversalPayment\Services\ExternalTransactionReferenceRegistry::class)
                 ->claim((string) $locked->gateway, $externalReference, (int) $locked->id);
