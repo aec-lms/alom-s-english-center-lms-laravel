@@ -205,7 +205,18 @@ class CourseCommercePaymentSettlementService
             throw new RuntimeException('Gift voucher amount, currency or status does not match the verified payment.');
         }
 
+        $invoice = $this->createPaidInvoice(
+            $transaction,
+            $transaction->branch_id !== null ? (int) $transaction->branch_id : null,
+            (float) $voucher->amount,
+            0,
+            (float) $voucher->amount,
+            (string) $voucher->currency,
+            'VOUCHER'
+        );
+
         DB::table('course_gift_vouchers')->where('id', $voucherId)->update([
+            'invoice_id' => $invoice->id,
             'status' => 'paid',
             'paid_at' => now(),
             'updated_at' => now(),
@@ -229,7 +240,7 @@ class CourseCommercePaymentSettlementService
             'invoice_number' => $prefix . '-' . strtoupper(substr(bin2hex(random_bytes(6)), 0, 10)),
             'student_id' => $studentProfile->id ?? null,
             'payer_name' => $transaction->payer_name,
-            'payer_email' => $transaction->user?->email,
+            'payer_email' => DB::table('users')->where('id', $transaction->user_id)->value('email'),
             'payer_phone' => $transaction->payer_contact,
             'branch_id' => $branchId,
             'subtotal_amount' => round($subtotal, 2),
