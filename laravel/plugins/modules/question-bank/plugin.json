@@ -1,0 +1,18 @@
+{
+  "slug": "question-bank",
+  "name": "BCS, Bank Job & Admission Question Bank",
+  "version": "1.0.0",
+  "author": "Alom's English Center",
+  "category": "academic",
+  "description": "Standalone MCQ and written question banks with immutable paper snapshots, answer keys and print-ready papers.",
+  "core_compatibility": "^2.0",
+  "dependencies": [],
+  "provider": "Plugins\\Modules\\QuestionBank\\Providers\\QuestionBankServiceProvider",
+  "permissions": [
+    {"slug": "question_bank.manage", "name": "Manage Question Bank and Question Papers"}
+  ],
+  "settings_schema": [],
+  "admin_menu": [
+    {"group": "Academic & Operations", "label": "Question Bank", "route": "plugins.question-bank.index", "order": 95, "permission": "question_bank.manage"}
+  ]
+}
