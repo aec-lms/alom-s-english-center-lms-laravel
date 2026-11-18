@@ -484,6 +484,11 @@ class UniversalPaymentController extends Controller
                     ? 'Gift payment was received but requires manual review. The recipient cannot redeem it yet.'
                     : 'Gift payment verified. The gift is ready for the recipient email address.');
             }
+            if (is_array($checkoutNotes) && ($checkoutNotes['purpose'] ?? null) === 'course_gift_voucher') {
+                return redirect('/student/course-commerce/cart')->with('status', $transaction->status === 'risk_review'
+                    ? 'Voucher payment requires manual review. The recipient cannot claim it yet.'
+                    : 'Gift voucher payment verified. The voucher has been sent to the recipient email address.');
+            }
             if ($transaction->status === 'risk_review') {
                 if ($transaction->learn_earn_exam_id) {
                     return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)
@@ -510,6 +515,9 @@ class UniversalPaymentController extends Controller
             }
             if (is_array($checkoutNotes) && ($checkoutNotes['purpose'] ?? null) === 'course_gift') {
                 return redirect('/student/course-commerce/cart')->withErrors(['payment' => 'Gift payment could not yet be verified. The recipient has not received access.']);
+            }
+            if (is_array($checkoutNotes) && ($checkoutNotes['purpose'] ?? null) === 'course_gift_voucher') {
+                return redirect('/student/course-commerce/cart')->withErrors(['payment' => 'Gift voucher payment could not yet be verified. No voucher credit has been issued.']);
             }
             if ($transaction?->learn_earn_exam_id) {
                 return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)
@@ -555,6 +563,14 @@ class UniversalPaymentController extends Controller
             }
             return redirect('/student/course-commerce/cart')->withErrors(['payment' => 'Gift payment was not completed.']);
         }
+        if (is_array($checkoutNotes) && ($checkoutNotes['purpose'] ?? null) === 'course_gift_voucher') {
+            if (in_array($transaction->status, ['verified', 'risk_review'], true)) {
+                return redirect('/student/course-commerce/cart')->with('status', $transaction->status === 'verified'
+                    ? 'Voucher payment was already verified.'
+                    : 'Voucher payment requires manual review. It cannot be claimed yet.');
+            }
+            return redirect('/student/course-commerce/cart')->withErrors(['payment' => 'Gift voucher payment was not completed.']);
+        }
         if (in_array($transaction->status, ['verified', 'risk_review'], true)) {
             $message = $transaction->status === 'verified'
                 ? 'Payment was already verified; your access remains available.'
@@ -593,6 +609,14 @@ class UniversalPaymentController extends Controller
                     : 'Gift payment requires manual review. It cannot be redeemed yet.');
             }
             return redirect('/student/course-commerce/cart')->with('status', 'Gift payment was cancelled.');
+        }
+        if (is_array($checkoutNotes) && ($checkoutNotes['purpose'] ?? null) === 'course_gift_voucher') {
+            if (in_array($transaction->status, ['verified', 'risk_review'], true)) {
+                return redirect('/student/course-commerce/cart')->with('status', $transaction->status === 'verified'
+                    ? 'Voucher payment was already verified.'
+                    : 'Voucher payment requires manual review. It cannot be claimed yet.');
+            }
+            return redirect('/student/course-commerce/cart')->with('status', 'Gift voucher payment was cancelled.');
         }
         if (in_array($transaction->status, ['verified', 'risk_review'], true)) {
             $message = $transaction->status === 'verified'
