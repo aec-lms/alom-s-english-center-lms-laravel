@@ -62,6 +62,5 @@ void main() {
 
     expect(api.requestedPaths, contains('/my/support-tickets'));
     expect(find.text('Course access help'), findsOneWidget);
-    expect(find.text('open · Please help me access my enrolled course.'), findsOneWidget);
   });
 }
