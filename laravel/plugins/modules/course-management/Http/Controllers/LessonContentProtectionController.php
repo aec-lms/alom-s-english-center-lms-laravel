@@ -239,13 +239,14 @@ class LessonContentProtectionController extends Controller
             ->join('courses', 'courses.id', '=', 'course_lessons.course_id')
             ->where('course_lessons.id', $lesson)
             ->where('courses.status', 'published')
-            ->select('course_lessons.*')
+            ->select('course_lessons.*', 'courses.branch_id as course_branch_id')
             ->first();
         abort_unless($row && !empty($row->media_path), 404, 'Published lesson media not found.');
 
         $enrolled = DB::table('enrollments')
             ->where('user_id', $request->user()->id)
             ->where('course_id', $row->course_id)
+            ->where('branch_id', $row->course_branch_id)
             ->where('status', 'active')
             ->exists();
 
