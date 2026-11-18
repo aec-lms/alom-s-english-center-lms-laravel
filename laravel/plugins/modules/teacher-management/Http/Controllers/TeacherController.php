@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Plugins\Modules\TeacherManagement\Models\Teacher;
 
@@ -213,7 +214,16 @@ class TeacherController extends Controller
             mkdir($dir, 0755, true);
         }
 
-        $filename = Str::uuid()->toString() . '.' . $file->getClientOriginalExtension();
+        $extension = strtolower((string) $file->guessExtension());
+        if (!in_array($extension, ['jpg', 'jpeg', 'png', 'webp'], true)) {
+            throw ValidationException::withMessages([
+                'photo' => 'The uploaded instructor photo must be a valid JPG, PNG, or WebP image.',
+            ]);
+        }
+
+        // Never trust the client-provided filename extension. Derive the stored
+        // extension from the server-detected MIME type after image validation.
+        $filename = Str::uuid()->toString() . '.' . $extension;
         $file->move($dir, $filename);
 
         return '/uploads/instructors/' . $filename;
