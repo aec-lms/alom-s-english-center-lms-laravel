@@ -118,11 +118,13 @@ class LoginController extends Controller
         $validated = $request->validate(['email' => ['required', 'email', 'max:150']]);
         $email = strtolower(trim($validated['email']));
         $key = 'password-recovery-otp-send:' . hash('sha256', $email . '|' . $request->ip());
+        $emailKey = 'password-recovery-otp-send-email:' . hash('sha256', $email);
 
-        if (RateLimiter::tooManyAttempts($key, 3)) {
+        if (RateLimiter::tooManyAttempts($key, 3) || RateLimiter::tooManyAttempts($emailKey, 5)) {
             return back()->withErrors(['otp_email' => 'Too many recovery requests. Please try again later.']);
         }
         RateLimiter::hit($key, 60);
+        RateLimiter::hit($emailKey, 3600);
 
         $user = User::query()->whereRaw('LOWER(email) = ?', [$email])->where('is_active', true)->first();
         if ($user) {
@@ -255,6 +257,21 @@ class LoginController extends Controller
                     'password' => Hash::make($password),
                     'remember_token' => Str::random(60),
                 ])->save();
+
+                DB::table('password_recovery_otps')->where('user_id', $user->id)->delete();
+                if (Schema::hasTable('device_sessions')) {
+                    DeviceSession::query()->where('user_id', $user->id)->whereNull('revoked_at')->update([
+                        'revoked_at' => now(),
+                        'revoke_reason' => 'Password recovered',
+                        'updated_at' => now(),
+                    ]);
+                }
+                if (Schema::hasTable('sessions')) {
+                    DB::table('sessions')->where('user_id', $user->id)->delete();
+                }
+                if (Schema::hasTable('personal_access_tokens')) {
+                    DB::table('personal_access_tokens')->where('tokenable_type', User::class)->where('tokenable_id', $user->id)->delete();
+                }
             }
         );
 
