@@ -38,7 +38,10 @@ final class PhoneticsLearningController extends Controller
             ->where(fn ($scope) => $scope->whereNull('course_ref')->orWhere('course_ref', $courseRef))
             ->where(fn ($scope) => $scope->whereNull('course_category_ref')->orWhere('course_category_ref', $this->catalog->courseCategoryId($course) ?? '__none__'))
             ->where(fn ($scope) => $scope->whereNull('lesson_ref')->orWhere('lesson_ref', $request->query('lesson') ?? '__course_overview__'))
-            ->whereIn('audience', ['both', $isPaid ? 'paid' : 'free'])->get()
+            ->whereIn('audience', ['both', $isPaid ? 'paid' : 'free'])
+            ->where(fn ($dates) => $dates->whereNull('available_from')->orWhere('available_from', '<=', now()))
+            ->where(fn ($dates) => $dates->whereNull('available_until')->orWhere('available_until', '>=', now()))
+            ->get()
             ->filter(fn ($exam) => !$exam->batch_ref || ($request->user() && $this->catalog->isBatchMember($request->user(), (string) $exam->batch_ref)))
             ->values();
         $challenge = null;
