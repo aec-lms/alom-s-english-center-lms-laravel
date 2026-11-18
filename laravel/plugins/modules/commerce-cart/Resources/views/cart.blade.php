@@ -22,6 +22,19 @@
     @endforelse
     @if ($items->isNotEmpty())
         <div class="ml-auto max-w-sm rounded-2xl border border-slate-200 bg-white p-5"><div class="flex justify-between text-sm text-slate-500"><span>Subtotal</span><span>৳{{ number_format($subtotal, 2) }}</span></div><div class="mt-2 flex justify-between text-lg font-extrabold"><span>Total</span><span>৳{{ number_format($subtotal, 2) }}</span></div><p class="mt-3 text-xs text-slate-500">Final price and availability will be revalidated at checkout.</p></div>
+        <form method="POST" action="{{ route('plugins.commerce_cart.checkout') }}" class="ml-auto max-w-sm space-y-3 rounded-2xl border border-slate-200 bg-white p-5">
+            @csrf
+            <h2 class="font-bold text-slate-900">Secure Checkout</h2>
+            <input name="payer_name" required maxlength="160" placeholder="Full name" value="{{ old('payer_name', auth()->user()->name) }}" class="w-full rounded-lg border px-3 py-2 text-sm">
+            <input name="payer_email" required type="email" maxlength="180" placeholder="Email address" value="{{ old('payer_email', auth()->user()->email) }}" class="w-full rounded-lg border px-3 py-2 text-sm">
+            <input name="payer_phone" required maxlength="40" placeholder="Mobile number" value="{{ old('payer_phone', auth()->user()->phone) }}" class="w-full rounded-lg border px-3 py-2 text-sm">
+            <select name="gateway" required class="w-full rounded-lg border bg-white px-3 py-2 text-sm">
+                <option value="gateway-sslcommerz">SSLCOMMERZ (bKash, Nagad, Cards &amp; Internet Banking)</option>
+                <option value="gateway-paypal">PayPal</option>
+            </select>
+            <button type="submit" class="w-full rounded-lg bg-slate-900 px-5 py-3 text-sm font-extrabold text-white">Place Order &amp; Pay ৳{{ number_format($subtotal, 2) }}</button>
+            <p class="text-xs text-slate-500">Prices and availability are checked again before payment. Access is granted only after verified settlement.</p>
+        </form>
     @endif
 </div>
 @endsection
