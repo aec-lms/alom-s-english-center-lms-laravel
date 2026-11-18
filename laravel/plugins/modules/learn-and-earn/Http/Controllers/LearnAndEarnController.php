@@ -339,20 +339,23 @@ class LearnAndEarnController extends Controller
             return redirect()->away($gateway->initiateSslcommerz($transaction, $exam, $student, $values['payer_contact']));
         } catch (\Throwable $exception) {
             report($exception);
-            // A definitive provider rejection marks the transaction failed in
-            // the gateway service. A transport timeout is ambiguous: retain a
-            // risk-review hold so the student cannot accidentally pay twice.
-            DB::transaction(function () use ($transaction): void {
+            $ambiguous = $exception instanceof \Illuminate\Http\Client\ConnectionException;
+            DB::transaction(function () use ($transaction, $ambiguous): void {
                 $locked = UniversalPaymentTransaction::query()->whereKey($transaction->id)->lockForUpdate()->first();
                 if ($locked && $locked->status === 'pending') {
                     $locked->update([
-                        'status' => 'risk_review',
-                        'notes' => 'SSLCOMMERZ session initialization outcome is unknown. Reconcile with the provider before allowing a retry.',
+                        'status' => $ambiguous ? 'risk_review' : 'failed',
+                        'notes' => $ambiguous
+                            ? 'SSLCOMMERZ session initialization outcome is unknown. Reconcile with the provider before allowing a retry.'
+                            : 'SSLCOMMERZ checkout could not be initialized before a provider session was confirmed.',
                     ]);
                 }
             });
 
-            return back()->withErrors(['payment' => 'The payment session could not be confirmed. Please contact support before retrying; do not submit another payment.']);
+            $message = $ambiguous
+                ? 'The payment session outcome is unknown. Contact support before retrying; do not submit another payment.'
+                : 'Unable to start the payment session. Check gateway configuration and try again.';
+            return back()->withErrors(['payment' => $message]);
         }
     }
 
