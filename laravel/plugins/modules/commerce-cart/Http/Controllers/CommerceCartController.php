@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\CommerceCart\\Http\\Controllers;
+namespace Plugins\Modules\CommerceCart\Http\Controllers;
 
-use App\\Http\\Controllers\\Controller;
-use Illuminate\\Http\\RedirectResponse;
-use Illuminate\\Http\\Request;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\View\\View;
-use Plugins\\Modules\\CommerceCart\\Services\\CommerceCatalog;
+use App\Http\Controllers\Controller;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\View\View;
+use Plugins\Modules\CommerceCart\Services\CommerceCatalog;
 
 class CommerceCartController extends Controller
 {
