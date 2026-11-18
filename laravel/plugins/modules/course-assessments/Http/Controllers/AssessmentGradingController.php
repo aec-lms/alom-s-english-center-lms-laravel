@@ -20,6 +20,7 @@ class AssessmentGradingController extends Controller
     public function index(Request $request)
     {
         $actor = $request->user();
+        $this->ensureBranchAccess($actor);
         $attempts = AssessmentAttempt::query()->with(['questions', 'assessmentSet'])
             ->whereIn('status', ['pending_review', 'graded'])
             ->when($actor->hasRole('branch_manager'), fn ($q) => $q->whereHas('assessmentSet', fn ($s) => $s->where('branch_id', (int) $actor->branch_id)))
@@ -40,7 +41,8 @@ class AssessmentGradingController extends Controller
         abort_unless($set, 404);
 
         if ($actor->hasRole('branch_manager')) {
-            abort_unless(app(PluginManager::class)->isEnabled('branch-management') && $actor->branch_id && (int) $set->branch_id === (int) $actor->branch_id, 403, 'Branch isolation violation.');
+            $this->ensureBranchAccess($actor);
+            abort_unless((int) $set->branch_id === (int) $actor->branch_id, 403, 'Branch isolation violation.');
         } elseif ($actor->hasRole('teacher')) {
             abort_unless($set->course_id && Schema::hasTable('course_teacher_assignments')
                 && DB::table('course_teacher_assignments')->where('course_id', $set->course_id)->where('teacher_user_id', $actor->id)->exists(), 403, 'You are not assigned to this course.');
@@ -85,5 +87,18 @@ class AssessmentGradingController extends Controller
         $this->audit->log('course_assessment.graded', 'course_assessment_attempt', (string) $attempt->id, ['manual_score' => $manual]);
 
         return back()->with('status', 'Assessment grading saved.');
+    }
+    private function ensureBranchAccess($actor): void
+    {
+        if (!$actor?->hasRole('branch_manager')) return;
+
+        abort_unless(
+            $actor->branch_id
+                && app(PluginManager::class)->isEnabled('branch-management')
+                && Schema::hasTable('branches')
+                && DB::table('branches')->where('id', $actor->branch_id)->where('is_active', true)->exists(),
+            403,
+            'Branch manager must be assigned to an active branch.'
+        );
     }
 }
