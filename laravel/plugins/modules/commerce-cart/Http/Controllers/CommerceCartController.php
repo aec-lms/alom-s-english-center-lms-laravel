@@ -36,6 +36,9 @@ class CommerceCartController extends Controller
             'quantity' => ['nullable', 'integer', 'min:1', 'max:20'],
         ]);
         $item = $this->catalog->resolve($data['item_type'], (int) $data['item_id']);
+        if ($item['type'] !== 'other' && (int) ($data['quantity'] ?? 1) !== 1) {
+            return back()->withErrors(['quantity' => 'Course access, eBooks, exams, subscriptions and live-class passes can only be purchased once per order.']);
+        }
         $cart = $this->activeCart((int) $request->user()->id);
 
         DB::transaction(function () use ($cart, $item, $data): void {
