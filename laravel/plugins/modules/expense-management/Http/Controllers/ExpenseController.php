@@ -44,6 +44,7 @@ class ExpenseController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureExpenseManager($actor);
         $this->ensureBranchAccess($actor);
         $validated = $request->validate([
             'branch_id' => ['nullable', 'integer', 'min:1'],
@@ -77,6 +78,7 @@ class ExpenseController extends Controller
     public function update(Request $request, int $expense): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureExpenseManager($actor);
         $this->ensureBranchAccess($actor);
         $record = $this->scopedQuery($actor)->findOrFail($expense);
         abort_unless($record->status === 'pending' || $actor->hasRole('admin'), 403, 'Approved or rejected expenses can only be edited by an administrator.');
@@ -122,6 +124,7 @@ class ExpenseController extends Controller
     public function destroy(Request $request, int $expense): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureExpenseManager($actor);
         $this->ensureBranchAccess($actor);
         $record = $this->scopedQuery($actor)->findOrFail($expense);
         abort_unless($record->status === 'pending' || $actor->hasRole('admin'), 403);
@@ -163,7 +166,7 @@ class ExpenseController extends Controller
         $collected = 0.0;
         $refunds = 0.0;
         if (app(PluginManager::class)->isEnabled('payment-management') && Schema::hasTable('payment_transactions')) {
-            $payments = DB::table('payment_transactions')->where('status', 'settled')
+            $payments = DB::table('payment_transactions')->whereIn('status', ['settled', 'refunded'])
                 ->when($actor->hasRole('branch_manager') || $actor->hasRole('accountant'), fn ($q) => $q->where('branch_id', $actor->branch_id));
             if (!empty($filters['date_from'])) $payments->where('settled_at', '>=', $filters['date_from'] . ' 00:00:00');
             if (!empty($filters['date_to'])) $payments->where('settled_at', '<=', $filters['date_to'] . ' 23:59:59');
@@ -250,8 +253,20 @@ class ExpenseController extends Controller
         return $requested;
     }
 
+    private function ensureExpenseManager($actor): void
+    {
+        abort_unless($actor && (
+            $actor->hasRole('admin')
+            || (($actor->hasRole('branch_manager') || $actor->hasRole('accountant')) && $actor->hasPermission('expenses.manage'))
+        ), 403, 'You do not have permission to manage expenses.');
+    }
+
     private function ensureBranchAccess($actor): void
     {
+        abort_unless($actor && (
+            $actor->hasRole('admin')
+            || (($actor->hasRole('branch_manager') || $actor->hasRole('accountant')) && $actor->hasPermission('expenses.view'))
+        ), 403, 'You do not have permission to view finance records.');
         if ($actor->hasRole('branch_manager') || $actor->hasRole('accountant')) {
             abort_unless((int) ($actor->branch_id ?? 0) > 0
                 && app(PluginManager::class)->isEnabled('branch-management')
