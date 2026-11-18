@@ -1,0 +1,19 @@
+{
+  "slug": "course-bundles",
+  "name": "Course Bundles & Combo Sales",
+  "version": "1.0.0",
+  "author": "Alom's English Center",
+  "category": "commerce",
+  "description": "Admin-managed course bundles with immutable purchase snapshots and fee-invoice based checkout.",
+  "core_compatibility": "^2.0",
+  "dependencies": [],
+  "optional_dependencies": ["course-management", "fees-management", "student-management", "universal-payment"],
+  "provider": "Plugins\\Modules\\CourseBundles\\Providers\\CourseBundlesServiceProvider",
+  "permissions": [
+    {"slug": "course_bundles.manage", "name": "Manage course bundles and combo sales"}
+  ],
+  "settings_schema": [],
+  "admin_menu": [
+    {"group": "Commerce & Sales", "label": "Course Bundles", "route": "plugins.course-bundles.index", "order": 115, "permission": "course_bundles.manage"}
+  ]
+}
