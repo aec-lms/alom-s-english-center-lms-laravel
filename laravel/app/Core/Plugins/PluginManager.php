@@ -801,11 +801,21 @@ class PluginManager
         }
 
         $checksums = [];
-        foreach (File::allFiles($root) as $file) {
-            if ($file->isLink()) {
+        $iterator = new \\RecursiveIteratorIterator(
+            new \\RecursiveDirectoryIterator($root, \\FilesystemIterator::SKIP_DOTS),
+            \\RecursiveIteratorIterator::SELF_FIRST
+        );
+        foreach ($iterator as $entry) {
+            if ($entry->isLink()) {
                 throw new RuntimeException('Symlinks are not allowed in archived plugin packages.');
             }
-            $path = $file->getPathname();
+            if ($entry->isDir()) {
+                continue;
+            }
+            if (!$entry->isFile()) {
+                throw new RuntimeException('Archived plugin package contains an unsupported filesystem entry.');
+            }
+            $path = $entry->getPathname();
             $resolved = realpath($path);
             if (!$resolved || !str_starts_with($resolved, rtrim($root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR)) {
                 throw new RuntimeException('Archived plugin package contains a path outside its protected directory.');
