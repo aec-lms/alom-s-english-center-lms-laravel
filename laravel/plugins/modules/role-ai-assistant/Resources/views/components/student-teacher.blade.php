@@ -1,7 +1,7 @@
 @php
     $studentTeacherEnabled = auth()->check()
         && auth()->user()->hasRole('student')
-        && app(\\App\\Core\\Plugins\\PluginManager::class)->isEnabled('role-ai-assistant')
+        && app(\App\Core\Plugins\PluginManager::class)->isEnabled('role-ai-assistant')
         && auth()->user()->hasPermission('ai.assistant.use');
 @endphp
 @if ($studentTeacherEnabled)
