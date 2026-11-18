@@ -83,7 +83,14 @@ class AdminAssessmentController extends Controller
         if (!empty($data['source_question_ids'])) {
             abort_unless(app(PluginManager::class)->isEnabled('question-bank') && Schema::hasTable('question_bank_questions'),409,'Enable Question Bank to import questions.');
             $source = DB::table('question_bank_questions')->whereIn('id',$data['source_question_ids'])->whereNull('deleted_at')->where('is_active',true)
-                ->when($actor?->hasRole('branch_manager'),fn($q)=>$q->where('branch_id',(int)$actor->branch_id))->get();
+                ->when($actor?->hasRole('branch_manager'), fn ($q) => $q->where('branch_id', (int) $actor->branch_id))
+                ->when(!$actor?->hasRole('branch_manager'), function ($q) use ($course): void {
+                    if ($course && $course->branch_id !== null) {
+                        $q->where(fn ($scope) => $scope->whereNull('branch_id')->orWhere('branch_id', (int) $course->branch_id));
+                    } else {
+                        $q->whereNull('branch_id');
+                    }
+                })->get();
             abort_unless($source->count() === count($data['source_question_ids']),422,'One or more source questions are unavailable in your branch.');
         }
         $manual = collect($data['questions'] ?? []);
