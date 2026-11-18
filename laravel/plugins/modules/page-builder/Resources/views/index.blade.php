@@ -184,7 +184,7 @@
     document.querySelectorAll('[data-block-list]').forEach((list) => {
         const form = list.closest('form');
         const addButton = form?.querySelector('[data-add-block]');
-        const status = form?.querySelector('[data-block-status]');
+        const status = document.querySelector('[data-block-status]');
         const announce = (message) => { if (status) status.textContent = message; };
         const sync = (block) => {
             const type = block.querySelector('[data-block-type]')?.value || 'text';
