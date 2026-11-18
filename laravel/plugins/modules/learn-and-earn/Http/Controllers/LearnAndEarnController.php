@@ -343,7 +343,7 @@ class LearnAndEarnController extends Controller
         try {
             $exam = Exam::query()->findOrFail($examId);
             return redirect()->away($gateway->initiateSslcommerz($transaction, $exam, $student, $values['payer_contact']));
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             report($exception);
             // A definitive provider rejection marks the transaction failed in
             // the gateway service. A transport timeout is ambiguous: retain a
