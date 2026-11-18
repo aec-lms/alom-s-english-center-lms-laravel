@@ -54,7 +54,7 @@ class AllPluginsIndependentAcceptanceTest extends TestCase
             try {
                 app(PluginManager::class)->deleteToRecycleBin('legacy-symlink-fixture');
                 $this->fail('A symlinked plugin source must never be moved into the recycle bin.');
-            } catch (\\RuntimeException $exception) {
+            } catch (\RuntimeException $exception) {
                 $this->assertStringContainsString('outside the registered modules directory', $exception->getMessage());
             }
 
