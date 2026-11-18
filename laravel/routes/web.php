@@ -121,6 +121,13 @@ Route::middleware('installed')->group(function (): void {
             Route::post('/{log}/rollback', [UpdateCenterController::class, 'rollback'])->name('rollback');
         });
 
+        Route::get('/course-social-proof', [CourseSocialProofSettingsController::class, 'edit'])
+            ->name('course-social-proof.edit')
+            ->middleware(['permission:core.settings.manage', 'central.admin']);
+        Route::post('/course-social-proof', [CourseSocialProofSettingsController::class, 'update'])
+            ->name('course-social-proof.update')
+            ->middleware(['permission:core.settings.manage', 'central.admin']);
+
         Route::get('/health', [HealthMonitorController::class, 'index'])->name('health.index')->middleware(['permission:core.dashboard.view', 'central.admin']);
         Route::post('/health/check', [HealthMonitorController::class, 'check'])->name('health.check')->middleware(['permission:core.dashboard.view', 'central.admin']);
 
