@@ -30,7 +30,9 @@ class _CourseDetailPageState extends State<CourseDetailPage> {
   void reload() {
     final slug = Uri.encodeComponent(widget.slug);
     course = widget.api.get('/courses/$slug');
-    lessons = widget.api.get('/courses/$slug/lessons');
+    lessons = widget.api.get('/courses/$slug/lessons').catchError(
+      (Object error) => <String, dynamic>{'_error': error},
+    );
   }
 
   Future<void> saveToWishlist(int courseId) async {
