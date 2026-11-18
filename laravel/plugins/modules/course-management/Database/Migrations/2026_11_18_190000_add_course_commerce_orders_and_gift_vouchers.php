@@ -51,6 +51,7 @@ return new class extends Migration {
                 if (!Schema::hasColumn('course_gifts', 'message')) $table->text('message')->nullable();
                 if (!Schema::hasColumn('course_gifts', 'redeem_token_encrypted')) $table->text('redeem_token_encrypted')->nullable();
                 if (!Schema::hasColumn('course_gifts', 'payment_transaction_id')) $table->unsignedBigInteger('payment_transaction_id')->nullable()->index();
+                if (!Schema::hasColumn('course_gifts', 'notification_sent_at')) $table->timestamp('notification_sent_at')->nullable();
             });
         }
 
