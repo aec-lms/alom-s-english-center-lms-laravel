@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
+import 'firebase_options.dart';
 import 'api_client.dart';
 import 'attendance_page.dart';
 
-void main() => runApp(const InstructorApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await initializeAecFirebase();
+  runApp(const InstructorApp());
+}
 
 class InstructorApp extends StatelessWidget {
   const InstructorApp({super.key});
