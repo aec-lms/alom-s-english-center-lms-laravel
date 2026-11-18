@@ -57,6 +57,16 @@ class DeliverNotificationJob implements ShouldQueue, ShouldBeUnique
             'last_error' => null,
         ])->save();
 
+        $recipient = User::query()->find($notification->user_id);
+        if (!$recipient) {
+            $notification->forceFill(['status' => 'failed', 'last_error' => 'Recipient account no longer exists.', 'processed_at' => now()])->save();
+            return;
+        }
+        if ($notification->branch_id !== null && (int) $recipient->branch_id !== (int) $notification->branch_id) {
+            $notification->forceFill(['status' => 'failed', 'last_error' => 'Notification branch does not match the recipient account branch.', 'processed_at' => now()])->save();
+            return;
+        }
+
         if ($notification->channel === 'push') {
             if (!$plugins->isEnabled('push-notifications')) {
                 $notification->forceFill([
@@ -92,8 +102,7 @@ class DeliverNotificationJob implements ShouldQueue, ShouldBeUnique
             return;
         }
 
-        $recipient = User::query()->find($notification->user_id);
-        if (!$recipient || !filter_var($recipient->email, FILTER_VALIDATE_EMAIL)) {
+        if (!filter_var($recipient->email, FILTER_VALIDATE_EMAIL)) {
             $notification->forceFill([
                 'status' => 'failed',
                 'last_error' => 'Recipient has no valid email address.',

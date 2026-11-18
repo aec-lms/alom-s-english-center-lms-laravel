@@ -12,7 +12,7 @@ class MediaAsset extends Model
     use SoftDeletes;
 
     protected $fillable = [
-        'uploaded_by', 'disk', 'path', 'original_name', 'mime_type',
+        'uploaded_by', 'branch_id', 'disk', 'path', 'original_name', 'mime_type',
         'size_bytes', 'collection', 'alt_text',
     ];
 
