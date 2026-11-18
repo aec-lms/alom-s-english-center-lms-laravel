@@ -15,7 +15,7 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:referral-income'])
         Route::post('/payout', [ReferralIncomeController::class, 'requestPayout'])->middleware('throttle:3,1')->name('payout');
     });
 
-Route::middleware(['web', 'installed', 'auth', 'plugin:referral-income', 'permission:referral_income.manage'])
+Route::middleware(['web', 'installed', 'auth', 'plugin:referral-income', 'central.admin', 'permission:referral_income.manage'])
     ->prefix('admin/referral-income')->name('plugins.referral_income.admin.')
     ->group(function (): void {
         Route::get('/', [ReferralIncomeController::class, 'adminIndex'])->name('index');
