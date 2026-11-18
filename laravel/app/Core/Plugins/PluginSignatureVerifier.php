@@ -57,7 +57,7 @@ class PluginSignatureVerifier
 
         try {
             $manifest = json_decode((string) file_get_contents($manifestPath), true, 512, JSON_THROW_ON_ERROR);
-        } catch (\\JsonException $exception) {
+        } catch (\JsonException $exception) {
             throw new RuntimeException('Plugin manifest is not valid JSON for signature verification.', 0, $exception);
         }
         if (!is_array($manifest) || !is_string($manifest['slug'] ?? null)
