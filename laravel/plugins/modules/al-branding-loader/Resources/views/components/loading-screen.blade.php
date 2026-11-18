@@ -1,4 +1,4 @@
-@php($loaderSetting=\\Plugins\\Modules\\AlBrandingLoader\\Models\\LoaderSetting::current())
+@php($loaderSetting=\Plugins\Modules\AlBrandingLoader\Models\LoaderSetting::current())
 @if($loaderSetting->shouldRenderForPath(request()->path()))
 <div id="al-branding-loader" class="lb-style-{{ $loaderSetting->animation_style }}" role="status" aria-live="polite" aria-label="{{ $loaderSetting->headline }}" data-min="{{ $loaderSetting->min_duration_ms??500 }}" data-fade="{{ $loaderSetting->fade_duration_ms??250 }}" data-max="{{ $loaderSetting->max_timeout_ms??5000 }}" data-trigger="{{ $loaderSetting->trigger_mode??'every-load' }}" style="--lb-bg:{{ $loaderSetting->background_color??'#F01800' }};--lb-accent:{{ $loaderSetting->accent_color??'#38BDF8' }};--lb-text:{{ $loaderSetting->text_color??'#F8FAFC' }};--lb-fade:{{ $loaderSetting->fade_duration_ms??250 }}ms">
  @if($loaderSetting->logo_url)<img class="lb-logo" src="{{ $loaderSetting->logo_url }}" alt="">@else
@@ -28,7 +28,7 @@
  const start=Date.now(),hide=()=>{const delay=Math.max(0,Number(o.dataset.min||0)-(Date.now()-start));setTimeout(()=>o.classList.add('lb-hidden'),delay)};
  addEventListener('load',hide,{once:true});setTimeout(hide,Math.max(1000,Number(o.dataset.max||5000)));
  try{if(mode==='first-visit-session')sessionStorage.setItem(key,'1');if(mode==='first-visit-daily')localStorage.setItem(key,new Date().toDateString())}catch(e){}
- document.addEventListener('click',e=>{if(mode!=='every-load')return;const a=e.target.closest('a[href]');if(!a||e.defaultPrevented||e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey||a.target||a.hasAttribute('download'))return;const u=new URL(a.href,location.href);if(u.origin!==location.origin||u.pathname===location.pathname||/^\\/(admin|api|payment|payments|checkout|webhook|webhooks|live-class|live-classes)(\\/|$)/.test(u.pathname))return;o.classList.remove('lb-hidden')},true);
+ document.addEventListener('click',e=>{if(mode!=='every-load')return;const a=e.target.closest('a[href]');if(!a||e.defaultPrevented||e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey||a.target||a.hasAttribute('download'))return;const u=new URL(a.href,location.href);if(u.origin!==location.origin||u.pathname===location.pathname||/^\/(admin|api|payment|payments|checkout|webhook|webhooks|live-class|live-classes)(\/|$)/.test(u.pathname))return;o.classList.remove('lb-hidden')},true);
 })();
 </script>
 @endif
