@@ -128,6 +128,7 @@ class CourseCommerceController extends Controller
             'recipient_email' => ['required', 'email:rfc', 'max:190'],
             'recipient_name' => ['nullable', 'string', 'max:160'],
             'message' => ['nullable', 'string', 'max:1000'],
+            'coupon_code' => ['nullable', 'string', 'max:40'],
             'payer_contact' => ['required', 'string', 'min:7', 'max:40'],
         ]);
         $this->assertCheckoutReady();
@@ -142,7 +143,14 @@ class CourseCommerceController extends Controller
         abort_if(strtolower(trim($validated['recipient_email'])) === strtolower(trim((string) $student->email)), 422,
             'You cannot gift a course to your own account.');
 
-        $created = DB::transaction(function () use ($student, $course, $validated): array {
+        $couponService = app(CourseCouponService::class);
+        $created = DB::transaction(function () use ($student, $course, $validated, $couponService): array {
+            $coupon = filled($validated['coupon_code'] ?? null)
+                ? $couponService->reserve((string) $validated['coupon_code'], (int) $student->id, [(int) $course->id], (float) $course->price, true)
+                : null;
+            $discount = round((float) ($coupon['discount'] ?? 0), 2);
+            $payable = round(max(0, (float) $course->price - $discount), 2);
+            abort_if($payable <= 0, 422, 'A gift coupon cannot reduce the payment to zero. Please use a different coupon.');
             $token = Str::random(64);
             $giftId = DB::table('course_gifts')->insertGetId([
                 'sender_user_id' => $student->id,
@@ -155,7 +163,12 @@ class CourseCommerceController extends Controller
                 'redeem_token_encrypted' => encrypt($token),
                 'status' => 'awaiting_payment',
                 'currency' => strtoupper((string) config('lms.default_currency', 'BDT')),
-                'amount' => round((float) $course->price, 2),
+                'amount' => $payable,
+                'subtotal_amount' => round((float) $course->price, 2),
+                'discount_amount' => $discount,
+                'coupon_id' => $coupon['coupon_id'] ?? null,
+                'coupon_code' => $coupon['code'] ?? null,
+                'coupon_reservation_key' => $coupon['reservation_key'] ?? null,
                 'expires_at' => now()->addDays(90),
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -168,7 +181,7 @@ class CourseCommerceController extends Controller
                 'item_title' => 'Gift Course: ' . $course->title,
                 'gateway' => 'sslcommerz',
                 'currency' => strtoupper((string) config('lms.default_currency', 'BDT')),
-                'amount' => round((float) $course->price, 2),
+                'amount' => $payable,
                 'external_trx_id' => null,
                 'user_id' => $student->id,
                 'branch_id' => $course->branch_id ?? $this->assignedBranchId($student),
@@ -180,7 +193,7 @@ class CourseCommerceController extends Controller
                 'updated_at' => now(),
             ]);
 
-            return ['gift_id' => $giftId, 'transaction' => $transaction, 'token' => $token];
+            return ['gift_id' => $giftId, 'transaction' => $transaction, 'token' => $token, 'coupon_key' => $coupon['reservation_key'] ?? null];
         }, 3);
 
         try {
@@ -189,19 +202,22 @@ class CourseCommerceController extends Controller
                 (object) ['title' => 'Gift Course #' . $created['gift_id']],
                 $student,
                 trim($validated['payer_contact']),
-                ['purpose' => 'course_gift', 'course_gift_id' => $created['gift_id']]
+                ['purpose' => 'course_gift', 'course_gift_id' => $created['gift_id'], 'coupon_reservation_key' => $created['coupon_key']]
             );
 
             return redirect()->away($url);
         } catch (\Throwable $exception) {
             report($exception);
             $ambiguous = $exception instanceof ConnectionException;
-            DB::transaction(function () use ($created, $ambiguous): void {
+            DB::transaction(function () use ($created, $ambiguous, $couponService): void {
                 $transaction = UniversalPaymentTransaction::query()->whereKey($created['transaction']->id)->lockForUpdate()->first();
                 if ($transaction && $transaction->status === 'pending') {
                     $transaction->update(['status' => $ambiguous ? 'risk_review' : 'failed']);
                     DB::table('course_gifts')->where('id', $created['gift_id'])->where('status', 'awaiting_payment')
                         ->update(['status' => $ambiguous ? 'risk_review' : 'payment_failed', 'updated_at' => now()]);
+                }
+                if (!$ambiguous && filled($created['coupon_key'])) {
+                    $couponService->release((string) $created['coupon_key']);
                 }
             }, 3);
 
