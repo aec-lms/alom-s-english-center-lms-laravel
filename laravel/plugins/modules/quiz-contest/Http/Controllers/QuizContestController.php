@@ -172,6 +172,118 @@ class QuizContestController extends Controller
         return view('quiz-contest::admin-entries', compact('record', 'entries'));
     }
 
+    public function edit(Request $request, int $contest): View
+    {
+        $actor = $request->user();
+        $this->authorizeContestManager($actor);
+        $record = $this->staffContestQuery($actor)->with('questions')->findOrFail($contest);
+        abort_if(
+            $record->drawn_at !== null
+                || $record->starts_at->lessThanOrEqualTo(now())
+                || $record->entries()->exists(),
+            409,
+            'A contest can only be edited before it starts and before any entries are submitted.'
+        );
+
+        return view('quiz-contest::admin-edit', compact('record'));
+    }
+
+    public function update(Request $request, int $contest): RedirectResponse
+    {
+        $actor = $request->user();
+        $this->authorizeContestManager($actor);
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:180'],
+            'description' => ['nullable', 'string', 'max:5000'],
+            'prize_description' => ['required', 'string', 'max:500'],
+            'winner_count' => ['required', 'integer', 'min:1', 'max:100'],
+            'starts_at' => ['required', 'date', 'after:now'],
+            'ends_at' => ['required', 'date', 'after:starts_at'],
+            'questions' => ['required', 'array', 'min:1', 'max:50'],
+            'questions.*.question' => ['required', 'string', 'max:2000'],
+            'questions.*.options' => ['required', 'array', 'size:4'],
+            'questions.*.options.*' => ['required', 'string', 'max:300'],
+            'questions.*.correct_option' => ['required', 'integer', 'between:0,3'],
+        ]);
+
+        DB::transaction(function () use ($actor, $contest, $data): void {
+            $record = $this->staffContestQuery($actor)->lockForUpdate()->findOrFail($contest);
+            abort_if(
+                $record->drawn_at !== null
+                    || $record->starts_at->lessThanOrEqualTo(now())
+                    || $record->entries()->exists()
+                    || $record->status !== 'published',
+                409,
+                'A contest can only be edited before it starts and before any entries are submitted.'
+            );
+
+            $record->update([
+                'title' => trim($data['title']),
+                'description' => $data['description'] ?? null,
+                'prize_description' => trim($data['prize_description']),
+                'winner_count' => $data['winner_count'],
+                'starts_at' => $data['starts_at'],
+                'ends_at' => $data['ends_at'],
+            ]);
+            $record->questions()->delete();
+            foreach ($data['questions'] as $position => $question) {
+                $record->questions()->create([
+                    'question' => trim($question['question']),
+                    'options' => array_values($question['options']),
+                    'correct_option' => $question['correct_option'],
+                    'position' => $position + 1,
+                ]);
+            }
+        });
+
+        $this->audit->log('quiz_contest.updated', 'quiz_contest', (string) $contest, [], $actor->id);
+
+        return redirect()->route('plugins.quiz-contest.admin.index')->with('status', 'প্রতিযোগিতার তথ্য আপডেট হয়েছে।');
+    }
+
+    public function updateStatus(Request $request, int $contest): RedirectResponse
+    {
+        $actor = $request->user();
+        $this->authorizeContestManager($actor);
+        $data = $request->validate(['status' => ['required', 'in:published,paused,closed']]);
+
+        DB::transaction(function () use ($actor, $contest, $data): void {
+            $record = $this->staffContestQuery($actor)->lockForUpdate()->findOrFail($contest);
+            abort_if($record->drawn_at !== null, 409, 'Published contest results cannot be changed.');
+            $next = $data['status'];
+
+            if ($next === 'paused') {
+                abort_unless(
+                    $record->status === 'published'
+                        && now()->greaterThanOrEqualTo($record->starts_at)
+                        && now()->lessThan($record->ends_at),
+                    422,
+                    'Only an active contest can be paused.'
+                );
+            } elseif ($next === 'published') {
+                abort_unless(
+                    $record->status === 'paused'
+                        && now()->lessThan($record->ends_at),
+                    422,
+                    'Only a paused contest before its deadline can be resumed.'
+                );
+            } else {
+                abort_unless(
+                    in_array($record->status, ['published', 'paused'], true)
+                        && now()->greaterThanOrEqualTo($record->ends_at),
+                    422,
+                    'A contest can only be closed after its scheduled end time.'
+                );
+            }
+
+            $record->update(['status' => $next]);
+        });
+
+        $this->audit->log('quiz_contest.status_changed', 'quiz_contest', (string) $contest, ['status' => $data['status']], $actor->id);
+
+        return back()->with('status', 'প্রতিযোগিতার অবস্থা আপডেট হয়েছে।');
+    }
+
     public function publishResults(Request $request, int $contest): RedirectResponse
     {
         $actor = $request->user();
@@ -179,7 +291,7 @@ class QuizContestController extends Controller
         $winnerCount = DB::transaction(function () use ($actor, $contest): int {
             $record = $this->staffContestQuery($actor)->lockForUpdate()->findOrFail($contest);
             abort_if($record->drawn_at !== null, 409, 'Contest results have already been published.');
-            abort_unless(in_array($record->status, ['published', 'closed'], true)
+            abort_unless(in_array($record->status, ['published', 'paused', 'closed'], true)
                 && now()->greaterThanOrEqualTo($record->ends_at), 422, 'The contest must end before results can be published.');
 
             $entries = $record->entries()->orderByDesc('score')->orderBy('submitted_at')->orderBy('id')->get();

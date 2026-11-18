@@ -36,7 +36,18 @@
     <h2>প্রতিযোগিতার তালিকা</h2>
     <div class="table-wrap"><table><thead><tr><th>শিরোনাম</th><th>Branch</th><th>অবস্থা</th><th>অংশগ্রহণ</th><th></th></tr></thead><tbody>
     @forelse($contests as $contest)
-        <tr><td>{{ $contest->title }}</td><td>{{ $contest->branch_id ?? 'সব Branch' }}</td><td>{{ $contest->status }}</td><td>{{ $contest->entries_count }}</td><td><a class="btn secondary" href="{{ route('plugins.quiz-contest.admin.entries', $contest->id) }}">Entries</a>
+        <tr><td>{{ $contest->title }}</td><td>{{ $contest->branch_id ?? 'সব Branch' }}</td><td>{{ $contest->status }}</td><td>{{ $contest->entries_count }}</td><td>
+        <a class="btn secondary" href="{{ route('plugins.quiz-contest.admin.entries', $contest->id) }}">Entries</a>
+        @if(!$contest->drawn_at && $contest->entries_count === 0 && $contest->status === 'published' && now()->lessThan($contest->starts_at))
+            <a class="btn secondary" href="{{ route('plugins.quiz-contest.admin.edit', $contest->id) }}">Edit</a>
+        @endif
+        @if(!$contest->drawn_at && $contest->status === 'published' && now()->between($contest->starts_at, $contest->ends_at))
+            <form method="POST" action="{{ route('plugins.quiz-contest.admin.status', $contest->id) }}" style="display:inline">@csrf @method('PATCH')<input type="hidden" name="status" value="paused"><button class="btn secondary" type="submit">Pause</button></form>
+        @elseif(!$contest->drawn_at && $contest->status === 'paused' && now()->lessThan($contest->ends_at))
+            <form method="POST" action="{{ route('plugins.quiz-contest.admin.status', $contest->id) }}" style="display:inline">@csrf @method('PATCH')<input type="hidden" name="status" value="published"><button class="btn secondary" type="submit">Resume</button></form>
+        @elseif(!$contest->drawn_at && in_array($contest->status, ['published', 'paused'], true) && now()->greaterThanOrEqualTo($contest->ends_at))
+            <form method="POST" action="{{ route('plugins.quiz-contest.admin.status', $contest->id) }}" style="display:inline">@csrf @method('PATCH')<input type="hidden" name="status" value="closed"><button class="btn secondary" type="submit">Close</button></form>
+        @endif
         @if(!$contest->drawn_at && now()->greaterThanOrEqualTo($contest->ends_at))
             <form method="POST" action="{{ route('plugins.quiz-contest.admin.publish-results', $contest->id) }}" style="display:inline">@csrf<button class="btn primary" type="submit">বিজয়ী প্রকাশ</button></form>
         @endif</td></tr>
