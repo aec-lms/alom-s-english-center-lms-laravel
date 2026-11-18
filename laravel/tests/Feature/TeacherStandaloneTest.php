@@ -68,4 +68,29 @@ class TeacherStandaloneTest extends TestCase
         $this->assertDatabaseHas('users', ['id' => $teacher->user_id, 'is_active' => true]);
     }
 
+    public function test_teacher_photo_upload_uses_server_detected_extension_not_client_filename(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['teacher-management']);
+        $admin = $this->createUserWithRole('admin');
+
+        $this->actingAs($admin)->post('/admin/teachers', [
+            'name' => 'Safe Upload Teacher',
+            'email' => 'safe.upload@aec.test',
+            'employee_code' => 'SAFE-UPLOAD-001',
+            'specialization' => 'English Grammar',
+            'is_active' => '1',
+            // Valid JPEG content deliberately supplied with a dangerous client extension.
+            'photo' => UploadedFile::fake()->image('teacher-photo.php'),
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $teacher = Teacher::query()->where('employee_code', 'SAFE-UPLOAD-001')->firstOrFail();
+        $this->assertMatchesRegularExpression('/\\.(?:jpe?g|png|webp)$/i', (string) $teacher->photo_path);
+        $this->assertStringNotContainsString('.php', strtolower((string) $teacher->photo_path));
+        $storedPath = public_path(ltrim((string) $teacher->photo_path, '/'));
+        $this->assertFileExists($storedPath);
+
+        @unlink($storedPath);
+    }
+
 }
