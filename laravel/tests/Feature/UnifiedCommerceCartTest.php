@@ -43,6 +43,24 @@ final class UnifiedCommerceCartTest extends TestCase
             'item_type' => 'subscription', 'item_id' => $subscriptionId, 'quantity' => 1, 'unit_price' => 1,
         ])->assertRedirect('/cart');
 
+        // Adding the same access item twice must not turn it into quantity two.
+        $this->actingAs($student)->post('/cart/items', [
+            'item_type' => 'subscription', 'item_id' => $subscriptionId, 'quantity' => 1,
+        ])->assertRedirect('/cart');
+
+        $subscriptionCartItem = DB::table('commerce_cart_items')
+            ->where('item_type', 'subscription')->where('item_id', $subscriptionId)->first();
+        $this->assertNotNull($subscriptionCartItem);
+        $this->assertSame(1, (int) $subscriptionCartItem->quantity);
+
+        // Direct quantity edits must not bypass the single-access-item rule.
+        $this->actingAs($student)->patch('/cart/items/' . $subscriptionCartItem->id, [
+            'quantity' => 2,
+        ])->assertSessionHasErrors('quantity');
+        $this->assertDatabaseHas('commerce_cart_items', [
+            'id' => $subscriptionCartItem->id, 'quantity' => 1,
+        ]);
+
         $this->actingAs($student)->post('/cart/items', [
             'item_type' => 'live_class', 'item_id' => $livePassId, 'quantity' => 1,
         ])->assertRedirect('/cart');
