@@ -44,8 +44,11 @@ class CourseCommerceController extends Controller
             : collect();
         $subtotal = round((float) $items->sum(fn ($item) => (float) $item->unit_price), 2);
         $currency = strtoupper((string) ($cart->currency ?? config('lms.default_currency', 'BDT')));
+        $walletBalance = Schema::hasTable('course_gift_wallets')
+            ? (float) DB::table('course_gift_wallets')->where('user_id', $student->id)->where('currency', $currency)->value('balance')
+            : 0.0;
 
-        return view('course-management::commerce.cart', compact('cart', 'items', 'subtotal', 'currency'));
+        return view('course-management::commerce.cart', compact('cart', 'items', 'subtotal', 'currency', 'walletBalance'));
     }
 
     public function add(Request $request, int $courseId): RedirectResponse
