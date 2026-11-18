@@ -16,8 +16,6 @@ Route::middleware(['api', 'installed', 'plugin:attendance-management', 'auth:san
 // Native student clients submit the same short-lived QR token through Sanctum.
 // Keep the web check-in route for browser users; both paths share one controller
 // so expiry, replay, roster, branch and consent rules cannot drift.
-use Plugins\\Modules\\AttendanceManagement\\Http\\Controllers\\AttendanceQrController;
-
 Route::middleware(['api', 'installed', 'plugin:attendance-management', 'auth:sanctum'])
     ->prefix('api/v1/attendance')
     ->name('plugins.attendance.mobile.')
