@@ -27,6 +27,41 @@ class ProfileSettingsController extends Controller
         return view('profile.public', ['profile' => $user]);
     }
 
+    public function media(Request $request, string $username, string $type): StreamedResponse
+    {
+        $user = \\App\\Models\\User::query()
+            ->where('username', strtolower($username))
+            ->firstOrFail();
+
+        abort_unless($user->profile_is_public || $request->user()?->is($user), 404);
+
+        return $this->streamProfileImage($user, $type, $user->profile_is_public);
+    }
+
+    public function myMedia(Request $request, string $type): StreamedResponse
+    {
+        $user = $request->user();
+        abort_unless($user, 401);
+
+        return $this->streamProfileImage($user, $type, false);
+    }
+
+    private function streamProfileImage(\\App\\Models\\User $user, string $type, bool $isPublic): StreamedResponse
+    {
+        $column = match ($type) {
+            'avatar' => 'avatar_path',
+            'cover' => 'cover_path',
+            default => abort(404),
+        };
+        $path = $user->{$column};
+        abort_unless(is_string($path) && $path !== '' && Storage::disk('local')->exists($path), 404);
+
+        return Storage::disk('local')->response($path, basename($path), [
+            'Cache-Control' => $isPublic ? 'public, max-age=300' : 'private, no-store',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
     public function edit(Request $request): View
     {
         return view('profile.settings', ['user' => $request->user()]);
@@ -94,7 +129,7 @@ class ProfileSettingsController extends Controller
 
             $file = $request->file($input);
             abort_unless($file && $file->isValid(), 422, 'The uploaded image is invalid.');
-            $newPath = $file->store('users/' . ($input === 'avatar' ? 'avatars' : 'covers') . '/' . $user->id, 'public');
+            $newPath = $file->store('users/' . ($input === 'avatar' ? 'avatars' : 'covers') . '/' . $user->id, 'local');
             if (!$newPath) {
                 return back()->withErrors([$input => 'Unable to store the image. Please try again.'])->withInput();
             }
@@ -108,7 +143,7 @@ class ProfileSettingsController extends Controller
 
         $user->save();
         foreach ($replacedFiles as $oldPath) {
-            Storage::disk('public')->delete($oldPath);
+            Storage::disk('local')->delete($oldPath);
         }
 
         return redirect()->route('profile.settings.edit')->with('status', 'Your profile has been updated successfully.');

@@ -7,13 +7,13 @@
     <article class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
         <div class="h-40 bg-gradient-to-r from-sky-500 via-indigo-600 to-fuchsia-600 sm:h-56">
             @if ($profile->cover_path)
-                <img src="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($profile->cover_path) }}" alt="" class="h-full w-full object-cover">
+                <img src="{{ \Illuminate\Support\Facades\route('profile.media', ['username' => $profile->username, 'type' => 'cover']) }}" alt="" class="h-full w-full object-cover">
             @endif
         </div>
         <div class="px-6 pb-8">
             <div class="-mt-14 flex h-28 w-28 items-center justify-center overflow-hidden rounded-3xl border-4 border-white bg-indigo-100 text-3xl font-black text-indigo-700 shadow">
                 @if ($profile->avatar_path)
-                    <img src="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($profile->avatar_path) }}" alt="{{ $profile->display_name ?: $profile->name }}" class="h-full w-full object-cover">
+                    <img src="{{ \Illuminate\Support\Facades\route('profile.media', ['username' => $profile->username, 'type' => 'avatar']) }}" alt="{{ $profile->display_name ?: $profile->name }}" class="h-full w-full object-cover">
                 @else
                     {{ strtoupper(substr($profile->display_name ?: $profile->name, 0, 1)) }}
                 @endif

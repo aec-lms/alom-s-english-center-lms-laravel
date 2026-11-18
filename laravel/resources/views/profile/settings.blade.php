@@ -27,13 +27,13 @@
         <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div class="relative h-36 bg-gradient-to-r from-sky-500 via-indigo-500 to-fuchsia-500 sm:h-48">
                 @if ($user->cover_path)
-                    <img src="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($user->cover_path) }}" alt="Profile cover" class="h-full w-full object-cover">
+                    <img src="{{ \Illuminate\Support\Facades\route('profile.settings.media', ['type' => 'cover']) }}" alt="Profile cover" class="h-full w-full object-cover">
                 @endif
             </div>
             <div class="flex flex-col gap-4 p-5 sm:flex-row sm:items-end">
                 <div class="-mt-14 flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-3xl border-4 border-white bg-slate-100 text-3xl font-black text-indigo-700 shadow">
                     @if ($user->avatar_path)
-                        <img src="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($user->avatar_path) }}" alt="Your profile picture" class="h-full w-full object-cover">
+                        <img src="{{ \Illuminate\Support\Facades\route('profile.settings.media', ['type' => 'avatar']) }}" alt="Your profile picture" class="h-full w-full object-cover">
                     @else
                         {{ strtoupper(substr($user->display_name ?: $user->name, 0, 1)) }}
                     @endif

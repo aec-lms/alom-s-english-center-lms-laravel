@@ -47,7 +47,7 @@ class ProfileSettingsTest extends TestCase
     public function test_user_can_upload_a_valid_avatar_and_cover_image(): void
     {
         $this->markSystemInstalled();
-        Storage::fake('public');
+        Storage::fake('local');
         $user = $this->createUserWithRole('teacher', 4, 'profile-teacher@aec.test');
 
         $this->actingAs($user)->put(route('profile.settings.update'), [
@@ -59,7 +59,7 @@ class ProfileSettingsTest extends TestCase
         $fresh = $user->fresh();
         $this->assertNotEmpty($fresh->avatar_path);
         $this->assertNotEmpty($fresh->cover_path);
-        Storage::disk('public')->assertExists($fresh->avatar_path);
+        Storage::disk('local')->assertExists($fresh->avatar_path);
         Storage::disk('public')->assertExists($fresh->cover_path);
     }
 
@@ -84,6 +84,22 @@ class ProfileSettingsTest extends TestCase
         $this->assertSame(9, (int) $fresh->branch_id);
         $this->assertTrue($fresh->hasRole('guardian'));
         $this->assertFalse($fresh->hasRole('admin'));
+    }
+
+    public function test_profile_images_are_private_until_the_profile_is_public(): void
+    {
+        $this->markSystemInstalled();
+        Storage::fake('local');
+        $user = $this->createUserWithRole('student', 5, 'profile-media@aec.test');
+        $path = 'users/avatars/'.$user->id.'/avatar.jpg';
+        Storage::disk('local')->put($path, 'fake-image');
+        $user->forceFill(['username' => 'media_learner', 'avatar_path' => $path, 'profile_is_public' => false])->save();
+
+        $this->get(route('profile.media', ['username' => 'media_learner', 'type' => 'avatar']))->assertNotFound();
+        $this->actingAs($user)->get(route('profile.settings.media', ['type' => 'avatar']))->assertOk();
+
+        $user->forceFill(['profile_is_public' => true])->save();
+        $this->get(route('profile.media', ['username' => 'media_learner', 'type' => 'avatar']))->assertOk();
     }
 
     public function test_public_profile_is_available_only_when_user_enables_visibility(): void
