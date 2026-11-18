@@ -128,12 +128,14 @@ class ReferralIncomeService
         }
 
         return DB::transaction(function () use ($owner, $type, $method, $accountDetails): int {
+            // Local bKash, Nagad and bank payouts are denominated in BDT.
+            // Never combine foreign-currency commissions or silently treat them as BDT.
             $commissions = DB::table('referral_commissions')->where('referrer_user_id', $owner->id)
-                ->where('status', 'approved')->orderBy('id')->lockForUpdate()->get();
+                ->where('status', 'approved')->where('currency', 'BDT')->orderBy('id')->lockForUpdate()->get();
             $amount = round((float) $commissions->sum('commission_amount'), 2);
             $minimum = (float) (DB::table('referral_income_rules')->where('referrer_type', $type)->value('minimum_payout') ?? 500);
             if ($amount < $minimum) {
-                throw ValidationException::withMessages(['payout' => 'Your approved balance has not reached the minimum payout amount.']);
+                throw ValidationException::withMessages(['payout' => 'Your approved BDT balance has not reached the minimum payout amount. Foreign-currency commissions are kept separate and cannot be paid through local BDT methods.']);
             }
 
             $payoutId = DB::table('referral_payout_requests')->insertGetId([
