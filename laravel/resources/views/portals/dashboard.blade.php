@@ -13,6 +13,9 @@
                     <span aria-hidden="true">✦</span> Customize my profile
                 </a>
             </div>
+            @if (in_array($role, ['student', 'teacher'], true) && Route::has('plugins.referral_income.member.dashboard'))
+                <a href="{{ route('plugins.referral_income.member.dashboard') }}" class="rounded-xl border border-emerald-200/40 bg-emerald-400/15 px-4 py-2.5 text-sm font-bold text-emerald-100 backdrop-blur transition hover:bg-emerald-400/25">Referral Income</a>
+            @endif
             @if (in_array($role, ['student', 'guardian']) && Route::has('plugins.attendance.portal'))
                 <a href="{{ route('plugins.attendance.portal') }}" class="rounded-xl border border-white/25 bg-white/10 px-4 py-2.5 text-sm font-bold text-white backdrop-blur transition hover:bg-white/20">My Attendance</a>
             @endif
