@@ -162,6 +162,24 @@ final class CourseCatalog
 
     public function isBatchMember(object $user, string $batchRef): bool
     {
+        $batchMap = config('phonetics.catalog.batches', []);
+        if (!$this->available($batchMap)) {
+            throw new ServiceUnavailableHttpException(null, 'Batch catalog mapping is not configured for this LMS.');
+        }
+        $batch = $this->batch($batchRef);
+        $userBranchId = data_get($user, 'branch_id');
+        $batchBranchColumn = $batchMap['branch_id'] ?? 'branch_id';
+        if ($this->hasColumn($batchMap, $batchBranchColumn)) {
+            $batchBranchId = data_get($batch, $batchBranchColumn);
+            abort_unless(
+                $batchBranchId === null || ($userBranchId !== null && (string) $batchBranchId === (string) $userBranchId),
+                403,
+                'Batch belongs to another branch.'
+            );
+        } elseif ($userBranchId !== null) {
+            throw new ServiceUnavailableHttpException(null, 'Batch branch mapping is required for this branch-scoped account.');
+        }
+
         $membership = config('phonetics.catalog.batch_memberships', []);
         if (!$this->available($membership)) {
             throw new ServiceUnavailableHttpException(null, 'Batch membership mapping is not configured for this LMS.');
