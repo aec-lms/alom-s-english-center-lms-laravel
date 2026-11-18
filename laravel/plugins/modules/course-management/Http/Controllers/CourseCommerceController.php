@@ -453,9 +453,13 @@ class CourseCommerceController extends Controller
             'payer_contact' => ['required', 'string', 'min:7', 'max:40'],
             'coupon_code' => ['nullable', 'string', 'max:40'],
         ]);
-        $this->assertCheckoutReady();
+        $this->assertCheckoutStorageReady();
 
-        $couponService = new CourseCouponService();
+        $couponService = null;
+        if (filled($validated['coupon_code'] ?? null)) {
+            abort_unless($this->plugins->isEnabled('marketing-management'), 503, 'Enable Marketing Management before applying course coupons.');
+            $couponService = new CourseCouponService();
+        }
         $created = DB::transaction(function () use ($student, $validated, $couponService): array {
             DB::table('users')->where('id', $student->id)->lockForUpdate()->first();
             $this->assertNoUnresolvedOrder((int) $student->id);
@@ -489,6 +493,7 @@ class CourseCommerceController extends Controller
             $currency = strtoupper((string) ($cart->currency ?: config('lms.default_currency', 'BDT')));
             $coupon = null;
             if (filled($validated['coupon_code'] ?? null)) {
+                abort_unless($couponService !== null, 503, 'Course coupon service is unavailable.');
                 $coupon = $couponService->reserve((string) $validated['coupon_code'], (int) $student->id, $courseIds, $subtotal);
             }
             $discount = round((float) ($coupon['discount'] ?? 0), 2);
@@ -502,6 +507,9 @@ class CourseCommerceController extends Controller
                 }
             }
             $gatewayAmount = round(max(0, $total - $walletCredit), 2);
+            if ($gatewayAmount > 0) {
+                $this->assertGatewayCheckoutReady();
+            }
 
             $orderId = DB::table('course_cart_orders')->insertGetId([
                 'cart_id' => $cart->id,
@@ -632,7 +640,7 @@ class CourseCommerceController extends Controller
                         DB::table('course_carts')->where('id', $order->cart_id)->update(['status' => 'active', 'updated_at' => now()]);
                     }
                 }
-                if (!$ambiguous && filled($created['coupon_key'])) {
+                if (!$ambiguous && filled($created['coupon_key']) && $couponService !== null) {
                     $couponService->release((string) $created['coupon_key']);
                 }
                 if (!$ambiguous && $order && filled($order->wallet_reservation_key)) {
@@ -658,7 +666,7 @@ class CourseCommerceController extends Controller
         }
     }
 
-    private function activateOrder(int $orderId, $student, ?int $branchId, CourseCouponService $couponService): void
+    private function activateOrder(int $orderId, $student, ?int $branchId, ?object $couponService): void
     {
         $order = DB::table('course_cart_orders')->where('id', $orderId)->lockForUpdate()->first();
         abort_unless($order, 404);
@@ -676,6 +684,7 @@ class CourseCommerceController extends Controller
             ]);
         }
         if (filled($order->coupon_reservation_key)) {
+            abort_unless($couponService !== null, 503, 'Course coupon reservation cannot be finalized.');
             $couponService->redeem((string) $order->coupon_reservation_key);
         }
         DB::table('course_cart_orders')->where('id', $orderId)->update([
@@ -684,9 +693,11 @@ class CourseCommerceController extends Controller
             'paid_at' => now(),
             'updated_at' => now(),
         ]);
-        app(StorefrontPaymentGatewayService::class)->recordReferralPurchase(
-            $student, 'course_cart_order', (string) $orderId, (float) $order->net_amount, (string) $order->currency
-        );
+        if ($this->plugins->isEnabled('referral-income')) {
+            app(\Plugins\Modules\ReferralIncome\Services\ReferralIncomeService::class)->recordSettledPurchase(
+                $student, 'course_cart_order', (string) $orderId, (float) $order->net_amount, (string) $order->currency
+            );
+        }
         DB::table('course_carts')->where('id', $order->cart_id)->update(['status' => 'completed', 'updated_at' => now()]);
         if (filled($order->wallet_reservation_key)) {
             DB::table('course_gift_wallet_transactions')->where('reference', $order->wallet_reservation_key)
@@ -730,15 +741,26 @@ class CourseCommerceController extends Controller
             'A previous course order is awaiting payment confirmation or reconciliation. Contact support before starting another checkout.');
     }
 
-    private function assertCheckoutReady(): void
+    private function assertCheckoutStorageReady(): void
+    {
+        abort_unless($this->plugins->isEnabled('fees-management')
+            && Schema::hasTable('fee_invoices')
+            && Schema::hasTable('enrollments'), 503,
+            'Enable Fees Management and invoice-linked enrollments before purchasing courses.');
+    }
+
+    private function assertGatewayCheckoutReady(): void
     {
         abort_unless($this->plugins->isEnabled('universal-payment')
             && $this->plugins->isEnabled('gateway-sslcommerz')
-            && $this->plugins->isEnabled('fees-management')
-            && Schema::hasTable('universal_payment_transactions')
-            && Schema::hasTable('fee_invoices')
-            && Schema::hasTable('enrollments'), 503,
-            'Enable Universal Payment, SSLCOMMERZ Gateway and Fees Management before purchasing courses online.');
+            && Schema::hasTable('universal_payment_transactions'), 503,
+            'Enable Universal Payment and the SSLCOMMERZ Gateway for the remaining online payment balance.');
+    }
+
+    private function assertCheckoutReady(): void
+    {
+        $this->assertCheckoutStorageReady();
+        $this->assertGatewayCheckoutReady();
     }
 
     private function giftVoucherSettings(): array
