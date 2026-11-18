@@ -25,10 +25,10 @@
  if(@json((bool)$loaderSetting->respect_reduced_motion))o.classList.add('lb-respect-motion');
  const mode=o.dataset.trigger,key='al-loader-seen';
  try{if(mode==='first-visit-session'&&sessionStorage.getItem(key)){o.remove();return}if(mode==='first-visit-daily'&&localStorage.getItem(key)===new Date().toDateString()){o.remove();return}}catch(e){}
- const start=Date.now(),hide=()=>{const delay=Math.max(0,Number(o.dataset.min||0)-(Date.now()-start));setTimeout(()=>{o.classList.add('lb-hidden');setTimeout(()=>o.remove(),Number(o.dataset.fade||250))},delay)};
+ const start=Date.now(),hide=()=>{const delay=Math.max(0,Number(o.dataset.min||0)-(Date.now()-start));setTimeout(()=>o.classList.add('lb-hidden'),delay)};
  addEventListener('load',hide,{once:true});setTimeout(hide,Math.max(1000,Number(o.dataset.max||5000)));
  try{if(mode==='first-visit-session')sessionStorage.setItem(key,'1');if(mode==='first-visit-daily')localStorage.setItem(key,new Date().toDateString())}catch(e){}
- document.addEventListener('click',e=>{const a=e.target.closest('a[href]');if(!a||e.defaultPrevented||e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey||a.target||a.hasAttribute('download'))return;const u=new URL(a.href,location.href);if(u.origin!==location.origin||u.pathname===location.pathname||/^\\/(admin|api|payment|payments|checkout|webhook|webhooks|live-class|live-classes)(\\/|$)/.test(u.pathname))return;o.classList.remove('lb-hidden')},true);
+ document.addEventListener('click',e=>{if(mode!=='every-load')return;const a=e.target.closest('a[href]');if(!a||e.defaultPrevented||e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey||a.target||a.hasAttribute('download'))return;const u=new URL(a.href,location.href);if(u.origin!==location.origin||u.pathname===location.pathname||/^\\/(admin|api|payment|payments|checkout|webhook|webhooks|live-class|live-classes)(\\/|$)/.test(u.pathname))return;o.classList.remove('lb-hidden')},true);
 })();
 </script>
 @endif
