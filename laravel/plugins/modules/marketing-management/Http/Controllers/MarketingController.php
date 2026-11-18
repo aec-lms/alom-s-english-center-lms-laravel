@@ -28,7 +28,11 @@ class MarketingController extends Controller
             ? PromoCoupon::query()->orderByDesc('id')->get()
             : collect();
 
-        return view('marketing-management::index', compact('campaigns', 'coupons'));
+        $courses = Schema::hasTable('courses')
+            ? DB::table('courses')->where('status', 'published')->orderBy('title')->get(['id', 'title'])
+            : collect();
+
+        return view('marketing-management::index', compact('campaigns', 'coupons', 'courses'));
     }
 
     public function storeCampaign(Request $request): RedirectResponse
@@ -53,17 +57,34 @@ class MarketingController extends Controller
         $this->ensureCentralAdmin($request->user());
         $validated = $request->validate([
             'code' => ['required', 'string', 'max:40', 'unique:promo_coupons,code'],
-            'discount_percent' => ['required', 'integer', 'min:1', 'max:100'],
-            'max_uses' => ['required', 'integer', 'min:1', 'max:100000'],
-            'expires_at' => ['nullable', 'date'],
+            'discount_type' => ['required', 'in:percent,fixed'],
+            'discount_percent' => ['nullable', 'required_if:discount_type,percent', 'integer', 'min:1', 'max:100'],
+            'discount_amount' => ['nullable', 'required_if:discount_type,fixed', 'numeric', 'min:0.01', 'max:100000000'],
+            'max_uses' => ['nullable', 'integer', 'min:0', 'max:100000'],
+            'minimum_subtotal' => ['nullable', 'numeric', 'min:0', 'max:100000000'],
+            'maximum_discount' => ['nullable', 'numeric', 'min:0.01', 'max:100000000'],
+            'per_user_limit' => ['nullable', 'integer', 'min:1', 'max:100000'],
+            'starts_at' => ['nullable', 'date'],
+            'expires_at' => ['nullable', 'date', 'after_or_equal:starts_at'],
+            'applies_to_course_ids' => ['nullable', 'array', 'max:100'],
+            'applies_to_course_ids.*' => ['required', 'integer', 'distinct', 'exists:courses,id'],
+            'first_purchase_only' => ['nullable', 'boolean'],
         ]);
 
         $coupon = PromoCoupon::query()->create([
             'code' => strtoupper(trim($validated['code'])),
-            'discount_percent' => $validated['discount_percent'],
-            'max_uses' => $validated['max_uses'],
+            'discount_type' => $validated['discount_type'],
+            'discount_percent' => (int) ($validated['discount_percent'] ?? 0),
+            'discount_amount' => $validated['discount_amount'] ?? null,
+            'max_uses' => (int) ($validated['max_uses'] ?? 0),
             'used_count' => 0,
+            'minimum_subtotal' => $validated['minimum_subtotal'] ?? 0,
+            'maximum_discount' => $validated['maximum_discount'] ?? null,
+            'per_user_limit' => $validated['per_user_limit'] ?? null,
+            'starts_at' => $validated['starts_at'] ?? null,
             'expires_at' => $validated['expires_at'] ?? null,
+            'applies_to_course_ids' => array_values(array_map('intval', $validated['applies_to_course_ids'] ?? [])),
+            'first_purchase_only' => $request->boolean('first_purchase_only'),
             'is_active' => true,
         ]);
 
