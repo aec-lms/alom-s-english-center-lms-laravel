@@ -67,7 +67,7 @@ An initial native-plugin implementation is now present on the integration branch
 - `al-branding-loader` packages the AL Branding entry point and Loader feature areas together. Branding delegates to the existing Core Site Identity service rather than introducing a competing identity store.
 - `phonetics` is a separate plugin with no hard dependency on Course Management; it declares Course Management as optional and fails closed when enrollment enforcement is enabled but the enrollment tables are unavailable.
 - Admin routes use the plugin-enabled and permission middleware.
-- Phonetics attempt correctness is calculated from the stored IPA answer on the server; client-supplied correctness is not accepted.
+- Phonetics challenges are issued and stored server-side in the session, expire after 15 minutes, and are consumed once. The attempt endpoint accepts only the selected answer; client-supplied entry IDs, target accents, quiz modes or correctness flags are ignored.
 - Loader and phonetics media validation does not accept SVG uploads in this initial implementation.
 
 This is an incremental implementation, not a release approval. The original ZIP's complete audio upload, rich theme profiles, card animation, full admin editing, and complete migration/rollback acceptance still require implementation and tests. Do not install this on production until all CI checks and acceptance tests pass.
