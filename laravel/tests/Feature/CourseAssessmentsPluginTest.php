@@ -138,4 +138,71 @@ class CourseAssessmentsPluginTest extends TestCase
             ->assertSessionHasErrors();
         $this->assertDatabaseCount('course_assessment_attempts',1);
     }
+
+    public function test_student_can_browse_standalone_assessments_without_course_management(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-assessments']);
+        $student = $this->createUserWithRole('student');
+        $set = $this->createSet(['title' => 'Standalone Visible Assessment']);
+
+        $this->actingAs($student)
+            ->get(route('plugins.course-assessments.student.index'))
+            ->assertOk()
+            ->assertSee('Standalone Visible Assessment');
+    }
+
+    public function test_answer_autosave_is_rejected_after_submit_and_after_deadline(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-assessments']);
+        $student = $this->createUserWithRole('student');
+
+        $submittedSet = $this->createSet(['title' => 'Submitted Attempt']);
+        $this->createQuestion($submittedSet);
+        $start = $this->actingAs($student)->post(route('plugins.course-assessments.student.start', $submittedSet));
+        $attemptId = (int) basename(parse_url($start->headers->get('Location'), PHP_URL_PATH));
+        $questionId = (int) DB::table('course_assessment_attempt_questions')->where('attempt_id', $attemptId)->value('id');
+        $this->post(route('plugins.course-assessments.student.submit', $attemptId))->assertRedirect();
+        $this->putJson(route('plugins.course-assessments.student.answer', [$attemptId, $questionId]), ['selected_option' => 1])
+            ->assertStatus(409);
+
+        $expiredSet = $this->createSet(['title' => 'Expired Attempt']);
+        $this->createQuestion($expiredSet);
+        $start = $this->actingAs($student)->post(route('plugins.course-assessments.student.start', $expiredSet));
+        $expiredAttemptId = (int) basename(parse_url($start->headers->get('Location'), PHP_URL_PATH));
+        $expiredQuestionId = (int) DB::table('course_assessment_attempt_questions')->where('attempt_id', $expiredAttemptId)->value('id');
+        DB::table('course_assessment_attempts')->where('id', $expiredAttemptId)->update(['deadline_at' => now()->subSecond()]);
+        $this->putJson(route('plugins.course-assessments.student.answer', [$expiredAttemptId, $expiredQuestionId]), ['selected_option' => 1])
+            ->assertStatus(409);
+    }
+
+    public function test_branch_manager_cannot_create_assessment_from_inactive_branch(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'course-assessments']);
+        $branchId = DB::table('branches')->insertGetId([
+            'code' => 'ASSESS-INACTIVE',
+            'name' => 'Inactive Assessment Branch',
+            'is_active' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $roleId = DB::table('roles')->where('slug', 'branch_manager')->value('id');
+        $permissionId = DB::table('permissions')->where('slug', 'course_assessments.manage')->value('id');
+        $this->assertNotNull($roleId);
+        $this->assertNotNull($permissionId);
+        DB::table('permission_role')->insertOrIgnore(['role_id' => $roleId, 'permission_id' => $permissionId]);
+        $manager = $this->createUserWithRole('branch_manager', $branchId);
+
+        $this->actingAs($manager)->post(route('plugins.course-assessments.admin.store'), [
+            'title' => 'Must Not Be Created',
+            'status' => 'draft',
+            'questions' => [
+                ['type' => 'mcq', 'question' => 'Q?', 'options' => ['A', 'B'], 'correct_option' => 0, 'marks' => 1],
+            ],
+        ])->assertForbidden();
+
+        $this->assertDatabaseMissing('course_assessment_sets', ['title' => 'Must Not Be Created']);
+    }
 }
