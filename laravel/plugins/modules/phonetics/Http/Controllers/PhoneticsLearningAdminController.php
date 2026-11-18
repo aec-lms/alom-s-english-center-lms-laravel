@@ -9,6 +9,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
+use App\Models\User;
+use Plugins\Modules\Phonetics\Models\PhoneticBatchMembership;
 use Plugins\Modules\Phonetics\Models\PhoneticEntry;
 use Plugins\Modules\Phonetics\Models\PhoneticExam;
 use Plugins\Modules\Phonetics\Models\PhoneticExamQuestion;
@@ -25,6 +27,8 @@ final class PhoneticsLearningAdminController extends Controller
             'categories' => $this->catalog->categories(),
             'courses' => $this->catalog->courses(),
             'batches' => $this->catalog->batches(),
+            'students' => User::query()->orderBy('name')->limit(500)->get(['id', 'name', 'email']),
+            'batchMembers' => PhoneticBatchMembership::query()->with('user')->where('lms_driver', $this->catalog->driver())->latest()->paginate(20, ['*'], 'members'),
             'words' => PhoneticEntry::query()->where('is_active', true)->orderBy('word')->get(),
             'assignments' => PhoneticLearningAssignment::query()->with('word')->latest()->paginate(20, ['*'], 'assignments'),
             'exams' => PhoneticExam::query()->withCount('questions')->latest()->paginate(20, ['*'], 'exams'),
@@ -64,6 +68,28 @@ final class PhoneticsLearningAdminController extends Controller
         ]);
 
         return back()->with('status', 'Word assigned to the selected course, lesson and batch.');
+    }
+
+    public function storeBatchMember(Request $request)
+    {
+        $data = $request->validate([
+            'batch_ref' => ['required', 'string', 'max:128'],
+            'user_id' => ['required', 'integer', 'exists:users,id'],
+        ]);
+        $batchIds = collect($this->catalog->batches())->pluck('id');
+        abort_unless($batchIds->contains((string) $data['batch_ref']), 422, 'Choose a batch from the connected LMS.');
+        PhoneticBatchMembership::query()->updateOrCreate(
+            ['lms_driver' => $this->catalog->driver(), 'batch_ref' => $data['batch_ref'], 'user_id' => $data['user_id']],
+            ['is_active' => true]
+        );
+        return back()->with('status', 'Student assigned to the batch roster.');
+    }
+
+    public function destroyBatchMember(PhoneticBatchMembership $membership)
+    {
+        abort_unless($membership->lms_driver === $this->catalog->driver(), 404);
+        $membership->update(['is_active' => false]);
+        return back()->with('status', 'Student removed from this plugin batch roster.');
     }
 
     public function destroyAssignment(PhoneticLearningAssignment $assignment)
