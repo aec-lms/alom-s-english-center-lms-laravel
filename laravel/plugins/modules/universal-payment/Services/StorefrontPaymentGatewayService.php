@@ -399,7 +399,9 @@ class StorefrontPaymentGatewayService
                 'paid_at' => now(),
                 'updated_at' => now(),
             ]);
-            app(\\Plugins\\Modules\\UniversalPayment\\Services\\ExternalTransactionReferenceRegistry::class)
+            app(\Plugins\Modules\UniversalPayment\Services\ExternalTransactionReferenceRegistry::class)
+                ->claim((string) $locked->gateway, $externalReference, (int) $locked->id);
+            app(\Plugins\Modules\UniversalPayment\Services\ExternalTransactionReferenceRegistry::class)
                 ->claim((string) $locked->gateway, $externalReference, (int) $locked->id);
             $locked->update([
                 'status' => 'verified',
