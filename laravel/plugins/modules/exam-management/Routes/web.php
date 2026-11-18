@@ -34,4 +34,6 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:exam-management'])
             ->name('plugins.exams.take')->middleware('throttle:20,1');
         Route::post('/exams/{exam}/attempt', [ExamController::class, 'submitAttempt'])
             ->name('plugins.exams.attempt')->middleware('throttle:5,1');
+        Route::post('/exams/{exam}/attempt/autosave', [ExamController::class, 'saveAttemptAnswers'])
+            ->name('plugins.exams.autosave')->middleware('throttle:30,1');
     });
