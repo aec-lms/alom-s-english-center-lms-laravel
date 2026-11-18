@@ -91,6 +91,14 @@ class CourseBundlesPluginTest extends TestCase
         $this->attachCourses($bundleId, [$first, $third]);
         $this->assertDatabaseHas('course_bundle_order_courses', ['order_id' => $order->id, 'course_id' => $second, 'course_title' => 'Paid Speaking']);
         $this->assertDatabaseMissing('course_bundle_order_courses', ['order_id' => $order->id, 'course_id' => $third]);
+
+        DB::table('fee_invoices')->where('id', $order->invoice_id)->update([
+            'status' => 'paid',
+            'paid_amount' => 1500,
+            'updated_at' => now(),
+        ]);
+        $this->actingAs($student)->get('/my-bundle-orders')->assertOk()->assertSee('completed');
+        $this->assertDatabaseHas('course_bundle_orders', ['id' => $order->id, 'status' => 'completed']);
     }
 
     public function test_course_bundle_archive_does_not_delete_order_history(): void
