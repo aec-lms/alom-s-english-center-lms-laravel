@@ -26,6 +26,7 @@ class PromoCoupon extends Model
         'starts_at',
         'applies_to_course_ids',
         'first_purchase_only',
+        'gift_only',
     ];
 
     protected $casts = [
@@ -41,5 +42,6 @@ class PromoCoupon extends Model
         'starts_at' => 'datetime',
         'applies_to_course_ids' => 'array',
         'first_purchase_only' => 'boolean',
+        'gift_only' => 'boolean',
     ];
 }
