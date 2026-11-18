@@ -55,7 +55,11 @@ class PluginSignatureVerifier
             throw new RuntimeException('Plugin signature or trusted public key has an invalid encoding.');
         }
 
-        $manifest = json_decode((string) file_get_contents($manifestPath), true, 512, JSON_THROW_ON_ERROR);
+        try {
+            $manifest = json_decode((string) file_get_contents($manifestPath), true, 512, JSON_THROW_ON_ERROR);
+        } catch (\\JsonException $exception) {
+            throw new RuntimeException('Plugin manifest is not valid JSON for signature verification.', 0, $exception);
+        }
         if (!is_array($manifest) || !is_string($manifest['slug'] ?? null)
             || !is_string($manifest['version'] ?? null)) {
             throw new RuntimeException('Plugin manifest identity is invalid for signature verification.');
