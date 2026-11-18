@@ -21,14 +21,22 @@ class ReferralIncomePluginTest extends TestCase
         $this->markSystemInstalled();
         $this->activatePlugins(['referral-income']);
 
+        $admin = $this->createUserWithRole('admin');
+        $this->actingAs($admin)->get('/admin/referral-income')->assertOk()->assertSee('Student & Teacher Referral Income');
+
         $studentReferrer = $this->createUserWithRole('student');
         $buyer = $this->createUserWithRole('student');
         $service = app(ReferralIncomeService::class);
         $code = $service->createOrGetCode($studentReferrer);
 
         $this->assertSame($code, $service->createOrGetCode($studentReferrer));
-        $this->actingAs($buyer)->post('/my-referrals/apply', ['referral_code' => $code])
-            ->assertRedirect()->assertSessionHasNoErrors();
+        $this->get('/r/' . $code)->assertRedirect('/register');
+        $this->actingAs($buyer)->get('/my-referrals')->assertOk()->assertSee('My Referral Income');
+        $this->assertDatabaseHas('referral_attributions', [
+            'referrer_user_id' => $studentReferrer->id,
+            'referred_user_id' => $buyer->id,
+            'status' => 'active',
+        ]);
 
         $first = $service->recordSettledPurchase($buyer, 'course_order', 'ORDER-1001', 10000, 'BDT');
         $retry = $service->recordSettledPurchase($buyer, 'course_order', 'ORDER-1001', 10000, 'BDT');
