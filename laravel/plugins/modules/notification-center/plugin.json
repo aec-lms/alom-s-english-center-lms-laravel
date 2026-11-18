@@ -26,12 +26,6 @@
             "label": "SMS API Token",
             "type": "password",
             "secret": true
-        },
-        {
-            "key": "push_server_key",
-            "label": "Push Gateway Key",
-            "type": "password",
-            "secret": true
         }
     ],
     "admin_menu": [

@@ -4,7 +4,7 @@
 <div class="space-y-6 max-w-5xl">
     <div>
         <h1 class="text-2xl font-extrabold text-slate-900">Notification Center</h1>
-        <p class="text-xs text-slate-500 mt-1">Send in-app notifications, SMTP email, or Greenweb SMS. Push delivery is not yet connected.</p>
+        <p class="text-xs text-slate-500 mt-1">Send in-app notifications, SMTP email, Greenweb SMS, or Firebase Cloud Messaging push notifications. Push delivery requires the optional Push Notifications plugin and registered mobile devices.</p>
     </div>
 
     <form method="POST" action="{{ url('/admin/notifications/dispatch') }}" class="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
@@ -31,7 +31,7 @@
                     <option value="in_app" @selected(old('channel') === 'in_app')>In-app Inbox</option>
                     <option value="email" @selected(old('channel') === 'email')>Email (SMTP)</option>
                     <option value="sms" @selected(old('channel') === 'sms')>SMS (Greenweb)</option>
-                    <option value="push" @selected(old('channel') === 'push')>Push (not connected)</option>
+                    <option value="push" @selected(old('channel') === 'push')>Push (Firebase Cloud Messaging)</option>
                 </select>
             </div>
             <div class="sm:col-span-2">

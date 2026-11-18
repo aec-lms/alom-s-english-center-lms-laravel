@@ -166,12 +166,12 @@ class NotificationCenterTest extends TestCase
             'channel' => 'push',
             'title' => 'New lesson',
             'message' => 'A new lesson is available.',
-        ])->assertSessionHas('status', 'Push notifications are not connected yet. The notification was recorded but not sent.');
+        ])->assertSessionHas('status', 'Push was not sent because its provider is not configured.');
 
         $this->assertSame(3, DB::table('lms_notifications')->count());
         $this->assertDatabaseHas('lms_notifications', ['channel' => 'email', 'status' => 'not_configured']);
         $this->assertDatabaseHas('lms_notifications', ['channel' => 'sms', 'status' => 'not_configured']);
-        $this->assertDatabaseHas('lms_notifications', ['channel' => 'push', 'status' => 'provider_not_implemented']);
+        $this->assertDatabaseHas('lms_notifications', ['channel' => 'push', 'status' => 'not_configured']);
         Http::assertNothingSent();
     }
 

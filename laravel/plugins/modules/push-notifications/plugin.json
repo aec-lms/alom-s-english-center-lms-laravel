@@ -1,0 +1,40 @@
+{
+  "slug": "push-notifications",
+  "name": "Firebase Push Notifications",
+  "version": "1.0.0",
+  "author": "Alom's English Center",
+  "category": "integration",
+  "description": "Firebase Cloud Messaging HTTP v1 delivery for registered Android and iOS app devices.",
+  "core_compatibility": "^2.0",
+  "dependencies": [],
+  "optional_dependencies": [
+    "notification-center",
+    "mobile-app-api"
+  ],
+  "provider": "Plugins\\Modules\\PushNotifications\\Providers\\PushNotificationsServiceProvider",
+  "permissions": [],
+  "settings_schema": [
+    {
+      "key": "project_id",
+      "label": "Firebase Project ID",
+      "type": "text",
+      "required": true,
+      "secret": false
+    },
+    {
+      "key": "client_email",
+      "label": "Firebase Service Account Email",
+      "type": "text",
+      "required": true,
+      "secret": false
+    },
+    {
+      "key": "private_key",
+      "label": "Firebase Service Account Private Key (PEM)",
+      "type": "password",
+      "required": true,
+      "secret": true
+    }
+  ],
+  "admin_menu": []
+}
