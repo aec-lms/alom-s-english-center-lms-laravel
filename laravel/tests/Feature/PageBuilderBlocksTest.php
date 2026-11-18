@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
+use Plugins\Modules\PageBuilder\Models\BuilderPage;
+use Plugins\Modules\PageBuilder\Models\BuilderPageRevision;
 use Tests\TestCase;
 
 class PageBuilderBlocksTest extends TestCase
@@ -107,6 +109,114 @@ class PageBuilderBlocksTest extends TestCase
             ->assertSee('aria-atomic="true"', false)
             ->assertSee('aria-label="Move block up"', false)
             ->assertSee('aria-label="Move block down"', false);
+    }
+
+    private function createRevisionTestPage($admin, string $slug, string $title, string $content): BuilderPage
+    {
+        $this->actingAs($admin)->post('/admin/page-builder', [
+            'title' => $title,
+            'slug' => $slug,
+            'template' => 'standard',
+            'blocks' => [['type' => 'heading', 'content' => $content, 'align' => 'left']],
+            'is_published' => '1',
+        ])->assertRedirect();
+
+        return BuilderPage::query()->where('slug', $slug)->firstOrFail();
+    }
+
+    public function test_page_revisions_restore_old_content_and_preserve_a_new_revision(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['page-builder']);
+        $admin = $this->createUserWithRole('admin');
+        $page = $this->createRevisionTestPage($admin, 'revision-history-page', 'Original title', 'Original heading');
+        $firstRevision = $page->revisions()->where('version', 1)->firstOrFail();
+
+        $this->actingAs($admin)->put('/admin/page-builder/' . $page->id, [
+            'title' => 'Updated title',
+            'slug' => 'revision-history-page',
+            'template' => 'landing',
+            'blocks' => [['type' => 'heading', 'content' => 'Updated heading', 'align' => 'center']],
+            'is_published' => '1',
+        ])->assertRedirect();
+
+        $this->assertDatabaseCount('cms_page_revisions', 2);
+        $this->actingAs($admin)->post(route('plugins.page_builder.revisions.restore', [$page, $firstRevision]))
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $page->refresh();
+        $this->assertSame('Original title', $page->title);
+        $this->assertSame('revision-history-page', $page->slug);
+        $this->assertSame('standard', $page->template);
+        $this->assertSame('Original heading', $page->blocks_json[0]['content']);
+        $this->assertSame(3, $page->revisions()->max('version'));
+        $this->assertDatabaseHas('cms_page_revisions', [
+            'builder_page_id' => $page->id,
+            'version' => 3,
+            'created_by' => $admin->id,
+        ]);
+
+        $this->actingAs($admin)->get('/admin/page-builder')
+            ->assertOk()
+            ->assertSee('Revision history')
+            ->assertSee('Version 3')
+            ->assertSee('Restore version 1');
+    }
+
+    public function test_page_revision_restore_rejects_a_revision_from_another_page(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['page-builder']);
+        $admin = $this->createUserWithRole('admin');
+        $pageA = $this->createRevisionTestPage($admin, 'revision-page-a', 'Page A', 'A content');
+        $pageB = $this->createRevisionTestPage($admin, 'revision-page-b', 'Page B', 'B content');
+        $foreignRevision = $pageB->revisions()->firstOrFail();
+
+        $this->actingAs($admin)->post(route('plugins.page_builder.revisions.restore', [$pageA, $foreignRevision]))
+            ->assertNotFound();
+
+        $this->assertSame('Page A', $pageA->fresh()->title);
+        $this->assertSame('A content', $pageA->fresh()->blocks_json[0]['content']);
+    }
+
+    public function test_page_revision_restore_rejects_slug_collisions_and_malformed_snapshots(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['page-builder']);
+        $admin = $this->createUserWithRole('admin');
+        $page = $this->createRevisionTestPage($admin, 'old-revision-slug', 'Original', 'Original content');
+        $oldRevision = $page->revisions()->where('version', 1)->firstOrFail();
+
+        $this->actingAs($admin)->put('/admin/page-builder/' . $page->id, [
+            'title' => 'Renamed page',
+            'slug' => 'new-revision-slug',
+            'template' => 'standard',
+            'blocks' => [['type' => 'text', 'content' => 'New content']],
+            'is_published' => '1',
+        ])->assertRedirect();
+
+        $this->createRevisionTestPage($admin, 'old-revision-slug', 'Slug owner', 'Other page');
+        $this->actingAs($admin)->post(route('plugins.page_builder.revisions.restore', [$page, $oldRevision]))
+            ->assertSessionHasErrors('revision');
+        $this->assertSame('new-revision-slug', $page->fresh()->slug);
+
+        $malformed = $page->revisions()->where('version', 1)->firstOrFail();
+        $malformed->update(['snapshot' => [
+            'slug' => 'invalid slug with spaces',
+            'title' => 'Bad snapshot',
+            'template' => 'standard',
+            'banner_image' => null,
+            'blocks_json' => [['type' => 'heading', 'content' => 'Bad']],
+            'seo_title' => 'Bad snapshot',
+            'seo_description' => null,
+            'is_published' => true,
+        ]]);
+
+        $this->actingAs($admin)->post(route('plugins.page_builder.revisions.restore', [$page, $malformed]))
+            ->assertSessionHasErrors('revision');
+        $this->assertSame('new-revision-slug', $page->fresh()->slug);
+        $this->assertSame('Renamed page', $page->fresh()->title);
     }
 
 }
