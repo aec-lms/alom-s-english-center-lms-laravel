@@ -24,13 +24,18 @@ final class StandalonePhoneticsServiceProvider extends ServiceProvider
         $this->mergeConfigFrom($this->pluginPath('Config/phonetics.php'), 'phonetics');
         $this->app->singleton(CourseCatalog::class);
 
-        if (config('phonetics.standalone') && !$hostMiddleware) {
-            config([
-                'phonetics.middleware.practice' => ['web'],
-                'phonetics.middleware.attempt' => ['web', 'auth'],
-                'phonetics.middleware.exam' => ['web', 'auth'],
-                'phonetics.middleware.admin' => ['web', 'auth', 'can:manage-phonetics'],
-            ]);
+        if (config('phonetics.standalone')) {
+            $defaults = [
+                'practice' => ['web'],
+                'attempt' => ['web', 'auth'],
+                'exam' => ['web', 'auth'],
+                'admin' => ['web', 'auth', 'can:manage-phonetics'],
+            ];
+            foreach ($defaults as $key => $middleware) {
+                if (empty($hostMiddleware[$key])) {
+                    config(['phonetics.middleware.'.$key => $middleware]);
+                }
+            }
         }
     }
 
