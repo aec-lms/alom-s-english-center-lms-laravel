@@ -35,6 +35,10 @@ final class CourseCatalog
         if (!$this->available($map)) {
             return [];
         }
+        $priceColumn = $map['price'] ?? null;
+        if (!$priceColumn || !$this->hasColumn($map, $priceColumn)) {
+            throw new ServiceUnavailableHttpException(null, 'Course price mapping is required before course vocabulary can be administered.');
+        }
         $query = $this->table($map);
         if ($categoryRef !== null && $categoryRef !== '' && $this->hasColumn($map, $map['category_id'] ?? 'category_id')) {
             $query->where($map['category_id'] ?? 'category_id', $categoryRef);
