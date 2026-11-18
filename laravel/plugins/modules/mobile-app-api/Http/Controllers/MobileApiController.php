@@ -63,6 +63,7 @@ class MobileApiController extends Controller
     public function home(Request $request): JsonResponse
     {
         $actor = $this->mobileActor($request);
+        $branchId = app(BranchAccess::class)->assignedBranchId($actor);
         $cfg = $this->loadMobileConfig();
 
         $sliders = $this->plugins->isEnabled('slider-builder') && Schema::hasTable('cms_sliders')
@@ -111,10 +112,10 @@ class MobileApiController extends Controller
             : collect();
 
         $stats = [
-            'students' => $this->plugins->isEnabled('student-management') && Schema::hasTable('students') ? DB::table('students')->count() : 0,
-            'courses' => $this->plugins->isEnabled('course-management') && Schema::hasTable('courses') ? DB::table('courses')->where('status', 'published')->count() : 0,
-            'teachers' => $this->plugins->isEnabled('teacher-management') && Schema::hasTable('teachers') ? DB::table('teachers')->count() : 0,
-            'lessons' => $this->plugins->isEnabled('course-management') && Schema::hasTable('course_lessons') ? DB::table('course_lessons')->count() : 0,
+            'students' => $this->plugins->isEnabled('student-management') && Schema::hasTable('students') ? $this->scopeVisibleBranch(DB::table('students'), 'students', $branchId)->count() : 0,
+            'courses' => $this->plugins->isEnabled('course-management') && Schema::hasTable('courses') ? $this->scopeVisibleBranch(DB::table('courses')->where('status', 'published'), 'courses', $branchId)->count() : 0,
+            'teachers' => $this->plugins->isEnabled('teacher-management') && Schema::hasTable('teachers') ? $this->scopeVisibleBranch(DB::table('teachers'), 'teachers', $branchId)->count() : 0,
+            'lessons' => $this->plugins->isEnabled('course-management') && Schema::hasTable('course_lessons') ? DB::table('course_lessons')->whereIn('course_id', $this->scopeVisibleBranch(DB::table('courses'), 'courses', $branchId)->select('id'))->count() : 0,
         ];
 
         return response()->json([
@@ -328,7 +329,7 @@ class MobileApiController extends Controller
             'Course content access is unavailable until Course Management is installed.'
         );
 
-        $course = Course::query()
+        $course = $this->scopeVisibleBranch(Course::query(), 'courses', app(BranchAccess::class)->assignedBranchId($actor))
             ->where('slug', $slug)
             ->where('status', 'published')
             ->firstOrFail();
@@ -336,6 +337,7 @@ class MobileApiController extends Controller
         $hasAccess = Enrollment::query()
             ->where('user_id', $actor->id)
             ->where('course_id', $course->id)
+            ->where('branch_id', $course->branch_id)
             ->whereIn('status', ['active', 'completed'])
             ->exists();
         abort_unless($hasAccess, 403, 'An active course enrollment is required to view lessons.');
