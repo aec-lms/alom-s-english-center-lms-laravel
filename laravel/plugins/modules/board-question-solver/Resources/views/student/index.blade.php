@@ -87,9 +87,6 @@
         <div id="board-solver-answer-text" class="mt-3 whitespace-pre-wrap text-sm leading-7 text-slate-700"></div>
     </section>
 </main>
-@endsection
-
-@push('scripts')
 <script>
 (() => {
     const form = document.getElementById('board-solver-form');
@@ -126,4 +123,4 @@
     });
 })();
 </script>
-@endpush
+@endsection
