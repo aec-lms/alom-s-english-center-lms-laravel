@@ -331,18 +331,17 @@ class _StudentExamAttemptPageState extends State<StudentExamAttemptPage> {
                               const SizedBox(height: 8),
                               RadioGroup<int>(
                                 groupValue: answers[id],
-                                onChanged: submitting || result != null
-                                    ? null
-                                    : (value) {
-                                        if (value == null) return;
-                                        setState(() => answers[id] = value);
-                                      },
+                                onChanged: (value) {
+                                  if (submitting || result != null || value == null) return;
+                                  setState(() => answers[id] = value);
+                                },
                                 child: Column(
                                   children: [
                                     for (var optionIndex = 0; optionIndex < options.length; optionIndex++)
                                       RadioListTile<int>(
                                         contentPadding: EdgeInsets.zero,
                                         dense: true,
+                                        enabled: !submitting && result == null,
                                         value: optionIndex,
                                         title: Text(options[optionIndex].toString()),
                                       ),
