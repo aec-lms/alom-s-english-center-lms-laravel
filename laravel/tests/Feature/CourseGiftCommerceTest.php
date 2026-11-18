@@ -382,4 +382,64 @@ class CourseGiftCommerceTest extends TestCase
         $this->assertDatabaseCount('universal_payment_transactions', 0);
     }
 
+    public function test_wallet_fully_covers_course_cart_without_enabling_an_online_gateway(): void
+    {
+        $buyer = $this->createUserWithRole('student');
+        $course = Course::query()->create([
+            'code' => 'WALLET-ONLY-001',
+            'title' => 'Wallet Only Course',
+            'slug' => 'wallet-only-course',
+            'price' => 1000,
+            'status' => 'published',
+        ]);
+        $cartId = DB::table('course_carts')->insertGetId([
+            'user_id' => $buyer->id,
+            'status' => 'active',
+            'currency' => 'BDT',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('course_cart_items')->insert([
+            'cart_id' => $cartId,
+            'course_id' => $course->id,
+            'unit_price' => 1000,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $walletId = DB::table('course_gift_wallets')->insertGetId([
+            'user_id' => $buyer->id,
+            'currency' => 'BDT',
+            'balance' => 1000,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // This test deliberately does not enable the SSLCOMMERZ gateway.
+        $this->actingAs($buyer)->post('/student/course-commerce/checkout', [
+            'payer_contact' => '01712345678',
+        ])->assertRedirect(route('course-commerce.cart'))
+            ->assertSessionHas('status', 'Your course wallet or coupon covered the full cart. All selected courses are now active.');
+
+        $this->assertDatabaseHas('course_cart_orders', [
+            'user_id' => $buyer->id,
+            'status' => 'paid',
+            'wallet_credit_amount' => 1000,
+            'currency' => 'BDT',
+        ]);
+        $this->assertDatabaseHas('course_gift_wallets', ['id' => $walletId, 'balance' => 0]);
+        $this->assertDatabaseHas('course_gift_wallet_transactions', [
+            'wallet_id' => $walletId,
+            'user_id' => $buyer->id,
+            'type' => 'debit',
+            'status' => 'completed',
+            'amount' => 1000,
+        ]);
+        $this->assertDatabaseHas('enrollments', [
+            'user_id' => $buyer->id,
+            'course_id' => $course->id,
+            'status' => 'active',
+        ]);
+        $this->assertDatabaseCount('universal_payment_transactions', 0);
+    }
+
 }
