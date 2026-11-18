@@ -79,6 +79,7 @@ return new class extends Migration {
                 $table->string('type', 32)->index();
                 $table->string('title', 200);
                 $table->string('sku', 80)->nullable()->unique();
+                $table->unsignedBigInteger('resource_id')->nullable()->index();
                 $table->text('description')->nullable();
                 $table->decimal('price', 10, 2);
                 $table->string('currency', 8)->default('BDT');
