@@ -104,11 +104,13 @@ class CourseWishlistPluginTest extends TestCase
 
         $otherStudent = $this->createUserWithRole('student');
         $otherToken = $otherStudent->createToken('other-wishlist-mobile')->plainTextToken;
+        app('auth')->forgetGuards();
         $this->withHeader('Authorization', 'Bearer ' . $otherToken)
             ->deleteJson('/api/v1/my/wishlist/' . $courseId)
             ->assertOk()
             ->assertJsonPath('removed', false);
 
+        app('auth')->forgetGuards();
         $this->withHeader('Authorization', 'Bearer ' . $token)
             ->deleteJson('/api/v1/my/wishlist/' . $courseId)
             ->assertOk()
@@ -131,6 +133,7 @@ class CourseWishlistPluginTest extends TestCase
 
         DB::table('courses')->where('id', $courseId)->update(['status' => 'draft']);
         $studentToken = $student->createToken('student-wishlist-mobile')->plainTextToken;
+        app('auth')->forgetGuards();
         $this->withHeader('Authorization', 'Bearer ' . $studentToken)
             ->postJson('/api/v1/my/wishlist/' . $courseId)
             ->assertNotFound();
