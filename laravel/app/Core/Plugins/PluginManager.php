@@ -119,6 +119,8 @@ class PluginManager
         }
         $this->assertDependenciesSatisfied($manifest, true);
 
+        $previousRecord = PluginRecord::query()->where('slug', $slug)->first();
+        $previousAttributes = $previousRecord?->getAttributes();
         $migratedRelative = $this->runPluginMigrations($manifest);
 
         try {
@@ -157,10 +159,17 @@ class PluginManager
             // Register plugin routes after the database transaction commits so the router
             // sees a stable installed/enabled plugin state in tests and long-lived workers.
             $this->loadPluginRoutes($manifest);
-            event(new PluginLifecycleEvent('installed', $manifest->slug, $manifest->version, $actorId));
-
-            return $record;
         } catch (Throwable $e) {
+            // Route registration happens after commit. If it fails, compensate the
+            // committed catalog state before rolling back the plugin migrations.
+            DB::transaction(function () use ($slug, $previousRecord, $previousAttributes): void {
+                if ($previousRecord && is_array($previousAttributes)) {
+                    PluginRecord::query()->whereKey($previousRecord->getKey())->update($previousAttributes);
+                } else {
+                    PluginRecord::query()->where('slug', $slug)->delete();
+                }
+            });
+
             if ($migratedRelative !== null) {
                 try {
                     Artisan::call('migrate:rollback', ['--path' => $migratedRelative, '--force' => true]);
@@ -171,6 +180,10 @@ class PluginManager
             $this->logPluginOperation($manifest->slug, '0.0.0', $manifest->version, 'rolled_back', 'Install rolled back: ' . $e->getMessage(), $actorId);
             throw $e;
         }
+
+        event(new PluginLifecycleEvent('installed', $manifest->slug, $manifest->version, $actorId));
+
+        return $record;
     }
 
     public function updatePlugin(string $slug, ?int $actorId = null): PluginRecord
@@ -337,10 +350,12 @@ class PluginManager
                         File::deleteDirectory($rollbackDir);
                     }
                 }
-                if ($alreadyInstalled && $previousRecord && is_array($previousAttributes)) {
+                if ($previousRecord && is_array($previousAttributes)) {
                     unset($previousAttributes['id']);
                     $previousAttributes['updated_at'] = now();
                     PluginRecord::query()->whereKey($previousRecord->getKey())->update($previousAttributes);
+                } else {
+                    PluginRecord::query()->where('slug', $manifest->slug)->delete();
                 }
 
                 $this->logPluginOperation(
