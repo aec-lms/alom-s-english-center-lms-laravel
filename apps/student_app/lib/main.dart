@@ -3,6 +3,7 @@ import 'api_client.dart';
 import 'course_detail_page.dart';
 import 'qr_attendance_page.dart';
 import 'student_assignments_page.dart';
+import 'student_exams_page.dart';
 import 'student_wishlist_page.dart';
 
 void main() => runApp(const AlomStudentApp());
@@ -117,6 +118,7 @@ class _StudentHomeState extends State<StudentHome> {
       ),
       _DataList(title: 'My Learning', future: profile, keyName: 'enrollments', labelKey: 'course', onRefresh: () => setState(refresh)),
       StudentAssignmentsPage(api: widget.api),
+      StudentExamsPage(api: widget.api),
       _DataList(title: 'Notices', future: notices, keyName: 'data', labelKey: 'title', onRefresh: () => setState(refresh)),
       StudentMorePage(api: widget.api),
     ];
@@ -132,6 +134,7 @@ class _StudentHomeState extends State<StudentHome> {
           NavigationDestination(icon: Icon(Icons.menu_book), label: 'Courses'),
           NavigationDestination(icon: Icon(Icons.school), label: 'My Learning'),
           NavigationDestination(icon: Icon(Icons.assignment_outlined), label: 'Tasks'),
+          NavigationDestination(icon: Icon(Icons.quiz_outlined), label: 'Exams'),
           NavigationDestination(icon: Icon(Icons.notifications), label: 'Notices'),
           NavigationDestination(icon: Icon(Icons.more_horiz), label: 'More'),
         ]),
