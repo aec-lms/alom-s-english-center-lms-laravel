@@ -77,6 +77,9 @@
             <a href="{{ route('admin.updates.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Update Center</a>
             <a href="{{ route('admin.backups.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Backup & Restore</a>
             <a href="{{ route('admin.audit.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Audit Logs</a>
+            @if (auth()->user()?->hasRole('admin') && auth()->user()?->hasPermission('core.audit.view'))
+                <a href="{{ route('admin.security.sessions.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Device Sessions</a>
+            @endif
             @can('core.settings.manage')
                 <a href="{{ route('admin.setup-wizard.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Setup Wizard</a>
             @endcan
