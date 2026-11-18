@@ -1,0 +1,5 @@
+<?php
+declare(strict_types=1);
+use Illuminate\Support\Facades\Route;use Plugins\Modules\Phonetics\Http\Controllers\PhoneticsAdminController;use Plugins\Modules\Phonetics\Http\Controllers\PhoneticsPracticeController;
+Route::middleware(['web','installed','plugin:phonetics'])->prefix('courses/{courseSlug}/phonetics-practice')->name('plugins.phonetics.practice.')->group(function():void{Route::get('/',[PhoneticsPracticeController::class,'index'])->name('index');Route::post('/attempts',[PhoneticsPracticeController::class,'storeAttempt'])->middleware(['auth','throttle:30,1'])->name('attempts.store');});
+Route::middleware(['web','installed','auth','plugin:phonetics','permission:phonetics.manage'])->prefix('admin/phonetics')->name('plugins.phonetics.admin.')->group(function():void{Route::get('/',[PhoneticsAdminController::class,'index'])->name('index');Route::patch('/settings',[PhoneticsAdminController::class,'updateSettings'])->name('settings');Route::post('/',[PhoneticsAdminController::class,'store'])->name('store');Route::delete('/{entry}',[PhoneticsAdminController::class,'destroy'])->name('destroy');});
