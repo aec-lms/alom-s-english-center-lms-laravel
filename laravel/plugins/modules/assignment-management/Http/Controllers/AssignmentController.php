@@ -305,6 +305,181 @@ class AssignmentController extends Controller
         return $this->downloadPrivateAttachment($record->attachment_path);
     }
 
+    public function apiIndex(Request $request): JsonResponse
+    {
+        $student = $request->user();
+        abort_unless($student && $student->hasRole('student'), 403);
+        $assignments = $this->studentAssignmentQuery($student)
+            ->with(['submissions' => fn ($query) => $query->where('student_id', $student->id)])
+            ->latest()
+            ->paginate(20);
+
+        return response()->json([
+            'data' => $assignments->getCollection()->map(fn (Assignment $assignment): array => $this->studentAssignmentData($assignment)),
+            'meta' => [
+                'current_page' => $assignments->currentPage(),
+                'last_page' => $assignments->lastPage(),
+                'per_page' => $assignments->perPage(),
+                'total' => $assignments->total(),
+            ],
+        ]);
+    }
+
+    public function apiShow(Request $request, int $assignment): JsonResponse
+    {
+        $student = $request->user();
+        abort_unless($student && $student->hasRole('student'), 403);
+        $item = $this->studentAssignmentQuery($student)
+            ->with(['submissions' => fn ($query) => $query->where('student_id', $student->id)])
+            ->findOrFail($assignment);
+
+        return response()->json(['data' => $this->studentAssignmentData($item)]);
+    }
+
+    public function apiSubmit(Request $request, int $assignment): JsonResponse
+    {
+        $student = $request->user();
+        abort_unless($student && $student->hasRole('student'), 403);
+        $item = $this->studentAssignmentQuery($student)->findOrFail($assignment);
+
+        $validated = $request->validate([
+            'answer_text' => ['nullable', 'string', 'max:30000'],
+            'attachment' => ['nullable', 'file', 'mimes:pdf,doc,docx,txt,jpg,jpeg,png,zip', 'max:20480'],
+        ]);
+        if (trim((string) ($validated['answer_text'] ?? '')) === '' && !$request->hasFile('attachment')) {
+            return response()->json(['message' => 'Write an answer or attach a file.'], 422);
+        }
+
+        $storedPath = null;
+        if ($request->hasFile('attachment')) {
+            $storedPath = $request->file('attachment')->store('assignment-submissions/' . $item->id, 'local');
+            if (!$storedPath) {
+                return response()->json(['message' => 'The attachment could not be stored.'], 500);
+            }
+        }
+
+        try {
+            $result = DB::transaction(function () use ($item, $student, $validated, $storedPath): array {
+                $lockedAssignment = Assignment::query()->lockForUpdate()->findOrFail($item->id);
+                abort_unless($this->studentCanAccessAssignment($student, $lockedAssignment), 404);
+                if ($lockedAssignment->due_at && now()->greaterThan($lockedAssignment->due_at) && !$lockedAssignment->allow_late) {
+                    return ['state' => 'closed'];
+                }
+
+                $submission = AssignmentSubmission::query()
+                    ->where('assignment_id', $lockedAssignment->id)
+                    ->where('student_id', $student->id)
+                    ->lockForUpdate()
+                    ->first();
+                if ($submission && $submission->status === 'graded') {
+                    return ['state' => 'graded'];
+                }
+
+                if (
+                    trim((string) ($validated['answer_text'] ?? '')) === ''
+                    && !$storedPath
+                    && !$submission?->attachment_path
+                    && trim((string) ($submission?->answer_text ?? '')) === ''
+                ) {
+                    throw ValidationException::withMessages([
+                        'answer_text' => 'Write an answer or attach a file.',
+                    ]);
+                }
+
+                $previousPath = $submission?->attachment_path;
+                $submission ??= new AssignmentSubmission([
+                    'assignment_id' => $lockedAssignment->id,
+                    'student_id' => $student->id,
+                ]);
+                $submission->fill([
+                    'answer_text' => $validated['answer_text'] ?? $submission->answer_text,
+                    'attachment_path' => $storedPath ?? $submission->attachment_path,
+                    'submitted_at' => now(),
+                    'status' => 'submitted',
+                    'score' => null,
+                    'feedback' => null,
+                    'graded_by' => null,
+                    'graded_at' => null,
+                ]);
+                $submission->assignment_id = $lockedAssignment->id;
+                $submission->student_id = $student->id;
+                $submission->save();
+
+                $this->audit->log('assignment.submitted', 'assignment_submission', (string) $submission->id, [
+                    'assignment_id' => $lockedAssignment->id,
+                    'source' => 'mobile_api',
+                    'has_attachment' => (bool) $submission->attachment_path,
+                ], $student->id);
+
+                return [
+                    'state' => 'saved',
+                    'created' => $submission->wasRecentlyCreated,
+                    'previous_path' => $previousPath,
+                    'submission' => $submission,
+                ];
+            });
+        } catch (Throwable $exception) {
+            if ($storedPath) {
+                Storage::disk('local')->delete($storedPath);
+            }
+            throw $exception;
+        }
+
+        if ($result['state'] !== 'saved') {
+            if ($storedPath) {
+                Storage::disk('local')->delete($storedPath);
+            }
+            $status = $result['state'] === 'graded' ? 409 : 422;
+            $message = $result['state'] === 'graded'
+                ? 'This submission has already been graded and cannot be replaced.'
+                : 'The submission deadline has passed.';
+            return response()->json(['message' => $message], $status);
+        }
+
+        if (($result['previous_path'] ?? null) && $result['previous_path'] !== $storedPath) {
+            Storage::disk('local')->delete($result['previous_path']);
+        }
+
+        /** @var AssignmentSubmission $submission */
+        $submission = $result['submission'];
+
+        return response()->json([
+            'message' => 'Assignment submitted successfully.',
+            'data' => [
+                'id' => $submission->id,
+                'status' => $submission->status,
+                'submitted_at' => $submission->submitted_at?->toIso8601String(),
+                'score' => $submission->score,
+                'feedback' => $submission->feedback,
+                'has_attachment' => filled($submission->attachment_path),
+            ],
+        ], $result['created'] ? 201 : 200);
+    }
+
+    private function studentAssignmentData(Assignment $assignment): array
+    {
+        $submission = $assignment->submissions->first();
+
+        return [
+            'id' => $assignment->id,
+            'title' => $assignment->title,
+            'instructions' => $assignment->instructions,
+            'course_id' => $assignment->course_id,
+            'due_at' => $assignment->due_at?->toIso8601String(),
+            'max_score' => $assignment->max_score,
+            'allow_late' => $assignment->allow_late,
+            'submission' => $submission ? [
+                'id' => $submission->id,
+                'answer_text' => $submission->answer_text,
+                'status' => $submission->status,
+                'submitted_at' => $submission->submitted_at?->toIso8601String(),
+                'score' => $submission->score,
+                'feedback' => $submission->feedback,
+                'has_attachment' => filled($submission->attachment_path),
+            ] : null,
+        ];
+    }
+
     private function studentAssignmentQuery($student)
     {
         $query = Assignment::query()
