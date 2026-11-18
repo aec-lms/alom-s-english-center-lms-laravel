@@ -68,6 +68,26 @@ return new class extends Migration {
                     DB::table('student_trace_events')->insertOrIgnore($payload);
                 }
             });
+
+        // The old tracing migration temporarily added these fields to the
+        // Student Tracking table. Once legacy trace rows are copied, remove
+        // that schema coupling; the tracking plugin owns only its own fields.
+        $legacyColumns = [];
+        if ($sourceHasStudent && Schema::hasColumn('student_activity_events', 'student_id')) {
+            $legacyColumns[] = 'student_id';
+        }
+        if ($sourceHasBranch && Schema::hasColumn('student_activity_events', 'branch_id')) {
+            $legacyColumns[] = 'branch_id';
+        }
+
+        if ($legacyColumns !== []) {
+            Schema::table('student_activity_events', function (Blueprint $table) use ($legacyColumns): void {
+                foreach ($legacyColumns as $column) {
+                    $table->dropIndex([$column]);
+                    $table->dropColumn($column);
+                }
+            });
+        }
     }
 
     public function down(): void
