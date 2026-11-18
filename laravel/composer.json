@@ -28,6 +28,7 @@
             "Plugins\\Modules\\GuardianManagement\\": "plugins/modules/guardian-management/",
             "Plugins\\Modules\\CourseManagement\\": "plugins/modules/course-management/",
             "Plugins\\Modules\\ExamManagement\\": "plugins/modules/exam-management/",
+            "Plugins\\Modules\\QuestionBank\\": "plugins/modules/question-bank/",
             "Plugins\\Modules\\AttendanceManagement\\": "plugins/modules/attendance-management/",
             "Plugins\\Modules\\FeesManagement\\": "plugins/modules/fees-management/",
             "Plugins\\Modules\\PaymentManagement\\": "plugins/modules/payment-management/",
