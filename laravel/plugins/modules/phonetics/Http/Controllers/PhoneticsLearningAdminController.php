@@ -199,8 +199,8 @@ final class PhoneticsLearningAdminController extends Controller
                 'available_until' => $data['available_until'] ?? null,
             ]);
 
-            $words = PhoneticEntry::query()->whereIn('id', $data['word_ids'])->where('is_active', true)->get()->shuffle()->take($data['question_count']);
-            abort_if($words->count() < $data['question_count'], 422, 'Some selected vocabulary words are archived. Select active words only.');
+            $words = PhoneticEntry::query()->whereIn('id', $data['word_ids'])->where('is_active', true)->whereColumn('uk_ipa', '!=', 'us_ipa')->get()->shuffle()->take($data['question_count']);
+            abort_if($words->count() < $data['question_count'], 422, 'The selected words must be active and have different UK/US IPA forms to create a valid accent question.');
             foreach ($words->values() as $index => $word) {
                 $accent = random_int(0, 1) === 0 ? 'uk' : 'us';
                 if ($data['question_type'] === 'identify-accent') {
