@@ -114,12 +114,22 @@ class AdminCourseContentStudioController extends Controller
             'items.*.duration_minutes'=>['nullable','integer','min:0','max:600'],
             'items.*.is_preview'=>['nullable','boolean'],
             'items.*.is_active'=>['nullable','boolean'],
+            'add_post_ids'=>['nullable','array','max:500'],
+            'add_post_ids.*'=>['integer','distinct','exists:course_content_posts,id'],
         ]);
         DB::transaction(function()use($course,$data){
             foreach($data['items']??[] as $item){
                 CourseCurriculumItem::query()->updateOrCreate(
                     ['course_id'=>$course,'course_content_post_id'=>$item['post_id']],
                     ['section_title'=>$item['section_title']??null,'position'=>$item['position'],'duration_minutes'=>$item['duration_minutes']??null,'is_preview'=>(bool)($item['is_preview']??false),'is_active'=>(bool)($item['is_active']??true)]
+                );
+            }
+            $position=(int)CourseCurriculumItem::query()->where('course_id',$course)->max('position');
+            foreach($data['add_post_ids']??[] as $postId){
+                $position+=10;
+                CourseCurriculumItem::query()->updateOrCreate(
+                    ['course_id'=>$course,'course_content_post_id'=>$postId],
+                    ['position'=>$position,'is_active'=>true,'is_preview'=>false]
                 );
             }
         });
