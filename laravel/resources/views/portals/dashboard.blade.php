@@ -7,8 +7,11 @@
         <section class="relative isolate overflow-hidden rounded-3xl bg-gradient-to-br {{ $role === 'student' ? 'from-sky-950 via-cyan-900 to-teal-800' : ($role === 'teacher' ? 'from-indigo-950 via-violet-900 to-blue-800' : ($role === 'guardian' ? 'from-fuchsia-950 via-purple-900 to-indigo-800' : ($role === 'branch_manager' ? 'from-amber-950 via-orange-900 to-rose-800' : 'from-slate-950 via-indigo-950 to-sky-900'))) }} px-6 py-8 text-white shadow-xl sm:px-9 sm:py-10"><div aria-hidden="true" class="pointer-events-none absolute -right-16 -top-24 h-72 w-72 rounded-full bg-sky-400/20 blur-3xl"></div><div aria-hidden="true" class="pointer-events-none absolute -bottom-28 left-1/3 h-64 w-64 rounded-full bg-violet-400/20 blur-3xl"></div><div class="relative flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
             <div>
                 <p class="text-xs font-extrabold uppercase tracking-[.22em] text-sky-200">{{ ucwords(str_replace('_', ' ', $role)) }} Portal</p>
-                <h1 class="mt-2 text-3xl font-black tracking-tight text-white sm:text-4xl">Welcome, {{ $user->name }}</h1>
+                <h1 class="mt-2 text-3xl font-black tracking-tight text-white sm:text-4xl">Welcome, {{ $user->display_name ?: $user->name }}</h1>
                 <p class="mt-2 text-sm text-slate-300">{{ $user->email }}</p>
+                <a href="{{ route('profile.settings.edit') }}" class="mt-3 inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-white/20 focus:outline-none focus:ring-4 focus:ring-white/30">
+                    <span aria-hidden="true">✦</span> Customize my profile
+                </a>
             </div>
             @if (in_array($role, ['student', 'guardian']) && Route::has('plugins.attendance.portal'))
                 <a href="{{ route('plugins.attendance.portal') }}" class="rounded-xl border border-white/25 bg-white/10 px-4 py-2.5 text-sm font-bold text-white backdrop-blur transition hover:bg-white/20">My Attendance</a>
