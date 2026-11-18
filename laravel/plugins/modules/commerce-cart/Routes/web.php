@@ -5,7 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Route;
 use Plugins\Modules\CommerceCart\Http\Controllers\CommerceCartController;
 
-Route::middleware(['web', 'installed', 'auth', 'plugin:commerce-cart', 'permission:commerce.orders.manage'])
+Route::middleware(['web', 'installed', 'auth', 'plugin:commerce-cart', 'permission:commerce.orders.manage', 'central.admin'])
     ->prefix('admin/commerce')
     ->name('plugins.commerce_cart.admin.')
     ->group(function (): void {
