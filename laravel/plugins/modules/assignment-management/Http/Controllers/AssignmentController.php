@@ -412,6 +412,11 @@ class AssignmentController extends Controller
     {
         if ($grader->hasRole('teacher')) {
             abort_unless((int) $assignment->created_by === (int) $grader->id, 403, 'You can grade only your own assignments.');
+            abort_unless(
+                (int) ($assignment->branch_id ?? 0) === (int) ($grader->branch_id ?? 0),
+                403,
+                'You cannot grade assignments outside your assigned branch.'
+            );
         }
         if ($grader->hasRole('branch_manager')) {
             abort_unless((int) ($grader->branch_id ?? 0) > 0 && (int) $grader->branch_id === (int) $assignment->branch_id, 403);
