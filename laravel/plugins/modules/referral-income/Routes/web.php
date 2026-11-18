@@ -18,7 +18,8 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:referral-income'])
 Route::middleware(['web', 'installed', 'auth', 'plugin:referral-income', 'permission:referral_income.manage'])
     ->prefix('admin/referral-income')->name('plugins.referral_income.admin.')
     ->group(function (): void {
-        Route::get('/', [ReferralIncomeController::class, 'adminIndex'])->name('index');\n        Route::put('/rules', [ReferralIncomeController::class, 'updateRules'])->name('rules.update');
+        Route::get('/', [ReferralIncomeController::class, 'adminIndex'])->name('index');
+        Route::put('/rules', [ReferralIncomeController::class, 'updateRules'])->name('rules.update');
         Route::post('/commissions/{commission}/review', [ReferralIncomeController::class, 'reviewCommission'])->whereNumber('commission')->name('commissions.review');
         Route::post('/payouts/{payout}/review', [ReferralIncomeController::class, 'reviewPayout'])->whereNumber('payout')->name('payouts.review');
     });
