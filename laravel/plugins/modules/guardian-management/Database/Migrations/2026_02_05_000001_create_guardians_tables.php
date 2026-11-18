@@ -20,6 +20,19 @@ return new class extends Migration {
                 $table->timestamps();
             });
         }
+
+        // Create the optional link only when Student Management is already present.
+        // If Guardian Management is installed first, the student migration creates it later.
+        if (Schema::hasTable('students') && !Schema::hasTable('guardian_student')) {
+            Schema::create('guardian_student', function (Blueprint $table): void {
+                $table->id();
+                $table->foreignId('guardian_id')->constrained('guardians')->cascadeOnDelete();
+                $table->foreignId('student_id')->constrained('students')->cascadeOnDelete();
+                $table->boolean('is_primary')->default(true);
+                $table->timestamps();
+                $table->unique(['guardian_id', 'student_id']);
+            });
+        }
     }
 
     public function down(): void

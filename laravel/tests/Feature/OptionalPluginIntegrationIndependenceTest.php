@@ -13,18 +13,37 @@ class OptionalPluginIntegrationIndependenceTest extends TestCase
     public function test_guardian_management_can_be_installed_before_student_management(): void
     {
         $this->markSystemInstalled();
-
         $this->activatePlugins(['guardian-management']);
 
         $this->assertTrue(Schema::hasTable('guardians'));
-        $this->assertTrue(Schema::hasTable('guardian_student'));
+        $this->assertFalse(Schema::hasTable('guardian_student'));
         $this->assertFalse(Schema::hasTable('students'));
 
         $this->activatePlugins(['student-management']);
 
         $this->assertTrue(Schema::hasTable('students'));
         $this->assertTrue(Schema::hasTable('guardian_student'));
+        $this->assertCanLinkGuardianToStudent();
+    }
 
+    public function test_student_management_can_be_installed_before_guardian_management(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['student-management']);
+
+        $this->assertTrue(Schema::hasTable('students'));
+        $this->assertFalse(Schema::hasTable('guardians'));
+        $this->assertFalse(Schema::hasTable('guardian_student'));
+
+        $this->activatePlugins(['guardian-management']);
+
+        $this->assertTrue(Schema::hasTable('guardians'));
+        $this->assertTrue(Schema::hasTable('guardian_student'));
+        $this->assertCanLinkGuardianToStudent();
+    }
+
+    private function assertCanLinkGuardianToStudent(): void
+    {
         $guardianUser = $this->createUserWithRole('guardian');
         $studentUser = $this->createUserWithRole('student');
 
@@ -36,7 +55,7 @@ class OptionalPluginIntegrationIndependenceTest extends TestCase
         ]);
         $studentId = DB::table('students')->insertGetId([
             'user_id' => $studentUser->id,
-            'student_code' => 'OPTIONAL-LINK-001',
+            'student_code' => 'OPTIONAL-LINK-' . $studentUser->id,
             'admission_date' => now()->toDateString(),
             'status' => 'active',
             'created_at' => now(),
