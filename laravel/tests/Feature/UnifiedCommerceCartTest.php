@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Models\Permission;
+use App\Models\Role;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -108,4 +110,53 @@ final class UnifiedCommerceCartTest extends TestCase
         $this->actingAs($first)->post('/cart/items', ['item_type' => 'other', 'item_id' => $id])->assertRedirect('/cart');
         $this->actingAs($second)->get('/cart')->assertOk()->assertDontSee('Grammar Workshop');
     }
+    public function test_student_cannot_add_a_course_owned_by_another_branch(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'course-management', 'commerce-cart']);
+        $branchA = DB::table('branches')->insertGetId([
+            'code' => 'CART-A-' . uniqid(), 'name' => 'Cart Branch A', 'is_active' => true,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $branchB = DB::table('branches')->insertGetId([
+            'code' => 'CART-B-' . uniqid(), 'name' => 'Cart Branch B', 'is_active' => true,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $student = $this->createUserWithRole('student', (int) $branchA);
+        $courseId = DB::table('courses')->insertGetId([
+            'code' => 'CART-CROSS-' . strtoupper(uniqid()),
+            'title' => 'Other Branch Paid Course',
+            'slug' => 'other-branch-paid-course-' . uniqid(),
+            'price' => 350,
+            'status' => 'published',
+            'branch_id' => $branchB,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($student)->post('/cart/items', [
+            'item_type' => 'course',
+            'item_id' => $courseId,
+            'quantity' => 1,
+        ])->assertSessionHasErrors('item');
+
+        $this->assertDatabaseCount('commerce_cart_items', 0);
+    }
+
+    public function test_branch_manager_cannot_access_global_commerce_order_administration(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'commerce-cart']);
+        $branchId = DB::table('branches')->insertGetId([
+            'code' => 'CART-MGR-' . uniqid(), 'name' => 'Cart Manager Branch', 'is_active' => true,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $manager = $this->createUserWithRole('branch_manager', (int) $branchId);
+        $role = Role::query()->where('slug', 'branch_manager')->firstOrFail();
+        $permission = Permission::query()->where('slug', 'commerce.orders.manage')->firstOrFail();
+        $role->permissions()->syncWithoutDetaching([$permission->id]);
+
+        $this->actingAs($manager)->get('/admin/commerce/orders')->assertForbidden();
+    }
+
 }
