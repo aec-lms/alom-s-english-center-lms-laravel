@@ -360,7 +360,7 @@ class CourseCommerceController extends Controller
 
     private function assertNoOpenBatch(int $courseId): void
     {
-        if (Schema::hasTable('batches') && Schema::hasColumn('batches', 'status')) {
+        if (Schema::hasTable('batches') && Schema::hasColumn('batches', 'status') && Schema::hasColumn('batches', 'course_id')) {
             abort_if(DB::table('batches')->where('course_id', $courseId)->where('status', 'open')->exists(), 409, 'This course has an open batch. Contact admissions to enroll in the correct batch.');
         }
     }
