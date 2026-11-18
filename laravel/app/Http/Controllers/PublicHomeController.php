@@ -436,12 +436,12 @@ class PublicHomeController extends Controller
                 'E-book file is outside private storage.'
             );
 
-            $mime = (new \\finfo(FILEINFO_MIME_TYPE))->file($absolutePath) ?: 'application/octet-stream';
+            $mime = (new \finfo(FILEINFO_MIME_TYPE))->file($absolutePath) ?: 'application/octet-stream';
             abort_unless($mime === 'application/pdf', 415, 'The protected e-book is not a PDF file.');
 
             return response()->download(
                 $absolutePath,
-                \\Illuminate\\Support\\Str::slug($item->title) . '.pdf',
+                \Illuminate\\Support\\Str::slug($item->title) . '.pdf',
                 [
                     'Content-Type' => 'application/pdf',
                     'X-Content-Type-Options' => 'nosniff',
