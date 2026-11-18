@@ -131,6 +131,8 @@ class AttendanceController extends Controller
         abort_if(empty($items[0]['student_id']) || empty($items[0]['status']), 422, 'At least one student and attendance status are required.');
 
         DB::transaction(function () use ($items, $batch, $batchMappingId, $validated, $actor, $plugins): void {
+            // Serialize all writes for this batch so concurrent manual/offline/QR marks cannot race on an empty attendance row.
+            AttendanceBatchMapping::query()->whereKey($batchMappingId)->lockForUpdate()->firstOrFail();
             foreach ($items as $item) {
                 $student = Student::query()->findOrFail((int) $item['student_id']);
                 abort_if((int) ($batch->branch_id ?? 0) !== (int) ($student->branch_id ?? 0), 422, 'Student and batch must belong to the same branch.');
