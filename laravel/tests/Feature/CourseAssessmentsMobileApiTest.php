@@ -256,4 +256,77 @@ class CourseAssessmentsMobileApiTest extends TestCase
             'updated_at' => now(),
         ], $overrides));
     }
+
+    public function test_only_the_assigned_course_teacher_can_grade_written_assessment_attempts(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'course-management', 'course-assessments']);
+        $branch = $this->createBranch('MOB-GRADE-A');
+        $student = $this->createUserWithRole('student', $branch);
+        $teacher = $this->createUserWithRole('teacher', $branch);
+        $otherTeacher = $this->createUserWithRole('teacher', $branch);
+        $course = $this->createCourse($branch, 'GRADE-A');
+
+        DB::table('course_teacher_assignments')->insert([
+            'course_id' => $course,
+            'teacher_user_id' => $teacher->id,
+            'assigned_by' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $teacherRole = DB::table('roles')->where('slug', 'teacher')->value('id');
+        $gradePermission = DB::table('permissions')->where('slug', 'course_assessments.grade')->value('id');
+        $this->assertNotNull($teacherRole);
+        $this->assertNotNull($gradePermission);
+        DB::table('permission_role')->insertOrIgnore([
+            'role_id' => $teacherRole,
+            'permission_id' => $gradePermission,
+        ]);
+
+        $set = $this->createSet($course, $branch, 'Teacher Graded Assessment', ['max_attempts' => 1]);
+        $this->createQuestion($set, [
+            'type' => 'written',
+            'options' => null,
+            'correct_option' => null,
+            'correct_answer' => 'A complete sentence.',
+            'question' => 'Write a complete sentence.',
+            'marks' => 3,
+        ]);
+        DB::table('enrollments')->insert([
+            'user_id' => $student->id,
+            'course_id' => $course,
+            'branch_id' => $branch,
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $token = $student->createToken('mobile-teacher-grade')->plainTextToken;
+        $start = $this->withToken($token)->postJson('/api/v1/my-learning/assessments/'.$set.'/start')->assertCreated();
+        $attemptId = (int) $start->json('attempt.id');
+        $questionId = (int) $start->json('questions.0.id');
+        $this->withToken($token)->putJson("/api/v1/my-learning/assessments/attempts/{$attemptId}/questions/{$questionId}", [
+            'answer_text' => 'A complete sentence for grading.',
+        ])->assertOk();
+        $this->withToken($token)->postJson("/api/v1/my-learning/assessments/attempts/{$attemptId}/submit")
+            ->assertOk()->assertJsonPath('attempt.status', 'pending_review');
+
+        $this->actingAs($otherTeacher)->patch(route('plugins.course-assessments.grading.update', $attemptId), [
+            'scores' => [$questionId => 2],
+        ])->assertForbidden();
+
+        $this->actingAs($teacher)->patch(route('plugins.course-assessments.grading.update', $attemptId), [
+            'scores' => [$questionId => 2],
+            'feedback' => [$questionId => 'Good.'],
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('course_assessment_attempts', [
+            'id' => $attemptId,
+            'status' => 'graded',
+            'manual_score' => 2,
+            'final_score' => 2,
+            'graded_by' => $teacher->id,
+        ]);
+    }
+
 }
