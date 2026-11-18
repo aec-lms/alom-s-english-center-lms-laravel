@@ -49,7 +49,29 @@ class AiAssistantService
         return null;
     }
 
-    public function queryAssistant(User $user, string $prompt): array
+    public function isProviderConfigured(): bool
+    {
+        $provider = strtolower((string) $this->plugins->getSetting('role-ai-assistant', 'provider', 'gemini'));
+        if (!in_array($provider, self::SUPPORTED_PROVIDERS, true)) {
+            return false;
+        }
+
+        $apiKey = (string) $this->plugins->getSetting('role-ai-assistant', 'api_key', '');
+        if ($apiKey === '') {
+            $environmentKey = $provider === 'openai' ? env('OPENAI_API_KEY', '') : env('GEMINI_API_KEY', '');
+            $apiKey = is_string($environmentKey) ? $environmentKey : '';
+        }
+
+        return $apiKey !== '';
+    }
+
+    public function queryAssistant(
+        User $user,
+        string $prompt,
+        ?string $specializedInstruction = null,
+        ?string $imageData = null,
+        ?int $dailyRequestLimitOverride = null
+    ): array
     {
         $roleSlug = $this->allowedRoleSlug($user);
         if ($roleSlug === null) {
@@ -72,6 +94,9 @@ class AiAssistantService
         $model = $configuredModel !== '' ? $configuredModel : $defaultModel;
         $maxTokens = min(8192, max(64, (int) $this->plugins->getSetting('role-ai-assistant', 'max_tokens', '1024')));
         $systemInstruction = $this->systemPromptForRole($roleSlug);
+        if (is_string($specializedInstruction) && trim($specializedInstruction) !== '') {
+            $systemInstruction .= "\n\n" . trim($specializedInstruction);
+        }
 
         $reservationId = null;
         $actualTokens = 0;
@@ -80,9 +105,12 @@ class AiAssistantService
             $reply = $this->offlineRoleGuidance($roleSlug, $prompt);
             $actualTokens = strlen($systemInstruction) + strlen($prompt) + strlen($reply);
         } else {
-            $estimatedPromptTokens = max(1, strlen($systemInstruction) + strlen($prompt) + 16);
+            $estimatedPromptTokens = max(1, strlen($systemInstruction) + strlen($prompt) + ($imageData !== null ? 1024 : 16));
             $dailyTokenBudget = max(0, (int) $this->plugins->getSetting('role-ai-assistant', 'daily_token_budget', '50000'));
             $dailyRequestLimit = max(0, (int) $this->plugins->getSetting('role-ai-assistant', 'daily_request_limit', '20'));
+            if ($dailyRequestLimitOverride !== null) {
+                $dailyRequestLimit = min($dailyRequestLimit, max(0, $dailyRequestLimitOverride));
+            }
             $reservation = $this->usageBudget->reserve(
                 (int) $user->id,
                 $roleSlug,
@@ -101,7 +129,7 @@ class AiAssistantService
             $reservationId = $reservation;
             $completionLimit = min($maxTokens, max(1, (int) $this->reservationCompletionLimit($reservation)));
             try {
-                $providerResult = $this->dispatchProviderRequest($provider, $model, $apiKey, $systemInstruction, $prompt, $completionLimit);
+                $providerResult = $this->dispatchProviderRequest($provider, $model, $apiKey, $systemInstruction, $prompt, $completionLimit, $imageData);
                 $reply = $providerResult['reply'];
                 $actualTokens = $providerResult['tokens'] ?? (strlen($systemInstruction) + strlen($prompt) + strlen($reply));
                 $this->usageBudget->settle($reservationId, $actualTokens);
@@ -158,15 +186,18 @@ class AiAssistantService
         return "আপনার {$label} প্যানেলের AEC LMS AI Assistant বর্তমানে অফলাইন মোডে আছে। Admin Settings থেকে AI integration configure করলে পূর্ণ AI সহায়তা চালু হবে। আপনার প্রশ্নটি আবার চেষ্টা করুন অথবা Admin-এর সঙ্গে যোগাযোগ করুন।";
     }
 
-    private function dispatchProviderRequest(string $provider, string $model, string $apiKey, string $systemInstruction, string $prompt, int $maxTokens): array
+    private function dispatchProviderRequest(string $provider, string $model, string $apiKey, string $systemInstruction, string $prompt, int $maxTokens, ?string $imageData = null): array
     {
         if ($provider === 'openai') {
-            $resp = Http::withToken($apiKey)->timeout(20)->post('https://api.openai.com/v1/chat/completions', [
+            $resp = Http::withToken($apiKey)->timeout($imageData === null ? 20 : 60)->post('https://api.openai.com/v1/chat/completions', [
                 'model' => $model,
                 'max_tokens' => $maxTokens,
                 'messages' => [
                     ['role' => 'system', 'content' => $systemInstruction],
-                    ['role' => 'user', 'content' => $prompt],
+                    ['role' => 'user', 'content' => $imageData === null ? $prompt : [
+                        ['type' => 'text', 'text' => $prompt],
+                        ['type' => 'image_url', 'image_url' => ['url' => $imageData, 'detail' => 'high']],
+                    ]],
                 ],
             ]);
             if (!$resp->successful()) {
@@ -182,9 +213,16 @@ class AiAssistantService
         }
 
         $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model) . ':generateContent';
-        $resp = Http::withHeaders(['x-goog-api-key' => $apiKey])->timeout(20)->post($url, [
+        $parts = [['text' => $prompt]];
+        if ($imageData !== null) {
+            if (preg_match('/^data:(image\\/(?:jpeg|png|webp));base64,([A-Za-z0-9+\\/]+=*)$/D', $imageData, $matches) !== 1) {
+                throw new RuntimeException('The attached question image could not be decoded safely.');
+            }
+            $parts[] = ['inline_data' => ['mime_type' => $matches[1], 'data' => $matches[2]]];
+        }
+        $resp = Http::withHeaders(['x-goog-api-key' => $apiKey])->timeout($imageData === null ? 20 : 60)->post($url, [
             'systemInstruction' => ['parts' => [['text' => $systemInstruction]]],
-            'contents' => [['parts' => [['text' => $prompt]]]],
+            'contents' => [['parts' => $parts]],
             'generationConfig' => ['maxOutputTokens' => $maxTokens],
         ]);
         if (!$resp->successful()) {
