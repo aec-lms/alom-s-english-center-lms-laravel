@@ -28,8 +28,8 @@
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         @foreach([
             'Invoices Issued' => $issuedInvoices,
-            'Invoice Value' => '৳' . number_format((float) $issuedAmount, 2),
-            'Outstanding Balance' => '৳' . number_format((float) $outstanding, 2),
+            'Issued Invoice Amount' => '৳' . number_format((float) $issuedAmount, 2),
+            'Outstanding Invoice Balance' => '৳' . number_format((float) $outstanding, 2),
             'Payment Transactions' => $paymentCount,
             'Refund Records' => $refundCount,
             'Approved Expense Records' => $expenseCount,
