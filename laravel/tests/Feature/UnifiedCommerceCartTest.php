@@ -21,9 +21,20 @@ final class UnifiedCommerceCartTest extends TestCase
             'entitlement' => json_encode(['type' => 'subscription', 'duration_days' => 30]),
             'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
         ]);
+        $courseId = DB::table('courses')->insertGetId([
+            'code' => 'CART-LIVE-01', 'title' => 'Live Pass Test Course',
+            'slug' => 'live-pass-test-course', 'price' => 0, 'status' => 'published',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $liveClassId = DB::table('live_classes')->insertGetId([
+            'course_id' => $courseId, 'title' => 'Live Speaking Workshop',
+            'meeting_url' => 'https://example.test/live', 'starts_at' => now()->subMinutes(5),
+            'status' => 'live', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
         $livePassId = DB::table('commerce_sellables')->insertGetId([
             'type' => 'live_class', 'title' => 'Live Speaking Workshop', 'sku' => 'LIVE-01',
-            'description' => 'Speaking workshop access', 'price' => 250, 'currency' => 'BDT',
+            'description' => 'Speaking workshop access', 'price' => 250, 'currency' => 'BDT', 'resource_id' => $liveClassId,
             'entitlement' => json_encode(['type' => 'live_class']),
             'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
         ]);
