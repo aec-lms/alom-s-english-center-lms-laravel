@@ -7,8 +7,6 @@
         <a href="{{ route('admin.board-solver.history') }}" class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold">Student activity</a>
     </header>
     @if (session('status'))<div role="status" class="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{{ session('status') }}</div>@endif
-    @if (!$this->plugins ?? false)
-    @endif
     <form method="POST" action="{{ route('admin.board-solver.settings.update') }}" class="space-y-4 rounded-2xl border border-slate-200 bg-white p-5">
         @csrf
         @method('PUT')
