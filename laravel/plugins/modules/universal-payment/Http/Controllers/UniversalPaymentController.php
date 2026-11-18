@@ -239,9 +239,9 @@ class UniversalPaymentController extends Controller
                         if ($this->plugins->isEnabled('referral-income') && Schema::hasTable('commerce_orders')) {
                             $order = DB::table('commerce_orders')->where('invoice_id', $invoice->id)->lockForUpdate()->first();
                             if ($order) {
-                                DB::table('commerce_orders')->where('id', $order->id)->update([
-                                    'status' => 'completed', 'payment_status' => 'paid', 'paid_at' => now(), 'updated_at' => now(),
-                                ]);
+                                $orderUpdates = ['status' => 'completed', 'payment_status' => 'paid', 'updated_at' => now()];
+                                if (Schema::hasColumn('commerce_orders', 'paid_at')) $orderUpdates['paid_at'] = now();
+                                DB::table('commerce_orders')->where('id', $order->id)->update($orderUpdates);
                                 $buyer = User::query()->find((int) $order->user_id);
                                 if ($buyer) {
                                     app(ReferralIncomeService::class)->recordSettledPurchase(
