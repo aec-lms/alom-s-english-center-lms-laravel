@@ -63,7 +63,7 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
    $this->assertFileExists(public_path($entry->us_audio_path));
    $this->assertFileExists(public_path($entry->card_bg_image_path));
    $this->assertNotNull($entry->uk_audio_url);
-   $this->assertDatabaseHas('audit_logs',['action'=>'phonetics.entry.created','entity_id'=>(string)$entry->id]);
+   $this->assertDatabaseHas('phonetic_audit_events',['action'=>'phonetics.entry.created','entity_id'=>(string)$entry->id]);
    $oldUkPath=$entry->uk_audio_path;
    $this->actingAs($admin)->put('/admin/phonetics/'.$entry->id,[
     'word'=>'aec-test-water','category'=>'rhoticity','uk_ipa'=>'/ˈwɔːtə/','us_ipa'=>'/ˈwɔːtər/',
