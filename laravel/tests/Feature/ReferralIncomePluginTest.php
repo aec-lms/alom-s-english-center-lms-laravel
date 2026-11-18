@@ -265,6 +265,11 @@ class ReferralIncomePluginTest extends TestCase
         $this->assertNotSame('01712345678', $payout->account_details_encrypted);
 
         $this->actingAs($admin)->post('/admin/referral-income/payouts/' . $payout->id . '/review', [
+            'status' => 'paid',
+        ])->assertStatus(422);
+        $this->assertDatabaseHas('referral_payout_requests', ['id' => $payout->id, 'status' => 'pending']);
+
+        $this->actingAs($admin)->post('/admin/referral-income/payouts/' . $payout->id . '/review', [
             'status' => 'approved',
             'admin_note' => 'Verified',
         ])->assertRedirect();
