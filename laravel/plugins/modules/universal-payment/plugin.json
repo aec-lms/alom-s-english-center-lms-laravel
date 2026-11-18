@@ -52,6 +52,7 @@
     ],
     "optional_dependencies": [
         "fees-management",
+        "marketing-management",
         "gateway-paypal",
         "gateway-sslcommerz",
         "gateway-stripe",
