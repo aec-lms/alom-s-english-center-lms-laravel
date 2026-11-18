@@ -56,6 +56,8 @@
         "gateway-sslcommerz",
         "gateway-stripe",
         "payment-management",
-        "referral-income"
+        "referral-income",
+        "marketing-management",
+        "course-management"
     ]
 }
