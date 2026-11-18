@@ -165,31 +165,32 @@ class ExpenseController extends Controller
 
         $collected = 0.0;
         $refunds = 0.0;
-        if (app(PluginManager::class)->isEnabled('payment-management') && Schema::hasTable('payment_transactions')) {
+        if ($this->plugins->isEnabled('payment-management') && Schema::hasTable('payment_transactions')) {
             $payments = DB::table('payment_transactions')->whereIn('status', ['settled', 'refunded'])
                 ->when($actor->hasRole('branch_manager') || $actor->hasRole('accountant'), fn ($q) => $q->where('branch_id', $actor->branch_id));
             if (!empty($filters['date_from'])) $payments->where('settled_at', '>=', $filters['date_from'] . ' 00:00:00');
             if (!empty($filters['date_to'])) $payments->where('settled_at', '<=', $filters['date_to'] . ' 23:59:59');
             $collected = (float) (clone $payments)->sum('amount');
 
-            if (app(PluginManager::class)->isEnabled('universal-payment') && Schema::hasTable('universal_payment_transactions')) {
-                $manualReceipts = DB::table('universal_payment_transactions')
-                    ->where('status', 'verified')
-                    ->when($actor->hasRole('branch_manager') || $actor->hasRole('accountant'), fn ($q) => $q->where('branch_id', $actor->branch_id));
-                if (!empty($filters['date_from'])) $manualReceipts->where('verified_at', '>=', $filters['date_from'] . ' 00:00:00');
-                if (!empty($filters['date_to'])) $manualReceipts->where('verified_at', '<=', $filters['date_to'] . ' 23:59:59');
-                $collected += (float) $manualReceipts->sum('amount');
-            }
-
             if (Schema::hasTable('payment_refunds')) {
                 $refundQuery = DB::table('payment_refunds')
                     ->join('payment_transactions', 'payment_transactions.id', '=', 'payment_refunds.payment_transaction_id')
-                    ->where('payment_transactions.status', 'refunded')
+                    ->whereIn('payment_transactions.status', ['settled', 'refunded'])
                     ->when($actor->hasRole('branch_manager') || $actor->hasRole('accountant'), fn ($q) => $q->where('payment_transactions.branch_id', $actor->branch_id));
                 if (!empty($filters['date_from'])) $refundQuery->whereDate('payment_refunds.created_at', '>=', $filters['date_from']);
                 if (!empty($filters['date_to'])) $refundQuery->whereDate('payment_refunds.created_at', '<=', $filters['date_to']);
                 $refunds = (float) $refundQuery->sum('payment_refunds.amount');
             }
+        }
+
+        // Manual bank/cash receipts are recorded separately from gateway transactions.
+        if ($this->plugins->isEnabled('universal-payment') && Schema::hasTable('universal_payment_transactions')) {
+            $manualReceipts = DB::table('universal_payment_transactions')
+                ->where('status', 'verified')
+                ->when($actor->hasRole('branch_manager') || $actor->hasRole('accountant'), fn ($q) => $q->where('branch_id', $actor->branch_id));
+            if (!empty($filters['date_from'])) $manualReceipts->where('verified_at', '>=', $filters['date_from'] . ' 00:00:00');
+            if (!empty($filters['date_to'])) $manualReceipts->where('verified_at', '<=', $filters['date_to'] . ' 23:59:59');
+            $collected += (float) $manualReceipts->sum('amount');
         }
 
         $expenseQuery = $this->scopedQuery($actor)->where('status', 'approved');
@@ -226,8 +227,8 @@ class ExpenseController extends Controller
                 foreach ($rows as $row) {
                     fputcsv($output, [
                         $row->expense_date?->toDateString(), $row->branch_id, $row->category,
-                        $row->title, $row->amount, $row->payment_method, $row->reference,
-                        $row->status, $row->creator?->name,
+                        $this->safeCsvCell($row->title), $row->amount, $row->payment_method, $this->safeCsvCell($row->reference),
+                        $row->status, $this->safeCsvCell($row->creator?->name),
                     ]);
                 }
             });
@@ -260,6 +261,12 @@ class ExpenseController extends Controller
             abort(422, 'Enable Branch Management before assigning an expense to a branch.');
         }
         return $requested;
+    }
+
+    private function safeCsvCell(?string $value): string
+    {
+        $value = (string) $value;
+        return preg_match('/^[=+\\-@\\t\\r]/', $value) ? "'" . $value : $value;
     }
 
     private function ensureExpenseManager($actor): void
