@@ -25,11 +25,12 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
   $courseId=DB::table('courses')->insertGetId(['code'=>'PHON-SEC-001','title'=>'British and American Phonetics','slug'=>'british-american-phonetics','description'=>'Practice course','price'=>0,'status'=>'published','created_at'=>now(),'updated_at'=>now()]);
   DB::table('enrollments')->insert(['user_id'=>$student->id,'course_id'=>$courseId,'branch_id'=>null,'status'=>'active','created_at'=>now(),'updated_at'=>now()]);
   $entry=PhoneticEntry::query()->create(['word'=>'car','category'=>'rhoticity','uk_ipa'=>'/kɑː/','us_ipa'=>'/kɑːr/','is_active'=>true,'sort_order'=>1]);
-  $this->actingAs($student)->get('/courses/british-american-phonetics/phonetics-practice')->assertOk();
-  $challenge=session('phonetics.challenge');
+  DB::table('phonetic_learning_assignments')->insert(['lms_driver'=>'aec','course_ref'=>(string)$courseId,'course_category_ref'=>null,'lesson_ref'=>null,'batch_ref'=>null,'word_id'=>$entry->id,'audience'=>'both','sort_order'=>1,'is_required'=>true,'created_at'=>now(),'updated_at'=>now()]);
+  $this->actingAs($student)->get('/courses/british-american-phonetics/phonetics-learning')->assertOk();
+  $challenge=session('phonetics.learning_challenge');
   $this->assertIsArray($challenge);
   $challengeEntry=PhoneticEntry::query()->findOrFail($challenge['entry_id']);
-  $this->actingAs($student)->postJson('/courses/british-american-phonetics/phonetics-practice/attempts',[
+  $this->actingAs($student)->postJson('/courses/british-american-phonetics/phonetics-learning/attempts',[
    'selected_answer'=>$challenge['expected'],
    'is_correct'=>false,
    'entry_id'=>999999,
@@ -43,7 +44,7 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
   ])->assertStatus(409);
   $this->assertSame(1,DB::table('alom_english_center_phonetic_attempts')->where('user_id',$student->id)->count());
   DB::table('enrollments')->where('user_id',$student->id)->delete();
-  $this->actingAs($student)->get('/courses/british-american-phonetics/phonetics-practice')->assertForbidden();
+  $this->actingAs($student)->get('/courses/british-american-phonetics/phonetics-learning')->assertForbidden();
  }
 
  public function test_phonetics_admin_uploads_safe_media_and_rejects_svg():void{
