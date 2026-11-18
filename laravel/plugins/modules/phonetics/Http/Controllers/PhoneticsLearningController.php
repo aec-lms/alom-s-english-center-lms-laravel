@@ -13,6 +13,7 @@ use Illuminate\View\View;
 use Plugins\Modules\Phonetics\Models\PhoneticAttempt;
 use Plugins\Modules\Phonetics\Models\PhoneticEntry;
 use Plugins\Modules\Phonetics\Models\PhoneticLearningAssignment;
+use Plugins\Modules\Phonetics\Models\PhoneticExam;
 use Plugins\Modules\Phonetics\Models\PhoneticSetting;
 use Plugins\Modules\Phonetics\Services\CourseCatalog;
 
@@ -32,6 +33,14 @@ final class PhoneticsLearningController extends Controller
         }
 
         $entries = $this->assignedEntries($request, $course, $request->query('lesson'));
+        $isPaid = $this->catalog->isPaid($course);
+        $exams = PhoneticExam::query()->where('lms_driver', $this->catalog->driver())->where('status', 'published')
+            ->where(fn ($scope) => $scope->whereNull('course_ref')->orWhere('course_ref', $courseRef))
+            ->where(fn ($scope) => $scope->whereNull('course_category_ref')->orWhere('course_category_ref', $this->catalog->courseCategoryId($course) ?? '__none__'))
+            ->where(fn ($scope) => $scope->whereNull('lesson_ref')->orWhere('lesson_ref', $request->query('lesson') ?? '__course_overview__'))
+            ->whereIn('audience', ['both', $isPaid ? 'paid' : 'free'])->get()
+            ->filter(fn ($exam) => !$exam->batch_ref || ($request->user() && $this->catalog->isBatchMember($request->user(), (string) $exam->batch_ref)))
+            ->values();
         $challenge = null;
         if ($entries->isNotEmpty()) {
             $entry = $entries->random();
@@ -59,6 +68,7 @@ final class PhoneticsLearningController extends Controller
             'course' => $course,
             'setting' => $setting,
             'entries' => $entries,
+            'exams' => $exams,
             'challenge' => $challenge,
             'lessonRef' => $request->query('lesson'),
         ]);
