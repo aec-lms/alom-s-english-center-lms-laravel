@@ -46,12 +46,18 @@ class InstructorMobileApiController extends Controller
             ->when($course->branch_id !== null, fn ($q) => $q->where('students.branch_id', $course->branch_id))
             ->when($actor->branch_id !== null, fn ($q) => $q->where('students.branch_id', $actor->branch_id))
             ->when(Schema::hasColumn('students', 'deleted_at'), fn ($q) => $q->whereNull('students.deleted_at'))
-            ->select('students.id', 'students.student_code', 'students.user_id', 'users.name', 'users.email', 'enrollments.status', 'enrollments.created_at')
+            ->select('students.id as student_id', 'students.student_code', 'students.user_id', 'users.name', 'users.email', 'enrollments.status', 'enrollments.created_at')
             ->orderBy('users.name')
             ->paginate(50);
 
+        $items = $students->getCollection()->map(fn ($row) => [
+            'student' => ['id' => $row->student_id, 'student_code' => $row->student_code, 'user_id' => $row->user_id, 'name' => $row->name, 'email' => $row->email],
+            'status' => $row->status,
+            'enrolled_at' => $row->created_at,
+        ]);
+
         return response()->json([
-            'data' => $students->items(),
+            'data' => $items,
             'meta' => ['current_page' => $students->currentPage(), 'last_page' => $students->lastPage(), 'total' => $students->total()],
         ]);
     }
@@ -72,8 +78,11 @@ class InstructorMobileApiController extends Controller
     {
         [$actor, $ids] = $this->teacher($request);
         abort_unless(Schema::hasTable('batches'), 409, 'Course batches are unavailable.');
-        $record = DB::table('batches')->where('id', $batch)->whereIn('course_id', $ids)
-            ->when($actor->branch_id !== null, fn ($q) => $q->where('branch_id', $actor->branch_id))
+        $record = DB::table('batches')->join('courses', 'courses.id', '=', 'batches.course_id')
+            ->where('batches.id', $batch)
+            ->whereIn('batches.course_id', $ids)
+            ->when($actor->branch_id !== null, fn ($q) => $q->where('batches.branch_id', $actor->branch_id))
+            ->select('batches.*', 'courses.title as course_title')
             ->first();
         abort_unless($record, 404);
 
@@ -99,20 +108,30 @@ class InstructorMobileApiController extends Controller
         }
 
         $students = $studentQuery
-            ->select('students.id', 'students.student_code', 'students.user_id', 'users.name', 'users.email', 'enrollments.status')
+            ->select('students.id as student_id', 'students.student_code', 'students.user_id', 'users.name', 'users.email', 'enrollments.status')
             ->distinct()
             ->orderBy('users.name')
             ->paginate(50);
+
+        $items = $students->getCollection()->map(fn ($row) => [
+            'student' => ['id' => $row->student_id, 'student_code' => $row->student_code, 'user_id' => $row->user_id, 'name' => $row->name, 'email' => $row->email],
+            'status' => $row->status,
+        ]);
 
         return response()->json([
             'batch' => [
                 'id' => $record->id,
                 'title' => $record->name,
+                'course' => $record->course_title,
                 'course_id' => $record->course_id,
                 'capacity' => $record->capacity,
+                'enrolled_count' => $students->total(),
+                'starts_at' => null,
+                'ends_at' => null,
+                'status' => 'active',
                 'roster_configured' => (bool) $rosterConfigured,
             ],
-            'data' => $students->items(),
+            'data' => $items,
             'meta' => ['current_page' => $students->currentPage(), 'last_page' => $students->lastPage(), 'total' => $students->total()],
         ]);
     }
