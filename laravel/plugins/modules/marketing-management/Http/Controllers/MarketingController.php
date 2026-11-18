@@ -119,7 +119,7 @@ class MarketingController extends Controller
             'applies_to_course_ids' => ['nullable', 'array', 'max:100'],
             'applies_to_course_ids.*' => ['required', 'integer', 'distinct', 'exists:courses,id'],
             'first_purchase_only' => ['nullable', 'boolean'],
-            'is_active' => ['required', 'boolean'],
+            'is_active' => ['sometimes', 'boolean'],
         ]);
         $coupon->update([
             'discount_type' => $validated['discount_type'],
@@ -133,7 +133,7 @@ class MarketingController extends Controller
             'expires_at' => $validated['expires_at'] ?? null,
             'applies_to_course_ids' => array_values(array_map('intval', $validated['applies_to_course_ids'] ?? [])),
             'first_purchase_only' => $request->boolean('first_purchase_only'),
-            'is_active' => (bool) $validated['is_active'],
+            'is_active' => $request->boolean('is_active'),
         ]);
         $this->audit->log('marketing.coupon_updated', 'promo_coupon', (string) $coupon->id, [
             'code' => $coupon->code, 'is_active' => $coupon->is_active,
