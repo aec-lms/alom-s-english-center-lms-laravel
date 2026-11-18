@@ -147,7 +147,7 @@ class StudentTrackingController extends Controller
             ];
 
             if ($validated['event_type'] === 'lesson_completed') {
-                $started = \\Plugins\\Modules\\StudentTracking\\Models\\StudentActivityEvent::query()
+                $started = \Plugins\Modules\StudentTracking\Models\StudentActivityEvent::query()
                     ->where('user_id', $request->user()->id)
                     ->where('event_type', 'lesson_started')
                     ->where('subject_type', 'lesson')
