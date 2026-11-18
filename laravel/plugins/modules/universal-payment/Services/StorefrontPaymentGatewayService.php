@@ -14,7 +14,7 @@ class StorefrontPaymentGatewayService
 {
     public function __construct(private readonly PluginManager $plugins) {}
 
-    public function initiateSslcommerz(UniversalPaymentTransaction $transaction, object $item, object $user, string $payerContact): string
+    public function initiateSslcommerz(UniversalPaymentTransaction $transaction, object $item, object $user, string $payerContact, array $metadata = []): string
     {
         if (!$this->plugins->isEnabled('gateway-sslcommerz')) {
             throw new RuntimeException('Enable the dedicated SSLCOMMERZ Gateway plugin before accepting e-book payments.');
@@ -70,11 +70,11 @@ class StorefrontPaymentGatewayService
         }
 
         $transaction->update([
-            'notes' => json_encode([
+            'notes' => json_encode(array_merge($metadata, [
                 'provider' => 'sslcommerz',
                 'session_key' => (string) ($data['sessionkey'] ?? ''),
                 'mode' => $sandbox ? 'sandbox' : 'live',
-            ], JSON_THROW_ON_ERROR),
+            ]), JSON_THROW_ON_ERROR),
         ]);
 
         return $checkoutUrl;
@@ -135,6 +135,12 @@ class StorefrontPaymentGatewayService
             'validation_status' => strtoupper((string) $data['status']),
         ];
 
+        $notes = json_decode((string) $transaction->notes, true);
+        $notes = is_array($notes) ? $notes : [];
+        if (($notes['purpose'] ?? null) === 'course_cart') {
+            return $this->grantCourseCartAccess($transaction, $validationId, $providerDetails, $notes);
+        }
+
         if ($transaction->learn_earn_exam_id) {
             return $this->grantExamAccess($transaction, $validationId, $providerDetails);
         }
@@ -147,13 +153,174 @@ class StorefrontPaymentGatewayService
         $reference = trim((string) ($callback['tran_id'] ?? ''));
         abort_if($reference === '', 422, 'Missing payment reference.');
         $transaction = UniversalPaymentTransaction::query()->where('reference', $reference)->where('gateway', 'sslcommerz')->firstOrFail();
-        if ($transaction->status === 'pending') {
-            $transaction->update(['status' => $status]);
-        }
-        return $transaction->fresh();
+
+        return DB::transaction(function () use ($transaction, $status): UniversalPaymentTransaction {
+            $locked = UniversalPaymentTransaction::query()->whereKey($transaction->id)->lockForUpdate()->firstOrFail();
+            if ($locked->status !== 'pending') {
+                return $locked->fresh();
+            }
+
+            $notes = json_decode((string) $locked->notes, true);
+            $notes = is_array($notes) ? $notes : [];
+            if (($notes['purpose'] ?? null) === 'course_cart') {
+                $orderId = (int) ($notes['course_cart_order_id'] ?? 0);
+                if ($orderId > 0 && Schema::hasTable('course_cart_orders')) {
+                    $order = DB::table('course_cart_orders')->where('id', $orderId)->lockForUpdate()->first();
+                    if ($order && $order->status === 'awaiting_payment') {
+                        DB::table('course_cart_orders')->where('id', $orderId)->update([
+                            'status' => 'payment_failed',
+                            'updated_at' => now(),
+                        ]);
+                        DB::table('course_carts')->where('id', $order->cart_id)->where('status', 'checkout_pending')
+                            ->update(['status' => 'active', 'updated_at' => now()]);
+                        if (filled($order->coupon_reservation_key) && Schema::hasTable('promo_coupon_redemptions')) {
+                            (new \\Plugins\\Modules\\MarketingManagement\\Services\\CourseCouponService())->release((string) $order->coupon_reservation_key);
+                        }
+                    }
+                }
+            }
+
+            $locked->update(['status' => $status]);
+            return $locked->fresh();
+        }, 3);
     }
 
  
+    private function grantCourseCartAccess(UniversalPaymentTransaction $transaction, string $externalReference, array $providerDetails, array $notes): UniversalPaymentTransaction
+    {
+        return DB::transaction(function () use ($transaction, $externalReference, $providerDetails, $notes): UniversalPaymentTransaction {
+            $locked = UniversalPaymentTransaction::query()->whereKey($transaction->id)->lockForUpdate()->firstOrFail();
+            if ($locked->status === 'verified') return $locked;
+
+            $orderId = (int) ($notes['course_cart_order_id'] ?? 0);
+            if ($orderId < 1 || !Schema::hasTable('course_cart_orders') || !Schema::hasTable('course_cart_order_items')
+                || !Schema::hasTable('fee_invoices') || !Schema::hasTable('enrollments')) {
+                throw new RuntimeException('The paid course cart order could not be located safely. Manual reconciliation is required.');
+            }
+
+            $order = DB::table('course_cart_orders')->where('id', $orderId)->lockForUpdate()->first();
+            if (!$order || (int) $order->payment_transaction_id !== (int) $locked->id
+                || (int) $order->user_id !== (int) $locked->user_id
+                || abs((float) $order->net_amount - (float) $locked->amount) > 0.01
+                || strtoupper((string) $order->currency) !== strtoupper((string) $locked->currency)) {
+                throw new RuntimeException('Course cart order and verified payment details do not match.');
+            }
+
+            if ($order->status === 'paid') {
+                $locked->update([
+                    'status' => 'verified',
+                    'external_trx_id' => $externalReference,
+                    'verified_at' => $locked->verified_at ?? now(),
+                ]);
+                return $locked->fresh();
+            }
+
+            if ($order->status !== 'awaiting_payment'
+                || ($order->expires_at && now()->greaterThan($order->expires_at))) {
+                $locked->update(['status' => 'risk_review', 'external_trx_id' => $externalReference,
+                    'notes' => json_encode(array_merge($notes, ['risk_review' => true, 'reason' => 'course_cart_order_expired_or_not_payable']), JSON_THROW_ON_ERROR)]);
+                DB::table('course_cart_orders')->where('id', $orderId)->update(['status' => 'risk_review', 'updated_at' => now()]);
+                return $locked->fresh();
+            }
+
+            $items = DB::table('course_cart_order_items')->where('order_id', $orderId)->orderBy('position')->get();
+            if ($items->isEmpty()) {
+                throw new RuntimeException('The paid course cart order has no course items.');
+            }
+            $courseIds = $items->pluck('course_id')->map(fn ($id): int => (int) $id)->all();
+            $courses = DB::table('courses')->whereIn('id', $courseIds)->where('status', 'published')->get()->keyBy('id');
+            if ($courses->count() !== count($courseIds)) {
+                $locked->update(['status' => 'risk_review', 'external_trx_id' => $externalReference,
+                    'notes' => json_encode(array_merge($notes, ['risk_review' => true, 'reason' => 'course_unavailable_after_payment']), JSON_THROW_ON_ERROR)]);
+                DB::table('course_cart_orders')->where('id', $orderId)->update(['status' => 'risk_review', 'updated_at' => now()]);
+                return $locked->fresh();
+            }
+
+            $existingEnrollment = DB::table('enrollments')->where('user_id', $locked->user_id)
+                ->whereIn('course_id', $courseIds)->whereIn('status', ['pending', 'active'])->exists();
+            if ($existingEnrollment) {
+                $locked->update(['status' => 'risk_review', 'external_trx_id' => $externalReference,
+                    'notes' => json_encode(array_merge($notes, ['risk_review' => true, 'reason' => 'enrollment_exists_after_checkout']), JSON_THROW_ON_ERROR)]);
+                DB::table('course_cart_orders')->where('id', $orderId)->update(['status' => 'risk_review', 'updated_at' => now()]);
+                return $locked->fresh();
+            }
+
+            if (Schema::hasTable('batches') && Schema::hasColumn('batches', 'status')
+                && DB::table('batches')->whereIn('course_id', $courseIds)->where('status', 'open')->exists()) {
+                $locked->update(['status' => 'risk_review', 'external_trx_id' => $externalReference,
+                    'notes' => json_encode(array_merge($notes, ['risk_review' => true, 'reason' => 'open_batch_created_after_checkout']), JSON_THROW_ON_ERROR)]);
+                DB::table('course_cart_orders')->where('id', $orderId)->update(['status' => 'risk_review', 'updated_at' => now()]);
+                return $locked->fresh();
+            }
+
+            if (filled($order->coupon_reservation_key)) {
+                if (!Schema::hasTable('promo_coupon_redemptions')) {
+                    $locked->update(['status' => 'risk_review', 'external_trx_id' => $externalReference,
+                        'notes' => json_encode(array_merge($notes, ['risk_review' => true, 'reason' => 'coupon_ledger_unavailable']), JSON_THROW_ON_ERROR)]);
+                    DB::table('course_cart_orders')->where('id', $orderId)->update(['status' => 'risk_review', 'updated_at' => now()]);
+                    return $locked->fresh();
+                }
+                $reservation = DB::table('promo_coupon_redemptions')->where('reservation_key', $order->coupon_reservation_key)->first();
+                if (!$reservation || ($reservation->status !== 'redeemed'
+                    && ($reservation->status !== 'reserved' || ($reservation->expires_at && now()->greaterThan($reservation->expires_at))))) {
+                    $locked->update(['status' => 'risk_review', 'external_trx_id' => $externalReference,
+                        'notes' => json_encode(array_merge($notes, ['risk_review' => true, 'reason' => 'coupon_reservation_expired']), JSON_THROW_ON_ERROR)]);
+                    DB::table('course_cart_orders')->where('id', $orderId)->update(['status' => 'risk_review', 'updated_at' => now()]);
+                    return $locked->fresh();
+                }
+                (new \\Plugins\\Modules\\MarketingManagement\\Services\\CourseCouponService())->redeem((string) $order->coupon_reservation_key);
+            }
+
+            $user = DB::table('users')->where('id', $locked->user_id)->first();
+            if (!$user) throw new RuntimeException('The course buyer account no longer exists.');
+            $studentProfile = Schema::hasTable('students') ? DB::table('students')->where('user_id', $user->id)->first() : null;
+            $invoice = \\Plugins\\Modules\\FeesManagement\\Models\\FeeInvoice::query()->create([
+                'invoice_number' => 'CART-' . strtoupper(substr(bin2hex(random_bytes(6)), 0, 10)),
+                'student_id' => $studentProfile->id ?? null,
+                'payer_name' => $user->name,
+                'payer_email' => $user->email,
+                'payer_phone' => $user->phone,
+                'branch_id' => $order->branch_id,
+                'subtotal_amount' => $order->subtotal_amount,
+                'discount_amount' => $order->discount_amount,
+                'net_amount' => $order->net_amount,
+                'paid_amount' => $order->net_amount,
+                'currency' => strtoupper((string) $order->currency),
+                'status' => 'paid',
+                'due_date' => now()->toDateString(),
+            ]);
+
+            foreach ($items as $item) {
+                DB::table('enrollments')->insert([
+                    'user_id' => $locked->user_id,
+                    'course_id' => $item->course_id,
+                    'branch_id' => $order->branch_id,
+                    'invoice_id' => $invoice->id,
+                    'status' => 'active',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+
+            DB::table('course_cart_orders')->where('id', $orderId)->update([
+                'invoice_id' => $invoice->id,
+                'status' => 'paid',
+                'paid_at' => now(),
+                'updated_at' => now(),
+            ]);
+            DB::table('course_carts')->where('id', $order->cart_id)->update(['status' => 'completed', 'updated_at' => now()]);
+
+            $locked->update([
+                'status' => 'verified',
+                'external_trx_id' => $externalReference,
+                'verified_at' => now(),
+                'notes' => json_encode(array_merge($notes, ['provider' => $locked->gateway], $providerDetails), JSON_THROW_ON_ERROR),
+            ]);
+
+            return $locked->fresh();
+        }, 3);
+    }
+
     private function grantExamAccess(UniversalPaymentTransaction $transaction, string $externalReference, array $providerDetails): UniversalPaymentTransaction
     {
         return DB::transaction(function () use ($transaction, $externalReference, $providerDetails): UniversalPaymentTransaction {
