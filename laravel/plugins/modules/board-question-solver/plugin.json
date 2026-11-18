@@ -1,0 +1,27 @@
+{
+  "slug": "board-question-solver",
+  "name": "Board Question Solver",
+  "version": "1.0.0",
+  "author": "Alom's English Center",
+  "category": "education",
+  "description": "Student-owned board exam practice with text/photo questions, progressive hints, concept explanations and Bangla/English solutions, reusing the encrypted AEC AI provider and shared usage budget.",
+  "core_compatibility": "^2.0",
+  "dependencies": [],
+  "optional_dependencies": ["role-ai-assistant"],
+  "provider": "Plugins\\Modules\\BoardQuestionSolver\\Providers\\BoardQuestionSolverServiceProvider",
+  "permissions": [
+    {"slug": "board-solver.use", "name": "Use Board Question Solver"},
+    {"slug": "board-solver.configure", "name": "Configure Board Question Solver"}
+  ],
+  "settings_schema": [
+    {"key": "enabled", "label": "Enable Board Question Solver", "type": "text", "secret": false, "default": "0"},
+    {"key": "allow_image_questions", "label": "Allow question photos", "type": "text", "secret": false, "default": "1"},
+    {"key": "max_question_length", "label": "Maximum question length", "type": "text", "secret": false, "default": "4000"},
+    {"key": "max_image_kb", "label": "Maximum image size (KB)", "type": "text", "secret": false, "default": "5120"},
+    {"key": "daily_request_limit", "label": "Daily requests per student", "type": "text", "secret": false, "default": "10"},
+    {"key": "default_language", "label": "Default answer language (bn/en)", "type": "text", "secret": false, "default": "bn"}
+  ],
+  "admin_menu": [
+    {"group": "Learning Tools", "label": "Board Question Solver", "route": "admin.board-solver.settings", "order": 48, "permission": "board-solver.configure"}
+  ]
+}
