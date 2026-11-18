@@ -24,7 +24,7 @@ class CourseContentStudioPluginTest extends TestCase
         ]);
     }
 
-    private function post(int $authorId,string $slug='content-studio-lesson'): int
+    private function createContentPost(int $authorId,string $slug='content-studio-lesson'): int
     {
         return DB::table('course_content_posts')->insertGetId([
             'author_id'=>$authorId,
@@ -86,7 +86,7 @@ class CourseContentStudioPluginTest extends TestCase
         $this->activatePlugins(['course-management','course-content-studio']);
         $admin=$this->createUserWithRole('admin');
         $course=$this->course();
-        $post=$this->post($admin->id);
+        $post=$this->createContentPost($admin->id);
 
         $this->actingAs($admin)->put('/admin/course-content-studio/courses/'.$course.'/builder',[
             'add_post_ids'=>[$post],
