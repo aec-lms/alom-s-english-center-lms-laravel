@@ -47,7 +47,7 @@
             <div class="divide-y">
                 @foreach($methodTotals as $method)
                     <div class="flex items-center justify-between gap-3 py-2 text-sm">
-                        <span class="text-slate-600">{{ str($method->method)->replace(['gateway-', '_'], ['', ' '])->title() }}</span>
+                        <span class="text-slate-600">{{ ucwords(str_replace(['gateway-', '_', '-'], ['', ' ', ' '], (string) $method->method)) }}</span>
                         <span class="text-right font-semibold">৳{{ number_format((float) $method->total, 2) }} <span class="text-xs font-normal text-slate-500">({{ $method->transactions }} tx)</span></span>
                     </div>
                 @endforeach
