@@ -45,6 +45,42 @@
         .rounded-xl { border-radius:var(--aec-radius); }
         .space-y-6 > :not([hidden]) ~ :not([hidden]) { margin-top:calc(1.5rem * var(--aec-density)); }
     </style>
+    <style>
+        @keyframes aec-progress-fill-enter {
+            from { transform: scaleX(0); }
+            to { transform: scaleX(1); }
+        }
+        @keyframes aec-progress-shimmer {
+            0% { transform: translateX(-150%); opacity: 0; }
+            18% { opacity: .38; }
+            100% { transform: translateX(260%); opacity: 0; }
+        }
+        [role="progressbar"] > [data-progress-fill] {
+            position: relative;
+            overflow: hidden;
+            transform-origin: left center;
+            animation: aec-progress-fill-enter 850ms cubic-bezier(.22, 1, .36, 1) both;
+            transition: width 700ms cubic-bezier(.22, 1, .36, 1);
+        }
+        [role="progressbar"]:not([aria-valuenow="100"]) > [data-progress-fill]::after {
+            content: "";
+            position: absolute;
+            inset: 0 auto 0 0;
+            width: 42%;
+            pointer-events: none;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,.48), transparent);
+            animation: aec-progress-shimmer 2.4s ease-in-out 350ms infinite;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            [role="progressbar"] > [data-progress-fill] {
+                animation: none !important;
+                transition: none !important;
+            }
+            [role="progressbar"] > [data-progress-fill]::after {
+                animation: none !important;
+            }
+        }
+    </style>
 </head>
 <body class="bg-slate-100 text-slate-900 antialiased">
 <div class="min-h-screen flex">
