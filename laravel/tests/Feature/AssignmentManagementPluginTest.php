@@ -155,6 +155,7 @@ class AssignmentManagementPluginTest extends TestCase
     {
         $this->markSystemInstalled();
         $this->activatePlugins(['assignment-management']);
+        Storage::fake('local');
         $teacher = $this->createUserWithRole('teacher');
         $student = $this->createUserWithRole('student');
         $otherStudent = $this->createUserWithRole('student');
@@ -204,7 +205,12 @@ class AssignmentManagementPluginTest extends TestCase
             ->assertJsonPath('data.submission.id', $submissionId)
             ->assertJsonPath('data.submission.status', 'submitted');
 
+        $attachmentPath = 'assignment-submissions/'.$assignmentId.'/private-answer.pdf';
+        Storage::disk('local')->put($attachmentPath, 'private attachment');
+        DB::table('assignment_submissions')->where('id', $submissionId)->update(['attachment_path' => $attachmentPath]);
+
         $otherToken = $otherStudent->createToken('other-student-assignment-mobile')->plainTextToken;
+        app('auth')->forgetGuards();
         $this->withHeader('Authorization', 'Bearer ' . $otherToken)
             ->getJson('/api/v1/my/assignments/submissions/' . $submissionId . '/attachment')
             ->assertForbidden();
@@ -244,6 +250,7 @@ class AssignmentManagementPluginTest extends TestCase
             ->assertForbidden();
 
         $studentToken = $student->createToken('graded-assignment-mobile')->plainTextToken;
+        app('auth')->forgetGuards();
         $this->withHeader('Authorization', 'Bearer ' . $studentToken)
             ->postJson('/api/v1/my/assignments/' . $assignmentId . '/submit', [
                 'answer_text' => 'Try to replace graded work.',
