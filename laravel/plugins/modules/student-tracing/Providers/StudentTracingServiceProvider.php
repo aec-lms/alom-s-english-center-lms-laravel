@@ -41,7 +41,7 @@ class StudentTracingServiceProvider extends BasePluginServiceProvider
                     'eloquent.' . $action . ': ' . $modelClass,
                     function (object $model) use ($source, $studentKey, $branchKey, $action): void {
                         $studentId = $this->resolveStudentId($model, $studentKey, $source);
-                        if (!$studentId || !Schema::hasTable('student_activity_events')) {
+                        if (!$studentId || !Schema::hasTable('student_trace_events')) {
                             return;
                         }
 
@@ -52,7 +52,7 @@ class StudentTracingServiceProvider extends BasePluginServiceProvider
                                 : (method_exists($model, 'getAttribute') ? $model->getAttribute($branchKey) : ($model->{$branchKey} ?? null));
                         }
                         $branchId = $branchValue !== null ? (int) $branchValue : null;
-                        if ($branchId === null && Schema::hasTable('students')) {
+                        if ($branchId === null && Schema::hasTable('students') && Schema::hasColumn('students', 'branch_id')) {
                             $branchId = DB::table('students')->where('id', $studentId)->value('branch_id');
                         }
 
@@ -62,7 +62,7 @@ class StudentTracingServiceProvider extends BasePluginServiceProvider
                             : [];
 
                         try {
-                            DB::table('student_activity_events')->insert([
+                            DB::table('student_trace_events')->insert([
                                 'student_id' => $studentId,
                                 'branch_id' => $branchId,
                                 'actor_id' => Auth::id(),
@@ -92,7 +92,7 @@ class StudentTracingServiceProvider extends BasePluginServiceProvider
             return isset($model->student_id) ? (int) $model->student_id : null;
         }
 
-        if (!isset($model->user_id) || !Schema::hasTable('students')) {
+        if (!isset($model->user_id) || !Schema::hasTable('students') || !Schema::hasColumn('students', 'user_id')) {
             return null;
         }
 

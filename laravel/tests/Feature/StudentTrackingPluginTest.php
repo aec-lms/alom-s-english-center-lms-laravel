@@ -66,7 +66,7 @@ class StudentTrackingPluginTest extends TestCase
     }
 
 
-    public function test_tracking_and_tracing_plugins_share_a_compatible_schema_and_capture_academic_events(): void
+    public function test_tracking_and_tracing_plugins_keep_separate_schemas_and_capture_academic_events(): void
     {
         $this->markSystemInstalled();
         // Install Tracking first to exercise the legacy table-creation order.
@@ -79,8 +79,11 @@ class StudentTrackingPluginTest extends TestCase
             'exam-management',
         ]);
 
-        foreach (['user_id', 'student_id', 'branch_id', 'actor_id', 'event_type', 'subject_type', 'subject_id', 'duration_seconds', 'metadata', 'occurred_at'] as $column) {
-            $this->assertTrue(Schema::hasColumn('student_activity_events', $column), "Shared activity table is missing {$column}.");
+        foreach (['user_id', 'actor_id', 'event_type', 'subject_type', 'subject_id', 'duration_seconds', 'metadata', 'occurred_at'] as $column) {
+            $this->assertTrue(Schema::hasColumn('student_activity_events', $column), "Student Tracking table is missing {$column}.");
+        }
+        foreach (['student_id', 'branch_id', 'actor_id', 'event_type', 'metadata', 'occurred_at'] as $column) {
+            $this->assertTrue(Schema::hasColumn('student_trace_events', $column), "Student Tracing table is missing {$column}.");
         }
 
         $studentUser = $this->createUserWithRole('student');
@@ -121,7 +124,7 @@ class StudentTrackingPluginTest extends TestCase
             'event_type' => 'quiz_submitted',
             'subject_id' => '92',
         ]);
-        $this->assertDatabaseHas('student_activity_events', [
+        $this->assertDatabaseHas('student_trace_events', [
             'student_id' => $studentId,
             'event_type' => 'student.created',
         ]);
