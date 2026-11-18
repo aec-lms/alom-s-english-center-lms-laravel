@@ -43,9 +43,9 @@
             <label class="text-sm font-semibold md:col-span-2">Exam title<input name="title" required maxlength="180" class="mt-1 w-full rounded border p-2" placeholder="Lesson 1 Vocabulary Test"></label>
             <label class="text-sm font-semibold">Status<select name="status" class="mt-1 w-full rounded border p-2"><option value="draft">Draft</option><option value="published">Publish immediately</option></select></label>
             <label class="text-sm font-semibold">Course category<select name="course_category_ref" class="mt-1 w-full rounded border p-2"><option value="">Select category</option>@foreach($categories as $category)<option value="{{ $category['id'] }}">{{ $category['title'] }}</option>@endforeach</select></label>
-            <label class="text-sm font-semibold">Course<select name="course_ref" class="mt-1 w-full rounded border p-2"><option value="">Select course</option>@foreach($courses as $course)<option value="{{ $course['id'] }}">{{ $course['title'] }}</option>@endforeach</select></label>
+            <label class="text-sm font-semibold">Course<select name="course_ref" id="exam-course" class="mt-1 w-full rounded border p-2"><option value="">Select course</option>@foreach($courses as $course)<option value="{{ $course['id'] }}">{{ $course['title'] }}</option>@endforeach</select></label>
             <label class="text-sm font-semibold">Batch<select name="batch_ref" class="mt-1 w-full rounded border p-2"><option value="">All batches</option>@foreach($batches as $batch)<option value="{{ $batch['id'] }}">{{ $batch['title'] }}</option>@endforeach</select></label>
-            <label class="text-sm font-semibold">Lesson ID (optional)<input name="lesson_ref" class="mt-1 w-full rounded border p-2" placeholder="Select lesson ID"></label>
+            <label class="text-sm font-semibold">Lesson<select name="lesson_ref" id="exam-lesson" class="mt-1 w-full rounded border p-2"><option value="">All lessons / course level</option></select></label>
             <label class="text-sm font-semibold">Course type<select name="audience" class="mt-1 w-full rounded border p-2"><option value="both">Free and Paid</option><option value="free">Free only</option><option value="paid">Paid only</option></select></label>
             <label class="text-sm font-semibold">Time limit (minutes)<input type="number" name="duration_minutes" min="0" max="300" value="0" class="mt-1 w-full rounded border p-2"></label>
             <label class="text-sm font-semibold">Pass mark (%)<input type="number" name="pass_percentage" min="1" max="100" value="60" class="mt-1 w-full rounded border p-2"></label>
@@ -87,13 +87,17 @@
 </div>
 <script>
 (() => {
- const course=document.getElementById('assignment-course'), lesson=document.getElementById('assignment-lesson');
- if(!course||!lesson)return;
- course.addEventListener('change',async()=>{
+ const endpoint=@json(route('plugins.phonetics.admin.learning.lessons'));
+ async function loadLessons(course,lesson){
+  if(!course||!lesson)return;
   lesson.innerHTML='<option value="">All lessons / course level</option>';
   if(!course.value)return;
-  try{const url=new URL(@json(route('plugins.phonetics.admin.learning.lessons')),window.location.origin);url.searchParams.set('course_ref',course.value);const response=await fetch(url,{headers:{Accept:'application/json'},credentials:'same-origin'});if(!response.ok)return;const rows=await response.json();rows.forEach(row=>{const option=document.createElement('option');option.value=row.id;option.textContent=row.title;lesson.appendChild(option);});}catch(_){}
- });
+  try{const url=new URL(endpoint,window.location.origin);url.searchParams.set('course_ref',course.value);const response=await fetch(url,{headers:{Accept:'application/json'},credentials:'same-origin'});if(!response.ok)return;const rows=await response.json();rows.forEach(row=>{const option=document.createElement('option');option.value=row.id;option.textContent=row.title;lesson.appendChild(option);});}catch(_){}
+ }
+ const assignmentCourse=document.getElementById('assignment-course'),assignmentLesson=document.getElementById('assignment-lesson');
+ const examCourse=document.getElementById('exam-course'),examLesson=document.getElementById('exam-lesson');
+ if(assignmentCourse)assignmentCourse.addEventListener('change',()=>loadLessons(assignmentCourse,assignmentLesson));
+ if(examCourse)examCourse.addEventListener('change',()=>loadLessons(examCourse,examLesson));
 })();
 </script>
 @endsection
