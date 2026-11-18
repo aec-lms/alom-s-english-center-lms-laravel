@@ -195,7 +195,7 @@ class StorefrontPaymentGatewayService
 
             $orderId = (int) ($notes['course_cart_order_id'] ?? 0);
             if ($orderId < 1 || !Schema::hasTable('course_cart_orders') || !Schema::hasTable('course_cart_order_items')
-                || !Schema::hasTable('fee_invoices') || !Schema::hasTable('enrollments')) {
+                || !Schema::hasTable('fee_invoices') || !Schema::hasTable('enrollments') || !Schema::hasTable('courses')) {
                 throw new RuntimeException('The paid course cart order could not be located safely. Manual reconciliation is required.');
             }
 
@@ -246,7 +246,7 @@ class StorefrontPaymentGatewayService
                 return $locked->fresh();
             }
 
-            if (Schema::hasTable('batches') && Schema::hasColumn('batches', 'status')
+            if (Schema::hasTable('batches') && Schema::hasColumn('batches', 'status') && Schema::hasColumn('batches', 'course_id')
                 && DB::table('batches')->whereIn('course_id', $courseIds)->where('status', 'open')->exists()) {
                 $locked->update(['status' => 'risk_review', 'external_trx_id' => $externalReference,
                     'notes' => json_encode(array_merge($notes, ['risk_review' => true, 'reason' => 'open_batch_created_after_checkout']), JSON_THROW_ON_ERROR)]);
