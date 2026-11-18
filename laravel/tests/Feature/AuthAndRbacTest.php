@@ -96,6 +96,108 @@ class AuthAndRbacTest extends TestCase
             ->post('/reset-password', $payload)
             ->assertSessionHasErrors('email');
     }
+
+    public function test_email_otp_password_recovery_works_for_students_managers_and_guardians(): void
+    {
+        $this->markSystemInstalled();
+        Notification::fake();
+
+        foreach (['student', 'branch_manager', 'guardian'] as $role) {
+            $user = $this->createUserWithRole($role, null, $role . '@otp.aec.test');
+
+            $this->post('/forgot-password/otp', ['email' => $user->email])
+                ->assertRedirect()
+                ->assertSessionHas('otp_status');
+
+            $code = null;
+            Notification::assertSentTo($user, \App\Notifications\PasswordRecoveryOtp::class, function ($notification) use (&$code): bool {
+                $code = $notification->code;
+                return true;
+            });
+            $this->assertMatchesRegularExpression('/^[0-9]{6}$/', (string) $code);
+
+            $newPassword = 'OtpResetPassword!2026';
+            $this->post('/forgot-password/otp/verify', [
+                'email' => $user->email,
+                'otp' => $code,
+                'password' => $newPassword,
+                'password_confirmation' => $newPassword,
+            ])->assertRedirect('/login')->assertSessionHas('status');
+
+            $this->assertTrue(password_verify($newPassword, $user->fresh()->password));
+            $this->assertDatabaseMissing('password_recovery_otps', ['user_id' => $user->id]);
+        }
+    }
+
+    public function test_email_recovery_otp_is_single_use_and_expires_after_ten_minutes(): void
+    {
+        $this->markSystemInstalled();
+        Notification::fake();
+        $user = $this->createUserWithRole('guardian', null, 'guardian-expiry@aec.test');
+
+        $this->post('/forgot-password/otp', ['email' => $user->email])->assertRedirect();
+
+        $code = null;
+        Notification::assertSentTo($user, \App\Notifications\PasswordRecoveryOtp::class, function ($notification) use (&$code): bool {
+            $code = $notification->code;
+            return true;
+        });
+
+        $this->travel(11)->minutes();
+        $this->from('/forgot-password')->post('/forgot-password/otp/verify', [
+            'email' => $user->email,
+            'otp' => $code,
+            'password' => 'OtpResetPassword!2026',
+            'password_confirmation' => 'OtpResetPassword!2026',
+        ])->assertSessionHasErrors('otp');
+
+        $this->assertTrue(password_verify('StrongPassword!2026', $user->fresh()->password));
+    }
+
+
+    public function test_email_recovery_otp_locks_after_five_incorrect_codes(): void
+    {
+        $this->markSystemInstalled();
+        Notification::fake();
+        $user = $this->createUserWithRole('student', null, 'otp-lock@aec.test');
+
+        $this->post('/forgot-password/otp', ['email' => $user->email])->assertRedirect();
+        $code = null;
+        Notification::assertSentTo($user, \App\Notifications\PasswordRecoveryOtp::class, function ($notification) use (&$code): bool {
+            $code = $notification->code;
+            return true;
+        });
+
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $this->from('/forgot-password')->post('/forgot-password/otp/verify', [
+                'email' => $user->email,
+                'otp' => '000000',
+                'password' => 'OtpResetPassword!2026',
+                'password_confirmation' => 'OtpResetPassword!2026',
+            ])->assertSessionHasErrors('otp');
+        }
+
+        $this->from('/forgot-password')->post('/forgot-password/otp/verify', [
+            'email' => $user->email,
+            'otp' => $code,
+            'password' => 'OtpResetPassword!2026',
+            'password_confirmation' => 'OtpResetPassword!2026',
+        ])->assertSessionHasErrors('otp');
+
+        $this->assertTrue(password_verify('StrongPassword!2026', $user->fresh()->password));
+    }
+
+    public function test_email_otp_request_does_not_disclose_unknown_accounts(): void
+    {
+        $this->markSystemInstalled();
+        Notification::fake();
+
+        $this->post('/forgot-password/otp', ['email' => 'not-registered@aec.test'])
+            ->assertRedirect()
+            ->assertSessionHas('otp_status', 'If an active account matches that email, a recovery code will be sent. The code expires in 10 minutes.');
+        Notification::assertNothingSent();
+    }
+
     public function test_student_lands_on_student_portal_and_unassigned_branch_manager_is_blocked(): void
     {
         $this->markSystemInstalled();

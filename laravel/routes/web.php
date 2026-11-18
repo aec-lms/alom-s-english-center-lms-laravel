@@ -66,6 +66,8 @@ Route::middleware('installed')->group(function (): void {
     Route::post('/register', [LoginController::class, 'register'])->name('register.attempt')->middleware('guest');
     Route::get('/forgot-password', [LoginController::class, 'showForgotPassword'])->name('password.request')->middleware('guest');
     Route::post('/forgot-password', [LoginController::class, 'sendResetNotice'])->name('password.email')->middleware('guest');
+    Route::post('/forgot-password/otp', [LoginController::class, 'sendRecoveryOtp'])->name('password.otp.send')->middleware('guest');
+    Route::post('/forgot-password/otp/verify', [LoginController::class, 'verifyRecoveryOtp'])->name('password.otp.verify')->middleware('guest');
     Route::get('/reset-password/{token}', [LoginController::class, 'showResetPassword'])->name('password.reset')->middleware('guest');
     Route::post('/reset-password', [LoginController::class, 'resetPassword'])->name('password.update')->middleware('guest');
     Route::post('/logout', [LoginController::class, 'logout'])->name('logout')->middleware('auth');
