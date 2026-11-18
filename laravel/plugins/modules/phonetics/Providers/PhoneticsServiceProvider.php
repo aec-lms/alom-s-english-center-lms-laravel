@@ -5,6 +5,7 @@ use App\Core\Plugins\BasePluginServiceProvider;
 use Illuminate\Support\Facades\Cache;
 final class PhoneticsServiceProvider extends BasePluginServiceProvider {
  public function slug():string{return 'phonetics';}
+ public function register():void{parent::register();$this->mergeConfigFrom($this->pluginPath('Config/phonetics.php'),'phonetics');$this->app->singleton(\\Plugins\\Modules\\Phonetics\\Services\\CourseCatalog::class);}
  protected function pluginPath(string $relative=''):string{return dirname(__DIR__).($relative!==''?DIRECTORY_SEPARATOR.ltrim($relative,DIRECTORY_SEPARATOR):'');}
  public function onEnable():void{$this->clearPluginCache();}
  public function onDisable():void{$this->clearPluginCache();}
