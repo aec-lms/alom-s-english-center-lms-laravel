@@ -63,7 +63,7 @@
                     data-lesson-id="{{ $lesson->id }}"
                     data-comments-url="{{ route('plugins.learning-interactions.lesson.comments.index', $lesson->id) }}"
                     data-store-url="{{ route('plugins.learning-interactions.lesson.comments.store', $lesson->id) }}"
-                    data-update-template="{{ url('/learning-interactions/lessons/'.$lesson->id.'/comments/__COMMENT__') }}">
+                    data-update-template="{{ route('plugins.learning-interactions.lesson.comments.update', ['lesson' => $lesson->id, 'comment' => '__COMMENT__']) }}">
                     <div class="flex items-center justify-between gap-3">
                         <div><h3 class="font-extrabold text-slate-900 text-sm">Lesson Discussion</h3><p class="text-xs text-slate-500 mt-1">Ask, discuss and learn together.</p></div>
                         <span class="rounded-full bg-white border border-slate-200 px-3 py-1 text-[11px] font-bold text-slate-600" data-comment-count>Loading…</span>
