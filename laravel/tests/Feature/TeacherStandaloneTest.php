@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Core\Plugins\PluginManager;
+use Illuminate\Http\UploadedFile;
 use Plugins\Modules\TeacherManagement\Models\Teacher;
 use Tests\TestCase;
 
