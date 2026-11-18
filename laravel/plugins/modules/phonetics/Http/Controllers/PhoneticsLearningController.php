@@ -48,6 +48,7 @@ final class PhoneticsLearningController extends Controller
                 ],
                 'expires_at' => now()->addMinutes(15)->timestamp,
                 'course_ref' => $courseRef,
+                'lesson_ref' => $request->query('lesson'),
             ];
             $request->session()->put('phonetics.learning_challenge', $challenge);
         } else {
@@ -86,7 +87,7 @@ final class PhoneticsLearningController extends Controller
         );
         $request->session()->forget('phonetics.learning_challenge');
 
-        $entries = $this->assignedEntries($request, $course, null);
+        $entries = $this->assignedEntries($request, $course, $challenge['lesson_ref'] ?? null);
         $entry = $entries->firstWhere('id', (int) $challenge['entry_id']);
         abort_unless($entry, 403, 'This word is no longer assigned to your course or batch.');
 
