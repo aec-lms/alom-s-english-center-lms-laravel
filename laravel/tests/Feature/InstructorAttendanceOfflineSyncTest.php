@@ -20,6 +20,9 @@ class InstructorAttendanceOfflineSyncTest extends TestCase
         $this->withHeaders($auth)->getJson('/api/v1/instructor/attendance/policy')
             ->assertOk()->assertJsonPath('offline_sync_enabled', false)->assertJsonPath('consent_required', true);
 
+        $this->withHeaders($auth)->postJson('/api/v1/instructor/attendance/sync', $this->payload($batch, $student))
+            ->assertForbidden();
+
         $this->withHeaders($auth)->postJson('/api/v1/instructor/attendance/gps-consent', [
             'policy_version' => 'instructor-offline-gps-v1',
         ])->assertOk()->assertJsonPath('offline_sync_enabled', true);
