@@ -35,7 +35,7 @@ class _QrAttendancePageState extends State<QrAttendancePage> {
     appBar: AppBar(title: const Text('QR Attendance')),
     body: Column(children: [
       Expanded(child: MobileScanner(onDetect: (capture) {
-        final value = capture.barcodes.firstOrNull?.rawValue;
+        final value = capture.barcodes.isEmpty ? null : capture.barcodes.first.rawValue;
         if (value != null) submit(value);
       })),
       if (busy) const LinearProgressIndicator(),
