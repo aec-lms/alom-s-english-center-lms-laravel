@@ -239,12 +239,14 @@ class CourseGiftCommerceTest extends TestCase
         $this->assertDatabaseHas('universal_payment_transactions', [
             'id' => $transaction->id,
             'status' => 'verified',
-            'external_trx_id' => 'COURSE-VALIDATION-1',
+            'external_trx_id' => 'BANK-COURSE-1',
         ]);
         $this->assertDatabaseHas('course_cart_orders', [
             'id' => $orderId,
             'status' => 'paid',
         ]);
+        $verifiedNotes = json_decode((string) UniversalPaymentTransaction::query()->findOrFail($transaction->id)->notes, true);
+        $this->assertSame('COURSE-VALIDATION-1', $verifiedNotes['validation_id'] ?? null);
         $this->assertDatabaseHas('course_carts', ['id' => $cartId, 'status' => 'completed']);
         $this->assertDatabaseHas('enrollments', [
             'user_id' => $buyer->id,
