@@ -41,7 +41,7 @@
                             <p class="text-muted small">{{ \Illuminate\Support\Str::limit(strip_tags((string) $course->description), 130) }}</p>
                             <p class="fw-semibold mt-auto">{{ __('BDT') }} {{ number_format((float) $course->price, 2) }}</p>
                             <div class="d-flex gap-2">
-                                <a class="btn btn-primary btn-sm" href="{{ url('/courses/' . $course->slug) }}">{{ __('View course') }}</a>
+                                <a class="btn btn-primary btn-sm" href="{{ url('/course/' . $course->slug) }}">{{ __('View course') }}</a>
                                 <form method="POST" action="{{ route('plugins.course-wishlist.destroy', $course->id) }}">
                                     @csrf
                                     @method('DELETE')
