@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'api_client.dart';
 import 'qr_attendance_page.dart';
+import 'support_tickets_page.dart';
 
 void main() => runApp(const AlomStudentApp());
 
@@ -98,6 +99,7 @@ class _StudentHomeState extends State<StudentHome> {
       _DataList(title: 'Courses', future: home, keyName: 'courses', labelKey: 'title', onRefresh: () => setState(refresh)),
       _DataList(title: 'My Learning', future: profile, keyName: 'enrollments', labelKey: 'course', onRefresh: () => setState(refresh)),
       _DataList(title: 'Notices', future: notices, keyName: 'data', labelKey: 'title', onRefresh: () => setState(refresh)),
+      SupportTicketsPage(api: widget.api),
     ];
     return Scaffold(
       appBar: AppBar(title: const Text("Alom's English Center"), actions: [
@@ -111,6 +113,7 @@ class _StudentHomeState extends State<StudentHome> {
           NavigationDestination(icon: Icon(Icons.menu_book), label: 'Courses'),
           NavigationDestination(icon: Icon(Icons.school), label: 'My Learning'),
           NavigationDestination(icon: Icon(Icons.notifications), label: 'Notices'),
+          NavigationDestination(icon: Icon(Icons.support_agent), label: 'Support'),
         ]),
     );
   }
