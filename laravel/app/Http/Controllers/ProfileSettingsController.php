@@ -30,7 +30,7 @@ class ProfileSettingsController extends Controller
 
     public function media(Request $request, string $username, string $type): StreamedResponse
     {
-        $user = \\App\\Models\\User::query()
+        $user = \App\Models\User::query()
             ->where('username', strtolower($username))
             ->firstOrFail();
 
@@ -47,7 +47,7 @@ class ProfileSettingsController extends Controller
         return $this->streamProfileImage($user, $type, false);
     }
 
-    private function streamProfileImage(\\App\\Models\\User $user, string $type, bool $isPublic): StreamedResponse
+    private function streamProfileImage(\App\Models\User $user, string $type, bool $isPublic): StreamedResponse
     {
         $column = match ($type) {
             'avatar' => 'avatar_path',
