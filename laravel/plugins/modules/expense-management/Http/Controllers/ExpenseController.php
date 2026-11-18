@@ -163,46 +163,93 @@ class ExpenseController extends Controller
             'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
         ]);
 
+        $inRange = static function ($query, string $column) use ($filters): void {
+            if (!empty($filters['date_from'])) $query->whereDate($column, '>=', $filters['date_from']);
+            if (!empty($filters['date_to'])) $query->whereDate($column, '<=', $filters['date_to']);
+        };
+        $branchScope = static function ($query, string $column) use ($actor): void {
+            if ($actor->hasRole('branch_manager') || $actor->hasRole('accountant')) {
+                $query->where($column, (int) ($actor->branch_id ?? 0));
+            }
+        };
+
         $collected = 0.0;
         $refunds = 0.0;
+        $paymentCount = 0;
+        $refundCount = 0;
+        $methodTotals = collect();
+        $issuedInvoices = 0;
+        $issuedAmount = 0.0;
+        $outstanding = 0.0;
+
+        if (app(PluginManager::class)->isEnabled('fees-management') && Schema::hasTable('fee_invoices')) {
+            $issuedQuery = DB::table('fee_invoices');
+            $branchScope($issuedQuery, 'branch_id');
+            $inRange($issuedQuery, 'created_at');
+            $issuedInvoices = (clone $issuedQuery)->count();
+            $issuedAmount = (float) (clone $issuedQuery)->sum('net_amount');
+
+            $outstandingQuery = DB::table('fee_invoices')->whereIn('status', ['unpaid', 'partial']);
+            $branchScope($outstandingQuery, 'branch_id');
+            $inRange($outstandingQuery, 'created_at');
+            $outstanding = (float) $outstandingQuery->get(['net_amount', 'paid_amount'])
+                ->sum(static fn ($invoice): float => max(0, (float) $invoice->net_amount - (float) $invoice->paid_amount));
+        }
+
         if (app(PluginManager::class)->isEnabled('payment-management') && Schema::hasTable('payment_transactions')) {
-            $payments = DB::table('payment_transactions')->whereIn('status', ['settled', 'refunded'])
-                ->when($actor->hasRole('branch_manager') || $actor->hasRole('accountant'), fn ($q) => $q->where('branch_id', $actor->branch_id));
-            if (!empty($filters['date_from'])) $payments->where('settled_at', '>=', $filters['date_from'] . ' 00:00:00');
-            if (!empty($filters['date_to'])) $payments->where('settled_at', '<=', $filters['date_to'] . ' 23:59:59');
+            $payments = DB::table('payment_transactions')->whereIn('status', ['settled', 'refunded']);
+            $branchScope($payments, 'branch_id');
+            $inRange($payments, 'settled_at');
             $collected = (float) (clone $payments)->sum('amount');
+            $paymentCount = (int) (clone $payments)->count();
+            $methodTotals = (clone $payments)
+                ->selectRaw('gateway_slug as method, SUM(amount) as total, COUNT(*) as transactions')
+                ->groupBy('gateway_slug')->orderByDesc('total')->get();
 
             if (Schema::hasTable('payment_refunds')) {
                 $refundQuery = DB::table('payment_refunds')
                     ->join('payment_transactions', 'payment_transactions.id', '=', 'payment_refunds.payment_transaction_id')
-                    ->whereIn('payment_transactions.status', ['settled', 'refunded'])
-                    ->when($actor->hasRole('branch_manager') || $actor->hasRole('accountant'), fn ($q) => $q->where('payment_transactions.branch_id', $actor->branch_id));
-                if (!empty($filters['date_from'])) $refundQuery->whereDate('payment_refunds.created_at', '>=', $filters['date_from']);
-                if (!empty($filters['date_to'])) $refundQuery->whereDate('payment_refunds.created_at', '<=', $filters['date_to']);
-                $refunds = (float) $refundQuery->sum('payment_refunds.amount');
+                    ->whereIn('payment_transactions.status', ['settled', 'refunded']);
+                $branchScope($refundQuery, 'payment_transactions.branch_id');
+                $inRange($refundQuery, 'payment_refunds.created_at');
+                $refunds = (float) (clone $refundQuery)->sum('payment_refunds.amount');
+                $refundCount = (int) (clone $refundQuery)->count();
             }
         }
 
-        // Manual bank/cash receipts are recorded separately from gateway transactions.
+        // Verified manual receipts are a separate ledger from gateway/offline Payment Management transactions.
         if (app(PluginManager::class)->isEnabled('universal-payment') && Schema::hasTable('universal_payment_transactions')) {
-            $manualReceipts = DB::table('universal_payment_transactions')
-                ->where('status', 'verified')
-                ->when($actor->hasRole('branch_manager') || $actor->hasRole('accountant'), fn ($q) => $q->where('branch_id', $actor->branch_id));
-            if (!empty($filters['date_from'])) $manualReceipts->where('verified_at', '>=', $filters['date_from'] . ' 00:00:00');
-            if (!empty($filters['date_to'])) $manualReceipts->where('verified_at', '<=', $filters['date_to'] . ' 23:59:59');
-            $collected += (float) $manualReceipts->sum('amount');
+            $manualReceipts = DB::table('universal_payment_transactions')->where('status', 'verified');
+            $branchScope($manualReceipts, 'branch_id');
+            $inRange($manualReceipts, 'verified_at');
+            $manualCollected = (float) (clone $manualReceipts)->sum('amount');
+            $collected += $manualCollected;
+            $paymentCount += (int) (clone $manualReceipts)->count();
+
+            $manualMethods = (clone $manualReceipts)
+                ->selectRaw('gateway as method, SUM(amount) as total, COUNT(*) as transactions')
+                ->groupBy('gateway')->orderByDesc('total')->get();
+            $methodTotals = $methodTotals->concat($manualMethods)->values();
         }
 
         $expenseQuery = $this->scopedQuery($actor)->where('status', 'approved');
         if (!empty($filters['date_from'])) $expenseQuery->whereDate('expense_date', '>=', $filters['date_from']);
         if (!empty($filters['date_to'])) $expenseQuery->whereDate('expense_date', '<=', $filters['date_to']);
         $expenses = (float) $expenseQuery->sum('amount');
+        $expenseCount = (int) (clone $expenseQuery)->count();
 
         return view('expense-management::finance', [
             'collected' => $collected,
             'refunds' => $refunds,
             'expenses' => $expenses,
             'netBalance' => $collected - $refunds - $expenses,
+            'paymentCount' => $paymentCount,
+            'refundCount' => $refundCount,
+            'expenseCount' => $expenseCount,
+            'issuedInvoices' => $issuedInvoices,
+            'issuedAmount' => $issuedAmount,
+            'outstanding' => $outstanding,
+            'methodTotals' => $methodTotals,
             'filters' => $filters,
         ]);
     }
