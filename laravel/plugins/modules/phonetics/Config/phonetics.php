@@ -74,6 +74,7 @@ return [
         'free_price_column' => 'price',
         'free_price_operator' => '<=',
         'free_price_value' => 0,
+        'admin_roles' => ['admin', 'super_admin'],
         'paid_enrollment_statuses' => ['active', 'completed'],
     ],
 ];
