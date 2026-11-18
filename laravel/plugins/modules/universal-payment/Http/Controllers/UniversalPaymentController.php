@@ -452,20 +452,22 @@ class UniversalPaymentController extends Controller
                 return redirect()->away($checkoutUrl);
             } catch (\Throwable $exception) {
                 report($exception);
-                DB::transaction(function () use ($tx): void {
+                $ambiguous = $exception instanceof \Illuminate\Http\Client\ConnectionException;
+                DB::transaction(function () use ($tx, $ambiguous): void {
                     $locked = UniversalPaymentTransaction::query()->whereKey($tx->id)->lockForUpdate()->first();
                     if ($locked && $locked->status === 'pending') {
-                        // The gateway service marks a definitive provider rejection
-                        // as failed before throwing. If it is still pending here,
-                        // the request may have timed out after the provider created
-                        // a session; require reconciliation before another charge.
                         $locked->update([
-                            'status' => 'risk_review',
-                            'notes' => 'SSLCOMMERZ session initialization outcome is unknown. Reconcile with the provider before allowing a retry.',
+                            'status' => $ambiguous ? 'risk_review' : 'failed',
+                            'notes' => $ambiguous
+                                ? 'SSLCOMMERZ session initialization outcome is unknown. Reconcile with the provider before allowing a retry.'
+                                : 'SSLCOMMERZ checkout could not be initialized before a provider session was confirmed.',
                         ]);
                     }
                 });
-                return back()->withErrors(['gateway' => 'Unable to start hosted checkout. Check the SSLCOMMERZ plugin configuration and try again.'])->withInput();
+                $message = $ambiguous
+                    ? 'The payment session outcome is unknown. Contact support before retrying; do not submit another payment.'
+                    : 'Unable to start hosted checkout. Check the SSLCOMMERZ plugin configuration and try again.';
+                return back()->withErrors(['gateway' => $message])->withInput();
             }
         }
 
