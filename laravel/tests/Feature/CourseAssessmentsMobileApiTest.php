@@ -76,8 +76,10 @@ class CourseAssessmentsMobileApiTest extends TestCase
             ->assertJsonPath('attempt.status', 'submitted')
             ->assertJsonPath('attempt.auto_score', '2.00');
 
+        app('auth')->forgetGuards();
         $this->withToken($tokenB)->getJson("/api/v1/my-learning/assessments/attempts/{$attemptId}")
             ->assertNotFound();
+        app('auth')->forgetGuards();
         $this->withToken($tokenA)->putJson("/api/v1/my-learning/assessments/attempts/{$attemptId}/questions/{$questionId}", [
             'selected_option' => 0,
         ])->assertStatus(409);
@@ -148,6 +150,7 @@ class CourseAssessmentsMobileApiTest extends TestCase
             'teacher_feedback' => 'Well done.',
         ])->assertRedirect()->assertSessionHasNoErrors();
 
+        app('auth')->forgetGuards();
         $this->withToken($token)->getJson('/api/v1/my-learning/assessments/history')
             ->assertOk()
             ->assertJsonPath('data.0.status', 'graded')
