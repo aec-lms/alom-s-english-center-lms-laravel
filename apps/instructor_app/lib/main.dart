@@ -30,7 +30,7 @@ class InstructorGate extends StatefulWidget {
 }
 class _InstructorGateState extends State<InstructorGate> {
   final api = MobileApi();
-  late final pushNotifications = AecPushNotificationService(api);
+  late final pushNotifications = AecPushNotificationService(api, onMessage: _showPushMessage);
   bool loading = true;
   bool signedIn = false;
 
@@ -45,6 +45,12 @@ class _InstructorGateState extends State<InstructorGate> {
       });
       if (restored) unawaited(pushNotifications.initialize());
     });
+  }
+
+  void _showPushMessage(String title, String body) {
+    if (!mounted) return;
+    final message = body.isEmpty ? title : '$title\n$body';
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _onLogin() {
