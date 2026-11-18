@@ -260,4 +260,24 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
   }
  }
 
+
+ public function test_branchless_student_cannot_access_branch_scoped_batch_vocabulary():void{
+  Schema::create('phonetics_branch_batches',function(Blueprint $table):void{$table->unsignedBigInteger('id')->primary();$table->string('name');$table->unsignedBigInteger('branch_id')->nullable();});
+  Schema::create('phonetics_branch_memberships',function(Blueprint $table):void{$table->id();$table->string('user_id',128);$table->string('batch_ref',128);$table->string('lms_driver',40);$table->boolean('is_active')->default(true);});
+  try{
+   $student=$this->createUserWithRole('student');
+   DB::table('phonetics_branch_batches')->insert(['id'=>77,'name'=>'Branch Batch','branch_id'=>2]);
+   DB::table('phonetics_branch_memberships')->insert(['user_id'=>(string)$student->getAuthIdentifier(),'batch_ref'=>'77','lms_driver'=>'aec','is_active'=>true]);
+   config([
+    'phonetics.catalog.batches'=>['table'=>'phonetics_branch_batches','id'=>'id','title'=>'name','branch_id'=>'branch_id'],
+    'phonetics.catalog.batch_memberships'=>['table'=>'phonetics_branch_memberships','user_id'=>'user_id','batch_id'=>'batch_ref','driver_column'=>'lms_driver','active_column'=>'is_active','active_value'=>1],
+   ]);
+   $this->expectException(AccessDeniedHttpException::class);
+   app(CourseCatalog::class)->isBatchMember($student,'77');
+  }finally{
+   Schema::dropIfExists('phonetics_branch_memberships');
+   Schema::dropIfExists('phonetics_branch_batches');
+  }
+ }
+
 }
