@@ -108,8 +108,10 @@ class CourseBundleController extends Controller
         $bundle = CourseBundle::query()->where('slug', $slug)->where('status', 'published')->with('items')->firstOrFail();
         $courses = $this->publishedBundleCourses($bundle);
         abort_unless($courses->count() >= 2, 404);
+        $purchaseAvailable = !Schema::hasTable('batches') || !Schema::hasColumn('batches', 'status')
+            || !DB::table('batches')->whereIn('course_id', $courses->pluck('id'))->where('status', 'open')->exists();
 
-        return view('course-bundles::show', compact('bundle', 'courses'));
+        return view('course-bundles::show', compact('bundle', 'courses', 'purchaseAvailable'));
     }
 
     public function checkout(Request $request, string $slug): RedirectResponse
@@ -236,6 +238,7 @@ class CourseBundleController extends Controller
 
     private function validateBundle(Request $request, $actor, ?int $ignoreId = null): array
     {
+        $this->assertCourseIntegration();
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:180'],
             'description' => ['nullable', 'string', 'max:5000'],
