@@ -25,66 +25,14 @@ class _SupportTicketsPageState extends State<SupportTicketsPage> {
   }
 
   Future<void> createTicket() async {
-    final subject = TextEditingController();
-    final message = TextEditingController();
-    final submitted = await showDialog<bool>(
+    final values = await showDialog<Map<String, String>>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('New support request'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: subject,
-                maxLength: 160,
-                decoration: const InputDecoration(
-                  labelText: 'Subject',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: message,
-                minLines: 4,
-                maxLines: 7,
-                maxLength: 5000,
-                decoration: const InputDecoration(
-                  labelText: 'How can we help?',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(
-              dialogContext,
-              subject.text.trim().length >= 5 &&
-                  message.text.trim().length >= 5,
-            ),
-            child: const Text('Submit'),
-          ),
-        ],
-      ),
+      builder: (_) => const _NewSupportTicketDialog(),
     );
-
-    if (submitted != true || !mounted) {
-      subject.dispose();
-      message.dispose();
-      return;
-    }
+    if (values == null || !mounted) return;
 
     try {
-      await widget.api.postJson('/my/support-tickets', {
-        'subject': subject.text.trim(),
-        'message': message.text.trim(),
-      });
+      await widget.api.postJson('/my/support-tickets', values);
       if (!mounted) return;
       setState(reload);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -96,9 +44,6 @@ class _SupportTicketsPageState extends State<SupportTicketsPage> {
           SnackBar(content: Text(error.toString())),
         );
       }
-    } finally {
-      subject.dispose();
-      message.dispose();
     }
   }
 
@@ -317,5 +262,72 @@ class _SupportTicketDetailPageState extends State<SupportTicketDetailPage> {
             );
           },
         ),
+      );
+}
+
+
+class _NewSupportTicketDialog extends StatefulWidget {
+  const _NewSupportTicketDialog();
+
+  @override
+  State<_NewSupportTicketDialog> createState() => _NewSupportTicketDialogState();
+}
+
+class _NewSupportTicketDialogState extends State<_NewSupportTicketDialog> {
+  final subject = TextEditingController();
+  final message = TextEditingController();
+
+  @override
+  void dispose() {
+    subject.dispose();
+    message.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: const Text('New support request'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: subject,
+                maxLength: 160,
+                decoration: const InputDecoration(
+                  labelText: 'Subject',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: message,
+                minLines: 4,
+                maxLines: 7,
+                maxLength: 5000,
+                decoration: const InputDecoration(
+                  labelText: 'How can we help?',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: subject.text.trim().length < 5 ||
+                    message.text.trim().length < 5
+                ? null
+                : () => Navigator.pop(context, {
+                      'subject': subject.text.trim(),
+                      'message': message.text.trim(),
+                    }),
+            child: const Text('Submit'),
+          ),
+        ],
       );
 }
