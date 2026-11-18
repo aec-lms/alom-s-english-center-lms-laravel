@@ -12,6 +12,7 @@ Route::middleware(['web','installed','auth','plugin:course-content-studio','perm
         Route::get('/',[AdminCourseContentStudioController::class,'index'])->name('index');
         Route::post('/categories',[AdminCourseContentStudioController::class,'storeCategory'])->name('categories.store');
         Route::post('/posts',[AdminCourseContentStudioController::class,'store'])->name('posts.store');
+        Route::get('/posts/{post}/edit',[AdminCourseContentStudioController::class,'edit'])->whereNumber('post')->name('posts.edit');
         Route::put('/posts/{post}',[AdminCourseContentStudioController::class,'update'])->whereNumber('post')->name('posts.update');
         Route::delete('/posts/{post}',[AdminCourseContentStudioController::class,'archive'])->whereNumber('post')->name('posts.archive');
         Route::get('/courses/{course}/builder',[AdminCourseContentStudioController::class,'builder'])->whereNumber('course')->name('builder');
