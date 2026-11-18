@@ -9,6 +9,49 @@ use Tests\TestCase;
 
 class DeviceSessionManagementTest extends TestCase
 {
+    public function test_successful_login_registers_a_hashed_browser_session_and_logout_revokes_it(): void
+    {
+        $this->markSystemInstalled();
+        $user = $this->createUserWithRole('admin');
+
+        $this->post(route('login.attempt'), [
+            'email' => $user->email,
+            'password' => 'password',
+        ])->assertRedirect();
+
+        $session = DeviceSession::query()->where('user_id', $user->id)->firstOrFail();
+        $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $session->session_hash);
+        $this->assertSame(session('device_session_hash'), $session->session_hash);
+
+        $this->post(route('logout'))->assertRedirect(route('home'));
+        $this->assertNotNull($session->fresh()->revoked_at);
+    }
+
+    public function test_revoked_session_is_logged_out_on_its_next_web_request(): void
+    {
+        $this->markSystemInstalled();
+        $user = $this->createUserWithRole('admin');
+        $hash = hash('sha256', 'revoked-browser-session');
+
+        DeviceSession::query()->create([
+            'user_id' => $user->id,
+            'session_hash' => $hash,
+            'device_name' => 'Test browser',
+            'logged_in_at' => now()->subHour(),
+            'last_seen_at' => now(),
+            'revoked_at' => now(),
+            'revoke_reason' => 'Test revocation',
+        ]);
+
+        $this->actingAs($user)
+            ->withSession(['device_session_hash' => $hash])
+            ->get(route('admin.dashboard'))
+            ->assertRedirect(route('login'))
+            ->assertSessionHas('error');
+
+        $this->assertGuest();
+    }
+
     public function test_admin_can_list_and_revoke_another_users_browser_session(): void
     {
         $this->markSystemInstalled();
