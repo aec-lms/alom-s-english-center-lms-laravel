@@ -129,6 +129,24 @@ class MobileApi {
     return _decode(response);
   }
 
+  Future<Map<String, dynamic>> deleteJson(String path) async {
+    final token = await readToken();
+    if (token == null || token.isEmpty) {
+      throw const MobileApiException('Please sign in again.', 401);
+    }
+    final response = await client.delete(
+      Uri.parse('$baseUrl$path'),
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      await storage.delete(key: _tokenKey);
+    }
+    return _decode(response);
+  }
+
   Future<Map<String, dynamic>> postMultipart(
     String path,
     Map<String, String> fields, {
