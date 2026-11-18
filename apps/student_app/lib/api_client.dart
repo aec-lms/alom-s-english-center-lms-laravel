@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -24,7 +25,7 @@ class MobileApi {
         baseUrl = (baseUrl ??
                 const String.fromEnvironment(
                   'API_BASE_URL',
-                  defaultValue: 'https://www.alomsenglishcenter.com/api/v1',
+                  defaultValue: 'https://your-domain.example/api/v1',
                 ))
             .replaceFirst(RegExp(r'/+$'), '');
 
@@ -75,7 +76,7 @@ class MobileApi {
         'password': password,
         'device_name': 'Alom Student App',
         'device_id': await _deviceId(),
-        'platform': 'android',
+        'platform': Platform.isIOS ? 'ios' : 'android',
         'app_version': '1.0.0',
       }),
     );
