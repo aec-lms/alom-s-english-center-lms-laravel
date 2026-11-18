@@ -293,6 +293,7 @@ class _NewSupportTicketDialogState extends State<_NewSupportTicketDialog> {
             children: [
               TextField(
                 controller: subject,
+                onChanged: (_) => setState(() {}),
                 maxLength: 160,
                 decoration: const InputDecoration(
                   labelText: 'Subject',
@@ -302,6 +303,7 @@ class _NewSupportTicketDialogState extends State<_NewSupportTicketDialog> {
               const SizedBox(height: 12),
               TextField(
                 controller: message,
+                onChanged: (_) => setState(() {}),
                 minLines: 4,
                 maxLines: 7,
                 maxLength: 5000,
