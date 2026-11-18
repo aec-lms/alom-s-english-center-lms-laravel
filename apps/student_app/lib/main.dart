@@ -1,4 +1,4 @@
-import 'package:material_ui/material_ui.dart';
+import 'package:flutter/material.dart';
 import 'api_client.dart';
 import 'qr_attendance_page.dart';
 
