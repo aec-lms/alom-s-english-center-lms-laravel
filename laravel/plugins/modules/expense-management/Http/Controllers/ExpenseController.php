@@ -172,6 +172,15 @@ class ExpenseController extends Controller
             if (!empty($filters['date_to'])) $payments->where('settled_at', '<=', $filters['date_to'] . ' 23:59:59');
             $collected = (float) (clone $payments)->sum('amount');
 
+            if (app(PluginManager::class)->isEnabled('universal-payment') && Schema::hasTable('universal_payment_transactions')) {
+                $manualReceipts = DB::table('universal_payment_transactions')
+                    ->where('status', 'verified')
+                    ->when($actor->hasRole('branch_manager') || $actor->hasRole('accountant'), fn ($q) => $q->where('branch_id', $actor->branch_id));
+                if (!empty($filters['date_from'])) $manualReceipts->where('verified_at', '>=', $filters['date_from'] . ' 00:00:00');
+                if (!empty($filters['date_to'])) $manualReceipts->where('verified_at', '<=', $filters['date_to'] . ' 23:59:59');
+                $collected += (float) $manualReceipts->sum('amount');
+            }
+
             if (Schema::hasTable('payment_refunds')) {
                 $refundQuery = DB::table('payment_refunds')
                     ->join('payment_transactions', 'payment_transactions.id', '=', 'payment_refunds.payment_transaction_id')
