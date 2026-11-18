@@ -44,6 +44,35 @@ class ProfileSettingsTest extends TestCase
         ], $user->fresh()->social_links);
     }
 
+    public function test_partial_profile_update_preserves_fields_that_were_not_submitted(): void
+    {
+        $this->markSystemInstalled();
+        $user = $this->createUserWithRole('student', 17, 'profile-partial@aec.test');
+        $user->forceFill([
+            'username' => 'existing_learner',
+            'headline' => 'Existing headline',
+            'bio' => 'Existing biography',
+            'location' => 'Dhaka',
+            'website' => 'https://example.com',
+            'profile_is_public' => true,
+            'social_links' => ['youtube' => 'https://youtube.com/@existing'],
+        ])->save();
+
+        $this->actingAs($user)->put(route('profile.settings.update'), [
+            'display_name' => 'Updated display name',
+        ])->assertRedirect(route('profile.settings.edit'));
+
+        $fresh = $user->fresh();
+        $this->assertSame('existing_learner', $fresh->username);
+        $this->assertSame('Existing headline', $fresh->headline);
+        $this->assertSame('Existing biography', $fresh->bio);
+        $this->assertSame('Dhaka', $fresh->location);
+        $this->assertSame('https://example.com', $fresh->website);
+        $this->assertTrue($fresh->profile_is_public);
+        $this->assertSame(['youtube' => 'https://youtube.com/@existing'], $fresh->social_links);
+        $this->assertSame('Updated display name', $fresh->display_name);
+    }
+
     public function test_user_can_upload_a_valid_avatar_and_cover_image(): void
     {
         $this->markSystemInstalled();
@@ -179,6 +208,8 @@ class ProfileSettingsTest extends TestCase
             'user_id' => $user->id, 'session_hash' => $otherHash, 'device_name' => 'Other',
             'logged_in_at' => now(), 'last_seen_at' => now(),
         ]);
+        $rememberToken = $user->getRememberToken();
+        $apiToken = $user->createToken('old-client');
 
         $this->actingAs($user)->withSession(['device_session_hash' => $currentHash])
             ->put(route('profile.settings.update'), [
@@ -197,6 +228,8 @@ class ProfileSettingsTest extends TestCase
         $this->assertNotNull($other->fresh()->revoked_at);
         $this->assertDatabaseHas('device_sessions', ['session_hash' => $currentHash, 'revoked_at' => null]);
         $this->assertTrue(\Illuminate\Support\Facades\Hash::check('A_New_Strong_Password_2026!', $user->fresh()->password));
+        $this->assertNotSame($rememberToken, $user->fresh()->getRememberToken());
+        $this->assertDatabaseMissing('personal_access_tokens', ['id' => $apiToken->accessToken->id]);
         $log = \App\Models\AuditLog::query()->where('user_id', $user->id)->where('action', 'security.password_changed')->firstOrFail();
         $this->assertStringNotContainsString('A_New_Strong_Password_2026!', json_encode($log->metadata));
     }
