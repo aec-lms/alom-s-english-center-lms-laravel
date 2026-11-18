@@ -69,6 +69,8 @@ class AttendanceSyncController extends Controller
         $batchMappingId = (int) $mapping->id;
 
         $result = DB::transaction(function () use ($validated, $batch, $mapping, $batchMappingId, $actor): array {
+            // Serialize all writes for this batch so concurrent manual/offline/QR marks cannot race on an empty attendance row.
+            AttendanceBatchMapping::query()->whereKey($batchMappingId)->lockForUpdate()->firstOrFail();
             $synced = 0;
             $duplicates = 0;
 
