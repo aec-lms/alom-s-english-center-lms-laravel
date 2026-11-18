@@ -130,6 +130,51 @@ class StudentTrackingPluginTest extends TestCase
         ]);
     }
 
+    public function test_guardian_can_only_view_activity_for_linked_students(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['student-tracking', 'guardian-management', 'student-management']);
+
+        $guardianUser = $this->createUserWithRole('guardian');
+        $guardianId = DB::table('guardians')->insertGetId([
+            'user_id' => $guardianUser->id,
+            'branch_id' => null,
+            'relationship' => 'Parent',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $linkedStudentUser = $this->createUserWithRole('student');
+        $linkedStudentId = DB::table('students')->insertGetId([
+            'user_id' => $linkedStudentUser->id,
+            'student_code' => 'GUARDIAN-LINKED-001',
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('guardian_student')->insert([
+            'guardian_id' => $guardianId,
+            'student_id' => $linkedStudentId,
+            'is_primary' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $unlinkedStudent = $this->createUserWithRole('student');
+        app(StudentActivityTracker::class)->record((int) $linkedStudentUser->id, 'lesson_completed', 'lesson', 'linked-lesson', 180, [
+            'course_title' => 'Linked Student Course',
+        ]);
+        app(StudentActivityTracker::class)->record((int) $unlinkedStudent->id, 'lesson_completed', 'lesson', 'private-lesson', 240, [
+            'course_title' => 'Unlinked Student Private Course',
+        ]);
+
+        $this->actingAs($guardianUser)->get('/student-tracking/guardian')
+            ->assertOk()
+            ->assertSee('Linked Student Course')
+            ->assertDontSee('Unlinked Student Private Course');
+    }
+
     public function test_student_tracking_rejects_unknown_event_types(): void
     {
         $this->markSystemInstalled();
