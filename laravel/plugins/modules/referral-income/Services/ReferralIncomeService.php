@@ -7,6 +7,7 @@ namespace Plugins\Modules\ReferralIncome\Services;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
@@ -48,6 +49,10 @@ class ReferralIncomeService
         }
         if ((int) $record->owner_user_id === (int) $referred->id) {
             throw ValidationException::withMessages(['referral_code' => 'You cannot use your own referral code.']);
+        }
+
+        if (Schema::hasTable('commerce_orders') && DB::table('commerce_orders')->where('user_id', $referred->id)->whereIn('status', ['paid', 'settled', 'completed'])->exists()) {
+            throw ValidationException::withMessages(['referral_code' => 'Referral codes must be applied before the first paid order.']);
         }
 
         DB::transaction(function () use ($referred, $record): void {
