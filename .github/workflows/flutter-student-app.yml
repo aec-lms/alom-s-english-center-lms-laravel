@@ -1,0 +1,64 @@
+name: Flutter Student App
+
+on:
+  pull_request:
+    paths:
+      - 'apps/student_app/**'
+      - '.github/workflows/flutter-student-app.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/student_app/**'
+      - '.github/workflows/flutter-student-app.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  student-app:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/student_app
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Install Flutter stable SDK
+        run: |
+          git clone --depth 1 --branch stable https://github.com/flutter/flutter.git "$HOME/flutter"
+          echo "$HOME/flutter/bin" >> "$GITHUB_PATH"
+          "$HOME/flutter/bin/flutter" --version
+      - name: Generate native platform scaffolding
+        run: flutter create --platforms=android,ios --project-name aloms_student_app .
+      - name: Ensure Gradle plugin repositories include Maven Central
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          settings = Path("android/settings.gradle.kts")
+          source = settings.read_text()
+          pattern = re.compile(r"(pluginManagement\s*\{.*?repositories\s*\{)(.*?)(\n\s*\})", re.S)
+          match = pattern.search(source)
+          if match:
+              repositories = match.group(2)
+              if "mavenCentral()" not in repositories:
+                  if "google()" in repositories:
+                      repositories = repositories.replace("google()", "google()\n        mavenCentral()", 1)
+                  else:
+                      repositories = "\n        google()\n        mavenCentral()\n        gradlePluginPortal()\n" + repositories
+                  source = source[:match.start(2)] + repositories + source[match.end(2):]
+          else:
+              source = "pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }\n" + source
+          settings.write_text(source)
+          PY
+      - name: Resolve dependencies
+        run: flutter pub get
+      - name: Check formatting
+        run: dart format lib test
+      - name: Analyze
+        run: flutter analyze
+      - name: Test
+        run: flutter test
+      - name: Build Android APK
+        run: flutter build apk --debug --dart-define=API_BASE_URL=https://www.alomsenglishcenter.com/api/v1
