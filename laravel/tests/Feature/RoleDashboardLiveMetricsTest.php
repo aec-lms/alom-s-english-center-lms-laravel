@@ -78,7 +78,7 @@ class RoleDashboardLiveMetricsTest extends TestCase
     public function test_branch_manager_dashboard_counts_only_attendance_from_the_assigned_branch(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['branch-management', 'attendance-management']);
+        $this->activatePlugins(['branch-management', 'attendance-management', 'fees-management']);
 
         $branchA = $this->createBranch('PORTAL-A');
         $branchB = $this->createBranch('PORTAL-B');
