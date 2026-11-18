@@ -12,5 +12,6 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:page-builder', 'permissio
         Route::get('/', [PageBuilderController::class, 'index'])->name('index');
         Route::post('/', [PageBuilderController::class, 'store'])->name('store');
         Route::put('/{page}', [PageBuilderController::class, 'update'])->name('update');
+        Route::post('/{page}/revisions/{revision}/restore', [PageBuilderController::class, 'restoreRevision'])->name('revisions.restore');
         Route::delete('/{page}', [PageBuilderController::class, 'destroy'])->name('destroy');
     });
