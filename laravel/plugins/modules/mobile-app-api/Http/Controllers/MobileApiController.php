@@ -216,7 +216,7 @@ class MobileApiController extends Controller
         // relying on a guard's current token when it is a transient session token.
         if ($user && is_string($plainTextToken) && $plainTextToken !== '') {
             $accessToken = PersonalAccessToken::findToken($plainTextToken);
-            if ($accessToken && (int) $accessToken->tokenable_id === (int) $user->getKey()) {
+            if ($accessToken && (int) $accessToken->tokenable_id === (int) $user->getKey() && $accessToken->tokenable_type === $user->getMorphClass()) {
                 $accessToken->delete();
             }
         }
