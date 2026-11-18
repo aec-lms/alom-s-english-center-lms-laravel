@@ -3,21 +3,31 @@
 Reviewed upload: `spoken-english-practice-laravel-plugin (4).zip` (18 November 2026).
 
 ## Package verification
-- Original archive: 44 entries; 27 supplied source checksums matched.
-- Hardened package: `spoken-english-practice-laravel-plugin-1.0.2.zip`.
-- 24 PHP files pass PHP syntax lint.
-- 28 SHA-256 entries match the packaged files; the ZIP integrity test passes.
-- The plugin remains an independent module, separate from Phonetics and AL Branding & Loader.
 
-## AEC LMS compatibility
-- Modules are installed under `laravel/plugins/modules/<slug>`.
-- Provider contract: `App\Core\Plugins\BasePluginServiceProvider`.
-- Host course schema: `courses(id,title,slug,description,price,status,branch_id?)`.
-- Host enrollment schema: `enrollments(user_id,course_id,status,branch_id?)`.
-- Host access accepts `active` and `completed` enrollment states and checks branch IDs where present.
-- Route loading is idempotent for the runtime ZIP-install path, where the plugin manager may load a route file after provider boot.
+- Hardened package: `spoken-english-practice-laravel-plugin-1.0.2.zip`.
+- Archive contains the single plugin root directory `spoken-english-practice/`; the AEC uploader accepts a root manifest or one directory below the ZIP root.
+- Package SHA-256: `aab4c5bab18e19dc45b5e5a34ab7f88538e62a2fce66edcc3158e21a48fc9271`.
+- 24 PHP files pass PHP syntax lint.
+- All 28 SHA-256 entries match; the ZIP integrity test passes.
+- Composer validation was not run because Composer is not installed in the review runtime.
+- No Laravel/MySQL feature or migration integration test has been run.
+
+## AEC LMS integration compatibility checked against `main`
+
+Repository: `aec-lms/alom-s-english-center-lms-laravel`.
+
+- Laravel application root: `laravel/`; independent plugin modules live at `laravel/plugins/modules/<slug>`.
+- Core version defaults to `2.0.0` in `laravel/config/lms.php`; manifest compatibility `^2.0` matches that default.
+- `PluginManager::locateManifestFile()` accepts `plugin.json` at the archive root or one subdirectory deep. The package's one-folder layout is accepted.
+- `PluginManager::verifyPackageIntegrity()` requires `checksums.json`, requires the `plugin.json` checksum, checks each SHA-256 and rejects unlisted package files. The v1.0.2 package contains the required manifest and checksum inventory.
+- `PluginManager::registerPluginAutoload()` derives the plugin namespace prefix from the manifest provider and maps it to the installed plugin directory; a Composer autoload edit is not required for this plugin.
+- `BasePluginServiceProvider` loads plugin web/API routes, views and migrations. PluginManager also requires route files after installation, so route registration must be idempotent.
+- The plugin uses the expected provider contract and its route file has a named-route guard for the runtime second load.
+- Manifest has no hard dependencies; `course-management` and `exam-management` are optional dependencies, so absence of either does not block installation.
+- Host core config defaults to `APP_VERSION=2.0.0`; confirm the deployed value before upload because a custom version outside `^2.0` will reject the package.
 
 ## Issues addressed in package v1.0.2
+
 1. Paid/course-scoped exams cannot bypass enrollment when no linked course exists.
 2. Server-side deadlines close expired attempts; expired attempts count toward the attempt limit.
 3. Attempt creation/submission use database row locks and request throttling.
@@ -30,10 +40,12 @@ Reviewed upload: `spoken-english-practice-laravel-plugin (4).zip` (18 November 2
 10. Replaced uploaded audio is cleaned up after a successful update.
 11. AEC provider boot avoids duplicate route/view/migration loading; route definitions are also idempotent.
 
-## Verification still required before production
-- Run the plugin through the AEC Plugin Manager against a disposable copy of the LMS.
-- Execute Laravel feature tests and MySQL migrations/integration tests.
-- Verify plugin enable/disable/uninstall and student/admin browser flows.
-- Do not deploy migrations to the live hosting environment until the staging acceptance checks pass.
+## Integration state and production gates
 
-The ZIP package has been prepared and statically checked. It has **not** been installed on the live hosting account, and its source files have **not** yet been merged into the LMS repository.
+- The v1.0.2 ZIP is prepared and statically checked.
+- The plugin source files are **not yet present in the LMS Git repository**; the audit branch contains this review document only.
+- The package has **not** been uploaded through the LMS Admin Panel and has **not** been installed on live hosting.
+- Before production: install it in a disposable/staging copy through Admin Panel → Plugins → Upload Plugin ZIP; verify checksum acceptance, migration, enable/disable, route availability, admin permission assignment, student free/paid enrollment, branch isolation, exam deadline/attempt limits, audio upload/cleanup, and rollback.
+- Run the Laravel feature suite and MySQL migration/integration tests against the actual LMS revision. Do not treat PHP lint or package checksums as proof of runtime compatibility.
+- Keep this plugin independent from the Phonetics plugin and the AL Branding & Loader plugin.
+
