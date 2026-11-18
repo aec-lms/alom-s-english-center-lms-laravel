@@ -1,0 +1,18 @@
+{
+  "slug": "quiz-contest",
+  "name": "Quiz Contest & Leaderboard",
+  "version": "1.0.0",
+  "author": "Alom's English Center",
+  "category": "academic",
+  "description": "Free skill-based quiz contests with timed entry windows, one attempt per student and transparent score-based winner ranking.",
+  "core_compatibility": "^2.0",
+  "dependencies": [],
+  "permissions": [
+    {"slug": "quiz.contests.manage", "name": "Create and manage quiz contests"}
+  ],
+  "settings_schema": [],
+  "provider": "Plugins\\Modules\\QuizContest\\Providers\\QuizContestServiceProvider",
+  "admin_menu": [
+    {"group": "Academic & Operations", "label": "Quiz Contests", "route": "plugins.quiz-contest.admin.index", "order": 170, "permission": "quiz.contests.manage"}
+  ]
+}
