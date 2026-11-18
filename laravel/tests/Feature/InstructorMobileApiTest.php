@@ -38,10 +38,14 @@ class InstructorMobileApiTest extends TestCase
     public function test_instructor_api_only_exposes_explicitly_assigned_courses_and_students(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['course-management', 'mobile-app-api']);
+        $this->activatePlugins(['course-management', 'student-management', 'mobile-app-api']);
         $teacher = $this->createUserWithRole('teacher');
         $student = $this->createUserWithRole('student');
         $teacher->forceFill(['branch_id' => 1])->save();
+        $studentProfileId = DB::table('students')->insertGetId([
+            'user_id' => $student->id, 'branch_id' => 1, 'student_code' => 'MOB-STUDENT-001',
+            'admission_date' => today(), 'status' => 'active', 'created_at' => now(), 'updated_at' => now(),
+        ]);
         $assigned = $this->course(1, 'assigned');
         $unassigned = $this->course(1, 'unassigned');
         $this->assignCourse($assigned, $teacher->id);
@@ -61,7 +65,8 @@ class InstructorMobileApiTest extends TestCase
 
         $this->withToken($token)->getJson('/api/v1/instructor/courses/mobile-instructor-course-assigned/students')
             ->assertOk()->assertJsonPath('meta.total', 1)
-            ->assertJsonPath('data.0.id', $student->id);
+            ->assertJsonPath('data.0.student.id', $studentProfileId)
+            ->assertJsonPath('data.0.student.user_id', $student->id);
 
         $this->withToken($token)->getJson('/api/v1/instructor/courses/mobile-instructor-course-unassigned/students')
             ->assertNotFound();
