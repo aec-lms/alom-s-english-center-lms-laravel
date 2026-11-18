@@ -37,6 +37,35 @@ class CourseCommerceAdminControlsTest extends TestCase
         $this->assertSame(true, $stored['allow_personal_message']);
     }
 
+    public function test_admin_can_suspend_and_reactivate_only_unclaimed_paid_vouchers(): void
+    {
+        $admin = $this->createUserWithRole('admin');
+        $sender = $this->createUserWithRole('student');
+        $voucherId = DB::table('course_gift_vouchers')->insertGetId([
+            'sender_user_id' => $sender->id,
+            'recipient_email' => 'voucher-owner@example.test',
+            'redeem_token_hash' => hash('sha256', str_repeat('X', 64)),
+            'redeem_token_encrypted' => encrypt(str_repeat('X', 64)),
+            'currency' => 'BDT',
+            'amount' => 1000,
+            'remaining_amount' => 1000,
+            'status' => 'paid',
+            'expires_at' => now()->addDays(30),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($admin)->patch(route('plugins.marketing.gift-vouchers.status', $voucherId), [
+            'status' => 'suspended',
+        ])->assertRedirect();
+        $this->assertDatabaseHas('course_gift_vouchers', ['id' => $voucherId, 'status' => 'suspended']);
+
+        $this->actingAs($admin)->patch(route('plugins.marketing.gift-vouchers.status', $voucherId), [
+            'status' => 'paid',
+        ])->assertRedirect();
+        $this->assertDatabaseHas('course_gift_vouchers', ['id' => $voucherId, 'status' => 'paid']);
+    }
+
     public function test_student_cannot_change_coupon_or_gift_voucher_admin_settings(): void
     {
         $student = $this->createUserWithRole('student');
