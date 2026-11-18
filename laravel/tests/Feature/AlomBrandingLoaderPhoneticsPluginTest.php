@@ -220,4 +220,24 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
   $this->assertDatabaseMissing('phonetic_exams',['title'=>'Ambiguous IPA Exam']);
  }
 
+
+ public function test_enrollment_mapping_without_an_active_status_column_fails_closed():void{
+  Schema::create('phonetics_guard_courses',function(Blueprint $table):void{$table->string('id',20)->primary();$table->decimal('price',10,2)->default(0);$table->string('status',20)->default('published');});
+  Schema::create('phonetics_guard_enrollments',function(Blueprint $table):void{$table->id();$table->string('user_id',128);$table->string('course_id',20);});
+  try{
+   $student=$this->createUserWithRole('student');
+   DB::table('phonetics_guard_courses')->insert(['id'=>'course-1','price'=>0,'status'=>'published']);
+   DB::table('phonetics_guard_enrollments')->insert(['user_id'=>(string)$student->getAuthIdentifier(),'course_id'=>'course-1']);
+   config([
+    'phonetics.catalog.courses'=>['table'=>'phonetics_guard_courses','id'=>'id','title'=>'title','price'=>'price','status'=>'status'],
+    'phonetics.catalog.enrollments'=>['table'=>'phonetics_guard_enrollments','user_id'=>'user_id','course_id'=>'course_id','status'=>'status','active_statuses'=>['active']],
+   ]);
+   $this->expectException(ServiceUnavailableHttpException::class);
+   app(CourseCatalog::class)->assertAccess($student,'course-1');
+  }finally{
+   Schema::dropIfExists('phonetics_guard_enrollments');
+   Schema::dropIfExists('phonetics_guard_courses');
+  }
+ }
+
 }
