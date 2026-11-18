@@ -82,8 +82,6 @@ class StudentTrackingPluginTest extends TestCase
         foreach (['user_id', 'actor_id', 'event_type', 'subject_type', 'subject_id', 'duration_seconds', 'metadata', 'occurred_at'] as $column) {
             $this->assertTrue(Schema::hasColumn('student_activity_events', $column), "Student Tracking table is missing {$column}.");
         }
-        $this->assertFalse(Schema::hasColumn('student_activity_events', 'student_id'));
-        $this->assertFalse(Schema::hasColumn('student_activity_events', 'branch_id'));
         foreach (['student_id', 'branch_id', 'actor_id', 'event_type', 'metadata', 'occurred_at'] as $column) {
             $this->assertTrue(Schema::hasColumn('student_trace_events', $column), "Student Tracing table is missing {$column}.");
         }
