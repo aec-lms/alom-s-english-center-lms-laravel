@@ -7,8 +7,11 @@
         <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
             <div>
                 <p class="text-xs font-bold uppercase tracking-wider text-sky-700">{{ ucwords(str_replace('_', ' ', $role)) }} Portal</p>
-                <h1 class="text-3xl font-extrabold text-slate-900 mt-1">Welcome, {{ $user->name }}</h1>
+                <h1 class="text-3xl font-extrabold text-slate-900 mt-1">Welcome, {{ $user->display_name ?: $user->name }}</h1>
                 <p class="text-sm text-slate-500 mt-1">{{ $user->email }}</p>
+            <a href="{{ route('profile.settings.edit') }}" class="mt-3 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:-translate-y-0.5 focus:outline-none focus:ring-4 focus:ring-indigo-200">
+                <span aria-hidden="true">✦</span> Customize my profile
+            </a>
             </div>
             @if (in_array($role, ['student', 'guardian']) && Route::has('plugins.attendance.portal'))
                 <a href="{{ route('plugins.attendance.portal') }}" class="rounded-lg border border-sky-200 px-4 py-2.5 text-sm font-bold text-sky-700">My Attendance</a>

@@ -59,6 +59,10 @@ Route::middleware('installed')->group(function (): void {
     Route::get('/refund-policy', [PublicHomeController::class, 'legalPage'])->defaults('slug', 'refund-policy')->name('public.refund');
     Route::get('/profile', [PublicHomeController::class, 'profile'])->name('public.profile' );
     Route::get('/dashboard', [PortalController::class, 'index'])->middleware('auth')->name('portal.dashboard');
+    Route::middleware('auth')->prefix('profile/settings')->name('profile.settings')->group(function (): void {
+        Route::get('/', [ProfileSettingsController::class, 'edit'])->name('edit');
+        Route::put('/', [ProfileSettingsController::class, 'update'])->name('update');
+    });
 
     Route::get('/login', [LoginController::class, 'show'])->name('login')->middleware('guest');
     Route::post('/login', [LoginController::class, 'authenticate'])->name('login.attempt')->middleware('guest');

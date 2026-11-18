@@ -24,6 +24,16 @@ class User extends Authenticatable
         'branch_id',
         'is_active',
         'email_verified_at',
+        'username',
+        'display_name',
+        'avatar_path',
+        'cover_path',
+        'headline',
+        'bio',
+        'location',
+        'website',
+        'social_links',
+        'profile_is_public',
     ];
 
     protected $hidden = [
@@ -37,6 +47,8 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
+            'social_links' => 'array',
+            'profile_is_public' => 'boolean',
         ];
     }
 
