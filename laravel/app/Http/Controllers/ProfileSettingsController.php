@@ -51,7 +51,7 @@ class ProfileSettingsController extends Controller
             'headline' => ['nullable', 'string', 'max:160'],
             'bio' => ['nullable', 'string', 'max:1200'],
             'location' => ['nullable', 'string', 'max:120'],
-            'website' => ['nullable', 'url', 'max:2048'],
+            'website' => ['nullable', 'url', 'regex:/^https?:\/\//i', 'max:2048'],
             'profile_is_public' => ['nullable', 'boolean'],
             'avatar' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:3072'],
             'cover' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],

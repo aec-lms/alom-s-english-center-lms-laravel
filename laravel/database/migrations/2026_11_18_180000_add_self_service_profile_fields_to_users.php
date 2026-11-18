@@ -19,7 +19,7 @@ return new class extends Migration {
             $table->string('location', 120)->nullable();
             $table->string('website', 2048)->nullable();
             $table->json('social_links')->nullable();
-            $table->boolean('profile_is_public')->default(true);
+            $table->boolean('profile_is_public')->default(false);
         });
     }
 

@@ -74,7 +74,7 @@
                 </label>
             </div>
             <label class="mt-5 flex items-center gap-3 rounded-xl bg-slate-50 p-4 text-sm text-slate-700">
-                <input type="checkbox" name="profile_is_public" value="1" @checked(old('profile_is_public', $user->profile_is_public)) class="h-4 w-4 rounded border-slate-300 text-indigo-600">
+                <input type="checkbox" name="profile_is_public" value="1" @checked(old('profile_is_public', $user->profile_is_public ?? false)) class="h-4 w-4 rounded border-slate-300 text-indigo-600">
                 <span><strong class="block">Public profile</strong><span class="text-xs text-slate-500">Allow your profile details and social links to be shown on your public profile.</span></span>
             </label>
         </section>
