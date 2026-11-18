@@ -81,9 +81,17 @@
                                     @endif
                                 </div>
 
-                                <a href="{{ route('public.courses.show', $course->slug) }}" class="px-4 py-2 bg-[#0284C7] hover:bg-[#0369A1] text-white font-bold rounded-lg text-xs shadow-xs transition-colors">
-                                    View Course
-                                </a>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    @if (auth()->check() && auth()->user()->hasRole('student') && app(\App\Core\Plugins\PluginManager::class)->isEnabled('course-wishlist') && Route::has('plugins.course-wishlist.store'))
+                                        <form method="POST" action="{{ route('plugins.course-wishlist.store', $course->id) }}">
+                                            @csrf
+                                            <button type="submit" class="px-3 py-2 border border-sky-200 text-[#0284C7] hover:bg-sky-50 font-bold rounded-lg text-xs transition-colors">{{ __('Save') }}</button>
+                                        </form>
+                                    @endif
+                                    <a href="{{ route('public.courses.show', $course->slug) }}" class="px-4 py-2 bg-[#0284C7] hover:bg-[#0369A1] text-white font-bold rounded-lg text-xs shadow-xs transition-colors">
+                                        View Course
+                                    </a>
+                                </div>
                             </div>
                         </div>
                     </article>
