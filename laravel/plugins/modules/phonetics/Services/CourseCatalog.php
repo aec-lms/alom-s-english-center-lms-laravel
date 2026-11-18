@@ -227,23 +227,31 @@ final class CourseCatalog
             ->where($courseColumn, $this->courseId($course))
             ->whereIn($statusColumn, $activeStatuses);
 
-        // Preserve the host LMS branch boundary when its catalog exposes branch IDs.
+        // Keep branch-scoped courses and enrollments isolated in both directions.
         $branchId = data_get($user, 'branch_id');
-        if ($branchId !== null) {
-            $courseBranchColumn = $courseMap['branch_id'] ?? 'branch_id';
-            $this->requireColumns($courseMap, [$courseBranchColumn], 'course branch scope');
+        $courseBranchColumn = $courseMap['branch_id'] ?? 'branch_id';
+        if ($this->hasColumn($courseMap, $courseBranchColumn)) {
             $courseBranchId = data_get($course, $courseBranchColumn);
             abort_unless(
-                $courseBranchId === null || (string) $courseBranchId === (string) $branchId,
+                $courseBranchId === null || ($branchId !== null && (string) $courseBranchId === (string) $branchId),
                 403,
                 'Course belongs to another branch.'
             );
+        } elseif ($branchId !== null) {
+            throw new ServiceUnavailableHttpException(null, 'Course branch mapping is required for this branch-scoped account.');
+        }
 
-            $enrollmentBranchColumn = $enrollment['branch_id'] ?? 'branch_id';
-            $this->requireColumns($enrollment, [$enrollmentBranchColumn], 'enrollment branch scope');
-            $query->where(fn ($branch) => $branch
-                ->whereNull($enrollmentBranchColumn)
-                ->orWhere($enrollmentBranchColumn, $branchId));
+        $enrollmentBranchColumn = $enrollment['branch_id'] ?? 'branch_id';
+        if ($this->hasColumn($enrollment, $enrollmentBranchColumn)) {
+            if ($branchId !== null) {
+                $query->where(fn ($branch) => $branch
+                    ->whereNull($enrollmentBranchColumn)
+                    ->orWhere($enrollmentBranchColumn, $branchId));
+            } else {
+                $query->whereNull($enrollmentBranchColumn);
+            }
+        } elseif ($branchId !== null) {
+            throw new ServiceUnavailableHttpException(null, 'Enrollment branch mapping is required for this branch-scoped account.');
         }
 
         abort_unless($query->exists(), 403, 'An active course enrollment is required.');
