@@ -37,6 +37,17 @@ class CommerceCatalog
             throw ValidationException::withMessages(['item' => 'This course is not currently available for purchase.']);
         }
         $price = round((float) ($course->price ?? 0), 2);
+        if (app(\\App\\Core\\Plugins\\PluginManager::class)->isEnabled('flash-sale') && Schema::hasTable('flash_sales')) {
+            $sale = DB::table('flash_sales')->where('course_id', $id)->where('is_published', true)
+                ->where('is_active', true)->where('starts_at', '<=', now())->where('ends_at', '>', now())
+                ->orderByDesc('id')->first();
+            if ($sale) {
+                $discount = $sale->discount_type === 'percent'
+                    ? $price * ((float) $sale->discount_value / 100)
+                    : (float) $sale->discount_value;
+                $price = round(max(0, $price - min($price, $discount)), 2);
+            }
+        }
         if ($price <= 0) throw ValidationException::withMessages(['item' => 'Free courses should be enrolled in directly, not purchased.']);
         return $this->snapshot('course', $id, (string) $course->title, $price, ['course_id' => $id]);
     }
@@ -56,6 +67,9 @@ class CommerceCatalog
         $this->requireTable('exams');
         $exam = DB::table('exams')->where('id', $id)->where('is_published', true)->first();
         if (!$exam) throw ValidationException::withMessages(['item' => 'This mock test is not currently available.']);
+        if (!Schema::hasTable('learn_earn_exam_access')) {
+            throw new RuntimeException('The Learn & Earn exam access module must be installed before selling paid mock tests.');
+        }
         $paidType = Schema::hasColumn('exams', 'learn_earn_type') ? (string) ($exam->learn_earn_type ?? '') : '';
         $price = Schema::hasColumn('exams', 'access_price') ? (float) ($exam->access_price ?? 0) : 0.0;
         if ($paidType !== 'paid' || $price <= 0) {
@@ -70,6 +84,10 @@ class CommerceCatalog
         $item = DB::table('commerce_sellables')->where('id', $id)->where('type', $type)->where('is_active', true)->first();
         if (!$item || (float) $item->price <= 0) {
             throw ValidationException::withMessages(['item' => 'This paid service is not currently available.']);
+        }
+        if ($type === 'live_class' && (!$item->resource_id || !Schema::hasTable('live_classes')
+            || !DB::table('live_classes')->where('id', $item->resource_id)->exists())) {
+            throw ValidationException::withMessages(['item' => 'This live-class pass must be linked to an existing Live Class ID by an administrator.']);
         }
         if ($item->available_from && now()->lt($item->available_from)) {
             throw ValidationException::withMessages(['item' => 'This service is not available yet.']);
