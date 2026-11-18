@@ -50,7 +50,7 @@ class BranchManagerDashboardIsolationTest extends TestCase
             ->assertDontSee('Recent Security Audit Trail')
             ->assertDontSee('System Information');
 
-        preg_match('/data-dashboard-widget="users".*?<div class="mt-1 text-2xl font-extrabold">(\d+)<\/div>/s', $response->getContent(), $matches);
+        preg_match('/data-dashboard-widget="users".*?<div class="mt-1 text-2xl font-extrabold">(?:<span[^>]*>)?(\\d+)(?:<\\/span>)?<\\/div>/s', $response->getContent(), $matches);
         $this->assertSame('2', $matches[1] ?? null, 'Dashboard count must include only accounts from the assigned branch.');
 
         $this->actingAs($manager)->post('/admin/dashboard/widgets', ['widgets' => ['plugins']])
