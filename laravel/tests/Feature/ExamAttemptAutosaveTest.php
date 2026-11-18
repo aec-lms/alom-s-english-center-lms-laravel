@@ -138,4 +138,76 @@ class ExamAttemptAutosaveTest extends TestCase
 
         return [$examId, $questionId, $secondQuestionId];
     }
+
+    public function test_autosave_is_rejected_at_the_exact_attempt_deadline(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['exam-management']);
+        $student = $this->createUserWithRole('student');
+        [$examId, $questionId] = $this->createExamFixture();
+
+        $page = $this->actingAs($student)->get("/exams/{$examId}/take")->assertOk();
+        preg_match('/name="attempt_id" value="([0-9]+)"/', $page->getContent(), $match);
+        $attemptId = (int) ($match[1] ?? 0);
+        $this->assertGreaterThan(0, $attemptId);
+
+        $deadline = now()->startOfSecond();
+        DB::table('exam_attempts')->where('id', $attemptId)->update([
+            'started_at' => $deadline->copy()->subMinutes(30),
+        ]);
+        $this->travelTo($deadline);
+
+        $this->actingAs($student)
+            ->postJson("/exams/{$examId}/attempt/autosave", [
+                'attempt_id' => $attemptId,
+                'answers' => [$questionId => 0],
+            ])
+            ->assertStatus(409);
+
+        $this->assertNull(DB::table('exam_attempts')->where('id', $attemptId)->value('submitted_answers'));
+    }
+
+    public function test_submission_at_the_exact_attempt_deadline_is_recorded_as_expired(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['exam-management']);
+        $student = $this->createUserWithRole('student');
+        [$examId, $questionId] = $this->createExamFixture();
+
+        $page = $this->actingAs($student)->get("/exams/{$examId}/take")->assertOk();
+        preg_match('/name="attempt_id" value="([0-9]+)"/', $page->getContent(), $match);
+        $attemptId = (int) ($match[1] ?? 0);
+        $this->assertGreaterThan(0, $attemptId);
+
+        $deadline = now()->startOfSecond();
+        DB::table('exam_attempts')->where('id', $attemptId)->update([
+            'started_at' => $deadline->copy()->subMinutes(30),
+        ]);
+        $this->travelTo($deadline);
+
+        $this->actingAs($student)->post("/exams/{$examId}/attempt", [
+            'attempt_id' => $attemptId,
+            'answers' => [$questionId => 1],
+        ])->assertRedirect();
+
+        $attempt = DB::table('exam_attempts')->where('id', $attemptId)->first();
+        $this->assertNotNull($attempt->submitted_at);
+        $this->assertEquals(0, (float) $attempt->score_obtained);
+        $this->assertFalse((bool) $attempt->passed);
+    }
+
+    public function test_exam_submission_window_is_closed_at_its_exact_end_time(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['exam-management']);
+        $student = $this->createUserWithRole('student');
+        [$examId] = $this->createExamFixture();
+
+        $end = now()->startOfSecond();
+        DB::table('exams')->where('id', $examId)->update(['ends_at' => $end]);
+        $this->travelTo($end);
+
+        $this->actingAs($student)->get("/exams/{$examId}/take")->assertForbidden();
+    }
+
 }
