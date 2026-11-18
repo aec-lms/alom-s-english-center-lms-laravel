@@ -190,12 +190,35 @@ class PublicHomeController extends Controller
         $courseSocialProofSettings = $this->courseSocialProofSettings();
         $courseSocialProofStats = [];
         if (($courseSocialProofSettings['enabled'] ?? false) && ($courseSocialProofSettings['show_on_cards'] ?? true)) {
+            $viewCounts = Schema::hasTable('course_view_events')
+                ? DB::table('course_view_events')->select('course_id')->selectRaw('COUNT(*) AS total')->groupBy('course_id')->pluck('total', 'course_id')
+                : collect();
+            $purchaseQuery = DB::table('enrollments')
+                ->select('course_id')
+                ->selectRaw('COUNT(*) AS total')
+                ->whereIn('status', ['active', 'completed']);
+            if (Schema::hasTable('fee_invoices')) {
+                $purchaseQuery->where(function ($enrollmentQuery): void {
+                    $enrollmentQuery->whereNull('invoice_id')
+                        ->orWhereExists(function ($invoiceQuery): void {
+                            $invoiceQuery->selectRaw('1')
+                                ->from('fee_invoices')
+                                ->whereColumn('fee_invoices.id', 'enrollments.invoice_id')
+                                ->where('fee_invoices.status', 'paid')
+                                ->whereRaw('fee_invoices.paid_amount + 0.01 >= fee_invoices.net_amount');
+                        });
+                });
+            } else {
+                $purchaseQuery->whereNull('invoice_id');
+            }
+            $purchaseCounts = Schema::hasTable('enrollments')
+                ? $purchaseQuery->groupBy('course_id')->pluck('total', 'course_id')
+                : collect();
+
             foreach ($courses as $catalogCourse) {
                 $courseSocialProofStats[$catalogCourse->id] = [
-                    'views' => Schema::hasTable('course_view_events')
-                        ? (int) DB::table('course_view_events')->where('course_id', $catalogCourse->id)->count()
-                        : 0,
-                    'purchases' => $this->verifiedCoursePurchaseCount((int) $catalogCourse->id),
+                    'views' => (int) ($viewCounts[$catalogCourse->id] ?? 0),
+                    'purchases' => (int) ($purchaseCounts[$catalogCourse->id] ?? 0),
                 ];
             }
         }
