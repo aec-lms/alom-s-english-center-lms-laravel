@@ -24,6 +24,10 @@ class PluginRecord extends Model
         'is_installed',
         'is_enabled',
         'installed_at',
+        'signature_key_id',
+        'signature_algorithm',
+        'signature_checksums_sha256',
+        'signature_verified_at',
     ];
 
     protected function casts(): array
@@ -35,6 +39,7 @@ class PluginRecord extends Model
             'is_installed' => 'boolean',
             'is_enabled' => 'boolean',
             'installed_at' => 'datetime',
+            'signature_verified_at' => 'datetime',
         ];
     }
 }
