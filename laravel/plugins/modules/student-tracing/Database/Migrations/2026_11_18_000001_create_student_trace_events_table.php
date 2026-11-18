@@ -80,12 +80,14 @@ return new class extends Migration {
             $legacyColumns[] = 'branch_id';
         }
 
-        if ($legacyColumns !== []) {
-            Schema::table('student_activity_events', function (Blueprint $table) use ($legacyColumns): void {
-                foreach ($legacyColumns as $column) {
-                    $table->dropIndex([$column]);
-                    $table->dropColumn($column);
-                }
+        foreach ($legacyColumns as $column) {
+            // SQLite requires the index to be removed in a separate schema
+            // operation before the indexed column can be dropped.
+            Schema::table('student_activity_events', function (Blueprint $table) use ($column): void {
+                $table->dropIndex([$column]);
+            });
+            Schema::table('student_activity_events', function (Blueprint $table) use ($column): void {
+                $table->dropColumn($column);
             });
         }
     }
