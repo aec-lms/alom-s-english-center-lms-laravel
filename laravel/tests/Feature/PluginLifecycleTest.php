@@ -322,7 +322,7 @@ PHP;
         $keyPair = sodium_crypto_sign_keypair();
         $secretKey = sodium_crypto_sign_secretkey($keyPair);
         $publicKey = sodium_crypto_sign_publickey($keyPair);
-        $message = implode("\\n", [
+        $message = implode("\n", [
             'AEC-LMS-PLUGIN-SIGNATURE-V1',
             $slug,
             '1.0.0',
