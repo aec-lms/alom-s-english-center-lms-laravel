@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 namespace Plugins\Modules\Phonetics\Http\Controllers;
-use App\Http\Controllers\Controller;
+use Illuminate\Routing\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Plugins\Modules\Phonetics\Services\CourseCatalog;
