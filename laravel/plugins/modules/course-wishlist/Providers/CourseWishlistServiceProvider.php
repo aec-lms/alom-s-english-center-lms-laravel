@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\CourseWishlist\\Providers;
+namespace Plugins\Modules\CourseWishlist\Providers;
 
-use App\\Core\\Plugins\\BasePluginServiceProvider;
+use App\Core\Plugins\BasePluginServiceProvider;
 
 class CourseWishlistServiceProvider extends BasePluginServiceProvider
 {
