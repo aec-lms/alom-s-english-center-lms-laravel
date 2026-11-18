@@ -61,6 +61,17 @@
     </section>
 
     <section class="rounded-xl border bg-white p-5">
+        <h2 class="text-lg font-bold">Batch student roster</h2>
+        <p class="mt-1 text-sm text-slate-500">Connect learners to the batch roster used by batch-specific vocabulary and exams. If your host LMS already has a membership table, map it in Config/phonetics.php instead.</p>
+        <form method="POST" action="{{ route('plugins.phonetics.admin.learning.batch-members.store') }}" class="mt-3 grid gap-3 md:grid-cols-3">@csrf
+            <label class="text-sm font-semibold">Batch<select name="batch_ref" required class="mt-1 w-full rounded border p-2"><option value="">Choose batch</option>@foreach($batches as $batch)<option value="{{ $batch['id'] }}">{{ $batch['title'] }}</option>@endforeach</select></label>
+            <label class="text-sm font-semibold md:col-span-2">Student account<select name="user_id" required class="mt-1 w-full rounded border p-2"><option value="">Choose student</option>@foreach($students as $student)<option value="{{ $student->id }}">{{ $student->name }} · {{ $student->email }}</option>@endforeach</select></label>
+            <button class="rounded-lg bg-slate-800 px-4 py-2 font-bold text-white md:col-span-3">Add student to batch roster</button>
+        </form>
+        <div class="mt-4 overflow-x-auto"><table class="w-full text-left text-sm"><thead><tr class="border-b"><th class="p-2">Student</th><th>Batch ID</th><th>Status</th><th></th></tr></thead><tbody>@forelse($batchMembers as $member)<tr class="border-b"><td class="p-2">{{ $member->user?->name ?? 'Deleted user' }}</td><td>{{ $member->batch_ref }}</td><td>{{ $member->is_active ? 'Active' : 'Removed' }}</td><td>@if($member->is_active)<form method="POST" action="{{ route('plugins.phonetics.admin.learning.batch-members.destroy',$member) }}">@csrf @method('DELETE')<button class="text-red-600">Remove</button></form>@endif</td></tr>@empty<tr><td colspan="4" class="p-3 text-slate-500">No batch roster entries yet.</td></tr>@endforelse</tbody></table></div>{{ $batchMembers->links() }}
+    </section>
+
+    <section class="rounded-xl border bg-white p-5">
         <h2 class="text-lg font-bold">Current word assignments</h2>
         <div class="mt-3 overflow-x-auto"><table class="w-full text-left text-sm"><thead><tr class="border-b"><th class="p-2">Word</th><th>Course</th><th>Category</th><th>Lesson</th><th>Batch</th><th>Access</th><th></th></tr></thead><tbody>
         @forelse($assignments as $assignment)<tr class="border-b"><td class="p-2 font-semibold">{{ $assignment->word?->word ?? 'Archived word' }}</td><td>{{ $assignment->course_ref ?? '—' }}</td><td>{{ $assignment->course_category_ref ?? '—' }}</td><td>{{ $assignment->lesson_ref ?? 'All' }}</td><td>{{ $assignment->batch_ref ?? 'All' }}</td><td>{{ ucfirst($assignment->audience) }}</td><td><form method="POST" action="{{ route('plugins.phonetics.admin.learning.assignments.destroy',$assignment) }}">@csrf @method('DELETE')<button class="text-red-600">Remove</button></form></td></tr>@empty<tr><td colspan="7" class="p-4 text-slate-500">No word assignments yet.</td></tr>@endforelse
