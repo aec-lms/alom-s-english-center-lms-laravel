@@ -1,0 +1,18 @@
+{
+    "slug": "course-wishlist",
+    "name": "Course Wishlist",
+    "version": "1.0.0",
+    "author": "Alom's English Center",
+    "category": "academic",
+    "description": "Lets students privately save published courses for later, with branch-aware visibility and duplicate-safe saves.",
+    "core_compatibility": "^2.0",
+    "dependencies": [],
+    "provider": "Plugins\\Modules\\CourseWishlist\\Providers\\CourseWishlistServiceProvider",
+    "permissions": [],
+    "settings_schema": [],
+    "admin_menu": [],
+    "optional_dependencies": [
+        "course-management",
+        "branch-management"
+    ]
+}
