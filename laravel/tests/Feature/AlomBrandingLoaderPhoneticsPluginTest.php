@@ -88,4 +88,22 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
   $this->assertDatabaseHas('audit_logs',['action'=>'al_branding_loader.settings.updated','entity_id'=>'al-branding-loader']);
  }
 
+
+ public function test_plugins_enable_disable_and_reinstall_independently_while_preserving_phonetics_data():void{
+  $this->markSystemInstalled();
+  $this->activatePlugins(['al-branding-loader','phonetics']);
+  $manager=app(PluginManager::class);
+  $entry=PhoneticEntry::query()->create(['word'=>'ship','category'=>'rhoticity','uk_ipa'=>'/ʃɪp/','us_ipa'=>'/ʃɪp/','is_active'=>true,'sort_order'=>10]);
+  $manager->disable('al-branding-loader');
+  $this->assertTrue($manager->isEnabled('phonetics'));
+  $manager->enable('al-branding-loader');
+  $manager->disable('phonetics');
+  $this->assertTrue($manager->isEnabled('al-branding-loader'));
+  $manager->uninstall('phonetics',false);
+  $this->assertDatabaseHas('alom_english_center_phonetic_entries',['id'=>$entry->id,'word'=>'ship']);
+  $manager->install('phonetics');
+  $this->assertTrue($manager->isEnabled('phonetics'));
+  $this->assertDatabaseHas('alom_english_center_phonetic_entries',['id'=>$entry->id,'word'=>'ship']);
+ }
+
 }
