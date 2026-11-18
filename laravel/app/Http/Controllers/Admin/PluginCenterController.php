@@ -33,6 +33,7 @@ class PluginCenterController extends Controller
 
         $records = PluginRecord::query()->orderBy('category')->orderBy('name')->get()->map(function (PluginRecord $record) use ($manifests, $recentLogs) {
             $manifest = $manifests[$record->slug] ?? null;
+            $record->setAttribute('icon', $manifest?->icon ?? PluginIconRegistry::resolve($record->slug, $record->category));
             $record->setAttribute('is_compatible', $manifest ? $this->plugins->isCompatible($manifest) : false);
             $record->setAttribute('has_settings', $manifest && count($manifest->settingsSchema) > 0);
             $record->setAttribute('manifest_version', $manifest?->version ?? $record->version);
