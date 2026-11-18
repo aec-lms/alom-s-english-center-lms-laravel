@@ -33,6 +33,7 @@ class UniversalPaymentController extends Controller
         $config = [
             'default_currency' => $this->plugins->getSetting('universal-payment', 'default_currency', (string) config('lms.default_currency', 'BDT')),
             'enabled_gateways' => array_filter(array_map('trim', explode(',', (string) $enabledRaw))),
+            'allow_offline_payments' => (string) $this->plugins->getSetting('universal-payment', 'allow_offline_payments', '1') === '1',
         ];
         $transactionQuery = Schema::hasTable('universal_payment_transactions')
             ? UniversalPaymentTransaction::query()->latest()
@@ -53,11 +54,13 @@ class UniversalPaymentController extends Controller
             'default_currency' => ['required', 'string', 'regex:/^[A-Z]{3}$/'],
             'gateways' => ['nullable', 'array'],
             'gateways.*' => ['string', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,bank_cash'],
+            'allow_offline_payments' => ['nullable', 'boolean'],
         ]);
 
         $values = [
             'default_currency' => strtoupper($validated['default_currency']),
             'enabled_gateways' => implode(',', $validated['gateways'] ?? []),
+            'allow_offline_payments' => $request->boolean('allow_offline_payments') ? '1' : '0',
         ];
 
         $this->plugins->saveSettings('universal-payment', $values, [], auth()->id());
@@ -526,6 +529,14 @@ class UniversalPaymentController extends Controller
 
     private function assertGatewayEnabled(string $gateway): void
     {
+        if (in_array($gateway, ['bank_cash', 'offline'], true)) {
+            abort_unless(
+                (string) $this->plugins->getSetting('universal-payment', 'allow_offline_payments', '1') === '1',
+                422,
+                'Cash and bank transfer payments are disabled by the administrator.'
+            );
+        }
+
         $enabledRaw = $this->plugins->getSetting(
             'universal-payment',
             'enabled_gateways',
