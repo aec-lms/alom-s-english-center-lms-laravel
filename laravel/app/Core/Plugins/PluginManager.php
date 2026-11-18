@@ -556,6 +556,24 @@ class PluginManager
             throw new RuntimeException('Could not move plugin package into the recycle bin. The previous installation state was restored where possible; database records remain preserved.');
         }
 
+        if ($packageChecksums !== $this->pluginDirectoryChecksums($destination)) {
+            $restored = File::moveDirectory($destination, $source);
+            if ($restored && $wasInstalled) {
+                try {
+                    $this->install($slug, $actorId);
+                    if (!$wasEnabled) {
+                        $this->disable($slug, $actorId);
+                    }
+                } catch (Throwable) {
+                    PluginRecord::query()->where('slug', $slug)->update([
+                        'is_installed' => false,
+                        'is_enabled' => false,
+                    ]);
+                }
+            }
+            throw new RuntimeException('Plugin recycle-bin archive integrity verification failed; the original package was restored where possible.');
+        }
+
         $metadata = [
             'slug' => $slug,
             'name' => $manifest->name,
@@ -742,17 +760,25 @@ class PluginManager
         }
         @chmod($resolvedBackupRoot, 0700);
         $backupPath = $resolvedBackupRoot . DIRECTORY_SEPARATOR . $archiveName;
-        if (file_exists($backupPath) || is_link($backupPath)) {
-            throw new RuntimeException('A private recovery snapshot already exists; permanent deletion was cancelled.');
+        if (is_link($backupPath) || (file_exists($backupPath) && !is_dir($backupPath))) {
+            throw new RuntimeException('Permanent-delete recovery snapshot path is unsafe.');
         }
-        if (!File::copyDirectory($source, $backupPath)) {
-            File::deleteDirectory($backupPath);
-            throw new RuntimeException('Permanent delete cancelled: could not create a private backup.');
-        }
-        @chmod($backupPath, 0700);
-        if ($this->pluginDirectoryChecksums($source) !== $this->pluginDirectoryChecksums($backupPath)) {
-            File::deleteDirectory($backupPath);
-            throw new RuntimeException('Permanent delete cancelled: backup integrity verification failed.');
+        if (is_dir($backupPath)) {
+            // A previous attempt may have created the recovery copy but failed
+            // before deleting the recycle-bin source. Reuse only an exact match.
+            if ($sourceChecksums !== $this->pluginDirectoryChecksums($backupPath)) {
+                throw new RuntimeException('An existing private recovery snapshot does not match the archive; permanent deletion was cancelled.');
+            }
+        } else {
+            if (!File::copyDirectory($source, $backupPath)) {
+                File::deleteDirectory($backupPath);
+                throw new RuntimeException('Permanent delete cancelled: could not create a private backup.');
+            }
+            @chmod($backupPath, 0700);
+            if ($sourceChecksums !== $this->pluginDirectoryChecksums($backupPath)) {
+                File::deleteDirectory($backupPath);
+                throw new RuntimeException('Permanent delete cancelled: backup integrity verification failed.');
+            }
         }
 
         if (!File::deleteDirectory($source)) {
