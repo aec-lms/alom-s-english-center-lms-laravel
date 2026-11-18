@@ -23,6 +23,7 @@ class CourseGiftCommerceTest extends TestCase
         $recipient = $this->createUserWithRole('student');
         $recipient->update(['email' => 'gift-recipient@example.test']);
         $course = Course::query()->create([
+            'code' => 'GIFT-IELTS-001',
             'title' => 'Gifted IELTS Course',
             'slug' => 'gifted-ielts-course',
             'price' => 1500,
