@@ -47,6 +47,20 @@ class PluginCenterController extends Controller
         return view('admin.plugins.index', compact('records', 'archives'));
     }
 
+    public function favicon(string $slug): Response
+    {
+        abort_unless(preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/', $slug) === 1, 404);
+
+        $manifest = $this->plugins->discoverManifests()[$slug] ?? null;
+        abort_unless($manifest !== null, 404);
+
+        return response(\App\Core\Plugins\PluginIconRegistry::faviconSvg($manifest->icon), 200, [
+            'Content-Type' => 'image/svg+xml; charset=UTF-8',
+            'Cache-Control' => 'public, max-age=3600, stale-while-revalidate=86400',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
     public function upload(Request $request): RedirectResponse
     {
         $request->validate([
