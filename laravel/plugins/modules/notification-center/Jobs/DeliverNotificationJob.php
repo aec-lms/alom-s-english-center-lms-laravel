@@ -15,6 +15,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Mail;
 use Plugins\Modules\NotificationCenter\Models\LmsNotification;
+use Plugins\Modules\PushNotifications\Services\FirebaseCloudMessagingService;
 use Throwable;
 
 class DeliverNotificationJob implements ShouldQueue, ShouldBeUnique
@@ -53,6 +54,31 @@ class DeliverNotificationJob implements ShouldQueue, ShouldBeUnique
             'attempt_count' => (int) $notification->attempt_count + 1,
             'last_error' => null,
         ])->save();
+
+        if ($notification->channel === 'push') {
+            if (!$plugins->isEnabled('push-notifications')) {
+                $notification->forceFill([
+                    'status' => 'failed',
+                    'last_error' => 'Firebase Push Notifications integration is disabled.',
+                    'processed_at' => now(),
+                ])->save();
+                return;
+            }
+
+            $result = app(FirebaseCloudMessagingService::class)->deliver($notification);
+            $notification->forceFill([
+                'status' => $result === 'sent' ? 'sent' : 'failed',
+                'last_error' => match ($result) {
+                    'sent' => null,
+                    'no_devices' => 'No active registered mobile device is available for this user.',
+                    'not_configured' => 'Firebase or Mobile App API is not configured or enabled.',
+                    default => 'Firebase did not accept the push notification.',
+                },
+                'processed_at' => now(),
+            ])->save();
+
+            return;
+        }
 
         if ($notification->channel !== 'email') {
             $notification->forceFill([
