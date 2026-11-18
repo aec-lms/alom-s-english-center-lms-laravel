@@ -1,18 +1,18 @@
-# 47-Plugin Functional Acceptance Matrix
+# 58-Plugin Functional Acceptance Matrix
 
 Audit date: 2026-11-18  
 Audited branch: `main`  
-Audited commit: `a0deb699f74b98ffbe7a656050f246bb8f9f1e03`
+Audited commit: `f54526ccc288c077076d227bddbe7118e676827a`
 
 ## Verified repository inventory
 
-The `laravel/plugins/modules/` directory contains **47 plugin packages**, each represented by a `plugin.json` manifest. The previous 39-plugin count is obsolete.
+The `laravel/plugins/modules/` directory contains **58 plugin packages**, each represented by a `plugin.json` manifest. The previous 39-plugin count is obsolete.
 
-A recursive Git tree audit at the audited commit confirms **905 entries beneath the plugin module directories**. The Laravel test tree contains 78 Feature/Unit test files.
+A recursive Git tree audit at the audited commit confirms **1,150 entries beneath the plugin module directories**. The Laravel test tree contains **110 Feature/Unit test files**.
 
-## CI evidence for the audited commit
+## Historical CI evidence for the previous 47-plugin snapshot
 
-All three workflows below ran against the same main-branch commit and completed successfully:
+The following successful runs belong to the previous audited commit `a0deb699f74b98ffbe7a656050f246bb8f9f1e03`. They are historical evidence only and do not certify the newer 58-plugin snapshot:
 
 | Workflow | Run | Result |
 |---|---:|---|
@@ -35,7 +35,7 @@ Both the default test database run and MySQL 8.0.46 run report **317 passed test
 - Reset to manifest-declared default settings.
 - Recycle-bin deletion, restore, and permanent-delete archive behavior.
 
-**Current result: 47/47 packages are covered by this universal lifecycle test on the audited main commit.**
+**Current inventory: 58/58 plugin manifests are present. The universal lifecycle test discovers manifests dynamically, so all 58 are included in the test's discovery scope; CI must pass on this exact snapshot before this is marked accepted.**
 
 This is lifecycle acceptance, not proof that every plugin's complete business feature set has been manually or independently accepted.
 
@@ -93,6 +93,28 @@ The following table records the current plugin inventory and the most directly r
 | universal-payment | UniversalPaymentGatewayToggleTest; UniversalPaymentInvoiceSettlementTest; UniversalPaymentProofTest | Targeted feature coverage |
 | visitor-popup-ads | VisitorPopupSecurityTest; PluginCriticalRegressionTest | Targeted security coverage |
 
+### Additional packages present in the 58-plugin snapshot
+
+These 11 packages were added after the previous 47-plugin matrix snapshot and are now included in the repository inventory. Their named test files provide targeted evidence, but do not replace full per-plugin UI, authorization, migration and external-provider acceptance.
+
+| Plugin package | Relevant feature-test evidence | Assessment |
+|---|---|---|
+| assignment-management | AssignmentManagementPluginTest | Targeted assignment workflow coverage |
+| board-question-solver | BoardQuestionSolverPluginTest | Targeted solver/security coverage |
+| course-assessments | CourseAssessmentsPluginTest; CourseAssessmentsMobileApiTest | Targeted assessment and mobile API coverage |
+| course-bundles | CourseBundlesPluginTest | Targeted bundle workflow coverage |
+| course-content-studio | CourseContentStudioPluginTest | Targeted content authoring/learning coverage |
+| course-wishlist | CourseWishlistPluginTest | Targeted wishlist coverage |
+| expense-management | ExpenseManagementPluginTest; ExpenseFinanceReportTest | Targeted expense and finance-report coverage |
+| guardian-portal | GuardianPortalPluginTest; GuardianStudentTrackingAuthorizationTest | Targeted guardian and linked-student authorization coverage |
+| push-notifications | PushNotificationDeliveryTest; MobilePushTokenLifecycleTest | Targeted delivery and device-token lifecycle coverage |
+| quiz-contest | QuizContestPluginTest | Targeted contest workflow coverage |
+| support-center | SupportCenterPluginTest | Targeted support-ticket workflow coverage |
+
+## Current snapshot CI gate
+
+The previous 47-plugin CI run IDs below must not be used as evidence for the 58-plugin snapshot. The 58-plugin snapshot requires a fresh Laravel SQLite + MySQL 8.0 run, Composer Security Audit, Browser E2E, and production package verification on the exact commit under review. Until those checks complete successfully, lifecycle and feature acceptance remain pending for release purposes.
+
 ## Remaining acceptance gates
 
 Before declaring every plugin fully functionally accepted, continue with the following per-plugin gates and record test evidence for each:
@@ -114,9 +136,10 @@ Before declaring every plugin fully functionally accepted, continue with the fol
 
 ## Acceptance status
 
-- Plugin inventory: **47/47 verified**.
-- Plugin module tree entries: **905 verified at the audited commit**.
-- Universal plugin lifecycle test: **47/47 covered; suite passed**.
+- Plugin inventory: **58/58 manifests verified at commit `f54526ccc288c077076d227bddbe7118e676827a`**.
+- Plugin module tree entries: **1,150 verified at that commit**.
+- Feature/Unit test files: **110 present at that commit**.
+- Universal plugin lifecycle test: dynamically discovers all valid manifests; exact 58-plugin run is pending CI confirmation.
 - Laravel automated suite: **317 passed / 3,822 assertions**.
 - MySQL 8.0.46 automated suite: **317 passed / 3,822 assertions**.
 - Composer security audit: **passed**.
