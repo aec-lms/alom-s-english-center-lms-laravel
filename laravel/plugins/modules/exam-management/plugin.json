@@ -1,17 +1,17 @@
 {
     "slug": "exam-management",
-    "name": "Exam, Question Bank & Assessment Engine",
+    "name": "Exam Management & Online Assessment Engine",
     "version": "2.1.0",
     "author": "Alom's English Center",
     "category": "academic",
-    "description": "Exam schedules, question bank, online exam attempts with strict server-side grading, and results.",
+    "description": "Exam schedules, exam-specific questions, online exam attempts with strict server-side grading, and results. Reusable BCS, Bank Job and Admission question banks are provided by the standalone Question Bank plugin.",
     "core_compatibility": "^2.0",
     "dependencies": [],
     "provider": "Plugins\\Modules\\ExamManagement\\Providers\\ExamManagementServiceProvider",
     "permissions": [
         {
             "slug": "exams.manage",
-            "name": "Manage Exams & Question Bank"
+            "name": "Manage Exams & Online Assessments"
         },
         {
             "slug": "exams.attempt",
@@ -22,7 +22,7 @@
     "admin_menu": [
         {
             "group": "Academic & Operations",
-            "label": "Exams & Bank",
+            "label": "Exam Management",
             "route": "plugins.exams.index",
             "order": 100,
             "permission": "exams.manage"
