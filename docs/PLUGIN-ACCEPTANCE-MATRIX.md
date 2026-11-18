@@ -189,3 +189,17 @@ The current tree contains 44 plugin manifests. The parameterized `AllPluginsInde
 - Review PR #31 separately; do not merge its divergent draft branch until its base/history are reconciled and its complete diff is revalidated against current main.
 
 No production deployment or live data migration is authorized by this CI result.
+
+## Current main inventory refresh (2026-11-18, main `114e9b149e302a1991935153dbde33f91369e1ff`)
+
+A fresh recursive tree scan of current main found **47 plugin manifests**. The previous 44-manifest checkpoint above is historical. Three additional manifests are now present:
+
+| Additional plugin | Focused test evidence | Acceptance interpretation |
+|---|---|---|
+| `al-branding-loader` | `AlomBrandingLoaderPhoneticsPluginTest` | Targeted settings, permission and lifecycle coverage; full browser acceptance remains open |
+| `phonetics` | `AlomBrandingLoaderPhoneticsPluginTest` | Targeted media, enrollment, assignment, exam and server-side grading coverage; portability and edge-case fixes are being verified in PR #118 |
+| `question-bank` | `QuestionBankPluginTest` | Targeted question bank and paper-snapshot coverage |
+
+The 47-manifest count is inventory only. It does not mean 47/47 modules are fully feature-accepted. The latest main CI run on `114e9b1` had 315 passing tests and one failing Phonetics replay assertion on both SQLite and MySQL; the test used a legacy URL that intentionally redirects. PR #118 updates the replay test and adds portability/security regressions. Do not update the acceptance status until its exact head passes SQLite, MySQL, Browser E2E, Composer audit, PHP lint, Blade compilation and package build.
+
+The external production release gates in issue #14 remain open: representative backup restore, real cPanel installation/rollback, payment-provider sandboxes and authorized 300-participant conferencing validation.
