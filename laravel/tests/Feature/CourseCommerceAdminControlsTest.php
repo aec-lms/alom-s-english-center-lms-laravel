@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Models\SystemSetting;
+use Illuminate\Support\Facades\DB;
 use Plugins\Modules\MarketingManagement\Models\PromoCoupon;
 use Tests\TestCase;
 
