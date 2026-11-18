@@ -38,6 +38,16 @@ class RoleDashboardLiveMetricsTest extends TestCase
             ],
         ]);
 
+        $activeStudent = $this->createUserWithRole('student', null, 'active-student-' . bin2hex(random_bytes(3)) . '@aec.test');
+        $secondActiveStudent = $this->createUserWithRole('student', null, 'second-active-student-' . bin2hex(random_bytes(3)) . '@aec.test');
+        $pendingStudent = $this->createUserWithRole('student', null, 'pending-student-' . bin2hex(random_bytes(3)) . '@aec.test');
+        DB::table('enrollments')->insert([
+            ['user_id' => $activeStudent->id, 'course_id' => $assignedCourse, 'branch_id' => null, 'status' => 'active', 'created_at' => now(), 'updated_at' => now()],
+            ['user_id' => $activeStudent->id, 'course_id' => $legacyCourse, 'branch_id' => null, 'status' => 'active', 'created_at' => now(), 'updated_at' => now()],
+            ['user_id' => $secondActiveStudent->id, 'course_id' => $assignedCourse, 'branch_id' => null, 'status' => 'active', 'created_at' => now(), 'updated_at' => now()],
+            ['user_id' => $pendingStudent->id, 'course_id' => $assignedCourse, 'branch_id' => null, 'status' => 'pending', 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
         $response = $this->actingAs($teacher)->get('/dashboard')->assertOk();
         $courseIds = $response->viewData('courses')->pluck('id')->all();
 
@@ -45,6 +55,7 @@ class RoleDashboardLiveMetricsTest extends TestCase
         $this->assertContains($legacyCourse, $courseIds, 'Legacy instructor-name assignments must remain visible during migration.');
         $this->assertNotContains($unassignedCourse, $courseIds);
         $this->assertNotContains($assignedToOtherTeacher, $courseIds, 'A legacy name match must not override another teacher\'s normalized assignment.');
+        $this->assertSame(2, $response->viewData('metrics')['active_students'], 'Active student counts must be distinct across the teacher\'s assigned courses and exclude pending enrollments.');
 
         $legacyCollisionTeacher = $this->createUserWithRole('teacher', null, 'legacy-collision-' . bin2hex(random_bytes(3)) . '@aec.test');
         $legacyCollisionTeacher->forceFill(['name' => $otherTeacher->name])->save();

@@ -167,8 +167,16 @@ class PortalController extends Controller
                     ->select('live_classes.*')
                     ->orderBy('live_classes.starts_at')->limit(20)->get();
             }
+            $activeStudents = $courses->isNotEmpty() && Schema::hasTable('enrollments')
+                ? (int) DB::table('enrollments')
+                    ->whereIn('course_id', $courses->pluck('id'))
+                    ->where('status', 'active')
+                    ->distinct()
+                    ->count('user_id')
+                : 0;
             $metrics = [
                 'assigned_courses' => $courses->count(),
+                'active_students' => $activeStudents,
                 'scheduled_classes' => $liveClasses->where('status', 'upcoming')->count(),
             ];
         } elseif ($role === 'guardian') {
