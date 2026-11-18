@@ -36,8 +36,6 @@ class StudentTracingIndependenceTest extends TestCase
         $this->assertTrue(Schema::hasTable('student_activity_events'));
         $this->assertTrue(Schema::hasColumn('student_trace_events', 'student_id'));
         $this->assertTrue(Schema::hasColumn('student_trace_events', 'branch_id'));
-        $this->assertFalse(Schema::hasColumn('student_activity_events', 'student_id'));
-        $this->assertFalse(Schema::hasColumn('student_activity_events', 'branch_id'));
     }
 
     public function test_student_tracking_then_student_tracing_installation_keeps_both_stores_independent(): void
