@@ -96,6 +96,16 @@ class CommerceCartController extends Controller
 
 
 
+    public function orders(): View
+    {
+        abort_unless(auth()->user()?->can('commerce.orders.manage'), 403);
+        $orders = DB::table('commerce_orders')
+            ->join('users', 'users.id', '=', 'commerce_orders.user_id')
+            ->select('commerce_orders.*', 'users.name as customer_name', 'users.email as customer_email')
+            ->latest('commerce_orders.id')->paginate(30);
+        return view('commerce-cart::orders', compact('orders'));
+    }
+
     public function sellables(): View
     {
         abort_unless(auth()->user()?->can('commerce.orders.manage'), 403);
