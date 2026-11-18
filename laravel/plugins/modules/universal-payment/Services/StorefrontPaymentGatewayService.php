@@ -166,25 +166,29 @@ class StorefrontPaymentGatewayService
             throw new RuntimeException('SSLCOMMERZ flagged this payment for manual risk review. Course or gift access was not granted.');
         }
 
+        // Claim the provider's bank transaction ID, not just its validation token,
+        // so the same underlying payment cannot be replayed against a second order.
+        $externalReference = trim((string) ($data['bank_tran_id'] ?? '')) ?: $validationId;
         $providerDetails = [
-            'bank_transaction_id' => (string) ($data['bank_tran_id'] ?? ''),
+            'bank_transaction_id' => trim((string) ($data['bank_tran_id'] ?? '')),
+            'validation_id' => $validationId,
             'validation_status' => strtoupper((string) $data['status']),
         ];
         if (($notes['purpose'] ?? null) === 'course_cart') {
-            return $this->grantCourseCartAccess($transaction, $validationId, $providerDetails, $notes);
+            return $this->grantCourseCartAccess($transaction, $externalReference, $providerDetails, $notes);
         }
         if (($notes['purpose'] ?? null) === 'course_gift') {
-            return $this->grantCourseGiftAccess($transaction, $validationId, $providerDetails, $notes);
+            return $this->grantCourseGiftAccess($transaction, $externalReference, $providerDetails, $notes);
         }
         if (($notes['purpose'] ?? null) === 'course_gift_voucher') {
-            return $this->grantCourseGiftVoucher($transaction, $validationId, $providerDetails, $notes);
+            return $this->grantCourseGiftVoucher($transaction, $externalReference, $providerDetails, $notes);
         }
 
         if ($transaction->learn_earn_exam_id) {
-            return $this->grantExamAccess($transaction, $validationId, $providerDetails);
+            return $this->grantExamAccess($transaction, $externalReference, $providerDetails);
         }
 
-        return $this->grantEbookAccess($transaction, $validationId, $providerDetails);
+        return $this->grantEbookAccess($transaction, $externalReference, $providerDetails);
     }
 
     public function markSslcommerzFailed(array $callback, string $status): UniversalPaymentTransaction
