@@ -23,7 +23,8 @@ class AdminCourseContentStudioController extends Controller
     {
         $posts = CourseContentPost::query()->with(['author','categories'])->latest()->paginate(20)->withQueryString();
         $categories = CourseContentCategory::query()->orderBy('sort_order')->orderBy('name')->get();
-        return view('course-content-studio::admin-index', compact('posts','categories'));
+        $courses = app(PluginManager::class)->isEnabled('course-management') && Schema::hasTable('courses') ? DB::table('courses')->whereNull('deleted_at')->orderBy('title')->get(['id','title']) : collect();
+        return view('course-content-studio::admin-index', compact('posts','categories','courses'));
     }
 
     public function storeCategory(Request $request): RedirectResponse
