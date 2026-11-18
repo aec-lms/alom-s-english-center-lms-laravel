@@ -1,0 +1,18 @@
+{
+  "slug": "support-center",
+  "name": "Support Center",
+  "version": "1.0.0",
+  "author": "Alom's English Center",
+  "category": "communication",
+  "description": "Private student support tickets with staff replies, status tracking, audit logging and branch isolation.",
+  "core_compatibility": "^2.0",
+  "dependencies": [],
+  "permissions": [
+    {"slug": "support.tickets.manage", "name": "View and respond to support tickets"}
+  ],
+  "settings_schema": [],
+  "provider": "Plugins\\Modules\\SupportCenter\\Providers\\SupportCenterServiceProvider",
+  "admin_menu": [
+    {"group": "Academic & Operations", "label": "Support Center", "route": "plugins.support.admin.index", "order": 160, "permission": "support.tickets.manage"}
+  ]
+}
