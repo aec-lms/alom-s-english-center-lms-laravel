@@ -42,11 +42,12 @@ return [
             'course_title' => 'course_title',
         ],
         'batch_memberships' => [
-            'table' => env('PHONETICS_BATCH_MEMBERSHIPS_TABLE', 'batch_students'),
+            'table' => env('PHONETICS_BATCH_MEMBERSHIPS_TABLE', 'phonetic_batch_memberships'),
             'user_id' => 'user_id',
-            'batch_id' => 'batch_id',
-            'active_column' => 'status',
-            'active_value' => 'active',
+            'batch_id' => 'batch_ref',
+            'driver_column' => 'lms_driver',
+            'active_column' => 'is_active',
+            'active_value' => 1,
         ],
         'enrollments' => [
             'table' => env('PHONETICS_ENROLLMENTS_TABLE', 'enrollments'),
