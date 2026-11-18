@@ -25,5 +25,7 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
    'quiz_mode'=>'identify-accent',
   ])->assertOk()->assertJson(['saved'=>true,'correct'=>true]);
   $this->assertDatabaseHas('alom_english_center_phonetic_attempts',['user_id'=>$student->id,'entry_id'=>$entry->id,'is_correct'=>true]);
+  DB::table('enrollments')->where('user_id',$student->id)->delete();
+  $this->actingAs($student)->get('/courses/british-american-phonetics/phonetics-practice')->assertForbidden();
  }
 }
