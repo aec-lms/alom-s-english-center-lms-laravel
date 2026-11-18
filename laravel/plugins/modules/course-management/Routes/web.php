@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Route;
 use Plugins\Modules\CourseManagement\Http\Controllers\CourseController;
+use Plugins\Modules\CourseManagement\Http\Controllers\CourseTeacherAssignmentController;
 use Plugins\Modules\CourseManagement\Http\Controllers\LessonContentProtectionController;
 use Plugins\Modules\CourseManagement\Http\Controllers\LiveClassAccessController;
 
@@ -12,6 +13,9 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:course-management', 'perm
     ->name('plugins.courses.')
     ->group(function (): void {
         Route::get('/', [CourseController::class, 'index'])->name('index');
+        Route::get('/teacher-assignments', [CourseTeacherAssignmentController::class, 'index'])->name('teachers.index');
+        Route::post('/teacher-assignments', [CourseTeacherAssignmentController::class, 'store'])->name('teachers.store');
+        Route::delete('/teacher-assignments/{assignment}', [CourseTeacherAssignmentController::class, 'destroy'])->whereNumber('assignment')->name('teachers.destroy');
         Route::get('/content-protection', [LessonContentProtectionController::class, 'adminIndex'])->name('content-protection');
         Route::post('/', [CourseController::class, 'store'])->name('store');
         Route::put('/{course}', [CourseController::class, 'update'])->name('update');
