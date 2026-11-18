@@ -23,10 +23,11 @@ jobs:
         working-directory: apps/student_app
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
-        with:
-          channel: stable
-          cache: false
+      - name: Install Flutter stable SDK
+        run: |
+          git clone --depth 1 --branch stable https://github.com/flutter/flutter.git "$HOME/flutter"
+          echo "$HOME/flutter/bin" >> "$GITHUB_PATH"
+          "$HOME/flutter/bin/flutter" --version
       - name: Generate native platform scaffolding
         run: flutter create --platforms=android,ios --project-name aloms_student_app .
       - name: Resolve dependencies
