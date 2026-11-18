@@ -15,6 +15,11 @@ class EnsureBranchContext
 
     public function handle(Request $request, Closure $next): Response
     {
+        // A revoked/inactive branch manager must still be able to terminate the session/token.
+        if ($request->isMethod('POST') && (str_ends_with($request->path(), '/logout') || $request->path() === 'logout')) {
+            return $next($request);
+        }
+
         $actor = $request->user() ?? $request->user('sanctum');
         if ($actor && $this->branches->isBranchManager($actor)) {
             $request->attributes->set('assigned_branch_id', $this->branches->assignedBranchId($actor));
