@@ -58,3 +58,16 @@ Do not create a third standalone Branding plugin or fold Phonetics into the Bran
 ## Decision
 
 **Do not merge or deploy this ZIP as-is.** Syntax validity and ZIP integrity do not establish secure authorization, correct scoring, plugin compatibility, or production readiness. The implementation must preserve the two-plugin architecture above and pass the required checks before merge.
+
+
+## Implementation checkpoint — 2026-11-18
+
+An initial native-plugin implementation is now present on the integration branch:
+
+- `al-branding-loader` packages the AL Branding entry point and Loader feature areas together. Branding delegates to the existing Core Site Identity service rather than introducing a competing identity store.
+- `phonetics` is a separate plugin with no hard dependency on Course Management; it declares Course Management as optional and fails closed when enrollment enforcement is enabled but the enrollment tables are unavailable.
+- Admin routes use the plugin-enabled and permission middleware.
+- Phonetics attempt correctness is calculated from the stored IPA answer on the server; client-supplied correctness is not accepted.
+- Loader and phonetics media validation does not accept SVG uploads in this initial implementation.
+
+This is an incremental implementation, not a release approval. The original ZIP's complete audio upload, rich theme profiles, card animation, full admin editing, and complete migration/rollback acceptance still require implementation and tests. Do not install this on production until all CI checks and acceptance tests pass.
