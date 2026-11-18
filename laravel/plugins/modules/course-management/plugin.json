@@ -44,6 +44,8 @@
     ],
     "optional_dependencies": [
         "fees-management",
-        "student-tracking"
+        "student-tracking",
+        "marketing-management",
+        "universal-payment"
     ]
 }
