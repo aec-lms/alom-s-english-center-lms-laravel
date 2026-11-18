@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Plugins\Modules\MarketingManagement\Http\Controllers;
 
 use App\Core\Security\AuditLogger;
+use App\Models\SystemSetting;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
