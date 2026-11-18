@@ -200,8 +200,11 @@ class AllPluginsIndependentAcceptanceTest extends TestCase
         // Verify the irreversible Recycle Bin action for every plugin, while
         // retaining the manager's private recovery snapshot for test isolation.
         $secondRecycle = $manager->deleteToRecycleBin($slug);
-        $manager->permanentlyDeleteFromRecycleBin($secondRecycle['archive']);
+        $archiveSource = storage_path('app/plugin-recycle-bin/' . $secondRecycle['archive']);
         $privateBackup = storage_path('app/plugin-permanent-delete-backups/' . $secondRecycle['archive']);
+        File::ensureDirectoryExists(dirname($privateBackup));
+        $this->assertTrue(File::copyDirectory($archiveSource, $privateBackup), "{$slug} retry fixture could not create an existing recovery snapshot");
+        $manager->permanentlyDeleteFromRecycleBin($secondRecycle['archive']);
         $this->assertDirectoryExists($privateBackup, "{$slug} permanent delete must create a verified recovery backup");
         $this->assertSame([], $manager->recycledPlugins(), "{$slug} archive must leave the Recycle Bin after permanent delete");
         $this->assertTrue(File::copyDirectory($privateBackup, $directory), "{$slug} source fixture could not be restored from its private backup");
