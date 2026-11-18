@@ -11,7 +11,7 @@ use Tests\TestCase;
 
 class CourseSocialProofAnalyticsTest extends TestCase
 {
-    public function test_course_detail_records_one_view_per_session_per_day_and_excludes_pending_enrollments(): void
+    public function test_course_detail_records_one_view_per_session_per_day_and_excludes_unpaid_enrollments(): void
     {
         $this->markSystemInstalled();
         $this->activatePlugins(['course-management', 'fees-management']);
@@ -37,7 +37,7 @@ class CourseSocialProofAnalyticsTest extends TestCase
             'status' => 'pending',
         ]);
 
-        $this->get('/course/' . $course->slug)->assertOk()->assertSeeText('1 purchased');
+        $this->get('/course/' . $course->slug)->assertOk()->assertSeeText('0 purchased');
         $this->get('/course/' . $course->slug)->assertOk();
 
         $this->assertSame(1, DB::table('course_view_events')->where('course_id', $course->id)->count());
