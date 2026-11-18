@@ -5,15 +5,12 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Core\Plugins\PluginManager;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class AssignmentManagementPluginTest extends TestCase
 {
-    use RefreshDatabase;
-
     public function test_assignment_plugin_installs_without_course_or_student_management_plugins(): void
     {
         $this->markSystemInstalled();
