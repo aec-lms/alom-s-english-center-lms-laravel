@@ -20,8 +20,9 @@ class AssignmentController extends Controller
     public function index(Request $request): View
     {
         $actor = $request->user();
+        abort_unless($actor && ($actor->hasRole('admin') || $actor->hasRole('teacher') || ($actor->hasRole('branch_manager') && $actor->hasPermission('assignments.manage'))), 403);
         $this->ensureAssignedBranch($actor);
-        $assignments = Assignment::query()
+        $assignments = Assignment::query()->with('submissions.student')
             ->with('creator')
             ->withCount('submissions')
             ->when($actor->hasRole('branch_manager'), fn ($q) => $q->where('branch_id', $actor->branch_id ?: -1))
@@ -35,7 +36,7 @@ class AssignmentController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $actor = $request->user();
-        abort_unless($actor && ($actor->hasRole('admin') || $actor->hasRole('teacher') || $actor->hasRole('branch_manager')), 403);
+        abort_unless($actor && ($actor->hasRole('admin') || $actor->hasRole('teacher') || ($actor->hasRole('branch_manager') && $actor->hasPermission('assignments.manage'))), 403);
         $this->ensureAssignedBranch($actor);
 
         $validated = $request->validate([
@@ -156,7 +157,7 @@ class AssignmentController extends Controller
     public function grade(Request $request, int $submission): RedirectResponse
     {
         $grader = $request->user();
-        abort_unless($grader && ($grader->hasRole('admin') || $grader->hasRole('teacher')), 403);
+        abort_unless($grader && ($grader->hasRole('admin') || $grader->hasRole('teacher') || ($grader->hasRole('branch_manager') && $grader->hasPermission('assignments.grade'))), 403);
         $record = AssignmentSubmission::query()->with('assignment')->findOrFail($submission);
         if ($grader->hasRole('teacher')) {
             abort_unless((int) $record->assignment->created_by === (int) $grader->id, 403, 'You can grade only your own assignments.');
@@ -185,7 +186,7 @@ class AssignmentController extends Controller
     {
         $actor = $request->user();
         $record = AssignmentSubmission::query()->with('assignment')->findOrFail($submission);
-        abort_unless($actor && ($actor->hasRole('admin') || ($actor->hasRole('teacher') && (int) $record->assignment->created_by === (int) $actor->id)), 403);
+        abort_unless($actor && ($actor->hasRole('admin') || ($actor->hasRole('teacher') && (int) $record->assignment->created_by === (int) $actor->id) || ($actor->hasRole('branch_manager') && $actor->hasPermission('assignments.grade') && (int) $actor->branch_id === (int) $record->assignment->branch_id)), 403);
         abort_unless($record->attachment_path && Storage::disk('local')->exists($record->attachment_path), 404);
 
         return Storage::disk('local')->download($record->attachment_path);
