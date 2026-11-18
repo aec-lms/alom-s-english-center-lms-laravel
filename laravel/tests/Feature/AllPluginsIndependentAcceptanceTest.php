@@ -35,6 +35,38 @@ class AllPluginsIndependentAcceptanceTest extends TestCase
         return $slugs;
     }
 
+    public function test_legacy_plugin_recycle_bin_rejects_a_symlinked_package_source(): void
+    {
+        $modulesRoot = realpath((string) config('plugins.modules_path'));
+        $this->assertNotFalse($modulesRoot);
+
+        $outside = storage_path('framework/testing/legacy-plugin-outside-' . bin2hex(random_bytes(5)));
+        $link = $modulesRoot . DIRECTORY_SEPARATOR . 'legacy-symlink-fixture';
+        File::ensureDirectoryExists($outside);
+        File::put($outside . DIRECTORY_SEPARATOR . 'outside.txt', 'must remain untouched');
+
+        if (!@symlink($outside, $link)) {
+            File::deleteDirectory($outside);
+            $this->markTestSkipped('The test environment does not permit creating symbolic links.');
+        }
+
+        try {
+            try {
+                app(PluginManager::class)->deleteToRecycleBin('legacy-symlink-fixture');
+                $this->fail('A symlinked plugin source must never be moved into the recycle bin.');
+            } catch (\\RuntimeException $exception) {
+                $this->assertStringContainsString('outside the registered modules directory', $exception->getMessage());
+            }
+
+            $this->assertTrue(is_link($link), 'The symlink itself must remain untouched.');
+            $this->assertFileExists($outside . DIRECTORY_SEPARATOR . 'outside.txt');
+            $this->assertSame('must remain untouched', File::get($outside . DIRECTORY_SEPARATOR . 'outside.txt'));
+        } finally {
+            @unlink($link);
+            File::deleteDirectory($outside);
+        }
+    }
+
     #[DataProvider('pluginSlugs')]
     public function test_each_plugin_installs_and_runs_its_lifecycle_without_sibling_plugins(string $slug): void
     {
