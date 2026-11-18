@@ -229,7 +229,11 @@ class ExpenseController extends Controller
             $manualMethods = (clone $manualReceipts)
                 ->selectRaw('gateway as method, SUM(amount) as total, COUNT(*) as transactions')
                 ->groupBy('gateway')->orderByDesc('total')->get();
-            $methodTotals = $methodTotals->concat($manualMethods)->values();
+            $methodTotals = $methodTotals->concat($manualMethods)->groupBy('method')->map(static fn ($rows, $method) => (object) [
+                'method' => $method,
+                'total' => $rows->sum(static fn ($row): float => (float) $row->total),
+                'transactions' => $rows->sum(static fn ($row): int => (int) $row->transactions),
+            ])->sortByDesc('total')->values();
         }
 
         $expenseQuery = $this->scopedQuery($actor)->where('status', 'approved');
@@ -237,6 +241,9 @@ class ExpenseController extends Controller
         if (!empty($filters['date_to'])) $expenseQuery->whereDate('expense_date', '<=', $filters['date_to']);
         $expenses = (float) $expenseQuery->sum('amount');
         $expenseCount = (int) (clone $expenseQuery)->count();
+        $expenseCategoryTotals = (clone $expenseQuery)
+            ->selectRaw('category, SUM(amount) as total, COUNT(*) as records')
+            ->groupBy('category')->orderByDesc('total')->get();
 
         return view('expense-management::finance', [
             'collected' => $collected,
@@ -250,6 +257,7 @@ class ExpenseController extends Controller
             'issuedAmount' => $issuedAmount,
             'outstanding' => $outstanding,
             'methodTotals' => $methodTotals,
+            'expenseCategoryTotals' => $expenseCategoryTotals,
             'filters' => $filters,
         ]);
     }
