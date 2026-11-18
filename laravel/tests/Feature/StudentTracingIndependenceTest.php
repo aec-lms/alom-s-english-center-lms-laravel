@@ -19,6 +19,7 @@ class StudentTracingIndependenceTest extends TestCase
         $manager->syncCatalog();
         $manager->install('student-tracing');
 
+        $this->assertDatabaseMissing('student_trace_events', ['event_type' => 'lesson_completed']);
         $this->assertTrue(Schema::hasTable('student_trace_events'));
         $this->assertFalse(Schema::hasTable('student_activity_events'));
     }
@@ -50,10 +51,22 @@ class StudentTracingIndependenceTest extends TestCase
             'user_id' => 123,
             'actor_id' => 123,
             'event_type' => 'student.created',
+            'subject_type' => 'student',
+            'subject_id' => 'student-55',
+            'duration_seconds' => null,
+            'metadata' => json_encode(['source' => 'legacy-trace-test']),
+            'occurred_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('student_activity_events')->insert([
+            'user_id' => 123,
+            'actor_id' => 123,
+            'event_type' => 'lesson_completed',
             'subject_type' => 'lesson',
             'subject_id' => 'lesson-55',
             'duration_seconds' => 120,
-            'metadata' => json_encode(['source' => 'legacy-test']),
+            'metadata' => json_encode(['source' => 'tracking-only-test']),
             'occurred_at' => now(),
             'created_at' => now(),
             'updated_at' => now(),
