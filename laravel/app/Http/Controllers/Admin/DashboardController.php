@@ -2,20 +2,20 @@
 
 declare(strict_types=1);
 
-namespace App\\Http\\Controllers\\Admin;
+namespace App\Http\Controllers\Admin;
 
-use App\\Core\\Plugins\\PluginManager;
-use App\\Http\\Controllers\\Controller;
-use App\\Models\\AuditLog;
-use App\\Models\\BackupRecord;
-use App\\Models\\PluginRecord;
-use App\\Models\\SystemSetting;
-use App\\Models\\User;
-use Illuminate\\Http\\RedirectResponse;
-use Illuminate\\Http\\Request;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Facades\\Schema;
-use Illuminate\\View\\View;
+use App\Core\Plugins\PluginManager;
+use App\Http\Controllers\Controller;
+use App\Models\AuditLog;
+use App\Models\BackupRecord;
+use App\Models\PluginRecord;
+use App\Models\SystemSetting;
+use App\Models\User;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\View\View;
 
 class DashboardController extends Controller
 {
