@@ -15,7 +15,7 @@ class EnsureBranchContext
 
     public function handle(Request $request, Closure $next): Response
     {
-        $actor = $request->user();
+        $actor = $request->user() ?? $request->user('sanctum');
         if ($actor && $this->branches->isBranchManager($actor)) {
             $request->attributes->set('assigned_branch_id', $this->branches->assignedBranchId($actor));
         }
