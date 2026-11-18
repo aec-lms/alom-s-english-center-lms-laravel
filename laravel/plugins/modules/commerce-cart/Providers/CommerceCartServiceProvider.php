@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\CommerceCart\\Providers;
+namespace Plugins\Modules\CommerceCart\Providers;
 
-use App\\Core\\Plugins\\BasePluginServiceProvider;
-use Plugins\\Modules\\CommerceCart\\Services\\CommerceCatalog;
+use App\Core\Plugins\BasePluginServiceProvider;
+use Plugins\Modules\CommerceCart\Services\CommerceCatalog;
 
 class CommerceCartServiceProvider extends BasePluginServiceProvider
 {
