@@ -73,6 +73,9 @@ class CourseCommercePaymentSettlementService
             || (int) ($order->payment_transaction_id ?? 0) !== (int) $transaction->id) {
             throw new RuntimeException('Course cart order does not match the payment transaction.');
         }
+        if (($order->coupon_reservation_key ?? null) !== ($notes['coupon_reservation_key'] ?? null)) {
+            throw new RuntimeException('Course cart coupon reservation does not match the payment context.');
+        }
         if ($order->status === 'paid') {
             throw new RuntimeException('Course cart order is already settled by another payment.');
         }
@@ -158,6 +161,9 @@ class CourseCommercePaymentSettlementService
         if (!$gift || (int) $gift->sender_user_id !== (int) $transaction->user_id
             || (int) ($gift->payment_transaction_id ?? 0) !== (int) $transaction->id) {
             throw new RuntimeException('Course gift does not match the payment transaction.');
+        }
+        if (($gift->coupon_reservation_key ?? null) !== ($notes['coupon_reservation_key'] ?? null)) {
+            throw new RuntimeException('Course gift coupon reservation does not match the payment context.');
         }
         if ($gift->status === 'paid') {
             throw new RuntimeException('Course gift is already settled by another payment.');
