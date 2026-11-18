@@ -1,6 +1,6 @@
 # Firebase Push Notifications
 
-This plugin sends Android and iOS notifications through Firebase Cloud Messaging HTTP v1. It is optional and does not require Notification Center or Mobile App API to be installed.
+This plugin sends Android and iOS notifications through Firebase Cloud Messaging HTTP v1. It can be installed independently, but delivery requires the Mobile App API and Notification Center plugins to be enabled.
 
 ## Admin setup
 
@@ -11,7 +11,19 @@ This plugin sends Android and iOS notifications through Firebase Cloud Messaging
    - Service Account Email
    - Service Account Private Key (PEM)
 4. Enable Mobile App API and Notification Center.
-5. Ensure each app user has registered a device push token.
+5. Build the student and instructor apps with the Firebase compile-time values below; after sign-in each app requests notification permission and registers its current FCM token with the LMS. Token refreshes are registered automatically.
+
+For both Flutter apps, supply the Firebase project values at build time (do not put the service-account private key in the app):
+
+```bash
+--dart-define=FIREBASE_API_KEY=... \\
+--dart-define=FIREBASE_APP_ID=... \\
+--dart-define=FIREBASE_MESSAGING_SENDER_ID=... \\
+--dart-define=FIREBASE_PROJECT_ID=... \\
+--dart-define=FIREBASE_IOS_BUNDLE_ID=...
+```
+
+For iOS, configure the APNs authentication key/capability in Firebase and the Apple developer account. Android 13+ requires notification permission; the student app manifest declares it. The server-side Firebase service-account private key is configured only in the encrypted LMS plugin settings.
 
 Private keys are stored through the encrypted plugin-settings mechanism. Never commit service-account JSON or private keys to the repository.
 

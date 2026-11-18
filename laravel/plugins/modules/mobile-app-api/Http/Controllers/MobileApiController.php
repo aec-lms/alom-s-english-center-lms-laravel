@@ -251,7 +251,15 @@ class MobileApiController extends Controller
 
         return response()->json([
             'message' => 'Mobile push token registered.',
-            'device' => $record,
+            'device' => [
+                'id' => $record->id,
+                'platform' => $record->platform,
+                'device_name' => $record->device_name,
+                'device_id' => $record->device_id,
+                'app_version' => $record->app_version,
+                'last_seen_at' => $record->last_seen_at,
+                'is_active' => (bool) $record->is_active,
+            ],
         ]);
     }
 
