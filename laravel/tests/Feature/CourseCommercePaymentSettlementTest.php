@@ -90,6 +90,20 @@ class CourseCommercePaymentSettlementTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+        $coupon = PromoCoupon::query()->create([
+            'code' => 'GIFTSETTLE10',
+            'discount_percent' => 10,
+            'max_uses' => 5,
+            'used_count' => 0,
+            'expires_at' => now()->addDays(7)->toDateString(),
+            'is_active' => true,
+            'discount_type' => 'percent',
+            'minimum_subtotal' => 0,
+            'applies_to_course_ids' => [$courseId],
+            'first_purchase_only' => false,
+            'gift_only' => true,
+        ]);
+        $reservation = app(CourseCouponService::class)->reserve($coupon->code, (int) $sender->id, [$courseId], 800, true);
         $token = str_repeat('T', 64);
         $giftId = DB::table('course_gifts')->insertGetId([
             'sender_user_id' => $sender->id,
@@ -99,12 +113,17 @@ class CourseCommercePaymentSettlementTest extends TestCase
             'redeem_token_encrypted' => encrypt($token),
             'status' => 'awaiting_payment',
             'currency' => 'BDT',
-            'amount' => 800,
+            'amount' => 720,
+            'subtotal_amount' => 800,
+            'discount_amount' => 80,
+            'coupon_id' => $coupon->id,
+            'coupon_code' => $coupon->code,
+            'coupon_reservation_key' => $reservation['reservation_key'],
             'expires_at' => now()->addDays(90),
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-        $transaction = $this->transaction($sender->id, 800, [
+        $transaction = $this->transaction($sender->id, 720, [
             'purpose' => 'course_gift',
             'course_gift_id' => $giftId,
         ]);
@@ -116,6 +135,8 @@ class CourseCommercePaymentSettlementTest extends TestCase
 
         $gift = DB::table('course_gifts')->where('id', $giftId)->first();
         $this->assertSame('paid', $gift->status);
+        $this->assertSame(1, (int) $coupon->fresh()->used_count);
+        $this->assertDatabaseHas('promo_coupon_redemptions', ['reservation_key' => $reservation['reservation_key'], 'status' => 'redeemed']);
         $this->assertNotNull($gift->invoice_id);
         $this->assertDatabaseHas('fee_invoices', ['id' => $gift->invoice_id, 'status' => 'paid']);
         $this->assertSame(0, DB::table('enrollments')->where('course_id', $courseId)->count());
