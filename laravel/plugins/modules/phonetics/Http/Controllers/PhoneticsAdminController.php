@@ -90,8 +90,8 @@ final class PhoneticsAdminController extends Controller
             'text_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'text_bg_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'card_animation' => ['nullable', 'in:none,fade-up,float,pulse-glow,shimmer'],
-            'uk_audio' => ['nullable', 'file', 'mimes:mp3,wav,ogg,m4a,webm', 'max:5120'],
-            'us_audio' => ['nullable', 'file', 'mimes:mp3,wav,ogg,m4a,webm', 'max:5120'],
+            'uk_audio' => ['nullable', 'file', 'mimetypes:audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/ogg,application/ogg,audio/mp4,audio/webm,video/webm', 'max:5120'],
+            'us_audio' => ['nullable', 'file', 'mimetypes:audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/ogg,application/ogg,audio/mp4,audio/webm,video/webm', 'max:5120'],
             'card_bg_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
         ]);
 
@@ -152,8 +152,8 @@ final class PhoneticsAdminController extends Controller
             'text_bg_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'card_animation' => ['nullable', 'in:none,fade-up,float,pulse-glow,shimmer'],
             'is_active' => ['nullable', 'boolean'],
-            'uk_audio' => ['nullable', 'file', 'mimes:mp3,wav,ogg,m4a,webm', 'max:5120'],
-            'us_audio' => ['nullable', 'file', 'mimes:mp3,wav,ogg,m4a,webm', 'max:5120'],
+            'uk_audio' => ['nullable', 'file', 'mimetypes:audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/ogg,application/ogg,audio/mp4,audio/webm,video/webm', 'max:5120'],
+            'us_audio' => ['nullable', 'file', 'mimetypes:audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/ogg,application/ogg,audio/mp4,audio/webm,video/webm', 'max:5120'],
             'card_bg_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
         ]);
 
