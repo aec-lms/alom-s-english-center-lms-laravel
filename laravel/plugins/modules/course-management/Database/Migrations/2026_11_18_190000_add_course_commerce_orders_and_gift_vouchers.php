@@ -52,6 +52,11 @@ return new class extends Migration {
                 if (!Schema::hasColumn('course_gifts', 'redeem_token_encrypted')) $table->text('redeem_token_encrypted')->nullable();
                 if (!Schema::hasColumn('course_gifts', 'payment_transaction_id')) $table->unsignedBigInteger('payment_transaction_id')->nullable()->index();
                 if (!Schema::hasColumn('course_gifts', 'notification_sent_at')) $table->timestamp('notification_sent_at')->nullable();
+                if (!Schema::hasColumn('course_gifts', 'subtotal_amount')) $table->decimal('subtotal_amount', 10, 2)->nullable();
+                if (!Schema::hasColumn('course_gifts', 'discount_amount')) $table->decimal('discount_amount', 10, 2)->default(0);
+                if (!Schema::hasColumn('course_gifts', 'coupon_id')) $table->unsignedBigInteger('coupon_id')->nullable()->index();
+                if (!Schema::hasColumn('course_gifts', 'coupon_code')) $table->string('coupon_code', 40)->nullable();
+                if (!Schema::hasColumn('course_gifts', 'coupon_reservation_key')) $table->string('coupon_reservation_key', 80)->nullable()->unique();
             });
         }
 
