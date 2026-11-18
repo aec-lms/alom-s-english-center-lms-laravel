@@ -25,7 +25,7 @@ class MobileApi {
         baseUrl = (baseUrl ??
                 const String.fromEnvironment(
                   'API_BASE_URL',
-                  defaultValue: 'https://www.alomsenglishcenter.com/api/v1',
+                  defaultValue: 'https://your-domain.example/api/v1',
                 ))
             .replaceFirst(RegExp(r'/+$'), '');
 
@@ -124,6 +124,61 @@ class MobileApi {
       body: jsonEncode(body),
     );
     if (response.statusCode == 401) {
+      await storage.delete(key: _tokenKey);
+    }
+    return _decode(response);
+  }
+
+  Future<Map<String, dynamic>> deleteJson(String path) async {
+    final token = await readToken();
+    if (token == null || token.isEmpty) {
+      throw const MobileApiException('Please sign in again.', 401);
+    }
+    final response = await client.delete(
+      Uri.parse('$baseUrl$path'),
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      await storage.delete(key: _tokenKey);
+    }
+    return _decode(response);
+  }
+
+  Future<Map<String, dynamic>> postMultipart(
+    String path,
+    Map<String, String> fields, {
+    String? attachmentPath,
+    String? attachmentName,
+  }) async {
+    final token = await readToken();
+    if (token == null || token.isEmpty) {
+      throw const MobileApiException('Please sign in again.', 401);
+    }
+
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$baseUrl$path'),
+    )
+      ..headers['Accept'] = 'application/json'
+      ..headers['Authorization'] = 'Bearer $token'
+      ..fields.addAll(fields);
+
+    if (attachmentPath != null && attachmentPath.isNotEmpty) {
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'attachment',
+          attachmentPath,
+          filename: attachmentName,
+        ),
+      );
+    }
+
+    final streamed = await client.send(request);
+    final response = await http.Response.fromStream(streamed);
+    if (response.statusCode == 401 || response.statusCode == 403) {
       await storage.delete(key: _tokenKey);
     }
     return _decode(response);
