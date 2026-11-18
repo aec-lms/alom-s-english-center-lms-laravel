@@ -19,7 +19,7 @@ class _QrAttendancePageState extends State<QrAttendancePage> {
   bool busy = false, done = false;
   String? message;
   Future<void> submit(String raw) async {
-    if (busy || done) return;
+    if (busy || done) { return; }
     final token = attendanceTokenFromQr(raw);
     if (token == null) { setState(() => message = 'Invalid Alom attendance QR code.'); return; }
     setState(() { busy = true; message = null; });
