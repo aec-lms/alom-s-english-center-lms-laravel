@@ -136,6 +136,8 @@ class PluginCenterController extends Controller
         $destination = null;
         $wasInstalled = false;
         $wasEnabled = false;
+        $disabledByOperation = false;
+        $uninstalledByOperation = false;
 
         try {
             abort_unless(preg_match('/^[a-z0-9][a-z0-9-]{1,79}$/', $slug) === 1, 404);
@@ -162,9 +164,11 @@ class PluginCenterController extends Controller
             $wasEnabled = (bool) $record->is_enabled;
             if ($wasEnabled) {
                 $this->plugins->disable($slug, auth()->id());
+                $disabledByOperation = true;
             }
             if ($wasInstalled) {
                 $this->plugins->uninstall($slug, false, auth()->id());
+                $uninstalledByOperation = true;
             }
 
             $archiveId = (string) \Illuminate\Support\Str::uuid();
