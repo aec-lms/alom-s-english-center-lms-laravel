@@ -1,0 +1,19 @@
+{
+  "slug": "course-content-studio",
+  "name": "Course Content Studio",
+  "version": "1.0.0",
+  "author": "Alom's English Center",
+  "category": "academic",
+  "description": "Reusable lesson posts, private lesson files, categories, course curriculum builder, previews and student learning progress.",
+  "core_compatibility": "^2.0",
+  "dependencies": [],
+  "optional_dependencies": ["course-management"],
+  "provider": "Plugins\\Modules\\CourseContentStudio\\Providers\\CourseContentStudioServiceProvider",
+  "permissions": [
+    {"slug": "content-studio.manage", "name": "Manage Course Content Studio"}
+  ],
+  "settings_schema": [],
+  "admin_menu": [
+    {"group": "Academic & Operations", "label": "Course Content Studio", "route": "plugins.content-studio.admin.index", "order": 115, "permission": "content-studio.manage"}
+  ]
+}
