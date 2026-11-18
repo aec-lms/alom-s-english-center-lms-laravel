@@ -31,6 +31,8 @@ class _InstructorAttendancePageState extends State<InstructorAttendancePage>
   bool creatingQr = false;
   bool allowExcused = false;
   bool offlineSyncEnabled = false;
+  bool gpsConsentGranted = false;
+  bool consentRequired = false;
   String offlineSyncMessage = 'Offline attendance sync is not enabled by the academy.';
   int maxLocationAgeMinutes = 10;
   StreamSubscription<List<ConnectivityResult>>? connectivitySubscription;
@@ -74,6 +76,8 @@ class _InstructorAttendancePageState extends State<InstructorAttendancePage>
         batches = values;
         allowExcused = policy['allow_excused'] == true;
         offlineSyncEnabled = policy['offline_sync_enabled'] == true;
+        gpsConsentGranted = policy['gps_consent_granted'] == true;
+        consentRequired = policy['consent_required'] == true;
         offlineSyncMessage = policy['message']?.toString() ?? offlineSyncMessage;
         maxLocationAgeMinutes = (policy['max_location_age_minutes'] as num?)?.toInt() ?? 10;
         selectedBatchId ??= values.isNotEmpty
@@ -136,10 +140,48 @@ class _InstructorAttendancePageState extends State<InstructorAttendancePage>
     );
   }
 
+  Future<bool> requestGpsConsent() async {
+    if (!consentRequired || gpsConsentGranted) return gpsConsentGranted;
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Enable offline attendance location checks?'),
+        content: const Text(
+          'When you mark attendance, the app captures one foreground location reading with its accuracy and timestamp. The LMS uses it to validate the attendance record and stores the verification result, not the raw GPS coordinates. You can revoke this consent later through the academy.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Not now')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('I agree')),
+        ],
+      ),
+    );
+    if (accepted != true || !mounted) return false;
+    try {
+      await widget.api.postJson('/instructor/attendance/gps-consent', {
+        'policy_version': 'instructor-offline-gps-v1',
+      });
+      if (!mounted) return false;
+      setState(() {
+        gpsConsentGranted = true;
+        consentRequired = false;
+        offlineSyncEnabled = true;
+        offlineSyncMessage = 'Offline GPS attendance sync is enabled.';
+      });
+      return true;
+    } catch (exception) {
+      if (mounted) setState(() => error = exception.toString());
+      return false;
+    }
+  }
+
   Future<void> markStudent(Map<String, dynamic> student, String status) async {
     if (!offlineSyncEnabled) {
-      if (mounted) setState(() => error = offlineSyncMessage);
-      return;
+      if (consentRequired && !gpsConsentGranted) {
+        if (!await requestGpsConsent()) return;
+      } else {
+        if (mounted) setState(() => error = offlineSyncMessage);
+        return;
+      }
     }
     final batchId = selectedBatchId;
     final studentId = (student['id'] as num?)?.toInt();
