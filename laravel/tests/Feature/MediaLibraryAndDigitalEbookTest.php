@@ -209,7 +209,18 @@ class MediaLibraryAndDigitalEbookTest extends TestCase
         ]);
         $this->assertSame('verified', $transaction->fresh()->status);
 
-        $this->actingAs($student)->get('/ebooks/protected-guide/download')->assertOk();
+        $download = $this->actingAs($student)->get('/ebooks/protected-guide/download');
+        $download->assertOk()
+            ->assertHeader('X-Content-Type-Options', 'nosniff')
+            ->assertHeader('Cache-Control', 'must-revalidate, no-cache, no-store, private')
+            ->assertHeader('Pragma', 'no-cache')
+            ->assertHeader('Referrer-Policy', 'same-origin')
+            ->assertHeader('Content-Type', 'application/pdf');
+
+        DB::table('storefront_items')->where('id', $itemId)->update([
+            'download_url' => 'private:../outside.pdf',
+        ]);
+        $this->actingAs($student)->get('/ebooks/protected-guide/download')->assertNotFound();
 
         app(PluginManager::class)->disable('storefront-catalog');
         $this->actingAs($student)->get('/ebooks/protected-guide/download')->assertNotFound();

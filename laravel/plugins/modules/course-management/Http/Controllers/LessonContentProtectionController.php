@@ -235,8 +235,13 @@ class LessonContentProtectionController extends Controller
 
     private function authorizedLesson(Request $request, int $lesson): object
     {
-        $row = DB::table('course_lessons')->where('id', $lesson)->first();
-        abort_unless($row && !empty($row->media_path), 404, 'Lesson media not found.');
+        $row = DB::table('course_lessons')
+            ->join('courses', 'courses.id', '=', 'course_lessons.course_id')
+            ->where('course_lessons.id', $lesson)
+            ->where('courses.status', 'published')
+            ->select('course_lessons.*')
+            ->first();
+        abort_unless($row && !empty($row->media_path), 404, 'Published lesson media not found.');
 
         $enrolled = DB::table('enrollments')
             ->where('user_id', $request->user()->id)

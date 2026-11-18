@@ -59,6 +59,17 @@ class LessonContentProtectionTest extends TestCase
             ->assertHeader('Cache-Control');
     }
 
+    public function test_unpublished_course_media_is_denied_even_when_enrollment_is_active(): void
+    {
+        [$student, $lessonId] = $this->createProtectedLesson('active');
+        $courseId = (int) DB::table('course_lessons')->where('id', $lessonId)->value('course_id');
+        DB::table('courses')->where('id', $courseId)->update(['status' => 'draft']);
+
+        $this->actingAs($student)
+            ->getJson(route('plugins.lesson-media.access', $lessonId))
+            ->assertNotFound();
+    }
+
     public function test_pending_or_cancelled_enrollment_cannot_obtain_media_access(): void
     {
         [$student, $lessonId] = $this->createProtectedLesson('pending');

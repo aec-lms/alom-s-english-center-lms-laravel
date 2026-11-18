@@ -410,9 +410,49 @@ class PublicHomeController extends Controller
 
         $storedPath = (string) $item->download_url;
         if (str_starts_with($storedPath, 'private:')) {
-            $path = substr($storedPath, 8);
-            abort_unless(Storage::disk('local')->exists($path), 404);
-            return Storage::disk('local')->download($path, \Illuminate\Support\Str::slug($item->title) . '.pdf');
+            $path = str_replace('\\', '/', substr($storedPath, 8));
+            $segments = explode('/', $path);
+            abort_if(
+                $path === ''
+                    || str_starts_with($path, '/')
+                    || preg_match('/^[A-Za-z]:/', $path) === 1
+                    || str_contains($path, "\0")
+                    || in_array('.', $segments, true)
+                    || in_array('..', $segments, true),
+                404,
+                'Invalid private e-book path.'
+            );
+
+            $disk = Storage::disk('local');
+            abort_unless($disk->exists($path), 404);
+            $root = realpath($disk->path(''));
+            $absolutePath = realpath($disk->path($path));
+            abort_unless(
+                $root !== false
+                    && $absolutePath !== false
+                    && is_file($absolutePath)
+                    && str_starts_with($absolutePath, rtrim($root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR),
+                404,
+                'E-book file is outside private storage.'
+            );
+
+            $mime = (new \finfo(FILEINFO_MIME_TYPE))->file($absolutePath) ?: 'application/octet-stream';
+            abort_unless($mime === 'application/pdf', 415, 'The protected e-book is not a PDF file.');
+
+            $response = response()->download(
+                $absolutePath,
+                \Illuminate\Support\Str::slug($item->title) . '.pdf'
+            );
+            // BinaryFileResponse applies a public cache default during construction;
+            // set privacy headers after creating the response so it cannot override them.
+            $response->headers->set('Content-Type', 'application/pdf');
+            $response->headers->set('X-Content-Type-Options', 'nosniff');
+            $response->setPrivate();
+            $response->headers->set('Cache-Control', 'private, no-store, no-cache, must-revalidate');
+            $response->headers->set('Pragma', 'no-cache');
+            $response->headers->set('Referrer-Policy', 'same-origin');
+
+            return $response;
         }
 
         if ($isFree && filter_var($storedPath, FILTER_VALIDATE_URL)) {
