@@ -144,7 +144,7 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
   $this->actingAs($admin)->post('/admin/phonetics/learning/exams',[
    'title'=>'Lesson One Vocabulary Exam','description'=>'Test the assigned words','course_ref'=>(string)$courseId,
    'course_category_ref'=>(string)$categoryId,'lesson_ref'=>(string)$lessonId,'audience'=>'free',
-   'duration_minutes'=>10,'pass_percentage'=>60,'max_attempts'=>2,'question_count'=>1,
+   'duration_minutes'=>10,'pass_percentage'=>60,'max_attempts'=>2,'question_count'=>1,'question_type'=>'identify-ipa',
    'word_ids'=>[$word->id],'shuffle_questions'=>1,'shuffle_options'=>1,'show_result_immediately'=>1,'status'=>'published',
   ])->assertSessionHas('status');
   $exam=DB::table('phonetic_exams')->where('slug','lesson-one-vocabulary-exam')->first();
