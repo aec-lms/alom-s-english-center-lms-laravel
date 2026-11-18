@@ -213,10 +213,13 @@ class CourseCommerceController extends Controller
                 $transaction = UniversalPaymentTransaction::query()->whereKey($created['transaction']->id)->lockForUpdate()->first();
                 if ($transaction && $transaction->status === 'pending') {
                     $transaction->update(['status' => $ambiguous ? 'risk_review' : 'failed']);
+                }
+                if (!$transaction || !in_array($transaction->status, ['verified', 'risk_review'], true)) {
                     DB::table('course_gifts')->where('id', $created['gift_id'])->where('status', 'awaiting_payment')
                         ->update(['status' => $ambiguous ? 'risk_review' : 'payment_failed', 'updated_at' => now()]);
                 }
-                if (!$ambiguous && filled($created['coupon_key'])) {
+                if (!$ambiguous && (!$transaction || !in_array($transaction->status, ['verified', 'risk_review'], true))
+                    && filled($created['coupon_key'])) {
                     $couponService->release((string) $created['coupon_key']);
                 }
             }, 3);
@@ -370,6 +373,8 @@ class CourseCommerceController extends Controller
                 $transaction = UniversalPaymentTransaction::query()->whereKey($created['transaction']->id)->lockForUpdate()->first();
                 if ($transaction && $transaction->status === 'pending') {
                     $transaction->update(['status' => $ambiguous ? 'risk_review' : 'failed']);
+                }
+                if (!$transaction || !in_array($transaction->status, ['verified', 'risk_review'], true)) {
                     DB::table('course_gift_vouchers')->where('id', $created['voucher_id'])->where('status', 'awaiting_payment')
                         ->update(['status' => $ambiguous ? 'risk_review' : 'payment_failed', 'updated_at' => now()]);
                 }
