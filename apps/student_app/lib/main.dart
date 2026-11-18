@@ -123,7 +123,7 @@ class _DataList extends StatelessWidget {
   final VoidCallback onRefresh;
   @override
   Widget build(BuildContext context) => FutureBuilder<Map<String, dynamic>>(future: future, builder: (context, snapshot) {
-    if (snapshot.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
+    if (snapshot.connectionState != ConnectionState.done) { return const Center(child: CircularProgressIndicator()); }
     if (snapshot.hasError) { return Center(child: Text(snapshot.error.toString())); }
     final value = snapshot.data?[keyName];
     final List<dynamic> items = value is List ? value : value is Map && value['data'] is List ? value['data'] as List : [];
