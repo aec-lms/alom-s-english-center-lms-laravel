@@ -477,6 +477,21 @@ class UniversalPaymentController extends Controller
     {
         try {
             $transaction = $this->storefrontGateway->verifySslcommerz($request->all());
+            $checkoutNotes = json_decode((string) $transaction->notes, true);
+            if (is_array($checkoutNotes) && in_array($checkoutNotes['purpose'] ?? null, ['course_cart', 'course_gift', 'course_gift_voucher'], true)) {
+                $message = match ($checkoutNotes['purpose']) {
+                    'course_cart' => $transaction->status === 'risk_review'
+                        ? 'Payment requires manual review. Course access has not been granted yet.'
+                        : 'Payment verified. Your purchased courses are now active.',
+                    'course_gift' => $transaction->status === 'risk_review'
+                        ? 'Gift payment requires manual review. The recipient cannot redeem it yet.'
+                        : 'Gift payment verified. The gift is ready for the recipient email address.',
+                    default => $transaction->status === 'risk_review'
+                        ? 'Voucher payment requires manual review. The recipient cannot claim it yet.'
+                        : 'Gift voucher payment verified. The voucher has been sent to the recipient email address.',
+                };
+                return redirect('/student/course-commerce/cart')->with('status', $message);
+            }
             if ($transaction->status === 'risk_review') {
                 if ($transaction->learn_earn_exam_id) {
                     return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)
@@ -497,6 +512,11 @@ class UniversalPaymentController extends Controller
             report($exception);
             $reference = trim((string) $request->input('tran_id', ''));
             $transaction = UniversalPaymentTransaction::query()->where('reference', $reference)->first();
+            $checkoutNotes = json_decode((string) ($transaction?->notes ?? ''), true);
+            if (is_array($checkoutNotes) && in_array($checkoutNotes['purpose'] ?? null, ['course_cart', 'course_gift', 'course_gift_voucher'], true)) {
+                return redirect('/student/course-commerce/cart')->withErrors(['payment' =>
+                    'Payment could not yet be verified. No course access, gift redemption or voucher credit has been issued.']);
+            }
             if ($transaction?->learn_earn_exam_id) {
                 return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)
                     ->withErrors(['payment' => 'Payment could not yet be verified. No exam access has been granted.']);
@@ -524,6 +544,15 @@ class UniversalPaymentController extends Controller
     public function sslcommerzFailed(Request $request): RedirectResponse
     {
         $transaction = $this->storefrontGateway->markSslcommerzFailed($request->all(), 'failed');
+        $checkoutNotes = json_decode((string) $transaction->notes, true);
+        if (is_array($checkoutNotes) && in_array($checkoutNotes['purpose'] ?? null, ['course_cart', 'course_gift', 'course_gift_voucher'], true)) {
+            if (in_array($transaction->status, ['verified', 'risk_review'], true)) {
+                return redirect('/student/course-commerce/cart')->with('status', $transaction->status === 'verified'
+                    ? 'Payment was already verified; your course or gift access remains available.'
+                    : 'Payment requires manual review. No course or gift access has been granted yet.');
+            }
+            return redirect('/student/course-commerce/cart')->withErrors(['payment' => 'Payment was not completed. Your cart is available to try again.']);
+        }
         if (in_array($transaction->status, ['verified', 'risk_review'], true)) {
             $message = $transaction->status === 'verified'
                 ? 'Payment was already verified; your access remains available.'
@@ -546,6 +575,15 @@ class UniversalPaymentController extends Controller
     public function sslcommerzCancelled(Request $request): RedirectResponse
     {
         $transaction = $this->storefrontGateway->markSslcommerzFailed($request->all(), 'cancelled');
+        $checkoutNotes = json_decode((string) $transaction->notes, true);
+        if (is_array($checkoutNotes) && in_array($checkoutNotes['purpose'] ?? null, ['course_cart', 'course_gift', 'course_gift_voucher'], true)) {
+            if (in_array($transaction->status, ['verified', 'risk_review'], true)) {
+                return redirect('/student/course-commerce/cart')->with('status', $transaction->status === 'verified'
+                    ? 'Payment was already verified; your course or gift access remains available.'
+                    : 'Payment requires manual review. No course or gift access has been granted yet.');
+            }
+            return redirect('/student/course-commerce/cart')->with('status', 'Payment was cancelled. Your cart is available to try again.');
+        }
         if (in_array($transaction->status, ['verified', 'risk_review'], true)) {
             $message = $transaction->status === 'verified'
                 ? 'Payment was already verified; your access remains available.'
