@@ -684,6 +684,9 @@ class CourseCommerceController extends Controller
             'paid_at' => now(),
             'updated_at' => now(),
         ]);
+        app(StorefrontPaymentGatewayService::class)->recordReferralPurchase(
+            $student, 'course_cart_order', (string) $orderId, (float) $order->net_amount, (string) $order->currency
+        );
         DB::table('course_carts')->where('id', $order->cart_id)->update(['status' => 'completed', 'updated_at' => now()]);
         if (filled($order->wallet_reservation_key)) {
             DB::table('course_gift_wallet_transactions')->where('reference', $order->wallet_reservation_key)
