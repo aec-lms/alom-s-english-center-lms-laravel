@@ -501,10 +501,14 @@ class PluginManager
             throw new RuntimeException('Invalid or protected plugin slug.');
         }
 
-        $modulesPath = rtrim((string) config('plugins.modules_path'), DIRECTORY_SEPARATOR);
-        $source = $modulesPath . DIRECTORY_SEPARATOR . $slug;
-        if (!is_dir($source) || !is_file($source . DIRECTORY_SEPARATOR . 'plugin.json')) {
-            throw new RuntimeException('Plugin package does not exist.');
+        $modulesPath = (string) config('plugins.modules_path');
+        $modulesRoot = realpath($modulesPath);
+        $sourceCandidate = rtrim($modulesPath, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $slug;
+        $source = realpath($sourceCandidate);
+        if (!$modulesRoot || is_link($modulesPath) || is_link($sourceCandidate)
+            || !$source || dirname($source) !== $modulesRoot
+            || !is_dir($source) || !is_file($source . DIRECTORY_SEPARATOR . 'plugin.json')) {
+            throw new RuntimeException('Plugin package is missing or outside the registered modules directory.');
         }
 
         $manifest = PluginManifest::fromDirectory($source);
@@ -521,7 +525,15 @@ class PluginManager
         }
 
         $trashRoot = storage_path('app/plugin-recycle-bin');
+        if (is_link($trashRoot)) {
+            throw new RuntimeException('Plugin recycle-bin directory cannot be a symbolic link.');
+        }
         File::ensureDirectoryExists($trashRoot);
+        $resolvedTrashRoot = realpath($trashRoot);
+        if (!$resolvedTrashRoot || !is_dir($resolvedTrashRoot)) {
+            throw new RuntimeException('Plugin recycle-bin directory is missing or unsafe.');
+        }
+        $trashRoot = $resolvedTrashRoot;
         $token = now()->format('YmdHis') . '-' . bin2hex(random_bytes(5));
         $archiveName = $slug . '-' . $token;
         $destination = $trashRoot . DIRECTORY_SEPARATOR . $archiveName;
@@ -581,7 +593,7 @@ class PluginManager
     public function recycledPlugins(): array
     {
         $trashRoot = storage_path('app/plugin-recycle-bin');
-        if (!is_dir($trashRoot)) {
+        if (is_link($trashRoot) || !is_dir($trashRoot)) {
             return [];
         }
 
@@ -610,11 +622,16 @@ class PluginManager
             throw new RuntimeException('Invalid recycle-bin archive identifier.');
         }
 
-        $trashRoot = storage_path('app/plugin-recycle-bin');
-        $metadataPath = $trashRoot . DIRECTORY_SEPARATOR . $archiveName . '.json';
-        $source = $trashRoot . DIRECTORY_SEPARATOR . $archiveName;
-        if (!is_file($metadataPath) || !is_dir($source)) {
-            throw new RuntimeException('Recycled plugin package was not found.');
+        $trashRootCandidate = storage_path('app/plugin-recycle-bin');
+        $trashRoot = realpath($trashRootCandidate);
+        $metadataPath = $trashRootCandidate . DIRECTORY_SEPARATOR . $archiveName . '.json';
+        $sourceCandidate = $trashRootCandidate . DIRECTORY_SEPARATOR . $archiveName;
+        $metadataRealPath = realpath($metadataPath);
+        $source = realpath($sourceCandidate);
+        if (!$trashRoot || is_link($trashRootCandidate)
+            || is_link($metadataPath) || !$metadataRealPath || dirname($metadataRealPath) !== $trashRoot
+            || is_link($sourceCandidate) || !$source || dirname($source) !== $trashRoot || !is_dir($source)) {
+            throw new RuntimeException('Recycled plugin package is missing or outside the protected recycle-bin directory.');
         }
 
         $metadata = json_decode(File::get($metadataPath), true, 512, JSON_THROW_ON_ERROR);
@@ -632,8 +649,13 @@ class PluginManager
             throw new RuntimeException('Recycled plugin is incompatible or its manifest identity is invalid.');
         }
 
-        $target = rtrim((string) config('plugins.modules_path'), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $slug;
-        if (file_exists($target)) {
+        $modulesPath = (string) config('plugins.modules_path');
+        $modulesRoot = realpath($modulesPath);
+        if (!$modulesRoot || is_link($modulesPath)) {
+            throw new RuntimeException('Plugin modules directory is missing or unsafe.');
+        }
+        $target = $modulesRoot . DIRECTORY_SEPARATOR . $slug;
+        if (file_exists($target) || is_link($target)) {
             throw new RuntimeException('A plugin package with this slug already exists. Remove or update it before restoring.');
         }
         File::ensureDirectoryExists(dirname($target));
@@ -681,11 +703,16 @@ class PluginManager
         if (preg_match('/^[a-z0-9][a-z0-9-]{1,79}-[0-9]{14}-[a-f0-9]{10}$/', $archiveName) !== 1) {
             throw new RuntimeException('Invalid recycle-bin archive identifier.');
         }
-        $trashRoot = storage_path('app/plugin-recycle-bin');
-        $metadataPath = $trashRoot . DIRECTORY_SEPARATOR . $archiveName . '.json';
-        $source = $trashRoot . DIRECTORY_SEPARATOR . $archiveName;
-        if (!is_file($metadataPath) || !is_dir($source)) {
-            throw new RuntimeException('Recycled plugin package was not found.');
+        $trashRootCandidate = storage_path('app/plugin-recycle-bin');
+        $trashRoot = realpath($trashRootCandidate);
+        $metadataPath = $trashRootCandidate . DIRECTORY_SEPARATOR . $archiveName . '.json';
+        $sourceCandidate = $trashRootCandidate . DIRECTORY_SEPARATOR . $archiveName;
+        $metadataRealPath = realpath($metadataPath);
+        $source = realpath($sourceCandidate);
+        if (!$trashRoot || is_link($trashRootCandidate)
+            || is_link($metadataPath) || !$metadataRealPath || dirname($metadataRealPath) !== $trashRoot
+            || is_link($sourceCandidate) || !$source || dirname($source) !== $trashRoot || !is_dir($source)) {
+            throw new RuntimeException('Recycled plugin package is missing or outside the protected recycle-bin directory.');
         }
         $metadata = json_decode(File::get($metadataPath), true, 512, JSON_THROW_ON_ERROR);
         $slug = (string) ($metadata['slug'] ?? '');
@@ -726,15 +753,30 @@ class PluginManager
     /** @return array<string, string> */
     private function pluginDirectoryChecksums(string $directory): array
     {
+        $root = realpath($directory);
+        if (!$root || !is_dir($root) || is_link($directory)) {
+            throw new RuntimeException('Archived plugin package directory is missing or unsafe.');
+        }
+
         $checksums = [];
-        foreach (File::allFiles($directory) as $file) {
+        foreach (File::allFiles($root) as $file) {
             if ($file->isLink()) {
                 throw new RuntimeException('Symlinks are not allowed in archived plugin packages.');
             }
-            $relative = str_replace('\\\\', '/', $file->getRelativePathname());
-            $checksums[$relative] = hash_file('sha256', $file->getPathname());
+            $path = $file->getPathname();
+            $resolved = realpath($path);
+            if (!$resolved || !str_starts_with($resolved, rtrim($root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR)) {
+                throw new RuntimeException('Archived plugin package contains a path outside its protected directory.');
+            }
+            $relative = str_replace(DIRECTORY_SEPARATOR, '/', substr($resolved, strlen(rtrim($root, DIRECTORY_SEPARATOR)) + 1));
+            $checksum = hash_file('sha256', $resolved);
+            if (!is_string($checksum) || $checksum === '') {
+                throw new RuntimeException('Could not verify an archived plugin package file checksum.');
+            }
+            $checksums[$relative] = $checksum;
         }
         ksort($checksums);
+
         return $checksums;
     }
 
