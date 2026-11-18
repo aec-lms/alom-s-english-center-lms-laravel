@@ -3,7 +3,7 @@
 @section('content')
 @include('public.partials.navbar')
 <main class="mx-auto max-w-5xl space-y-5 px-4 py-8">
-  <a href="{{ route('courses.show',$course->slug) }}" class="text-sm text-sky-700 underline">← {{ $course->title }}</a>
+  <a href="{{ route('public.courses.show',$course->slug) }}" class="text-sm text-sky-700 underline">← {{ $course->title }}</a>
   <header><p class="text-sm text-slate-500">{{ $item->section_title }}</p><h1 class="text-3xl font-extrabold">{{ $post->title }}</h1>@if($post->short_description)<p class="mt-2 text-slate-600">{{ $post->short_description }}</p>@endif</header>
   @if($post->video_embed_url)<div class="aspect-video overflow-hidden rounded-2xl bg-slate-950"><iframe class="h-full w-full" src="{{ $post->video_url }}" title="{{ $post->title }}" loading="lazy" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>@endif
   <article class="prose max-w-none rounded-2xl border bg-white p-6">{!! nl2br(e($post->long_description)) !!}</article>
