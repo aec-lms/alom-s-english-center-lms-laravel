@@ -7,6 +7,8 @@ namespace Tests\Feature;
 use App\Core\Plugins\PluginManager;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 
 class AssignmentManagementPluginTest extends TestCase
@@ -108,4 +110,44 @@ class AssignmentManagementPluginTest extends TestCase
         $this->actingAs($student)->get("/student/assignments/{$assignmentId}")->assertOk()->assertDontSee('Private student answer.');
         $this->actingAs($student)->get("/student/assignments/submissions/{$submissionId}/attachment")->assertForbidden();
     }
+
+    public function test_submission_attachments_are_private_and_only_the_owner_can_download_them(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['assignment-management']);
+        Storage::fake('local');
+
+        $teacher = $this->createUserWithRole('teacher');
+        $student = $this->createUserWithRole('student');
+        $otherStudent = $this->createUserWithRole('student');
+        $assignmentId = DB::table('assignment_tasks')->insertGetId([
+            'created_by' => $teacher->id,
+            'title' => 'Private Attachment Task',
+            'instructions' => 'Upload your answer.',
+            'max_score' => 10,
+            'status' => 'published',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $file = UploadedFile::fake()->create('answer.pdf', 100, 'application/pdf');
+        $this->actingAs($student)->post("/student/assignments/{$assignmentId}/submit", [
+            'answer_text' => 'My answer.',
+            'attachment' => $file,
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $submission = DB::table('assignment_submissions')->where('assignment_id', $assignmentId)->first();
+        $this->assertNotNull($submission->attachment_path);
+        Storage::disk('local')->assertExists($submission->attachment_path);
+        Storage::disk('public')->assertMissing($submission->attachment_path);
+
+        $this->actingAs($otherStudent)
+            ->get("/student/assignments/submissions/{$submission->id}/attachment")
+            ->assertForbidden();
+
+        $this->actingAs($student)
+            ->get("/student/assignments/submissions/{$submission->id}/attachment")
+            ->assertOk();
+    }
+
 }
