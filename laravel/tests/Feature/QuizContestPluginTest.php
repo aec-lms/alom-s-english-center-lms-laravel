@@ -259,4 +259,38 @@ class QuizContestPluginTest extends TestCase
         $this->assertDatabaseHas('quiz_contests', ['id' => $contest, 'status' => 'published']);
     }
 
+
+    public function test_expired_paused_contest_cannot_resume_but_can_publish_score_based_results(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['quiz-contest']);
+        $admin = $this->createUserWithRole('admin');
+        $student = $this->createUserWithRole('student');
+        $contest = $this->createContest(null, now()->subDays(2)->toDateTimeString(), now()->subMinute()->toDateTimeString());
+        DB::table('quiz_contests')->where('id', $contest)->update(['status' => 'paused']);
+        $questionIds = DB::table('quiz_contest_questions')->where('quiz_contest_id', $contest)->orderBy('position')->pluck('id');
+        DB::table('quiz_contest_entries')->insert([
+            'quiz_contest_id' => $contest,
+            'user_id' => $student->id,
+            'answers' => json_encode([$questionIds[0] => 1, $questionIds[1] => 1]),
+            'score' => 2,
+            'submitted_at' => now()->subMinutes(2),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($admin)->patch("/admin/quiz-contests/{$contest}/status", ['status' => 'published'])
+            ->assertStatus(422);
+        $this->assertDatabaseHas('quiz_contests', ['id' => $contest, 'status' => 'paused']);
+
+        $this->actingAs($admin)->post("/admin/quiz-contests/{$contest}/publish-results")
+            ->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('quiz_contest_winners', [
+            'quiz_contest_id' => $contest,
+            'user_id' => $student->id,
+            'rank' => 1,
+        ]);
+        $this->assertDatabaseHas('quiz_contests', ['id' => $contest, 'status' => 'closed']);
+    }
+
 }
