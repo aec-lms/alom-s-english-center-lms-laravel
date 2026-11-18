@@ -17,6 +17,13 @@
     "admin_menu": [
         {
             "group": "Commerce",
+            "label": "Orders",
+            "route": "plugins.commerce_cart.admin.orders",
+            "order": 78,
+            "permission": "commerce.orders.manage"
+        },
+        {
+            "group": "Commerce",
             "label": "Paid Services Catalogue",
             "route": "plugins.commerce_cart.admin.sellables",
             "order": 80,
