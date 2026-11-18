@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use Illuminate\\Support\\Facades\\Route;
-use Plugins\\Modules\\SupportCenter\\Http\\Controllers\\SupportTicketController;
+use Illuminate\Support\Facades\Route;
+use Plugins\Modules\SupportCenter\Http\Controllers\SupportTicketController;
 
 Route::middleware(['web', 'installed', 'auth', 'plugin:support-center'])
     ->group(function (): void {
