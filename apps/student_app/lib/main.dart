@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 import 'api_client.dart';
+import 'course_detail_page.dart';
 import 'qr_attendance_page.dart';
 import 'support_tickets_page.dart';
 
@@ -96,7 +97,23 @@ class _StudentHomeState extends State<StudentHome> {
   @override
   Widget build(BuildContext context) {
     final pages = [
-      _DataList(title: 'Courses', future: home, keyName: 'courses', labelKey: 'title', onRefresh: () => setState(refresh)),
+      _DataList(
+        title: 'Courses',
+        future: home,
+        keyName: 'courses',
+        labelKey: 'title',
+        onRefresh: () => setState(refresh),
+        onItemTap: (item) {
+          final slug = item['slug']?.toString();
+          if (slug == null || slug.isEmpty) return;
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => CourseDetailPage(api: widget.api, slug: slug),
+            ),
+          );
+        },
+      ),
       _DataList(title: 'My Learning', future: profile, keyName: 'enrollments', labelKey: 'course', onRefresh: () => setState(refresh)),
       _DataList(title: 'Notices', future: notices, keyName: 'data', labelKey: 'title', onRefresh: () => setState(refresh)),
       SupportTicketsPage(api: widget.api),
@@ -120,10 +137,11 @@ class _StudentHomeState extends State<StudentHome> {
 }
 
 class _DataList extends StatelessWidget {
-  const _DataList({required this.title, required this.future, required this.keyName, required this.labelKey, required this.onRefresh});
+  const _DataList({required this.title, required this.future, required this.keyName, required this.labelKey, required this.onRefresh, this.onItemTap});
   final String title, keyName, labelKey;
   final Future<Map<String, dynamic>> future;
   final VoidCallback onRefresh;
+  final ValueChanged<Map<String, dynamic>>? onItemTap;
   @override
   Widget build(BuildContext context) => FutureBuilder<Map<String, dynamic>>(future: future, builder: (context, snapshot) {
     if (snapshot.connectionState != ConnectionState.done) { return const Center(child: CircularProgressIndicator()); }
@@ -136,7 +154,11 @@ class _DataList extends StatelessWidget {
         final item = Map<String, dynamic>.from(items[i] as Map);
         final label = item[labelKey];
         final display = label is Map ? label['title']?.toString() : label?.toString();
-        return ListTile(title: Text(display ?? title), subtitle: Text(item['status']?.toString() ?? ''));
+        return ListTile(
+          title: Text(display ?? title),
+          subtitle: Text(item['status']?.toString() ?? ''),
+          onTap: onItemTap == null ? null : () => onItemTap!(item),
+        );
       }));
   });
 }
