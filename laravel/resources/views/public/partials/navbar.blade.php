@@ -30,6 +30,16 @@
             'external' => false,
         ];
     }
+    if (auth()->check() && auth()->user()->hasRole('student')
+        && app(\\App\\Core\\Plugins\\PluginManager::class)->isEnabled('commerce-cart')
+        && Route::has('plugins.commerce_cart.index')) {
+        $navLinks[] = [
+            'label' => 'Shopping Cart',
+            'url' => route('plugins.commerce_cart.index'),
+            'active' => request()->routeIs('plugins.commerce_cart.*'),
+            'external' => false,
+        ];
+    }
 @endphp
 
 <header data-header-style="{{ $headerLayout['style'] }}" class="w-full bg-white border-b border-slate-200/80 {{ $headerLayout['sticky'] ? 'sticky top-0' : 'relative' }} z-40 shadow-2xs">
