@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Route;
 use Plugins\Modules\AttendanceManagement\Http\Controllers\AttendanceController;
+use Plugins\Modules\AttendanceManagement\Http\Controllers\AttendanceAuditController;
 use Plugins\Modules\AttendanceManagement\Http\Controllers\AttendanceQrController;
 use Plugins\Modules\AttendanceManagement\Http\Controllers\AttendanceSyncController;
 
@@ -12,6 +13,8 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:attendance-management', '
     ->name('plugins.attendance.')
     ->group(function (): void {
         Route::get('/', [AttendanceController::class, 'index'])->name('index');
+        Route::get('/audit', [AttendanceAuditController::class, 'index'])->name('audit');
+        Route::get('/audit/export.csv', [AttendanceAuditController::class, 'export'])->name('audit.export');
         Route::post('/', [AttendanceController::class, 'store'])->name('store');
         Route::post('/sync', [AttendanceSyncController::class, 'sync'])->name('sync');
         Route::put('/batches/{mappingId}/roster', [AttendanceQrController::class, 'assignRoster'])->whereNumber('mappingId')->name('roster.update');
