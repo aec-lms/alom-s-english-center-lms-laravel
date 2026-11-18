@@ -39,4 +39,4 @@ jobs:
       - name: Test
         run: flutter test
       - name: Build Android APK
-        run: flutter build apk --debug --dart-define=API_BASE_URL=https://www.alomsenglishcenter.com/api/v1
+        run: flutter build apk --debug --dart-define=API_BASE_URL=https://your-domain.example/api/v1
