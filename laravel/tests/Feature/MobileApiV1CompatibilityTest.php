@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use Tests\\TestCase;
+use Tests\TestCase;
 
 class MobileApiV1CompatibilityTest extends TestCase
 {
@@ -62,10 +62,14 @@ class MobileApiV1CompatibilityTest extends TestCase
 
         $student = $this->createUserWithRole('student');
         $token = $student->createToken('mobile-v1-logout')->plainTextToken;
+        $tokenId = (int) explode('|', $token, 2)[0];
 
         $this->withHeader('Authorization', 'Bearer ' . $token)
             ->postJson('/api/v1/auth/logout')
             ->assertOk();
+
+        $this->assertDatabaseMissing('personal_access_tokens', ['id' => $tokenId]);
+        app('auth')->forgetGuards();
 
         $this->withHeader('Authorization', 'Bearer ' . $token)
             ->getJson('/api/v1/auth/me')
