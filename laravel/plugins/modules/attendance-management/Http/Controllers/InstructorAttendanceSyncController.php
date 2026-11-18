@@ -2,19 +2,19 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\AttendanceManagement\\Http\\Controllers;
+namespace Plugins\Modules\AttendanceManagement\Http\Controllers;
 
-use App\\Core\\Plugins\\PluginManager;
-use App\\Core\\Security\\AuditLogger;
-use App\\Http\\Controllers\\Controller;
-use Carbon\\CarbonImmutable;
-use Illuminate\\Http\\JsonResponse;
-use Illuminate\\Http\\Request;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Facades\\Schema;
-use Illuminate\\Support\\Facades\\Validator;
-use Plugins\\Modules\\AttendanceManagement\\Models\\AttendanceBatchMapping;
-use Plugins\\Modules\\AttendanceManagement\\Models\\AttendanceEntry;
+use App\Core\Plugins\PluginManager;
+use App\Core\Security\AuditLogger;
+use App\Http\Controllers\Controller;
+use Carbon\CarbonImmutable;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Validator;
+use Plugins\Modules\AttendanceManagement\Models\AttendanceBatchMapping;
+use Plugins\Modules\AttendanceManagement\Models\AttendanceEntry;
 use Throwable;
 
 class InstructorAttendanceSyncController extends Controller
@@ -58,7 +58,7 @@ class InstructorAttendanceSyncController extends Controller
         foreach ($validated['records'] as $item) {
             try {
                 $results[] = $this->syncOne($actor, $item);
-            } catch (\\Illuminate\\Http\\Exceptions\\HttpResponseException $exception) {
+            } catch (\Illuminate\Http\Exceptions\HttpResponseException $exception) {
                 $response = $exception->getResponse();
                 $payload = $response?->getData(true) ?? [];
                 $results[] = [
@@ -66,7 +66,7 @@ class InstructorAttendanceSyncController extends Controller
                     'status' => 'failed',
                     'message' => $payload['message'] ?? 'Attendance record was rejected.',
                 ];
-            } catch (\\Symfony\\Component\\HttpKernel\\Exception\\HttpExceptionInterface $exception) {
+            } catch (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $exception) {
                 $results[] = [
                     'idempotency_key' => $item['idempotency_key'],
                     'status' => 'failed',
