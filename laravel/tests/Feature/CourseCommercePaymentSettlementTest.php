@@ -128,6 +128,7 @@ class CourseCommercePaymentSettlementTest extends TestCase
         $transaction = $this->transaction($sender->id, 720, [
             'purpose' => 'course_gift',
             'course_gift_id' => $giftId,
+            'coupon_reservation_key' => $reservation['reservation_key'],
         ]);
         DB::table('course_gifts')->where('id', $giftId)->update(['payment_transaction_id' => $transaction->id]);
 
