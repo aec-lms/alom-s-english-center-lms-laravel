@@ -4,56 +4,52 @@
 
 @section('content')
 @include('public.partials.navbar')
-<div class="container py-4">
-    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+<div class="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+    <div class="flex flex-wrap items-end justify-between gap-4">
         <div>
-            <span class="badge bg-info">{{ __('My learning') }}</span>
-            <h1 class="h3 mt-2 mb-1">{{ __('My Wishlist') }}</h1>
-            <p class="text-muted mb-0">{{ __('Courses you saved to explore later.') }}</p>
+            <span class="inline-flex rounded-full bg-sky-50 text-sky-700 px-3 py-1 text-xs font-semibold">{{ __('My learning') }}</span>
+            <h1 class="text-2xl sm:text-3xl font-bold text-slate-900 mt-3">{{ __('My Wishlist') }}</h1>
+            <p class="text-sm text-slate-500 mt-1">{{ __('Courses you saved to explore later.') }}</p>
         </div>
-        <a class="btn btn-outline-primary" href="{{ url('/courses') }}">{{ __('Browse courses') }}</a>
+        <a class="inline-flex items-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="{{ url('/courses') }}">{{ __('Browse courses') }}</a>
     </div>
 
     @if(session('status'))
-        <div class="alert alert-success" role="status">{{ session('status') }}</div>
+        <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">{{ session('status') }}</div>
     @endif
 
     @if($courses->isEmpty())
-        <div class="card border-0 shadow-sm">
-            <div class="card-body py-5 text-center">
-                <h2 class="h5">{{ __('Your wishlist is empty') }}</h2>
-                <p class="text-muted">{{ __('Save published courses and they will appear here.') }}</p>
-                <a class="btn btn-primary" href="{{ url('/courses') }}">{{ __('Explore courses') }}</a>
-            </div>
+        <div class="rounded-2xl border border-slate-200 bg-white p-8 sm:p-12 text-center shadow-sm">
+            <h2 class="text-lg font-semibold text-slate-900">{{ __('Your wishlist is empty') }}</h2>
+            <p class="text-sm text-slate-500 mt-2">{{ __('Save published courses and they will appear here.') }}</p>
+            <a class="inline-flex mt-5 rounded-lg bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-sky-700" href="{{ url('/courses') }}">{{ __('Explore courses') }}</a>
         </div>
     @else
-        <div class="row g-3">
+        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
             @foreach($courses as $course)
-                <div class="col-12 col-md-6 col-xl-4" wire:key="wishlist-course-{{ $course->id }}">
-                    <article class="card h-100 border-0 shadow-sm">
-                        @if($course->thumbnail)
-                            <img src="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($course->thumbnail) }}"
-                                 alt="{{ $course->title }}" loading="lazy"
-                                 class="card-img-top" style="aspect-ratio:16/9;object-fit:cover;">
-                        @endif
-                        <div class="card-body d-flex flex-column">
-                            <h2 class="h5">{{ $course->title }}</h2>
-                            <p class="text-muted small">{{ \Illuminate\Support\Str::limit(strip_tags((string) $course->description), 130) }}</p>
-                            <p class="fw-semibold mt-auto">{{ __('BDT') }} {{ number_format((float) $course->price, 2) }}</p>
-                            <div class="d-flex gap-2">
-                                <a class="btn btn-primary btn-sm" href="{{ url('/course/' . $course->slug) }}">{{ __('View course') }}</a>
-                                <form method="POST" action="{{ route('plugins.course-wishlist.destroy', $course->id) }}">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button class="btn btn-outline-secondary btn-sm" type="submit">{{ __('Remove') }}</button>
-                                </form>
-                            </div>
+                <article class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm flex flex-col">
+                    @if($course->thumbnail)
+                        <img src="{{ \\Illuminate\\Support\\Facades\\Storage::disk('public')->url($course->thumbnail) }}"
+                             alt="{{ $course->title }}" loading="lazy"
+                             class="w-full aspect-video object-cover">
+                    @endif
+                    <div class="p-5 flex flex-col flex-1">
+                        <h2 class="text-lg font-semibold text-slate-900">{{ $course->title }}</h2>
+                        <p class="text-sm text-slate-500 mt-2">{{ \\Illuminate\\Support\\Str::limit(strip_tags((string) $course->description), 130) }}</p>
+                        <p class="font-bold text-slate-900 mt-auto pt-4">{{ __('BDT') }} {{ number_format((float) $course->price, 2) }}</p>
+                        <div class="flex items-center gap-2 mt-4">
+                            <a class="inline-flex rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700" href="{{ url('/course/' . $course->slug) }}">{{ __('View course') }}</a>
+                            <form method="POST" action="{{ route('plugins.course-wishlist.destroy', $course->id) }}">
+                                @csrf
+                                @method('DELETE')
+                                <button class="inline-flex rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" type="submit">{{ __('Remove') }}</button>
+                            </form>
                         </div>
-                    </article>
-                </div>
+                    </div>
+                </article>
             @endforeach
         </div>
-        <div class="mt-4">{{ $courses->links() }}</div>
+        <div class="pt-2">{{ $courses->links() }}</div>
     @endif
 </div>
 @endsection
