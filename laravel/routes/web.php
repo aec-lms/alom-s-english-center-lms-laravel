@@ -37,7 +37,7 @@ Route::middleware('installed')->group(function (): void {
     Route::get('/', [PublicHomeController::class, 'index'])->name('home');
     Route::get('/courses', [PublicHomeController::class, 'courses'])->name('public.courses');
     Route::get('/course/{slug}', [PublicHomeController::class, 'courseShow'])->name('public.courses.show');
-    Route::post('/courses/coupon-check', [PublicHomeController::class, 'checkCoupon'])->middleware('throttle:20,1')->name('public.courses.coupon');
+    Route::post('/courses/coupon-check', [PublicHomeController::class, 'checkCoupon'])->middleware('throttle:public-coupon-check')->name('public.courses.coupon');
     Route::get('/learn', [PublicHomeController::class, 'learn'])->name('public.learn');
     Route::get('/instructors', [PublicHomeController::class, 'instructors'])->name('public.instructors');
     Route::get('/teacher/{id}', [PublicHomeController::class, 'instructorShow'])->name('public.instructors.show');
@@ -53,7 +53,7 @@ Route::middleware('installed')->group(function (): void {
 
     Route::get('/about-us', [PublicHomeController::class, 'aboutUs'])->name('public.about');
     Route::get('/contact-us', [PublicHomeController::class, 'contactUs'])->name('public.contact');
-    Route::post('/contact-us', [PublicHomeController::class, 'submitContact'])->middleware('throttle:5,1')->name('public.contact.submit');
+    Route::post('/contact-us', [PublicHomeController::class, 'submitContact'])->middleware('throttle:public-contact')->name('public.contact.submit');
     Route::get('/terms-and-conditions', [PublicHomeController::class, 'legalPage'])->defaults('slug', 'terms-and-conditions')->name('public.terms');
     Route::get('/privacy-policy', [PublicHomeController::class, 'legalPage'])->defaults('slug', 'privacy-policy')->name('public.privacy');
     Route::get('/refund-policy', [PublicHomeController::class, 'legalPage'])->defaults('slug', 'refund-policy')->name('public.refund');
@@ -61,15 +61,15 @@ Route::middleware('installed')->group(function (): void {
     Route::get('/dashboard', [PortalController::class, 'index'])->middleware('auth')->name('portal.dashboard');
 
     Route::get('/login', [LoginController::class, 'show'])->name('login')->middleware('guest');
-    Route::post('/login', [LoginController::class, 'authenticate'])->name('login.attempt')->middleware(['guest', 'throttle:20,1']);
+    Route::post('/login', [LoginController::class, 'authenticate'])->name('login.attempt')->middleware(['guest', 'throttle:auth-login']);
     Route::get('/register', [LoginController::class, 'showRegister'])->name('register')->middleware('guest');
-    Route::post('/register', [LoginController::class, 'register'])->name('register.attempt')->middleware(['guest', 'throttle:5,1']);
+    Route::post('/register', [LoginController::class, 'register'])->name('register.attempt')->middleware(['guest', 'throttle:auth-register']);
     Route::get('/forgot-password', [LoginController::class, 'showForgotPassword'])->name('password.request')->middleware('guest');
-    Route::post('/forgot-password', [LoginController::class, 'sendResetNotice'])->name('password.email')->middleware(['guest', 'throttle:3,1']);
-    Route::post('/forgot-password/otp', [LoginController::class, 'sendRecoveryOtp'])->name('password.otp.send')->middleware(['guest', 'throttle:10,1']);
-    Route::post('/forgot-password/otp/verify', [LoginController::class, 'verifyRecoveryOtp'])->name('password.otp.verify')->middleware(['guest', 'throttle:20,1']);
+    Route::post('/forgot-password', [LoginController::class, 'sendResetNotice'])->name('password.email')->middleware(['guest', 'throttle:password-reset-email']);
+    Route::post('/forgot-password/otp', [LoginController::class, 'sendRecoveryOtp'])->name('password.otp.send')->middleware(['guest', 'throttle:password-otp-send']);
+    Route::post('/forgot-password/otp/verify', [LoginController::class, 'verifyRecoveryOtp'])->name('password.otp.verify')->middleware(['guest', 'throttle:password-otp-verify']);
     Route::get('/reset-password/{token}', [LoginController::class, 'showResetPassword'])->name('password.reset')->middleware('guest');
-    Route::post('/reset-password', [LoginController::class, 'resetPassword'])->name('password.update')->middleware(['guest', 'throttle:5,1']);
+    Route::post('/reset-password', [LoginController::class, 'resetPassword'])->name('password.update')->middleware(['guest', 'throttle:password-reset-submit']);
     Route::post('/logout', [LoginController::class, 'logout'])->name('logout')->middleware('auth');
 
     Route::prefix('admin')->name('admin.')->middleware('auth')->group(function (): void {
