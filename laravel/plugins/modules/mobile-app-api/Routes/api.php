@@ -50,7 +50,7 @@ Route::middleware(['api', 'installed', 'plugin:mobile-app-api'])
             Route::put('/instructor/courses/{slug}/lessons/{lesson}', [InstructorMobileApiController::class, 'updateLesson'])->whereNumber('lesson')->middleware('throttle:30,1')->name('instructor.lessons.update');
             Route::delete('/instructor/courses/{slug}/lessons/{lesson}', [InstructorMobileApiController::class, 'destroyLesson'])->whereNumber('lesson')->middleware('throttle:10,1')->name('instructor.lessons.destroy');
             Route::get('/me', [MobileApiController::class, 'me'])->name('me');
-            Route::post('/push-token', [MobileApiController::class, 'registerPushToken'])->name('push_token');
+            Route::post('/push-token', [MobileApiController::class, 'registerPushToken'])->middleware('throttle:30,1')->name('push_token');
             Route::post('/logout', [MobileApiController::class, 'logout'])->name('logout');
         });
     });
@@ -81,7 +81,7 @@ Route::middleware(['api', 'installed', 'plugin:mobile-app-api'])
         Route::middleware('auth:sanctum')->group(function (): void {
             Route::get('/auth/me', [MobileApiController::class, 'me'])->name('auth.me');
             Route::post('/auth/logout', [MobileApiController::class, 'logout'])->name('auth.logout');
-            Route::post('/push-token', [MobileApiController::class, 'registerPushToken'])->name('push_token');
+            Route::post('/push-token', [MobileApiController::class, 'registerPushToken'])->middleware('throttle:30,1')->name('push_token');
             Route::get('/courses/{slug}/lessons', [MobileApiController::class, 'lessons'])->name('courses.lessons');
             Route::get('/instructor/courses', [InstructorMobileApiController::class, 'courses'])->name('instructor.courses');
             Route::get('/instructor/courses/{slug}/students', [InstructorMobileApiController::class, 'courseStudents'])->name('instructor.courses.students');

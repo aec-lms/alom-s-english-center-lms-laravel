@@ -184,6 +184,19 @@ class MobileApi {
     return _decode(response);
   }
 
+  Future<void> registerPushToken(String pushToken) async {
+    final token = await readToken();
+    if (token == null || token.isEmpty || pushToken.isEmpty) return;
+
+    await postJson('/push-token', {
+      'platform': Platform.isIOS ? 'ios' : 'android',
+      'device_name': 'Alom Student App',
+      'device_id': await _deviceId(),
+      'app_version': '1.0.0',
+      'push_token': pushToken,
+    });
+  }
+
   Future<void> logout() async {
     final token = await readToken();
     try {
@@ -193,7 +206,9 @@ class MobileApi {
           headers: {
             'Accept': 'application/json',
             'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
           },
+          body: jsonEncode({'device_id': await _deviceId()}),
         );
       }
     } finally {

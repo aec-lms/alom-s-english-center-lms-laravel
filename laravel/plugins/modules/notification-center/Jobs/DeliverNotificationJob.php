@@ -13,8 +13,11 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Mail;
 use Plugins\Modules\NotificationCenter\Models\LmsNotification;
+use Plugins\Modules\PushNotifications\Services\FirebaseCloudMessagingService;
 use Throwable;
 
 class DeliverNotificationJob implements ShouldQueue, ShouldBeUnique
@@ -53,6 +56,32 @@ class DeliverNotificationJob implements ShouldQueue, ShouldBeUnique
             'attempt_count' => (int) $notification->attempt_count + 1,
             'last_error' => null,
         ])->save();
+
+        if ($notification->channel === 'push') {
+            if (!$plugins->isEnabled('push-notifications')) {
+                $notification->forceFill([
+                    'status' => 'failed',
+                    'last_error' => 'Firebase Push Notifications integration is disabled.',
+                    'processed_at' => now(),
+                ])->save();
+                return;
+            }
+
+            $result = app(FirebaseCloudMessagingService::class)->deliver($notification);
+            $notification->forceFill([
+                'status' => $result === 'sent' ? 'sent' : 'failed',
+                'last_error' => match ($result) {
+                    'sent' => null,
+                    'no_devices' => 'No active registered mobile device is available for this user.',
+                    'not_configured' => 'Firebase or Mobile App API is not configured or enabled.',
+                    'payload_too_large' => 'Push notification content exceeds the Firebase payload limit.',
+                    default => 'Firebase did not accept the push notification.',
+                },
+                'processed_at' => now(),
+            ])->save();
+
+            return;
+        }
 
         if ($notification->channel !== 'email') {
             $notification->forceFill([
@@ -125,12 +154,29 @@ class DeliverNotificationJob implements ShouldQueue, ShouldBeUnique
 
     public function failed(?Throwable $exception): void
     {
+        $notification = LmsNotification::query()->find($this->notificationId);
+        $isPush = $notification?->channel === 'push';
+        $failureMessage = $isPush
+            ? 'Push delivery failed after retry attempts. Check Firebase configuration and server logs.'
+            : 'Mail transport failed after retry attempts. Check server mail logs.';
+
+        if ($isPush && Schema::hasTable('push_notification_deliveries')) {
+            DB::table('push_notification_deliveries')
+                ->where('notification_id', $this->notificationId)
+                ->where('status', 'pending')
+                ->update([
+                    'status' => 'failed',
+                    'last_error' => $failureMessage,
+                    'updated_at' => now(),
+                ]);
+        }
+
         LmsNotification::query()
             ->whereKey($this->notificationId)
             ->whereNotIn('status', ['sent', 'read'])
             ->update([
                 'status' => 'failed',
-                'last_error' => 'Mail transport failed after retry attempts. Check server mail logs.',
+                'last_error' => $failureMessage,
                 'processed_at' => now(),
             ]);
     }

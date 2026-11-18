@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:math';
+import 'dart:io';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -304,6 +305,19 @@ class MobileApi {
     );
   }
 
+  Future<void> registerPushToken(String pushToken) async {
+    final token = await readToken();
+    if (token == null || token.isEmpty || pushToken.isEmpty) return;
+
+    await postJson('/push-token', {
+      'platform': Platform.isIOS ? 'ios' : 'android',
+      'device_name': 'Aloms Instructor App',
+      'device_id': await _deviceId(),
+      'app_version': '1.0.0',
+      'push_token': pushToken,
+    });
+  }
+
   Future<void> logout() async {
     final token = await readToken();
     if (token != null && token.isNotEmpty) {
@@ -313,7 +327,9 @@ class MobileApi {
           headers: {
             'Accept': 'application/json',
             'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
           },
+          body: jsonEncode({'device_id': await _deviceId()}),
         );
       } finally {
         await storage.delete(key: _tokenKey);

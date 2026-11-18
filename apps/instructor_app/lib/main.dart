@@ -1,8 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'firebase_options.dart';
+import 'push_notification_service.dart';
 import 'api_client.dart';
 import 'attendance_page.dart';
 
-void main() => runApp(const InstructorApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await initializeAecFirebase();
+  runApp(const InstructorApp());
+}
 
 class InstructorApp extends StatelessWidget {
   const InstructorApp({super.key});
@@ -22,26 +30,48 @@ class InstructorGate extends StatefulWidget {
 }
 class _InstructorGateState extends State<InstructorGate> {
   final api = MobileApi();
+  late final pushNotifications = AecPushNotificationService(api, onMessage: _showPushMessage);
   bool loading = true;
   bool signedIn = false;
+
   @override
   void initState() {
     super.initState();
     api.restoreSession().then((restored) {
-      if (!mounted) {
-        return;
-      }
-      setState(() { signedIn = restored; loading = false; });
+      if (!mounted) return;
+      setState(() {
+        signedIn = restored;
+        loading = false;
+      });
+      if (restored) unawaited(pushNotifications.initialize());
     });
   }
+
+  void _showPushMessage(String title, String body) {
+    if (!mounted) return;
+    final message = body.isEmpty ? title : '$title\n$body';
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _onLogin() {
+    setState(() => signedIn = true);
+    unawaited(pushNotifications.initialize());
+  }
+
+  @override
+  void dispose() {
+    unawaited(pushNotifications.dispose());
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     if (loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     return signedIn
-      ? InstructorHome(api: api, onLogout: () => setState(() => signedIn = false))
-      : InstructorLogin(api: api, onLogin: () => setState(() => signedIn = true));
+        ? InstructorHome(api: api, onLogout: () => setState(() => signedIn = false))
+        : InstructorLogin(api: api, onLogin: _onLogin);
   }
 }
 
