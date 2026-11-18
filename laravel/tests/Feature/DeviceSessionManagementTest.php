@@ -16,7 +16,7 @@ class DeviceSessionManagementTest extends TestCase
 
         $this->post(route('login.attempt'), [
             'email' => $user->email,
-            'password' => 'password',
+            'password' => 'StrongPassword!2026',
         ])->assertRedirect();
 
         $session = DeviceSession::query()->where('user_id', $user->id)->firstOrFail();
