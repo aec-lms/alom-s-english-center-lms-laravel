@@ -560,10 +560,10 @@ class StorefrontPaymentGatewayService
                 try {
                     $token = decrypt((string) $voucher->redeem_token_encrypted);
                     $redeemUrl = url('/student/course-commerce/vouchers/redeem/' . $token);
-                    $message = "You have received an AEC course gift voucher worth {$voucher->currency} " . number_format((float) $voucher->amount, 2) . ".\\n\\n";
-                    if (filled($voucher->recipient_name)) $message .= "Hello {$voucher->recipient_name},\\n\\n";
-                    if (filled($voucher->message)) $message .= "Message from the sender: {$voucher->message}\\n\\n";
-                    $message .= "Sign in or register using this email address, then open this link to claim the voucher to your course wallet:\\n{$redeemUrl}\\n\\n";
+                    $message = "You have received an AEC course gift voucher worth {$voucher->currency} " . number_format((float) $voucher->amount, 2) . ".\n\n";
+                    if (filled($voucher->recipient_name)) $message .= "Hello {$voucher->recipient_name},\n\n";
+                    if (filled($voucher->message)) $message .= "Message from the sender: {$voucher->message}\n\n";
+                    $message .= "Sign in or register using this email address, then open this link to claim the voucher to your course wallet:\n{$redeemUrl}\n\n";
                     $message .= "The voucher expires on {$voucher->expires_at}.";
                     Mail::raw($message, function ($mail) use ($voucher): void {
                         $mail->to((string) $voucher->recipient_email)->subject('You received an AEC course gift voucher');
