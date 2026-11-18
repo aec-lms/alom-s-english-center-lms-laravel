@@ -49,7 +49,7 @@ class StudentTracingIndependenceTest extends TestCase
         DB::table('student_activity_events')->insert([
             'user_id' => 123,
             'actor_id' => 123,
-            'event_type' => 'lesson_completed',
+            'event_type' => 'student.created',
             'subject_type' => 'lesson',
             'subject_id' => 'lesson-55',
             'duration_seconds' => 120,
@@ -63,7 +63,7 @@ class StudentTracingIndependenceTest extends TestCase
 
         $this->assertDatabaseHas('student_trace_events', [
             'legacy_event_id' => 1,
-            'event_type' => 'lesson_completed',
+            'event_type' => 'student.created',
         ]);
         $this->assertTrue(Schema::hasTable('student_trace_events'));
         $this->assertTrue(Schema::hasTable('student_activity_events'));
