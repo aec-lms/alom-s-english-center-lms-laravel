@@ -13,10 +13,17 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
   $courseId=DB::table('courses')->insertGetId(['code'=>'PHON-SEC-001','title'=>'British and American Phonetics','slug'=>'british-american-phonetics','description'=>'Practice course','price'=>0,'status'=>'published','created_at'=>now(),'updated_at'=>now()]);
   DB::table('enrollments')->insert(['user_id'=>$student->id,'course_id'=>$courseId,'branch_id'=>null,'status'=>'active','created_at'=>now(),'updated_at'=>now()]);
   $entry=PhoneticEntry::query()->create(['word'=>'car','category'=>'rhoticity','uk_ipa'=>'/kɑː/','us_ipa'=>'/kɑːr/','is_active'=>true,'sort_order'=>1]);
+  $this->actingAs($student)->get('/courses/british-american-phonetics/phonetics-practice')->assertOk();
+  $challenge=session('phonetics.challenge');
+  $this->assertIsArray($challenge);
+  $this->assertSame($entry->id,$challenge['entry_id']);
   $this->actingAs($student)->postJson('/courses/british-american-phonetics/phonetics-practice/attempts',[
-   'entry_id'=>$entry->id,'target_accent'=>'uk','quiz_mode'=>'identify-ipa','selected_answer'=>'/kɑː/','is_correct'=>false,
+   'selected_answer'=>$challenge['expected'],
+   'is_correct'=>false,
+   'entry_id'=>999999,
+   'target_accent'=>'us',
+   'quiz_mode'=>'identify-accent',
   ])->assertOk()->assertJson(['saved'=>true,'correct'=>true]);
   $this->assertDatabaseHas('alom_english_center_phonetic_attempts',['user_id'=>$student->id,'entry_id'=>$entry->id,'is_correct'=>true]);
  }
-
 }
