@@ -177,6 +177,13 @@ class CourseBundleController extends Controller
             abort_unless($lockedCourses->count() === count($lockedItemIds), 409, 'A course in this bundle is no longer available.');
             $lockedBranchIds = $lockedCourses->pluck('branch_id')->filter()->unique();
             abort_if($lockedBranchIds->count() > 1, 422, 'A bundle cannot combine courses from different branches.');
+            if ($lockedBundle->branch_id !== null && $lockedBranchIds->isNotEmpty()) {
+                abort_unless(
+                    $lockedBranchIds->count() === 1 && (int) $lockedBranchIds->first() === (int) $lockedBundle->branch_id,
+                    409,
+                    'The bundle branch no longer matches its included courses.'
+                );
+            }
             $branchId = $lockedBundle->branch_id ?? $lockedBranchIds->first() ?? $student->branch_id;
             if ($branchId !== null) {
                 abort_unless(
