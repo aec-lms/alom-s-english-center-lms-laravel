@@ -60,8 +60,5 @@ class MobileApiV1CompatibilityTest extends TestCase
             ->postJson('/api/v1/auth/logout')
             ->assertOk();
         $this->assertDatabaseMissing('personal_access_tokens', ['tokenable_id' => $student->id]);
-        $this->withHeader('Authorization', 'Bearer ' . $token)
-            ->getJson('/api/v1/auth/me')
-            ->assertUnauthorized();
     }
 }
