@@ -142,4 +142,27 @@ class StudentTrackingPluginTest extends TestCase
 
         $this->assertDatabaseCount('student_activity_events', 0);
     }
+
+    public function test_student_can_record_lesson_started_activity_without_spoofing_another_user(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['student-tracking']);
+        $student = $this->createUserWithRole('student');
+
+        $this->actingAs($student)->postJson('/student-tracking/events', [
+            'event_type' => 'lesson_started',
+            'subject_type' => 'lesson',
+            'subject_id' => 'lesson-77',
+            'duration_seconds' => 0,
+            'metadata' => ['lesson_title' => 'Introduction to Tense'],
+        ])->assertCreated()->assertJsonPath('recorded', true);
+
+        $this->assertDatabaseHas('student_activity_events', [
+            'user_id' => $student->id,
+            'event_type' => 'lesson_started',
+            'subject_type' => 'lesson',
+            'subject_id' => 'lesson-77',
+        ]);
+    }
+
 }
