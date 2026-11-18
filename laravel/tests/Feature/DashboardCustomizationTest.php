@@ -97,4 +97,15 @@ class DashboardCustomizationTest extends TestCase
     }
 
 
+    public function test_admin_layout_includes_accessible_animated_progress_styles(): void
+    {
+        $this->markSystemInstalled();
+        $admin = $this->createUserWithRole('admin', null, 'animated-progress-admin@aec.test');
+
+        $this->actingAs($admin)->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertSee('@keyframes aec-progress-fill-enter', false)
+            ->assertSee('prefers-reduced-motion: reduce', false);
+    }
+
 }

@@ -33,12 +33,24 @@ class CourseContentLearningController extends Controller
         $progress=null;
         if($enrolled){$progress=CourseContentProgress::query()->updateOrCreate(['user_id'=>$user->id,'course_curriculum_item_id'=>$item->id],['last_viewed_at'=>now()]);}
         $items=CourseCurriculumItem::query()->with('post')->where('course_id',$courseRow->id)->where('is_active',true)->orderBy('position')->get()->filter(fn($row)=>$row->post?->status==='published' && $row->post->published_at?->lte(now()))->values();
+        $trackableItems=$items->where('is_preview',false)->values();
+        $totalLessonsCount=$trackableItems->count();
+        $completedLessonsCount=$enrolled && $totalLessonsCount>0
+            ? CourseContentProgress::query()->where('user_id',$user->id)->whereIn('course_curriculum_item_id',$trackableItems->pluck('id'))->whereNotNull('completed_at')->count()
+            : 0;
+        $progressPercent=$totalLessonsCount>0
+            ? min(100,(int)round(($completedLessonsCount/$totalLessonsCount)*100))
+            : 0;
         $index=$items->search(fn($row)=>$row->id===$item->id);
         return view('course-content-studio::learning',[
             'course'=>$courseRow,'post'=>$content,'item'=>$item,'progress'=>$progress,
             'previousItem'=>$index!==false && $index>0?$items[$index-1]:null,
             'nextItem'=>$index!==false?($items[$index+1]??null):null,
             'canComplete'=>(bool)$enrolled && !$item->is_preview,
+            'isEnrolled'=>(bool)$enrolled,
+            'totalLessonsCount'=>$totalLessonsCount,
+            'completedLessonsCount'=>$completedLessonsCount,
+            'progressPercent'=>$progressPercent,
         ]);
     }
 
