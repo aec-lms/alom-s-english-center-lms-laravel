@@ -134,14 +134,17 @@ final class CourseCatalog
         $map = config('phonetics.catalog.courses', []);
         $statusColumn = $map['status'] ?? null;
         $activeStatuses = config('phonetics.access.course_active_statuses', ['published', 'active']);
-        if ($statusColumn) {
-            $this->requireColumns($map, [$statusColumn], 'course status');
-            abort_unless(
-                in_array((string) data_get($course, $statusColumn), $activeStatuses, true),
-                404,
-                'This course is not currently available.'
-            );
+        if (!is_string($statusColumn) || trim($statusColumn) === ''
+            || !is_array($activeStatuses) || $activeStatuses === []) {
+            throw new ServiceUnavailableHttpException(null, 'Course publication status mapping is required before learning access can be granted.');
         }
+
+        $this->requireColumns($map, [$statusColumn], 'course status');
+        abort_unless(
+            in_array((string) data_get($course, $statusColumn), $activeStatuses, true),
+            404,
+            'This course is not currently available.'
+        );
     }
 
     public function isPaid(object $course): bool
