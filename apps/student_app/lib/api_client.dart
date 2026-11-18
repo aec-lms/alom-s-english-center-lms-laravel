@@ -60,9 +60,9 @@ class MobileApi {
   Future<Map<String, dynamic>> get(String path) async {
     final token = await readToken();
     final headers = <String, String>{'Accept': 'application/json'};
-    if (token != null) headers['Authorization'] = 'Bearer $token';
+    if (token != null) { headers['Authorization'] = 'Bearer $token'; }
     final response = await client.get(Uri.parse('$baseUrl$path'), headers: headers);
-    if (response.statusCode == 401) await storage.delete(key: _tokenKey);
+    if (response.statusCode == 401) { await storage.delete(key: _tokenKey); }
     return _decode(response);
   }
 
@@ -78,8 +78,8 @@ class MobileApi {
   Future<void> logout() async {
     final token = await readToken();
     try {
-      if (token != null) await client.post(Uri.parse('$baseUrl/auth/logout'),
-        headers: {'Accept': 'application/json', 'Authorization': 'Bearer $token'});
+      if (token != null) { await client.post(Uri.parse('$baseUrl/auth/logout'),
+        headers: {'Accept': 'application/json', 'Authorization': 'Bearer $token'}); }
     } finally { await storage.delete(key: _tokenKey); }
   }
 
@@ -91,7 +91,7 @@ class MobileApi {
       data = value is Map<String, dynamic> ? value : {'data': value};
     } catch (_) { data = <String, dynamic>{}; }
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw MobileApiException(data['message']?.toString() ?? 'Request failed: ' + response.statusCode.toString(), response.statusCode);
+      throw MobileApiException(data['message']?.toString() ?? 'Request failed: ${response.statusCode}', response.statusCode);
     }
     return data;
   }
