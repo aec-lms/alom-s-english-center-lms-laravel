@@ -101,10 +101,17 @@ class QuestionBankPluginTest extends TestCase
         $this->assertSame('Choose the correct verb.', $snapshot['prompt']);
         $this->assertSame('He goes', $snapshot['correct_answer']);
 
-        $this->actingAs($admin)->get(route('plugins.question-bank.papers.print', $paperId))
-            ->assertOk()->assertSee('Choose the correct verb.')->assertDontSee('He goes');
+        $printedPaper = $this->actingAs($admin)->get(route('plugins.question-bank.papers.print', $paperId))
+            ->assertOk()
+            ->assertSee('Choose the correct verb.')
+            ->assertDontSee('Third-person singular takes -s.');
+
+        // "He goes" is a legitimate MCQ option, so it must appear once as an option,
+        // but the print view must not append a separate answer/explanation block.
+        $this->assertSame(1, substr_count($printedPaper->getContent(), 'He goes'));
+
         $this->actingAs($admin)->get(route('plugins.question-bank.papers.answer-key', $paperId))
-            ->assertOk()->assertSee('He goes');
+            ->assertOk()->assertSee('He goes')->assertSee('Third-person singular takes -s.');
     }
 
     public function test_random_paper_respects_category_type_and_requested_count(): void
