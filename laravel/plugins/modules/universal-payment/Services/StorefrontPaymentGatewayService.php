@@ -8,6 +8,7 @@ use App\Core\Plugins\PluginManager;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
+use Plugins\Modules\CourseManagement\Services\CourseCommercePaymentSettlementService;
 use RuntimeException;
 
 class StorefrontPaymentGatewayService
@@ -145,7 +146,7 @@ class StorefrontPaymentGatewayService
         $notes = json_decode((string) $transaction->notes, true);
         $purpose = is_array($notes) ? ($notes['purpose'] ?? null) : null;
         if (in_array($purpose, ['course_cart', 'course_gift', 'course_gift_voucher'], true)) {
-            return app(\\Plugins\\Modules\\CourseManagement\\Services\\CourseCommercePaymentSettlementService::class)
+            return app(CourseCommercePaymentSettlementService::class)
                 ->settle($transaction, $validationId, $providerDetails);
         }
 
