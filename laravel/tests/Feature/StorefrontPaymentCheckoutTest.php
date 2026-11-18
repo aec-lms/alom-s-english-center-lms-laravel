@@ -108,6 +108,15 @@ final class StorefrontPaymentCheckoutTest extends TestCase
             'storefront_item_id' => $itemId,
         ];
 
+        // A definite provider rejection is safe to retry; network timeouts are
+        // covered separately and must remain in risk_review until reconciled.
+        Http::fake([
+            'https://sandbox.sslcommerz.com/gwprocess/v4/api.php' => Http::response([
+                'status' => 'FAILED',
+                'failedreason' => 'Invalid test credentials',
+            ], 400),
+        ]);
+
         $this->actingAs($buyer)
             ->from('/ebooks/retry-checkout-guide')
             ->post('/universal-checkout', $payload)
