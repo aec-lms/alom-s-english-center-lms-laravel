@@ -341,11 +341,18 @@ class PluginCenterController extends Controller
         }
 
         $checksums = [];
-        foreach (File::allFiles($root) as $file) {
-            if ($file->isLink()) {
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::SELF_FIRST,
+        );
+        foreach ($iterator as $entry) {
+            if ($entry->isLink()) {
                 throw new RuntimeException('Symbolic links are not allowed in plugin archives.');
             }
-            $path = $file->getPathname();
+            if ($entry->isDir()) {
+                continue;
+            }
+            $path = $entry->getPathname();
             $resolved = realpath($path);
             if (!$resolved || !str_starts_with($resolved, rtrim($root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR)) {
                 throw new RuntimeException('Plugin archive contains a path outside its protected directory.');
