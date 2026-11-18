@@ -129,9 +129,11 @@ final class CourseCatalog
     {
         $map = config('phonetics.catalog.courses', []);
         $column = $map['price'] ?? null;
-        return $column && $this->hasColumn($map, $column)
-            ? (float) data_get($course, $column, 0) > 0
-            : false;
+        if (!$column || !$this->hasColumn($map, $column)) {
+            throw new ServiceUnavailableHttpException(null, 'Course price mapping is required to enforce free/paid learning access.');
+        }
+
+        return (float) data_get($course, $column, 0) > 0;
     }
 
     public function isBatchMember(object $user, string $batchRef): bool
@@ -174,9 +176,8 @@ final class CourseCatalog
         if ($statusColumn && $this->hasColumn($courseMap, $statusColumn)) {
             abort_unless(in_array((string) data_get($course, $statusColumn), $activeCourseStatuses, true), 404, 'This course is not currently available.');
         }
-        $priceColumn = $courseMap['price'] ?? null;
-        if ($audience !== 'both' && $priceColumn && $this->hasColumn($courseMap, $priceColumn)) {
-            $isPaid = (float) data_get($course, $priceColumn, 0) > 0;
+        if ($audience !== 'both') {
+            $isPaid = $this->isPaid($course);
             if (($audience === 'paid' && !$isPaid) || ($audience === 'free' && $isPaid)) {
                 throw new AccessDeniedHttpException('This learning activity is not available for this course type.');
             }
