@@ -9,6 +9,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
+use App\Models\User;
+use Plugins\Modules\ReferralIncome\Services\ReferralIncomeService;
 use RuntimeException;
 
 class PaymentSettlementService
@@ -57,6 +59,27 @@ class PaymentSettlementService
                     ->where('invoice_id', $invoice->id)
                     ->where('status', 'pending')
                     ->update(['status' => 'active', 'updated_at' => now()]);
+            }
+
+            if ($newPaid >= (float) $invoice->net_amount
+                && app(\App\Core\Plugins\PluginManager::class)->isEnabled('referral-income')
+                && Schema::hasTable('commerce_orders')) {
+                $order = DB::table('commerce_orders')->where('invoice_id', $invoice->id)->lockForUpdate()->first();
+                if ($order) {
+                    DB::table('commerce_orders')->where('id', $order->id)->update([
+                        'status' => 'completed', 'payment_status' => 'paid', 'updated_at' => now(),
+                    ]);
+                    $buyer = User::query()->find((int) $order->user_id);
+                    if ($buyer) {
+                        app(ReferralIncomeService::class)->recordSettledPurchase(
+                            $buyer,
+                            'commerce_order',
+                            (string) $order->id,
+                            (float) $invoice->net_amount,
+                            (string) $invoice->currency
+                        );
+                    }
+                }
             }
 
             $this->audit->log('payment.settled', 'payment_transaction', (string) $lockedTx->id, [
