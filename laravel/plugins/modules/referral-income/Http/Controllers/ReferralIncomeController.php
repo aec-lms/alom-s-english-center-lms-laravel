@@ -97,7 +97,7 @@ class ReferralIncomeController extends Controller
                 'paid_at' => $data['status'] === 'paid' ? now() : null, 'updated_at' => now(),
             ]);
             if ($data['status'] === 'paid') {
-                DB::table('referral_commissions')->where('payout_request_id', $payout)->where('status', 'payout_requested')
+                DB::table('referral_commissions')->where('payout_request_id', $payout)->whereIn('status', ['payout_requested', 'payout_approved'])
                     ->update(['status' => 'paid', 'paid_at' => now(), 'updated_at' => now()]);
             } elseif ($data['status'] === 'rejected') {
                 DB::table('referral_commissions')->where('payout_request_id', $payout)->where('status', 'payout_requested')
