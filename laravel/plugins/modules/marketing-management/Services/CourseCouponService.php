@@ -153,11 +153,17 @@ class CourseCouponService
 
     private function discount(PromoCoupon $coupon, float $subtotal): float
     {
+        // Calculate in integer minor units to avoid floating-point currency drift.
+        $subtotalMinor = max(0, (int) round($subtotal * 100));
         $type = $coupon->discount_type ?? 'percent';
-        $raw = $type === 'fixed'
-            ? (float) ($coupon->discount_amount ?? 0)
-            : $subtotal * ((float) $coupon->discount_percent / 100);
-        if ($coupon->maximum_discount !== null) $raw = min($raw, (float) $coupon->maximum_discount);
-        return round(min($subtotal, max(0, $raw)), 2);
+        $rawMinor = $type === 'fixed'
+            ? (int) round((float) ($coupon->discount_amount ?? 0) * 100)
+            : (int) round($subtotalMinor * (int) $coupon->discount_percent / 100);
+        if ($coupon->maximum_discount !== null) {
+            $rawMinor = min($rawMinor, (int) round((float) $coupon->maximum_discount * 100));
+        }
+        $discountMinor = min($subtotalMinor, max(0, $rawMinor));
+
+        return round($discountMinor / 100, 2);
     }
 }
