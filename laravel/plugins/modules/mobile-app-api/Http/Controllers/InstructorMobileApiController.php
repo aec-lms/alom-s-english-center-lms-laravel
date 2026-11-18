@@ -28,7 +28,7 @@ class InstructorMobileApiController extends Controller
         $courses = DB::table('courses')->whereIn('id', $ids)->whereNull('deleted_at')
             ->when($actor->branch_id, fn ($q) => $q->where('branch_id', $actor->branch_id))
             ->orderBy('title')->paginate(30);
-        return response()->json(['data' => $courses->getCollection()->map(fn ($c) => ['id'=>$c->id,'title'=>$c->title,'slug'=>$c->slug,'branch_id'=>$c->branch_id])->values(), 'meta'=>['current_page'=>$courses->currentPage(),'last_page'=>$courses->lastPage(),'total'=>$courses->total()]]);
+        return response()->json(['data' => $courses->getCollection()->map(fn ($c) => ['id'=>$c->id,'title'=>$c->title,'slug'=>$c->slug,'branch_id'=>$c->branch_id,'status'=>$c->status,'students_count'=>DB::table('enrollments')->where('course_id',$c->id)->whereIn('status',['active','completed'])->count()])->values(), 'meta'=>['current_page'=>$courses->currentPage(),'last_page'=>$courses->lastPage(),'total'=>$courses->total()]]);
     }
 
     public function courseStudents(Request $request, string $slug): JsonResponse
@@ -205,4 +205,99 @@ class InstructorMobileApiController extends Controller
         abort_unless($deleted,404);
         return response()->json(['message'=>'Lesson deleted.']);
     }
+
+    public function liveClasses(Request $request): JsonResponse
+    {
+        [$actor,$ids]=$this->teacher($request);
+        abort_unless(app(PluginManager::class)->isEnabled('course-management') && Schema::hasTable('live_classes'),409,'Live classes are unavailable.');
+        $rows=DB::table('live_classes')->join('courses','courses.id','=','live_classes.course_id')->whereIn('live_classes.course_id',$ids)
+            ->when($actor->branch_id,fn($q)=>$q->where('courses.branch_id',$actor->branch_id))
+            ->select('live_classes.*','courses.title as course')->orderByDesc('starts_at')->paginate(30);
+        $items=$rows->getCollection()->map(function($row){$row->batch=$row->course;$row->status=$row->status==='upcoming'?'scheduled':$row->status;return $row;});
+        return response()->json(['data'=>$items,'meta'=>['current_page'=>$rows->currentPage(),'last_page'=>$rows->lastPage(),'total'=>$rows->total()]]);
+    }
+
+    public function storeLiveClass(Request $request,int $batch): JsonResponse
+    {
+        [$actor,$ids]=$this->teacher($request);
+        abort_unless(Schema::hasTable('batches') && Schema::hasTable('live_classes'),409);
+        $record=DB::table('batches')->where('id',$batch)->whereIn('course_id',$ids)->first();
+        abort_unless($record && (!$actor->branch_id || (int)$record->branch_id===(int)$actor->branch_id),404);
+        $data=$request->validate([
+            'title'=>['required','string','max:180'],'description'=>['nullable','string','max:5000'],
+            'meeting_url'=>['required','url','max:255','regex:/^https:\/\//i'],
+            'starts_at'=>['required','date','after:now'],'ends_at'=>['required','date','after:starts_at'],
+            'platform'=>['nullable','string','max:40'],
+        ]);
+        $id=DB::table('live_classes')->insertGetId([
+            'course_id'=>$record->course_id,'title'=>$data['title'],'description'=>$data['description']??null,
+            'instructor_name'=>$actor->name,'platform'=>$data['platform']??'other','meeting_url'=>$data['meeting_url'],
+            'starts_at'=>$data['starts_at'],'ends_at'=>$data['ends_at'],'capacity'=>300,'status'=>'upcoming',
+            'created_by'=>$actor->id,'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        $created=DB::table('live_classes')->find($id);$created->status='scheduled';$created->batch=DB::table('courses')->where('id',$record->course_id)->value('title');
+        return response()->json(['message'=>'Live class scheduled.','live_class'=>$created],201);
+    }
+
+    public function updateLiveClass(Request $request,int $liveClass): JsonResponse
+    {
+        [$actor,$ids]=$this->teacher($request);
+        $record=DB::table('live_classes')->where('id',$liveClass)->whereIn('course_id',$ids)->first();
+        abort_unless($record,404);
+        $data=$request->validate([
+            'status'=>['sometimes','in:scheduled,upcoming,live,completed,cancelled'],
+            'recording_url'=>['nullable','url','max:255','regex:/^https:\/\//i'],
+            'recording_notes'=>['nullable','string','max:5000'],
+        ]);
+        $update=[];
+        foreach(['status','recording_url','recording_notes'] as $key) if(array_key_exists($key,$data)) $update[$key]=$key==='status' && $data[$key]==='scheduled'?'upcoming':$data[$key];
+        if(($data['status']??null)==='completed' && !empty($data['recording_url'])) $update['recording_published_at']=now();
+        if($update) { $update['updated_at']=now(); DB::table('live_classes')->where('id',$liveClass)->update($update); }
+        $updated=DB::table('live_classes')->find($liveClass);$updated->status=$updated->status==='upcoming'?'scheduled':$updated->status;$updated->batch=DB::table('courses')->where('id',$updated->course_id)->value('title');
+        return response()->json(['message'=>'Live class updated.','live_class'=>$updated]);
+    }
+
+    public function notices(Request $request): JsonResponse
+    {
+        [$actor]=$this->teacher($request);
+        abort_unless(app(PluginManager::class)->isEnabled('notice-board') && Schema::hasTable('notices') && Schema::hasTable('notice_reads'),409,'Notice Board read tracking is unavailable.');
+        $rows=DB::table('notices')->whereIn('audience_role',['all','teacher'])
+            ->where(fn($q)=>$q->whereNull('branch_id')->orWhere('branch_id',$actor->branch_id))
+            ->where(fn($q)=>$q->whereNull('published_at')->orWhere('published_at','<=',now()))
+            ->leftJoin('notice_reads',fn($join)=>$join->on('notice_reads.notice_id','=','notices.id')->where('notice_reads.user_id','=',$actor->id))
+            ->select('notices.id','notices.title','notices.body','notices.published_at','notices.is_pinned','notice_reads.read_at')
+            ->orderByDesc('notices.is_pinned')->orderByDesc('notices.published_at')->paginate(30);
+        return response()->json(['data'=>$rows->items(),'meta'=>['current_page'=>$rows->currentPage(),'last_page'=>$rows->lastPage(),'total'=>$rows->total()]]);
+    }
+
+    public function markNoticeRead(Request $request,int $notice): JsonResponse
+    {
+        [$actor]=$this->teacher($request);
+        abort_unless(app(PluginManager::class)->isEnabled('notice-board') && Schema::hasTable('notices') && Schema::hasTable('notice_reads'),409,'Notice Board read tracking is unavailable.');
+        $exists=DB::table('notices')->where('id',$notice)->whereIn('audience_role',['all','teacher'])
+            ->where(fn($q)=>$q->whereNull('branch_id')->orWhere('branch_id',$actor->branch_id))->exists();
+        abort_unless($exists,404);
+        DB::table('notice_reads')->updateOrInsert(['notice_id'=>$notice,'user_id'=>$actor->id],['read_at'=>now(),'created_at'=>now(),'updated_at'=>now()]);
+        return response()->json(['message'=>'Notice marked as read.']);
+    }
+
+    public function attendancePolicy(Request $request): JsonResponse
+    {
+        $this->teacher($request);
+        abort_unless(app(PluginManager::class)->isEnabled('attendance-management'),409,'Attendance Management is disabled.');
+        return response()->json(['offline_sync_enabled'=>false,'allow_excused'=>false,'max_location_age_minutes'=>10,'message'=>'Offline GPS attendance sync is disabled until location-consent and audit storage are enabled. Use the online attendance register.']);
+    }
+
+    public function createAttendanceQr(Request $request,int $batch): JsonResponse
+    {
+        [$actor,$ids]=$this->teacher($request);
+        abort_unless(app(PluginManager::class)->isEnabled('attendance-management') && app(PluginManager::class)->isEnabled('course-management'),409);
+        $record=DB::table('batches')->where('id',$batch)->whereIn('course_id',$ids)->first();
+        abort_unless($record && (!$actor->branch_id || (int)$record->branch_id===(int)$actor->branch_id),404);
+        $mapping=\Plugins\Modules\AttendanceManagement\Models\AttendanceBatchMapping::resolve('course_batch',(int)$record->id,(int)$record->branch_id,$record->name??null);
+        $response=app(\Plugins\Modules\AttendanceManagement\Http\Controllers\AttendanceQrController::class)->issue($request,(int)$mapping->id);
+        $payload=$response->getData(true);
+        return response()->json(['status'=>$payload['status']??'ok','session_id'=>$payload['session_id']??null,'check_in_url'=>$payload['checkin_url']??null,'expires_at'=>$payload['expires_at']??null],$response->getStatusCode());
+    }
+
 }
