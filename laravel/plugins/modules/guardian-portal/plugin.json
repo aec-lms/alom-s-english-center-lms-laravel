@@ -1,0 +1,24 @@
+{
+  "slug": "guardian-portal",
+  "name": "Guardian Portal",
+  "version": "1.0.0",
+  "author": "Alom's English Center",
+  "category": "academic",
+  "description": "Read-only guardian dashboard for linked children, learning progress, attendance, exam results, fees and notices.",
+  "core_compatibility": "^2.0",
+  "dependencies": [],
+  "optional_dependencies": [
+    "guardian-management",
+    "student-management",
+    "student-tracking",
+    "course-management",
+    "attendance-management",
+    "exam-management",
+    "fees-management",
+    "notice-board"
+  ],
+  "provider": "Plugins\\Modules\\GuardianPortal\\Providers\\GuardianPortalServiceProvider",
+  "permissions": [],
+  "settings_schema": [],
+  "admin_menu": []
+}
