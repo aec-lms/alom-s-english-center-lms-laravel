@@ -214,7 +214,7 @@ PHP);
             try {
                 app(PluginManager::class)->install($slug);
                 $this->fail('Expected route registration to fail.');
-            } catch (\\ParseError) {
+            } catch (\ParseError) {
                 // The route file is intentionally invalid to simulate a post-commit failure.
             }
 
