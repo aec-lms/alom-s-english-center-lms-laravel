@@ -422,10 +422,9 @@ class UniversalPaymentController extends Controller
                 $pendingCheckout = UniversalPaymentTransaction::query()
                     ->where('user_id', auth()->id())
                     ->where('storefront_item_id', $lockedItem->id)
-                    ->where('status', 'pending')
-                    ->where('created_at', '>=', now()->subMinutes(30))
+                    ->whereIn('status', ['pending', 'risk_review'])
                     ->exists();
-                abort_if($pendingCheckout, 409, 'A checkout for this e-book is already pending. Wait for its result before retrying.');
+                abort_if($pendingCheckout, 409, 'A checkout for this e-book is still pending or requires provider reconciliation. Contact support before retrying.');
 
                 return UniversalPaymentTransaction::query()->create([
                     'reference' => 'UPAY-' . strtoupper(Str::random(8)),
