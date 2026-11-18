@@ -260,6 +260,27 @@ class StudentTrackingPluginTest extends TestCase
         $this->assertSame('Canonical Tense Lesson', $event->metadata['lesson_title']);
         $this->assertSame('student_portal', $event->metadata['source']);
         $this->assertArrayNotHasKey('result_percent', $event->metadata);
+        $this->assertNull($event->duration_seconds, 'Client-reported duration must not be trusted without a server-recorded start.');
+
+        $this->actingAs($student)->postJson('/student-tracking/events', [
+            'event_type' => 'lesson_started',
+            'subject_type' => 'lesson',
+            'subject_id' => (string) $lessonId,
+            'duration_seconds' => 21600,
+        ])->assertCreated();
+
+        $this->actingAs($student)->postJson('/student-tracking/events', [
+            'event_type' => 'lesson_completed',
+            'subject_type' => 'lesson',
+            'subject_id' => (string) $lessonId,
+            'duration_seconds' => 21600,
+        ])->assertCreated();
+
+        $trackedCompletion = StudentActivityEvent::query()
+            ->where('event_type', 'lesson_completed')
+            ->latest('id')
+            ->firstOrFail();
+        $this->assertLessThan(21600, (int) $trackedCompletion->duration_seconds);
 
         $this->actingAs($otherStudent)->postJson('/student-tracking/events', [
             'event_type' => 'lesson_completed',
