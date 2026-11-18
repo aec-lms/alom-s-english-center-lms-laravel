@@ -69,7 +69,7 @@ class PaymentSettlementService
                             'user_id' => $order->user_id,
                             'order_item_id' => $orderItem->id,
                             'entitlement_type' => $orderItem->item_type,
-                            'resource_id' => $orderItem->item_id,
+                            'resource_id' => $itemDetails['resource_id'] ?? $orderItem->item_id,
                             'details' => $orderItem->metadata,
                             'status' => 'active',
                             'starts_at' => now(),
