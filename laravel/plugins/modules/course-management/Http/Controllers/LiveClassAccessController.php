@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 use Plugins\Modules\CourseManagement\Models\Enrollment;
 use Plugins\Modules\CourseManagement\Models\LiveClass;
@@ -101,7 +102,7 @@ class LiveClassAccessController extends Controller
         abort_unless($student && $student->hasRole('student'), 403);
 
         $course = $liveClass->course()->firstOrFail();
-        $this->assertEligibleStudent($student, $course->id, $course->branch_id);
+        $this->assertEligibleStudent($student, $course->id, $course->branch_id, (int) $liveClass->id);
 
         abort_unless(in_array($liveClass->status, ['upcoming', 'live'], true), 403, 'This live class is not available.');
 
