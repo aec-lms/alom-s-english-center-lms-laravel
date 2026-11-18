@@ -77,7 +77,7 @@ return new class extends Migration {
             Schema::create('course_assessment_attempt_questions', function (Blueprint $table): void {
                 $table->id();
                 $table->foreignId('attempt_id')->constrained('course_assessment_attempts')->cascadeOnDelete();
-                $unsigned = $table->unsignedBigInteger('source_question_id')->nullable()->index();
+                $table->unsignedBigInteger('source_question_id')->nullable()->index();
                 $table->string('type', 20);
                 $table->longText('question');
                 $table->json('options')->nullable();
