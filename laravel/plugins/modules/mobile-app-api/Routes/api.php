@@ -32,3 +32,34 @@ Route::middleware(['api', 'installed', 'plugin:mobile-app-api'])
             Route::post('/logout', [MobileApiController::class, 'logout'])->name('logout');
         });
     });
+
+
+// Versioned compatibility surface for independently maintained native clients.
+// The legacy /api/mobile endpoints remain the canonical implementation.
+Route::middleware(['api', 'installed', 'plugin:mobile-app-api'])
+    ->prefix('api/v1')
+    ->name('plugins.mobile.v1.')
+    ->group(function (): void {
+        Route::get('/config', [MobileApiController::class, 'config'])->name('config');
+        Route::get('/home', [MobileApiController::class, 'home'])->name('home');
+        Route::post('/auth/register', [MobileApiController::class, 'register'])
+            ->middleware('throttle:5,1')
+            ->name('auth.register');
+        Route::post('/auth/login', [MobileApiController::class, 'login'])
+            ->middleware('throttle:10,1')
+            ->name('auth.login');
+        Route::get('/courses', [MobileApiController::class, 'courses'])->name('courses');
+        Route::get('/courses/{slug}', [MobileApiController::class, 'courseShow'])->name('courses.show');
+        Route::get('/ebooks', [MobileApiController::class, 'ebooks'])->name('ebooks');
+        Route::get('/products', [MobileApiController::class, 'products'])->name('products');
+        Route::get('/exams', [MobileApiController::class, 'exams'])->name('exams');
+        Route::get('/notices', [MobileApiController::class, 'notices'])->name('notices');
+        Route::get('/certificates/verify/{code}', [MobileApiController::class, 'verifyCertificate'])->name('certificates.verify');
+
+        Route::middleware('auth:sanctum')->group(function (): void {
+            Route::get('/auth/me', [MobileApiController::class, 'me'])->name('auth.me');
+            Route::post('/auth/logout', [MobileApiController::class, 'logout'])->name('auth.logout');
+            Route::post('/push-token', [MobileApiController::class, 'registerPushToken'])->name('push_token');
+            Route::get('/courses/{slug}/lessons', [MobileApiController::class, 'lessons'])->name('courses.lessons');
+        });
+    });
