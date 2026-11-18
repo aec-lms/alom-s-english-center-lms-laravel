@@ -447,6 +447,7 @@ class PublicHomeController extends Controller
             // set privacy headers after creating the response so it cannot override them.
             $response->headers->set('Content-Type', 'application/pdf');
             $response->headers->set('X-Content-Type-Options', 'nosniff');
+            $response->setPrivate();
             $response->headers->set('Cache-Control', 'private, no-store, no-cache, must-revalidate');
             $response->headers->set('Pragma', 'no-cache');
             $response->headers->set('Referrer-Policy', 'same-origin');
