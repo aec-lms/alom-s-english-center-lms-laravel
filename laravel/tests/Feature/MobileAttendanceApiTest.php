@@ -19,7 +19,6 @@ class MobileAttendanceApiTest extends TestCase
 
         $teacher = $this->createUserWithRole('teacher');
         $token = $teacher->createToken('mobile-instructor')->plainTextToken;
-
         $this->withHeader('Authorization', 'Bearer ' . $token)
             ->postJson('/api/v1/attendance/qr/check-in', [
                 'token' => str_repeat('a', 64),
