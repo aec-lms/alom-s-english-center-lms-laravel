@@ -37,7 +37,7 @@ class CommerceCatalog
             throw ValidationException::withMessages(['item' => 'This course is not currently available for purchase.']);
         }
         $price = round((float) ($course->price ?? 0), 2);
-        if (app(\\App\\Core\\Plugins\\PluginManager::class)->isEnabled('flash-sale') && Schema::hasTable('flash_sales')) {
+        if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('flash-sale') && Schema::hasTable('flash_sales')) {
             $sale = DB::table('flash_sales')->where('course_id', $id)->where('is_published', true)
                 ->where('is_active', true)->where('starts_at', '<=', now())->where('ends_at', '>', now())
                 ->orderByDesc('id')->first();
