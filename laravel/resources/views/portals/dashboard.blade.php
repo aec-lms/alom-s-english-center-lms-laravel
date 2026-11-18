@@ -45,9 +45,33 @@
             <section class="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
                 <h2 class="font-extrabold text-slate-900">My Courses</h2>
                 @forelse ($enrollments as $enrollment)
-                    <div class="flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
-                        <div><div class="font-semibold text-sm">{{ $enrollment->title }}</div><div class="text-xs text-slate-500">৳{{ number_format((float) $enrollment->price, 2) }}</div></div>
-                        <span class="text-xs font-bold uppercase {{ $enrollment->enrollment_status === 'active' ? 'text-emerald-700' : 'text-amber-700' }}">{{ $enrollment->enrollment_status }}</span>
+                    <div class="border-t border-slate-100 pt-3">
+                        <div class="flex items-center justify-between gap-3">
+                            <div><div class="font-semibold text-sm">{{ $enrollment->title }}</div><div class="text-xs text-slate-500">৳{{ number_format((float) $enrollment->price, 2) }}</div></div>
+                            <span class="text-xs font-bold uppercase {{ $enrollment->enrollment_status === 'active' ? 'text-emerald-700' : 'text-amber-700' }}">{{ $enrollment->enrollment_status }}</span>
+                        </div>
+                        @if (in_array($enrollment->enrollment_status, ['active', 'completed'], true))
+                            @if ($enrollment->total_lessons > 0)
+                                <div class="mt-3">
+                                    <div class="mb-1 flex items-center justify-between gap-3 text-xs">
+                                        <span class="font-semibold text-slate-600">{{ __('Learning progress') }}</span>
+                                        <strong class="text-slate-900">{{ $enrollment->progress_percent }}%</strong>
+                                    </div>
+                                    <div role="progressbar"
+                                         aria-label="{{ $enrollment->title }} {{ __('learning progress') }}"
+                                         aria-valuemin="0" aria-valuemax="100"
+                                         aria-valuenow="{{ $enrollment->progress_percent }}"
+                                         aria-valuetext="{{ __(':completed of :total lessons completed', ['completed' => $enrollment->completed_lessons, 'total' => $enrollment->total_lessons]) }}"
+                                         class="h-2 overflow-hidden rounded-full bg-slate-100">
+                                        <div data-progress-fill class="h-full rounded-full bg-gradient-to-r from-sky-600 to-blue-600"
+                                             style="width: {{ $enrollment->progress_percent }}%;"></div>
+                                    </div>
+                                    <p class="mt-1 text-[11px] text-slate-500">{{ $enrollment->completed_lessons }} / {{ $enrollment->total_lessons }} {{ __('lessons completed') }}</p>
+                                </div>
+                            @else
+                                <p class="mt-2 text-xs text-slate-500">{{ __('No published lessons are available in this course yet.') }}</p>
+                            @endif
+                        @endif
                     </div>
                 @empty
                     <p class="text-sm text-slate-500">No course enrollments yet.</p>

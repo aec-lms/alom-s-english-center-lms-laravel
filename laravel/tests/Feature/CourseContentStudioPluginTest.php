@@ -127,10 +127,17 @@ class CourseContentStudioPluginTest extends TestCase
         ]);
 
         $this->actingAs($student)->get('/courses/'.DB::table('courses')->where('id',$course)->value('slug').'/content/student-learning-lesson')
-            ->assertOk()->assertSee('Course Content Studio Lesson');
+            ->assertOk()
+            ->assertSee('Course Content Studio Lesson')
+            ->assertSee('0%', false)
+            ->assertSee('role="progressbar"', false);
 
         $this->actingAs($student)->post('/courses/'.DB::table('courses')->where('id',$course)->value('slug').'/content/student-learning-lesson/complete')
             ->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->actingAs($student)->get('/courses/'.DB::table('courses')->where('id',$course)->value('slug').'/content/student-learning-lesson')
+            ->assertOk()
+            ->assertSee('100%', false);
 
         $this->assertDatabaseHas('course_content_progress',[
             'user_id'=>$student->id,'course_curriculum_item_id'=>$item,
@@ -188,6 +195,66 @@ class CourseContentStudioPluginTest extends TestCase
             'user_id'=>$student->id,'course_id'=>$course,'status'=>'active','created_at'=>now(),'updated_at'=>now(),
         ]);
         $this->actingAs($student)->get('/courses/'.$slug.'/content/private-pdf-lesson/file')->assertOk();
+    }
+
+    public function test_student_portal_shows_only_the_signed_in_students_course_progress(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['student-management', 'course-management', 'course-content-studio']);
+
+        $teacher = $this->createUserWithRole('teacher');
+        $student = $this->createUserWithRole('student');
+        $otherStudent = $this->createUserWithRole('student');
+        $course = $this->course();
+
+        $firstPost = $this->createContentPost($teacher->id, 'progress-first-lesson');
+        $secondPost = $this->createContentPost($teacher->id, 'progress-second-lesson');
+        $previewPost = $this->createContentPost($teacher->id, 'progress-preview-lesson');
+        $inactivePost = $this->createContentPost($teacher->id, 'progress-inactive-lesson');
+
+        $firstItem = DB::table('course_curriculum_items')->insertGetId([
+            'course_id' => $course, 'course_content_post_id' => $firstPost, 'position' => 1,
+            'is_preview' => false, 'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('course_curriculum_items')->insert([
+            'course_id' => $course, 'course_content_post_id' => $secondPost, 'position' => 2,
+            'is_preview' => false, 'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('course_curriculum_items')->insert([
+            'course_id' => $course, 'course_content_post_id' => $previewPost, 'position' => 3,
+            'is_preview' => true, 'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('course_curriculum_items')->insert([
+            'course_id' => $course, 'course_content_post_id' => $inactivePost, 'position' => 4,
+            'is_preview' => false, 'is_active' => false, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        DB::table('students')->insert([
+            'user_id' => $student->id, 'branch_id' => null,
+            'student_code' => 'PROGRESS-' . strtoupper(bin2hex(random_bytes(3))),
+            'admission_date' => now()->toDateString(), 'status' => 'active',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('enrollments')->insert([
+            'user_id' => $student->id, 'course_id' => $course, 'status' => 'active',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('course_content_progress')->insert([
+            'user_id' => $student->id, 'course_curriculum_item_id' => $firstItem,
+            'last_viewed_at' => now(), 'completed_at' => now(), 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('course_content_progress')->insert([
+            'user_id' => $otherStudent->id, 'course_curriculum_item_id' => DB::table('course_curriculum_items')
+                ->where('course_id', $course)->where('course_content_post_id', $secondPost)->value('id'),
+            'last_viewed_at' => now(), 'completed_at' => now(), 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->actingAs($student)->get(route('portal.dashboard'))
+            ->assertOk()
+            ->assertSee('50%', false)
+            ->assertSee('1 / 2 lessons completed')
+            ->assertSee('aria-valuenow="50"', false)
+            ->assertSee('prefers-reduced-motion: reduce', false);
     }
 
 }
