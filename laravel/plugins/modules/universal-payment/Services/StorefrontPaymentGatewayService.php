@@ -174,7 +174,7 @@ class StorefrontPaymentGatewayService
                         DB::table('course_carts')->where('id', $order->cart_id)->where('status', 'checkout_pending')
                             ->update(['status' => 'active', 'updated_at' => now()]);
                         if (filled($order->coupon_reservation_key) && Schema::hasTable('promo_coupon_redemptions')) {
-                            (new \\Plugins\\Modules\\MarketingManagement\\Services\\CourseCouponService())->release((string) $order->coupon_reservation_key);
+                            (new \Plugins\Modules\MarketingManagement\Services\CourseCouponService())->release((string) $order->coupon_reservation_key);
                         }
                     }
                 }
@@ -268,13 +268,13 @@ class StorefrontPaymentGatewayService
                     DB::table('course_cart_orders')->where('id', $orderId)->update(['status' => 'risk_review', 'updated_at' => now()]);
                     return $locked->fresh();
                 }
-                (new \\Plugins\\Modules\\MarketingManagement\\Services\\CourseCouponService())->redeem((string) $order->coupon_reservation_key);
+                (new \Plugins\Modules\MarketingManagement\Services\CourseCouponService())->redeem((string) $order->coupon_reservation_key);
             }
 
             $user = DB::table('users')->where('id', $locked->user_id)->first();
             if (!$user) throw new RuntimeException('The course buyer account no longer exists.');
             $studentProfile = Schema::hasTable('students') ? DB::table('students')->where('user_id', $user->id)->first() : null;
-            $invoice = \\Plugins\\Modules\\FeesManagement\\Models\\FeeInvoice::query()->create([
+            $invoice = \Plugins\Modules\FeesManagement\Models\FeeInvoice::query()->create([
                 'invoice_number' => 'CART-' . strtoupper(substr(bin2hex(random_bytes(6)), 0, 10)),
                 'student_id' => $studentProfile->id ?? null,
                 'payer_name' => $user->name,
