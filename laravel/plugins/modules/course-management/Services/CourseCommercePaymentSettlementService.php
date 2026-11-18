@@ -35,12 +35,15 @@ class CourseCommercePaymentSettlementService
             }
 
             $purpose = $notes['purpose'] ?? null;
-            match ($purpose) {
-                'course_cart' => $this->settleCart($locked, $notes),
-                'course_gift' => $this->settleGift($locked, $notes),
-                'course_gift_voucher' => $this->settleVoucher($locked, $notes),
-                default => throw new RuntimeException('Unsupported course commerce payment purpose.'),
-            };
+            if ($purpose === 'course_cart') {
+                $this->settleCart($locked, $notes);
+            } elseif ($purpose === 'course_gift') {
+                $this->settleGift($locked, $notes);
+            } elseif ($purpose === 'course_gift_voucher') {
+                $this->settleVoucher($locked, $notes);
+            } else {
+                throw new RuntimeException('Unsupported course commerce payment purpose.');
+            }
 
             app(ExternalTransactionReferenceRegistry::class)->claim(
                 (string) $locked->gateway,
