@@ -29,7 +29,7 @@ class ReportController extends Controller
 
         $metrics = [
             'users_count' => User::query()->when($isBranchManager, fn ($q) => $q->where('branch_id', $branchId))->count(),
-            'enabled_plugins' => PluginRecord::query()->where('is_enabled', true)->count(),
+            'enabled_plugins' => $isBranchManager ? 'Restricted' : PluginRecord::query()->where('is_enabled', true)->count(),
             'audit_events' => AuditLog::query()->when($isBranchManager, fn ($q) => $q->whereIn('user_id', $branchUserIds))->count(),
             'branches_count' => $isBranchManager ? 1 : (Schema::hasTable('branches') ? DB::table('branches')->count() : 0),
             'students_count' => Schema::hasTable('students')

@@ -101,15 +101,16 @@ class LessonContentProtectionController extends Controller
 
     public function showCourse(Request $request, int $course): \Illuminate\View\View
     {
+        $courseRow = DB::table('courses')->where('id', $course)->where('status', 'published')->first();
+        abort_unless($courseRow, 404);
+
         $enrolled = DB::table('enrollments')
             ->where('user_id', $request->user()->id)
             ->where('course_id', $course)
+            ->where('branch_id', $courseRow->branch_id)
             ->where('status', 'active')
             ->exists();
-        abort_unless($enrolled, 403, 'An active enrollment is required to access this course.');
-
-        $courseRow = DB::table('courses')->where('id', $course)->first();
-        abort_unless($courseRow && $courseRow->status === 'published', 404);
+        abort_unless($enrolled, 403, 'An active enrollment in this branch is required to access this course.');
 
         $lessons = DB::table('course_lessons')
             ->where('course_id', $course)
@@ -239,13 +240,14 @@ class LessonContentProtectionController extends Controller
             ->join('courses', 'courses.id', '=', 'course_lessons.course_id')
             ->where('course_lessons.id', $lesson)
             ->where('courses.status', 'published')
-            ->select('course_lessons.*')
+            ->select('course_lessons.*', 'courses.branch_id as course_branch_id')
             ->first();
         abort_unless($row && !empty($row->media_path), 404, 'Published lesson media not found.');
 
         $enrolled = DB::table('enrollments')
             ->where('user_id', $request->user()->id)
             ->where('course_id', $row->course_id)
+            ->where('branch_id', $row->course_branch_id)
             ->where('status', 'active')
             ->exists();
 
