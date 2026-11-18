@@ -105,7 +105,7 @@ class AiAssistantService
                 $reply = $providerResult['reply'];
                 $actualTokens = $providerResult['tokens'] ?? (strlen($systemInstruction) + strlen($prompt) + strlen($reply));
                 $this->usageBudget->settle($reservationId, $actualTokens);
-            } catch (\\Throwable $exception) {
+            } catch (\Throwable $exception) {
                 $this->usageBudget->markUncertain($reservationId);
                 throw $exception;
             }
@@ -134,7 +134,7 @@ class AiAssistantService
 
     private function reservationCompletionLimit(int $reservationId): int
     {
-        return (int) \\Illuminate\\Support\\Facades\\DB::table('ai_assistant_usage_reservations')
+        return (int) \Illuminate\Support\Facades\DB::table('ai_assistant_usage_reservations')
             ->where('id', $reservationId)
             ->value('completion_limit');
     }
