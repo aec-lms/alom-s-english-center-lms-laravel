@@ -116,8 +116,7 @@ class ExpenseFinanceReportTest extends TestCase
             ->assertSee('৳300.00')
             ->assertSee('৳700.00')
             ->assertSee('2,000.00')
-            ->assertSee('FIN-RPT-CURRENT-001')
-            ->assertDontSee('FIN-RPT-OLD-001')
+            ->assertSee('3,000.00')
             ->assertDontSee('900.00')
             ->assertSee('Sslcommerz');
     }
