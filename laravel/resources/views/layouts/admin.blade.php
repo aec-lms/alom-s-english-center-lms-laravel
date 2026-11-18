@@ -1,12 +1,30 @@
 <!doctype html>
-@php($rtl = in_array(substr(strtolower(str_replace('_', '-', app()->getLocale())), 0, 2), ['ar', 'fa', 'he', 'ur', 'ps', 'dv'], true))
+@php
+    $rtl = in_array(substr(strtolower(str_replace('_', '-', app()->getLocale())), 0, 2), ['ar', 'fa', 'he', 'ur', 'ps', 'dv'], true);
+@endphp
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}" dir="{{ $rtl ? 'rtl' : 'ltr' }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Panel — ' . config('app.name'))</title>
-    @if (!empty($siteIdentity['favicon_url']))<link rel="icon" href="{{ $siteIdentity['favicon_url'] }}">@endif
+    @php
+        $activePluginFavicon = null;
+        $activeRouteName = request()->route()?->getName();
+        foreach (($pluginAdminMenu ?? []) as $pluginMenuGroup) {
+            foreach ($pluginMenuGroup as $pluginMenuItem) {
+                if (($pluginMenuItem['route'] ?? null) === $activeRouteName && !empty($pluginMenuItem['plugin'])) {
+                    $activePluginFavicon = route('admin.plugins.favicon', $pluginMenuItem['plugin']);
+                    break 2;
+                }
+            }
+        }
+    @endphp
+    @if (!empty($activePluginFavicon))
+        <link rel="icon" type="image/svg+xml" href="{{ $activePluginFavicon }}">
+    @elseif (!empty($siteIdentity['favicon_url']))
+        <link rel="icon" href="{{ $siteIdentity['favicon_url'] }}">
+    @endif
     @inject('themeManager', 'App\\Core\\Appearance\\ThemeManager')
     <style>
         :root { {!! $themeManager->cssVariables() !!}; {!! $themeManager->cssDesignVariables() !!} }
@@ -134,7 +152,7 @@
                 @foreach ($pluginAdminMenu as $groupName => $menuItems)
                     <div class="px-3 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">{{ $groupName }}</div>
                     @foreach ($menuItems as $menuItem)
-                        <a href="{{ route($menuItem['route']) }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">{{ $menuItem['label'] }}</a>
+                        <a href="{{ route($menuItem['route']) }}" class="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs"><x-plugin-icon :name="$menuItem['icon'] ?? 'puzzle'" class="h-4 w-4 shrink-0 opacity-80" /><span>{{ $menuItem['label'] }}</span></a>
                     @endforeach
                 @endforeach
             @endif

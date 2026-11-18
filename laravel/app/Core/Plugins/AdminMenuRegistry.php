@@ -65,6 +65,7 @@ final class AdminMenuRegistry
                 $groups[$group][] = [
                     'label' => $label,
                     'route' => $route,
+                    'icon' => PluginIconRegistry::forMenuLabel($label, PluginIconRegistry::resolve($slug, $manifest->category, isset($entry['icon']) && is_string($entry['icon']) ? $entry['icon'] : null)),
                     'permission' => $permission,
                     'plugin' => $slug,
                     'group' => $group,

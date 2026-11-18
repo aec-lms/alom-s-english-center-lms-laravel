@@ -111,6 +111,7 @@ Route::middleware('installed')->group(function (): void {
 
         Route::prefix('plugins')->name('plugins.')->middleware(['permission:core.plugins.manage', 'central.admin'])->group(function (): void {
             Route::get('/', [PluginCenterController::class, 'index'])->name('index');
+            Route::get('/{slug}/favicon.svg', [PluginCenterController::class, 'favicon'])->where('slug', '[a-z0-9-]+')->name('favicon');
             Route::post('/upload', [PluginCenterController::class, 'upload'])->name('upload');
             Route::post('/{slug}/install', [PluginCenterController::class, 'install'])->name('install');
             Route::post('/{slug}/update', [PluginCenterController::class, 'update'])->name('update');
