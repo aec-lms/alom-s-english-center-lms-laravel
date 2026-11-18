@@ -114,12 +114,12 @@ class UniversalPaymentController extends Controller
                     'proof_size' => $proofFile?->getSize(),
                 ]);
 
-                app(\\Plugins\\Modules\\UniversalPayment\\Services\\ExternalTransactionReferenceRegistry::class)
+                app(\Plugins\\Modules\\UniversalPayment\\Services\\ExternalTransactionReferenceRegistry::class)
                     ->claim($transaction->gateway, (string) $transaction->external_trx_id, (int) $transaction->id);
 
                 return $transaction;
             });
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             if ($proofPath !== null) {
                 Storage::disk('local')->delete($proofPath);
             }
@@ -238,7 +238,7 @@ class UniversalPaymentController extends Controller
             }
 
             if ($validated['status'] === 'verified') {
-                app(\\Plugins\\Modules\\UniversalPayment\\Services\\ExternalTransactionReferenceRegistry::class)
+                app(\Plugins\\Modules\\UniversalPayment\\Services\\ExternalTransactionReferenceRegistry::class)
                     ->claim($lockedTransaction->gateway, $reference, (int) $lockedTransaction->id);
             }
 
@@ -376,7 +376,7 @@ class UniversalPaymentController extends Controller
                     'status' => 'pending',
                 ]);
 
-                app(\\Plugins\\Modules\\UniversalPayment\\Services\\ExternalTransactionReferenceRegistry::class)
+                app(\Plugins\\Modules\\UniversalPayment\\Services\\ExternalTransactionReferenceRegistry::class)
                     ->claim('bank_cash', (string) $transaction->external_trx_id, (int) $transaction->id);
 
                 return $transaction;
