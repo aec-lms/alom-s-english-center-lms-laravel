@@ -102,11 +102,31 @@ class RoleDashboardLiveMetricsTest extends TestCase
             ],
         ]);
 
+        DB::table('fee_invoices')->insert([
+            [
+                'invoice_number' => 'PORTAL-A-' . strtoupper(bin2hex(random_bytes(3))),
+                'student_id' => null, 'branch_id' => $branchA, 'fee_category_id' => null,
+                'payer_name' => 'Branch A Payer', 'payer_email' => 'branch-a-' . bin2hex(random_bytes(3)) . '@aec.test',
+                'subtotal_amount' => 500, 'discount_amount' => 0, 'net_amount' => 500, 'paid_amount' => 500,
+                'currency' => 'BDT', 'status' => 'paid', 'due_date' => now()->toDateString(),
+                'created_at' => now(), 'updated_at' => now(),
+            ],
+            [
+                'invoice_number' => 'PORTAL-B-' . strtoupper(bin2hex(random_bytes(3))),
+                'student_id' => null, 'branch_id' => $branchB, 'fee_category_id' => null,
+                'payer_name' => 'Branch B Payer', 'payer_email' => 'branch-b-' . bin2hex(random_bytes(3)) . '@aec.test',
+                'subtotal_amount' => 900, 'discount_amount' => 0, 'net_amount' => 900, 'paid_amount' => 900,
+                'currency' => 'BDT', 'status' => 'paid', 'due_date' => now()->toDateString(),
+                'created_at' => now(), 'updated_at' => now(),
+            ],
+        ]);
+
         $response = $this->actingAs($manager)->get('/dashboard')->assertOk();
         $metrics = $response->viewData('metrics');
 
         $this->assertSame(2, $metrics['attendance_today']);
         $this->assertSame(1, $metrics['present_today']);
+        $this->assertSame(500.0, $metrics['collected_revenue'], 'Branch managers must not see revenue from other branches.');
     }
 
     private function createCourse(string $code, string $title, ?string $instructorName = null): int
