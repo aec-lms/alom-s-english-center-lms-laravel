@@ -123,8 +123,22 @@ class AssignmentManagementPluginTest extends TestCase
         $this->actingAs($otherStudent)->post("/student/assignments/{$assignmentId}/submit", [
             'answer_text' => 'I am not enrolled.',
         ])->assertNotFound();
+        $otherToken = $otherStudent->createToken('assignment-scope-other')->plainTextToken;
+        $this->withHeader('Authorization', 'Bearer ' . $otherToken)
+            ->getJson('/api/v1/my/assignments')->assertOk()->assertJsonMissing(['title' => 'Enrolled students only']);
+        $this->withHeader('Authorization', 'Bearer ' . $otherToken)
+            ->getJson("/api/v1/my/assignments/{$assignmentId}")->assertNotFound();
+        $this->withHeader('Authorization', 'Bearer ' . $otherToken)
+            ->postJson("/api/v1/my/assignments/{$assignmentId}/submit", ['answer_text' => 'Not enrolled.'])
+            ->assertNotFound();
 
         $this->actingAs($student)->get("/student/assignments/{$assignmentId}")->assertOk();
+        $studentToken = $student->createToken('assignment-scope-student')->plainTextToken;
+        $this->withHeader('Authorization', 'Bearer ' . $studentToken)
+            ->getJson("/api/v1/my/assignments/{$assignmentId}")->assertOk();
+        $this->withHeader('Authorization', 'Bearer ' . $studentToken)
+            ->postJson("/api/v1/my/assignments/{$assignmentId}/submit", ['answer_text' => 'Submitted from mobile.'])
+            ->assertCreated();
         $this->actingAs($student)->post("/student/assignments/{$assignmentId}/submit", [
             'answer_text' => 'I am actively enrolled.',
         ])->assertRedirect()->assertSessionHasNoErrors();
