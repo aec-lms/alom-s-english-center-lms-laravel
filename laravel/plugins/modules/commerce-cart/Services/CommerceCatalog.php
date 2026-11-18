@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\CommerceCart\\Services;
+namespace Plugins\Modules\CommerceCart\Services;
 
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Facades\\Schema;
-use Illuminate\\Validation\\ValidationException;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
 class CommerceCatalog
