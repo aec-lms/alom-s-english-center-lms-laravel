@@ -71,7 +71,7 @@ class _StudentLoginState extends State<StudentLogin> {
         FilledButton(onPressed: busy ? null : submit, child: busy ? const CircularProgressIndicator() : const Text('Sign in')),
       ]),
     ),
-  ))));
+  )));
 }
 
 class StudentHome extends StatefulWidget {
