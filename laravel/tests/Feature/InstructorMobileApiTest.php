@@ -130,4 +130,70 @@ class InstructorMobileApiTest extends TestCase
 
         $this->withToken($token)->getJson('/api/v1/instructor/courses')->assertForbidden();
     }
+
+    public function test_instructor_can_manage_lessons_and_schedule_live_classes_for_assigned_course(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management', 'mobile-app-api']);
+        $teacher = $this->createUserWithRole('teacher');
+        $teacher->forceFill(['branch_id' => 1])->save();
+        $course = $this->course(1, 'lesson-live');
+        $this->assignCourse($course, $teacher->id);
+        $batch = DB::table('batches')->insertGetId([
+            'course_id' => $course,
+            'branch_id' => 1,
+            'name' => 'Lesson and Live Batch',
+            'capacity' => 30,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $token = $teacher->createToken('instructor-content-test')->plainTextToken;
+        $slug = 'mobile-instructor-course-lesson-live';
+
+        $created = $this->withToken($token)->postJson('/api/v1/instructor/courses/'.$slug.'/lessons', [
+            'title' => 'Suffix and Prefix',
+            'content' => 'Lesson notes.',
+            'duration_minutes' => 25,
+            'order' => 1,
+            'video_url' => 'https://youtu.be/abcdefghijk',
+            'is_preview' => true,
+        ])->assertCreated()
+            ->assertJsonPath('lesson.title', 'Suffix and Prefix')
+            ->assertJsonPath('lesson.order', 1)
+            ->assertJsonPath('lesson.is_preview', true);
+
+        $lessonId = $created->json('lesson.id');
+        $this->withToken($token)->getJson('/api/v1/instructor/courses/'.$slug.'/lessons')
+            ->assertOk()->assertJsonPath('meta.total', 1);
+        $this->withToken($token)->putJson('/api/v1/instructor/courses/'.$slug.'/lessons/'.$lessonId, [
+            'title' => 'Suffix and Prefix Updated',
+            'content' => 'Updated lesson notes.',
+            'duration_minutes' => 30,
+            'order' => 2,
+            'video_url' => null,
+            'is_preview' => false,
+        ])->assertOk()->assertJsonPath('lesson.order', 2);
+        $this->assertDatabaseHas('course_lessons', ['id' => $lessonId, 'title' => 'Suffix and Prefix Updated', 'sort_order' => 2]);
+
+        $scheduled = $this->withToken($token)->postJson('/api/v1/instructor/batches/'.$batch.'/live-classes', [
+            'title' => 'Grammar live session',
+            'description' => 'Bring your notes.',
+            'meeting_url' => 'https://meet.google.com/abc-defg-hij',
+            'starts_at' => now()->addDays(2)->toIso8601String(),
+            'ends_at' => now()->addDays(2)->addHour()->toIso8601String(),
+            'platform' => 'google_meet',
+        ])->assertCreated()->assertJsonPath('live_class.status', 'scheduled');
+
+        $liveId = $scheduled->json('live_class.id');
+        $this->withToken($token)->getJson('/api/v1/instructor/live-classes')
+            ->assertOk()->assertJsonPath('meta.total', 1);
+        $this->withToken($token)->patchJson('/api/v1/instructor/live-classes/'.$liveId, [
+            'status' => 'completed',
+            'recording_url' => 'https://youtu.be/abcdefghijk',
+            'recording_notes' => 'Revision recording.',
+        ])->assertOk()->assertJsonPath('live_class.status', 'completed');
+
+        $this->assertDatabaseHas('live_classes', ['id' => $liveId, 'status' => 'completed', 'recording_url' => 'https://youtu.be/abcdefghijk']);
+    }
+
 }
