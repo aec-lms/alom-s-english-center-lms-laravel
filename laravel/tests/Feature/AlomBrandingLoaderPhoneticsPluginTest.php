@@ -28,4 +28,31 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
   DB::table('enrollments')->where('user_id',$student->id)->delete();
   $this->actingAs($student)->get('/courses/british-american-phonetics/phonetics-practice')->assertForbidden();
  }
+
+ public function test_phonetics_admin_uploads_safe_media_and_rejects_svg():void{
+  $this->markSystemInstalled();
+  $this->activatePlugins(['phonetics']);
+  $admin=$this->createUserWithRole('admin');
+  try{
+   $this->actingAs($admin)->post('/admin/phonetics',[
+    'word'=>'water','category'=>'rhoticity','uk_ipa'=>'/ˈwɔːtə/','us_ipa'=>'/ˈwɔːtər/',
+    'uk_audio'=>UploadedFile::fake()->create('british.mp3',100,'audio/mpeg'),
+    'us_audio'=>UploadedFile::fake()->create('american.mp3',100,'audio/mpeg'),
+    'card_bg_image'=>UploadedFile::fake()->image('card.png',120,80),
+   ])->assertSessionHas('status');
+   $entry=PhoneticEntry::query()->where('word','water')->firstOrFail();
+   $this->assertFileExists(public_path($entry->uk_audio_path));
+   $this->assertFileExists(public_path($entry->us_audio_path));
+   $this->assertFileExists(public_path($entry->card_bg_image_path));
+   $this->assertNotNull($entry->uk_audio_url);
+   $this->assertDatabaseHas('audit_logs',['action'=>'phonetics.entry.created','entity_id'=>(string)$entry->id]);
+   $this->actingAs($admin)->from('/admin/phonetics')->post('/admin/phonetics',[
+    'word'=>'unsafe','category'=>'rhoticity','uk_ipa'=>'/x/','us_ipa'=>'/x/',
+    'card_bg_image'=>UploadedFile::fake()->create('unsafe.svg',20,'image/svg+xml'),
+   ])->assertSessionHasErrors('card_bg_image');
+  }finally{
+   File::deleteDirectory(public_path('uploads/alom-english-center/phonetics'));
+  }
+ }
+
 }
