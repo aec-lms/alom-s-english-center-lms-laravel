@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Core\Plugins\PluginManager;
 use Illuminate\Support\Facades\DB;
+use Plugins\Modules\NotificationCenter\Jobs\DeliverNotificationJob;
 use Tests\TestCase;
 
 class BranchContextIsolationTest extends TestCase
@@ -56,4 +58,46 @@ class BranchContextIsolationTest extends TestCase
             ->assertOk()
             ->assertSee('Restricted');
     }
+    public function test_queued_notification_cannot_be_delivered_across_branch_ownership(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'notification-center']);
+
+        $branchA = DB::table('branches')->insertGetId([
+            'code' => 'NTA-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'name' => 'Notification Branch A',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $branchB = DB::table('branches')->insertGetId([
+            'code' => 'NTB-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'name' => 'Notification Branch B',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $recipient = $this->createUserWithRole('student', $branchB);
+
+        $notificationId = DB::table('lms_notifications')->insertGetId([
+            'user_id' => $recipient->id,
+            'branch_id' => $branchA,
+            'channel' => 'in_app',
+            'title' => 'Branch isolation test',
+            'message' => 'This must not be delivered across branches.',
+            'status' => 'queued',
+            'attempt_count' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        (new DeliverNotificationJob($notificationId))->handle(app(PluginManager::class));
+
+        $this->assertDatabaseHas('lms_notifications', [
+            'id' => $notificationId,
+            'status' => 'failed',
+            'last_error' => 'Notification branch does not match the recipient account branch.',
+        ]);
+    }
+
 }
