@@ -123,7 +123,6 @@ class MarketingController extends Controller
     public function updateCoupon(Request $request, int $couponId): RedirectResponse
     {
         $this->ensureCentralAdmin($request->user());
-        $coupon = PromoCoupon::query()->lockForUpdate()->findOrFail($couponId);
         $validated = $request->validate([
             'discount_type' => ['required', 'in:percent,fixed'],
             'discount_percent' => ['nullable', 'required_if:discount_type,percent', 'integer', 'min:1', 'max:100'],
@@ -139,25 +138,30 @@ class MarketingController extends Controller
             'first_purchase_only' => ['nullable', 'boolean'],
             'is_active' => ['sometimes', 'boolean'],
         ]);
-        $coupon->update([
-            'discount_type' => $validated['discount_type'],
-            'discount_percent' => (int) ($validated['discount_percent'] ?? 0),
-            'discount_amount' => $validated['discount_amount'] ?? null,
-            'max_uses' => (int) ($validated['max_uses'] ?? 0),
-            'minimum_subtotal' => $validated['minimum_subtotal'] ?? 0,
-            'maximum_discount' => $validated['maximum_discount'] ?? null,
-            'per_user_limit' => $validated['per_user_limit'] ?? null,
-            'starts_at' => $validated['starts_at'] ?? null,
-            'expires_at' => $validated['expires_at'] ?? null,
-            'applies_to_course_ids' => array_values(array_map('intval', $validated['applies_to_course_ids'] ?? [])),
-            'first_purchase_only' => $request->boolean('first_purchase_only'),
-            'is_active' => $request->boolean('is_active'),
-        ]);
-        $this->audit->log('marketing.coupon_updated', 'promo_coupon', (string) $coupon->id, [
-            'code' => $coupon->code, 'is_active' => $coupon->is_active,
-        ]);
+        $couponCode = DB::transaction(function () use ($request, $couponId, $validated): string {
+            $coupon = PromoCoupon::query()->lockForUpdate()->findOrFail($couponId);
+            $coupon->update([
+                'discount_type' => $validated['discount_type'],
+                'discount_percent' => (int) ($validated['discount_percent'] ?? 0),
+                'discount_amount' => $validated['discount_amount'] ?? null,
+                'max_uses' => (int) ($validated['max_uses'] ?? 0),
+                'minimum_subtotal' => $validated['minimum_subtotal'] ?? 0,
+                'maximum_discount' => $validated['maximum_discount'] ?? null,
+                'per_user_limit' => $validated['per_user_limit'] ?? null,
+                'starts_at' => $validated['starts_at'] ?? null,
+                'expires_at' => $validated['expires_at'] ?? null,
+                'applies_to_course_ids' => array_values(array_map('intval', $validated['applies_to_course_ids'] ?? [])),
+                'first_purchase_only' => $request->boolean('first_purchase_only'),
+                'is_active' => $request->boolean('is_active'),
+            ]);
+            $this->audit->log('marketing.coupon_updated', 'promo_coupon', (string) $coupon->id, [
+                'code' => $coupon->code, 'is_active' => $coupon->is_active,
+            ]);
 
-        return back()->with('status', "Coupon '{$coupon->code}' settings updated.");
+            return (string) $coupon->code;
+        }, 3);
+
+        return back()->with('status', "Coupon '{$couponCode}' settings updated.");
     }
 
     public function updateGiftVoucherStatus(Request $request, int $voucherId): RedirectResponse
