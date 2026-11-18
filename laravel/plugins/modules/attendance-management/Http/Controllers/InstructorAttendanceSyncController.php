@@ -32,6 +32,14 @@ class InstructorAttendanceSyncController extends Controller
             && Schema::hasTable('students')
             && Schema::hasTable('attendance_entries'), 409, 'Required attendance integrations are unavailable.');
 
+        abort_unless(Schema::hasTable('attendance_gps_consents')
+            && DB::table('attendance_gps_consents')->where('user_id', $actor->id)
+                ->where('policy_version', 'instructor-offline-gps-v1')
+                ->whereNotNull('consented_at')->whereNull('revoked_at')->exists(),
+            403,
+            'Explicit instructor GPS consent is required before offline attendance sync.'
+        );
+
         $validated = $request->validate([
             'records' => ['required', 'array', 'min:1', 'max:100'],
             'records.*.idempotency_key' => ['required', 'uuid'],
@@ -245,6 +253,17 @@ class InstructorAttendanceSyncController extends Controller
                     'event' => 'updated', 'old_status' => $oldStatus, 'new_status' => $data['status'],
                     'reason' => trim($data['reason']), 'source' => 'offline', 'occurred_at' => now(),
                 ]);
+            }
+            if (Schema::hasTable('attendance_audit_logs') && Schema::hasTable('attendance_records')) {
+                $legacyId = DB::table('attendance_records')->where('batch_id', (int) $batch->id)
+                    ->where('student_id', (int) $record->student_id)->whereDate('attendance_date', $record->attendance_date)->value('id');
+                if ($legacyId) {
+                    DB::table('attendance_audit_logs')->insert([
+                        'attendance_record_id' => $legacyId, 'actor_id' => $actor->id,
+                        'event' => 'updated', 'old_status' => $oldStatus, 'new_status' => $data['status'],
+                        'reason' => trim($data['reason']), 'source' => 'offline', 'occurred_at' => now(),
+                    ]);
+                }
             }
             $this->audit->log('attendance.conflict_resolved', 'attendance_entry', (string) $record->id, [
                 'old_status' => $oldStatus, 'new_status' => $data['status'], 'reason' => trim($data['reason']),
