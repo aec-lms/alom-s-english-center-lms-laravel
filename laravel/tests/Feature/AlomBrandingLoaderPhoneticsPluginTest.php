@@ -282,6 +282,7 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
 
 
  public function test_standalone_provider_uses_generic_middleware_and_preserves_host_overrides():void{
+  app(PluginManager::class)->discoverManifests();
   config([
    'phonetics.standalone'=>true,
    'phonetics.middleware'=>['practice'=>['web','verified']],
