@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\SupportCenter\\Providers;
+namespace Plugins\Modules\SupportCenter\Providers;
 
-use App\\Core\\Plugins\\BasePluginServiceProvider;
+use App\Core\Plugins\BasePluginServiceProvider;
 
 class SupportCenterServiceProvider extends BasePluginServiceProvider
 {
