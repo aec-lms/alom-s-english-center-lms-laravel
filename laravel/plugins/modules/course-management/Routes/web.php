@@ -70,3 +70,28 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:course-management', 'perm
         Route::get('/', [\Plugins\Modules\CourseManagement\Http\Controllers\EnrollmentController::class, 'index'])->name('index');
         Route::patch('/{enrollment}/status', [\Plugins\Modules\CourseManagement\Http\Controllers\EnrollmentController::class, 'updateStatus'])->name('status');
     });
+
+Route::middleware(['web', 'installed', 'auth', 'plugin:course-management'])
+    ->prefix('learning-interactions')
+    ->name('plugins.learning-interactions.')
+    ->group(function (): void {
+        Route::get('/lessons/{lesson}/comments', [\\Plugins\\Modules\\CourseManagement\\Http\\Controllers\\LearningInteractionController::class, 'lessonComments'])
+            ->whereNumber('lesson')->middleware('throttle:60,1')->name('lesson.comments.index');
+        Route::post('/lessons/{lesson}/comments', [\\Plugins\\Modules\\CourseManagement\\Http\\Controllers\\LearningInteractionController::class, 'storeLessonComment'])
+            ->whereNumber('lesson')->middleware('throttle:12,1')->name('lesson.comments.store');
+        Route::patch('/lessons/{lesson}/comments/{comment}', [\\Plugins\\Modules\\CourseManagement\\Http\\Controllers\\LearningInteractionController::class, 'updateLessonComment'])
+            ->whereNumber('lesson')->whereNumber('comment')->middleware('throttle:20,1')->name('lesson.comments.update');
+        Route::delete('/lessons/{lesson}/comments/{comment}', [\\Plugins\\Modules\\CourseManagement\\Http\\Controllers\\LearningInteractionController::class, 'deleteLessonComment'])
+            ->whereNumber('lesson')->whereNumber('comment')->middleware('throttle:20,1')->name('lesson.comments.destroy');
+
+        Route::get('/live-classes/{liveClass}/questions', [\\Plugins\\Modules\\CourseManagement\\Http\\Controllers\\LearningInteractionController::class, 'liveQuestions'])
+            ->whereNumber('liveClass')->middleware('throttle:60,1')->name('live.questions.index');
+        Route::post('/live-classes/{liveClass}/questions', [\\Plugins\\Modules\\CourseManagement\\Http\\Controllers\\LearningInteractionController::class, 'askLiveQuestion'])
+            ->whereNumber('liveClass')->middleware('throttle:10,1')->name('live.questions.store');
+        Route::post('/live-classes/{liveClass}/questions/{question}/answers', [\\Plugins\\Modules\\CourseManagement\\Http\\Controllers\\LearningInteractionController::class, 'answerLiveQuestion'])
+            ->whereNumber('liveClass')->whereNumber('question')->middleware('throttle:20,1')->name('live.questions.answer');
+        Route::patch('/live-classes/{liveClass}/questions/{question}', [\\Plugins\\Modules\\CourseManagement\\Http\\Controllers\\LearningInteractionController::class, 'moderateLiveQuestion'])
+            ->whereNumber('liveClass')->whereNumber('question')->middleware('throttle:20,1')->name('live.questions.moderate');
+        Route::post('/live-classes/{liveClass}/questions/{question}/vote', [\\Plugins\\Modules\\CourseManagement\\Http\\Controllers\\LearningInteractionController::class, 'voteLiveQuestion'])
+            ->whereNumber('liveClass')->whereNumber('question')->middleware('throttle:30,1')->name('live.questions.vote');
+    });
