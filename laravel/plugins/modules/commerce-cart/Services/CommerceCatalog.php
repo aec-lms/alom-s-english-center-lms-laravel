@@ -83,7 +83,7 @@ class CommerceCatalog
             'title' => (string) $item->title,
             'price' => round((float) $item->price, 2),
             'currency' => strtoupper((string) $item->currency),
-            'metadata' => ['sellable_id' => $id, 'entitlement' => json_decode((string) ($item->entitlement ?? '{}'), true) ?: []],
+            'metadata' => ['sellable_id' => $id, 'resource_id' => $item->resource_id ? (int) $item->resource_id : null, 'entitlement' => json_decode((string) ($item->entitlement ?? '{}'), true) ?: []],
         ];
     }
 
