@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use Illuminate\\Support\\Facades\\Route;
-use Plugins\\Modules\\QuestionBank\\Http\\Controllers\\QuestionBankController;
+use Illuminate\Support\Facades\Route;
+use Plugins\Modules\QuestionBank\Http\Controllers\QuestionBankController;
 
 Route::middleware(['web', 'installed', 'auth', 'plugin:question-bank', 'permission:question_bank.manage'])
     ->prefix('admin/question-bank')
