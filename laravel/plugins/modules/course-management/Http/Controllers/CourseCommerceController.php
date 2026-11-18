@@ -271,18 +271,22 @@ class CourseCommerceController extends Controller
     public function voucherForm(Request $request): View
     {
         $this->student($request);
+        $voucherSettings = $this->giftVoucherSettings();
+        abort_unless($voucherSettings['enabled'], 403, 'Gift voucher purchases are temporarily disabled.');
 
-        return view('course-management::commerce.voucher');
+        return view('course-management::commerce.voucher', compact('voucherSettings'));
     }
 
     public function purchaseVoucher(Request $request): RedirectResponse
     {
         $student = $this->student($request);
+        $voucherSettings = $this->giftVoucherSettings();
+        abort_unless($voucherSettings['enabled'], 403, 'Gift voucher purchases are temporarily disabled.');
         $validated = $request->validate([
             'recipient_email' => ['required', 'email:rfc', 'max:190'],
             'recipient_name' => ['nullable', 'string', 'max:160'],
-            'message' => ['nullable', 'string', 'max:1000'],
-            'amount' => ['required', 'numeric', 'min:100', 'max:100000'],
+            'message' => [$voucherSettings['allow_personal_message'] ? 'nullable' : 'prohibited', 'string', 'max:1000'],
+            'amount' => ['required', 'numeric', 'min:' . $voucherSettings['minimum_amount'], 'max:' . $voucherSettings['maximum_amount']],
             'payer_contact' => ['required', 'string', 'min:7', 'max:40'],
         ]);
         $this->assertCheckoutReady();
@@ -305,7 +309,7 @@ class CourseCommerceController extends Controller
                 'amount' => $amount,
                 'remaining_amount' => $amount,
                 'status' => 'awaiting_payment',
-                'expires_at' => now()->addDays(180),
+                'expires_at' => now()->addDays($voucherSettings['validity_days']),
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
@@ -711,6 +715,20 @@ class CourseCommerceController extends Controller
             && Schema::hasTable('fee_invoices')
             && Schema::hasTable('enrollments'), 503,
             'Enable Universal Payment, SSLCOMMERZ Gateway and Fees Management before purchasing courses online.');
+    }
+
+    private function giftVoucherSettings(): array
+    {
+        $stored = SystemSetting::query()->where('key', 'course_commerce.gift_vouchers')->value('value');
+        $decoded = is_array($stored) ? $stored : (json_decode((string) $stored, true) ?: []);
+
+        return array_merge([
+            'enabled' => true,
+            'minimum_amount' => 100,
+            'maximum_amount' => 100000,
+            'validity_days' => 180,
+            'allow_personal_message' => true,
+        ], $decoded);
     }
 
     private function student(Request $request)
