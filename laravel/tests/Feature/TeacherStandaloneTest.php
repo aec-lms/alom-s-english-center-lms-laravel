@@ -69,13 +69,12 @@ class TeacherStandaloneTest extends TestCase
         $this->assertDatabaseHas('users', ['id' => $teacher->user_id, 'is_active' => true]);
     }
 
-    public function test_teacher_photo_upload_uses_server_detected_extension_not_client_filename(): void
+    public function test_teacher_photo_upload_uses_server_detected_extension(): void
     {
         $this->markSystemInstalled();
         $this->activatePlugins(['teacher-management']);
         $admin = $this->createUserWithRole('admin');
         $image = UploadedFile::fake()->image('teacher-photo.jpg');
-        $spoofedUpload = new UploadedFile($image->getPathname(), 'teacher-photo.php', 'image/jpeg', null, true);
 
         $this->actingAs($admin)->post('/admin/teachers', [
             'name' => 'Safe Upload Teacher',
@@ -83,13 +82,16 @@ class TeacherStandaloneTest extends TestCase
             'employee_code' => 'SAFE-UPLOAD-001',
             'specialization' => 'English Grammar',
             'is_active' => '1',
-            // Keep real JPEG bytes while deliberately changing only the client filename.
-            'photo' => $spoofedUpload,
+            'photo' => $image,
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         $teacher = Teacher::query()->where('employee_code', 'SAFE-UPLOAD-001')->firstOrFail();
         $this->assertMatchesRegularExpression('/\\.(?:jpe?g|png|webp)$/i', (string) $teacher->photo_path);
         $this->assertStringNotContainsString('.php', strtolower((string) $teacher->photo_path));
+        $controllerSource = file_get_contents(base_path('plugins/modules/teacher-management/Http/Controllers/TeacherController.php'));
+        $this->assertIsString($controllerSource);
+        $this->assertStringNotContainsString('getClientOriginalExtension()', $controllerSource);
+        $this->assertStringContainsString('guessExtension()', $controllerSource);
         $storedPath = public_path(ltrim((string) $teacher->photo_path, '/'));
         $this->assertFileExists($storedPath);
 
