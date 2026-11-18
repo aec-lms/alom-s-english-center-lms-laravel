@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Core\Plugins\PluginIconRegistry;
-use PHPUnit\Framework\TestCase;
+use Tests\TestCase;
 
 class PluginIconRegistryTest extends TestCase
 {
