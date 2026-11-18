@@ -50,6 +50,9 @@
                         $thumb = !empty($course->thumbnail) ? $course->thumbnail : asset('assets/images/hero_educator_studio_1794552233836.jpg');
                         $price = (int) ($course->price ?? 0);
                         $origPrice = (int) ($course->original_price ?? 0);
+                        $proof = $courseSocialProofSettings ?? ['enabled' => false];
+                        $views = (int) (($courseSocialProofStats[$course->id]['views'] ?? 0));
+                        $purchases = (int) (($courseSocialProofStats[$course->id]['purchases'] ?? 0));
                     @endphp
                     <article class="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-xs hover:shadow-xl hover:-translate-y-1 transition-all duration-200 flex flex-col">
                         <a href="{{ route('public.courses.show', $course->slug) }}" class="relative h-48 bg-[#022D41] overflow-hidden block">
@@ -72,6 +75,17 @@
                                 <a href="{{ route('public.courses.show', $course->slug) }}" class="font-extrabold text-base text-slate-900 hover:text-[#0284C7] leading-snug line-clamp-2 block">{{ $course->title }}</a>
                                 <p class="text-xs text-slate-500 leading-relaxed line-clamp-2">{{ $course->description ?? '' }}</p>
                             </div>
+
+                            @if (($proof['enabled'] ?? false) && ($proof['show_on_cards'] ?? true))
+                                <div class="flex flex-wrap items-center gap-4 text-[11px] font-semibold text-slate-500">
+                                    @if ($proof['show_views'] ?? true)
+                                        <span class="inline-flex items-center gap-1.5"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>{{ number_format($views) }} views</span>
+                                    @endif
+                                    @if ($proof['show_purchases'] ?? true)
+                                        <span class="inline-flex items-center gap-1.5"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 3h2l2.4 12.2a2 2 0 0 0 2 1.6h8.8a2 2 0 0 0 1.9-1.4L22 8H6"/><circle cx="10" cy="21" r="1"/><circle cx="19" cy="21" r="1"/></svg>{{ number_format($purchases) }} purchased</span>
+                                    @endif
+                                </div>
+                            @endif
 
                             <div class="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
                                 <div>

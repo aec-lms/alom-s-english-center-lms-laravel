@@ -16,6 +16,7 @@ use App\Http\Controllers\Admin\RolePermissionController;
 use App\Http\Controllers\Admin\AdminMenuController;
 use App\Http\Controllers\Admin\SiteNavigationController;
 use App\Http\Controllers\Admin\InstitutionSettingsController;
+use App\Http\Controllers\Admin\CourseSocialProofSettingsController;
 use App\Http\Controllers\Admin\HealthMonitorController;
 use App\Http\Controllers\Admin\RecycleBinController;
 use App\Http\Controllers\Admin\PluginCenterController;
@@ -123,6 +124,13 @@ Route::middleware('installed')->group(function (): void {
             Route::post('/check', [UpdateCenterController::class, 'checkFeed'])->name('check');
             Route::post('/{log}/rollback', [UpdateCenterController::class, 'rollback'])->name('rollback');
         });
+
+        Route::get('/course-social-proof', [CourseSocialProofSettingsController::class, 'edit'])
+            ->name('course-social-proof.edit')
+            ->middleware(['permission:core.settings.manage', 'central.admin']);
+        Route::post('/course-social-proof', [CourseSocialProofSettingsController::class, 'update'])
+            ->name('course-social-proof.update')
+            ->middleware(['permission:core.settings.manage', 'central.admin']);
 
         Route::get('/health', [HealthMonitorController::class, 'index'])->name('health.index')->middleware(['permission:core.dashboard.view', 'central.admin']);
         Route::post('/health/check', [HealthMonitorController::class, 'check'])->name('health.check')->middleware(['permission:core.dashboard.view', 'central.admin']);

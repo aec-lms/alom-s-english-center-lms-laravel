@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Core\Plugins\PluginManager;
+use App\Models\SystemSetting;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -191,6 +192,38 @@ class PublicHomeController extends Controller
         $searchTerm = mb_substr(trim((string) $request->query('q', '')), 0, 100);
         $courses = $this->catalogCourses();
 
+        $courseSocialProofSettings = $this->courseSocialProofSettings();
+        $courseSocialProofStats = [];
+        if (($courseSocialProofSettings['enabled'] ?? false) && ($courseSocialProofSettings['show_on_cards'] ?? true)) {
+            $viewCounts = Schema::hasTable('course_view_events')
+                ? DB::table('course_view_events')->select('course_id')->selectRaw('COUNT(*) AS total')->groupBy('course_id')->pluck('total', 'course_id')
+                : collect();
+            $purchaseQuery = DB::table('enrollments')
+                ->select('course_id')
+                ->selectRaw('COUNT(*) AS total')
+                ->whereIn('status', ['active', 'completed']);
+            if (Schema::hasTable('fee_invoices')) {
+                $purchaseQuery->whereNotNull('invoice_id')->whereExists(function ($invoiceQuery): void {
+                            $invoiceQuery->selectRaw('1')
+                                ->from('fee_invoices')
+                                ->whereColumn('fee_invoices.id', 'enrollments.invoice_id')
+                                ->where('fee_invoices.status', 'paid')
+                                ->whereRaw('fee_invoices.paid_amount + 0.01 >= fee_invoices.net_amount');
+                });
+            } else {
+                $purchaseQuery->whereRaw('1 = 0');
+            }
+            $purchaseCounts = Schema::hasTable('enrollments')
+                ? $purchaseQuery->groupBy('course_id')->pluck('total', 'course_id')
+                : collect();
+
+            foreach ($courses as $catalogCourse) {
+                $courseSocialProofStats[$catalogCourse->id] = [
+                    'views' => (int) ($viewCounts[$catalogCourse->id] ?? 0),
+                    'purchases' => (int) ($purchaseCounts[$catalogCourse->id] ?? 0),
+                ];
+            }
+        }
         $categories = $courses->pluck('category')->filter()->unique()->values();
         $filteredCourses = $activeCategory === 'all' || $activeCategory === ''
             ? $courses
@@ -208,7 +241,7 @@ class PublicHomeController extends Controller
             })->values();
         }
 
-        return view('public.courses', compact('courses', 'categories', 'filteredCourses', 'activeCategory', 'searchTerm'));
+        return view('public.courses', compact('courses', 'categories', 'filteredCourses', 'activeCategory', 'searchTerm', 'courseSocialProofSettings', 'courseSocialProofStats'));
     }
 
     public function courseShow(string $slug): View
@@ -216,6 +249,27 @@ class PublicHomeController extends Controller
         $courses = $this->catalogCourses();
         $course = $courses->firstWhere('slug', $slug);
         if ($course === null) abort(404);
+
+        $socialProofSettings = $this->courseSocialProofSettings();
+        if (Schema::hasTable('course_view_events')) {
+            $visitorId = session()->get('course_view_visitor_id');
+            if (!is_string($visitorId) || preg_match('/^[a-f0-9]{64}$/D', $visitorId) !== 1) {
+                $visitorId = bin2hex(random_bytes(32));
+                session()->put('course_view_visitor_id', $visitorId);
+            }
+            $visitorKey = hash_hmac('sha256', $visitorId, (string) config('app.key'));
+            DB::table('course_view_events')->insertOrIgnore([
+                'course_id' => $course->id,
+                'visitor_hash' => $visitorKey,
+                'viewed_on' => now()->toDateString(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+        $courseViews = Schema::hasTable('course_view_events')
+            ? (int) DB::table('course_view_events')->where('course_id', $course->id)->count()
+            : 0;
+        $coursePurchases = $this->verifiedCoursePurchaseCount((int) $course->id);
 
         $lessons = collect();
         if (Schema::hasTable('course_lessons') && !empty($course->id)) {
@@ -238,7 +292,43 @@ class PublicHomeController extends Controller
             $linkedPost = DB::table('cms_posts')->where('id', $course->cms_post_id)->first();
         }
 
-        return view('public.course-show', compact('course', 'lessons', 'syllabus', 'linkedPost'));
+        return view('public.course-show', compact('course', 'lessons', 'syllabus', 'linkedPost', 'socialProofSettings', 'courseViews', 'coursePurchases'));
+    }
+
+
+    private function courseSocialProofSettings(): array
+    {
+        $defaults = ['enabled' => true, 'show_views' => true, 'show_purchases' => true, 'show_on_cards' => true, 'show_on_details' => true];
+        if (!Schema::hasTable('system_settings')) {
+            return $defaults;
+        }
+        $raw = SystemSetting::query()->where('key', 'course.social_proof')->value('value');
+        $stored = is_string($raw) ? json_decode($raw, true) : [];
+        return array_merge($defaults, is_array($stored) ? $stored : []);
+    }
+
+    private function verifiedCoursePurchaseCount(int $courseId): int
+    {
+        if (!Schema::hasTable('enrollments')) {
+            return 0;
+        }
+        $query = DB::table('enrollments')
+            ->where('course_id', $courseId)
+            ->whereIn('status', ['active', 'completed']);
+
+        if (Schema::hasTable('fee_invoices')) {
+            $query->whereNotNull('invoice_id')->whereExists(function ($invoiceQuery): void {
+                        $invoiceQuery->selectRaw('1')
+                            ->from('fee_invoices')
+                            ->whereColumn('fee_invoices.id', 'enrollments.invoice_id')
+                            ->where('fee_invoices.status', 'paid')
+                            ->whereRaw('fee_invoices.paid_amount + 0.01 >= fee_invoices.net_amount');
+            });
+        } else {
+            return 0;
+        }
+
+        return (int) $query->count();
     }
 
     public function checkCoupon(Request $request): JsonResponse
