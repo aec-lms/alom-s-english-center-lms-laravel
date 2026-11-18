@@ -27,7 +27,7 @@ class CourseContentLearningController extends Controller
         $item=CourseCurriculumItem::query()->where('course_id',$courseRow->id)->where('course_content_post_id',$content->id)->where('is_active',true)->firstOrFail();
         $user=$request->user();
         $enrolled=$user && $user->hasRole('student') && DB::table('enrollments')->where('user_id',$user->id)->where('course_id',$courseRow->id)->whereIn('status',['active','completed'])->exists();
-        $canManage=$user && ($user->hasRole('admin') || $user->hasRole('teacher'));
+        $canManage=$this->canManageCourse($user,(int)$courseRow->id);
         $allowed=$content->access_type==='free' || $item->is_preview || $enrolled || $canManage;
         abort_unless($allowed,403,'Enroll in this course to unlock this lesson.');
         $progress=null;
@@ -50,7 +50,7 @@ class CourseContentLearningController extends Controller
         $item=CourseCurriculumItem::query()->where('course_id',$courseRow->id)->where('course_content_post_id',$content->id)->where('is_active',true)->firstOrFail();
         $user=$request->user();
         $enrolled=$user && $user->hasRole('student') && DB::table('enrollments')->where('user_id',$user->id)->where('course_id',$courseRow->id)->whereIn('status',['active','completed'])->exists();
-        abort_unless($content->access_type==='free' || $item->is_preview || $enrolled || ($user && ($user->hasRole('admin')||$user->hasRole('teacher'))),403);
+        abort_unless($content->access_type==='free' || $item->is_preview || $enrolled || $this->canManageCourse($user,(int)$courseRow->id),403);
         abort_unless($content->content_file_path && Storage::disk('local')->exists($content->content_file_path),404);
         return response()->file(Storage::disk('local')->path($content->content_file_path),[
             'Content-Type'=>$content->content_file_mime?:'application/octet-stream',
@@ -71,6 +71,14 @@ class CourseContentLearningController extends Controller
         abort_if($item->is_preview,403,'Preview lessons do not count toward completion.');
         CourseContentProgress::query()->updateOrCreate(['user_id'=>$student->id,'course_curriculum_item_id'=>$item->id],['last_viewed_at'=>now(),'completed_at'=>now()]);
         return back()->with('status','Lesson marked as complete.');
+    }
+
+    private function canManageCourse($user,int $courseId): bool
+    {
+        if(!$user)return false;
+        if($user->hasRole('admin'))return true;
+        if(!$user->hasRole('teacher') || !Schema::hasTable('course_teacher_assignments'))return false;
+        return DB::table('course_teacher_assignments')->where('course_id',$courseId)->where('teacher_user_id',$user->id)->exists();
     }
 
     private function ensureCourses(): void
