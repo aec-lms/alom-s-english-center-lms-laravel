@@ -29,6 +29,8 @@ class CourseAssessmentsMobileApiTest extends TestCase
             ->assertOk()->assertJsonPath('data', []);
         $this->withToken($tokenA)->postJson('/api/v1/my-learning/assessments/'.$set.'/start')
             ->assertForbidden();
+        $this->withToken($tokenB)->getJson('/api/v1/my-learning/assessments')
+            ->assertOk()->assertJsonPath('data', []);
         $this->withToken($tokenB)->postJson('/api/v1/my-learning/assessments/'.$set.'/start')
             ->assertForbidden();
 
@@ -72,7 +74,7 @@ class CourseAssessmentsMobileApiTest extends TestCase
         $this->withToken($tokenA)->postJson("/api/v1/my-learning/assessments/attempts/{$attemptId}/submit")
             ->assertOk()
             ->assertJsonPath('attempt.status', 'submitted')
-            ->assertJsonPath('attempt.auto_score', 2);
+            ->assertJsonPath('attempt.auto_score', '2.00');
 
         $this->withToken($tokenB)->getJson("/api/v1/my-learning/assessments/attempts/{$attemptId}")
             ->assertNotFound();
