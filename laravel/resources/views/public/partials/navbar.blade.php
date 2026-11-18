@@ -9,6 +9,17 @@
             'external' => false,
         ];
     }
+    if (auth()->check() && auth()->user()->hasRole('student')
+        && app(\App\Core\Plugins\PluginManager::class)->isEnabled('course-wishlist')
+        && app(\App\Core\Plugins\PluginManager::class)->isEnabled('course-management')
+        && Route::has('plugins.course-wishlist.index')) {
+        $navLinks[] = [
+            'label' => 'My Wishlist',
+            'url' => route('plugins.course-wishlist.index'),
+            'active' => request()->routeIs('plugins.course-wishlist.*'),
+            'external' => false,
+        ];
+    }
 @endphp
 
 <header data-header-style="{{ $headerLayout['style'] }}" class="w-full bg-white border-b border-slate-200/80 {{ $headerLayout['sticky'] ? 'sticky top-0' : 'relative' }} z-40 shadow-2xs">
