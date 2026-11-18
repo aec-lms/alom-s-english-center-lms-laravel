@@ -107,6 +107,32 @@ class QuestionBankPluginTest extends TestCase
             ->assertOk()->assertSee('He goes');
     }
 
+    public function test_question_can_be_edited_and_soft_deleted_without_erasing_paper_snapshots(): void
+    {
+        $admin = $this->admin();
+        $questionId = $this->createQuestion();
+
+        $this->actingAs($admin)->put(route('plugins.question-bank.questions.update', $questionId), [
+            'exam_category' => 'bcs',
+            'question_type' => 'mcq',
+            'subject' => 'English',
+            'topic' => 'Tense',
+            'difficulty' => 'easy',
+            'prompt' => 'Updated grammar question?',
+            'options' => ['Option A', 'Option B'],
+            'correct_answer' => 'Option B',
+            'default_marks' => 2,
+            'default_negative_marks' => 0.5,
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('question_bank_questions', ['id' => $questionId, 'prompt' => 'Updated grammar question?']);
+
+        $this->actingAs($admin)->delete(route('plugins.question-bank.questions.destroy', $questionId))
+            ->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertSoftDeleted('question_bank_questions', ['id' => $questionId]);
+    }
+
     public function test_random_paper_respects_category_type_and_requested_count(): void
     {
         $admin = $this->admin();
