@@ -100,6 +100,14 @@ final class CourseCatalog
         return $course;
     }
 
+    public function batch(string $batchRef): object
+    {
+        $map = config('phonetics.catalog.batches', []);
+        $batch = $this->table($map)->where($map['id'] ?? 'id', $batchRef)->first();
+        abort_unless($batch, 404, 'Batch not found in the connected LMS.');
+        return $batch;
+    }
+
     public function courseId(object $course): string
     {
         $map = config('phonetics.catalog.courses', []);
@@ -161,6 +169,11 @@ final class CourseCatalog
 
         $courseMap = config('phonetics.catalog.courses', []);
         $course = $this->course($courseRef);
+        $statusColumn = $courseMap['status'] ?? null;
+        $activeCourseStatuses = config('phonetics.access.course_active_statuses', ['published', 'active']);
+        if ($statusColumn && $this->hasColumn($courseMap, $statusColumn)) {
+            abort_unless(in_array((string) data_get($course, $statusColumn), $activeCourseStatuses, true), 404, 'This course is not currently available.');
+        }
         $priceColumn = $courseMap['price'] ?? null;
         if ($audience !== 'both' && $priceColumn && $this->hasColumn($courseMap, $priceColumn)) {
             $isPaid = (float) data_get($course, $priceColumn, 0) > 0;
