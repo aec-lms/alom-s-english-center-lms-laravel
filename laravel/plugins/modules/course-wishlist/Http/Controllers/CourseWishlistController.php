@@ -76,4 +76,75 @@ class CourseWishlistController extends Controller
 
         return back()->with('status', 'Course removed from your wishlist.');
     }
+
+    public function apiIndex(Request $request, PluginManager $plugins): JsonResponse
+    {
+        $actor = $request->user();
+        abort_unless($actor && $actor->hasRole('student'), 403, 'Student accounts only.');
+        abort_unless($plugins->isEnabled('course-management') && Schema::hasTable('courses'), 503, 'Course Management must be enabled to browse saved courses.');
+        abort_unless(Schema::hasTable('course_wishlists'), 503, 'Course Wishlist storage is not installed.');
+
+        $courses = DB::table('courses')
+            ->join('course_wishlists', function ($join) use ($actor): void {
+                $join->on('courses.id', '=', 'course_wishlists.course_id')
+                    ->where('course_wishlists.user_id', '=', $actor->id);
+            })
+            ->where('courses.status', 'published')
+            ->when($actor->branch_id !== null, fn ($query) => $query->where(function ($scope) use ($actor): void {
+                $scope->whereNull('courses.branch_id')->orWhere('courses.branch_id', $actor->branch_id);
+            }))
+            ->when($actor->branch_id === null, fn ($query) => $query->whereNull('courses.branch_id'))
+            ->select('courses.id', 'courses.title', 'courses.slug', 'courses.description', 'courses.price', 'courses.thumbnail', 'courses.branch_id', 'course_wishlists.created_at as saved_at')
+            ->orderByDesc('course_wishlists.created_at')
+            ->paginate(20);
+
+        return response()->json([
+            'data' => $courses->getCollection()->values(),
+            'meta' => [
+                'current_page' => $courses->currentPage(),
+                'last_page' => $courses->lastPage(),
+                'per_page' => $courses->perPage(),
+                'total' => $courses->total(),
+            ],
+        ]);
+    }
+
+    public function apiStore(Request $request, int $course, PluginManager $plugins): JsonResponse
+    {
+        $actor = $request->user();
+        abort_unless($actor && $actor->hasRole('student'), 403, 'Student accounts only.');
+        abort_unless($plugins->isEnabled('course-management') && Schema::hasTable('courses'), 503, 'Course Management is not available.');
+        abort_unless(Schema::hasTable('course_wishlists'), 503, 'Course Wishlist storage is not installed.');
+
+        $courseQuery = DB::table('courses')->where('id', $course)->where('status', 'published');
+        $courseQuery->when($actor->branch_id !== null, fn ($query) => $query->where(function ($scope) use ($actor): void {
+            $scope->whereNull('branch_id')->orWhere('branch_id', $actor->branch_id);
+        }));
+        $courseQuery->when($actor->branch_id === null, fn ($query) => $query->whereNull('branch_id'));
+        abort_unless($courseQuery->exists(), 404, 'Published course not found in your available branch.');
+
+        DB::table('course_wishlists')->insertOrIgnore([
+            'user_id' => $actor->id,
+            'course_id' => $course,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return response()->json(['message' => 'Course saved to your wishlist.'], 201);
+    }
+
+    public function apiDestroy(Request $request, int $course): JsonResponse
+    {
+        $actor = $request->user();
+        abort_unless($actor && $actor->hasRole('student'), 403, 'Student accounts only.');
+        abort_unless(Schema::hasTable('course_wishlists'), 503, 'Course Wishlist storage is not installed.');
+
+        $deleted = DB::table('course_wishlists')
+            ->where('user_id', $actor->id)
+            ->where('course_id', $course)
+            ->delete();
+
+        return response()->json(['message' => 'Course removed from your wishlist.', 'removed' => $deleted > 0]);
+    }
+
 }
