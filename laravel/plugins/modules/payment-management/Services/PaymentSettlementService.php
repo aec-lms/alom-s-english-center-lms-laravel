@@ -51,6 +51,31 @@ class PaymentSettlementService
             ]);
 
             if ($newPaid >= (float) $invoice->net_amount && Schema::hasTable('commerce_orders')) {
+                // Refuse to grant commerce access if the order, invoice, pending
+                // enrollment, and source course disagree about branch ownership.
+                $preflightOrders = DB::table('commerce_orders')->where('invoice_id', $invoice->id)->lockForUpdate()->get();
+                foreach ($preflightOrders as $preflightOrder) {
+                    if (Schema::hasColumn('commerce_orders', 'branch_id')
+                        && Schema::hasColumn('fee_invoices', 'branch_id')
+                        && $preflightOrder->branch_id !== null
+                        && $invoice->branch_id !== null
+                        && (int) $preflightOrder->branch_id !== (int) $invoice->branch_id) {
+                        throw new RuntimeException('Commerce order and invoice branch ownership do not match.');
+                    }
+                }
+                if (Schema::hasTable('enrollments') && Schema::hasColumn('enrollments', 'invoice_id')
+                    && Schema::hasColumn('enrollments', 'branch_id') && Schema::hasTable('courses')
+                    && Schema::hasColumn('courses', 'branch_id')) {
+                    $pendingEnrollments = DB::table('enrollments')->where('invoice_id', $invoice->id)
+                        ->where('status', 'pending')->lockForUpdate()->get();
+                    foreach ($pendingEnrollments as $pendingEnrollment) {
+                        $courseBranchId = DB::table('courses')->where('id', $pendingEnrollment->course_id)->value('branch_id');
+                        if ($courseBranchId !== null && (int) ($pendingEnrollment->branch_id ?? 0) !== (int) $courseBranchId) {
+                            throw new RuntimeException('Pending course enrollment branch does not match the source course.');
+                        }
+                    }
+                }
+
                 $orders = DB::table('commerce_orders')->where('invoice_id', $invoice->id)->lockForUpdate()->get();
                 foreach ($orders as $order) {
                     if ($order->payment_status === 'paid') continue;
