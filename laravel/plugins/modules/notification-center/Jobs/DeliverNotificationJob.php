@@ -7,6 +7,7 @@ namespace Plugins\Modules\NotificationCenter\Jobs;
 use App\Core\Plugins\PluginManager;
 use App\Models\User;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
@@ -16,7 +17,7 @@ use Illuminate\Support\Facades\Mail;
 use Plugins\Modules\NotificationCenter\Models\LmsNotification;
 use Throwable;
 
-class DeliverNotificationJob implements ShouldQueue
+class DeliverNotificationJob implements ShouldQueue, ShouldBeUnique
 {
     use Dispatchable;
     use InteractsWithQueue;
@@ -24,6 +25,14 @@ class DeliverNotificationJob implements ShouldQueue
     use SerializesModels;
 
     public int $tries = 3;
+
+    /** Prevent duplicate dispatches from sending the same notification more than once. */
+    public int $uniqueFor = 3600;
+
+    public function uniqueId(): string
+    {
+        return (string) $this->notificationId;
+    }
 
     public function __construct(public readonly int $notificationId) {}
 
