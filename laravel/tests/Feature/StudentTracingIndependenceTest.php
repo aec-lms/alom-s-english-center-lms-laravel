@@ -19,7 +19,6 @@ class StudentTracingIndependenceTest extends TestCase
         $manager->syncCatalog();
         $manager->install('student-tracing');
 
-        $this->assertDatabaseMissing('student_trace_events', ['event_type' => 'lesson_completed']);
         $this->assertTrue(Schema::hasTable('student_trace_events'));
         $this->assertFalse(Schema::hasTable('student_activity_events'));
     }
@@ -78,6 +77,7 @@ class StudentTracingIndependenceTest extends TestCase
             'legacy_event_id' => 1,
             'event_type' => 'student.created',
         ]);
+        $this->assertDatabaseMissing('student_trace_events', ['event_type' => 'lesson_completed']);
         $this->assertTrue(Schema::hasTable('student_trace_events'));
         $this->assertTrue(Schema::hasTable('student_activity_events'));
         $this->assertTrue(Schema::hasColumn('student_trace_events', 'student_id'));
