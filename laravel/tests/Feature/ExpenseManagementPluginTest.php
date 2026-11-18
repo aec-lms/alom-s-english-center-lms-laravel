@@ -173,4 +173,55 @@ class ExpenseManagementPluginTest extends TestCase
             'status' => 'pending',
         ]);
     }
+
+    public function test_branch_manager_export_and_receipt_download_never_cross_branch_boundaries(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'expense-management']);
+        Storage::fake('local');
+
+        $branchA = DB::table('branches')->insertGetId([
+            'code' => 'EXP-A-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'name' => 'Expense Export Branch A', 'is_active' => true,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $branchB = DB::table('branches')->insertGetId([
+            'code' => 'EXP-B-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'name' => 'Expense Export Branch B', 'is_active' => true,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $roleId = DB::table('roles')->where('slug', 'branch_manager')->value('id');
+        foreach (['expenses.view', 'expenses.export'] as $slug) {
+            $permissionId = DB::table('permissions')->where('slug', $slug)->value('id');
+            $this->assertNotNull($permissionId);
+            DB::table('permission_role')->insertOrIgnore(['role_id' => $roleId, 'permission_id' => $permissionId]);
+        }
+        $manager = $this->createUserWithRole('branch_manager', $branchA);
+        Storage::disk('local')->put('expense-receipts/local.pdf', '%PDF local');
+        Storage::disk('local')->put('expense-receipts/remote.pdf', '%PDF remote');
+
+        $localId = DB::table('expenses')->insertGetId([
+            'branch_id' => $branchA, 'created_by' => $manager->id, 'category' => 'Supplies',
+            'title' => 'Local expense export marker', 'amount' => 100, 'payment_method' => 'cash',
+            'expense_date' => now()->toDateString(), 'status' => 'approved',
+            'receipt_path' => 'expense-receipts/local.pdf', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $remoteId = DB::table('expenses')->insertGetId([
+            'branch_id' => $branchB, 'created_by' => $manager->id, 'category' => 'Supplies',
+            'title' => 'Remote expense secret marker', 'amount' => 900, 'payment_method' => 'cash',
+            'expense_date' => now()->toDateString(), 'status' => 'approved',
+            'receipt_path' => 'expense-receipts/remote.pdf', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $export = $this->actingAs($manager)->get('/admin/expenses/export.csv');
+        $export->assertOk()->assertDownload();
+        $csv = $export->streamedContent();
+        $this->assertStringContainsString('Local expense export marker', $csv);
+        $this->assertStringNotContainsString('Remote expense secret marker', $csv);
+
+        $this->actingAs($manager)->get("/admin/expenses/{$remoteId}/receipt")->assertNotFound();
+        $this->actingAs($manager)->get("/admin/expenses/{$localId}/receipt")->assertOk();
+    }
+
 }
