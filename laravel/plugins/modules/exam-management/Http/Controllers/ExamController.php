@@ -6,6 +6,7 @@ namespace Plugins\Modules\ExamManagement\Http\Controllers;
 
 use App\Core\Security\AuditLogger;
 use App\Http\Controllers\Controller;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -257,6 +258,67 @@ class ExamController extends Controller
         $deadline = $attempt->started_at->copy()->addMinutes((int) $exam->duration_minutes);
 
         return view('exam-management::take', compact('exam', 'questions', 'attempt', 'deadline'));
+    }
+
+    /**
+     * Persist partial answers without finalizing the attempt.
+     * The server remains authoritative for ownership, allowed questions and timer.
+     */
+    public function saveAttemptAnswers(Request $request, Exam $exam): JsonResponse
+    {
+        $actor = $request->user();
+        abort_unless($actor && $actor->hasRole('student'), 403, 'Only student accounts can save exam answers.');
+        abort_unless($exam->is_published, 404);
+        if ($exam->branch_id !== null && (int) $actor->branch_id !== (int) $exam->branch_id) {
+            abort(403, 'Exam is outside your assigned branch.');
+        }
+
+        $validated = $request->validate([
+            'attempt_id' => ['required', 'integer'],
+            'answers' => ['required', 'array', 'max:500'],
+            'answers.*' => ['nullable', 'integer', 'min:0'],
+        ]);
+
+        $savedAt = DB::transaction(function () use ($exam, $actor, $validated): string {
+            $lockedExam = Exam::query()->whereKey($exam->id)->lockForUpdate()->firstOrFail();
+            $attempt = ExamAttempt::query()
+                ->whereKey((int) $validated['attempt_id'])
+                ->where('exam_id', $lockedExam->id)
+                ->where('user_id', $actor->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            abort_if($attempt->submitted_at !== null, 409, 'This exam attempt is already submitted.');
+            $deadline = $attempt->started_at?->copy()->addMinutes((int) $lockedExam->duration_minutes);
+            if (!$deadline || now()->greaterThan($deadline)) {
+                abort(409, 'The exam time has expired.', ['expired' => true]);
+            }
+
+            $questions = $lockedExam->questions()->get(['id', 'options']);
+            abort_if($questions->isEmpty(), 422, 'This exam has no questions.');
+            $allowedIds = $questions->pluck('id')->map(static fn ($id): string => (string) $id)->all();
+            $submittedIds = array_map('strval', array_keys($validated['answers']));
+            abort_if(array_diff($submittedIds, $allowedIds) !== [], 422, 'An answer references a question outside this exam.');
+
+            $answers = (array) ($attempt->submitted_answers ?? []);
+            foreach ($questions as $question) {
+                $key = (string) $question->id;
+                if (!array_key_exists($key, $validated['answers'])) {
+                    continue;
+                }
+                $selected = $validated['answers'][$key];
+                if ($selected !== null && (int) $selected >= count((array) $question->options)) {
+                    abort(422, 'An answer option is outside the allowed range.');
+                }
+                $answers[$key] = $selected !== null ? (int) $selected : null;
+            }
+
+            $attempt->update(['submitted_answers' => $answers]);
+
+            return now()->toIso8601String();
+        });
+
+        return response()->json(['saved' => true, 'saved_at' => $savedAt]);
     }
 
     /**
