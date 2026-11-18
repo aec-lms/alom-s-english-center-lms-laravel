@@ -74,7 +74,7 @@ return new class extends Migration {
             Schema::create('phonetic_exam_attempts', function (Blueprint $table): void {
                 $table->id();
                 $table->foreignId('exam_id')->constrained('phonetic_exams')->cascadeOnDelete();
-                $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
+                $table->string('user_id', 128)->index();
                 $table->string('status', 20)->default('in_progress');
                 $table->json('question_snapshot')->nullable();
                 $table->json('answers')->nullable();

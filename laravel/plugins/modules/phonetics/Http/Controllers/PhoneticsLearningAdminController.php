@@ -29,10 +29,11 @@ final class PhoneticsLearningAdminController extends Controller
             'courses' => $this->catalog->courses(),
             'batches' => $this->catalog->batches(),
             'students' => $this->studentOptions(),
+            'userNameColumn' => config('phonetics.users.name', 'name'),
             'batchMembers' => PhoneticBatchMembership::query()->with('user')->where('lms_driver', $this->catalog->driver())->latest()->paginate(20, ['*'], 'members'),
             'words' => PhoneticEntry::query()->where('is_active', true)->orderBy('word')->get(),
-            'assignments' => PhoneticLearningAssignment::query()->with('word')->latest()->paginate(20, ['*'], 'assignments'),
-            'exams' => PhoneticExam::query()->withCount('questions')->latest()->paginate(20, ['*'], 'exams'),
+            'assignments' => PhoneticLearningAssignment::query()->where('lms_driver', $this->catalog->driver())->with('word')->latest()->paginate(20, ['*'], 'assignments'),
+            'exams' => PhoneticExam::query()->where('lms_driver', $this->catalog->driver())->withCount('questions')->latest()->paginate(20, ['*'], 'exams'),
         ]);
     }
 
@@ -47,6 +48,13 @@ final class PhoneticsLearningAdminController extends Controller
             abort_unless(is_string($identifier) && preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $identifier) === 1, 500, 'Invalid user table mapping.');
         }
         abort_unless(Schema::hasTable($table), 503, 'Configured user table is unavailable.');
+        abort_unless(
+            Schema::hasColumn($table, $id)
+                && Schema::hasColumn($table, $name)
+                && Schema::hasColumn($table, $email),
+            503,
+            'Configured user ID, name and email columns are unavailable.'
+        );
         return DB::table($table)->orderBy($name)->limit(500)->get([
             $id.' as id', $name.' as name', $email.' as email',
         ]);
@@ -71,6 +79,7 @@ final class PhoneticsLearningAdminController extends Controller
             'available_from' => ['nullable', 'date'],
             'available_until' => ['nullable', 'date', 'after_or_equal:available_from'],
         ]);
+        abort_unless(PhoneticEntry::query()->whereKey($data['word_id'])->where('is_active', true)->exists(), 422, 'Only active vocabulary words can be assigned.');
         $this->validateScope($data);
         abort_if(
             empty($data['course_ref']) && empty($data['course_category_ref']),
@@ -93,8 +102,28 @@ final class PhoneticsLearningAdminController extends Controller
     {
         $data = $request->validate([
             'batch_ref' => ['required', 'string', 'max:128'],
-            'user_id' => ['required', 'integer', 'exists:users,id'],
+            'user_id' => ['required', 'string', 'max:128'],
         ]);
+        $userMap = config('phonetics.users', []);
+        $userTable = $userMap['table'] ?? 'users';
+        $userIdColumn = $userMap['id'] ?? 'id';
+        foreach ([$userTable, $userIdColumn] as $identifier) {
+            abort_unless(
+                is_string($identifier) && preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $identifier) === 1,
+                500,
+                'Invalid host LMS user mapping.'
+            );
+        }
+        abort_unless(
+            Schema::hasTable($userTable) && Schema::hasColumn($userTable, $userIdColumn),
+            503,
+            'Configured host LMS user table is unavailable.'
+        );
+        abort_unless(
+            DB::table($userTable)->where($userIdColumn, $data['user_id'])->exists(),
+            422,
+            'Selected student does not exist in the connected LMS.'
+        );
         $batchIds = collect($this->catalog->batches())->pluck('id');
         abort_unless($batchIds->contains((string) $data['batch_ref']), 422, 'Choose a batch from the connected LMS.');
         PhoneticBatchMembership::query()->updateOrCreate(
@@ -115,6 +144,7 @@ final class PhoneticsLearningAdminController extends Controller
 
     public function destroyAssignment(Request $request, PhoneticLearningAssignment $assignment)
     {
+        abort_unless($assignment->lms_driver === $this->catalog->driver(), 404);
         $id = (string) $assignment->id;
         $assignment->delete();
         $this->audit($request, 'phonetics.assignment.removed', 'learning_assignment', $id);
@@ -177,8 +207,8 @@ final class PhoneticsLearningAdminController extends Controller
                 'available_until' => $data['available_until'] ?? null,
             ]);
 
-            $words = PhoneticEntry::query()->whereIn('id', $data['word_ids'])->where('is_active', true)->get()->shuffle()->take($data['question_count']);
-            abort_if($words->count() < $data['question_count'], 422, 'Some selected vocabulary words are archived. Select active words only.');
+            $words = PhoneticEntry::query()->whereIn('id', $data['word_ids'])->where('is_active', true)->whereColumn('uk_ipa', '!=', 'us_ipa')->get()->shuffle()->take($data['question_count']);
+            abort_if($words->count() < $data['question_count'], 422, 'The selected words must be active and have different UK/US IPA forms to create a valid accent question.');
             foreach ($words->values() as $index => $word) {
                 $accent = random_int(0, 1) === 0 ? 'uk' : 'us';
                 if ($data['question_type'] === 'identify-accent') {
@@ -220,6 +250,7 @@ final class PhoneticsLearningAdminController extends Controller
 
     public function updateExamStatus(Request $request, PhoneticExam $exam)
     {
+        abort_unless($exam->lms_driver === $this->catalog->driver(), 404);
         $data = $request->validate(['status' => ['required', 'in:draft,published,archived']]);
         $exam->update(['status' => $data['status']]);
         $this->audit($request, 'phonetics.exam.status_updated', 'exam', (string) $exam->id, ['status' => $exam->status]);
