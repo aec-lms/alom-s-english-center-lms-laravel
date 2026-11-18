@@ -262,5 +262,9 @@
             </script>
         @endif
     @endif
+
+    @if ($pluginManager->isEnabled('role-ai-assistant'))
+        @include('role-ai-assistant::components.student-teacher')
+    @endif
 </body>
 </html>
