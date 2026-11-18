@@ -1,15 +1,15 @@
 <?php
 declare(strict_types=1);
-namespace Plugins\\Modules\\Phonetics\\Http\\Controllers;
-use App\\Http\\Controllers\\Controller;
-use Illuminate\\Http\\Request;
-use Illuminate\\Http\\JsonResponse;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Facades\\Schema;
-use Illuminate\\View\\View;
-use Plugins\\Modules\\Phonetics\\Models\\PhoneticSetting;
-use Plugins\\Modules\\Phonetics\\Models\\PhoneticEntry;
-use Plugins\\Modules\\Phonetics\\Models\\PhoneticAttempt;
+namespace Plugins\Modules\Phonetics\Http\Controllers;
+use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\View\View;
+use Plugins\Modules\Phonetics\Models\PhoneticSetting;
+use Plugins\Modules\Phonetics\Models\PhoneticEntry;
+use Plugins\Modules\Phonetics\Models\PhoneticAttempt;
 final class PhoneticsPracticeController extends Controller {
  public function index(Request $r,string $courseSlug):View {
   $s=PhoneticSetting::current();abort_unless($s->enabled,404);abort_if($s->course_scoped_only&&$courseSlug!==$s->course_slug,404);
