@@ -1,0 +1,42 @@
+name: Flutter Student App
+
+on:
+  pull_request:
+    paths:
+      - 'apps/student_app/**'
+      - '.github/workflows/flutter-student-app.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/student_app/**'
+      - '.github/workflows/flutter-student-app.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  student-app:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/student_app
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Install Flutter stable SDK
+        run: |
+          git clone --depth 1 --branch stable https://github.com/flutter/flutter.git "$HOME/flutter"
+          echo "$HOME/flutter/bin" >> "$GITHUB_PATH"
+          "$HOME/flutter/bin/flutter" --version
+      - name: Generate native platform scaffolding
+        run: flutter create --platforms=android,ios --project-name aloms_student_app .
+      - name: Resolve dependencies
+        run: flutter pub get
+      - name: Check formatting
+        run: dart format lib test
+      - name: Analyze
+        run: flutter analyze
+      - name: Test
+        run: flutter test
+      - name: Build Android APK
+        run: flutter build apk --debug --dart-define=API_BASE_URL=https://www.alomsenglishcenter.com/api/v1
