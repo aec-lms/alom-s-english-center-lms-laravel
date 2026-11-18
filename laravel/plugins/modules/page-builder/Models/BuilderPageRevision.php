@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class BuilderPageRevision extends Model
 {
+    protected $table = 'cms_page_revisions';
     protected $fillable = [
         'builder_page_id',
         'version',
