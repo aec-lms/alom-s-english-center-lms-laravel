@@ -87,7 +87,7 @@ class InstructorAttendanceSyncController extends Controller
     private function syncOne($actor, array $item): array
     {
         $capturedAt = CarbonImmutable::parse($item['location']['captured_at']);
-        $ageSeconds = now()->diffInSeconds($capturedAt, false);
+        $ageSeconds = $capturedAt->diffInSeconds(now(), false);
         if ($ageSeconds < -60 || $ageSeconds > 600 || (float) $item['location']['accuracy_meters'] > 100) {
             return [
                 'idempotency_key' => $item['idempotency_key'],
