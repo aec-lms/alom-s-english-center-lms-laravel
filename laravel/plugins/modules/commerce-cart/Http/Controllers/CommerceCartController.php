@@ -57,7 +57,11 @@ class CommerceCartController extends Controller
         DB::transaction(function () use ($cart, $item, $data): void {
             $existing = DB::table('commerce_cart_items')->where('cart_id', $cart->id)
                 ->where('item_type', $item['type'])->where('item_id', $item['id'])->lockForUpdate()->first();
-            $quantity = min(20, (int) ($existing->quantity ?? 0) + (int) ($data['quantity'] ?? 1));
+            // Access grants are single-quantity products. Repeated Add to Cart
+            // requests must remain idempotent instead of creating an invalid quantity.
+            $quantity = $item['type'] === 'other'
+                ? min(20, (int) ($existing->quantity ?? 0) + (int) ($data['quantity'] ?? 1))
+                : 1;
             if ($existing) {
                 DB::table('commerce_cart_items')->where('id', $existing->id)->update([
                     'quantity' => $quantity, 'unit_price' => $item['price'],
@@ -81,9 +85,17 @@ class CommerceCartController extends Controller
     {
         $data = $request->validate(['quantity' => ['required', 'integer', 'min:1', 'max:20']]);
         $cart = $this->activeCart((int) $request->user()->id);
-        $updated = DB::table('commerce_cart_items')->where('id', $item)->where('cart_id', $cart->id)
+        $cartItem = DB::table('commerce_cart_items')->where('id', $item)->where('cart_id', $cart->id)->first();
+        abort_unless($cartItem, 404);
+
+        if ($cartItem->item_type !== 'other' && (int) $data['quantity'] !== 1) {
+            return back()->withErrors([
+                'quantity' => 'Course access, eBooks, exams, subscriptions and live-class passes can only be purchased once per order.',
+            ]);
+        }
+
+        DB::table('commerce_cart_items')->where('id', $item)->where('cart_id', $cart->id)
             ->update(['quantity' => $data['quantity'], 'updated_at' => now()]);
-        abort_unless($updated, 404);
         return back()->with('status', 'Cart quantity updated.');
     }
 
