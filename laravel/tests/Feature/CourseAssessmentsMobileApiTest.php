@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -29,8 +30,10 @@ class CourseAssessmentsMobileApiTest extends TestCase
             ->assertOk()->assertJsonPath('data', []);
         $this->withToken($tokenA)->postJson('/api/v1/my-learning/assessments/'.$set.'/start')
             ->assertForbidden();
+        app('auth')->forgetGuards();
         $this->withToken($tokenB)->getJson('/api/v1/my-learning/assessments')
             ->assertOk()->assertJsonPath('data', []);
+        app('auth')->forgetGuards();
         $this->withToken($tokenB)->postJson('/api/v1/my-learning/assessments/'.$set.'/start')
             ->assertForbidden();
 
@@ -57,6 +60,7 @@ class CourseAssessmentsMobileApiTest extends TestCase
         $this->assertGreaterThan(0, $attemptId);
         $this->assertGreaterThan(0, $questionId);
 
+        app('auth')->forgetGuards();
         $this->withToken($tokenA)->putJson("/api/v1/my-learning/assessments/attempts/{$attemptId}/questions/{$questionId}", [
             'selected_option' => 1,
         ])->assertOk()->assertJson(['saved' => true]);
@@ -76,6 +80,7 @@ class CourseAssessmentsMobileApiTest extends TestCase
             ->assertJsonPath('attempt.status', 'submitted')
             ->assertJsonPath('attempt.auto_score', '2.00');
 
+        app('auth')->forgetGuards();
         app('auth')->forgetGuards();
         $this->withToken($tokenB)->getJson("/api/v1/my-learning/assessments/attempts/{$attemptId}")
             ->assertNotFound();
@@ -101,7 +106,7 @@ class CourseAssessmentsMobileApiTest extends TestCase
 
         $start = $this->withToken($token)->postJson('/api/v1/my-learning/assessments/'.$set.'/start')
             ->assertCreated();
-        $deadline = \Illuminate\Support\Carbon::parse($start->json('attempt.deadline_at'));
+        $deadline = \Carbon::parse($start->json('attempt.deadline_at'));
         $this->assertTrue($deadline->equalTo($availableUntil));
 
         $closedSet = $this->createSet(null, null, 'Closed Assessment', [
@@ -150,6 +155,7 @@ class CourseAssessmentsMobileApiTest extends TestCase
             'teacher_feedback' => 'Well done.',
         ])->assertRedirect()->assertSessionHasNoErrors();
 
+        app('auth')->forgetGuards();
         app('auth')->forgetGuards();
         $this->withToken($token)->getJson('/api/v1/my-learning/assessments/history')
             ->assertOk()
