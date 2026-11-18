@@ -1,27 +1,39 @@
-# Spoken English Practice — source review
+# Spoken English Practice — source review and integration gate
 
-Reviewed source: `spoken-english-practice-laravel-plugin (4).zip` uploaded 18 November 2026.
+Reviewed upload: `spoken-english-practice-laravel-plugin (4).zip` (18 November 2026).
 
-## Initial verification
-- 44 ZIP entries; 27 source checksums match the supplied `checksums.json`.
-- All 27 PHP and Blade files pass PHP 8.4 syntax lint.
-- The module is designed as an independent plugin and should remain separate from Phonetics and AL Branding & Loader.
+## Package verification
+- Original archive: 44 entries; 27 supplied source checksums matched.
+- Hardened package: `spoken-english-practice-laravel-plugin-1.0.2.zip`.
+- 24 PHP files pass PHP syntax lint.
+- 28 SHA-256 entries match the packaged files; the ZIP integrity test passes.
+- The plugin remains an independent module, separate from Phonetics and AL Branding & Loader.
 
-## Integration compatibility confirmed
-- AEC LMS plugin modules live under `laravel/plugins/modules/<slug>`.
-- Providers extend `App\Core\Plugins\BasePluginServiceProvider`.
-- The LMS course schema uses `courses(id,title,slug,description,price,status)`.
-- The LMS enrollment schema uses `enrollments(user_id,course_id,status)`, with `active` as the access-granting status.
-- The plugin's original host-course linking assumptions match those current columns.
+## AEC LMS compatibility
+- Modules are installed under `laravel/plugins/modules/<slug>`.
+- Provider contract: `App\Core\Plugins\BasePluginServiceProvider`.
+- Host course schema: `courses(id,title,slug,description,price,status,branch_id?)`.
+- Host enrollment schema: `enrollments(user_id,course_id,status,branch_id?)`.
+- Host access accepts `active` and `completed` enrollment states and checks branch IDs where present.
+- Route loading is idempotent for the runtime ZIP-install path, where the plugin manager may load a route file after provider boot.
 
-## Security and correctness issues requiring fixes before enablement
-1. `CourseAccessService::canAccessExam()` grants access to any authenticated user when an exam has `access_scope=paid` but no linked course. This bypasses paid-course gating.
-2. Exam submission does not enforce the server-side deadline. The browser timer is only a client-side control and can be bypassed.
-3. Exam attempt creation/submission is not serialized with row locks; concurrent requests can create or submit duplicate attempts.
-4. An abandoned `in_progress` attempt can be resumed after its deadline.
-5. Host course and enrollment table queries assume optional columns exist. Make the integration schema-aware for reuse in other Laravel LMS installations.
-6. Audio URL inputs accept arbitrary strings, and the model accepts protocol-relative URLs. Validate HTTPS URLs or known local storage paths and reject protocol-relative paths.
-7. Replacing uploaded audio leaves the previous stored asset behind; clean it up after a successful database update.
+## Issues addressed in package v1.0.2
+1. Paid/course-scoped exams cannot bypass enrollment when no linked course exists.
+2. Server-side deadlines close expired attempts; expired attempts count toward the attempt limit.
+3. Attempt creation/submission use database row locks and request throttling.
+4. Admin cannot edit/delete an assessment, its course, or its sentences while an attempt is in progress.
+5. Selected exam sentences must be active and belong to the assessment course.
+6. Host table optional columns are checked before use.
+7. Staff roles (teacher, instructor, branch manager) no longer implicitly bypass paid access; they need explicit plugin management permission.
+8. Host completed enrollments remain valid; host course/enrollment branch scope is enforced when available.
+9. Audio references are restricted to HTTPS or the configured local audio directory; protocol-relative and HTTP audio URLs are rejected.
+10. Replaced uploaded audio is cleaned up after a successful update.
+11. AEC provider boot avoids duplicate route/view/migration loading; route definitions are also idempotent.
 
-## Release gate
-Do not mark the plugin production-ready until the above authorization, timer, concurrency, and URL issues are fixed and tests cover free/paid access, expired attempts, replay/concurrency, cross-student ownership, and host-schema compatibility.
+## Verification still required before production
+- Run the plugin through the AEC Plugin Manager against a disposable copy of the LMS.
+- Execute Laravel feature tests and MySQL migrations/integration tests.
+- Verify plugin enable/disable/uninstall and student/admin browser flows.
+- Do not deploy migrations to the live hosting environment until the staging acceptance checks pass.
+
+The ZIP package has been prepared and statically checked. It has **not** been installed on the live hosting account, and its source files have **not** yet been merged into the LMS repository.
