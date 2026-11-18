@@ -39,14 +39,16 @@ class ReferralIncomeController extends Controller
         }
         $referralUrl = url('/r/' . $code);
         $commissions = DB::table('referral_commissions')->where('referrer_user_id', $user->id)->latest('id')->paginate(20);
-        $stats = DB::table('referral_commissions')->where('referrer_user_id', $user->id)
-            ->selectRaw("SUM(CASE WHEN status IN ('approved','payout_requested','paid') THEN commission_amount ELSE 0 END) as earned")
+        $statsByCurrency = DB::table('referral_commissions')->where('referrer_user_id', $user->id)
+            ->select('currency')
             ->selectRaw("SUM(CASE WHEN status = 'pending' THEN commission_amount ELSE 0 END) as pending")
+            ->selectRaw("SUM(CASE WHEN status IN ('approved','payout_requested','payout_approved','paid') THEN commission_amount ELSE 0 END) as earned")
             ->selectRaw("SUM(CASE WHEN status = 'paid' THEN commission_amount ELSE 0 END) as paid")
-            ->selectRaw("SUM(CASE WHEN status = 'approved' THEN commission_amount ELSE 0 END) as available")->first();
+            ->selectRaw("SUM(CASE WHEN status = 'approved' THEN commission_amount ELSE 0 END) as available")
+            ->groupBy('currency')->orderBy('currency')->get();
         $referralCount = DB::table('referral_attributions')->where('referrer_user_id', $user->id)->where('status', 'active')->count();
         $payouts = DB::table('referral_payout_requests')->where('user_id', $user->id)->latest('id')->limit(10)->get();
-        return view('referral-income::dashboard', compact('code', 'referralUrl', 'commissions', 'stats', 'referralCount', 'payouts'));
+        return view('referral-income::dashboard', compact('code', 'referralUrl', 'commissions', 'statsByCurrency', 'referralCount', 'payouts'));
     }
 
     public function apply(Request $request): RedirectResponse
