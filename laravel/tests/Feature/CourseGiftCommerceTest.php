@@ -309,4 +309,60 @@ class CourseGiftCommerceTest extends TestCase
         Http::assertSentCount(2);
     }
 
+    public function test_student_cannot_start_a_second_course_checkout_while_an_order_is_unresolved(): void
+    {
+        $this->activatePlugins(['course-management', 'fees-management', 'marketing-management', 'universal-payment', 'gateway-sslcommerz']);
+        $buyer = $this->createUserWithRole('student');
+        $course = Course::query()->create([
+            'code' => 'DUPLICATE-CHECKOUT-001',
+            'title' => 'Duplicate Checkout Guard Course',
+            'slug' => 'duplicate-checkout-guard-course',
+            'price' => 1000,
+            'status' => 'published',
+        ]);
+        $pendingCartId = DB::table('course_carts')->insertGetId([
+            'user_id' => $buyer->id, 'status' => 'checkout_pending', 'currency' => 'BDT',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $activeCartId = DB::table('course_carts')->insertGetId([
+            'user_id' => $buyer->id, 'status' => 'active', 'currency' => 'BDT',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('course_cart_items')->insert([
+            'cart_id' => $activeCartId, 'course_id' => $course->id, 'unit_price' => 1000,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('course_cart_orders')->insert([
+            'cart_id' => $pendingCartId,
+            'user_id' => $buyer->id,
+            'branch_id' => null,
+            'invoice_id' => null,
+            'payment_transaction_id' => null,
+            'coupon_id' => null,
+            'coupon_code' => null,
+            'coupon_reservation_key' => null,
+            'subtotal_amount' => 1000,
+            'discount_amount' => 0,
+            'net_amount' => 1000,
+            'wallet_credit_amount' => 0,
+            'wallet_reservation_key' => null,
+            'currency' => 'BDT',
+            'status' => 'awaiting_payment',
+            'paid_at' => null,
+            'expires_at' => now()->addMinutes(30),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($buyer)->post('/student/course-commerce/cart/items/' . $course->id)
+            ->assertStatus(409);
+        $this->actingAs($buyer)->post('/student/course-commerce/checkout', [
+            'payer_contact' => '01712345678',
+        ])->assertStatus(409);
+
+        $this->assertDatabaseCount('course_cart_orders', 1);
+        $this->assertDatabaseHas('course_carts', ['id' => $activeCartId, 'status' => 'active']);
+        $this->assertDatabaseCount('universal_payment_transactions', 0);
+    }
+
 }
