@@ -11,12 +11,49 @@ use App\Models\PluginSetting;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 use RuntimeException;
 use Tests\TestCase;
 use ZipArchive;
 
 class PluginLifecycleTest extends TestCase
 {
+
+    public function test_plugin_settings_reject_unknown_keys_and_manifest_disallowed_options_and_encrypt_declared_secrets(): void
+    {
+        $this->markSystemInstalled();
+        $manager = app(PluginManager::class);
+
+        try {
+            $manager->saveSettings('universal-payment', ['unlisted_setting' => 'unexpected']);
+            $this->fail('Undeclared plugin settings must be rejected.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('settings.unlisted_setting', $exception->errors());
+        }
+
+        try {
+            $manager->saveSettings('universal-payment', ['allow_offline_payments' => 'sometimes']);
+            $this->fail('Values outside manifest select options must be rejected.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('settings.allow_offline_payments', $exception->errors());
+        }
+
+        $manager->saveSettings('universal-payment', ['allow_offline_payments' => '0']);
+        $this->assertDatabaseHas('plugin_settings', [
+            'plugin_slug' => 'universal-payment',
+            'setting_key' => 'allow_offline_payments',
+            'setting_value' => '0',
+            'is_encrypted' => false,
+        ]);
+
+        $manager->saveSettings('sms-gateway', ['api_token' => 'manifest-secret']);
+        $this->assertDatabaseHas('plugin_settings', [
+            'plugin_slug' => 'sms-gateway',
+            'setting_key' => 'api_token',
+            'is_encrypted' => true,
+        ]);
+        $this->assertSame('manifest-secret', $manager->getSetting('sms-gateway', 'api_token'));
+    }
 
     public function test_plugin_core_compatibility_checks_minimum_semantic_versions(): void
     {

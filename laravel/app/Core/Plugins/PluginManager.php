@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 use RuntimeException;
 use Throwable;
 use ZipArchive;
@@ -739,8 +740,60 @@ class PluginManager
 
     public function saveSettings(string $slug, array $values, array $secretKeys = [], ?int $actorId = null): void
     {
-        foreach ($values as $key => $val) {
-            $isSecret = in_array($key, $secretKeys, true);
+        $manifest = $this->discoverManifests()[$slug] ?? throw new RuntimeException("Unknown plugin: {$slug}");
+        $schemaByKey = [];
+
+        foreach ($manifest->settingsSchema as $field) {
+            if (!is_array($field) || !isset($field['key']) || !is_string($field['key']) || trim($field['key']) === '') {
+                continue;
+            }
+
+            $key = $field['key'];
+            if (isset($schemaByKey[$key])) {
+                throw new RuntimeException("Plugin {$slug} declares duplicate settings key: {$key}");
+            }
+            $schemaByKey[$key] = $field;
+        }
+
+        $validated = [];
+        $manifestSecretKeys = [];
+        foreach ($values as $key => $value) {
+            $key = (string) $key;
+            $field = $schemaByKey[$key] ?? null;
+            if ($field === null) {
+                throw ValidationException::withMessages([
+                    "settings.{$key}" => "The {$key} setting is not declared by the {$slug} plugin manifest.",
+                ]);
+            }
+
+            if (is_array($value) || is_object($value) || is_resource($value)) {
+                throw ValidationException::withMessages([
+                    "settings.{$key}" => "The {$key} setting must be a scalar value.",
+                ]);
+            }
+
+            if (array_key_exists('options', $field) && is_array($field['options'])) {
+                $optionKeys = array_map('strval', array_keys($field['options']));
+                $optionValues = array_map(static fn ($option): string => is_scalar($option) ? (string) $option : '', array_values($field['options']));
+                $allowedOptions = array_unique(array_merge($optionKeys, $optionValues));
+                if (!in_array((string) $value, $allowedOptions, true)) {
+                    throw ValidationException::withMessages([
+                        "settings.{$key}" => "The selected value for {$key} is not allowed by the plugin manifest.",
+                    ]);
+                }
+            }
+
+            if ((bool) ($field['secret'] ?? false)
+                || (bool) ($field['encrypted'] ?? false)
+                || strtolower((string) ($field['type'] ?? '')) === 'password') {
+                $manifestSecretKeys[] = $key;
+            }
+
+            $validated[$key] = $value;
+        }
+
+        foreach ($validated as $key => $val) {
+            $isSecret = in_array($key, $secretKeys, true) || in_array($key, $manifestSecretKeys, true);
             $stringVal = is_scalar($val) ? (string) $val : json_encode($val, JSON_THROW_ON_ERROR);
             PluginSetting::query()->updateOrCreate(
                 ['plugin_slug' => $slug, 'setting_key' => (string) $key],
@@ -751,7 +804,7 @@ class PluginManager
             );
         }
 
-        $this->audit->log('plugin.configured', 'plugin', $slug, ['keys' => array_keys($values)], $actorId);
+        $this->audit->log('plugin.configured', 'plugin', $slug, ['keys' => array_keys($validated)], $actorId);
     }
 
     /** Reset only plugin configuration to manifest defaults; business data is never touched. */
