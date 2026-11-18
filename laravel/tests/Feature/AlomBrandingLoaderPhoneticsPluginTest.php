@@ -295,4 +295,18 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
   $this->assertSame(['web','auth','can:manage-phonetics'],config('phonetics.middleware.admin'));
  }
 
+
+ public function test_learning_admin_fails_closed_when_host_user_display_columns_are_missing():void{
+  $this->markSystemInstalled();
+  $this->activatePlugins(['phonetics']);
+  Schema::create('phonetics_incomplete_users',function(Blueprint $table):void{$table->string('uuid',36)->primary();$table->string('full_name');});
+  try{
+   config(['phonetics.users'=>['table'=>'phonetics_incomplete_users','id'=>'uuid','name'=>'full_name','email'=>'email_address']]);
+   $admin=$this->createUserWithRole('admin');
+   $this->actingAs($admin)->get('/admin/phonetics/learning')->assertStatus(503);
+  }finally{
+   Schema::dropIfExists('phonetics_incomplete_users');
+  }
+ }
+
 }
