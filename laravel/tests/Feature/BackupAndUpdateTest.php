@@ -370,4 +370,37 @@ class BackupAndUpdateTest extends TestCase
             @unlink($zipPath);
         }
     }
+
+    public function test_backup_integrity_rejects_a_symlinked_backup_root(): void
+    {
+        $realDirectory = sys_get_temp_dir() . '/aec-backup-real-' . bin2hex(random_bytes(6));
+        $linkedDirectory = sys_get_temp_dir() . '/aec-backup-link-' . bin2hex(random_bytes(6));
+        mkdir($realDirectory, 0700, true);
+        $filename = 'symlink-root-fixture.zip.enc';
+        $realFile = $realDirectory . DIRECTORY_SEPARATOR . $filename;
+        file_put_contents($realFile, 'encrypted backup fixture');
+
+        if (!@symlink($realDirectory, $linkedDirectory)) {
+            @unlink($realFile);
+            @rmdir($realDirectory);
+            $this->markTestSkipped('The test environment does not permit creating symbolic links.');
+        }
+
+        config(['lms.backup_path' => $linkedDirectory]);
+        $record = new BackupRecord([
+            'filename' => $filename,
+            'storage_path' => $linkedDirectory . DIRECTORY_SEPARATOR . $filename,
+            'checksum_sha256' => hash_file('sha256', $realFile),
+            'is_encrypted' => true,
+        ]);
+
+        try {
+            $this->assertFalse(app(BackupService::class)->verifyBackupIntegrity($record));
+        } finally {
+            @unlink($linkedDirectory);
+            @unlink($realFile);
+            @rmdir($realDirectory);
+        }
+    }
+
 }
