@@ -602,7 +602,7 @@ class CourseCommerceController extends Controller
         }, 3);
 
         if ($created['free']) {
-            return redirect()->route('course-commerce.cart')->with('status', 'Your coupon covered the full cart. All selected courses are now active.');
+            return redirect()->route('course-commerce.cart')->with('status', 'Your course wallet or coupon covered the full cart. All selected courses are now active.');
         }
 
         try {
