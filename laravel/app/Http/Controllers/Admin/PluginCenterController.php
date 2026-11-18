@@ -132,7 +132,15 @@ class PluginCenterController extends Controller
 
     public function deleteToRecycleBin(string $slug): RedirectResponse
     {
+        $source = null;
+        $destination = null;
+        $wasInstalled = false;
+        $wasEnabled = false;
+        $disabledByOperation = false;
+        $uninstalledByOperation = false;
+
         try {
+            abort_unless(preg_match('/^[a-z0-9][a-z0-9-]{1,79}$/', $slug) === 1, 404);
             $record = PluginRecord::query()->where('slug', $slug)->firstOrFail();
             if ($record->is_core || $slug === config('plugins.core_identifier')) {
                 throw new RuntimeException('Protected Core cannot be deleted.');
@@ -141,49 +149,131 @@ class PluginCenterController extends Controller
             if (!$manifest) {
                 throw new RuntimeException('Plugin files are missing; use the recovery package to restore them.');
             }
-            if ($record->is_enabled) $this->plugins->disable($slug, auth()->id());
-            if ($record->is_installed) $this->plugins->uninstall($slug, false, auth()->id());
+
+            $modulesRoot = realpath((string) config('plugins.modules_path'));
+            $source = realpath($manifest->basePath);
+            if (!$modulesRoot || !$source || dirname($source) !== $modulesRoot || is_link($manifest->basePath)) {
+                throw new RuntimeException('Plugin package path is outside the registered modules directory.');
+            }
+            $checksums = $this->directoryChecksums($source);
+            if ($checksums === []) {
+                throw new RuntimeException('Empty plugin packages cannot be archived.');
+            }
+
+            $wasInstalled = (bool) $record->is_installed;
+            $wasEnabled = (bool) $record->is_enabled;
+            if ($wasEnabled) {
+                $this->plugins->disable($slug, auth()->id());
+                $disabledByOperation = true;
+            }
+            if ($wasInstalled) {
+                $this->plugins->uninstall($slug, false, auth()->id());
+                $uninstalledByOperation = true;
+            }
 
             $archiveId = (string) \Illuminate\Support\Str::uuid();
-            $source = $manifest->basePath;
-            $destination = storage_path('app/plugin-recycle-bin/' . $archiveId);
-            File::ensureDirectoryExists(dirname($destination));
+            $trashRoot = storage_path('app/plugin-recycle-bin');
+            File::ensureDirectoryExists($trashRoot);
+            $destination = $trashRoot . DIRECTORY_SEPARATOR . $archiveId;
             if (!File::moveDirectory($source, $destination)) {
                 throw new RuntimeException('Plugin files could not be moved into the recycle bin.');
             }
-            try {
-                PluginArchive::query()->create([
-                    'plugin_slug' => $slug, 'plugin_name' => $record->name,
-                    'version' => $record->version, 'archive_path' => $destination,
-                    'manifest_snapshot' => $manifest->toArray(), 'deleted_by' => auth()->id(), 'deleted_at' => now(),
-                ]);
-            } catch (\Throwable $e) {
+            if ($checksums !== $this->directoryChecksums($destination)) {
                 File::moveDirectory($destination, $source);
-                throw $e;
+                throw new RuntimeException('Plugin archive integrity verification failed; the original package was restored.');
             }
-            return back()->with('status', "Plugin '{$slug}' moved to the recycle bin. Its settings and LMS business data were preserved.");
+
+            PluginArchive::query()->create([
+                'plugin_slug' => $slug,
+                'plugin_name' => $record->name,
+                'version' => $record->version,
+                'archive_path' => $destination,
+                'manifest_snapshot' => $manifest->toArray(),
+                'files_sha256' => $checksums,
+                'was_installed' => $wasInstalled,
+                'was_enabled' => $wasEnabled,
+                'deleted_by' => auth()->id(),
+                'deleted_at' => now(),
+            ]);
+
+            return back()->with('status', "Plugin '{$slug}' moved to the recycle bin. Its previous installation state, settings and LMS business data were preserved.");
         } catch (\Throwable $e) {
+            if ($destination && is_dir($destination) && $source && !file_exists($source)) {
+                File::moveDirectory($destination, $source);
+            }
+            if ($source && is_dir($source) && $wasInstalled && ($disabledByOperation || $uninstalledByOperation)) {
+                try {
+                    if ($uninstalledByOperation) {
+                        $this->plugins->install($slug, auth()->id());
+                        if (!$wasEnabled) {
+                            $this->plugins->disable($slug, auth()->id());
+                        }
+                    } elseif ($disabledByOperation && $wasEnabled) {
+                        $this->plugins->enable($slug, auth()->id());
+                    }
+                } catch (\Throwable $rollbackError) {
+                    report($rollbackError);
+                }
+            }
             return back()->withErrors(['plugin' => $e->getMessage()]);
         }
     }
 
     public function restoreFromRecycleBin(string $archive): RedirectResponse
     {
+        $destination = null;
+        $archivePath = null;
+
         try {
             $item = PluginArchive::query()->findOrFail($archive);
-            $destination = (string) config('plugins.modules_path') . DIRECTORY_SEPARATOR . $item->plugin_slug;
-            if (is_dir($destination)) throw new RuntimeException('A plugin with this slug already exists. Resolve the conflict before restoring.');
-            if (!is_dir($item->archive_path) || !File::moveDirectory($item->archive_path, $destination)) {
-                throw new RuntimeException('Archived plugin files are missing or could not be restored.');
+            abort_unless(preg_match('/^[a-z0-9][a-z0-9-]{1,79}$/', $item->plugin_slug) === 1, 404);
+
+            $trashRoot = realpath(storage_path('app/plugin-recycle-bin'));
+            $archivePath = realpath($item->archive_path);
+            if (!$trashRoot || !$archivePath || dirname($archivePath) !== $trashRoot
+                || is_link($item->archive_path) || !is_dir($archivePath)) {
+                throw new RuntimeException('Archived plugin path is missing or outside the protected recycle-bin directory.');
             }
+
+            $actualChecksums = $this->directoryChecksums($archivePath);
+            $expectedChecksums = $item->files_sha256;
+            if (is_array($expectedChecksums) && $expectedChecksums !== [] && $actualChecksums !== $expectedChecksums) {
+                throw new RuntimeException('Archived plugin integrity verification failed; restore was cancelled.');
+            }
+
+            $manifest = \App\Core\Plugins\PluginManifest::fromDirectory($archivePath);
+            if ($manifest->slug !== $item->plugin_slug || $manifest->isCore || !$this->plugins->isCompatible($manifest)) {
+                throw new RuntimeException('Archived plugin manifest identity or Core compatibility is invalid.');
+            }
+
+            $destination = rtrim((string) config('plugins.modules_path'), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $item->plugin_slug;
+            if (file_exists($destination)) {
+                throw new RuntimeException('A plugin with this slug already exists. Resolve the conflict before restoring.');
+            }
+            File::ensureDirectoryExists(dirname($destination));
+            if (!File::moveDirectory($archivePath, $destination)) {
+                throw new RuntimeException('Archived plugin files could not be restored.');
+            }
+
             try {
-                $this->plugins->install($item->plugin_slug, auth()->id());
+                if ((bool) $item->was_installed) {
+                    $this->plugins->install($item->plugin_slug, auth()->id());
+                    if (!(bool) $item->was_enabled) {
+                        $this->plugins->disable($item->plugin_slug, auth()->id());
+                    }
+                } else {
+                    $this->plugins->syncCatalog();
+                }
                 $item->delete();
             } catch (\Throwable $e) {
-                File::moveDirectory($destination, $item->archive_path);
+                if (is_dir($destination)) {
+                    File::moveDirectory($destination, $archivePath);
+                }
                 throw $e;
             }
-            return back()->with('status', "Plugin '{$item->plugin_slug}' restored and enabled.");
+
+            $state = $item->was_installed ? ((bool) $item->was_enabled ? 'enabled' : 'disabled') : 'uninstalled';
+            return back()->with('status', "Plugin '{$item->plugin_slug}' restored with its previous {$state} state.");
         } catch (\Throwable $e) {
             return back()->withErrors(['plugin' => $e->getMessage()]);
         }
@@ -245,11 +335,30 @@ class PluginCenterController extends Controller
 
     private function directoryChecksums(string $directory): array
     {
+        $root = realpath($directory);
+        if (!$root || !is_dir($root) || is_link($directory)) {
+            throw new RuntimeException('Plugin archive directory is missing or unsafe.');
+        }
+
         $checksums = [];
-        foreach (File::allFiles($directory) as $file) {
-            $relative = ltrim(str_replace($directory, '', $file->getPathname()), DIRECTORY_SEPARATOR);
-            $relative = str_replace(DIRECTORY_SEPARATOR, '/', $relative);
-            $checksum = hash_file('sha256', $file->getPathname());
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::SELF_FIRST,
+        );
+        foreach ($iterator as $entry) {
+            if ($entry->isLink()) {
+                throw new RuntimeException('Symbolic links are not allowed in plugin archives.');
+            }
+            if ($entry->isDir()) {
+                continue;
+            }
+            $path = $entry->getPathname();
+            $resolved = realpath($path);
+            if (!$resolved || !str_starts_with($resolved, rtrim($root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR)) {
+                throw new RuntimeException('Plugin archive contains a path outside its protected directory.');
+            }
+            $relative = str_replace(DIRECTORY_SEPARATOR, '/', substr($resolved, strlen(rtrim($root, DIRECTORY_SEPARATOR)) + 1));
+            $checksum = hash_file('sha256', $resolved);
             if (!is_string($checksum) || $checksum === '') {
                 throw new RuntimeException('Could not verify a plugin archive file checksum.');
             }

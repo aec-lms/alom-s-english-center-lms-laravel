@@ -108,4 +108,63 @@ class PluginRecycleBinAdminAcceptanceTest extends TestCase
             }
         }
     }
+    public function test_restore_preserves_previously_disabled_plugin_state(): void
+    {
+        $this->markSystemInstalled();
+        $slug = 'disabled-restore-probe-' . strtolower(substr(bin2hex(random_bytes(4)), 0, 8));
+        $modulePath = $this->createProbePlugin($slug);
+        $archivePath = null;
+
+        try {
+            $manager = app(PluginManager::class);
+            $manager->syncCatalog();
+            $manager->install($slug);
+            $manager->disable($slug);
+            $admin = $this->createUserWithRole('admin');
+
+            $this->actingAs($admin)->post('/admin/plugins/' . $slug . '/delete')->assertSessionHas('status');
+            $archive = PluginArchive::query()->where('plugin_slug', $slug)->firstOrFail();
+            $archivePath = $archive->archive_path;
+            $this->assertFalse($archive->was_enabled);
+            $this->assertTrue($archive->was_installed);
+
+            $this->actingAs($admin)->post('/admin/plugins/recycle-bin/' . $archive->id . '/restore')->assertSessionHas('status');
+
+            $this->assertTrue($manager->isInstalled($slug));
+            $this->assertFalse($manager->isEnabled($slug));
+        } finally {
+            File::deleteDirectory($modulePath);
+            if ($archivePath && is_dir($archivePath)) File::deleteDirectory($archivePath);
+        }
+    }
+
+    public function test_restore_rejects_modified_archived_plugin_package(): void
+    {
+        $this->markSystemInstalled();
+        $slug = 'tampered-restore-probe-' . strtolower(substr(bin2hex(random_bytes(4)), 0, 8));
+        $modulePath = $this->createProbePlugin($slug);
+        $archivePath = null;
+
+        try {
+            $manager = app(PluginManager::class);
+            $manager->syncCatalog();
+            $manager->install($slug);
+            $admin = $this->createUserWithRole('admin');
+            $this->actingAs($admin)->post('/admin/plugins/' . $slug . '/delete')->assertSessionHas('status');
+
+            $archive = PluginArchive::query()->where('plugin_slug', $slug)->firstOrFail();
+            $archivePath = $archive->archive_path;
+            File::append($archivePath . '/plugin.json', "\n/* tampered */");
+
+            $this->actingAs($admin)->post('/admin/plugins/recycle-bin/' . $archive->id . '/restore')
+                ->assertSessionHasErrors('plugin');
+            $this->assertDirectoryDoesNotExist($modulePath);
+            $this->assertDirectoryExists($archivePath);
+            $this->assertDatabaseHas('plugin_archives', ['id' => $archive->id]);
+        } finally {
+            File::deleteDirectory($modulePath);
+            if ($archivePath && is_dir($archivePath)) File::deleteDirectory($archivePath);
+        }
+    }
+
 }
