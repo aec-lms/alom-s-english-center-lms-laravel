@@ -1,0 +1,19 @@
+{
+  "slug": "support-center",
+  "name": "Student Support Center",
+  "version": "1.0.0",
+  "author": "Alom's English Center",
+  "category": "communication",
+  "description": "Student-owned support tickets, threaded replies, admin status management, unread tracking and secure API access.",
+  "core_compatibility": "^2.0",
+  "dependencies": [],
+  "optional_dependencies": ["branch-management", "student-management", "mobile-app-api"],
+  "provider": "Plugins\\Modules\\SupportCenter\\Providers\\SupportCenterServiceProvider",
+  "permissions": [
+    {"slug": "support.tickets.manage", "name": "Manage and reply to student support tickets"}
+  ],
+  "settings_schema": [],
+  "admin_menu": [
+    {"group": "Communication & Engagement", "label": "Support Tickets", "route": "plugins.support.admin.index", "order": 125, "permission": "support.tickets.manage"}
+  ]
+}
