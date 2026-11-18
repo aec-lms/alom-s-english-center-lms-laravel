@@ -48,6 +48,13 @@ final class PhoneticsLearningAdminController extends Controller
             abort_unless(is_string($identifier) && preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $identifier) === 1, 500, 'Invalid user table mapping.');
         }
         abort_unless(Schema::hasTable($table), 503, 'Configured user table is unavailable.');
+        abort_unless(
+            Schema::hasColumn($table, $id)
+                && Schema::hasColumn($table, $name)
+                && Schema::hasColumn($table, $email),
+            503,
+            'Configured user ID, name and email columns are unavailable.'
+        );
         return DB::table($table)->orderBy($name)->limit(500)->get([
             $id.' as id', $name.' as name', $email.' as email',
         ]);
