@@ -17,82 +17,27 @@ class _SupportTicketsPageState extends State<SupportTicketsPage> {
   @override
   void initState() {
     super.initState();
+    reload();
+  }
+
+  void reload() {
     tickets = widget.api.get('/my/support-tickets');
   }
 
-  Future<void> reload() async {
-    final next = widget.api.get('/my/support-tickets');
-    setState(() => tickets = next);
-    await next;
-  }
-
   Future<void> createTicket() async {
-    final subject = TextEditingController();
-    final message = TextEditingController();
     final values = await showDialog<Map<String, String>>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('New support request'),
-        content: SizedBox(
-          width: 440,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: subject,
-                maxLength: 160,
-                decoration: const InputDecoration(
-                  labelText: 'Subject',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: message,
-                minLines: 3,
-                maxLines: 5,
-                maxLength: 5000,
-                decoration: const InputDecoration(
-                  labelText: 'Describe your issue',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (subject.text.trim().length < 5 ||
-                  message.text.trim().length < 5) {
-                return;
-              }
-              Navigator.pop(dialogContext, {
-                'subject': subject.text.trim(),
-                'message': message.text.trim(),
-              });
-            },
-            child: const Text('Submit'),
-          ),
-        ],
-      ),
+      builder: (_) => const _NewSupportTicketDialog(),
     );
-    subject.dispose();
-    message.dispose();
     if (values == null || !mounted) return;
 
     try {
       await widget.api.postJson('/my/support-tickets', values);
-      await reload();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Your support request was submitted.')),
-        );
-      }
+      if (!mounted) return;
+      setState(reload);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Support request submitted.')),
+      );
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -102,13 +47,20 @@ class _SupportTicketsPageState extends State<SupportTicketsPage> {
     }
   }
 
+  Future<void> openTicket(Map<String, dynamic> ticket) async {
+    final id = (ticket['id'] as num?)?.toInt();
+    if (id == null) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => SupportTicketDetailPage(api: widget.api, ticketId: id),
+      ),
+    );
+    if (mounted) setState(reload);
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: createTicket,
-          icon: const Icon(Icons.add),
-          label: const Text('New ticket'),
-        ),
         body: FutureBuilder<Map<String, dynamic>>(
           future: tickets,
           builder: (context, snapshot) {
@@ -120,75 +72,48 @@ class _SupportTicketsPageState extends State<SupportTicketsPage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(snapshot.error.toString()),
+                    Text(snapshot.error.toString(), textAlign: TextAlign.center),
                     const SizedBox(height: 12),
                     OutlinedButton(
-                      onPressed: reload,
-                      child: const Text('Try again'),
+                      onPressed: () => setState(reload),
+                      child: const Text('Retry'),
                     ),
                   ],
                 ),
               );
             }
-
             final raw = snapshot.data?['data'];
             final items = raw is List ? raw : const <dynamic>[];
             if (items.isEmpty) {
-              return RefreshIndicator(
-                onRefresh: reload,
-                child: ListView(
-                  children: const [
-                    SizedBox(height: 140),
-                    Icon(Icons.support_agent, size: 56),
-                    SizedBox(height: 12),
-                    Center(child: Text('No support tickets yet.')),
-                    Center(child: Text('Create a ticket if you need help.')),
-                  ],
-                ),
-              );
+              return const Center(child: Text('You have no support requests yet.'));
             }
-
             return RefreshIndicator(
-              onRefresh: reload,
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 88),
-                children: [
-                  for (final rawTicket in items)
-                    Builder(builder: (context) {
-                      final ticket =
-                          Map<String, dynamic>.from(rawTicket as Map);
-                      return Card(
-                        child: ListTile(
-                          leading: const CircleAvatar(
-                            child: Icon(Icons.support_agent),
-                          ),
-                          title: Text(ticket['subject']?.toString() ?? 'Support ticket'),
-                          subtitle: Text(
-                            '${ticket['status'] ?? 'open'} · '
-                            '${ticket['last_message'] ?? 'No messages yet'}',
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () async {
-                            await Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => SupportTicketDetailPage(
-                                  api: widget.api,
-                                  ticketId: ticket['id'] as int,
-                                ),
-                              ),
-                            );
-                            if (mounted) await reload();
-                          },
-                        ),
-                      );
-                    }),
-                ],
+              onRefresh: () async => setState(reload),
+              child: ListView.separated(
+                itemCount: items.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final item = Map<String, dynamic>.from(items[index] as Map);
+                  return ListTile(
+                    leading: const Icon(Icons.support_agent),
+                    title: Text(item['subject']?.toString() ?? 'Support request'),
+                    subtitle: Text(
+                      '${item['status'] ?? 'open'} · ${item['last_message'] ?? ''}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => openTicket(item),
+                  );
+                },
               ),
             );
           },
+        ),
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: createTicket,
+          icon: const Icon(Icons.add),
+          label: const Text('New request'),
         ),
       );
 }
@@ -209,14 +134,14 @@ class SupportTicketDetailPage extends StatefulWidget {
 }
 
 class _SupportTicketDetailPageState extends State<SupportTicketDetailPage> {
-  final reply = TextEditingController();
   late Future<Map<String, dynamic>> detail;
+  final reply = TextEditingController();
   bool sending = false;
 
   @override
   void initState() {
     super.initState();
-    detail = widget.api.get('/my/support-tickets/${widget.ticketId}');
+    load();
   }
 
   @override
@@ -225,23 +150,21 @@ class _SupportTicketDetailPageState extends State<SupportTicketDetailPage> {
     super.dispose();
   }
 
-  Future<void> reload() async {
-    final next = widget.api.get('/my/support-tickets/${widget.ticketId}');
-    setState(() => detail = next);
-    await next;
+  void load() {
+    detail = widget.api.get('/my/support-tickets/${widget.ticketId}');
   }
 
   Future<void> sendReply() async {
-    final body = reply.text.trim();
-    if (body.length < 2 || sending) return;
+    final message = reply.text.trim();
+    if (message.length < 2 || sending) return;
     setState(() => sending = true);
     try {
       await widget.api.postJson(
         '/my/support-tickets/${widget.ticketId}/messages',
-        {'message': body},
+        {'message': message},
       );
       reply.clear();
-      await reload();
+      if (mounted) setState(load);
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -265,66 +188,45 @@ class _SupportTicketDetailPageState extends State<SupportTicketDetailPage> {
             if (snapshot.hasError) {
               return Center(child: Text(snapshot.error.toString()));
             }
-            final data = Map<String, dynamic>.from(
-              (snapshot.data?['data'] as Map?) ?? const {},
-            );
-            final messages = data['messages'] is List
-                ? data['messages'] as List
+            final ticket = snapshot.data?['data'];
+            if (ticket is! Map) {
+              return const Center(child: Text('Support request not found.'));
+            }
+            final messages = ticket['messages'] is List
+                ? ticket['messages'] as List
                 : const <dynamic>[];
-            final isClosed = data['status'] == 'closed';
-
+            final closed = ticket['status'] == 'closed';
             return Column(
               children: [
                 ListTile(
-                  title: Text(data['subject']?.toString() ?? 'Support ticket'),
-                  subtitle: Text('Status: ${data['status'] ?? 'open'}'),
+                  title: Text(ticket['subject']?.toString() ?? 'Support request'),
+                  subtitle: Text('Status: ${ticket['status'] ?? 'open'}'),
                 ),
                 const Divider(height: 1),
                 Expanded(
-                  child: RefreshIndicator(
-                    onRefresh: reload,
-                    child: ListView(
-                      padding: const EdgeInsets.all(16),
-                      children: [
-                        for (final rawMessage in messages)
-                          Builder(builder: (context) {
-                            final item =
-                                Map<String, dynamic>.from(rawMessage as Map);
-                            final mine = item['sender_role'] == 'student';
-                            return Align(
-                              alignment: mine
-                                  ? Alignment.centerRight
-                                  : Alignment.centerLeft,
-                              child: Container(
-                                constraints: const BoxConstraints(maxWidth: 520),
-                                margin: const EdgeInsets.only(bottom: 12),
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: mine
-                                      ? Theme.of(context).colorScheme.primaryContainer
-                                      : Theme.of(context).colorScheme.surfaceContainerHighest,
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      item['sender_name']?.toString() ??
-                                          (mine ? 'You' : 'Support'),
-                                      style: Theme.of(context).textTheme.labelLarge,
-                                    ),
-                                    const SizedBox(height: 5),
-                                    Text(item['body']?.toString() ?? ''),
-                                  ],
-                                ),
-                              ),
-                            );
-                          }),
-                      ],
-                    ),
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: messages.length,
+                    itemBuilder: (context, index) {
+                      final item = Map<String, dynamic>.from(messages[index] as Map);
+                      return Card(
+                        child: ListTile(
+                          title: Text(item['sender_name']?.toString() ?? 'Support'),
+                          subtitle: Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Text(item['body']?.toString() ?? ''),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
-                if (!isClosed)
+                if (closed)
+                  const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Text('This request is closed. Create a new request if you need more help.'),
+                  )
+                else
                   SafeArea(
                     child: Padding(
                       padding: const EdgeInsets.all(12),
@@ -336,7 +238,7 @@ class _SupportTicketDetailPageState extends State<SupportTicketDetailPage> {
                               minLines: 1,
                               maxLines: 4,
                               decoration: const InputDecoration(
-                                hintText: 'Write a reply…',
+                                hintText: 'Write a reply',
                                 border: OutlineInputBorder(),
                               ),
                             ),
@@ -348,24 +250,86 @@ class _SupportTicketDetailPageState extends State<SupportTicketDetailPage> {
                                 ? const SizedBox(
                                     width: 18,
                                     height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
+                                    child: CircularProgressIndicator(strokeWidth: 2),
                                   )
                                 : const Icon(Icons.send),
                           ),
                         ],
                       ),
                     ),
-                  )
-                else
-                  const Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Text('This ticket is closed.'),
                   ),
               ],
             );
           },
         ),
+      );
+}
+
+
+class _NewSupportTicketDialog extends StatefulWidget {
+  const _NewSupportTicketDialog();
+
+  @override
+  State<_NewSupportTicketDialog> createState() => _NewSupportTicketDialogState();
+}
+
+class _NewSupportTicketDialogState extends State<_NewSupportTicketDialog> {
+  final subject = TextEditingController();
+  final message = TextEditingController();
+
+  @override
+  void dispose() {
+    subject.dispose();
+    message.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: const Text('New support request'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: subject,
+                onChanged: (_) => setState(() {}),
+                maxLength: 160,
+                decoration: const InputDecoration(
+                  labelText: 'Subject',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: message,
+                onChanged: (_) => setState(() {}),
+                minLines: 4,
+                maxLines: 7,
+                maxLength: 5000,
+                decoration: const InputDecoration(
+                  labelText: 'How can we help?',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: subject.text.trim().length < 5 ||
+                    message.text.trim().length < 5
+                ? null
+                : () => Navigator.pop(context, {
+                      'subject': subject.text.trim(),
+                      'message': message.text.trim(),
+                    }),
+            child: const Text('Submit'),
+          ),
+        ],
       );
 }

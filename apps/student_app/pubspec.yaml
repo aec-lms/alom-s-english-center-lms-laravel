@@ -3,7 +3,7 @@ description: Alom's English Center student mobile application.
 publish_to: 'none'
 version: 1.0.0+1
 environment:
-  sdk: '>=3.5.0 <4.0.0'
+  sdk: '>=3.10.0 <4.0.0'
 dependencies:
   flutter:
     sdk: flutter
@@ -11,6 +11,8 @@ dependencies:
   material_ui: ^1.0.0
   http: ^1.2.2
   mobile_scanner: ^7.5.0
+  geolocator: ^13.0.2
+  file_picker: ^13.3.3
 dev_dependencies:
   flutter_test:
     sdk: flutter
