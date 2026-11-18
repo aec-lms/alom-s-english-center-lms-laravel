@@ -184,5 +184,45 @@
             <p class="text-xs text-slate-400">No coupons are available to manage.</p>
         @endforelse
     </section>
+
+    <section class="rounded-2xl border border-slate-200 bg-white p-5 space-y-4">
+        <div>
+            <h2 class="text-sm font-extrabold text-slate-900">Issued Gift Vouchers</h2>
+            <p class="mt-1 text-xs text-slate-500">Latest 100 vouchers. Admin can suspend or reactivate only paid, unclaimed and unexpired vouchers. Claimed voucher balances cannot be revoked here.</p>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full min-w-[760px] text-left text-xs">
+                <thead class="border-b border-slate-200 text-[11px] uppercase tracking-wide text-slate-500">
+                    <tr><th class="py-2 pr-3">Voucher</th><th class="py-2 pr-3">Sender</th><th class="py-2 pr-3">Recipient</th><th class="py-2 pr-3">Value / Balance</th><th class="py-2 pr-3">Status</th><th class="py-2 pr-3">Expires</th><th class="py-2">Admin action</th></tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    @forelse ($giftVouchers as $voucher)
+                        <tr>
+                            <td class="py-3 pr-3 font-mono font-bold">#{{ $voucher->id }}</td>
+                            <td class="py-3 pr-3">{{ $voucher->sender_name ?: '—' }}</td>
+                            <td class="py-3 pr-3">{{ $voucher->recipient_name ?: $voucher->recipient_email }}</td>
+                            <td class="py-3 pr-3 whitespace-nowrap">{{ $voucher->currency }} {{ number_format((float) $voucher->amount, 2) }}<span class="block text-[10px] text-slate-500">Balance: {{ number_format((float) $voucher->remaining_amount, 2) }}</span></td>
+                            <td class="py-3 pr-3"><span class="rounded-full px-2 py-1 text-[10px] font-bold {{ $voucher->status === 'paid' ? 'bg-emerald-100 text-emerald-700' : ($voucher->status === 'suspended' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600') }}">{{ ucfirst(str_replace('_', ' ', $voucher->status)) }}</span></td>
+                            <td class="py-3 pr-3 whitespace-nowrap">{{ $voucher->expires_at ? \Illuminate\Support\Carbon::parse($voucher->expires_at)->toDateString() : '—' }}</td>
+                            <td class="py-3">
+                                @if (in_array($voucher->status, ['paid', 'suspended'], true) && !$voucher->recipient_user_id && (!$voucher->expires_at || \Illuminate\Support\Carbon::parse($voucher->expires_at)->isFuture()))
+                                    <form method="POST" action="{{ route('plugins.marketing.gift-vouchers.status', $voucher->id) }}">
+                                        @csrf
+                                        @method('PATCH')
+                                        <input type="hidden" name="status" value="{{ $voucher->status === 'paid' ? 'suspended' : 'paid' }}">
+                                        <button type="submit" class="rounded-lg border px-3 py-1.5 font-bold {{ $voucher->status === 'paid' ? 'border-amber-200 text-amber-800 hover:bg-amber-50' : 'border-emerald-200 text-emerald-800 hover:bg-emerald-50' }}">{{ $voucher->status === 'paid' ? 'Suspend' : 'Reactivate' }}</button>
+                                    </form>
+                                @else
+                                    <span class="text-slate-400">No action</span>
+                                @endif
+                            </td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="7" class="py-5 text-center text-slate-400">No gift vouchers have been issued yet.</td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </section>
 </div>
 @endsection
