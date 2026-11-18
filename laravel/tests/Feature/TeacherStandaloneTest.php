@@ -81,8 +81,12 @@ class TeacherStandaloneTest extends TestCase
             'employee_code' => 'SAFE-UPLOAD-001',
             'specialization' => 'English Grammar',
             'is_active' => '1',
-            // Valid JPEG content deliberately supplied with a dangerous client extension.
-            'photo' => UploadedFile::fake()->image('teacher-photo.php'),
+            // Keep real JPEG bytes while deliberately changing only the client filename.
+            'photo' => (function (): UploadedFile {
+                $image = UploadedFile::fake()->image('teacher-photo.jpg');
+
+                return new UploadedFile($image->getPathname(), 'teacher-photo.php', 'image/jpeg', null, true);
+            })(),
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         $teacher = Teacher::query()->where('employee_code', 'SAFE-UPLOAD-001')->firstOrFail();
