@@ -86,17 +86,70 @@ class LearnAndEarnController extends Controller
         $this->ensureGlobalContentAccess($request->user());
         $values = $request->validate([
             'category_id' => ['nullable', 'integer', 'exists:learn_earn_categories,id'],
-            'question' => ['required', 'string'],
+            'subject' => ['nullable', 'string', 'max:120'],
+            'difficulty' => ['nullable', 'in:easy,medium,hard'],
+            'question' => ['required', 'string', 'max:5000'],
             'options' => ['required', 'array', 'size:4'],
-            'options.*' => ['required', 'string', 'max:500'],
+            'options.*' => ['required', 'string', 'max:500', 'distinct'],
             'correct_option_index' => ['required', 'integer', 'between:0,3'],
             'positive_marks' => ['required', 'numeric', 'gt:0', 'max:1000'],
             'negative_marks' => ['required', 'numeric', 'min:0', 'max:1000'],
+            'explanation' => ['nullable', 'string', 'max:5000'],
         ]);
 
-        LearnEarnQuestion::create($values + ['is_active' => true]);
+        $values['options'] = array_map(static fn ($option): string => trim((string) $option), $values['options']);
+        abort_if(count(array_unique($values['options'])) !== 4, 422, 'Each MCQ must have four distinct options.');
+
+        LearnEarnQuestion::create($values + [
+            'created_by' => $request->user()->id,
+            'subject' => $values['subject'] ?? null,
+            'difficulty' => $values['difficulty'] ?? 'medium',
+            'explanation' => $values['explanation'] ?? null,
+            'is_active' => true,
+        ]);
 
         return back()->with('status', 'MCQ saved.');
+    }
+
+    public function updateQuestion(Request $request, int $questionId): RedirectResponse
+    {
+        $this->ensureGlobalContentAccess($request->user());
+        $question = LearnEarnQuestion::query()->findOrFail($questionId);
+        $values = $request->validate([
+            'category_id' => ['nullable', 'integer', 'exists:learn_earn_categories,id'],
+            'subject' => ['nullable', 'string', 'max:120'],
+            'difficulty' => ['required', 'in:easy,medium,hard'],
+            'question' => ['required', 'string', 'max:5000'],
+            'options' => ['required', 'array', 'size:4'],
+            'options.*' => ['required', 'string', 'max:500', 'distinct'],
+            'correct_option_index' => ['required', 'integer', 'between:0,3'],
+            'positive_marks' => ['required', 'numeric', 'gt:0', 'max:1000'],
+            'negative_marks' => ['required', 'numeric', 'min:0', 'max:1000'],
+            'explanation' => ['nullable', 'string', 'max:5000'],
+        ]);
+        $values['options'] = array_map(static fn ($option): string => trim((string) $option), $values['options']);
+        abort_if(count(array_unique($values['options'])) !== 4, 422, 'Each MCQ must have four distinct options.');
+
+        $question->update($values);
+        app(AuditLogger::class)->log('learn_earn.question_updated', 'learn_earn_question', (string) $question->id, [
+            'snapshot_policy' => 'existing_exam_questions_unchanged',
+        ], $request->user()->id);
+
+        return back()->with('status', 'MCQ updated. Existing exam snapshots remain unchanged.');
+    }
+
+    public function toggleQuestion(Request $request, int $questionId): RedirectResponse
+    {
+        $this->ensureGlobalContentAccess($request->user());
+        $values = $request->validate(['is_active' => ['required', 'boolean']]);
+        $question = LearnEarnQuestion::query()->findOrFail($questionId);
+        $question->update(['is_active' => (bool) $values['is_active']]);
+
+        app(AuditLogger::class)->log('learn_earn.question_status_changed', 'learn_earn_question', (string) $question->id, [
+            'is_active' => (bool) $question->is_active,
+        ], $request->user()->id);
+
+        return back()->with('status', $question->is_active ? 'MCQ restored to the active bank.' : 'MCQ archived from new exam selection.');
     }
 
     public function storeExam(Request $request): RedirectResponse
