@@ -29,13 +29,13 @@
             @foreach($courses as $course)
                 <article class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm flex flex-col">
                     @if($course->thumbnail)
-                        <img src="{{ \\Illuminate\\Support\\Facades\\Storage::disk('public')->url($course->thumbnail) }}"
+                        <img src="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($course->thumbnail) }}"
                              alt="{{ $course->title }}" loading="lazy"
                              class="w-full aspect-video object-cover">
                     @endif
                     <div class="p-5 flex flex-col flex-1">
                         <h2 class="text-lg font-semibold text-slate-900">{{ $course->title }}</h2>
-                        <p class="text-sm text-slate-500 mt-2">{{ \\Illuminate\\Support\\Str::limit(strip_tags((string) $course->description), 130) }}</p>
+                        <p class="text-sm text-slate-500 mt-2">{{ \Illuminate\Support\Str::limit(strip_tags((string) $course->description), 130) }}</p>
                         <p class="font-bold text-slate-900 mt-auto pt-4">{{ __('BDT') }} {{ number_format((float) $course->price, 2) }}</p>
                         <div class="flex items-center gap-2 mt-4">
                             <a class="inline-flex rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700" href="{{ url('/course/' . $course->slug) }}">{{ __('View course') }}</a>
