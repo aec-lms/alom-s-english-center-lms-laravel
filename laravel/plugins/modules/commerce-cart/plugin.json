@@ -7,7 +7,7 @@
     "description": "Unified shopping cart, order snapshots and checkout orchestration for courses, e-books, exams, subscriptions, live classes and future paid services.",
     "core_compatibility": "^2.0",
     "dependencies": [],
-    "provider": "Plugins\\\\Modules\\\\CommerceCart\\\\Providers\\\\CommerceCartServiceProvider",
+    "provider": "Plugins\\Modules\\CommerceCart\\Providers\\CommerceCartServiceProvider",
     "permissions": [
         {
             "slug": "commerce.orders.manage",
