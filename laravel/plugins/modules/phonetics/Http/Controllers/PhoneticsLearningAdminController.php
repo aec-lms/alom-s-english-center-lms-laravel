@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
+use Plugins\Modules\Phonetics\Models\PhoneticAuditEvent;
 use Plugins\Modules\Phonetics\Models\PhoneticBatchMembership;
 use Plugins\Modules\Phonetics\Models\PhoneticEntry;
 use Plugins\Modules\Phonetics\Models\PhoneticExam;
@@ -76,13 +77,14 @@ final class PhoneticsLearningAdminController extends Controller
             'Choose a course or a course category for this word assignment.'
         );
 
-        PhoneticLearningAssignment::query()->create([
+        $assignment = PhoneticLearningAssignment::query()->create([
             ...$data,
             'lms_driver' => $this->catalog->driver(),
             'is_required' => $request->boolean('is_required'),
             'sort_order' => (int) PhoneticLearningAssignment::query()->max('sort_order') + 1,
         ]);
 
+        $this->audit($request, 'phonetics.assignment.created', 'learning_assignment', (string) $assignment->id, ['word_id' => $assignment->word_id, 'course_ref' => $assignment->course_ref, 'lesson_ref' => $assignment->lesson_ref, 'batch_ref' => $assignment->batch_ref]);
         return back()->with('status', 'Word assigned to the selected course, lesson and batch.');
     }
 
@@ -98,19 +100,23 @@ final class PhoneticsLearningAdminController extends Controller
             ['lms_driver' => $this->catalog->driver(), 'batch_ref' => $data['batch_ref'], 'user_id' => $data['user_id']],
             ['is_active' => true]
         );
+        $this->audit($request, 'phonetics.batch_member.assigned', 'batch_membership', $data['batch_ref'].':'.$data['user_id'], $data);
         return back()->with('status', 'Student assigned to the batch roster.');
     }
 
-    public function destroyBatchMember(PhoneticBatchMembership $membership)
+    public function destroyBatchMember(Request $request, PhoneticBatchMembership $membership)
     {
         abort_unless($membership->lms_driver === $this->catalog->driver(), 404);
         $membership->update(['is_active' => false]);
+        $this->audit($request, 'phonetics.batch_member.removed', 'batch_membership', (string) $membership->id, ['batch_ref' => $membership->batch_ref, 'user_id' => $membership->user_id]);
         return back()->with('status', 'Student removed from this plugin batch roster.');
     }
 
-    public function destroyAssignment(PhoneticLearningAssignment $assignment)
+    public function destroyAssignment(Request $request, PhoneticLearningAssignment $assignment)
     {
+        $id = (string) $assignment->id;
         $assignment->delete();
+        $this->audit($request, 'phonetics.assignment.removed', 'learning_assignment', $id);
         return back()->with('status', 'Word assignment removed. The vocabulary word itself was preserved.');
     }
 
@@ -189,6 +195,7 @@ final class PhoneticsLearningAdminController extends Controller
             return $exam;
         });
 
+        $this->audit($request, 'phonetics.exam.created', 'exam', (string) $exam->id, ['title' => $exam->title, 'course_ref' => $exam->course_ref, 'lesson_ref' => $exam->lesson_ref, 'batch_ref' => $exam->batch_ref, 'status' => $exam->status]);
         return back()->with('status', 'Exam created with '.$exam->questions()->count().' questions.');
     }
 
@@ -196,6 +203,19 @@ final class PhoneticsLearningAdminController extends Controller
     {
         $data = $request->validate(['status' => ['required', 'in:draft,published,archived']]);
         $exam->update(['status' => $data['status']]);
+        $this->audit($request, 'phonetics.exam.status_updated', 'exam', (string) $exam->id, ['status' => $exam->status]);
         return back()->with('status', 'Exam status updated.');
+    }
+
+    private function audit(Request $request, string $action, string $entityType, string $entityId, array $metadata = []): void
+    {
+        PhoneticAuditEvent::query()->create([
+            'user_id' => $request->user()?->getAuthIdentifier(),
+            'action' => $action,
+            'entity_type' => $entityType,
+            'entity_id' => $entityId,
+            'ip_address' => $request->ip(),
+            'metadata' => $metadata,
+        ]);
     }
 }
