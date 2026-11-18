@@ -1,4 +1,6 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter/widgets.dart';
+import 'firebase_options.dart';
 import 'api_client.dart';
 import 'course_detail_page.dart';
 import 'qr_attendance_page.dart';
@@ -6,7 +8,11 @@ import 'student_assignments_page.dart';
 import 'student_exams_page.dart';
 import 'student_wishlist_page.dart';
 
-void main() => runApp(const AlomStudentApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await initializeAecFirebase();
+  runApp(const AlomStudentApp());
+}
 
 class AlomStudentApp extends StatelessWidget {
   const AlomStudentApp({super.key});
