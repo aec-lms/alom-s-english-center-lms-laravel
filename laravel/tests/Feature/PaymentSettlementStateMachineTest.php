@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use Plugins\\Modules\\FeesManagement\\Models\\FeeInvoice;
-use Plugins\\Modules\\PaymentManagement\\Models\\PaymentTransaction;
-use Plugins\\Modules\\PaymentManagement\\Services\\PaymentSettlementService;
+use Plugins\Modules\FeesManagement\Models\FeeInvoice;
+use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
+use Plugins\Modules\PaymentManagement\Services\PaymentSettlementService;
 use RuntimeException;
-use Tests\\TestCase;
+use Tests\TestCase;
 
 class PaymentSettlementStateMachineTest extends TestCase
 {
