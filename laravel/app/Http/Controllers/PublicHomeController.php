@@ -198,9 +198,7 @@ class PublicHomeController extends Controller
                 ->selectRaw('COUNT(*) AS total')
                 ->whereIn('status', ['active', 'completed']);
             if (Schema::hasTable('fee_invoices')) {
-                $purchaseQuery->where(function ($enrollmentQuery): void {
-                    $enrollmentQuery->whereNull('invoice_id')
-                        ->orWhereExists(function ($invoiceQuery): void {
+                $purchaseQuery->whereNotNull('invoice_id')->whereExists(function ($invoiceQuery): void {
                             $invoiceQuery->selectRaw('1')
                                 ->from('fee_invoices')
                                 ->whereColumn('fee_invoices.id', 'enrollments.invoice_id')
@@ -209,7 +207,7 @@ class PublicHomeController extends Controller
                         });
                 });
             } else {
-                $purchaseQuery->whereNull('invoice_id');
+                $purchaseQuery->whereRaw('1 = 0');
             }
             $purchaseCounts = Schema::hasTable('enrollments')
                 ? $purchaseQuery->groupBy('course_id')->pluck('total', 'course_id')
@@ -314,18 +312,15 @@ class PublicHomeController extends Controller
             ->whereIn('status', ['active', 'completed']);
 
         if (Schema::hasTable('fee_invoices')) {
-            $query->where(function ($enrollmentQuery): void {
-                $enrollmentQuery->whereNull('invoice_id')
-                    ->orWhereExists(function ($invoiceQuery): void {
+            $query->whereNotNull('invoice_id')->whereExists(function ($invoiceQuery): void {
                         $invoiceQuery->selectRaw('1')
                             ->from('fee_invoices')
                             ->whereColumn('fee_invoices.id', 'enrollments.invoice_id')
                             ->where('fee_invoices.status', 'paid')
                             ->whereRaw('fee_invoices.paid_amount + 0.01 >= fee_invoices.net_amount');
-                    });
             });
         } else {
-            $query->whereNull('invoice_id');
+            return 0;
         }
 
         return (int) $query->count();
