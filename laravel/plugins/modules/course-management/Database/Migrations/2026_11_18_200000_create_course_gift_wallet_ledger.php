@@ -20,6 +20,7 @@ return new class extends Migration {
             Schema::table('course_gift_vouchers', function (Blueprint $table): void {
                 if (!Schema::hasColumn('course_gift_vouchers', 'recipient_user_id')) $table->unsignedBigInteger('recipient_user_id')->nullable()->index();
                 if (!Schema::hasColumn('course_gift_vouchers', 'notification_sent_at')) $table->timestamp('notification_sent_at')->nullable();
+                if (!Schema::hasColumn('course_gift_vouchers', 'invoice_id')) $table->unsignedBigInteger('invoice_id')->nullable()->index();
             });
         }
 
