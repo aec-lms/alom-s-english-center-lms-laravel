@@ -8,6 +8,7 @@ use App\Core\Contracts\PluginInterface;
 use App\Core\Plugins\PluginManifest;
 use App\Core\Plugins\PluginManager;
 use App\Models\Permission;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
@@ -266,7 +267,7 @@ class PluginCriticalRegressionTest extends TestCase
     {
         $job = new DeliverNotificationJob(481);
 
-        $this->assertInstanceOf(\\Illuminate\\Contracts\\Queue\\ShouldBeUnique::class, $job);
+        $this->assertInstanceOf(ShouldBeUnique::class, $job);
         $this->assertSame('481', $job->uniqueId());
         $this->assertSame(3600, $job->uniqueFor);
     }
