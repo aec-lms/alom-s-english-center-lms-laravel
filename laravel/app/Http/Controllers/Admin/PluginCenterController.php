@@ -50,18 +50,24 @@ class PluginCenterController extends Controller
     {
         $request->validate([
             'plugin_zip' => ['required', 'file', 'mimes:zip', 'max:51200'],
+            'plugin_signature' => ['required', 'file', 'mimes:json,txt', 'max:64'],
         ]);
 
         $stored = $request->file('plugin_zip')->store('plugin-uploads');
+        $signatureStored = $request->file('plugin_signature')->store('plugin-uploads');
         $absolutePath = storage_path('app/' . $stored);
+        $signaturePath = storage_path('app/' . $signatureStored);
         try {
-            $record = $this->plugins->installOrUpdateFromZip($absolutePath, auth()->id());
+            $record = $this->plugins->installOrUpdateFromZip($absolutePath, auth()->id(), $signaturePath);
             return back()->with('status', "Plugin '{$record->name}' (v{$record->version}) installed/updated successfully.");
         } catch (\Throwable $e) {
             return back()->withErrors(['plugin' => $e->getMessage()]);
         } finally {
             if (is_file($absolutePath)) {
                 @unlink($absolutePath);
+            }
+            if (is_file($signaturePath)) {
+                @unlink($signaturePath);
             }
         }
     }
