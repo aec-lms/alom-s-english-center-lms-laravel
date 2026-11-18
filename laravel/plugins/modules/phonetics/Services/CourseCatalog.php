@@ -130,7 +130,8 @@ final class CourseCatalog
         $map = config('phonetics.catalog.courses', []);
         $statusColumn = $map['status'] ?? null;
         $activeStatuses = config('phonetics.access.course_active_statuses', ['published', 'active']);
-        if ($statusColumn && $this->hasColumn($map, $statusColumn)) {
+        if ($statusColumn) {
+            $this->requireColumns($map, [$statusColumn], 'course status');
             abort_unless(
                 in_array((string) data_get($course, $statusColumn), $activeStatuses, true),
                 404,
@@ -161,15 +162,21 @@ final class CourseCatalog
         if (!$this->available($membership)) {
             throw new ServiceUnavailableHttpException(null, 'Batch membership mapping is not configured for this LMS.');
         }
+        $userColumn = $membership['user_id'] ?? 'user_id';
+        $batchColumn = $membership['batch_id'] ?? 'batch_id';
+        $this->requireColumns($membership, [$userColumn, $batchColumn], 'batch membership');
         $query = $this->table($membership)
-            ->where($membership['user_id'] ?? 'user_id', $user->getAuthIdentifier())
-            ->where($membership['batch_id'] ?? 'batch_id', $batchRef);
+            ->where($userColumn, $user->getAuthIdentifier())
+            ->where($batchColumn, $batchRef);
         $driverColumn = $membership['driver_column'] ?? null;
-        if ($driverColumn && $this->hasColumn($membership, $driverColumn)) {
+        if ($driverColumn) {
+            $this->requireColumns($membership, [$driverColumn], 'batch membership LMS driver');
             $query->where($driverColumn, $this->driver());
         }
-        if (!empty($membership['active_column']) && $this->hasColumn($membership, $membership['active_column'])) {
-            $query->where($membership['active_column'], $membership['active_value'] ?? 1);
+        $activeColumn = $membership['active_column'] ?? null;
+        if ($activeColumn) {
+            $this->requireColumns($membership, [$activeColumn], 'batch membership active status');
+            $query->where($activeColumn, $membership['active_value'] ?? 1);
         }
         return $query->exists();
     }
@@ -203,40 +210,51 @@ final class CourseCatalog
         if (!$this->available($enrollment)) {
             throw new ServiceUnavailableHttpException(null, 'The connected LMS enrollment adapter is not configured.');
         }
+        $userColumn = $enrollment['user_id'] ?? 'user_id';
+        $courseColumn = $enrollment['course_id'] ?? 'course_id';
+        $statusColumn = $enrollment['status'] ?? null;
+        $activeStatuses = $enrollment['active_statuses'] ?? ['active', 'completed'];
+        $this->requireColumns($enrollment, [$userColumn, $courseColumn, $statusColumn], 'course enrollment');
+        if (!is_array($activeStatuses) || $activeStatuses === []) {
+            throw new ServiceUnavailableHttpException(null, 'Active enrollment statuses are not configured for this LMS.');
+        }
         $query = $this->table($enrollment)
-            ->where($enrollment['user_id'] ?? 'user_id', $user->getAuthIdentifier())
-            ->where($enrollment['course_id'] ?? 'course_id', $this->courseId($course));
+            ->where($userColumn, $user->getAuthIdentifier())
+            ->where($courseColumn, $this->courseId($course))
+            ->whereIn($statusColumn, $activeStatuses);
 
         // Preserve the host LMS branch boundary when its catalog exposes branch IDs.
         $branchId = data_get($user, 'branch_id');
         if ($branchId !== null) {
             $courseBranchColumn = $courseMap['branch_id'] ?? 'branch_id';
-            if ($this->hasColumn($courseMap, $courseBranchColumn)) {
-                $courseBranchId = data_get($course, $courseBranchColumn);
-                abort_unless(
-                    $courseBranchId === null || (string) $courseBranchId === (string) $branchId,
-                    403,
-                    'Course belongs to another branch.'
-                );
-            }
+            $this->requireColumns($courseMap, [$courseBranchColumn], 'course branch scope');
+            $courseBranchId = data_get($course, $courseBranchColumn);
+            abort_unless(
+                $courseBranchId === null || (string) $courseBranchId === (string) $branchId,
+                403,
+                'Course belongs to another branch.'
+            );
 
             $enrollmentBranchColumn = $enrollment['branch_id'] ?? 'branch_id';
-            if ($this->hasColumn($enrollment, $enrollmentBranchColumn)) {
-                $query->where(fn ($branch) => $branch
-                    ->whereNull($enrollmentBranchColumn)
-                    ->orWhere($enrollmentBranchColumn, $branchId));
-            }
+            $this->requireColumns($enrollment, [$enrollmentBranchColumn], 'enrollment branch scope');
+            $query->where(fn ($branch) => $branch
+                ->whereNull($enrollmentBranchColumn)
+                ->orWhere($enrollmentBranchColumn, $branchId));
         }
 
-        $statusColumn = $enrollment['status'] ?? null;
-        $activeStatuses = $enrollment['active_statuses'] ?? ['active', 'completed'];
-        if ($statusColumn && $this->hasColumn($enrollment, $statusColumn)) {
-            $query->whereIn($statusColumn, $activeStatuses);
-        }
         abort_unless($query->exists(), 403, 'An active course enrollment is required.');
 
         if ($batchRef !== null && $batchRef !== '') {
             abort_unless($this->isBatchMember($user, $batchRef), 403, 'This activity is restricted to another batch.');
+        }
+    }
+
+    private function requireColumns(array $map, array $columns, string $label): void
+    {
+        foreach ($columns as $column) {
+            if (!is_string($column) || !$this->hasColumn($map, $column)) {
+                throw new ServiceUnavailableHttpException(null, 'Configured '.$label.' mapping is incomplete for this LMS.');
+            }
         }
     }
 
