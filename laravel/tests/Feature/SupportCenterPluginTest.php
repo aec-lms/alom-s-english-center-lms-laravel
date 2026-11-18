@@ -101,7 +101,8 @@ class SupportCenterPluginTest extends TestCase
         ]);
         $student = $this->createUserWithRole('student', $branchB);
         $manager = $this->createUserWithRole('branch_manager', $branchA);
-        $this->grantPermission($manager, 'support.tickets.manage');
+        $permission = Permission::query()->where('slug', 'support.tickets.manage')->firstOrFail();
+        Role::query()->where('slug', 'branch_manager')->firstOrFail()->permissions()->syncWithoutDetaching([$permission->id]);
         $ticketId = DB::table('support_tickets')->insertGetId([
             'user_id' => $student->id,
             'branch_id' => $branchB,
