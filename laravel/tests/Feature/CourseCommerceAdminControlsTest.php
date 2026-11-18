@@ -37,6 +37,20 @@ class CourseCommerceAdminControlsTest extends TestCase
         $this->assertSame(true, $stored['allow_personal_message']);
     }
 
+    public function test_student_cannot_change_coupon_or_gift_voucher_admin_settings(): void
+    {
+        $student = $this->createUserWithRole('student');
+
+        $this->actingAs($student)->put(route('plugins.marketing.gift-voucher-settings.update'), [
+            'enabled' => '0',
+            'minimum_amount' => 100,
+            'maximum_amount' => 10000,
+            'validity_days' => 30,
+        ])->assertForbidden();
+
+        $this->assertDatabaseMissing('system_settings', ['key' => 'course_commerce.gift_vouchers']);
+    }
+
     public function test_admin_can_disable_coupon_without_deleting_redemption_history(): void
     {
         $admin = $this->createUserWithRole('admin');
