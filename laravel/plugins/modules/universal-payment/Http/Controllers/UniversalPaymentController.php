@@ -429,6 +429,15 @@ class UniversalPaymentController extends Controller
                 return redirect()->away($checkoutUrl);
             } catch (\Throwable $exception) {
                 report($exception);
+                DB::transaction(function () use ($tx): void {
+                    $locked = UniversalPaymentTransaction::query()->whereKey($tx->id)->lockForUpdate()->first();
+                    if ($locked && $locked->status === 'pending') {
+                        $locked->update([
+                            'status' => 'failed',
+                            'notes' => 'SSLCOMMERZ checkout session could not be initialized.',
+                        ]);
+                    }
+                });
                 return back()->withErrors(['gateway' => 'Unable to start hosted checkout. Check the SSLCOMMERZ plugin configuration and try again.'])->withInput();
             }
         }
