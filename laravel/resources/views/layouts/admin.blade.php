@@ -133,7 +133,7 @@
                 @foreach ($pluginAdminMenu as $groupName => $menuItems)
                     <div class="px-3 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">{{ $groupName }}</div>
                     @foreach ($menuItems as $menuItem)
-                        <a href="{{ route($menuItem['route']) }}" class="block px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs">{{ $menuItem['label'] }}</a>
+                        <a href="{{ route($menuItem['route']) }}" class="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs"><x-plugin-icon :name="$menuItem['icon'] ?? 'puzzle'" class="h-4 w-4 shrink-0 opacity-80" /><span>{{ $menuItem['label'] }}</span></a>
                     @endforeach
                 @endforeach
             @endif
