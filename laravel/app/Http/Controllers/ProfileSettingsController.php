@@ -111,6 +111,6 @@ class ProfileSettingsController extends Controller
             Storage::disk('public')->delete($oldPath);
         }
 
-        return redirect()->route('profile.settings')->with('status', 'Your profile has been updated successfully.');
+        return redirect()->route('profile.settings.edit')->with('status', 'Your profile has been updated successfully.');
     }
 }
