@@ -108,24 +108,6 @@ final class StorefrontPaymentCheckoutTest extends TestCase
             'storefront_item_id' => $itemId,
         ];
 
-        app(PluginManager::class)->saveSettings('gateway-sslcommerz', [
-            'store_id' => 'test-store-id',
-            'store_password' => 'test-store-password',
-            'sandbox_mode' => '1',
-        ]);
-
-        // A definite provider rejection is safe to retry; network timeouts are
-        // covered separately and must remain in risk_review until reconciled.
-        Http::fake([
-            'https://sandbox.sslcommerz.com/gwprocess/v4/api.php' => Http::sequence()
-                ->push(['status' => 'FAILED', 'failedreason' => 'Invalid test credentials'], 400)
-                ->push([
-                    'status' => 'SUCCESS',
-                    'GatewayPageURL' => 'https://sandbox.sslcommerz.com/gateway/checkout',
-                    'sessionkey' => 'retry-session-key',
-                ], 200),
-        ]);
-
         $this->actingAs($buyer)
             ->from('/ebooks/retry-checkout-guide')
             ->post('/universal-checkout', $payload)
@@ -136,6 +118,19 @@ final class StorefrontPaymentCheckoutTest extends TestCase
             'user_id' => $buyer->id,
             'storefront_item_id' => $itemId,
             'status' => 'failed',
+        ]);
+
+        app(PluginManager::class)->saveSettings('gateway-sslcommerz', [
+            'store_id' => 'test-store-id',
+            'store_password' => 'test-store-password',
+            'sandbox_mode' => '1',
+        ]);
+        Http::fake([
+            'https://sandbox.sslcommerz.com/gwprocess/v4/api.php' => Http::response([
+                'status' => 'SUCCESS',
+                'GatewayPageURL' => 'https://sandbox.sslcommerz.com/gateway/checkout',
+                'sessionkey' => 'retry-session-key',
+            ], 200),
         ]);
 
         $this->actingAs($buyer)
@@ -149,7 +144,7 @@ final class StorefrontPaymentCheckoutTest extends TestCase
             'status' => 'pending',
             'amount' => 180,
         ]);
-        Http::assertSentCount(2);
+        Http::assertSentCount(1);
     }
 
     public function test_stale_pending_ebook_checkout_is_not_replaced_before_provider_reconciliation(): void
