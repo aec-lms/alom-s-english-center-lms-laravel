@@ -214,6 +214,15 @@ class MobileApiController extends Controller
 
         // Revoke the exact bearer token presented by this client. This avoids
         // relying on a guard's current token when it is a transient session token.
+        $validated = $request->validate(['device_id' => ['nullable', 'string', 'max:160']]);
+        $deviceId = trim((string) ($validated['device_id'] ?? ''));
+        if ($user && $deviceId !== '' && Schema::hasTable('mobile_device_tokens')) {
+            DB::table('mobile_device_tokens')
+                ->where('user_id', $user->id)
+                ->where('device_id', $deviceId)
+                ->update(['is_active' => false, 'updated_at' => now()]);
+        }
+
         if ($user && is_string($plainTextToken) && $plainTextToken !== '') {
             $accessToken = PersonalAccessToken::findToken($plainTextToken);
             if ($accessToken && (int) $accessToken->tokenable_id === (int) $user->getKey() && $accessToken->tokenable_type === $user->getMorphClass()) {
@@ -418,19 +427,24 @@ class MobileApiController extends Controller
         $platform = strtolower((string) ($validated['platform'] ?? 'android'));
         $deviceId = $validated['device_id'] ?? Str::slug($validated['device_name']);
 
+        $attributes = [
+            'device_name' => $validated['device_name'],
+            'app_version' => $validated['app_version'] ?? '1.0.0',
+            'last_seen_at' => now(),
+            'is_active' => true,
+        ];
+        // A login refresh must not erase a previously registered FCM token.
+        if (array_key_exists('push_token', $validated)) {
+            $attributes['push_token'] = $validated['push_token'];
+        }
+
         return MobileDeviceToken::query()->updateOrCreate(
             [
                 'user_id' => $user?->id,
                 'platform' => $platform,
                 'device_id' => $deviceId,
             ],
-            [
-                'device_name' => $validated['device_name'],
-                'app_version' => $validated['app_version'] ?? '1.0.0',
-                'push_token' => $validated['push_token'] ?? null,
-                'last_seen_at' => now(),
-                'is_active' => true,
-            ]
+            $attributes
         );
     }
 
