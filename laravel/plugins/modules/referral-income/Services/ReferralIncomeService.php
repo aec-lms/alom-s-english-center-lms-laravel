@@ -42,6 +42,7 @@ class ReferralIncomeService
 
     public function applyCode(User $referred, string $code): void
     {
+        $this->ownerType($referred);
         $code = strtoupper(trim($code));
         $record = DB::table('referral_codes')->where('code', $code)->where('is_active', true)->first();
         if (!$record) {
