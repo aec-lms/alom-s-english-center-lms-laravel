@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\SupportCenter\\Models;
+namespace Plugins\Modules\SupportCenter\Models;
 
-use Illuminate\\Database\\Eloquent\\Model;
-use Illuminate\\Database\\Eloquent\\Relations\\BelongsTo;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SupportTicketMessage extends Model
 {
@@ -20,6 +20,6 @@ class SupportTicketMessage extends Model
 
     public function sender(): BelongsTo
     {
-        return $this->belongsTo(\\App\\Models\\User::class, 'sender_id');
+        return $this->belongsTo(\App\Models\User::class, 'sender_id');
     }
 }
