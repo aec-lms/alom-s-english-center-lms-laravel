@@ -43,6 +43,7 @@ class StudentAssessmentController extends Controller
             abort_unless(DB::table('enrollments')->where('user_id',$student->id)->where('course_id',$set->course_id)->whereIn('status',['active','completed'])->exists(),403,'An active course enrollment is required.');
         }
         $attempt=DB::transaction(function()use($set,$student){
+            $set=AssessmentSet::query()->whereKey($set->id)->lockForUpdate()->firstOrFail();
             $existing=AssessmentAttempt::query()->where('assessment_set_id',$set->id)->where('student_id',$student->id)->where('status','in_progress')->lockForUpdate()->first();
             if($existing)return $existing;
             $count=AssessmentAttempt::query()->where('assessment_set_id',$set->id)->where('student_id',$student->id)->count();
