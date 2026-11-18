@@ -8,10 +8,10 @@ use Illuminate\Database\Eloquent\Model;
 
 class PluginArchive extends Model
 {
-    protected $fillable = ['plugin_slug', 'plugin_name', 'version', 'archive_path', 'manifest_snapshot', 'deleted_by', 'deleted_at'];
+    protected $fillable = ['plugin_slug', 'plugin_name', 'version', 'archive_path', 'manifest_snapshot', 'files_sha256', 'was_installed', 'was_enabled', 'deleted_by', 'deleted_at'];
 
     protected function casts(): array
     {
-        return ['manifest_snapshot' => 'array', 'deleted_at' => 'datetime'];
+        return ['manifest_snapshot' => 'array', 'files_sha256' => 'array', 'was_installed' => 'boolean', 'was_enabled' => 'boolean', 'deleted_at' => 'datetime'];
     }
 }
