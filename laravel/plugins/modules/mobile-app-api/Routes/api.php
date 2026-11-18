@@ -30,6 +30,8 @@ Route::middleware(['api', 'installed', 'plugin:mobile-app-api'])
             Route::get('/courses/{slug}/lessons', [MobileApiController::class, 'lessons'])->name('courses.lessons');
             Route::get('/instructor/courses', [InstructorMobileApiController::class, 'courses'])->name('instructor.courses');
             Route::get('/instructor/attendance/policy', [InstructorMobileApiController::class, 'attendancePolicy'])->name('instructor.attendance.policy');
+            Route::post('/instructor/attendance/gps-consent', [InstructorMobileApiController::class, 'grantAttendanceGpsConsent'])->middleware('throttle:5,1')->name('instructor.attendance.consent.grant');
+            Route::delete('/instructor/attendance/gps-consent', [InstructorMobileApiController::class, 'revokeAttendanceGpsConsent'])->middleware('throttle:5,1')->name('instructor.attendance.consent.revoke');
             Route::post('/instructor/batches/{batch}/attendance/qr', [InstructorMobileApiController::class, 'createAttendanceQr'])->whereNumber('batch')->middleware('throttle:10,1')->name('instructor.attendance.qr');
             Route::get('/instructor/notices', [InstructorMobileApiController::class, 'notices'])->name('instructor.notices');
             Route::post('/instructor/notices/{notice}/read', [InstructorMobileApiController::class, 'markNoticeRead'])->whereNumber('notice')->middleware('throttle:60,1')->name('instructor.notices.read');
