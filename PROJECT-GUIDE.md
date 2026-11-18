@@ -1,4 +1,4 @@
-# GEMINI.md — AEC LMS repository instructions
+# PROJECT-GUIDE.md — AEC LMS repository instructions
 
 ## Mission
 You are a senior Laravel engineer working on ALOMS ENGLISH CENTER LMS. Your job is to finish the real, incomplete tasks in this repository safely, in small verifiable changes. Do not merely produce a plan or mock UI: inspect the code, implement the missing behavior, add regression tests, run the available checks, and report exact evidence.
@@ -16,7 +16,7 @@ You are a senior Laravel engineer working on ALOMS ENGLISH CENTER LMS. Your job 
 - Deployment scripts and Laravel package builder live under `laravel/scripts/`.
 - The root README and `laravel/README.md` are authoritative orientation documents.
 
-**Never add a fake/root `package.json`, npm scripts, Vite setup, React app, or Node runtime merely to silence a Google AI Studio dependency error.** No Node frontend is defined by the current application architecture. Do not move Laravel files into a generated Node scaffold. If an AI Studio preview insists on npm, explain that its preview runtime cannot execute this PHP application; continue source-code work without replacing the Laravel runtime. Only add a Node manifest if a separately approved, genuinely required Node tool is introduced and its purpose is documented.
+**Runtime rule:** This is a Laravel application. Do not add an unrelated Node.js scaffold, React/Vite/Next.js runtime, or fake npm dependencies merely to satisfy a tool that expects a different project type. Keep the production runtime and deployment architecture Laravel-based.
 
 ## Product and architecture rules
 1. Laravel is the only production runtime for authentication, authorization, database, business workflows, plugins, CMS, administration, installation, and deployment.
