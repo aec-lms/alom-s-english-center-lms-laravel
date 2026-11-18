@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\ExpenseManagement\\Models;
+namespace Plugins\Modules\ExpenseManagement\Models;
 
-use Illuminate\\Database\\Eloquent\\Model;
-use Illuminate\\Database\\Eloquent\\Relations\\BelongsTo;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Expense extends Model
 {
@@ -23,11 +23,11 @@ class Expense extends Model
 
     public function branch(): BelongsTo
     {
-        return $this->belongsTo(\\App\\Models\\Branch::class);
+        return $this->belongsTo(\App\Models\Branch::class);
     }
 
     public function creator(): BelongsTo
     {
-        return $this->belongsTo(\\App\\Models\\User::class, 'created_by');
+        return $this->belongsTo(\App\Models\User::class, 'created_by');
     }
 }
