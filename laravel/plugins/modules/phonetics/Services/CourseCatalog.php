@@ -174,11 +174,9 @@ final class CourseCatalog
         $batchBranchColumn = $batchMap['branch_id'] ?? 'branch_id';
         if ($this->hasColumn($batchMap, $batchBranchColumn)) {
             $batchBranchId = data_get($batch, $batchBranchColumn);
-            abort_unless(
-                $batchBranchId === null || ($userBranchId !== null && (string) $batchBranchId === (string) $userBranchId),
-                403,
-                'Batch belongs to another branch.'
-            );
+            if (!($batchBranchId === null || ($userBranchId !== null && (string) $batchBranchId === (string) $userBranchId))) {
+                throw new AccessDeniedHttpException('Batch belongs to another branch.');
+            }
         } elseif ($userBranchId !== null) {
             throw new ServiceUnavailableHttpException(null, 'Batch branch mapping is required for this branch-scoped account.');
         }
@@ -253,11 +251,9 @@ final class CourseCatalog
         $courseBranchColumn = $courseMap['branch_id'] ?? 'branch_id';
         if ($this->hasColumn($courseMap, $courseBranchColumn)) {
             $courseBranchId = data_get($course, $courseBranchColumn);
-            abort_unless(
-                $courseBranchId === null || ($branchId !== null && (string) $courseBranchId === (string) $branchId),
-                403,
-                'Course belongs to another branch.'
-            );
+            if (!($courseBranchId === null || ($branchId !== null && (string) $courseBranchId === (string) $branchId))) {
+                throw new AccessDeniedHttpException('Course belongs to another branch.');
+            }
         } elseif ($branchId !== null) {
             throw new ServiceUnavailableHttpException(null, 'Course branch mapping is required for this branch-scoped account.');
         }
