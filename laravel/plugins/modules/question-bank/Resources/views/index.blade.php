@@ -54,7 +54,7 @@
 <div class="col-md-2"><select name="difficulty" class="form-select"><option value="easy" @selected($question->difficulty==='easy')>Easy</option><option value="medium" @selected($question->difficulty==='medium')>Medium</option><option value="hard" @selected($question->difficulty==='hard')>Hard</option></select></div>
 <div class="col-md-1"><input name="default_marks" type="number" step="0.01" min="0.01" class="form-control" value="{{ $question->default_marks }}"></div><div class="col-md-1"><input name="default_negative_marks" type="number" step="0.01" min="0" class="form-control" value="{{ $question->default_negative_marks }}"></div>
 <div class="col-12"><textarea name="prompt" class="form-control" rows="2" required>{{ $question->prompt }}</textarea></div>
-<div class="col-md-6"><label class="form-label">MCQ options (one per line)</label><textarea name="options_text" class="form-control qb-edit-options" rows="3">{{ implode("\\n",$question->options ?? []) }}</textarea></div>
+<div class="col-md-6"><label class="form-label">MCQ options (one per line)</label><textarea name="options_text" class="form-control qb-edit-options" rows="3">{{ implode(PHP_EOL,$question->options ?? []) }}</textarea></div>
 <div class="col-md-6"><label class="form-label">Correct answer / marking guide</label><textarea name="correct_answer" class="form-control" rows="3">{{ $question->correct_answer }}</textarea></div>
 <div class="col-12"><textarea name="explanation" class="form-control" rows="2" placeholder="Explanation">{{ $question->explanation }}</textarea></div>
 <div class="col-12 d-flex gap-2"><button class="btn btn-sm btn-primary">Update question</button></form>
