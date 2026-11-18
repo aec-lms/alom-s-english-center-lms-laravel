@@ -21,28 +21,19 @@ final class PhoneticsExamController extends Controller
     public function start(Request $request, string $courseSlug, string $examSlug): View
     {
         abort_unless($request->user(), 401);
-        abort_unless(PhoneticSetting::current()->enabled, 404);
+        $setting = PhoneticSetting::current();
+        abort_unless($setting->enabled, 404);
         $course = $this->catalog->course($courseSlug);
         $courseRef = $this->catalog->courseId($course);
-        $this->catalog->assertAccess($request->user(), $courseRef);
+        if ($setting->require_course_enrollment) {
+            $this->catalog->assertAccess($request->user(), $courseRef);
+        }
 
         $exam = $this->resolveExam($examSlug, $course, $request->query('lesson'));
         if ($exam->batch_ref) {
             abort_unless($this->catalog->isBatchMember($request->user(), (string) $exam->batch_ref), 403, 'This exam is restricted to another batch.');
         }
         $this->assertAudience($exam, $course);
-
-        if ($exam->max_attempts > 0) {
-            $count = PhoneticExamAttempt::query()
-                ->where('exam_id', $exam->id)
-                ->where('user_id', $request->user()->getAuthIdentifier())
-                ->where(function ($attempts): void {
-                    $attempts->where('status', 'submitted')
-                        ->orWhere(fn ($active) => $active->where('status', 'in_progress')
-                            ->where(fn ($expiry) => $expiry->whereNull('expires_at')->orWhere('expires_at', '>', now())));
-                })->count();
-            abort_if($count >= $exam->max_attempts, 403, 'You have used all attempts for this examination.');
-        }
 
         $questions = $exam->questions()->get();
         abort_if($questions->isEmpty(), 404, 'This exam has no questions yet.');
@@ -62,16 +53,33 @@ final class PhoneticsExamController extends Controller
             ];
         })->all();
 
-        $attempt = PhoneticExamAttempt::query()->create([
-            'exam_id' => $exam->id,
-            'user_id' => $request->user()->getAuthIdentifier(),
-            'status' => 'in_progress',
-            'question_snapshot' => $snapshot,
-            'answers' => [],
-            'total_marks' => $questions->sum('marks'),
-            'started_at' => now(),
-            'expires_at' => $exam->duration_minutes > 0 ? now()->addMinutes($exam->duration_minutes) : null,
-        ]);
+        $attempt = DB::transaction(function () use ($exam, $request, $snapshot, $questions): PhoneticExamAttempt {
+            $lockedExam = PhoneticExam::query()->lockForUpdate()->findOrFail($exam->id);
+            abort_unless($lockedExam->status === 'published', 404, 'This examination is no longer available.');
+
+            if ($lockedExam->max_attempts > 0) {
+                $count = PhoneticExamAttempt::query()
+                    ->where('exam_id', $lockedExam->id)
+                    ->where('user_id', (string) $request->user()->getAuthIdentifier())
+                    ->where(function ($attempts): void {
+                        $attempts->where('status', 'submitted')
+                            ->orWhere(fn ($active) => $active->where('status', 'in_progress')
+                                ->where(fn ($expiry) => $expiry->whereNull('expires_at')->orWhere('expires_at', '>', now())));
+                    })->count();
+                abort_if($count >= $lockedExam->max_attempts, 403, 'You have used all attempts for this examination.');
+            }
+
+            return PhoneticExamAttempt::query()->create([
+                'exam_id' => $lockedExam->id,
+                'user_id' => (string) $request->user()->getAuthIdentifier(),
+                'status' => 'in_progress',
+                'question_snapshot' => $snapshot,
+                'answers' => [],
+                'total_marks' => $questions->sum('marks'),
+                'started_at' => now(),
+                'expires_at' => $lockedExam->duration_minutes > 0 ? now()->addMinutes($lockedExam->duration_minutes) : null,
+            ]);
+        });
 
         return view('phonetics::learning.exam', [
             'course' => $course,
@@ -86,10 +94,13 @@ final class PhoneticsExamController extends Controller
     public function submit(Request $request, string $courseSlug, string $examSlug, PhoneticExamAttempt $attempt): View
     {
         abort_unless($request->user(), 401);
-        abort_unless(PhoneticSetting::current()->enabled, 404);
+        $setting = PhoneticSetting::current();
+        abort_unless($setting->enabled, 404);
         $course = $this->catalog->course($courseSlug);
         $courseRef = $this->catalog->courseId($course);
-        $this->catalog->assertAccess($request->user(), $courseRef);
+        if ($setting->require_course_enrollment) {
+            $this->catalog->assertAccess($request->user(), $courseRef);
+        }
         $exam = $this->resolveExam($examSlug, $course, $request->query('lesson'));
         $this->assertAudience($exam, $course);
         if ($exam->batch_ref) {
