@@ -158,6 +158,29 @@
                             <button type="submit" class="rounded-lg bg-slate-900 px-4 py-2.5 text-xs font-bold text-white">Save changes</button>
                         </div>
                     </form>
+                    <section class="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4" aria-label="Page revision history">
+                        <div class="mb-3 flex items-center justify-between gap-3">
+                            <div><h3 class="text-sm font-bold text-slate-800">Revision history</h3><p class="text-xs text-slate-500">Every saved version is retained. Restoring a version creates a new revision; it does not erase newer versions.</p></div>
+                            <span class="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-600">{{ $page->revisions->count() }} versions</span>
+                        </div>
+                        <div class="space-y-2">
+                            @forelse ($page->revisions as $revision)
+                                <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3">
+                                    <div class="text-xs text-slate-600">
+                                        <strong class="text-slate-800">Version {{ $revision->version }}</strong>
+                                        <span class="mx-1">·</span>{{ $revision->creator?->name ?? 'System / former user' }}
+                                        <span class="mx-1">·</span>{{ $revision->created_at?->format('d M Y, h:i A') }}
+                                    </div>
+                                    <form method="POST" action="{{ route('plugins.page_builder.revisions.restore', [$page, $revision]) }}" onsubmit="return confirm('Restore version {{ $revision->version }}? The current page will be saved as a new version first.')">
+                                        @csrf
+                                        <button type="submit" class="rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-800">Restore version {{ $revision->version }}</button>
+                                    </form>
+                                </div>
+                            @empty
+                                <p class="text-xs text-slate-500">No saved revisions yet.</p>
+                            @endforelse
+                        </div>
+                    </section>
                     <form method="POST" action="{{ route('plugins.page_builder.destroy', $page) }}" class="mt-3" onsubmit="return confirm('Move this page to the recycle bin?')">@csrf @method('DELETE')<button type="submit" class="text-xs font-semibold text-rose-600">Move to recycle bin</button></form>
                 </div>
             </details>
