@@ -65,8 +65,12 @@ class CourseBundleController extends Controller
         $record = CourseBundle::query()->when($actor->hasRole('branch_manager'), fn ($q) => $q->where('branch_id', $actor->branch_id))->findOrFail($bundle);
         $validated = $this->validateBundle($request, $actor, $record->id);
 
-        DB::transaction(function () use ($record, $validated): void {
-            $record->update([
+        DB::transaction(function () use ($record, $validated, $actor): void {
+            $lockedRecord = CourseBundle::query()
+                ->when($actor->hasRole('branch_manager'), fn ($q) => $q->where('branch_id', $actor->branch_id))
+                ->lockForUpdate()
+                ->findOrFail($record->id);
+            $lockedRecord->update([
                 'branch_id' => $validated['branch_id'],
                 'title' => $validated['title'],
                 'slug' => $this->uniqueSlug($validated['title'], $record->id),
@@ -74,7 +78,7 @@ class CourseBundleController extends Controller
                 'price' => $validated['price'],
                 'status' => $validated['status'],
             ]);
-            $this->syncItems($record, $validated['course_ids']);
+            $this->syncItems($lockedRecord, $validated['course_ids']);
         });
 
         return back()->with('status', 'Course bundle updated. Existing orders retain their original course snapshots.');
@@ -90,11 +94,10 @@ class CourseBundleController extends Controller
         return back()->with('status', 'Course bundle archived. Purchase history was preserved.');
     }
 
-    public function publicIndex(): View
+    public function publicIndex(Request $request): View
     {
         $this->assertCourseIntegration();
-        $bundles = CourseBundle::query()
-            ->where('status', 'published')
+        $bundles = $this->publicBundleQuery($request->user())
             ->with('items')
             ->latest()
             ->paginate(12);
@@ -102,10 +105,13 @@ class CourseBundleController extends Controller
         return view('course-bundles::catalog', compact('bundles'));
     }
 
-    public function show(string $slug): View
+    public function show(Request $request, string $slug): View
     {
         $this->assertCourseIntegration();
-        $bundle = CourseBundle::query()->where('slug', $slug)->where('status', 'published')->with('items')->firstOrFail();
+        $bundle = $this->publicBundleQuery($request->user())
+            ->where('slug', $slug)
+            ->with('items')
+            ->firstOrFail();
         $courses = $this->publishedBundleCourses($bundle);
         abort_unless($courses->count() >= 2, 404);
         $purchaseAvailable = !Schema::hasTable('batches') || !Schema::hasColumn('batches', 'status')
@@ -132,8 +138,12 @@ class CourseBundleController extends Controller
             abort_if(DB::table('batches')->whereIn('course_id', $courses->pluck('id'))->where('status', 'open')->exists(), 409, 'A course in this bundle has an open batch. Contact the admissions office to enroll in the correct batch.');
         }
         $branchId = $bundle->branch_id ?? $branchIds->first() ?? $student->branch_id;
-        if ($branchId !== null && $student->branch_id !== null && (int) $branchId !== (int) $student->branch_id) {
-            abort(403, 'This bundle is outside your assigned branch.');
+        if ($branchId !== null) {
+            abort_unless(
+                $student->branch_id !== null && (int) $branchId === (int) $student->branch_id,
+                403,
+                'A branch-specific bundle is available only to students assigned to that branch.'
+            );
         }
 
         $existing = DB::table('enrollments')
@@ -143,8 +153,53 @@ class CourseBundleController extends Controller
             ->exists();
         abort_if($existing, 409, 'You already have a pending or active enrollment in one or more courses in this bundle.');
 
-        $order = DB::transaction(function () use ($bundle, $courses, $student, $branchId): CourseBundleOrder {
-            $price = round((float) $bundle->price, 2);
+        $order = DB::transaction(function () use ($bundle, $courses, $student): CourseBundleOrder {
+            // Serialize checkouts for this student, then re-check enrollments while locked.
+            DB::table('users')->where('id', $student->id)->lockForUpdate()->first();
+            $lockedBundle = CourseBundle::query()->lockForUpdate()->findOrFail($bundle->id);
+            abort_unless($lockedBundle->status === 'published', 409, 'This bundle is no longer available.');
+
+            $lockedItemIds = DB::table('course_bundle_courses')
+                ->where('bundle_id', $lockedBundle->id)
+                ->orderBy('position')
+                ->lockForUpdate()
+                ->pluck('course_id')
+                ->map(fn ($id): int => (int) $id)
+                ->all();
+            $expectedIds = $courses->pluck('id')->map(fn ($id): int => (int) $id)->all();
+            abort_unless($lockedItemIds === $expectedIds && count($lockedItemIds) >= 2, 409, 'The bundle contents changed. Please review the bundle and try again.');
+
+            $lockedCourses = DB::table('courses')
+                ->whereIn('id', $lockedItemIds)
+                ->where('status', 'published')
+                ->get(['id', 'title', 'branch_id'])
+                ->keyBy('id');
+            abort_unless($lockedCourses->count() === count($lockedItemIds), 409, 'A course in this bundle is no longer available.');
+            $lockedBranchIds = $lockedCourses->pluck('branch_id')->filter()->unique();
+            abort_if($lockedBranchIds->count() > 1, 422, 'A bundle cannot combine courses from different branches.');
+            $branchId = $lockedBundle->branch_id ?? $lockedBranchIds->first() ?? $student->branch_id;
+            if ($branchId !== null) {
+                abort_unless(
+                    $student->branch_id !== null && (int) $branchId === (int) $student->branch_id,
+                    403,
+                    'A branch-specific bundle is available only to students assigned to that branch.'
+                );
+            }
+
+            $existing = DB::table('enrollments')
+                ->where('user_id', $student->id)
+                ->whereIn('course_id', $lockedItemIds)
+                ->whereIn('status', ['pending', 'active'])
+                ->lockForUpdate()
+                ->exists();
+            abort_if($existing, 409, 'You already have a pending or active enrollment in one or more courses in this bundle.');
+
+            if (Schema::hasTable('batches') && Schema::hasColumn('batches', 'status')) {
+                abort_if(DB::table('batches')->whereIn('course_id', $lockedItemIds)->where('status', 'open')->exists(), 409, 'A course in this bundle has an open batch. Contact the admissions office to enroll in the correct batch.');
+            }
+
+            $orderedCourses = collect($lockedItemIds)->map(fn (int $id) => $lockedCourses->get($id));
+            $price = round((float) $lockedBundle->price, 2);
             $invoice = null;
             if ($price > 0) {
                 abort_unless($this->plugins->isEnabled('fees-management') && Schema::hasTable('fee_invoices')
@@ -171,18 +226,18 @@ class CourseBundleController extends Controller
             }
 
             $order = CourseBundleOrder::query()->create([
-                'bundle_id' => $bundle->id,
+                'bundle_id' => $lockedBundle->id,
                 'user_id' => $student->id,
                 'invoice_id' => $invoice?->id,
                 'branch_id' => $branchId,
-                'bundle_title' => $bundle->title,
+                'bundle_title' => $lockedBundle->title,
                 'amount' => $price,
                 'currency' => $invoice?->currency ?? strtoupper((string) config('lms.default_currency', 'BDT')),
                 'status' => $price > 0 ? 'awaiting_payment' : 'completed',
                 'purchased_at' => $price > 0 ? null : now(),
             ]);
 
-            foreach ($courses->values() as $position => $course) {
+            foreach ($orderedCourses as $position => $course) {
                 DB::table('course_bundle_order_courses')->insert([
                     'order_id' => $order->id,
                     'course_id' => $course->id,
@@ -288,7 +343,16 @@ class CourseBundleController extends Controller
             abort_if($openBatchCourseIds !== [], 422, 'Courses with open batches cannot be added to a combo bundle.');
         }
 
-        $branchId = $actor->hasRole('branch_manager') ? (int) $actor->branch_id : ($validated['branch_id'] ?? $branches->first());
+        $branchId = $actor->hasRole('branch_manager') ? (int) $actor->branch_id : (isset($validated['branch_id']) ? (int) $validated['branch_id'] : $branches->first());
+        if (!$actor->hasRole('branch_manager') && $branchId !== null) {
+            abort_unless(
+                $this->plugins->isEnabled('branch-management')
+                && Schema::hasTable('branches')
+                && DB::table('branches')->where('id', $branchId)->where('is_active', true)->exists(),
+                422,
+                'Select an active branch.'
+            );
+        }
         if ($branches->isNotEmpty() && $branchId !== null) {
             abort_unless($branches->count() === 1 && (int) $branches->first() === (int) $branchId, 422, 'Bundle and courses must belong to the same branch.');
         }
@@ -337,6 +401,18 @@ class CourseBundleController extends Controller
             $slug = $base . '-' . $suffix++;
         }
         return $slug;
+    }
+
+    private function publicBundleQuery($actor)
+    {
+        return CourseBundle::query()
+            ->where('status', 'published')
+            ->where(function ($query) use ($actor): void {
+                $query->whereNull('branch_id');
+                if ($actor && $actor->branch_id !== null) {
+                    $query->orWhere('branch_id', (int) $actor->branch_id);
+                }
+            });
     }
 
     private function assertCourseIntegration(): void
