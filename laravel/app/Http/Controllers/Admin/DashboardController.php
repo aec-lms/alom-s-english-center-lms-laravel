@@ -137,7 +137,7 @@ class DashboardController extends Controller
 
         try {
             $stored = json_decode($value, true, 512, JSON_THROW_ON_ERROR);
-        } catch (\\JsonException) {
+        } catch (\JsonException) {
             return self::MOTION_DEFAULTS;
         }
 
@@ -174,7 +174,7 @@ class DashboardController extends Controller
 
         try {
             $stored = json_decode($value, true, 512, JSON_THROW_ON_ERROR);
-        } catch (\\JsonException) {
+        } catch (\JsonException) {
             return $defaults;
         }
 
