@@ -160,29 +160,29 @@
                     <div class="bg-[#0C2B47]/90 border border-white/10 rounded-xl p-3.5 flex items-center gap-3">
                         <div class="w-10 h-10 rounded-lg bg-[#0EA5E9] text-white flex items-center justify-center shrink-0 font-extrabold text-xs">ST</div>
                         <div class="min-w-0">
-                            <div class="text-base sm:text-lg font-extrabold tabular-nums text-white leading-tight">{{ number_format((int) $stats['students']) }}</div>
+                            <div class="homepage-stat-number text-base sm:text-lg font-extrabold tabular-nums text-white leading-tight" data-count-up="{{ (int) $stats['students'] }}" data-count-label="Students" aria-label="{{ number_format((int) $stats['students']) }} Students">0</div>
                             <div class="text-[11px] text-slate-300">Students</div>
                         </div>
                     </div>
                     <div class="bg-[#0C2B47]/90 border border-white/10 rounded-xl p-3.5 flex items-center gap-3">
                         <div class="w-10 h-10 rounded-lg bg-[#0EA5E9] text-white flex items-center justify-center shrink-0 font-extrabold text-xs">CR</div>
                         <div class="min-w-0">
-                            <div class="text-base sm:text-lg font-extrabold tabular-nums text-white leading-tight">{{ number_format((int) $stats['courses']) }}</div>
+                            <div class="homepage-stat-number text-base sm:text-lg font-extrabold tabular-nums text-white leading-tight" data-count-up="{{ (int) $stats['courses'] }}" data-count-label="Courses" aria-label="{{ number_format((int) $stats['courses']) }} Courses">0</div>
                             <div class="text-[11px] text-slate-300">Courses</div>
                         </div>
                     </div>
                     <div class="bg-[#0C2B47]/90 border border-white/10 rounded-xl p-3.5 flex items-center gap-3">
                         <div class="w-10 h-10 rounded-lg bg-[#0EA5E9] text-white flex items-center justify-center shrink-0 font-extrabold text-xs">TR</div>
                         <div class="min-w-0">
-                            <div class="text-base sm:text-lg font-extrabold tabular-nums text-white leading-tight">{{ number_format((int) $stats['teachers']) }}</div>
+                            <div class="homepage-stat-number text-base sm:text-lg font-extrabold tabular-nums text-white leading-tight" data-count-up="{{ (int) $stats['teachers'] }}" data-count-label="Teachers" aria-label="{{ number_format((int) $stats['teachers']) }} Teachers">0</div>
                             <div class="text-[11px] text-slate-300">Teachers</div>
                         </div>
                     </div>
                     <div class="bg-[#0C2B47]/90 border border-white/10 rounded-xl p-3.5 flex items-center gap-3">
                         <div class="w-10 h-10 rounded-lg bg-[#0EA5E9] text-white flex items-center justify-center shrink-0 font-extrabold text-xs">VD</div>
                         <div class="min-w-0">
-                            <div class="text-base sm:text-lg font-extrabold tabular-nums text-white leading-tight">{{ number_format((int) $stats['lessons']) }}</div>
-                            <div class="text-[11px] text-slate-300">Lessons</div>
+                            <div class="homepage-stat-number text-base sm:text-lg font-extrabold tabular-nums text-white leading-tight" data-count-up="{{ (int) $stats['videos'] }}" data-count-label="Videos" aria-label="{{ number_format((int) $stats['videos']) }} Videos">0</div>
+                            <div class="text-[11px] text-slate-300">Videos</div>
                         </div>
                     </div>
                 </div>
@@ -422,6 +422,42 @@
 @endif
 
 @include('public.partials.footer')
+
+
+<script>
+(() => {
+    const counters = Array.from(document.querySelectorAll('[data-count-up]'));
+    if (!counters.length) return;
+    const formatter = new Intl.NumberFormat('en-US');
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const animate = (element) => {
+        if (element.dataset.counted === 'true') return;
+        element.dataset.counted = 'true';
+        const target = Math.max(0, Number.parseInt(element.dataset.countUp || '0', 10) || 0);
+        if (reducedMotion || target === 0) { element.textContent = formatter.format(target); return; }
+        const duration = Math.min(2400, Math.max(1100, 900 + String(target).length * 110));
+        const started = performance.now();
+        const tick = (now) => {
+            const progress = Math.min(1, (now - started) / duration);
+            const eased = 1 - Math.pow(1 - progress, 4);
+            element.textContent = formatter.format(progress === 1 ? target : Math.min(target, Math.floor(target * eased)));
+            if (progress < 1) requestAnimationFrame(tick);
+            else { element.textContent = formatter.format(target); element.classList.add('homepage-stat-counted'); }
+        };
+        requestAnimationFrame(tick);
+    };
+    if (!('IntersectionObserver' in window)) { counters.forEach(animate); return; }
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => { if (entry.isIntersecting) { animate(entry.target); observer.unobserve(entry.target); } });
+    }, {threshold: 0.35});
+    counters.forEach((counter) => observer.observe(counter));
+})();
+</script>
+<style>
+.homepage-stat-number { display:inline-block; min-width:2ch; font-variant-numeric:tabular-nums; transition:filter .35s ease, transform .35s ease; }
+.homepage-stat-number.homepage-stat-counted { filter:drop-shadow(0 0 9px rgba(56,189,248,.3)); transform:translateY(-1px); }
+@media (prefers-reduced-motion: reduce) { .homepage-stat-number, .homepage-stat-number.homepage-stat-counted { transition:none; transform:none; filter:none; } }
+</style>
 
 <script>
 (() => {
