@@ -31,6 +31,14 @@ class PluginIconRegistryTest extends TestCase
         $this->assertSame('puzzle', PluginIconRegistry::forMenuLabel('Unknown Tool', 'puzzle'));
     }
 
+    public function test_plugin_favicons_are_valid_svg_and_ignore_untrusted_icon_names(): void
+    {
+        $svg = PluginIconRegistry::faviconSvg('video');
+        $this->assertStringStartsWith('<svg xmlns="http://www.w3.org/2000/svg"', $svg);
+        $this->assertStringContainsString('<rect', $svg);
+        $this->assertStringNotContainsString('onload=', PluginIconRegistry::faviconSvg('<svg onload=alert(1)>'));
+    }
+
     public function test_every_resolved_icon_is_supported_by_the_svg_component(): void
     {
         $component = file_get_contents(resource_path('views/components/plugin-icon.blade.php'));
