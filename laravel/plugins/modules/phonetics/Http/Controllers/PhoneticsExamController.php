@@ -64,7 +64,7 @@ final class PhoneticsExamController extends Controller
 
         $attempt = PhoneticExamAttempt::query()->create([
             'exam_id' => $exam->id,
-            'user_id' => $request->user()->id,
+            'user_id' => $request->user()->getAuthIdentifier(),
             'status' => 'in_progress',
             'question_snapshot' => $snapshot,
             'answers' => [],
@@ -95,7 +95,7 @@ final class PhoneticsExamController extends Controller
         if ($exam->batch_ref) {
             abort_unless($this->catalog->isBatchMember($request->user(), (string) $exam->batch_ref), 403, 'This exam is restricted to another batch.');
         }
-        abort_unless($attempt->exam_id === $exam->id && $attempt->user_id === $request->user()->id, 404);
+        abort_unless($attempt->exam_id === $exam->id && (string) $attempt->user_id === (string) $request->user()->getAuthIdentifier(), 404);
         abort_unless($attempt->status === 'in_progress', 409, 'This attempt has already been submitted.');
         abort_if($attempt->expires_at && $attempt->expires_at->isPast(), 410, 'The examination time has expired.');
 
