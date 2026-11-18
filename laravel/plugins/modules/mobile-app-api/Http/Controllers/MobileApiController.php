@@ -195,6 +195,7 @@ class MobileApiController extends Controller
 
         return response()->json([
             'token' => $token,
+            'access_token' => $token,
             'platform' => $validated['platform'] ?? 'android',
             'user' => [
                 'id' => $user->id,
