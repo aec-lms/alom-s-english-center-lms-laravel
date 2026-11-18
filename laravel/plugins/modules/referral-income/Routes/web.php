@@ -5,6 +5,8 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Route;
 use Plugins\Modules\ReferralIncome\Http\Controllers\ReferralIncomeController;
 
+Route::middleware(['web', 'installed', 'plugin:referral-income'])->get('/r/{code}', [ReferralIncomeController::class, 'track'])->where('code', '[A-Za-z0-9]{6,32}')->name('plugins.referral_income.track');
+
 Route::middleware(['web', 'installed', 'auth', 'plugin:referral-income'])
     ->prefix('my-referrals')->name('plugins.referral_income.member.')
     ->group(function (): void {
