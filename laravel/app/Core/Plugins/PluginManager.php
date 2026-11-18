@@ -298,7 +298,22 @@ class PluginManager
             }
             $this->assertDependenciesSatisfied($manifest, false);
 
-            $targetDir = (string) config('plugins.modules_path') . DIRECTORY_SEPARATOR . $manifest->slug;
+            $modulesRoot = realpath((string) config('plugins.modules_path'));
+            if (!$modulesRoot || !is_dir($modulesRoot)) {
+                throw new RuntimeException('Plugin modules directory is missing or unsafe.');
+            }
+
+            $targetDir = $modulesRoot . DIRECTORY_SEPARATOR . $manifest->slug;
+            if (is_link($targetDir)) {
+                throw new RuntimeException('Plugin update target cannot be a symbolic link.');
+            }
+            if (file_exists($targetDir)) {
+                $resolvedTarget = realpath($targetDir);
+                if (!$resolvedTarget || !is_dir($resolvedTarget) || dirname($resolvedTarget) !== $modulesRoot) {
+                    throw new RuntimeException('Plugin update target is outside the registered modules directory.');
+                }
+            }
+
             $previousRecord = PluginRecord::query()->where('slug', $manifest->slug)->first();
             $previousAttributes = $previousRecord?->getAttributes();
             $fromVersion = $previousRecord?->version ?? '0.0.0';
@@ -316,8 +331,12 @@ class PluginManager
 
                 File::ensureDirectoryExists(dirname($targetDir));
                 if (is_dir($targetDir)) {
-                    File::deleteDirectory($targetDir);
+                    // Treat the old target as replaced before deletion so a partial
+                    // filesystem failure still enters the snapshot-restore path.
                     $targetReplaced = true;
+                    if (!File::deleteDirectory($targetDir) || file_exists($targetDir)) {
+                        throw new RuntimeException('Existing plugin package could not be safely removed before update.');
+                    }
                 }
 
                 $targetReplaced = true;
