@@ -221,4 +221,21 @@ class BoardQuestionSolverPluginTest extends TestCase
 
         Http::assertSentCount(1);
     }
+    public function test_ready_board_solver_is_discoverable_from_the_student_dashboard(): void
+    {
+        $this->enablePlugins();
+        $student = $this->createUserWithRole('student');
+        $this->configureStudent($student);
+
+        $this->actingAs($student)->get(route('portal.dashboard'))
+            ->assertOk()
+            ->assertSee('Board Question Solver')
+            ->assertSee(route('student.board-solver.index'));
+
+        app(PluginManager::class)->saveSettings('board-question-solver', ['enabled' => '0']);
+        $this->actingAs($student)->get(route('portal.dashboard'))
+            ->assertOk()
+            ->assertDontSee('Board Question Solver');
+    }
+
 }
