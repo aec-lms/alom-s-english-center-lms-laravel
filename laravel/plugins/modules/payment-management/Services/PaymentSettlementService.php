@@ -60,6 +60,11 @@ class PaymentSettlementService
                     if (!Schema::hasTable('commerce_order_items') || !Schema::hasTable('commerce_entitlements')) continue;
                     $orderItems = DB::table('commerce_order_items')->where('order_id', $order->id)->get();
                     foreach ($orderItems as $orderItem) {
+                        $itemDetails = json_decode((string) ($orderItem->metadata ?? '{}'), true) ?: [];
+                        $entitlementDetails = $itemDetails['entitlement'] ?? $itemDetails;
+                        $durationDays = $orderItem->item_type === 'subscription'
+                            ? max(1, min(3650, (int) ($entitlementDetails['duration_days'] ?? 30)))
+                            : null;
                         DB::table('commerce_entitlements')->insertOrIgnore([
                             'user_id' => $order->user_id,
                             'order_item_id' => $orderItem->id,
@@ -68,7 +73,7 @@ class PaymentSettlementService
                             'details' => $orderItem->metadata,
                             'status' => 'active',
                             'starts_at' => now(),
-                            'expires_at' => null,
+                            'expires_at' => $durationDays ? now()->addDays($durationDays) : null,
                             'created_at' => now(),
                             'updated_at' => now(),
                         ]);
