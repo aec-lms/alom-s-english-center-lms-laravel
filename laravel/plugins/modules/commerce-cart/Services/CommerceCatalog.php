@@ -39,6 +39,9 @@ class CommerceCatalog
         }
         $courseBranchId = Schema::hasColumn('courses', 'branch_id') ? ($course->branch_id ?? null) : null;
         $this->assertBranchAccess($user, $courseBranchId);
+        if (!Schema::hasTable('enrollments') || !Schema::hasColumn('enrollments', 'invoice_id')) {
+            throw new RuntimeException('The course enrollment module must support invoice-linked pending enrollments before courses can be sold through the unified cart.');
+        }
         $price = round((float) ($course->price ?? 0), 2);
         if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('flash-sale') && Schema::hasTable('flash_sales')) {
             $sale = DB::table('flash_sales')->where('course_id', $id)->where('is_published', true)
