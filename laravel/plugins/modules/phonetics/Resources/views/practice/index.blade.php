@@ -22,8 +22,8 @@
  @endif
  <div class="grid gap-4 md:grid-cols-2">
  @forelse($entries as $e)
-  <article class="rounded-xl border bg-white p-5"><div class="flex justify-between"><h2 class="text-xl font-bold">{{ $e->word }}</h2><span class="text-xs uppercase">{{ $e->category }}</span></div>
-   <div class="mt-4 grid grid-cols-2 gap-3"><div class="rounded bg-slate-50 p-3"><b>British</b><p class="text-lg">{{ $e->uk_ipa }}</p>@if($setting->show_articulatory_notes)<small>{{ $e->uk_note }}</small>@endif</div><div class="rounded bg-slate-50 p-3"><b>American</b><p class="text-lg">{{ $e->us_ipa }}</p>@if($setting->show_articulatory_notes)<small>{{ $e->us_note }}</small>@endif</div></div>
+  <article class="rounded-xl border bg-white p-5">@if($e->card_bg_image_url)<img class="mb-3 max-h-40 w-full rounded-lg object-cover" src="{{ $e->card_bg_image_url }}" alt="Pronunciation card illustration" loading="lazy">@endif<div class="flex justify-between"><h2 class="text-xl font-bold">{{ $e->word }}</h2><span class="text-xs uppercase">{{ $e->category }}</span></div>
+   <div class="mt-4 grid grid-cols-2 gap-3"><div class="rounded bg-slate-50 p-3"><b>British</b><p class="text-lg">{{ $e->uk_ipa }}</p>@if($e->uk_audio_url)<audio class="mt-2 w-full" controls preload="none" src="{{ $e->uk_audio_url }}">Your browser does not support audio playback.</audio>@endif@if($setting->show_articulatory_notes)<small>{{ $e->uk_note }}</small>@endif</div><div class="rounded bg-slate-50 p-3"><b>American</b><p class="text-lg">{{ $e->us_ipa }}</p>@if($e->us_audio_url)<audio class="mt-2 w-full" controls preload="none" src="{{ $e->us_audio_url }}">Your browser does not support audio playback.</audio>@endif@if($setting->show_articulatory_notes)<small>{{ $e->us_note }}</small>@endif</div></div>
    @if($e->example_sentence)<p class="mt-3 text-sm italic">{{ $e->example_sentence }}</p>@endif
   </article>
  @empty
