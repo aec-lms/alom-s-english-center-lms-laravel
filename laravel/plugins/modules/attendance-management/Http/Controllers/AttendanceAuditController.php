@@ -139,10 +139,12 @@ class AttendanceAuditController extends Controller
     private function ensureAuditAccess($actor): void
     {
         abort_unless($actor && ($actor->hasRole('admin') || $actor->hasRole('branch_manager')), 403);
+        abort_unless(Schema::hasTable('attendance_entry_audit_logs') && Schema::hasTable('attendance_entries') && Schema::hasTable('students'), 409, 'Attendance audit dependencies are not enabled.');
         if ($actor->hasRole('branch_manager')) {
             abort_unless(
                 (int) ($actor->branch_id ?? 0) > 0
                     && app(\App\Core\Plugins\PluginManager::class)->isEnabled('branch-management')
+                    && Schema::hasTable('branches')
                     && DB::table('branches')->where('id', $actor->branch_id)->where('is_active', true)->exists(),
                 403,
                 'Branch manager must be assigned to an active branch.'
