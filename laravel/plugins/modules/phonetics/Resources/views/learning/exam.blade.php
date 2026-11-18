@@ -22,7 +22,7 @@
             <a href="{{ route('plugins.phonetics.learning.index',['courseSlug'=>request()->route('courseSlug')]) }}" class="mt-5 inline-block rounded-lg bg-blue-600 px-5 py-2 font-bold text-white">Back to vocabulary practice</a>
         </section>
     @else
-        <form method="POST" action="{{ route('plugins.phonetics.learning.exams.submit',['courseSlug'=>request()->route('courseSlug'),'examSlug'=>$exam->slug,'attempt'=>$attempt->id]) }}" class="space-y-4">
+        <form method="POST" action="{{ route('plugins.phonetics.learning.exams.submit',['courseSlug'=>request()->route('courseSlug'),'examSlug'=>$exam->slug,'attempt'=>$attempt->id,'lesson'=>$lessonRef]) }}" class="space-y-4">
             @csrf
             @foreach($questions as $index=>$question)
             <section class="rounded-xl border bg-white p-5">
