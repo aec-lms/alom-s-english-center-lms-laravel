@@ -110,16 +110,18 @@
                             <td class="font-bold">{{ $tx->currency }} {{ number_format((float) $tx->amount, 2) }}</td>
                             <td><span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase {{ $tx->status === 'verified' ? 'bg-emerald-100 text-emerald-800' : ($tx->status === 'refunded' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800') }}">{{ $tx->status }}</span></td>
                             <td>
-                                <form method="POST" action="{{ route('plugins.universal_payment.status', $tx) }}" class="inline-flex items-center gap-1.5">
-                                    @csrf
-                                    <select name="status" class="rounded border border-slate-300 px-1.5 py-1 text-[11px]">
-                                        <option value="verified" {{ $tx->status === 'verified' ? 'selected' : '' }}>Verify</option>
-                                        <option value="pending" {{ $tx->status === 'pending' ? 'selected' : '' }}>Pending</option>
-                                        <option value="refunded" {{ $tx->status === 'refunded' ? 'selected' : '' }}>Refund</option>
-                                        <option value="rejected" {{ $tx->status === 'rejected' ? 'selected' : '' }}>Reject</option>
-                                    </select>
-                                    <button class="px-2 py-1 rounded bg-slate-900 text-white text-[11px] font-semibold">Apply</button>
-                                </form>
+                                @if (in_array($tx->gateway, ['bank_cash', 'offline'], true) && $tx->status === 'pending')
+                                    <form method="POST" action="{{ route('plugins.universal_payment.status', $tx) }}" class="inline-flex items-center gap-1.5">
+                                        @csrf
+                                        <select name="status" class="rounded border border-slate-300 px-1.5 py-1 text-[11px]">
+                                            <option value="verified">Verify</option>
+                                            <option value="rejected">Reject</option>
+                                        </select>
+                                        <button class="px-2 py-1 rounded bg-slate-900 text-white text-[11px] font-semibold">Apply</button>
+                                    </form>
+                                @else
+                                    <span class="text-slate-400">—</span>
+                                @endif
                             </td>
                         </tr>
                     @empty
