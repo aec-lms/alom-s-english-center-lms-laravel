@@ -16,17 +16,19 @@ final class PhoneticsAdminController extends Controller {
  public function store(Request $r){
   $v=$r->validate(['word'=>'required|string|max:80','category'=>'required|in:rhoticity,trap-bath,t-flapping,lot-vowel,yod-dropping,word-stress','uk_ipa'=>'required|string|max:100','us_ipa'=>'required|string|max:100','uk_note'=>'nullable|string|max:255','us_note'=>'nullable|string|max:255','example_sentence'=>'nullable|string|max:255','uk_audio'=>'nullable|file|mimes:mp3,wav,ogg,m4a,webm|max:5120','us_audio'=>'nullable|file|mimes:mp3,wav,ogg,m4a,webm|max:5120','card_bg_image'=>'nullable|image|mimes:jpg,jpeg,png,webp|max:2048']);
   $paths=[];$v['sort_order']=(PhoneticEntry::query()->max('sort_order')??0)+1;$v['is_active']=true;
-  foreach(['uk_audio'=>'audio/uk','us_audio'=>'audio/us','card_bg_image'=>'images/cards'] as $field=>$dir){if($r->hasFile($field)){$path=$this->storeMedia($r->file($field),$dir);$paths[]=$path;$v[match($field){'uk_audio'=>'uk_audio_path','us_audio'=>'us_audio_path',default=>'card_bg_image_path'}]=$path;}}
-  unset($v['uk_audio'],$v['us_audio'],$v['card_bg_image']);
-  try{PhoneticEntry::query()->create($v);}catch(\\Throwable $e){foreach($paths as $path)$this->deleteMedia($path);throw $e;}
+  try{
+   foreach(['uk_audio'=>'audio/uk','us_audio'=>'audio/us','card_bg_image'=>'images/cards'] as $field=>$dir){if($r->hasFile($field)){$path=$this->storeMedia($r->file($field),$dir);$paths[]=$path;$v[match($field){'uk_audio'=>'uk_audio_path','us_audio'=>'us_audio_path',default=>'card_bg_image_path'}]=$path;}}
+   unset($v['uk_audio'],$v['us_audio'],$v['card_bg_image']);PhoneticEntry::query()->create($v);
+  }catch(\\Throwable $e){foreach($paths as $path)$this->deleteMedia($path);throw $e;}
   return back()->with('status','Phonetic entry added.');
  }
  public function update(Request $r,PhoneticEntry $entry){
   $v=$r->validate(['word'=>'required|string|max:80','category'=>'required|in:rhoticity,trap-bath,t-flapping,lot-vowel,yod-dropping,word-stress','uk_ipa'=>'required|string|max:100','us_ipa'=>'required|string|max:100','uk_note'=>'nullable|string|max:255','us_note'=>'nullable|string|max:255','example_sentence'=>'nullable|string|max:255','is_active'=>'nullable|boolean','uk_audio'=>'nullable|file|mimes:mp3,wav,ogg,m4a,webm|max:5120','us_audio'=>'nullable|file|mimes:mp3,wav,ogg,m4a,webm|max:5120','card_bg_image'=>'nullable|image|mimes:jpg,jpeg,png,webp|max:2048']);
   $newPaths=[];$oldPaths=[];$v['is_active']=$r->boolean('is_active');
-  foreach(['uk_audio'=>'audio/uk','us_audio'=>'audio/us','card_bg_image'=>'images/cards'] as $field=>$dir){if($r->hasFile($field)){$column=match($field){'uk_audio'=>'uk_audio_path','us_audio'=>'us_audio_path',default=>'card_bg_image_path'};$path=$this->storeMedia($r->file($field),$dir);$newPaths[]=$path;if($entry->{$column})$oldPaths[]=$entry->{$column};$v[$column]=$path;}}
-  unset($v['uk_audio'],$v['us_audio'],$v['card_bg_image']);
-  try{$entry->update($v);}catch(\\Throwable $e){foreach($newPaths as $path)$this->deleteMedia($path);throw $e;}
+  try{
+   foreach(['uk_audio'=>'audio/uk','us_audio'=>'audio/us','card_bg_image'=>'images/cards'] as $field=>$dir){if($r->hasFile($field)){$column=match($field){'uk_audio'=>'uk_audio_path','us_audio'=>'us_audio_path',default=>'card_bg_image_path'};$path=$this->storeMedia($r->file($field),$dir);$newPaths[]=$path;if($entry->{$column})$oldPaths[]=$entry->{$column};$v[$column]=$path;}}
+   unset($v['uk_audio'],$v['us_audio'],$v['card_bg_image']);$entry->update($v);
+  }catch(\\Throwable $e){foreach($newPaths as $path)$this->deleteMedia($path);throw $e;}
   foreach($oldPaths as $path)$this->deleteMedia($path);
   return back()->with('status','Phonetic entry updated.');
  }
