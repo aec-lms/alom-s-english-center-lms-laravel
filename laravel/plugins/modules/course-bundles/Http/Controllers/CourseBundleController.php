@@ -222,6 +222,12 @@ class CourseBundleController extends Controller
     public function myOrders(Request $request): View
     {
         $orders = CourseBundleOrder::query()->where('user_id', $request->user()->id)->with('items')->latest()->paginate(20);
+        foreach ($orders as $order) {
+            $invoice = $order->invoice_id && Schema::hasTable('fee_invoices')
+                ? DB::table('fee_invoices')->where('id', $order->invoice_id)->first()
+                : null;
+            $this->syncOrderPaymentStatus($order, $invoice);
+        }
         return view('course-bundles::orders', compact('orders'));
     }
 
@@ -231,9 +237,27 @@ class CourseBundleController extends Controller
         $invoice = $record->invoice_id && Schema::hasTable('fee_invoices')
             ? DB::table('fee_invoices')->where('id', $record->invoice_id)->first()
             : null;
+        $this->syncOrderPaymentStatus($record, $invoice);
         $paymentReady = $this->plugins->isEnabled('universal-payment') && Schema::hasTable('universal_payment_transactions');
 
         return view('course-bundles::order-show', compact('record', 'invoice', 'paymentReady'));
+    }
+
+    private function syncOrderPaymentStatus(CourseBundleOrder $order, $invoice): void
+    {
+        if ($invoice === null) return;
+        $status = match ($invoice->status) {
+            'paid' => 'completed',
+            'partial' => 'partial_payment',
+            'cancelled' => 'cancelled',
+            default => 'awaiting_payment',
+        };
+        if ($order->status !== $status) {
+            $order->update([
+                'status' => $status,
+                'purchased_at' => $status === 'completed' ? ($order->purchased_at ?? now()) : $order->purchased_at,
+            ]);
+        }
     }
 
     private function validateBundle(Request $request, $actor, ?int $ignoreId = null): array
