@@ -177,7 +177,7 @@ class CourseCommerceController extends Controller
             );
 
             return redirect()->away($url);
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             report($exception);
             DB::transaction(function () use ($created): void {
                 $transaction = UniversalPaymentTransaction::query()->whereKey($created['transaction']->id)->lockForUpdate()->first();
