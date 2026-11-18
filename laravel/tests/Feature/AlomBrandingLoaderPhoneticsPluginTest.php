@@ -1,8 +1,8 @@
 <?php
 declare(strict_types=1);
 namespace Tests\Feature;
-use App\Core\Plugins\PluginManager;use Illuminate\Http\UploadedFile;use Illuminate\Support\Facades\DB;
-use Plugins\Modules\Phonetics\Models\PhoneticSetting;use Illuminate\Support\Facades\File;use Plugins\Modules\Phonetics\Models\PhoneticEntry;use Tests\TestCase;
+use App\Core\Plugins\PluginManager;use Illuminate\Database\Schema\Blueprint;use Illuminate\Http\UploadedFile;use Illuminate\Support\Facades\DB;use Illuminate\Support\Facades\Schema;
+use Plugins\Modules\Phonetics\Models\PhoneticSetting;use Plugins\Modules\Phonetics\Services\CourseCatalog;use Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException;use Illuminate\Support\Facades\File;use Plugins\Modules\Phonetics\Models\PhoneticEntry;use Tests\TestCase;
 final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
  public function test_al_branding_loader_and_phonetics_are_independent_plugins():void{$m=app(PluginManager::class)->discoverManifests();$this->assertArrayHasKey('al-branding-loader',$m);$this->assertArrayHasKey('phonetics',$m);$this->assertSame([],$m['al-branding-loader']->dependencies);$this->assertSame([],$m['phonetics']->dependencies);$this->assertContains('course-management',$m['phonetics']->optionalDependencies);$this->assertNotContains('phonetics',$m['al-branding-loader']->dependencies);$this->assertNotContains('al-branding-loader',$m['phonetics']->dependencies);}
  public function test_admin_routes_are_permission_protected():void{
@@ -158,6 +158,66 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
    'answers'=>[$question->id=>$question->answer_key],
   ])->assertOk()->assertSee('Congratulations');
   $this->assertDatabaseHas('phonetic_exam_attempts',['id'=>$attempt->id,'status'=>'submitted','passed'=>true]);
+ }
+
+
+ public function test_phonetics_user_reference_columns_are_portable_and_have_no_host_user_foreign_key():void{
+  $this->markSystemInstalled();
+  $this->activatePlugins(['phonetics']);
+  $this->assertSame('string',Schema::getColumnType('alom_english_center_phonetic_attempts','user_id'));
+  $this->assertSame('string',Schema::getColumnType('phonetic_exam_attempts','user_id'));
+  $this->assertSame('string',Schema::getColumnType('phonetic_batch_memberships','user_id'));
+  $foreignKeys=collect(Schema::getForeignKeys('phonetic_exam_attempts'));
+  $this->assertFalse($foreignKeys->contains(fn($foreignKey)=>in_array('user_id',$foreignKey['columns']??[],true)));
+ }
+
+ public function test_batch_roster_uses_configured_uuid_host_user_table():void{
+  $this->markSystemInstalled();
+  $this->activatePlugins(['phonetics']);
+  Schema::create('phonetics_uuid_users',function(Blueprint $table):void{$table->string('uuid',36)->primary();$table->string('full_name');$table->string('email_address');});
+  Schema::create('phonetics_test_batches',function(Blueprint $table):void{$table->string('batch_key',40)->primary();$table->string('batch_name');});
+  try{
+   $uuid='7e8f9a10-1112-4314-8516-171819202122';
+   DB::table('phonetics_uuid_users')->insert(['uuid'=>$uuid,'full_name'=>'UUID Student','email_address'=>'uuid@example.test']);
+   DB::table('phonetics_test_batches')->insert(['batch_key'=>'batch-uuid-1','batch_name'=>'UUID Batch']);
+   config([
+    'phonetics.users'=>['table'=>'phonetics_uuid_users','id'=>'uuid','name'=>'full_name','email'=>'email_address'],
+    'phonetics.catalog.batches'=>['table'=>'phonetics_test_batches','id'=>'batch_key','title'=>'batch_name'],
+   ]);
+   $admin=$this->createUserWithRole('admin');
+   $this->actingAs($admin)->post('/admin/phonetics/learning/batch-members',[
+    'batch_ref'=>'batch-uuid-1','user_id'=>$uuid,
+   ])->assertSessionHas('status');
+   $this->assertDatabaseHas('phonetic_batch_memberships',['lms_driver'=>'aec','batch_ref'=>'batch-uuid-1','user_id'=>$uuid,'is_active'=>true]);
+  }finally{
+   Schema::dropIfExists('phonetics_test_batches');
+   Schema::dropIfExists('phonetics_uuid_users');
+  }
+ }
+
+ public function test_free_paid_classification_fails_closed_without_a_price_mapping():void{
+  Schema::create('phonetics_price_guard_courses',function(Blueprint $table):void{$table->id();});
+  try{
+   config(['phonetics.catalog.courses'=>['table'=>'phonetics_price_guard_courses','id'=>'id','title'=>'title']]);
+   $this->expectException(ServiceUnavailableHttpException::class);
+   app(CourseCatalog::class)->isPaid((object)['id'=>1]);
+  }finally{
+   Schema::dropIfExists('phonetics_price_guard_courses');
+  }
+ }
+
+ public function test_exam_creation_rejects_words_without_a_uk_us_pronunciation_difference():void{
+  $this->markSystemInstalled();
+  $this->activatePlugins(['course-management','phonetics']);
+  $admin=$this->createUserWithRole('admin');
+  $courseId=DB::table('courses')->insertGetId(['code'=>'PHON-SAME-001','title'=>'Same IPA Course','slug'=>'same-ipa-course','description'=>'Test course','price'=>0,'status'=>'published','created_at'=>now(),'updated_at'=>now()]);
+  $word=PhoneticEntry::query()->create(['word'=>'ship-same-ipa','category'=>'test','uk_ipa'=>'/ʃɪp/','us_ipa'=>'/ʃɪp/','is_active'=>true,'sort_order'=>900]);
+  $this->actingAs($admin)->postJson('/admin/phonetics/learning/exams',[
+   'title'=>'Ambiguous IPA Exam','course_ref'=>(string)$courseId,'audience'=>'both',
+   'duration_minutes'=>10,'pass_percentage'=>60,'max_attempts'=>1,'question_count'=>1,
+   'question_type'=>'identify-ipa','word_ids'=>[$word->id],'status'=>'draft',
+  ])->assertStatus(422);
+  $this->assertDatabaseMissing('phonetic_exams',['title'=>'Ambiguous IPA Exam']);
  }
 
 }
