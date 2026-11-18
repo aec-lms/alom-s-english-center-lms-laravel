@@ -286,11 +286,13 @@ class PublicHomeController extends Controller
         if (!Schema::hasTable('enrollments')) {
             return 0;
         }
-        return (int) DB::table('enrollments')
+        $query = DB::table('enrollments')
             ->where('course_id', $courseId)
-            ->whereIn('status', ['active', 'completed'])
-            ->where(function ($query): void {
-                $query->whereNull('invoice_id')
+            ->whereIn('status', ['active', 'completed']);
+
+        if (Schema::hasTable('fee_invoices')) {
+            $query->where(function ($enrollmentQuery): void {
+                $enrollmentQuery->whereNull('invoice_id')
                     ->orWhereExists(function ($invoiceQuery): void {
                         $invoiceQuery->selectRaw('1')
                             ->from('fee_invoices')
@@ -298,8 +300,12 @@ class PublicHomeController extends Controller
                             ->where('fee_invoices.status', 'paid')
                             ->whereRaw('fee_invoices.paid_amount + 0.01 >= fee_invoices.net_amount');
                     });
-            })
-            ->count();
+            });
+        } else {
+            $query->whereNull('invoice_id');
+        }
+
+        return (int) $query->count();
     }
 
     public function checkCoupon(Request $request): JsonResponse
