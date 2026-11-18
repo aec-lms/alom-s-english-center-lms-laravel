@@ -70,6 +70,7 @@ final class PhoneticsExamController extends Controller
             'attempt' => $attempt,
             'questions' => $snapshot,
             'result' => null,
+            'lessonRef' => $request->query('lesson'),
         ]);
     }
 
@@ -80,6 +81,10 @@ final class PhoneticsExamController extends Controller
         $courseRef = $this->catalog->courseId($course);
         $this->catalog->assertAccess($request->user(), $courseRef);
         $exam = $this->resolveExam($examSlug, $course, $request->query('lesson'));
+        $this->assertAudience($exam, $course);
+        if ($exam->batch_ref) {
+            abort_unless($this->catalog->isBatchMember($request->user(), (string) $exam->batch_ref), 403, 'This exam is restricted to another batch.');
+        }
         abort_unless($attempt->exam_id === $exam->id && $attempt->user_id === $request->user()->id, 404);
         abort_unless($attempt->status === 'in_progress', 409, 'This attempt has already been submitted.');
         abort_if($attempt->expires_at && $attempt->expires_at->isPast(), 410, 'The examination time has expired.');
@@ -126,6 +131,7 @@ final class PhoneticsExamController extends Controller
             'exam' => $exam,
             'attempt' => $attempt,
             'questions' => $snapshot,
+            'lessonRef' => $request->query('lesson'),
             'result' => $exam->show_result_immediately ? [
                 'score' => $score,
                 'total' => $total,
