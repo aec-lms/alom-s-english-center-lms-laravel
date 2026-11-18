@@ -44,7 +44,7 @@
                             data-access-url="{{ route('plugins.lesson-media.access', $lesson->id) }}"
                             data-mime="{{ $lesson->media_mime }}"
                             data-title="{{ $lesson->title }}"
-                            data-lesson-id="{{ $lesson->id }}"
+                            data-lesson-id="{{ $lesson->id }}" data-current-user="{{ auth()->id() }}"
                             data-course-title="{{ $course->title }}">
                             Open Lesson
                         </button>
