@@ -3,6 +3,7 @@
 @section('title', __('My Wishlist') . ' | ' . config('app.name'))
 
 @section('content')
+@include('public.partials.navbar')
 <div class="container py-4">
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
         <div>
