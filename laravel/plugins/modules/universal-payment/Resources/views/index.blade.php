@@ -33,6 +33,10 @@
                         </label>
                     @endforeach
                 </div>
+                <label class="flex items-start gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900">
+                    <input type="checkbox" name="allow_offline_payments" value="1" {{ $config['allow_offline_payments'] ? 'checked' : '' }} class="mt-0.5 rounded text-blue-600">
+                    <span><strong>Allow cash / bank transfer</strong><span class="block mt-0.5 text-[11px]">When disabled, new manual cash and bank-transfer submissions are rejected.</span></span>
+                </label>
             </div>
             <div class="space-y-3">
                 <div>
@@ -80,15 +84,11 @@
                     <input type="number" step="0.01" min="1" name="amount" required class="w-full rounded-xl border border-slate-300 px-3 py-2">
                 </div>
                 <div>
-                    <label class="font-semibold text-slate-700 block mb-1">External TrxID (Optional)</label>
-                    <input name="external_trx_id" class="w-full rounded-xl border border-slate-300 px-3 py-2 font-mono">
+                    <label class="font-semibold text-slate-700 block mb-1">External TrxID / Receipt Reference *</label>
+                    <input name="external_trx_id" required class="w-full rounded-xl border border-slate-300 px-3 py-2 font-mono">
                 </div>
-                <div>
-                    <label class="font-semibold text-slate-700 block mb-1">Initial Status</label>
-                    <select name="status" class="w-full rounded-xl border border-slate-300 px-3 py-2 bg-white">
-                        <option value="verified">Verified / Paid</option>
-                        <option value="pending">Pending Verification</option>
-                    </select>
+                <div class="col-span-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-900">
+                    Manual payment records always start as pending. An authorized reviewer must verify the receipt before the payment is treated as settled.
                 </div>
             </div>
             <button class="px-5 py-2.5 rounded-xl bg-[#0057FF] hover:bg-blue-700 text-white font-bold">Record Payment</button>
@@ -110,16 +110,18 @@
                             <td class="font-bold">{{ $tx->currency }} {{ number_format((float) $tx->amount, 2) }}</td>
                             <td><span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase {{ $tx->status === 'verified' ? 'bg-emerald-100 text-emerald-800' : ($tx->status === 'refunded' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800') }}">{{ $tx->status }}</span></td>
                             <td>
-                                <form method="POST" action="{{ route('plugins.universal_payment.status', $tx) }}" class="inline-flex items-center gap-1.5">
-                                    @csrf
-                                    <select name="status" class="rounded border border-slate-300 px-1.5 py-1 text-[11px]">
-                                        <option value="verified" {{ $tx->status === 'verified' ? 'selected' : '' }}>Verify</option>
-                                        <option value="pending" {{ $tx->status === 'pending' ? 'selected' : '' }}>Pending</option>
-                                        <option value="refunded" {{ $tx->status === 'refunded' ? 'selected' : '' }}>Refund</option>
-                                        <option value="rejected" {{ $tx->status === 'rejected' ? 'selected' : '' }}>Reject</option>
-                                    </select>
-                                    <button class="px-2 py-1 rounded bg-slate-900 text-white text-[11px] font-semibold">Apply</button>
-                                </form>
+                                @if (in_array($tx->gateway, ['bank_cash', 'offline'], true) && $tx->status === 'pending')
+                                    <form method="POST" action="{{ route('plugins.universal_payment.status', $tx) }}" class="inline-flex items-center gap-1.5">
+                                        @csrf
+                                        <select name="status" class="rounded border border-slate-300 px-1.5 py-1 text-[11px]">
+                                            <option value="verified">Verify</option>
+                                            <option value="rejected">Reject</option>
+                                        </select>
+                                        <button class="px-2 py-1 rounded bg-slate-900 text-white text-[11px] font-semibold">Apply</button>
+                                    </form>
+                                @else
+                                    <span class="text-slate-400">—</span>
+                                @endif
                             </td>
                         </tr>
                     @empty

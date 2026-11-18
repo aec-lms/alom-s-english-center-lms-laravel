@@ -9,6 +9,42 @@ use Tests\TestCase;
 
 class UniversalPaymentGatewayToggleTest extends TestCase
 {
+    public function test_offline_payment_setting_blocks_manual_and_public_cash_checkout(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['universal-payment']);
+
+        app(PluginManager::class)->saveSettings('universal-payment', [
+            'enabled_gateways' => 'bank_cash',
+            'allow_offline_payments' => '0',
+        ]);
+
+        $admin = $this->createUserWithRole('admin');
+        $this->actingAs($admin)->post('/plugins/universal-payment/transactions', [
+            'payer_name' => 'Offline Disabled Test',
+            'payer_contact' => '01712345678',
+            'item_title' => 'Tuition receipt',
+            'gateway' => 'bank_cash',
+            'amount' => 1000,
+            'external_trx_id' => 'OFFLINE-DISABLED-001',
+        ])->assertStatus(422);
+
+        $this->actingAs($admin)->post('/universal-checkout', [
+            'payer_name' => $admin->name,
+            'payer_contact' => '01712345678',
+            'item_title' => 'Tuition invoice',
+            'gateway' => 'bank_cash',
+            'external_trx_id' => 'OFFLINE-DISABLED-002',
+        ])->assertStatus(422);
+
+        $this->assertDatabaseMissing('universal_payment_transactions', [
+            'external_trx_id' => 'OFFLINE-DISABLED-001',
+        ]);
+        $this->assertDatabaseMissing('universal_payment_transactions', [
+            'external_trx_id' => 'OFFLINE-DISABLED-002',
+        ]);
+    }
+
     public function test_disabled_gateway_cannot_be_used_for_new_manual_transactions(): void
     {
         $this->markSystemInstalled();
