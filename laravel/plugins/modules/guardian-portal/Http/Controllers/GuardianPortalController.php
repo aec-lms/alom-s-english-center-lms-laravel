@@ -100,7 +100,12 @@ class GuardianPortalController extends Controller
             if ($plugins->isEnabled('student-tracking') && Schema::hasTable('student_activity_events')) {
                 $activityQuery = DB::table('student_activity_events')->where('user_id', $selected->user_id);
                 $summary['activity_count'] = (clone $activityQuery)->where('occurred_at', '>=', now()->subDays(30))->count();
-                $activities = $activityQuery->latest('occurred_at')->limit(10)->get();
+                $activities = $activityQuery->latest('occurred_at')->limit(10)->get()->map(function ($event) {
+                    $event->metadata = is_array($event->metadata)
+                        ? $event->metadata
+                        : (json_decode((string) ($event->metadata ?? '{}'), true) ?: []);
+                    return $event;
+                });
             }
 
             if ($plugins->isEnabled('attendance-management')) {
