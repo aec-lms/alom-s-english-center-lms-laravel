@@ -653,6 +653,186 @@ class ExamController extends Controller
         ]);
     }
 
+    /**
+     * Students can review only their own attempt summaries.
+     * Correct answers and other learners' submissions are never exposed here.
+     */
+    public function history(Request $request, Exam $exam): View
+    {
+        $actor = $request->user();
+        abort_unless($actor && $actor->hasRole('student'), 403, 'Only student accounts can view exam history.');
+        if ($exam->branch_id !== null && (int) $actor->branch_id !== (int) $exam->branch_id) {
+            abort(403, 'Exam is outside your assigned branch.');
+        }
+
+        $attempts = ExamAttempt::query()
+            ->where('exam_id', $exam->id)
+            ->where('user_id', $actor->id)
+            ->latest('id')
+            ->paginate(10);
+
+        return view('exam-management::history', compact('exam', 'attempts'));
+    }
+
+    /**
+     * Persist partial answers without finalizing the attempt.
+     * The server remains authoritative for ownership, allowed questions and timer.
+     */
+    public function saveAttemptAnswers(Request $request, Exam $exam): JsonResponse
+    {
+        $actor = $request->user();
+        abort_unless($actor && $actor->hasRole('student'), 403, 'Only student accounts can save exam answers.');
+        abort_unless($exam->is_published, 404);
+        if ($exam->branch_id !== null && (int) $actor->branch_id !== (int) $exam->branch_id) {
+            abort(403, 'Exam is outside your assigned branch.');
+        }
+        if ($exam->starts_at && now()->lt($exam->starts_at)) abort(403, 'This exam has not started yet.');
+        if ($exam->ends_at && now()->gt($exam->ends_at)) abort(403, 'The exam submission window has closed.');
+        if (Schema::hasColumn('exams', 'learn_earn_type') && $exam->learn_earn_type === 'paid') {
+            abort_unless(Schema::hasTable('learn_earn_exam_access') && DB::table('learn_earn_exam_access')->where('exam_id', $exam->id)->where('user_id', $actor->id)->where('status', 'granted')->exists(), 403, 'Payment is required before saving this exam.');
+        }
+
+        $validated = $request->validate([
+            'attempt_id' => ['required', 'integer'],
+            'answers' => ['required', 'array', 'max:500'],
+            'answers.*' => ['nullable', 'integer', 'min:0'],
+        ]);
+
+        $savedAt = DB::transaction(function () use ($exam, $actor, $validated): string {
+            $lockedExam = Exam::query()->whereKey($exam->id)->lockForUpdate()->firstOrFail();
+            $attempt = ExamAttempt::query()
+                ->whereKey((int) $validated['attempt_id'])
+                ->where('exam_id', $lockedExam->id)
+                ->where('user_id', $actor->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            abort_if($attempt->submitted_at !== null, 409, 'This exam attempt is already submitted.');
+            $deadline = $attempt->started_at?->copy()->addMinutes((int) $lockedExam->duration_minutes);
+            if (!$deadline || now()->greaterThan($deadline)) {
+                abort(409, 'The exam time has expired.');
+            }
+
+            $questions = $lockedExam->questions()->get(['id', 'options']);
+            abort_if($questions->isEmpty(), 422, 'This exam has no questions.');
+            $allowedIds = $questions->pluck('id')->map(static fn ($id): string => (string) $id)->all();
+            $submittedIds = array_map('strval', array_keys($validated['answers']));
+            abort_if(array_diff($submittedIds, $allowedIds) !== [], 422, 'An answer references a question outside this exam.');
+
+            $answers = (array) ($attempt->submitted_answers ?? []);
+            foreach ($questions as $question) {
+                $key = (string) $question->id;
+                if (!array_key_exists($key, $validated['answers'])) {
+                    continue;
+                }
+                $selected = $validated['answers'][$key];
+                if ($selected !== null && (int) $selected >= count((array) $question->options)) {
+                    abort(422, 'An answer option is outside the allowed range.');
+                }
+                $answers[$key] = $selected !== null ? (int) $selected : null;
+            }
+
+            $attempt->update(['submitted_answers' => $answers]);
+
+            return now()->toIso8601String();
+        });
+
+        return response()->json(['saved' => true, 'saved_at' => $savedAt]);
+    }
+
+    /**
+     * Server-side authoritative grading, timer and attempt-limit enforcement.
+     */
+    public function submitAttempt(Request $request, Exam $exam): RedirectResponse
+    {
+        abort_unless($exam->is_published, 403, 'Exam is not published for attempts.');
+        $actor = $request->user();
+        abort_unless($actor && $actor->hasRole('student'), 403, 'Only student accounts can submit exam attempts.');
+        if (Schema::hasColumn('exams', 'learn_earn_type') && $exam->learn_earn_type === 'paid') {
+            abort_unless(Schema::hasTable('learn_earn_exam_access') && DB::table('learn_earn_exam_access')->where('exam_id', $exam->id)->where('user_id', $actor->id)->where('status', 'granted')->exists(), 403, 'Payment is required before attempting this exam.');
+        }
+        if ($exam->branch_id !== null && (int) $actor->branch_id !== (int) $exam->branch_id) {
+            abort(403, 'Exam is outside your assigned branch.');
+        }
+        if ($exam->starts_at && now()->lt($exam->starts_at)) abort(403, 'This exam has not started yet.');
+        if ($exam->ends_at && now()->gt($exam->ends_at)) abort(403, 'The exam submission window has closed.');
+
+        $validated = $request->validate([
+            'attempt_id' => ['required', 'integer'],
+            'answers' => ['required', 'array'],
+            'answers.*' => ['nullable', 'integer', 'min:0'],
+        ]);
+
+        $result = DB::transaction(function () use ($exam, $actor, $validated): array {
+            $attempt = ExamAttempt::query()
+                ->whereKey((int) $validated['attempt_id'])
+                ->where('exam_id', $exam->id)
+                ->where('user_id', $actor->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            abort_if($attempt->submitted_at !== null, 409, 'This exam attempt has already been submitted.');
+
+            $questions = $exam->questions()->get();
+            abort_if($questions->isEmpty(), 422, 'This exam has no questions.');
+            $deadline = $attempt->started_at?->copy()->addMinutes((int) $exam->duration_minutes);
+            $total = (float) $questions->sum('marks');
+
+            if (!$deadline || now()->greaterThan($deadline)) {
+                $attempt->update([
+                    'submitted_answers' => [],
+                    'score_obtained' => 0,
+                    'total_marks' => $total,
+                    'passed' => false,
+                    'submitted_at' => now(),
+                ]);
+
+                return ['expired' => true, 'attempt' => $attempt->fresh(), 'score' => 0.0, 'total' => $total];
+            }
+
+            $allowedIds = $questions->pluck('id')->map(static fn ($id): string => (string) $id)->all();
+            $submittedIds = array_map('strval', array_keys($validated['answers']));
+            abort_if(array_diff($submittedIds, $allowedIds) !== [], 422, 'An answer references a question outside this exam.');
+
+            $score = 0.0;
+            $sanitizedAnswers = [];
+            foreach ($questions as $question) {
+                $selected = $validated['answers'][(string) $question->id] ?? null;
+                $options = (array) $question->options;
+                if ($selected !== null && (int) $selected >= count($options)) {
+                    abort(422, 'An answer option is outside the allowed range.');
+                }
+                if ($selected !== null && (int) $selected === (int) $question->correct_option_index) {
+                    $score += (float) $question->marks;
+                } elseif ($selected !== null) {
+                    $score -= (float) ($question->negative_marks ?? 0);
+                }
+                $sanitizedAnswers[(string) $question->id] = $selected !== null ? (int) $selected : null;
+            }
+
+            $attempt->update([
+                'submitted_answers' => $sanitizedAnswers,
+                'score_obtained' => $score,
+                'total_marks' => $total,
+                'passed' => $score >= (float) $exam->pass_marks,
+                'submitted_at' => now(),
+            ]);
+
+            return ['expired' => false, 'attempt' => $attempt->fresh(), 'score' => $score, 'total' => $total];
+        });
+
+        if ($result['expired']) {
+            $this->audit->log('exam.attempt_expired', 'exam_attempt', (string) $result['attempt']->id, ['exam_id' => $exam->id]);
+            return redirect()->route('portal.dashboard')->withErrors(['exam' => 'Your exam time expired. The attempt was submitted with zero marks.']);
+        }
+
+        $this->audit->log('exam.attempted', 'exam_attempt', (string) $result['attempt']->id, [
+            'exam_id' => $exam->id,
+            'score' => $result['score'],
+            'total' => $result['total'],
+        ]);
+
+        return redirect()->route('portal.dashboard')->with('status', "Exam graded server-side: {$result['score']}/{$result['total']} marks.");
+    }
     private function ensureAssignedBranch($actor): void
     {
         if (!$actor || !$actor->hasRole('branch_manager')) {
