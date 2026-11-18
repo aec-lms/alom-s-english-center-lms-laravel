@@ -86,6 +86,12 @@ class PaidLearnAndEarnCheckoutTest extends TestCase
         $this->assertSame(150.0, (float) $transaction->amount);
         $this->assertSame('pending', $transaction->status);
 
+        // An old unresolved provider session can still be paid later. It must
+        // remain a retry hold rather than opening a second billable session.
+        DB::table('universal_payment_transactions')
+            ->where('id', $transaction->id)
+            ->update(['created_at' => now()->subMinutes(45)]);
+
         $this->actingAs($student)->post("/learn-and-earn/exams/{$exam->id}/checkout", [
             'payer_contact' => '01700000000',
         ])->assertStatus(409);
