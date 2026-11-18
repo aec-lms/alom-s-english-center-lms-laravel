@@ -155,3 +155,18 @@ These require a disposable staging host/database, anonymized backup data, offici
 ### Release decision
 
 Current main has green automated CI, but it is **not certified production-ready**. Do not merge PR #31 or deploy a production release until the branch history is reconciled, required checks pass on the exact candidate, and the external staging gates are evidenced. No production deployment or production-data change was performed for this checkpoint.
+
+
+## Live repository refresh — 2026-11-18
+
+This section supersedes the older branch/PR snapshot above; the earlier audit notes remain historical evidence.
+
+- Current `main` is `114e9b149e302a1991935153dbde33f91369e1ff` and contains **47 plugin manifests**. A manifest count is not functional acceptance.
+- PR #104 (AL Branding & Loader plus independent Phonetics plugin integration) is merged. No production deployment is recorded.
+- Latest post-merge CI on `main` passed Browser E2E and Composer Security Audit, but the Laravel workflow failed on one stale Phonetics replay assertion: 315 tests passed and one test expected HTTP 409 from the legacy `phonetics-practice/attempts` route, which intentionally redirects (302). The MySQL 8 run failed on the same assertion.
+- PR #118 (`test/fix-phonetics-replay-endpoint`) is the active correction branch. It now also contains fail-closed course-price mapping, host-user UUID portability, forward schema migration, course-publication checks, exam-attempt concurrency protection, and broader regression tests. Its latest CI is pending; do not claim the fixes are verified until the exact PR head passes.
+- A PHP syntax lint across all application/plugin PHP files, Composer metadata validation and full Blade view compilation have been added to the Laravel CI workflow.
+- PR #117 separately hardens protected lesson and ebook delivery and remains subject to its own CI/review.
+- Release-blocker issue #14 remains open. Real cPanel installation/rollback, representative backup restore, official payment sandbox tests and authorized 300-participant conferencing validation still require an isolated staging environment and external provider access.
+
+**Current release status: NOT PRODUCTION-READY.** Do not deploy the current main build or use production data until all code checks and the external gates above are closed with recorded evidence.
