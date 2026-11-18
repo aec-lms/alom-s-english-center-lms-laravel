@@ -79,13 +79,17 @@ class MarketingController extends Controller
     public function storeCoupon(Request $request): RedirectResponse
     {
         $this->ensureCentralAdmin($request->user());
+        // Backward compatibility: older forms submit only discount_percent.
+        if (!$request->filled('discount_type')) {
+            $request->merge(['discount_type' => 'percent']);
+        }
         $validated = $request->validate([
             'code' => ['required', 'string', 'max:40', 'unique:promo_coupons,code'],
             'description' => ['nullable', 'string', 'max:200'],
             // Legacy marketing form clients send discount_percent without discount_type.
             // Preserve that contract by defaulting those submissions to percentage coupons.
-            'discount_type' => ['sometimes', 'in:percent,fixed'],
-            'discount_percent' => ['nullable', 'required_without:discount_type', 'required_if:discount_type,percent', 'integer', 'min:1', 'max:100'],
+            'discount_type' => ['required', 'in:percent,fixed'],
+            'discount_percent' => ['nullable', 'required_if:discount_type,percent', 'integer', 'min:1', 'max:100'],
             'discount_amount' => ['nullable', 'required_if:discount_type,fixed', 'numeric', 'min:0.01', 'max:100000000'],
             'max_uses' => ['nullable', 'integer', 'min:0', 'max:100000'],
             'minimum_subtotal' => ['nullable', 'numeric', 'min:0', 'max:100000000'],
