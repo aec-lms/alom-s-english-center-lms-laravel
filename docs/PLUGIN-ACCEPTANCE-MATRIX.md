@@ -190,7 +190,7 @@ The current tree contains 44 plugin manifests. The parameterized `AllPluginsInde
 
 No production deployment or live data migration is authorized by this CI result.
 
-## Current main inventory refresh (2026-11-18, main `114e9b149e302a1991935153dbde33f91369e1ff`)
+## Current main inventory refresh (2026-11-18, main `47b7e594c5ca1a70468ea3ad51be5008aed90709`)
 
 A fresh recursive tree scan of current main found **47 plugin manifests**. The previous 44-manifest checkpoint above is historical. Three additional manifests are now present:
 
@@ -200,6 +200,6 @@ A fresh recursive tree scan of current main found **47 plugin manifests**. The p
 | `phonetics` | `AlomBrandingLoaderPhoneticsPluginTest` | Targeted media, enrollment, assignment, exam and server-side grading coverage; portability and edge-case fixes are being verified in PR #118 |
 | `question-bank` | `QuestionBankPluginTest` | Targeted question bank and paper-snapshot coverage |
 
-The 47-manifest count is inventory only. It does not mean 47/47 modules are fully feature-accepted. The latest main CI run on `114e9b1` had 315 passing tests and one failing Phonetics replay assertion on both SQLite and MySQL; the test used a legacy URL that intentionally redirects. PR #118 updates the replay test and adds portability/security regressions. Do not update the acceptance status until its exact head passes SQLite, MySQL, Browser E2E, Composer audit, PHP lint, Blade compilation and package build.
+The 47-manifest count is inventory only. It does not mean 47/47 modules are fully feature-accepted. PR #117 has since merged as `a0deb699f74b98ffbe7a656050f246bb8f9f1e03`; its SQLite, MySQL, Browser E2E and Composer audit checks passed, including the corrected replay assertion. The current `main` head `47b7e594` is a documentation-only inventory refresh and its CI is queued. PR #118 adds further Phonetics portability/security regressions and whole-project PHP/Blade checks; do not update feature acceptance until that PR's exact head passes SQLite, MySQL, Browser E2E, Composer audit, PHP lint, Blade compilation and package build.
 
 The external production release gates in issue #14 remain open: representative backup restore, real cPanel installation/rollback, payment-provider sandboxes and authorized 300-participant conferencing validation.
