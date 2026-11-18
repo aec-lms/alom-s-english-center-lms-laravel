@@ -99,6 +99,15 @@ class LearningInteractionController extends Controller
         return response()->json(['deleted' => true]);
     }
 
+
+    public function instructorLiveClass(Request $request, int $liveClass): \Illuminate\View\View
+    {
+        $class = $this->authorizedLiveClass($request, $liveClass);
+        abort_unless($this->canTeachLiveClass($request, $class), 403, 'Only the assigned instructor or an authorized course manager can access this panel.');
+        $course = DB::table('courses')->where('id', $class->course_id)->first();
+        return view('course-management::live-class-instructor', compact('class', 'course'));
+    }
+
     public function liveQuestions(Request $request, int $liveClass): JsonResponse
     {
         $class = $this->authorizedLiveClass($request, $liveClass);
