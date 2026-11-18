@@ -46,6 +46,21 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
    $this->assertFileExists(public_path($entry->card_bg_image_path));
    $this->assertNotNull($entry->uk_audio_url);
    $this->assertDatabaseHas('audit_logs',['action'=>'phonetics.entry.created','entity_id'=>(string)$entry->id]);
+   $this->actingAs($admin)->put('/admin/phonetics/'.$entry->id,[
+    'word'=>'water','category'=>'rhoticity','uk_ipa'=>'/ˈwɔːtə/','us_ipa'=>'/ˈwɔːtər/',
+    'is_active'=>1,'remove_uk_audio'=>1,
+   ])->assertSessionHas('status');
+   $entry->refresh();
+   $this->assertNull($entry->uk_audio_path);
+   $this->assertFileDoesNotExist(public_path('uploads/alom-english-center/phonetics/audio/uk/'.basename($entry->uk_audio_path??'removed.mp3')));
+   $this->assertNotNull($entry->us_audio_path);
+   $this->actingAs($admin)->patch('/admin/phonetics/settings',[
+    'enabled'=>1,'require_course_enrollment'=>1,'show_articulatory_notes'=>1,
+    'allow_slow_playback'=>0,'course_slug'=>'british-american-phonetics','course_title'=>'British & American Phonetics',
+    'theme_profile_id'=>'warm-studio','page_bg_color'=>'#F8FAFC','default_card_bg_color'=>'#FFFFFF',
+    'default_text_color'=>'#0F172A','accent_color'=>'#1D4ED8',
+   ])->assertSessionHas('status');
+   $this->assertDatabaseHas('alom_english_center_phonetic_settings',['theme_profile_id'=>'warm-studio','allow_slow_playback'=>false,'page_bg_color'=>'#FFF7ED']);
    $this->actingAs($admin)->from('/admin/phonetics')->post('/admin/phonetics',[
     'word'=>'unsafe','category'=>'rhoticity','uk_ipa'=>'/x/','us_ipa'=>'/x/',
     'card_bg_image'=>UploadedFile::fake()->create('unsafe.svg',20,'image/svg+xml'),
