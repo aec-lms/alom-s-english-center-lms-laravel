@@ -12,7 +12,7 @@ return new class extends Migration {
         if (!Schema::hasTable('phonetic_audit_events')) {
             Schema::create('phonetic_audit_events', function (Blueprint $table): void {
                 $table->id();
-                $table->unsignedBigInteger('user_id')->nullable()->index();
+                $table->string('user_id', 128)->nullable()->index();
                 $table->string('action', 120)->index();
                 $table->string('entity_type', 80);
                 $table->string('entity_id', 128);
