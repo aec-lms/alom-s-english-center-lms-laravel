@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'api_client.dart';
 import 'course_detail_page.dart';
+import 'support_tickets_page.dart';
 
 class StudentWishlistPage extends StatefulWidget {
   const StudentWishlistPage({required this.api, super.key});
