@@ -26,9 +26,9 @@
         <section id="live-class-qa" class="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5 space-y-4"
             data-list-url="{{ route('plugins.learning-interactions.live.questions.index', $liveClass->id) }}"
             data-store-url="{{ route('plugins.learning-interactions.live.questions.store', $liveClass->id) }}"
-            data-answer-template="{{ url('/learning-interactions/live-classes/'.$liveClass->id.'/questions/__QUESTION__/answers') }}"
-            data-vote-template="{{ url('/learning-interactions/live-classes/'.$liveClass->id.'/questions/__QUESTION__/vote') }}"
-            data-moderate-template="{{ url('/learning-interactions/live-classes/'.$liveClass->id.'/questions/__QUESTION__') }}">
+            data-answer-template="{{ route('plugins.learning-interactions.live.questions.answer', ['liveClass' => $liveClass->id, 'question' => '__QUESTION__']) }}"
+            data-vote-template="{{ route('plugins.learning-interactions.live.questions.vote', ['liveClass' => $liveClass->id, 'question' => '__QUESTION__']) }}"
+            data-moderate-template="{{ route('plugins.learning-interactions.live.questions.moderate', ['liveClass' => $liveClass->id, 'question' => '__QUESTION__']) }}">
             <div class="flex items-start justify-between gap-3"><div><h2 class="font-extrabold text-slate-900">Live Class Q&amp;A</h2><p class="mt-1 text-xs text-slate-500">Ask questions, follow the instructor’s answers and vote for useful questions.</p></div><span class="rounded-full bg-white border border-slate-200 px-3 py-1 text-[11px] font-bold text-slate-600" data-qa-count>Loading…</span></div>
             <form id="live-qa-form" class="grid gap-2">
                 <textarea name="body" rows="2" maxlength="2000" required placeholder="What would you like to ask the instructor?" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"></textarea>
