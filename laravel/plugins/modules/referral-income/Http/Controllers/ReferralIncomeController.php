@@ -58,6 +58,24 @@ class ReferralIncomeController extends Controller
         return view('referral-income::admin', compact('commissions', 'payouts', 'rules'));
     }
 
+    public function updateRules(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'student_commission_percent' => ['required', 'numeric', 'min:0', 'max:50'],
+            'teacher_commission_percent' => ['required', 'numeric', 'min:0', 'max:50'],
+            'student_minimum_payout' => ['required', 'numeric', 'min:1', 'max:10000000'],
+            'teacher_minimum_payout' => ['required', 'numeric', 'min:1', 'max:10000000'],
+        ]);
+        foreach (['student', 'teacher'] as $type) {
+            DB::table('referral_income_rules')->where('referrer_type', $type)->update([
+                'commission_percent' => $data[$type . '_commission_percent'],
+                'minimum_payout' => $data[$type . '_minimum_payout'],
+                'updated_at' => now(),
+            ]);
+        }
+        return back()->with('status', 'Referral commission rules updated.');
+    }
+
     public function reviewCommission(Request $request, int $commission): RedirectResponse
     {
         $data = $request->validate(['status' => ['required', 'in:approved,rejected,reversed']]);
