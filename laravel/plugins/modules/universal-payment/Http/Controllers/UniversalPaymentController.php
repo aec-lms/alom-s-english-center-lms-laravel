@@ -319,16 +319,6 @@ class UniversalPaymentController extends Controller
             return redirect('/ebooks/' . rawurlencode((string) $storefrontItem->slug))->with('status', 'You already have access to this e-book.');
         }
 
-        if ($storefrontItem !== null) {
-            $pendingCheckout = UniversalPaymentTransaction::query()
-                ->where('user_id', auth()->id())
-                ->where('storefront_item_id', $storefrontItem->id)
-                ->where('status', 'pending')
-                ->where('created_at', '>=', now()->subMinutes(30))
-                ->exists();
-            abort_if($pendingCheckout, 409, 'A checkout for this e-book is already pending. Wait for its result before retrying.');
-        }
-
         if ($invoice !== null) {
             $tx = DB::transaction(function () use ($invoice, $validated): UniversalPaymentTransaction {
                 $lockedInvoice = DB::table('fee_invoices')->where('id', $invoice->id)->lockForUpdate()->first();
@@ -365,19 +355,65 @@ class UniversalPaymentController extends Controller
                 ]);
             });
         } else {
-            $tx = UniversalPaymentTransaction::query()->create([
-                'reference' => 'UPAY-' . strtoupper(Str::random(8)),
-                'payer_name' => auth()->user()->name,
-                'payer_contact' => $validated['payer_contact'],
-                'item_title' => $storefrontItem->title,
-                'gateway' => $validated['gateway'],
-                'currency' => $this->plugins->getSetting('universal-payment', 'default_currency', 'BDT') ?: 'BDT',
-                'amount' => (float) $storefrontItem->price,
-                'external_trx_id' => null,
-                'user_id' => auth()->id(),
-                'storefront_item_id' => $storefrontItem->id,
-                'status' => 'pending',
-            ]);
+            // Serialize checkout creation on the storefront item row. A preflight
+            // pending-check alone can race when the same buyer submits twice.
+            $tx = DB::transaction(function () use ($storefrontItem, $validated): UniversalPaymentTransaction {
+                $lockedItem = DB::table('storefront_items')
+                    ->where('id', $storefrontItem->id)
+                    ->where('type', 'ebook')
+                    ->where('is_active', true)
+                    ->lockForUpdate()
+                    ->first();
+
+                abort_unless(
+                    $lockedItem !== null
+                        && !(bool) $lockedItem->is_free
+                        && (float) $lockedItem->price > 0,
+                    409,
+                    'This e-book is no longer available for purchase.'
+                );
+                abort_if(
+                    abs((float) $lockedItem->price - (float) $storefrontItem->price) > 0.01,
+                    409,
+                    'The e-book price changed. Reload the page before starting checkout.'
+                );
+                abort_if(
+                    empty($lockedItem->download_url)
+                        || !str_starts_with((string) $lockedItem->download_url, 'private:'),
+                    422,
+                    'The e-book PDF must be privately uploaded before it can be sold.'
+                );
+                abort_if(
+                    DB::table('storefront_item_access')
+                        ->where('storefront_item_id', $lockedItem->id)
+                        ->where('user_id', auth()->id())
+                        ->exists(),
+                    409,
+                    'You already have access to this e-book.'
+                );
+
+                $pendingCheckout = UniversalPaymentTransaction::query()
+                    ->where('user_id', auth()->id())
+                    ->where('storefront_item_id', $lockedItem->id)
+                    ->where('status', 'pending')
+                    ->where('created_at', '>=', now()->subMinutes(30))
+                    ->exists();
+                abort_if($pendingCheckout, 409, 'A checkout for this e-book is already pending. Wait for its result before retrying.');
+
+                return UniversalPaymentTransaction::query()->create([
+                    'reference' => 'UPAY-' . strtoupper(Str::random(8)),
+                    'payer_name' => auth()->user()->name,
+                    'payer_contact' => $validated['payer_contact'],
+                    'item_title' => $lockedItem->title,
+                    'gateway' => $validated['gateway'],
+                    'currency' => $this->plugins->getSetting('universal-payment', 'default_currency', 'BDT') ?: 'BDT',
+                    'amount' => (float) $lockedItem->price,
+                    'external_trx_id' => null,
+                    'user_id' => auth()->id(),
+                    'storefront_item_id' => $lockedItem->id,
+                    'status' => 'pending',
+                ]);
+            });
         }
 
         if ($invoice !== null) {
