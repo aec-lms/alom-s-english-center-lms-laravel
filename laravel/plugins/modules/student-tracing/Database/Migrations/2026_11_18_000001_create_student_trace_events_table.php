@@ -44,6 +44,12 @@ return new class extends Migration {
         }
 
         DB::table('student_activity_events')
+            ->where(function ($query): void {
+                $query->where('event_type', 'like', 'student.%')
+                    ->orWhere('event_type', 'like', 'attendance.%')
+                    ->orWhere('event_type', 'like', 'enrollment.%')
+                    ->orWhere('event_type', 'like', 'exam_attempt.%');
+            })
             ->orderBy('id')
             ->chunkById(500, function ($rows) use ($sourceHasStudent, $sourceHasBranch, $sourceHasActor, $sourceHasMetadata): void {
                 foreach ($rows as $row) {
