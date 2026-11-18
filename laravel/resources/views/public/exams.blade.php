@@ -46,9 +46,14 @@
                                     Duration: {{ $exam->duration_minutes ?? 30 }} mins &middot; Total Marks: {{ $exam->total_marks ?? 50 }}
                                 </div>
                             </div>
-                            <a href="{{ route('admin.dashboard') }}" class="w-full py-2.5 rounded-lg bg-[#0077CC] hover:bg-[#0060A8] text-white text-xs font-bold text-center transition-colors">
-                                Open in Portal
-                            </a>
+                            @if (($exam->learn_earn_type ?? '') === 'paid' && (float) ($exam->access_price ?? 0) > 0 && Route::has('plugins.commerce_cart.add'))
+                                <form method="POST" action="{{ route('plugins.commerce_cart.add') }}">@csrf
+                                    <input type="hidden" name="item_type" value="mock_test"><input type="hidden" name="item_id" value="{{ $exam->id }}">
+                                    <button class="w-full py-2.5 rounded-lg bg-[#0077CC] hover:bg-[#0060A8] text-white text-xs font-bold">Add Mock Test to Cart · ৳{{ number_format((float) $exam->access_price, 2) }}</button>
+                                </form>
+                            @else
+                                <a href="{{ route('admin.dashboard') }}" class="w-full py-2.5 rounded-lg bg-[#0077CC] hover:bg-[#0060A8] text-white text-xs font-bold text-center transition-colors">Open in Portal</a>
+                            @endif
                         </article>
                     @endforeach
                 </div>
