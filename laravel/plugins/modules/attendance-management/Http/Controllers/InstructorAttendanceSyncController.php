@@ -223,6 +223,9 @@ class InstructorAttendanceSyncController extends Controller
     {
         $actor = $request->user();
         abort_unless($actor && $actor->hasRole('teacher'), 403, 'Teacher accounts only.');
+        abort_unless(app(PluginManager::class)->isEnabled('course-management')
+            && Schema::hasTable('course_teacher_assignments')
+            && Schema::hasTable('batches'), 409, 'Course teacher assignment integration is unavailable.');
         $data = $request->validate([
             'status' => ['required', 'in:present,absent,late'],
             'reason' => ['required', 'string', 'min:5', 'max:255'],
