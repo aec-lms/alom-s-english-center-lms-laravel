@@ -102,7 +102,7 @@ class QuestionBankPluginTest extends TestCase
         $this->assertSame('He goes', $snapshot['correct_answer']);
 
         $this->actingAs($admin)->get(route('plugins.question-bank.papers.print', $paperId))
-            ->assertOk()->assertSee('Choose the correct verb.')->assertDontSee('He goes');
+            ->assertOk()->assertSee('Choose the correct verb.')->assertDontSee('Answer:')->assertDontSee('Explanation:');
         $this->actingAs($admin)->get(route('plugins.question-bank.papers.answer-key', $paperId))
             ->assertOk()->assertSee('He goes');
     }
