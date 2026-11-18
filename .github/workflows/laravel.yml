@@ -50,6 +50,11 @@ jobs:
       - name: Composer security audit
         run: composer audit --locked --no-interaction
 
+      - name: Lint all PHP application and test files
+        run: |
+          find app bootstrap config database plugins routes tests public -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+          php -l artisan
+
       - name: Generate application key
         run: php artisan key:generate
 
