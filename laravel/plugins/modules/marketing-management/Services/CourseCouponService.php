@@ -63,17 +63,46 @@ class CourseCouponService
     public function redeem(string $reservationKey): void
     {
         DB::transaction(function () use ($reservationKey): void {
-            $reservation = DB::table('promo_coupon_redemptions')->where('reservation_key', $reservationKey)->lockForUpdate()->first();
-            if (!$reservation || $reservation->status !== 'reserved' || ($reservation->expires_at && now()->greaterThan($reservation->expires_at))) {
+            // Use the same lock order as reserve(): coupon first, redemption second.
+            // This avoids a coupon/redemption lock inversion under concurrent webhooks.
+            $candidate = DB::table('promo_coupon_redemptions')
+                ->where('reservation_key', $reservationKey)
+                ->first();
+
+            if (!$candidate) {
+                throw ValidationException::withMessages(['coupon_code' => 'Coupon reservation was not found.']);
+            }
+
+            $coupon = PromoCoupon::query()->lockForUpdate()->find($candidate->coupon_id);
+            if (!$coupon) {
+                throw ValidationException::withMessages(['coupon_code' => 'The coupon for this reservation no longer exists.']);
+            }
+
+            $reservation = DB::table('promo_coupon_redemptions')
+                ->where('reservation_key', $reservationKey)
+                ->lockForUpdate()
+                ->first();
+
+            // Payment-provider callbacks are retried. A previously redeemed
+            // reservation must remain successful and must not increment twice.
+            if ($reservation->status === 'redeemed') {
+                return;
+            }
+
+            if ($reservation->status !== 'reserved'
+                || ($reservation->expires_at && now()->greaterThan($reservation->expires_at))) {
                 throw ValidationException::withMessages(['coupon_code' => 'Coupon reservation is no longer valid.']);
             }
-            $coupon = PromoCoupon::query()->lockForUpdate()->findOrFail($reservation->coupon_id);
+
             if ((int) $coupon->used_count >= (int) $coupon->max_uses) {
                 throw ValidationException::withMessages(['coupon_code' => 'Coupon usage limit was reached.']);
             }
+
             $coupon->increment('used_count');
             DB::table('promo_coupon_redemptions')->where('id', $reservation->id)->update([
-                'status' => 'redeemed', 'redeemed_at' => now(), 'updated_at' => now(),
+                'status' => 'redeemed',
+                'redeemed_at' => now(),
+                'updated_at' => now(),
             ]);
         }, 3);
     }
