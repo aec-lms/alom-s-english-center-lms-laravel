@@ -74,7 +74,7 @@ class ReferralIncomeService
      */
     public function recordSettledPurchase(User $buyer, string $sourceType, string|int $sourceId, float $eligibleAmount, string $currency = 'BDT'): ?int
     {
-        if ($eligibleAmount <= 0 || !preg_match('/^[a-z0-9_-]{2,40}$/i', $sourceType)) {
+        if ($eligibleAmount <= 0 || strlen((string) $sourceId) > 80 || !preg_match('/^[a-z0-9_-]{2,40}$/i', $sourceType)) {
             return null;
         }
 
