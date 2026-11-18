@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Plugins\Modules\MobileAppApi\Http\Controllers;
 
 use App\Core\Plugins\PluginManager;
+use App\Core\Security\BranchAccess;
 use App\Http\Controllers\Controller;
 use App\Models\Role;
 use App\Models\SystemSetting;
@@ -27,6 +28,7 @@ class MobileApiController extends Controller
     public function config(Request $request): JsonResponse
     {
         $cfg = $this->loadMobileConfig();
+        $branchId = app(BranchAccess::class)->assignedBranchId($actor);
         $platform = strtolower((string) $request->query('platform', 'all'));
 
         return response()->json([
@@ -67,7 +69,7 @@ class MobileApiController extends Controller
             : collect();
 
         $courses = $this->plugins->isEnabled('course-management') && Schema::hasTable('courses')
-            ? DB::table('courses')->where('status', 'published')->orderByDesc('id')->limit(12)->get(['id', 'code', 'title', 'slug', 'price', 'thumbnail', 'instructor_name'])
+            ? $this->scopeVisibleBranch(DB::table('courses')->where('status', 'published'), 'courses', $branchId)->orderByDesc('id')->limit(12)->get(['id', 'code', 'title', 'slug', 'price', 'thumbnail', 'instructor_name'])
             : collect();
 
         $carouselItems = $this->plugins->isEnabled('storefront-catalog') && Schema::hasTable('storefront_items')
@@ -80,11 +82,11 @@ class MobileApiController extends Controller
             : collect();
 
         $ebooks = $this->plugins->isEnabled('storefront-catalog') && Schema::hasTable('storefront_items')
-            ? DB::table('storefront_items')->where('type', 'ebook')->where('is_active', true)->orderByDesc('id')->limit(12)->get(['id', 'type', 'slug', 'title', 'category', 'badge', 'price', 'original_price', 'is_free', 'pages', 'summary', 'thumbnail_path', 'pdf_thumbnail_path'])
+            ? $this->scopeVisibleBranch(DB::table('storefront_items')->where('type', 'ebook')->where('is_active', true), 'storefront_items', $branchId)->orderByDesc('id')->limit(12)->get(['id', 'type', 'slug', 'title', 'category', 'badge', 'price', 'original_price', 'is_free', 'pages', 'summary', 'thumbnail_path', 'pdf_thumbnail_path'])
             : collect();
 
         $products = $this->plugins->isEnabled('storefront-catalog') && Schema::hasTable('storefront_items')
-            ? DB::table('storefront_items')->where('type', 'product')->where('is_active', true)->orderByDesc('id')->limit(12)->get(['id', 'type', 'slug', 'title', 'category', 'badge', 'price', 'original_price', 'summary', 'thumbnail_path'])
+            ? $this->scopeVisibleBranch(DB::table('storefront_items')->where('type', 'product')->where('is_active', true), 'storefront_items', $branchId)->orderByDesc('id')->limit(12)->get(['id', 'type', 'slug', 'title', 'category', 'badge', 'price', 'original_price', 'summary', 'thumbnail_path'])
             : collect();
 
         $visibleNoticeRoles = $actor ? $actor->roles()->pluck('slug')->all() : [];
@@ -284,24 +286,23 @@ class MobileApiController extends Controller
         ]);
     }
 
-    public function courses(): JsonResponse
+    public function courses(Request $request): JsonResponse
     {
         abort_unless($this->plugins->isEnabled('course-management') && Schema::hasTable('courses'), 409, 'Course Management is disabled.');
         return response()->json([
-            'data' => Course::query()
-                ->where('status', 'published')
+            'data' => $this->scopeVisibleBranch(Course::query()->where('status', 'published'), 'courses', app(BranchAccess::class)->assignedBranchId($this->mobileActor($request)))
                 ->select(['id', 'code', 'title', 'slug', 'price', 'description', 'thumbnail', 'instructor_name'])
                 ->latest()
                 ->paginate(20),
         ]);
     }
 
-    public function courseShow(string $slug): JsonResponse
+    public function courseShow(Request $request, string $slug): JsonResponse
     {
         abort_unless($this->plugins->isEnabled('course-management') && Schema::hasTable('courses'), 404, 'Course Management is disabled.');
         // Course currently has no Eloquent category/lessons relationships.
         // Return the persisted course record instead of eager-loading undefined relations.
-        $course = Course::query()
+        $course = $this->scopeVisibleBranch(Course::query(), 'courses', app(BranchAccess::class)->assignedBranchId($this->mobileActor($request)))
             ->select(['id', 'code', 'title', 'slug', 'description', 'price', 'thumbnail', 'instructor_name', 'status'])
             ->where('slug', $slug)
             ->where('status', 'published')
@@ -348,7 +349,7 @@ class MobileApiController extends Controller
         return response()->json(['data' => $lessons]);
     }
 
-    public function ebooks(): JsonResponse
+    public function ebooks(Request $request): JsonResponse
     {
         $items = $this->plugins->isEnabled('storefront-catalog') && Schema::hasTable('storefront_items')
             ? DB::table('storefront_items')->where('type', 'ebook')->where('is_active', true)->orderByDesc('id')->get(['id', 'type', 'slug', 'title', 'category', 'badge', 'price', 'original_price', 'is_free', 'pages', 'summary', 'thumbnail_path', 'pdf_thumbnail_path'])
@@ -357,7 +358,7 @@ class MobileApiController extends Controller
         return response()->json(['data' => $items]);
     }
 
-    public function products(): JsonResponse
+    public function products(Request $request): JsonResponse
     {
         $items = $this->plugins->isEnabled('storefront-catalog') && Schema::hasTable('storefront_items')
             ? DB::table('storefront_items')->where('type', 'product')->where('is_active', true)->orderByDesc('id')->get(['id', 'type', 'slug', 'title', 'category', 'badge', 'price', 'original_price', 'summary', 'thumbnail_path'])
@@ -366,7 +367,7 @@ class MobileApiController extends Controller
         return response()->json(['data' => $items]);
     }
 
-    public function exams(): JsonResponse
+    public function exams(Request $request): JsonResponse
     {
         $exams = $this->plugins->isEnabled('exam-management') && Schema::hasTable('exams')
             ? DB::table('exams')->where('is_published', true)->orderByDesc('id')->limit(30)->get()
@@ -416,6 +417,16 @@ class MobileApiController extends Controller
         return response()->json(['verified' => true, 'data' => $cert]);
     }
 
+
+    private function scopeVisibleBranch($query, string $table, ?int $branchId)
+    {
+        if ($branchId !== null && Schema::hasTable($table) && Schema::hasColumn($table, 'branch_id')) {
+            $query->where(function ($branch) use ($table, $branchId): void {
+                $branch->whereNull($table . '.branch_id')->orWhere($table . '.branch_id', $branchId);
+            });
+        }
+        return $query;
+    }
 
     private function mobileActor(Request $request): ?User
     {
