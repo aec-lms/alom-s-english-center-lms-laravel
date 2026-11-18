@@ -93,8 +93,28 @@ final class PhoneticsLearningAdminController extends Controller
     {
         $data = $request->validate([
             'batch_ref' => ['required', 'string', 'max:128'],
-            'user_id' => ['required', 'integer', 'exists:users,id'],
+            'user_id' => ['required', 'integer'],
         ]);
+        $userMap = config('phonetics.users', []);
+        $userTable = $userMap['table'] ?? 'users';
+        $userIdColumn = $userMap['id'] ?? 'id';
+        foreach ([$userTable, $userIdColumn] as $identifier) {
+            abort_unless(
+                is_string($identifier) && preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $identifier) === 1,
+                500,
+                'Invalid host LMS user mapping.'
+            );
+        }
+        abort_unless(
+            Schema::hasTable($userTable) && Schema::hasColumn($userTable, $userIdColumn),
+            503,
+            'Configured host LMS user table is unavailable.'
+        );
+        abort_unless(
+            DB::table($userTable)->where($userIdColumn, $data['user_id'])->exists(),
+            422,
+            'Selected student does not exist in the connected LMS.'
+        );
         $batchIds = collect($this->catalog->batches())->pluck('id');
         abort_unless($batchIds->contains((string) $data['batch_ref']), 422, 'Choose a batch from the connected LMS.');
         PhoneticBatchMembership::query()->updateOrCreate(
