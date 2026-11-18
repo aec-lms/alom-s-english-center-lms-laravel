@@ -226,13 +226,29 @@ class UniversalPaymentController extends Controller
                         'updated_at' => now(),
                     ]);
 
-                    if ($newPaid + 0.01 >= (float) $invoice->net_amount
-                        && Schema::hasTable('enrollments')
-                        && Schema::hasColumn('enrollments', 'invoice_id')) {
-                        DB::table('enrollments')
-                            ->where('invoice_id', $invoice->id)
-                            ->where('status', 'pending')
-                            ->update(['status' => 'active', 'updated_at' => now()]);
+                    if ($newPaid + 0.01 >= (float) $invoice->net_amount) {
+                        if (Schema::hasTable('enrollments') && Schema::hasColumn('enrollments', 'invoice_id')) {
+                            DB::table('enrollments')
+                                ->where('invoice_id', $invoice->id)
+                                ->where('status', 'pending')
+                                ->update(['status' => 'active', 'updated_at' => now()]);
+                        }
+
+                        if ($this->plugins->isEnabled('referral-income') && Schema::hasTable('commerce_orders')) {
+                            $order = DB::table('commerce_orders')->where('invoice_id', $invoice->id)->lockForUpdate()->first();
+                            if ($order) {
+                                DB::table('commerce_orders')->where('id', $order->id)->update([
+                                    'status' => 'completed', 'payment_status' => 'paid', 'updated_at' => now(),
+                                ]);
+                                $buyer = User::query()->find((int) $order->user_id);
+                                if ($buyer) {
+                                    app(ReferralIncomeService::class)->recordSettledPurchase(
+                                        $buyer, 'commerce_order', (string) $order->id,
+                                        (float) $invoice->net_amount, (string) $invoice->currency
+                                    );
+                                }
+                            }
+                        }
                     }
                 }
             }
