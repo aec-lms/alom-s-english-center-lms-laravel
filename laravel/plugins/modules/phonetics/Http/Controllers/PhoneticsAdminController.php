@@ -1,18 +1,18 @@
 <?php
 declare(strict_types=1);
-namespace Plugins\\Modules\\Phonetics\\Http\\Controllers;
+namespace Plugins\Modules\Phonetics\Http\Controllers;
 
-use App\\Http\\Controllers\\Controller;
-use App\\Models\\AuditLog;
-use Illuminate\\Http\\Request;
-use Illuminate\\Http\\UploadedFile;
-use Illuminate\\Support\\Facades\\Cache;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Facades\\File;
-use Illuminate\\Support\\Str;
-use Illuminate\\View\\View;
-use Plugins\\Modules\\Phonetics\\Models\\PhoneticSetting;
-use Plugins\\Modules\\Phonetics\\Models\\PhoneticEntry;
+use App\Http\Controllers\Controller;
+use App\Models\AuditLog;
+use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
+use Illuminate\View\View;
+use Plugins\Modules\Phonetics\Models\PhoneticSetting;
+use Plugins\Modules\Phonetics\Models\PhoneticEntry;
 
 final class PhoneticsAdminController extends Controller
 {
@@ -127,7 +127,7 @@ final class PhoneticsAdminController extends Controller
 
                 return $entry;
             });
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             foreach ($newPaths as $path) {
                 $this->deleteMedia($path);
             }
@@ -189,7 +189,7 @@ final class PhoneticsAdminController extends Controller
                     'is_active' => $entry->is_active,
                 ]);
             });
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             foreach ($newPaths as $path) {
                 $this->deleteMedia($path);
             }
