@@ -32,6 +32,12 @@ class PaymentSettlementService
                 return $lockedTx;
             }
 
+            // A verified late callback must never resurrect a fully refunded
+            // transaction or credit its invoice a second time.
+            if ($lockedTx->status === 'refunded') {
+                throw new RuntimeException('A refunded transaction cannot be settled again.');
+            }
+
             $invoice = FeeInvoice::query()->where('id', $lockedTx->invoice_id)->lockForUpdate()->firstOrFail();
             $newPaid = round((float) $invoice->paid_amount + (float) $lockedTx->amount, 2);
             if ($newPaid > (float) $invoice->net_amount + 0.01) {
