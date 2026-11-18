@@ -86,5 +86,103 @@
             <p class="text-slate-400">No promo coupons created yet.</p>
         @endforelse
     </div>
+
+    <section class="rounded-2xl border border-slate-200 bg-white p-5 space-y-4">
+        <div>
+            <h2 class="text-sm font-extrabold text-slate-900">Admin Gift Voucher Controls</h2>
+            <p class="mt-1 text-xs text-slate-500">Control whether students can buy vouchers, allowed amounts, expiry and personal messages. Existing paid vouchers keep their original terms.</p>
+        </div>
+        <form method="POST" action="{{ route('plugins.marketing.gift-voucher-settings.update') }}" class="grid gap-3 md:grid-cols-2 text-xs">
+            @csrf
+            @method('PUT')
+            <label class="flex items-center gap-2 font-bold text-slate-700 md:col-span-2">
+                <input type="checkbox" name="enabled" value="1" @checked($giftVoucherSettings['enabled']) class="rounded border-slate-300">
+                Enable new gift voucher purchases
+            </label>
+            <label class="grid gap-1 text-slate-600">Minimum voucher amount (BDT)
+                <input type="number" name="minimum_amount" min="1" step="0.01" required value="{{ $giftVoucherSettings['minimum_amount'] }}" class="rounded-lg border border-slate-300 px-3 py-2">
+            </label>
+            <label class="grid gap-1 text-slate-600">Maximum voucher amount (BDT)
+                <input type="number" name="maximum_amount" min="1" step="0.01" required value="{{ $giftVoucherSettings['maximum_amount'] }}" class="rounded-lg border border-slate-300 px-3 py-2">
+            </label>
+            <label class="grid gap-1 text-slate-600">Voucher validity (days)
+                <input type="number" name="validity_days" min="1" max="1095" required value="{{ $giftVoucherSettings['validity_days'] }}" class="rounded-lg border border-slate-300 px-3 py-2">
+            </label>
+            <label class="flex items-center gap-2 text-slate-700 self-end pb-2">
+                <input type="checkbox" name="allow_personal_message" value="1" @checked($giftVoucherSettings['allow_personal_message']) class="rounded border-slate-300">
+                Allow sender personal message
+            </label>
+            <button type="submit" class="rounded-lg bg-emerald-600 px-4 py-2.5 font-bold text-white md:col-span-2">Save Gift Voucher Settings</button>
+        </form>
+    </section>
+
+    <section class="rounded-2xl border border-slate-200 bg-white p-5 space-y-4">
+        <div>
+            <h2 class="text-sm font-extrabold text-slate-900">Manage Existing Coupons</h2>
+            <p class="mt-1 text-xs text-slate-500">Update discount rules, course targeting, usage limits, dates and enable/disable status. Coupons with redemption history are retained, not deleted.</p>
+        </div>
+        @forelse ($coupons as $coupon)
+            <form method="POST" action="{{ route('plugins.marketing.coupons.update', $coupon->id) }}" class="rounded-xl border border-slate-200 p-4 space-y-3">
+                @csrf
+                @method('PATCH')
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div class="font-mono text-sm font-black text-slate-900">{{ $coupon->code }}</div>
+                    <label class="flex items-center gap-2 text-xs font-bold text-slate-700">
+                        <input type="checkbox" name="is_active" value="1" @checked($coupon->is_active) class="rounded border-slate-300">
+                        Enabled for new checkouts
+                    </label>
+                </div>
+                <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-xs">
+                    <label class="grid gap-1 text-slate-600">Discount type
+                        <select name="discount_type" class="rounded-lg border border-slate-300 px-3 py-2">
+                            <option value="percent" @selected($coupon->discount_type !== 'fixed')>Percentage</option>
+                            <option value="fixed" @selected($coupon->discount_type === 'fixed')>Fixed amount</option>
+                        </select>
+                    </label>
+                    <label class="grid gap-1 text-slate-600">Percent (1–100)
+                        <input name="discount_percent" type="number" min="1" max="100" value="{{ $coupon->discount_percent ?: 10 }}" class="rounded-lg border border-slate-300 px-3 py-2">
+                    </label>
+                    <label class="grid gap-1 text-slate-600">Fixed amount (BDT)
+                        <input name="discount_amount" type="number" min="0.01" step="0.01" value="{{ $coupon->discount_amount }}" class="rounded-lg border border-slate-300 px-3 py-2">
+                    </label>
+                    <label class="grid gap-1 text-slate-600">Max uses (0 = unlimited)
+                        <input name="max_uses" type="number" min="0" value="{{ $coupon->max_uses }}" class="rounded-lg border border-slate-300 px-3 py-2">
+                    </label>
+                    <label class="grid gap-1 text-slate-600">Minimum subtotal
+                        <input name="minimum_subtotal" type="number" min="0" step="0.01" value="{{ $coupon->minimum_subtotal ?? 0 }}" class="rounded-lg border border-slate-300 px-3 py-2">
+                    </label>
+                    <label class="grid gap-1 text-slate-600">Maximum discount
+                        <input name="maximum_discount" type="number" min="0.01" step="0.01" value="{{ $coupon->maximum_discount }}" class="rounded-lg border border-slate-300 px-3 py-2">
+                    </label>
+                    <label class="grid gap-1 text-slate-600">Per-student limit
+                        <input name="per_user_limit" type="number" min="1" value="{{ $coupon->per_user_limit }}" class="rounded-lg border border-slate-300 px-3 py-2">
+                    </label>
+                    <label class="grid gap-1 text-slate-600">Starts at
+                        <input name="starts_at" type="datetime-local" value="{{ $coupon->starts_at?->format('Y-m-d\\TH:i') }}" class="rounded-lg border border-slate-300 px-3 py-2">
+                    </label>
+                    <label class="grid gap-1 text-slate-600">Expires at
+                        <input name="expires_at" type="date" value="{{ $coupon->expires_at?->format('Y-m-d') }}" class="rounded-lg border border-slate-300 px-3 py-2">
+                    </label>
+                </div>
+                <label class="block text-xs text-slate-600">Applicable courses (empty = all)
+                    <select name="applies_to_course_ids[]" multiple size="3" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
+                        @foreach ($courses as $course)
+                            <option value="{{ $course->id }}" @selected(in_array((int) $course->id, array_map('intval', $coupon->applies_to_course_ids ?? []), true))>{{ $course->title }}</option>
+                        @endforeach
+                    </select>
+                </label>
+                <label class="flex items-center gap-2 text-xs text-slate-700">
+                    <input type="checkbox" name="first_purchase_only" value="1" @checked($coupon->first_purchase_only) class="rounded border-slate-300">
+                    First purchase only
+                </label>
+                <div class="flex items-center justify-between gap-3">
+                    <p class="text-[11px] text-slate-500">Redeemed {{ $coupon->used_count }} times. Existing paid orders are not changed.</p>
+                    <button type="submit" class="rounded-lg bg-slate-900 px-4 py-2 text-xs font-bold text-white">Save Coupon</button>
+                </div>
+            </form>
+        @empty
+            <p class="text-xs text-slate-400">No coupons are available to manage.</p>
+        @endforelse
+    </section>
 </div>
 @endsection
