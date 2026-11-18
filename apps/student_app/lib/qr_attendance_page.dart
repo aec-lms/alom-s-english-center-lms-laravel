@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'api_client.dart';
 
@@ -25,10 +25,10 @@ class _QrAttendancePageState extends State<QrAttendancePage> {
     setState(() { busy = true; message = null; });
     try {
       final result = await widget.api.postJson('/attendance/qr/check-in', {'token': token});
-      if (mounted) setState(() { done = true; message = result['message']?.toString() ?? 'Attendance submitted.'; });
+      if (mounted) { setState(() { done = true; message = result['message']?.toString() ?? 'Attendance submitted.'; }); }
     } catch (e) {
-      if (mounted) setState(() => message = e.toString());
-    } finally { if (mounted) setState(() => busy = false); }
+      if (mounted) { setState(() => message = e.toString()); }
+    } finally { if (mounted) { setState(() => busy = false); } }
   }
   @override
   Widget build(BuildContext context) => Scaffold(
