@@ -100,8 +100,9 @@ class _CourseDetailPageState extends State<CourseDetailPage> {
                           child: Center(child: CircularProgressIndicator()),
                         );
                       }
-                      if (lessonSnapshot.hasError) {
-                        final error = lessonSnapshot.error;
+                      final lessonError = lessonSnapshot.data?['_error'];
+                      if (lessonSnapshot.hasError || lessonError != null) {
+                        final error = lessonError ?? lessonSnapshot.error;
                         if (error is MobileApiException &&
                             error.statusCode == 403) {
                           return const ListTile(
