@@ -24,6 +24,7 @@ final class PluginManifest
         public readonly array $optionalDependencies = [],
         public readonly bool $isCore = false,
         public readonly array $adminMenu = [],
+        public readonly string $icon = 'puzzle',
     ) {}
 
     public static function fromDirectory(string $directory): self
@@ -72,6 +73,7 @@ final class PluginManifest
             optionalDependencies: array_values(array_filter((array) ($data['optional_dependencies'] ?? []), 'is_string')),
             isCore: (bool) ($data['is_core'] ?? false),
             adminMenu: array_values(array_filter((array) ($data['admin_menu'] ?? []), 'is_array')),
+            icon: PluginIconRegistry::resolve($data['slug'], (string) ($data['category'] ?? 'general'), isset($data['icon']) && is_string($data['icon']) ? $data['icon'] : null),
         );
     }
 
@@ -92,6 +94,7 @@ final class PluginManifest
             'settings_schema' => $this->settingsSchema,
             'is_core' => $this->isCore,
             'admin_menu' => $this->adminMenu,
+            'icon' => $this->icon,
         ];
     }
 }
