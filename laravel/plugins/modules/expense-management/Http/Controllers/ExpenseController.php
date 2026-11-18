@@ -58,7 +58,7 @@ class ExpenseController extends Controller
             'receipt' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
         ]);
 
-        $branchId = $this->resolvedBranchId($actor, $validated['branch_id'] ?? null);
+        $branchId = $this->resolvedBranchId($actor, isset($validated['branch_id']) ? (int) $validated['branch_id'] : null);
         $receiptPath = $request->hasFile('receipt') ? $request->file('receipt')->store('expense-receipts', 'local') : null;
         $isAdmin = $actor->hasRole('admin');
 
