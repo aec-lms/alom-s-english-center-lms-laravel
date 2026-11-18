@@ -10,6 +10,7 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:student-tracking'])
     ->name('plugins.student-tracking.')
     ->group(function (): void {
         Route::get('/mine', [StudentTrackingController::class, 'mine'])->name('mine');
+        Route::get('/guardian', [StudentTrackingController::class, 'guardian'])->name('guardian');
         Route::post('/events', [StudentTrackingController::class, 'record'])->middleware('throttle:60,1')->name('events.record');
     });
 
