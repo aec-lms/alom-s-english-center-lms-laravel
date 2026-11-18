@@ -1,0 +1,71 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Feature;
+
+use App\Models\SystemSetting;
+use Plugins\Modules\MarketingManagement\Models\PromoCoupon;
+use Tests\TestCase;
+
+class CourseCommerceAdminControlsTest extends TestCase
+{
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->markSystemInstalled();
+        $this->activatePlugins(['marketing-management', 'course-management']);
+    }
+
+    public function test_admin_can_change_gift_voucher_policy_and_purchase_settings_are_persisted(): void
+    {
+        $admin = $this->createUserWithRole('admin');
+
+        $this->actingAs($admin)->put(route('plugins.marketing.gift-voucher-settings.update'), [
+            'enabled' => '1',
+            'minimum_amount' => 250,
+            'maximum_amount' => 25000,
+            'validity_days' => 90,
+            'allow_personal_message' => '1',
+        ])->assertRedirect();
+
+        $stored = json_decode((string) SystemSetting::query()->where('key', 'course_commerce.gift_vouchers')->value('value'), true);
+        $this->assertSame(true, $stored['enabled']);
+        $this->assertSame(250.0, $stored['minimum_amount']);
+        $this->assertSame(25000.0, $stored['maximum_amount']);
+        $this->assertSame(90, $stored['validity_days']);
+        $this->assertSame(true, $stored['allow_personal_message']);
+    }
+
+    public function test_admin_can_disable_coupon_without_deleting_redemption_history(): void
+    {
+        $admin = $this->createUserWithRole('admin');
+        $coupon = PromoCoupon::query()->create([
+            'code' => 'ADMIN-CONTROL-25',
+            'discount_percent' => 25,
+            'max_uses' => 100,
+            'used_count' => 3,
+            'expires_at' => now()->addDays(30)->toDateString(),
+            'is_active' => true,
+            'discount_type' => 'percent',
+            'minimum_subtotal' => 0,
+            'applies_to_course_ids' => [],
+            'first_purchase_only' => false,
+        ]);
+
+        $this->actingAs($admin)->patch(route('plugins.marketing.coupons.update', $coupon->id), [
+            'discount_type' => 'percent',
+            'discount_percent' => 15,
+            'max_uses' => 50,
+            'minimum_subtotal' => 500,
+            'is_active' => '0',
+            'applies_to_course_ids' => [],
+        ])->assertRedirect();
+
+        $coupon->refresh();
+        $this->assertFalse($coupon->is_active);
+        $this->assertSame(15, $coupon->discount_percent);
+        $this->assertSame(3, $coupon->used_count);
+        $this->assertSame(50, $coupon->max_uses);
+    }
+}
