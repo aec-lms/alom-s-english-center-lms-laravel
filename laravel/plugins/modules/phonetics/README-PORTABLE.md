@@ -11,6 +11,7 @@ This plugin can run inside the AEC LMS plugin manager or as a standalone Laravel
 - Exams generated from admin-selected words, with time limits, pass marks, attempt limits and randomized questions/options.
 - Server-side answer checking. Correct answers are never sent in the question payload and submitted scores are never trusted.
 - A plugin-owned batch roster fallback. If the host LMS has its own student-to-batch table, map that table instead.
+- Numeric or UUID host user identifiers (stored in the plugin schema as strings, without foreign keys to host tables).
 - Plugin-owned assignments, exams, attempts and audit events. Host LMS course/enrollment tables are read-only integrations.
 
 ## Standalone installation in another Laravel LMS
@@ -31,6 +32,7 @@ The default standalone middleware is web for the practice page, web+auth for att
 
 - A free course is identified by its mapped price column being zero or less.
 - A paid course is identified by its mapped price column being greater than zero.
+- `catalog.courses.price` must map to the host LMS course price column. The plugin fails closed with a service-unavailable response if the price mapping is missing; it never silently treats an unknown course as free.
 - An assignment/exam can target both, free or paid.
 - Learners must have an active enrollment according to catalog.enrollments.active_statuses when enrollment protection is enabled. A paid LMS should only mark a paid enrollment active after payment has been settled.
 - A batch-scoped assignment/exam requires a matching active batch membership. If no host membership table exists, administrators can maintain the plugin-owned roster from Admin → Phonetics → Vocabulary & Exams.
