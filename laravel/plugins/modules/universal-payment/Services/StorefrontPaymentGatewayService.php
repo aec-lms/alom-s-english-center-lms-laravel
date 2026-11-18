@@ -141,6 +141,9 @@ class StorefrontPaymentGatewayService
         if (($notes['purpose'] ?? null) === 'course_cart') {
             return $this->grantCourseCartAccess($transaction, $validationId, $providerDetails, $notes);
         }
+        if (($notes['purpose'] ?? null) === 'course_gift') {
+            return $this->grantCourseGiftAccess($transaction, $validationId, $providerDetails, $notes);
+        }
 
         if ($transaction->learn_earn_exam_id) {
             return $this->grantExamAccess($transaction, $validationId, $providerDetails);
@@ -163,6 +166,13 @@ class StorefrontPaymentGatewayService
 
             $notes = json_decode((string) $locked->notes, true);
             $notes = is_array($notes) ? $notes : [];
+            if (($notes['purpose'] ?? null) === 'course_gift') {
+                $giftId = (int) ($notes['course_gift_id'] ?? 0);
+                if ($giftId > 0 && Schema::hasTable('course_gifts')) {
+                    DB::table('course_gifts')->where('id', $giftId)->where('status', 'awaiting_payment')
+                        ->update(['status' => 'payment_failed', 'updated_at' => now()]);
+                }
+            }
             if (($notes['purpose'] ?? null) === 'course_cart') {
                 $orderId = (int) ($notes['course_cart_order_id'] ?? 0);
                 if ($orderId > 0 && Schema::hasTable('course_cart_orders')) {
@@ -311,6 +321,86 @@ class StorefrontPaymentGatewayService
             ]);
             DB::table('course_carts')->where('id', $order->cart_id)->update(['status' => 'completed', 'updated_at' => now()]);
 
+            $locked->update([
+                'status' => 'verified',
+                'external_trx_id' => $externalReference,
+                'verified_at' => now(),
+                'notes' => json_encode(array_merge($notes, ['provider' => $locked->gateway], $providerDetails), JSON_THROW_ON_ERROR),
+            ]);
+
+            return $locked->fresh();
+        }, 3);
+    }
+
+    private function grantCourseGiftAccess(UniversalPaymentTransaction $transaction, string $externalReference, array $providerDetails, array $notes): UniversalPaymentTransaction
+    {
+        return DB::transaction(function () use ($transaction, $externalReference, $providerDetails, $notes): UniversalPaymentTransaction {
+            $locked = UniversalPaymentTransaction::query()->whereKey($transaction->id)->lockForUpdate()->firstOrFail();
+            if ($locked->status === 'verified') return $locked;
+
+            $giftId = (int) ($notes['course_gift_id'] ?? 0);
+            if ($giftId < 1 || !Schema::hasTable('course_gifts') || !Schema::hasTable('courses')
+                || !Schema::hasTable('fee_invoices') || !Schema::hasColumn('course_gifts', 'payment_transaction_id')) {
+                throw new RuntimeException('The gift course order could not be located safely.');
+            }
+
+            $gift = DB::table('course_gifts')->where('id', $giftId)->lockForUpdate()->first();
+            if (!$gift || (int) $gift->payment_transaction_id !== (int) $locked->id
+                || (int) $gift->sender_user_id !== (int) $locked->user_id
+                || abs((float) $gift->amount - (float) $locked->amount) > 0.01
+                || strtoupper((string) $gift->currency) !== strtoupper((string) $locked->currency)) {
+                throw new RuntimeException('Gift course order and verified payment details do not match.');
+            }
+
+            if (in_array($gift->status, ['paid', 'redeemed'], true)) {
+                $locked->update(['status' => 'verified', 'external_trx_id' => $externalReference,
+                    'verified_at' => $locked->verified_at ?? now()]);
+                return $locked->fresh();
+            }
+
+            if ($gift->status !== 'awaiting_payment'
+                || ($gift->expires_at && now()->greaterThan($gift->expires_at))) {
+                $locked->update(['status' => 'risk_review', 'external_trx_id' => $externalReference,
+                    'notes' => json_encode(array_merge($notes, ['risk_review' => true, 'reason' => 'gift_expired_or_not_payable']), JSON_THROW_ON_ERROR)]);
+                DB::table('course_gifts')->where('id', $giftId)->update(['status' => 'risk_review', 'updated_at' => now()]);
+                return $locked->fresh();
+            }
+
+            $course = DB::table('courses')->where('id', $gift->course_id)->where('status', 'published')->first();
+            if (!$course || abs((float) $course->price - (float) $gift->amount) > 0.01) {
+                $locked->update(['status' => 'risk_review', 'external_trx_id' => $externalReference,
+                    'notes' => json_encode(array_merge($notes, ['risk_review' => true, 'reason' => 'gift_course_price_or_availability_changed']), JSON_THROW_ON_ERROR)]);
+                DB::table('course_gifts')->where('id', $giftId)->update(['status' => 'risk_review', 'updated_at' => now()]);
+                return $locked->fresh();
+            }
+
+            $sender = DB::table('users')->where('id', $gift->sender_user_id)->first();
+            if (!$sender) throw new RuntimeException('Gift sender account could not be found.');
+            $studentProfile = Schema::hasTable('students') ? DB::table('students')->where('user_id', $sender->id)->first() : null;
+            $invoice = PluginsModulesFeesManagementModelsFeeInvoice::query()->create([
+                'invoice_number' => 'GIFT-' . strtoupper(substr(bin2hex(random_bytes(6)), 0, 10)),
+                'student_id' => $studentProfile->id ?? null,
+                'payer_name' => $sender->name,
+                'payer_email' => $sender->email,
+                'payer_phone' => $locked->payer_contact,
+                'branch_id' => $locked->branch_id,
+                'subtotal_amount' => $gift->amount,
+                'discount_amount' => 0,
+                'net_amount' => $gift->amount,
+                'paid_amount' => $gift->amount,
+                'currency' => strtoupper((string) $gift->currency),
+                'status' => 'paid',
+                'due_date' => now()->toDateString(),
+            ]);
+
+            DB::table('course_gifts')->where('id', $giftId)->update([
+                'invoice_id' => $invoice->id,
+                'status' => 'paid',
+                'paid_at' => now(),
+                'updated_at' => now(),
+            ]);
+            app(\\Plugins\\Modules\\UniversalPayment\\Services\\ExternalTransactionReferenceRegistry::class)
+                ->claim((string) $locked->gateway, $externalReference, (int) $locked->id);
             $locked->update([
                 'status' => 'verified',
                 'external_trx_id' => $externalReference,
