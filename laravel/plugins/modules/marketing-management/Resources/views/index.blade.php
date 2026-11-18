@@ -68,6 +68,7 @@
                     </select>
                 </label>
                 <label class="flex items-center gap-2 text-slate-700"><input type="checkbox" name="first_purchase_only" value="1" class="rounded border-slate-300"> First purchase only</label>
+                <label class="flex items-center gap-2 text-slate-700"><input type="checkbox" name="gift_only" value="1" class="rounded border-slate-300"> Gift course purchases only</label>
                 <button type="submit" class="px-4 py-2 rounded-lg bg-emerald-600 text-white font-bold">Create Coupon</button>
             </form>
         </div>
@@ -80,7 +81,7 @@
                 <div>
                     <div class="font-bold font-mono text-sm text-slate-900">{{ $coupon->code }} &mdash; {{ $coupon->discount_type === 'fixed' ? number_format((float) $coupon->discount_amount, 2) . ' BDT OFF' : $coupon->discount_percent . '% OFF' }}</div>
                     @if ($coupon->description)<div class="text-slate-600">{{ $coupon->description }}</div>@endif
-                    <div class="text-slate-500">Used {{ $coupon->used_count }} / {{ (int) $coupon->max_uses > 0 ? $coupon->max_uses : 'Unlimited' }} &middot; Per student {{ $coupon->per_user_limit ?? 'Unlimited' }} &middot; Expires {{ $coupon->expires_at?->toDateString() ?? 'No expiry' }}</div>
+                    <div class="text-slate-500">{{ $coupon->gift_only ? 'Gift-only' : 'All eligible checkouts' }} &middot; Used {{ $coupon->used_count }} / {{ (int) $coupon->max_uses > 0 ? $coupon->max_uses : 'Unlimited' }} &middot; Per student {{ $coupon->per_user_limit ?? 'Unlimited' }} &middot; Expires {{ $coupon->expires_at?->toDateString() ?? 'No expiry' }}</div>
                 </div>
                 <span class="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 font-bold text-[11px]">{{ $coupon->is_active ? 'Active' : 'Disabled' }}</span>
             </div>
@@ -177,6 +178,10 @@
                 <label class="flex items-center gap-2 text-xs text-slate-700">
                     <input type="checkbox" name="first_purchase_only" value="1" @checked($coupon->first_purchase_only) class="rounded border-slate-300">
                     First purchase only
+                </label>
+                <label class="flex items-center gap-2 text-xs text-slate-700">
+                    <input type="checkbox" name="gift_only" value="1" @checked($coupon->gift_only) class="rounded border-slate-300">
+                    Gift course purchases only
                 </label>
                 <div class="flex items-center justify-between gap-3">
                     <p class="text-[11px] text-slate-500">Redeemed {{ $coupon->used_count }} times. Existing paid orders are not changed.</p>
