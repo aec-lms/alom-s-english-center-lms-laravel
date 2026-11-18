@@ -125,6 +125,20 @@ final class CourseCatalog
         return $value === null ? null : (string) $value;
     }
 
+    public function assertCourseAvailable(object $course): void
+    {
+        $map = config('phonetics.catalog.courses', []);
+        $statusColumn = $map['status'] ?? null;
+        $activeStatuses = config('phonetics.access.course_active_statuses', ['published', 'active']);
+        if ($statusColumn && $this->hasColumn($map, $statusColumn)) {
+            abort_unless(
+                in_array((string) data_get($course, $statusColumn), $activeStatuses, true),
+                404,
+                'This course is not currently available.'
+            );
+        }
+    }
+
     public function isPaid(object $course): bool
     {
         $map = config('phonetics.catalog.courses', []);
@@ -157,6 +171,9 @@ final class CourseCatalog
 
     public function assertAccess(object $user, string $courseRef, string $audience = 'both', ?string $batchRef = null): void
     {
+        $course = $this->course($courseRef);
+        $this->assertCourseAvailable($course);
+
         $adminRoles = config('phonetics.access.admin_roles', ['admin']);
         if (method_exists($user, 'hasRole')) {
             foreach ($adminRoles as $role) {
@@ -170,12 +187,6 @@ final class CourseCatalog
         }
 
         $courseMap = config('phonetics.catalog.courses', []);
-        $course = $this->course($courseRef);
-        $statusColumn = $courseMap['status'] ?? null;
-        $activeCourseStatuses = config('phonetics.access.course_active_statuses', ['published', 'active']);
-        if ($statusColumn && $this->hasColumn($courseMap, $statusColumn)) {
-            abort_unless(in_array((string) data_get($course, $statusColumn), $activeCourseStatuses, true), 404, 'This course is not currently available.');
-        }
         if ($audience !== 'both') {
             $isPaid = $this->isPaid($course);
             if (($audience === 'paid' && !$isPaid) || ($audience === 'free' && $isPaid)) {
