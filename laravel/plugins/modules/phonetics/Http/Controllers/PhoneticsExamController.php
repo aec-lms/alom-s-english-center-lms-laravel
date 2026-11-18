@@ -57,6 +57,12 @@ final class PhoneticsExamController extends Controller
         $attempt = DB::transaction(function () use ($exam, $request, $snapshot, $questions): PhoneticExamAttempt {
             $lockedExam = PhoneticExam::query()->lockForUpdate()->findOrFail($exam->id);
             abort_unless($lockedExam->status === 'published', 404, 'This examination is no longer available.');
+            abort_unless(
+                (!$lockedExam->available_from || $lockedExam->available_from->lte(now()))
+                && (!$lockedExam->available_until || $lockedExam->available_until->gte(now())),
+                404,
+                'This examination is outside its availability window.'
+            );
 
             if ($lockedExam->max_attempts > 0) {
                 $count = PhoneticExamAttempt::query()
@@ -137,6 +143,7 @@ final class PhoneticsExamController extends Controller
         DB::transaction(function () use ($attempt, $answers, $score, $total, $percentage, $passed): void {
             $locked = PhoneticExamAttempt::query()->lockForUpdate()->findOrFail($attempt->id);
             abort_unless($locked->status === 'in_progress', 409, 'This attempt has already been submitted.');
+            abort_if($locked->expires_at && $locked->expires_at->isPast(), 410, 'The examination time has expired.');
             $locked->update([
                 'answers' => $answers,
                 'score' => $score,
