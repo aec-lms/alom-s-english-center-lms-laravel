@@ -72,7 +72,7 @@ class QuizContestPluginTest extends TestCase
 
         $this->actingAs($student)->post("/quiz-contests/{$contest}/submit", [
             'answers' => [$questions[0] => 1],
-        ])->assertSessionHasErrors('answers');
+        ])->assertStatus(422);
 
         $this->actingAs($student)->get("/quiz-contests/{$contest}")->assertOk()->assertDontSee('সঠিক উত্তর:');
 
