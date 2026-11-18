@@ -12,6 +12,7 @@ class PromoCoupon extends Model
 
     protected $fillable = [
         'code',
+        'description',
         'discount_percent',
         'max_uses',
         'used_count',
