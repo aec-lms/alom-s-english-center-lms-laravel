@@ -66,6 +66,8 @@ Route::middleware('installed')->group(function (): void {
     Route::post('/register', [LoginController::class, 'register'])->name('register.attempt')->middleware('guest');
     Route::get('/forgot-password', [LoginController::class, 'showForgotPassword'])->name('password.request')->middleware('guest');
     Route::post('/forgot-password', [LoginController::class, 'sendResetNotice'])->name('password.email')->middleware('guest');
+    Route::post('/forgot-password/otp', [LoginController::class, 'sendRecoveryOtp'])->name('password.otp.send')->middleware('guest');
+    Route::post('/forgot-password/otp/verify', [LoginController::class, 'verifyRecoveryOtp'])->name('password.otp.verify')->middleware('guest');
     Route::get('/reset-password/{token}', [LoginController::class, 'showResetPassword'])->name('password.reset')->middleware('guest');
     Route::post('/reset-password', [LoginController::class, 'resetPassword'])->name('password.update')->middleware('guest');
     Route::post('/logout', [LoginController::class, 'logout'])->name('logout')->middleware('auth');
@@ -140,67 +142,25 @@ Route::middleware('installed')->group(function (): void {
         });
 
         Route::prefix('institution-settings')->name('institution-settings.')->middleware(['permission:core.settings.manage', 'central.admin'])->group(function (): void {
-            Route::get('/', [InstitutionSettingsController::class, 'edit'])->name('edit');
+            Route::get('/', [InstitutionSettingsController::class, 'index'])->name('index');
             Route::post('/', [InstitutionSettingsController::class, 'update'])->name('update');
         });
 
-        Route::prefix('site-identity')->name('site-identity.')->middleware(['permission:core.settings.manage', 'central.admin'])->group(function (): void {
-            Route::get('/', [SiteIdentityController::class, 'edit'])->name('edit');
-            Route::post('/', [SiteIdentityController::class, 'update'])->name('update');
-        });
-
-        Route::prefix('site-layout')->name('site-layout.')->middleware(['permission:core.settings.manage', 'central.admin'])->group(function (): void {
-            Route::get('/', [SiteLayoutController::class, 'index'])->name('index');
-            Route::post('/', [SiteLayoutController::class, 'update'])->name('update');
-        });
-
-        Route::prefix('site-widgets')->name('site-widgets.')->middleware(['permission:core.settings.manage', 'central.admin'])->group(function (): void {
-            Route::get('/', [SiteWidgetController::class, 'index'])->name('index');
-            Route::post('/', [SiteWidgetController::class, 'update'])->name('update');
-        });
-
-        Route::prefix('appearance')->name('appearance.')->middleware(['permission:core.settings.manage', 'central.admin'])->group(function (): void {
-            Route::get('/', [AppearanceController::class, 'index'])->name('index');
-            Route::post('/', [AppearanceController::class, 'update'])->name('update');
-            Route::post('/design', [AppearanceController::class, 'updateDesign'])->name('design');
-            Route::post('/reset', [AppearanceController::class, 'reset'])->name('reset');
-            Route::get('/themes', [ThemePackageController::class, 'index'])->name('themes.index');
-            Route::get('/themes/{slug}/preview', [ThemePackageController::class, 'preview'])->name('themes.preview');
-            Route::post('/themes/upload', [ThemePackageController::class, 'upload'])->name('themes.upload');
-            Route::post('/themes/{slug}/activate', [ThemePackageController::class, 'activate'])->name('themes.activate');
-            Route::post('/themes/deactivate', [ThemePackageController::class, 'deactivate'])->name('themes.deactivate');
-            Route::delete('/themes/{slug}', [ThemePackageController::class, 'uninstall'])->name('themes.uninstall');
-        });
-
-        Route::prefix('recycle-bin')->name('recycle-bin.')->middleware(['permission:core.recycle_bin.manage', 'central.admin'])->group(function (): void {
-            Route::get('/', [RecycleBinController::class, 'index'])->name('index');
-            Route::post('/{type}/{recordId}/permanent-delete', [RecycleBinController::class, 'permanentlyDelete'])->whereNumber('recordId')->name('permanent-delete');
-            Route::post('/students/{student}/restore', [RecycleBinController::class, 'restoreStudent'])->name('students.restore');
-            Route::post('/teachers/{teacher}/restore', [RecycleBinController::class, 'restoreTeacher'])->name('teachers.restore');
-            Route::post('/courses/{recordId}/restore', [RecycleBinController::class, 'restoreCourse'])->name('courses.restore');
-            Route::post('/course-categories/{recordId}/restore', [RecycleBinController::class, 'restoreCourseCategory'])->name('course-categories.restore');
-            Route::post('/live-classes/{recordId}/restore', [RecycleBinController::class, 'restoreLiveClass'])->name('live-classes.restore');
-            Route::post('/exams/{recordId}/restore', [RecycleBinController::class, 'restoreExam'])->name('exams.restore');
-            Route::post('/batches/{recordId}/restore', [RecycleBinController::class, 'restoreBatch'])->name('batches.restore');
-            Route::post('/classes/{recordId}/restore', [RecycleBinController::class, 'restoreClass'])->name('classes.restore');
-            Route::post('/boost-campaigns/{recordId}/restore', [RecycleBinController::class, 'restoreBoostCampaign'])->name('boost-campaigns.restore');
-            Route::post('/branches/{recordId}/restore', [RecycleBinController::class, 'restoreBranch'])->name('branches.restore');
-            Route::post('/carousel-items/{recordId}/restore', [RecycleBinController::class, 'restoreCarouselItem'])->name('carousel-items.restore');
-            Route::post('/cms-categories/{recordId}/restore', [RecycleBinController::class, 'restoreCmsCategory'])->name('cms-categories.restore');
-            Route::post('/cms-posts/{recordId}/restore', [RecycleBinController::class, 'restoreCmsPost'])->name('cms-posts.restore');
-            Route::post('/builder-pages/{recordId}/restore', [RecycleBinController::class, 'restoreBuilderPage'])->name('builder-pages.restore');
-            Route::post('/hero-sliders/{recordId}/restore', [RecycleBinController::class, 'restoreHeroSlider'])->name('hero-sliders.restore');
-            Route::post('/sms-campaigns/{recordId}/restore', [RecycleBinController::class, 'restoreSmsCampaign'])->name('sms-campaigns.restore');
-            Route::post('/visitor-popups/{recordId}/restore', [RecycleBinController::class, 'restoreVisitorPopup'])->name('visitor-popups.restore');
-        });
-
-        Route::get('/audit-logs', [AuditLogController::class, 'index'])
-            ->name('audit.index')
-            ->middleware(['permission:core.audit.view', 'central.admin']);
-
-        Route::prefix('security/sessions')->name('security.sessions.')->middleware(['permission:core.audit.view', 'central.admin'])->group(function (): void {
-            Route::get('/', [DeviceSessionController::class, 'index'])->name('index');
-            Route::patch('/{deviceSession}/revoke', [DeviceSessionController::class, 'revoke'])->name('revoke');
-        });
+        Route::get('/audit-logs', [AuditLogController::class, 'index'])->name('audit-logs.index')->middleware(['permission:core.audit.view', 'central.admin']);
+        Route::get('/device-sessions', [DeviceSessionController::class, 'index'])->name('device-sessions.index')->middleware(['permission:core.security.manage', 'central.admin']);
+        Route::post('/device-sessions/{session}/revoke', [DeviceSessionController::class, 'revoke'])->name('device-sessions.revoke')->middleware(['permission:core.security.manage', 'central.admin']);
+        Route::get('/appearance', [AppearanceController::class, 'index'])->name('appearance.index')->middleware(['permission:core.settings.manage', 'central.admin']);
+        Route::post('/appearance', [AppearanceController::class, 'update'])->name('appearance.update')->middleware(['permission:core.settings.manage', 'central.admin']);
+        Route::get('/theme-packages', [ThemePackageController::class, 'index'])->name('theme-packages.index')->middleware(['permission:core.settings.manage', 'central.admin']);
+        Route::post('/theme-packages', [ThemePackageController::class, 'upload'])->name('theme-packages.upload')->middleware(['permission:core.settings.manage', 'central.admin']);
+        Route::post('/theme-packages/{package}/activate', [ThemePackageController::class, 'activate'])->name('theme-packages.activate')->middleware(['permission:core.settings.manage', 'central.admin']);
+        Route::post('/theme-packages/{package}/delete', [ThemePackageController::class, 'delete'])->name('theme-packages.delete')->middleware(['permission:core.settings.manage', 'central.admin']);
+        Route::get('/site-identity', [SiteIdentityController::class, 'index'])->name('site-identity.index')->middleware(['permission:core.settings.manage', 'central.admin']);
+        Route::post('/site-identity', [SiteIdentityController::class, 'update'])->name('site-identity.update')->middleware(['permission:core.settings.manage', 'central.admin']);
+        Route::get('/site-layout', [SiteLayoutController::class, 'index'])->name('site-layout.index')->middleware(['permission:core.settings.manage', 'central.admin']);
+        Route::post('/site-layout', [SiteLayoutController::class, 'update'])->name('site-layout.update')->middleware(['permission:core.settings.manage', 'central.admin']);
+        Route::get('/site-widgets', [SiteWidgetController::class, 'index'])->name('site-widgets.index')->middleware(['permission:core.settings.manage', 'central.admin']);
+        Route::post('/site-widgets', [SiteWidgetController::class, 'update'])->name('site-widgets.update')->middleware(['permission:core.settings.manage', 'central.admin']);
+        Route::get('/recycle-bin', [RecycleBinController::class, 'index'])->name('recycle-bin.index')->middleware(['permission:core.recycle-bin.view', 'central.admin']);
     });
 });
