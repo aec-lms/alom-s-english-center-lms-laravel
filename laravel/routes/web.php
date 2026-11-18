@@ -61,7 +61,7 @@ Route::middleware('installed')->group(function (): void {
     Route::get('/profile', [PublicHomeController::class, 'profile'])->name('public.profile' );
     Route::get('/dashboard', [PortalController::class, 'index'])->middleware('auth')->name('portal.dashboard');
     Route::get('/u/{username}', [ProfileSettingsController::class, 'showPublic'])->where('username', '[A-Za-z0-9_]{3,40}')->name('profile.public');
-    Route::middleware('auth')->prefix('profile/settings')->name('profile.settings')->group(function (): void {
+    Route::middleware('auth')->prefix('profile/settings')->name('profile.settings.')->group(function (): void {
         Route::get('/', [ProfileSettingsController::class, 'edit'])->name('edit');
         Route::put('/', [ProfileSettingsController::class, 'update'])->name('update');
     });

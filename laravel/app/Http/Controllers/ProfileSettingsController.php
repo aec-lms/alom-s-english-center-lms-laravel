@@ -55,7 +55,7 @@ class ProfileSettingsController extends Controller
             'profile_is_public' => ['nullable', 'boolean'],
             'avatar' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:3072'],
             'cover' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
-            'social_links' => ['nullable', 'array'],
+            'social_links' => ['nullable', 'array:facebook,instagram,youtube,linkedin,tiktok,x,whatsapp,telegram,github'],
             'social_links.facebook' => ['nullable', 'url', 'regex:/^https?:\\/\\//i', 'max:2048'],
             'social_links.instagram' => ['nullable', 'url', 'regex:/^https?:\\/\\//i', 'max:2048'],
             'social_links.youtube' => ['nullable', 'url', 'regex:/^https?:\\/\\//i', 'max:2048'],
@@ -86,6 +86,7 @@ class ProfileSettingsController extends Controller
         }
         $user->social_links = $links;
 
+        $replacedFiles = [];
         foreach (['avatar' => 'avatar_path', 'cover' => 'cover_path'] as $input => $column) {
             if (!$request->hasFile($input)) {
                 continue;
@@ -101,11 +102,14 @@ class ProfileSettingsController extends Controller
             $oldPath = $user->{$column};
             $user->{$column} = $newPath;
             if (is_string($oldPath) && str_starts_with($oldPath, 'users/' . ($input === 'avatar' ? 'avatars' : 'covers') . '/' . $user->id . '/')) {
-                Storage::disk('public')->delete($oldPath);
+                $replacedFiles[] = $oldPath;
             }
         }
 
         $user->save();
+        foreach ($replacedFiles as $oldPath) {
+            Storage::disk('public')->delete($oldPath);
+        }
 
         return redirect()->route('profile.settings')->with('status', 'Your profile has been updated successfully.');
     }

@@ -86,6 +86,26 @@ class ProfileSettingsTest extends TestCase
         $this->assertFalse($fresh->hasRole('admin'));
     }
 
+    public function test_public_profile_is_available_only_when_user_enables_visibility(): void
+    {
+        $this->markSystemInstalled();
+        $user = $this->createUserWithRole('student', null, 'profile-public@aec.test');
+        $user->forceFill([
+            'username' => 'public_learner',
+            'display_name' => 'Public Learner',
+            'profile_is_public' => true,
+            'social_links' => ['youtube' => 'https://youtube.com/@learner'],
+        ])->save();
+
+        $this->get(route('profile.public', ['username' => 'public_learner']))
+            ->assertOk()
+            ->assertSee('Public Learner')
+            ->assertSee('youtube.com/@learner');
+
+        $user->forceFill(['profile_is_public' => false])->save();
+        $this->get(route('profile.public', ['username' => 'public_learner']))->assertNotFound();
+    }
+
     public function test_profile_settings_are_authenticated_and_uploads_are_validated(): void
     {
         $this->markSystemInstalled();
