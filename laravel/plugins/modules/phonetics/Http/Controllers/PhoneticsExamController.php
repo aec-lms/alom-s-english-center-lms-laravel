@@ -33,7 +33,7 @@ final class PhoneticsExamController extends Controller
         if ($exam->max_attempts > 0) {
             $count = PhoneticExamAttempt::query()
                 ->where('exam_id', $exam->id)
-                ->where('user_id', $request->user()->id)
+                ->where('user_id', $request->user()->getAuthIdentifier())
                 ->where(function ($attempts): void {
                     $attempts->where('status', 'submitted')
                         ->orWhere(fn ($active) => $active->where('status', 'in_progress')
