@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 namespace Tests\Feature;
-use App\Core\Plugins\PluginManager;use Illuminate\Http\UploadedFile;use Illuminate\Support\Facades\DB;
+use App\Core\Plugins\PluginManager;use Illuminate\Http\UploadedFile;use Illuminate\Support\Facades\DB;use Illuminate\Support\Facades\Schema;
 use Plugins\Modules\Phonetics\Models\PhoneticSetting;
 use Plugins\Modules\Phonetics\Services\CourseCatalog;
 use Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException;use Illuminate\Support\Facades\File;use Plugins\Modules\Phonetics\Models\PhoneticEntry;use Tests\TestCase;
