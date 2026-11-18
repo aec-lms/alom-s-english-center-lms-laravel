@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Core\Plugins\PluginManager;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Plugins\Modules\CourseManagement\Models\Course;
@@ -85,6 +86,12 @@ class PaidLearnAndEarnCheckoutTest extends TestCase
         $this->assertSame(150.0, (float) $transaction->amount);
         $this->assertSame('pending', $transaction->status);
 
+        // An old unresolved provider session can still be paid later. It must
+        // remain a retry hold rather than opening a second billable session.
+        DB::table('universal_payment_transactions')
+            ->where('id', $transaction->id)
+            ->update(['created_at' => now()->subMinutes(45)]);
+
         $this->actingAs($student)->post("/learn-and-earn/exams/{$exam->id}/checkout", [
             'payer_contact' => '01700000000',
         ])->assertStatus(409);
@@ -118,4 +125,125 @@ class PaidLearnAndEarnCheckoutTest extends TestCase
         $this->assertSame(1, DB::table('learn_earn_exam_access')
             ->where('exam_id', $exam->id)->where('user_id', $student->id)->count());
     }
+
+    public function test_missing_gateway_credentials_fail_checkout_without_creating_an_indefinite_risk_hold(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins([
+            'course-management',
+            'exam-management',
+            'learn-and-earn',
+            'universal-payment',
+            'gateway-sslcommerz',
+        ]);
+
+        $course = Course::query()->create([
+            'code' => 'LEARN-EARN-NO-GATEWAY',
+            'title' => 'Gateway Setup Course',
+            'slug' => 'gateway-setup-course',
+            'price' => 0,
+            'status' => 'published',
+        ]);
+        $exam = Exam::query()->create([
+            'course_id' => $course->id,
+            'title' => 'Gateway Setup Exam',
+            'duration_minutes' => 30,
+            'pass_marks' => 5,
+            'learn_earn_type' => 'paid',
+            'access_price' => 125,
+            'is_published' => true,
+        ]);
+        $student = $this->createUserWithRole('student');
+
+        $this->actingAs($student)
+            ->from("/learn-and-earn/exams/{$exam->id}")
+            ->post("/learn-and-earn/exams/{$exam->id}/checkout", [
+                'payer_contact' => '01700000000',
+            ])
+            ->assertRedirect("/learn-and-earn/exams/{$exam->id}")
+            ->assertSessionHasErrors('payment');
+
+        $this->assertDatabaseHas('universal_payment_transactions', [
+            'user_id' => $student->id,
+            'learn_earn_exam_id' => $exam->id,
+            'status' => 'failed',
+        ]);
+        $this->assertDatabaseMissing('universal_payment_transactions', [
+            'user_id' => $student->id,
+            'learn_earn_exam_id' => $exam->id,
+            'status' => 'risk_review',
+        ]);
+    }
+
+    public function test_ambiguous_gateway_timeout_holds_exam_checkout_for_reconciliation_instead_of_allowing_double_payment(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins([
+            'course-management',
+            'exam-management',
+            'learn-and-earn',
+            'universal-payment',
+            'gateway-sslcommerz',
+        ]);
+
+        app(PluginManager::class)->saveSettings('gateway-sslcommerz', [
+            'store_id' => 'test-store',
+            'store_password' => 'test-secret',
+            'sandbox_mode' => '1',
+        ], ['store_password']);
+
+        $course = Course::query()->create([
+            'code' => 'LEARN-EARN-TIMEOUT',
+            'title' => 'Timeout Exam Course',
+            'slug' => 'timeout-exam-course',
+            'price' => 0,
+            'status' => 'published',
+        ]);
+        $exam = Exam::query()->create([
+            'course_id' => $course->id,
+            'title' => 'Timeout Protected Exam',
+            'duration_minutes' => 30,
+            'pass_marks' => 5,
+            'learn_earn_type' => 'paid',
+            'access_price' => 175,
+            'is_published' => true,
+        ]);
+        $student = $this->createUserWithRole('student');
+
+        Http::fake(function () {
+            throw new ConnectionException('Simulated provider timeout after session request.');
+        });
+
+        $this->actingAs($student)
+            ->from("/learn-and-earn/exams/{$exam->id}")
+            ->post("/learn-and-earn/exams/{$exam->id}/checkout", [
+                'payer_contact' => '01700000000',
+            ])
+            ->assertRedirect("/learn-and-earn/exams/{$exam->id}")
+            ->assertSessionHasErrors('payment');
+
+        $transaction = UniversalPaymentTransaction::query()
+            ->where('user_id', $student->id)
+            ->where('learn_earn_exam_id', $exam->id)
+            ->firstOrFail();
+        $this->assertSame('risk_review', $transaction->status);
+        $this->assertStringContainsString('outcome is unknown', (string) $transaction->notes);
+
+        $this->actingAs($student)
+            ->post("/learn-and-earn/exams/{$exam->id}/checkout", [
+                'payer_contact' => '01700000000',
+            ])
+            ->assertStatus(409);
+
+        $this->assertSame(1, UniversalPaymentTransaction::query()
+            ->where('user_id', $student->id)
+            ->where('learn_earn_exam_id', $exam->id)
+            ->count());
+        $this->assertDatabaseMissing('learn_earn_exam_access', [
+            'exam_id' => $exam->id,
+            'user_id' => $student->id,
+            'status' => 'granted',
+        ]);
+    }
+
 }

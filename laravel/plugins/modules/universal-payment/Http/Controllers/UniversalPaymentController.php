@@ -422,10 +422,9 @@ class UniversalPaymentController extends Controller
                 $pendingCheckout = UniversalPaymentTransaction::query()
                     ->where('user_id', auth()->id())
                     ->where('storefront_item_id', $lockedItem->id)
-                    ->where('status', 'pending')
-                    ->where('created_at', '>=', now()->subMinutes(30))
+                    ->whereIn('status', ['pending', 'risk_review'])
                     ->exists();
-                abort_if($pendingCheckout, 409, 'A checkout for this e-book is already pending. Wait for its result before retrying.');
+                abort_if($pendingCheckout, 409, 'A checkout for this e-book is still pending or requires provider reconciliation. Contact support before retrying.');
 
                 return UniversalPaymentTransaction::query()->create([
                     'reference' => 'UPAY-' . strtoupper(Str::random(8)),
@@ -453,16 +452,22 @@ class UniversalPaymentController extends Controller
                 return redirect()->away($checkoutUrl);
             } catch (\Throwable $exception) {
                 report($exception);
-                DB::transaction(function () use ($tx): void {
+                $ambiguous = $exception instanceof \Illuminate\Http\Client\ConnectionException;
+                DB::transaction(function () use ($tx, $ambiguous): void {
                     $locked = UniversalPaymentTransaction::query()->whereKey($tx->id)->lockForUpdate()->first();
                     if ($locked && $locked->status === 'pending') {
                         $locked->update([
-                            'status' => 'failed',
-                            'notes' => 'SSLCOMMERZ checkout session could not be initialized.',
+                            'status' => $ambiguous ? 'risk_review' : 'failed',
+                            'notes' => $ambiguous
+                                ? 'SSLCOMMERZ session initialization outcome is unknown. Reconcile with the provider before allowing a retry.'
+                                : 'SSLCOMMERZ checkout could not be initialized before a provider session was confirmed.',
                         ]);
                     }
                 });
-                return back()->withErrors(['gateway' => 'Unable to start hosted checkout. Check the SSLCOMMERZ plugin configuration and try again.'])->withInput();
+                $message = $ambiguous
+                    ? 'The payment session outcome is unknown. Contact support before retrying; do not submit another payment.'
+                    : 'Unable to start hosted checkout. Check the SSLCOMMERZ plugin configuration and try again.';
+                return back()->withErrors(['gateway' => $message])->withInput();
             }
         }
 
