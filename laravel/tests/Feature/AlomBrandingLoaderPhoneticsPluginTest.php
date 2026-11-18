@@ -2,7 +2,7 @@
 declare(strict_types=1);
 namespace Tests\Feature;
 use App\Core\Plugins\PluginManager;use Illuminate\Database\Schema\Blueprint;use Illuminate\Http\UploadedFile;use Illuminate\Support\Facades\DB;use Illuminate\Support\Facades\Schema;
-use Plugins\Modules\Phonetics\Models\PhoneticSetting;use Plugins\Modules\Phonetics\Services\CourseCatalog;use Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException;use Illuminate\Support\Facades\File;use Plugins\Modules\Phonetics\Models\PhoneticEntry;use Tests\TestCase;
+use Plugins\Modules\Phonetics\Models\PhoneticSetting;use Plugins\Modules\Phonetics\Services\CourseCatalog;use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;use Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException;use Illuminate\Support\Facades\File;use Plugins\Modules\Phonetics\Models\PhoneticEntry;use Tests\TestCase;
 final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
  public function test_al_branding_loader_and_phonetics_are_independent_plugins():void{$m=app(PluginManager::class)->discoverManifests();$this->assertArrayHasKey('al-branding-loader',$m);$this->assertArrayHasKey('phonetics',$m);$this->assertSame([],$m['al-branding-loader']->dependencies);$this->assertSame([],$m['phonetics']->dependencies);$this->assertContains('course-management',$m['phonetics']->optionalDependencies);$this->assertNotContains('phonetics',$m['al-branding-loader']->dependencies);$this->assertNotContains('al-branding-loader',$m['phonetics']->dependencies);}
  public function test_admin_routes_are_permission_protected():void{
@@ -237,6 +237,26 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
   }finally{
    Schema::dropIfExists('phonetics_guard_enrollments');
    Schema::dropIfExists('phonetics_guard_courses');
+  }
+ }
+
+
+ public function test_branchless_student_cannot_access_branch_scoped_phonetics_course():void{
+  Schema::create('phonetics_branch_guard_courses',function(Blueprint $table):void{$table->string('id',20)->primary();$table->decimal('price',10,2)->default(0);$table->string('status',20)->default('published');$table->unsignedBigInteger('branch_id')->nullable();});
+  Schema::create('phonetics_branch_guard_enrollments',function(Blueprint $table):void{$table->id();$table->string('user_id',128);$table->string('course_id',20);$table->unsignedBigInteger('branch_id')->nullable();$table->string('status',20);});
+  try{
+   $student=$this->createUserWithRole('student');
+   DB::table('phonetics_branch_guard_courses')->insert(['id'=>'branch-course','price'=>0,'status'=>'published','branch_id'=>2]);
+   DB::table('phonetics_branch_guard_enrollments')->insert(['user_id'=>(string)$student->getAuthIdentifier(),'course_id'=>'branch-course','branch_id'=>2,'status'=>'active']);
+   config([
+    'phonetics.catalog.courses'=>['table'=>'phonetics_branch_guard_courses','id'=>'id','price'=>'price','status'=>'status','branch_id'=>'branch_id'],
+    'phonetics.catalog.enrollments'=>['table'=>'phonetics_branch_guard_enrollments','user_id'=>'user_id','course_id'=>'course_id','status'=>'status','branch_id'=>'branch_id','active_statuses'=>['active']],
+   ]);
+   $this->expectException(AccessDeniedHttpException::class);
+   app(CourseCatalog::class)->assertAccess($student,'branch-course');
+  }finally{
+   Schema::dropIfExists('phonetics_branch_guard_enrollments');
+   Schema::dropIfExists('phonetics_branch_guard_courses');
   }
  }
 
