@@ -30,6 +30,8 @@ class _InstructorAttendancePageState extends State<InstructorAttendancePage>
   bool syncing = false;
   bool creatingQr = false;
   bool allowExcused = false;
+  bool offlineSyncEnabled = false;
+  String offlineSyncMessage = 'Offline attendance sync is not enabled by the academy.';
   int maxLocationAgeMinutes = 10;
   StreamSubscription<List<ConnectivityResult>>? connectivitySubscription;
   String? error;
@@ -71,6 +73,8 @@ class _InstructorAttendancePageState extends State<InstructorAttendancePage>
       setState(() {
         batches = values;
         allowExcused = policy['allow_excused'] == true;
+        offlineSyncEnabled = policy['offline_sync_enabled'] == true;
+        offlineSyncMessage = policy['message']?.toString() ?? offlineSyncMessage;
         maxLocationAgeMinutes = (policy['max_location_age_minutes'] as num?)?.toInt() ?? 10;
         selectedBatchId ??= values.isNotEmpty
             ? (values.first as Map<String, dynamic>)['id'] as int
@@ -133,6 +137,10 @@ class _InstructorAttendancePageState extends State<InstructorAttendancePage>
   }
 
   Future<void> markStudent(Map<String, dynamic> student, String status) async {
+    if (!offlineSyncEnabled) {
+      if (mounted) setState(() => error = offlineSyncMessage);
+      return;
+    }
     final batchId = selectedBatchId;
     final studentId = (student['id'] as num?)?.toInt();
     if (batchId == null || studentId == null) return;
@@ -163,7 +171,7 @@ class _InstructorAttendancePageState extends State<InstructorAttendancePage>
   }
 
   Future<void> syncQueue() async {
-    if (syncing || !mounted) return;
+    if (!offlineSyncEnabled || syncing || !mounted) return;
     setState(() { syncing = true; error = null; });
     try {
       await widget.api.syncAttendanceQueue(queue);
@@ -176,6 +184,7 @@ class _InstructorAttendancePageState extends State<InstructorAttendancePage>
   }
 
   Future<void> resolveConflict(AttendanceQueueEntry entry) async {
+    if (!offlineSyncEnabled) return;
     final attendanceId = entry.serverAttendanceId;
     if (attendanceId == null) {
       setState(() => error = 'The server did not provide an attendance reference. Sync this record again.');
@@ -306,6 +315,7 @@ class _InstructorAttendancePageState extends State<InstructorAttendancePage>
   }
 
   Future<void> retryFailed() async {
+    if (!offlineSyncEnabled) return;
     await queue.retryFailed();
     await refreshQueue();
   }
@@ -360,6 +370,12 @@ class _InstructorAttendancePageState extends State<InstructorAttendancePage>
                         content: Text(error!),
                         actions: [TextButton(onPressed: () => setState(() => error = null), child: const Text('Dismiss'))],
                       ),
+                      if (!offlineSyncEnabled)
+                        MaterialBanner(
+                          content: Text(offlineSyncMessage),
+                          leading: const Icon(Icons.info_outline),
+                          actions: const [SizedBox.shrink()],
+                        ),
                       Text('Select assigned batch', style: Theme.of(context).textTheme.titleMedium),
                       const SizedBox(height: 8),
                       DropdownButtonFormField<int>(
@@ -406,14 +422,14 @@ class _InstructorAttendancePageState extends State<InstructorAttendancePage>
                           const SizedBox(height: 10),
                           Wrap(spacing: 8, runSpacing: 8, children: [
                             FilledButton.icon(
-                              onPressed: syncing || (pending + review) == 0 ? null : syncQueue,
+                              onPressed: !offlineSyncEnabled || syncing || (pending + review) == 0 ? null : syncQueue,
                               icon: syncing
                                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                                   : const Icon(Icons.sync),
                               label: const Text('Sync now'),
                             ),
                             OutlinedButton(
-                              onPressed: failed == 0 ? null : retryFailed,
+                              onPressed: !offlineSyncEnabled || failed == 0 ? null : retryFailed,
                               child: const Text('Retry failed'),
                             ),
                             TextButton(
@@ -446,7 +462,7 @@ class _InstructorAttendancePageState extends State<InstructorAttendancePage>
                               Wrap(spacing: 8, children: [
                                 for (final status in ['present', 'absent', 'late', if (allowExcused) 'excused'])
                                   OutlinedButton(
-                                    onPressed: capturing || loadingStudents
+                                    onPressed: !offlineSyncEnabled || capturing || loadingStudents
                                         ? null
                                         : () => markStudent(student, status),
                                     child: Text(status[0].toUpperCase() + status.substring(1)),

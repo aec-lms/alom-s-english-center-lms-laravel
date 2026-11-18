@@ -34,14 +34,55 @@ class InstructorMobileApiController extends Controller
     public function courseStudents(Request $request, string $slug): JsonResponse
     {
         [$actor, $ids] = $this->teacher($request);
-        $course = DB::table('courses')->where('slug',$slug)->whereIn('id',$ids)->first();
-        abort_unless($course,404);
-        $students = DB::table('enrollments')->join('users','users.id','=','enrollments.user_id')
-            ->where('enrollments.course_id',$course->id)->where('enrollments.branch_id',$course->branch_id)->whereIn('enrollments.status',['active','completed'])
-            ->when($actor->branch_id,fn($q)=>$q->where('enrollments.branch_id',$actor->branch_id))
-            ->select('users.id','users.name','users.email','enrollments.status','enrollments.created_at')
-            ->orderBy('users.name')->paginate(50);
-        return response()->json(['data'=>$students->items(),'meta'=>['current_page'=>$students->currentPage(),'last_page'=>$students->lastPage(),'total'=>$students->total()]]);
+        $course = DB::table('courses')->where('slug', $slug)->whereIn('id', $ids)->first();
+        abort_unless($course, 404);
+
+        $hasStudentDirectory = app(PluginManager::class)->isEnabled('student-management')
+            && Schema::hasTable('students');
+        $studentsQuery = DB::table('enrollments')
+            ->join('users', 'users.id', '=', 'enrollments.user_id')
+            ->where('enrollments.course_id', $course->id)
+            ->whereIn('enrollments.status', ['active', 'completed'])
+            ->where('enrollments.branch_id', $course->branch_id)
+            ->when($actor->branch_id !== null, fn ($q) => $q->where('enrollments.branch_id', $actor->branch_id));
+
+        if ($hasStudentDirectory) {
+            $studentsQuery->join('students', 'students.user_id', '=', 'users.id')
+                ->where('students.branch_id', $course->branch_id)
+                ->when($actor->branch_id !== null, fn ($q) => $q->where('students.branch_id', $actor->branch_id))
+                ->when(Schema::hasColumn('students', 'deleted_at'), fn ($q) => $q->whereNull('students.deleted_at'));
+        }
+
+        $studentSelect = $hasStudentDirectory
+            ? ['students.id as student_id', 'students.student_code']
+            : [DB::raw('users.id as student_id'), DB::raw('NULL as student_code')];
+
+        $students = $studentsQuery
+            ->select(array_merge($studentSelect, ['users.id as user_id', 'users.name', 'users.email', 'enrollments.status', 'enrollments.created_at']))
+            ->distinct()
+            ->orderBy('users.name')
+            ->paginate(50);
+
+        $items = $students->getCollection()->map(fn ($row) => [
+            'id' => $row->user_id,
+            'name' => $row->name,
+            'email' => $row->email,
+            'student_code' => $row->student_code,
+            'status' => $row->status,
+            'enrolled_at' => $row->created_at,
+            'student' => [
+                'id' => $row->student_id,
+                'student_code' => $row->student_code,
+                'user_id' => $row->user_id,
+                'name' => $row->name,
+                'email' => $row->email,
+            ],
+        ]);
+
+        return response()->json([
+            'data' => $items,
+            'meta' => ['current_page' => $students->currentPage(), 'last_page' => $students->lastPage(), 'total' => $students->total()],
+        ]);
     }
 
     public function batches(Request $request): JsonResponse
@@ -56,14 +97,87 @@ class InstructorMobileApiController extends Controller
         return response()->json(['data'=>$batchData,'meta'=>['current_page'=>$rows->currentPage(),'last_page'=>$rows->lastPage(),'total'=>$rows->total()]]);
     }
 
-    public function showBatch(Request $request,int $batch): JsonResponse
+    public function showBatch(Request $request, int $batch): JsonResponse
     {
-        [$actor,$ids]=$this->teacher($request);
-        $record=DB::table('batches')->where('id',$batch)->whereIn('course_id',$ids)->first();
-        abort_unless($record && (!$actor->branch_id || (int)$record->branch_id===(int)$actor->branch_id),404);
-        $students=DB::table('enrollments')->join('users','users.id','=','enrollments.user_id')->where('enrollments.course_id',$record->course_id)
-            ->whereIn('enrollments.status',['active','completed'])->select('users.id','users.name','users.email','enrollments.status')->orderBy('users.name')->paginate(50);
-        return response()->json(['batch'=>['id'=>$record->id,'title'=>$record->name,'course_id'=>$record->course_id,'capacity'=>$record->capacity],'data'=>$students->items(),'meta'=>['current_page'=>$students->currentPage(),'last_page'=>$students->lastPage(),'total'=>$students->total()]]);
+        [$actor, $ids] = $this->teacher($request);
+        abort_unless(Schema::hasTable('batches'), 409, 'Course batches are unavailable.');
+
+        $record = DB::table('batches')->join('courses', 'courses.id', '=', 'batches.course_id')
+            ->where('batches.id', $batch)
+            ->whereIn('batches.course_id', $ids)
+            ->when($actor->branch_id !== null, fn ($q) => $q->where('batches.branch_id', $actor->branch_id))
+            ->select('batches.*', 'courses.title as course_title')
+            ->first();
+        abort_unless($record, 404);
+
+        $hasStudentDirectory = app(PluginManager::class)->isEnabled('student-management')
+            && Schema::hasTable('students');
+        $mapping = Schema::hasTable('attendance_batch_mappings')
+            ? DB::table('attendance_batch_mappings')->where('source_type', 'course_batch')->where('source_id', $record->id)->first()
+            : null;
+        $rosterConfigured = $hasStudentDirectory && $mapping && Schema::hasTable('attendance_batch_rosters')
+            && DB::table('attendance_batch_rosters')->where('attendance_batch_mapping_id', $mapping->id)->where('is_active', true)->exists();
+
+        $studentQuery = DB::table('enrollments')
+            ->join('users', 'users.id', '=', 'enrollments.user_id')
+            ->where('enrollments.course_id', $record->course_id)
+            ->where('enrollments.branch_id', $record->branch_id)
+            ->whereIn('enrollments.status', ['active', 'completed'])
+            ->when($actor->branch_id !== null, fn ($q) => $q->where('enrollments.branch_id', $actor->branch_id));
+
+        if ($hasStudentDirectory) {
+            $studentQuery->join('students', 'students.user_id', '=', 'users.id')
+                ->where('students.branch_id', $record->branch_id)
+                ->when(Schema::hasColumn('students', 'deleted_at'), fn ($q) => $q->whereNull('students.deleted_at'));
+        }
+
+        if ($rosterConfigured) {
+            $studentQuery->join('attendance_batch_rosters', 'attendance_batch_rosters.student_id', '=', 'students.id')
+                ->where('attendance_batch_rosters.attendance_batch_mapping_id', $mapping->id)
+                ->where('attendance_batch_rosters.is_active', true);
+        }
+
+        $studentSelect = $hasStudentDirectory
+            ? ['students.id as student_id', 'students.student_code']
+            : [DB::raw('users.id as student_id'), DB::raw('NULL as student_code')];
+
+        $students = $studentQuery
+            ->select(array_merge($studentSelect, ['users.id as user_id', 'users.name', 'users.email', 'enrollments.status']))
+            ->distinct()
+            ->orderBy('users.name')
+            ->paginate(50);
+
+        $items = $students->getCollection()->map(fn ($row) => [
+            'id' => $row->user_id,
+            'name' => $row->name,
+            'email' => $row->email,
+            'student_code' => $row->student_code,
+            'status' => $row->status,
+            'student' => [
+                'id' => $row->student_id,
+                'student_code' => $row->student_code,
+                'user_id' => $row->user_id,
+                'name' => $row->name,
+                'email' => $row->email,
+            ],
+        ]);
+
+        return response()->json([
+            'batch' => [
+                'id' => $record->id,
+                'title' => $record->name,
+                'course' => $record->course_title,
+                'course_id' => $record->course_id,
+                'capacity' => $record->capacity,
+                'enrolled_count' => $students->total(),
+                'starts_at' => null,
+                'ends_at' => null,
+                'status' => 'active',
+                'roster_configured' => (bool) $rosterConfigured,
+            ],
+            'data' => $items,
+            'meta' => ['current_page' => $students->currentPage(), 'last_page' => $students->lastPage(), 'total' => $students->total()],
+        ]);
     }
 
     public function assignments(Request $request): JsonResponse
@@ -77,15 +191,50 @@ class InstructorMobileApiController extends Controller
         return response()->json(['data'=>$items,'meta'=>['current_page'=>$rows->currentPage(),'last_page'=>$rows->lastPage(),'total'=>$rows->total()]]);
     }
 
-    public function storeAssignment(Request $request,int $batch): JsonResponse
+    public function storeAssignment(Request $request, int $batch): JsonResponse
     {
-        [$actor,$ids]=$this->teacher($request);
-        abort_unless(app(PluginManager::class)->isEnabled('assignment-management') && app(PluginManager::class)->isEnabled('course-management') && Schema::hasTable('assignment_tasks') && Schema::hasTable('batches'),409);
-        $record=DB::table('batches')->where('id',$batch)->whereIn('course_id',$ids)->first();
-        abort_unless($record && (!$actor->branch_id || (int)$record->branch_id===(int)$actor->branch_id),404);
-        $data=$request->validate(['title'=>['required','string','max:180'],'instructions'=>['required','string','max:20000'],'due_at'=>['nullable','date','after:now'],'max_score'=>['required','numeric','gt:0','max:100000'],'allow_late'=>['sometimes','boolean']]);
-        $id=DB::table('assignment_tasks')->insertGetId(['branch_id'=>$record->branch_id,'course_id'=>$record->course_id,'created_by'=>$actor->id,'title'=>$data['title'],'instructions'=>$data['instructions'],'due_at'=>$data['due_at']??null,'max_score'=>$data['max_score'],'allow_late'=>(bool)($data['allow_late']??false),'status'=>'published','created_at'=>now(),'updated_at'=>now()]);
-        return response()->json(['message'=>'Assignment published.','assignment'=>DB::table('assignment_tasks')->find($id)],201);
+        [$actor, $ids] = $this->teacher($request);
+        abort_unless(
+            app(PluginManager::class)->isEnabled('assignment-management')
+                && app(PluginManager::class)->isEnabled('course-management')
+                && Schema::hasTable('assignment_tasks')
+                && Schema::hasTable('batches'),
+            409,
+            'Assignment or Course Management is not enabled.'
+        );
+        $record = DB::table('batches')->where('id', $batch)->whereIn('course_id', $ids)
+            ->when($actor->branch_id !== null, fn ($q) => $q->where('branch_id', $actor->branch_id))
+            ->first();
+        abort_unless($record, 404);
+
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:180'],
+            'instructions' => ['required', 'string', 'max:20000'],
+            'due_at' => ['nullable', 'date', 'after:now'],
+            'max_marks' => ['required_without:max_score', 'numeric', 'gt:0', 'max:100000'],
+            'max_score' => ['required_without:max_marks', 'numeric', 'gt:0', 'max:100000'],
+            'allow_late' => ['sometimes', 'boolean'],
+        ]);
+        $maxScore = (float) ($data['max_marks'] ?? $data['max_score']);
+
+        $id = DB::table('assignment_tasks')->insertGetId([
+            'branch_id' => $record->branch_id,
+            'course_id' => $record->course_id,
+            'created_by' => $actor->id,
+            'title' => trim($data['title']),
+            'instructions' => $data['instructions'],
+            'due_at' => $data['due_at'] ?? null,
+            'max_score' => $maxScore,
+            'allow_late' => (bool) ($data['allow_late'] ?? false),
+            'status' => 'published',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return response()->json([
+            'message' => 'Assignment published.',
+            'assignment' => DB::table('assignment_tasks')->find($id),
+        ], 201);
     }
 
     public function submissions(Request $request,int $assignment): JsonResponse
@@ -259,15 +408,51 @@ class InstructorMobileApiController extends Controller
 
     public function notices(Request $request): JsonResponse
     {
-        [$actor]=$this->teacher($request);
-        abort_unless(app(PluginManager::class)->isEnabled('notice-board') && Schema::hasTable('notices') && Schema::hasTable('notice_reads'),409,'Notice Board read tracking is unavailable.');
-        $rows=DB::table('notices')->whereIn('audience_role',['all','teacher'])
-            ->where(fn($q)=>$q->whereNull('branch_id')->orWhere('branch_id',$actor->branch_id))
-            ->where(fn($q)=>$q->whereNull('published_at')->orWhere('published_at','<=',now()))
-            ->leftJoin('notice_reads',fn($join)=>$join->on('notice_reads.notice_id','=','notices.id')->where('notice_reads.user_id','=',$actor->id))
-            ->select('notices.id','notices.title','notices.body','notices.published_at','notices.is_pinned','notice_reads.read_at')
-            ->orderByDesc('notices.is_pinned')->orderByDesc('notices.published_at')->paginate(30);
-        return response()->json(['data'=>$rows->items(),'meta'=>['current_page'=>$rows->currentPage(),'last_page'=>$rows->lastPage(),'total'=>$rows->total()]]);
+        [$actor] = $this->teacher($request);
+        abort_unless(
+            app(PluginManager::class)->isEnabled('notice-board')
+                && Schema::hasTable('notices')
+                && Schema::hasTable('notice_reads'),
+            409,
+            'Notice Board read tracking is unavailable.'
+        );
+
+        $rows = DB::table('notices')
+            ->whereIn('audience_role', ['all', 'teacher'])
+            ->where(fn ($q) => $q->whereNull('branch_id')->orWhere('branch_id', $actor->branch_id))
+            ->where(fn ($q) => $q->whereNull('published_at')->orWhere('published_at', '<=', now()))
+            ->leftJoin('notice_reads', fn ($join) => $join->on('notice_reads.notice_id', '=', 'notices.id')->where('notice_reads.user_id', '=', $actor->id))
+            ->select('notices.id', 'notices.title', 'notices.body', 'notices.published_at', 'notices.is_pinned', 'notice_reads.read_at')
+            ->orderByDesc('notices.is_pinned')
+            ->orderByDesc('notices.published_at')
+            ->paginate(30);
+
+        $items = $rows->getCollection()->map(fn ($row) => [
+            'id' => $row->id,
+            'title' => $row->title,
+            'body' => $row->body,
+            'published_at' => $row->published_at,
+            'is_pinned' => (bool) $row->is_pinned,
+            'read_at' => $row->read_at,
+            'is_read' => $row->read_at !== null,
+        ]);
+        $unreadCount = DB::table('notices')
+            ->leftJoin('notice_reads', fn ($join) => $join->on('notice_reads.notice_id', '=', 'notices.id')->where('notice_reads.user_id', '=', $actor->id))
+            ->whereIn('notices.audience_role', ['all', 'teacher'])
+            ->where(fn ($q) => $q->whereNull('notices.branch_id')->orWhere('notices.branch_id', $actor->branch_id))
+            ->where(fn ($q) => $q->whereNull('notices.published_at')->orWhere('notices.published_at', '<=', now()))
+            ->whereNull('notice_reads.read_at')
+            ->count();
+
+        return response()->json([
+            'data' => $items,
+            'meta' => [
+                'current_page' => $rows->currentPage(),
+                'last_page' => $rows->lastPage(),
+                'total' => $rows->total(),
+                'unread_count' => $unreadCount,
+            ],
+        ]);
     }
 
     public function markNoticeRead(Request $request,int $notice): JsonResponse
