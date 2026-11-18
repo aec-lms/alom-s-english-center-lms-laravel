@@ -10,6 +10,7 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:commerce-cart', 'permissi
     ->name('plugins.commerce_cart.admin.')
     ->group(function (): void {
         Route::get('/sellables', [CommerceCartController::class, 'sellables'])->name('sellables');
+        Route::get('/orders', [CommerceCartController::class, 'orders'])->name('orders');
         Route::post('/sellables', [CommerceCartController::class, 'storeSellable'])->name('sellables.store');
         Route::patch('/sellables/{sellable}/toggle', [CommerceCartController::class, 'toggleSellable'])->name('sellables.toggle');
     });
