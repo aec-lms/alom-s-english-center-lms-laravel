@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Plugins\Modules\NotificationCenter\Jobs\DeliverNotificationJob;
 use Plugins\Modules\NotificationCenter\Models\LmsNotification;
 use Plugins\Modules\PushNotifications\Services\FirebaseCloudMessagingService;
@@ -117,6 +118,24 @@ class PushNotificationDeliveryTest extends TestCase
         $this->assertSame('failed', $service->deliver($notification));
         $this->assertDatabaseHas('mobile_device_tokens', ['id' => $deviceId, 'is_active' => false]);
         $this->assertDatabaseHas('push_notification_deliveries', ['notification_id' => $notification->id, 'device_token_id' => $deviceId, 'status' => 'failed']);
+    }
+
+    public function test_notification_center_queues_push_only_when_fcm_and_a_device_are_configured(): void
+    {
+        [$admin, $user] = $this->prepareModules();
+        $this->addDevice($user->id, 'fcm-queue-device-token');
+        Queue::fake();
+
+        $this->actingAs($admin)->post('/admin/notifications/dispatch', [
+            'user_id' => $user->id,
+            'channel' => 'push',
+            'title' => 'Class reminder',
+            'message' => 'Your class starts in ten minutes.',
+        ])->assertSessionHas('status', 'Push notification queued for Firebase delivery. Final status updates after the worker processes it.');
+
+        $notification = LmsNotification::query()->where('user_id', $user->id)->where('channel', 'push')->firstOrFail();
+        $this->assertSame('queued', $notification->status);
+        Queue::assertPushed(DeliverNotificationJob::class, fn ($job) => $job->notificationId === (int) $notification->id);
     }
 
     public function test_push_service_fails_closed_when_no_mobile_device_is_registered(): void
