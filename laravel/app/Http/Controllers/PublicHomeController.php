@@ -26,14 +26,19 @@ class PublicHomeController extends Controller
             'students' => Schema::hasTable('students') ? DB::table('students')->count() : 0,
             'courses' => Schema::hasTable('courses') ? DB::table('courses')->where('status', 'published')->count() : 0,
             'teachers' => Schema::hasTable('teachers') ? DB::table('teachers')->count() : 0,
-            'lessons' => Schema::hasTable('course_lessons') ? DB::table('course_lessons')->count() : 0,
+            'videos' => Schema::hasTable('course_lessons')
+                && Schema::hasColumn('course_lessons', 'media_path')
+                && Schema::hasColumn('course_lessons', 'media_mime')
+                ? DB::table('course_lessons')->whereNotNull('media_path')->where('media_path', '<>')
+                    ->where('media_mime', 'like', 'video/%')->count()
+                : 0,
         ];
 
         $stats = ($homepage['stats_mode'] ?? 'auto') === 'manual' ? [
             'students' => (int) ($homepage['stats_students_override'] ?? $liveStats['students']),
             'courses' => (int) ($homepage['stats_courses_override'] ?? $liveStats['courses']),
             'teachers' => (int) ($homepage['stats_teachers_override'] ?? $liveStats['teachers']),
-            'lessons' => (int) ($homepage['stats_lessons_override'] ?? $liveStats['lessons']),
+            'videos' => (int) ($homepage['stats_videos_override'] ?? $homepage['stats_lessons_override'] ?? $liveStats['videos']),
         ] : $liveStats;
 
         $sliders = collect();
@@ -247,11 +252,12 @@ class PublicHomeController extends Controller
 
         $socialProofSettings = $this->courseSocialProofSettings();
         if (Schema::hasTable('course_view_events')) {
-            $visitorKey = hash_hmac(
-                'sha256',
-                (string) session()->getId() . '|' . (string) request()->ip() . '|' . (string) request()->userAgent(),
-                (string) config('app.key')
-            );
+            $visitorId = session()->get('course_view_visitor_id');
+            if (!is_string($visitorId) || preg_match('/^[a-f0-9]{64}$/D', $visitorId) !== 1) {
+                $visitorId = bin2hex(random_bytes(32));
+                session()->put('course_view_visitor_id', $visitorId);
+            }
+            $visitorKey = hash_hmac('sha256', $visitorId, (string) config('app.key'));
             DB::table('course_view_events')->insertOrIgnore([
                 'course_id' => $course->id,
                 'visitor_hash' => $visitorKey,
