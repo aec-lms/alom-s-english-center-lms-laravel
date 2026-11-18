@@ -131,7 +131,31 @@ class PortalController extends Controller
                 ? DB::table('teachers')->where('user_id', $user->id)->first()
                 : null;
             if (Schema::hasTable('courses')) {
-                $courses = DB::table('courses')->where('instructor_name', $user->name)
+                $hasTeacherAssignmentTable = Schema::hasTable('course_teacher_assignments');
+                $assignedCourseIds = $hasTeacherAssignmentTable
+                    ? DB::table('course_teacher_assignments')
+                        ->where('teacher_user_id', $user->id)
+                        ->pluck('course_id')
+                    : collect();
+
+                $courses = DB::table('courses')
+                    ->where(function ($query) use ($user, $assignedCourseIds, $hasTeacherAssignmentTable): void {
+                        if ($hasTeacherAssignmentTable) {
+                            $query->whereIn('id', $assignedCourseIds)
+                                ->orWhere(function ($legacy) use ($user): void {
+                                    // Keep legacy name-based assignments only when the course
+                                    // has no normalized teacher assignment.
+                                    $legacy->where('instructor_name', $user->name)
+                                        ->whereNotExists(function ($assignment): void {
+                                            $assignment->selectRaw('1')
+                                                ->from('course_teacher_assignments')
+                                                ->whereColumn('course_teacher_assignments.course_id', 'courses.id');
+                                        });
+                                });
+                        } else {
+                            $query->where('instructor_name', $user->name);
+                        }
+                    })
                     ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
                     ->orderBy('title')->get();
             }
@@ -143,8 +167,16 @@ class PortalController extends Controller
                     ->select('live_classes.*')
                     ->orderBy('live_classes.starts_at')->limit(20)->get();
             }
+            $activeStudents = $courses->isNotEmpty() && Schema::hasTable('enrollments')
+                ? (int) DB::table('enrollments')
+                    ->whereIn('course_id', $courses->pluck('id'))
+                    ->where('status', 'active')
+                    ->distinct()
+                    ->count('user_id')
+                : 0;
             $metrics = [
                 'assigned_courses' => $courses->count(),
+                'active_students' => $activeStudents,
                 'scheduled_classes' => $liveClasses->where('status', 'upcoming')->count(),
             ];
         } elseif ($role === 'guardian') {
@@ -174,12 +206,30 @@ class PortalController extends Controller
                 'attendance_records' => $attendance->count(),
             ];
         } elseif ($role === 'branch_manager') {
+            $branchInvoices = Schema::hasTable('fee_invoices')
+                ? DB::table('fee_invoices')->where('branch_id', $branchId)
+                : null;
+            $branchAttendance = Schema::hasTable('attendance_records')
+                && Schema::hasColumn('attendance_records', 'branch_id')
+                && Schema::hasColumn('attendance_records', 'attendance_date')
+                ? DB::table('attendance_records')->where('branch_id', $branchId)
+                : null;
+
             $metrics = [
                 'students' => Schema::hasTable('students') ? DB::table('students')->where('branch_id', $branchId)->count() : 0,
                 'teachers' => Schema::hasTable('teachers') ? DB::table('teachers')->where('branch_id', $branchId)->count() : 0,
                 'courses' => Schema::hasTable('courses') ? DB::table('courses')->where('branch_id', $branchId)->count() : 0,
                 'pending_enrollments' => Schema::hasTable('enrollments') ? DB::table('enrollments')->where('branch_id', $branchId)->where('status', 'pending')->count() : 0,
-                'unpaid_invoices' => Schema::hasTable('fee_invoices') ? DB::table('fee_invoices')->where('branch_id', $branchId)->whereIn('status', ['unpaid', 'partial'])->count() : 0,
+                'unpaid_invoices' => $branchInvoices ? (clone $branchInvoices)->whereIn('status', ['unpaid', 'partial'])->count() : 0,
+                'collected_revenue' => $branchInvoices && Schema::hasColumn('fee_invoices', 'paid_amount')
+                    ? (float) (clone $branchInvoices)->whereIn('status', ['paid', 'partial'])->sum('paid_amount')
+                    : 0,
+                'attendance_today' => $branchAttendance
+                    ? (clone $branchAttendance)->whereDate('attendance_date', now()->toDateString())->count()
+                    : 0,
+                'present_today' => $branchAttendance && Schema::hasColumn('attendance_records', 'status')
+                    ? (clone $branchAttendance)->whereDate('attendance_date', now()->toDateString())->whereIn('status', ['present', 'late'])->count()
+                    : 0,
             ];
         } elseif ($role === 'accountant') {
             $invoices = Schema::hasTable('fee_invoices')

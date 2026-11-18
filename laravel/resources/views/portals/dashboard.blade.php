@@ -136,7 +136,24 @@
                 @endforelse
             </section>
         @elseif ($role === 'branch_manager')
-            <div class="rounded-3xl border border-sky-200 bg-gradient-to-br from-sky-50 to-indigo-50 p-6 text-sm text-slate-700 shadow-sm">All counts and enrollment records shown here are restricted to your assigned branch.</div>
+            <section class="grid gap-4 lg:grid-cols-3" aria-label="Branch performance">
+                <article class="rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white p-5 shadow-sm">
+                    <p class="text-xs font-extrabold uppercase tracking-wider text-emerald-700">Collected revenue</p>
+                    <p class="mt-2 text-3xl font-black tracking-tight text-slate-900">৳{{ number_format((float) ($metrics['collected_revenue'] ?? 0), 2) }}</p>
+                    <p class="mt-1 text-xs text-slate-500">Recorded payments for this branch</p>
+                </article>
+                <article class="rounded-3xl border border-sky-100 bg-gradient-to-br from-sky-50 to-white p-5 shadow-sm">
+                    <p class="text-xs font-extrabold uppercase tracking-wider text-sky-700">Today's attendance</p>
+                    <p class="mt-2 text-3xl font-black tracking-tight text-slate-900">{{ (int) ($metrics['attendance_today'] ?? 0) }}</p>
+                    <p class="mt-1 text-xs text-slate-500">Attendance records in your branch today</p>
+                </article>
+                <article class="rounded-3xl border border-violet-100 bg-gradient-to-br from-violet-50 to-white p-5 shadow-sm">
+                    <p class="text-xs font-extrabold uppercase tracking-wider text-violet-700">Present / late today</p>
+                    <p class="mt-2 text-3xl font-black tracking-tight text-slate-900">{{ (int) ($metrics['present_today'] ?? 0) }}</p>
+                    <p class="mt-1 text-xs text-slate-500">Present and late attendance records</p>
+                </article>
+            </section>
+            <div class="rounded-3xl border border-sky-200 bg-gradient-to-br from-sky-50 to-indigo-50 p-6 text-sm text-slate-700 shadow-sm">All counts, attendance records and invoice totals shown here are restricted to your assigned branch.</div>
         @elseif ($role === 'accountant')
             <section class="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
                 <h2 class="mb-4 text-lg font-black tracking-tight text-slate-900">Recent Invoices</h2>
