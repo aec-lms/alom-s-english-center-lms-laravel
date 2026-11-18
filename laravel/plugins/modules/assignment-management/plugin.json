@@ -1,0 +1,20 @@
+{
+  "slug": "assignment-management",
+  "name": "Assignment Management",
+  "version": "1.0.0",
+  "author": "Alom's English Center",
+  "category": "academic",
+  "description": "Standalone assignment publishing, private student submissions, late policies and teacher grading with optional course and branch integration.",
+  "core_compatibility": "^2.0",
+  "dependencies": [],
+  "optional_dependencies": ["course-management", "student-management", "teacher-management"],
+  "provider": "Plugins\\Modules\\AssignmentManagement\\Providers\\AssignmentManagementServiceProvider",
+  "permissions": [
+    {"slug": "assignments.manage", "name": "Create and manage assignments"},
+    {"slug": "assignments.grade", "name": "Review and grade student submissions"}
+  ],
+  "settings_schema": [],
+  "admin_menu": [
+    {"group": "Academic & Operations", "label": "Assignments", "route": "plugins.assignments.index", "order": 110, "permission": "assignments.manage"}
+  ]
+}
