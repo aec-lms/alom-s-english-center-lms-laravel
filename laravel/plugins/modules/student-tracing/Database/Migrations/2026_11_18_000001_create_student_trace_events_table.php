@@ -69,27 +69,7 @@ return new class extends Migration {
                 }
             });
 
-        // The old tracing migration temporarily added these fields to the
-        // Student Tracking table. Once legacy trace rows are copied, remove
-        // that schema coupling; the tracking plugin owns only its own fields.
-        $legacyColumns = [];
-        if ($sourceHasStudent && Schema::hasColumn('student_activity_events', 'student_id')) {
-            $legacyColumns[] = 'student_id';
-        }
-        if ($sourceHasBranch && Schema::hasColumn('student_activity_events', 'branch_id')) {
-            $legacyColumns[] = 'branch_id';
-        }
 
-        foreach ($legacyColumns as $column) {
-            // SQLite requires the index to be removed in a separate schema
-            // operation before the indexed column can be dropped.
-            Schema::table('student_activity_events', function (Blueprint $table) use ($column): void {
-                $table->dropIndex([$column]);
-            });
-            Schema::table('student_activity_events', function (Blueprint $table) use ($column): void {
-                $table->dropColumn($column);
-            });
-        }
     }
 
     public function down(): void
