@@ -28,7 +28,7 @@ class BoardQuestionSolverController extends Controller
     public function index(Request $request): View
     {
         $this->assertStudentAccess($request);
-        $settings = $this->settings();
+        $settings = $this->moduleSettings();
         $history = BoardQuestionSolution::query()
             ->where('user_id', $request->user()->id)
             ->latest()
@@ -40,7 +40,7 @@ class BoardQuestionSolverController extends Controller
 
     public function solve(Request $request): JsonResponse
     {
-        $settings = $this->settings();
+        $settings = $this->moduleSettings();
         abort_unless($settings['enabled'], 404);
         $this->assertStudentAccess($request);
 
@@ -128,7 +128,7 @@ class BoardQuestionSolverController extends Controller
 
     public function settings(): View
     {
-        $settings = $this->settings();
+        $settings = $this->moduleSettings();
 
         return view('board-question-solver::admin.settings', compact('settings'));
     }
@@ -174,13 +174,13 @@ class BoardQuestionSolverController extends Controller
     {
         $user = $request->user();
         abort_unless($user && $user->hasRole('student'), 403);
-        abort_unless($this->settings()['enabled'], 404);
+        abort_unless($this->moduleSettings()['enabled'], 404);
         abort_unless($this->plugins->isEnabled('role-ai-assistant'), 503, 'Enable and configure the AEC AI Assistant before using Board Question Solver.');
         abort_unless($this->assistant->isRoleAllowed($user), 403, 'Your role is not enabled for the AEC AI Assistant.');
         abort_unless($this->assistant->isProviderConfigured(), 503, 'Admin must configure an AI provider before students can solve questions.');
     }
 
-    private function settings(): array
+    private function moduleSettings(): array
     {
         return [
             'enabled' => filter_var($this->plugins->getSetting('board-question-solver', 'enabled', '0'), FILTER_VALIDATE_BOOLEAN),
