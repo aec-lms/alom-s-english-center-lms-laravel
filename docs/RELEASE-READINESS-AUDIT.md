@@ -113,3 +113,45 @@ A dedicated Playwright/Chromium GitHub Actions workflow runs against an isolated
 - Tracking issue: [#14 — External staging release gates](https://github.com/aec-lms/alom-s-english-center-lms-laravel/issues/14).
 - These external gates remain **OPEN / NOT RUN** until the required anonymized dump, disposable cPanel staging environment, official provider sandbox access, and authorized conferencing load-test facility are available. No production resources were used.
 - Documentation commit `59087fa97ceda3fb4837ec76b3c4509a15aec860` has Composer Security Audit passing; Laravel MySQL/SQLite and Browser E2E workflows are running.
+
+
+## Current release-gate checkpoint (2026-11-18)
+
+This section supersedes earlier dated CI and inventory snapshots above where they conflict. It records the state observed on the current `main` commit `3912188aa6685019b2463ee3a613b71eae557d3c`.
+
+### Main-branch automated checks
+
+The following GitHub Actions checks completed successfully on the exact current main commit:
+
+- Laravel SQLite test job: passed.
+- Laravel MySQL test job: passed.
+- Browser Playwright E2E smoke job: passed.
+- Composer dependency/lockfile security audit: passed.
+
+These are meaningful automated checks, but the Browser E2E workflow is a smoke suite and the green checks do not certify every plugin or external service integration.
+
+### Plugin inventory and acceptance
+
+- Current main contains **44** plugin manifests under `laravel/plugins/modules/`.
+- The count is a static manifest inventory only. Do not report 44/44 as functionally accepted.
+- The existing per-plugin acceptance matrix contains an earlier 39-plugin snapshot and must be refreshed against current main before it can be used as the authoritative 44-plugin tracking sheet.
+- Common lifecycle tests and targeted regressions provide partial evidence; each module still needs feature-specific positive/negative tests, permission and branch isolation review, browser workflow coverage, and provider sandbox validation where applicable.
+
+### Optional sibling-plugin integration PR #31
+
+PR #31, `refactor(plugins): make sibling modules optional and independently installable`, remains open and Draft. Its head commit `8fe9409f012f6c837a8481212a07eb20e2d937dd` is **44 commits ahead and 223 commits behind** current main, with a diverged history. No PR-triggered workflow runs were found for that head commit at the time of this checkpoint. The PR must not be merged in this state. Rebase or recreate the change on current main, inspect the complete resulting diff, and rerun SQLite, MySQL, Browser E2E and Composer security checks. Confirm optional integrations degrade safely when absent and required dependencies still block installation.
+
+### External gates — still open / not run
+
+- Clean cPanel staging installation on the target PHP/MySQL environment.
+- Production-sized backup restore into a separate disposable database and private-file directory.
+- Core upgrade and rollback rehearsal on staging.
+- Payment provider sandbox callbacks, signature verification and reconciliation.
+- Provider-backed 300+ concurrent live-class load test, separately measuring LMS application load and meeting-provider capacity.
+- Full functional acceptance of all 44 plugins and broader Admin/Student/Teacher/Guardian workflows.
+
+These require a disposable staging host/database, anonymized backup data, official provider sandbox credentials and an authorized conferencing load-test environment. Do not use production data or the main domain for these tests.
+
+### Release decision
+
+Current main has green automated CI, but it is **not certified production-ready**. Do not merge PR #31 or deploy a production release until the branch history is reconciled, required checks pass on the exact candidate, and the external staging gates are evidenced. No production deployment or production-data change was performed for this checkpoint.
