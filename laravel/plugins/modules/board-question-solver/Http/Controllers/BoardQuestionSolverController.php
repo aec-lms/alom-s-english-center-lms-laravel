@@ -174,6 +174,7 @@ class BoardQuestionSolverController extends Controller
     {
         $user = $request->user();
         abort_unless($user && $user->hasRole('student'), 403);
+        abort_unless($this->settings()['enabled'], 404);
         abort_unless($this->plugins->isEnabled('role-ai-assistant'), 503, 'Enable and configure the AEC AI Assistant before using Board Question Solver.');
         abort_unless($this->assistant->isRoleAllowed($user), 403, 'Your role is not enabled for the AEC AI Assistant.');
         abort_unless($this->assistant->isProviderConfigured(), 503, 'Admin must configure an AI provider before students can solve questions.');
