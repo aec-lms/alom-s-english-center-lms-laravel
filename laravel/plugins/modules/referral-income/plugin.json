@@ -1,0 +1,33 @@
+{
+  "slug": "referral-income",
+  "name": "Student & Teacher Referral Income",
+  "version": "1.0.0",
+  "author": "Alom's English Center",
+  "category": "finance",
+  "description": "Referral attribution, role-based commissions, commission ledger and payout requests for students and teachers.",
+  "core_compatibility": "^2.0",
+  "dependencies": [],
+  "provider": "Plugins\\Modules\\ReferralIncome\\Providers\\ReferralIncomeServiceProvider",
+  "permissions": [
+    {
+      "slug": "referral_income.manage",
+      "name": "Manage Referral Income"
+    }
+  ],
+  "admin_menu": [
+    {
+      "group": "Finance",
+      "label": "Referral Income",
+      "route": "plugins.referral_income.admin.index",
+      "order": 115,
+      "permission": "referral_income.manage"
+    }
+  ],
+  "optional_dependencies": [
+    "student-management",
+    "teacher-management",
+    "commerce-cart",
+    "universal-payment",
+    "payment-management"
+  ]
+}

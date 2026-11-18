@@ -16,7 +16,8 @@
     ],
     "settings_schema": [],
     "optional_dependencies": [
-        "fees-management"
+        "fees-management",
+        "referral-income"
     ],
     "admin_menu": [
         {
