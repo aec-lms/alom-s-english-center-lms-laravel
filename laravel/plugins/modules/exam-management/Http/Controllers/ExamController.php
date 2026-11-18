@@ -261,6 +261,27 @@ class ExamController extends Controller
     }
 
     /**
+     * Students can review only their own attempt summaries.
+     * Correct answers and other learners' submissions are never exposed here.
+     */
+    public function history(Request $request, Exam $exam): View
+    {
+        $actor = $request->user();
+        abort_unless($actor && $actor->hasRole('student'), 403, 'Only student accounts can view exam history.');
+        if ($exam->branch_id !== null && (int) $actor->branch_id !== (int) $exam->branch_id) {
+            abort(403, 'Exam is outside your assigned branch.');
+        }
+
+        $attempts = ExamAttempt::query()
+            ->where('exam_id', $exam->id)
+            ->where('user_id', $actor->id)
+            ->latest('id')
+            ->paginate(10);
+
+        return view('exam-management::history', compact('exam', 'attempts'));
+    }
+
+    /**
      * Persist partial answers without finalizing the attempt.
      * The server remains authoritative for ownership, allowed questions and timer.
      */
