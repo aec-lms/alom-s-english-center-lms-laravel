@@ -12,6 +12,19 @@ declare(strict_types=1);
 | be trusted administrator/developer configuration, never request input.
 */
 return [
+    'standalone' => env('PHONETICS_STANDALONE', false),
+    'middleware' => [
+        'practice' => ['web', 'installed', 'plugin:phonetics'],
+        'attempt' => ['web', 'installed', 'plugin:phonetics', 'auth'],
+        'exam' => ['web', 'installed', 'plugin:phonetics', 'auth'],
+        'admin' => ['web', 'installed', 'auth', 'plugin:phonetics', 'permission:phonetics.manage'],
+    ],
+    'users' => [
+        'table' => env('PHONETICS_USERS_TABLE', 'users'),
+        'id' => 'id',
+        'name' => 'name',
+        'email' => 'email',
+    ],
     'driver' => env('PHONETICS_LMS_DRIVER', 'aec'),
     'catalog' => [
         'courses' => [
