@@ -534,17 +534,26 @@ class UniversalPaymentController extends Controller
             $transaction = UniversalPaymentTransaction::query()->where('reference', $reference)->first();
             $checkoutNotes = json_decode((string) ($transaction?->notes ?? ''), true);
             if (is_array($checkoutNotes) && ($checkoutNotes['purpose'] ?? null) === 'course_cart') {
-                return redirect('/student/course-commerce/cart')->withErrors(['payment' => 'Payment could not yet be verified. No course access has been granted.']);
+                return $transaction?->status === 'risk_review'
+                    ? redirect('/student/course-commerce/cart')->with('status', 'Payment was received but requires manual review. No course access has been granted yet.')
+                    : redirect('/student/course-commerce/cart')->withErrors(['payment' => 'Payment could not yet be verified. No course access has been granted.']);
             }
             if (is_array($checkoutNotes) && ($checkoutNotes['purpose'] ?? null) === 'course_gift') {
-                return redirect('/student/course-commerce/cart')->withErrors(['payment' => 'Gift payment could not yet be verified. The recipient has not received access.']);
+                return $transaction?->status === 'risk_review'
+                    ? redirect('/student/course-commerce/cart')->with('status', 'Gift payment was received but requires manual review. The recipient cannot redeem it yet.')
+                    : redirect('/student/course-commerce/cart')->withErrors(['payment' => 'Gift payment could not yet be verified. The recipient has not received access.']);
             }
             if (is_array($checkoutNotes) && ($checkoutNotes['purpose'] ?? null) === 'course_gift_voucher') {
-                return redirect('/student/course-commerce/cart')->withErrors(['payment' => 'Gift voucher payment could not yet be verified. No voucher credit has been issued.']);
+                return $transaction?->status === 'risk_review'
+                    ? redirect('/student/course-commerce/cart')->with('status', 'Gift voucher payment was received but requires manual review. No voucher credit has been issued yet.')
+                    : redirect('/student/course-commerce/cart')->withErrors(['payment' => 'Gift voucher payment could not yet be verified. No voucher credit has been issued.']);
             }
             if ($transaction?->learn_earn_exam_id) {
-                return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)
-                    ->withErrors(['payment' => 'Payment could not yet be verified. No exam access has been granted.']);
+                return $transaction->status === 'risk_review'
+                    ? redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)
+                        ->with('status', 'Payment was received but requires manual review. No exam access has been granted yet.')
+                    : redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)
+                        ->withErrors(['payment' => 'Payment could not yet be verified. No exam access has been granted.']);
             }
             $slug = $transaction?->storefront_item_id
                 ? DB::table('storefront_items')->where('id', $transaction->storefront_item_id)->value('slug')
