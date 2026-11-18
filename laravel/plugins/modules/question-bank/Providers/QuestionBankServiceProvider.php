@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\QuestionBank\\Providers;
+namespace Plugins\Modules\QuestionBank\Providers;
 
-use App\\Core\\Plugins\\BasePluginServiceProvider;
+use App\Core\Plugins\BasePluginServiceProvider;
 
 class QuestionBankServiceProvider extends BasePluginServiceProvider
 {
