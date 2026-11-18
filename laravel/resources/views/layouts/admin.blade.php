@@ -18,7 +18,7 @@
             }
         }
     @endphp
-    @if ($activePluginFavicon)
+    @if (!empty($activePluginFavicon))
         <link rel="icon" type="image/svg+xml" href="{{ $activePluginFavicon }}">
     @elseif (!empty($siteIdentity['favicon_url']))
         <link rel="icon" href="{{ $siteIdentity['favicon_url'] }}">
