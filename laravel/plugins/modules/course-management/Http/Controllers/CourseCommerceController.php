@@ -234,10 +234,11 @@ class CourseCommerceController extends Controller
         $student = $this->student($request);
         abort_unless(preg_match('/^[A-Za-z0-9]{40,80}$/', $token) === 1, 404);
         $gift = DB::table('course_gifts')->where('redeem_token_hash', hash('sha256', $token))->first();
-        abort_unless($gift && $gift->status === 'paid', 404, 'This gift is not available for redemption.');
-        abort_if($gift->expires_at && now()->greaterThan($gift->expires_at), 410, 'This gift has expired.');
+        abort_unless($gift, 404, 'This gift is not available for redemption.');
         abort_unless(hash_equals(strtolower((string) $gift->recipient_email), strtolower((string) $student->email)),
             403, 'Sign in with the email address that received this gift.');
+        abort_unless($gift->status === 'paid', 409, 'This gift has already been redeemed or is no longer available.');
+        abort_if($gift->expires_at && now()->greaterThan($gift->expires_at), 410, 'This gift has expired.');
         abort_if($gift->sender_user_id === $student->id, 403, 'The sender cannot redeem their own gift.');
 
         return DB::transaction(function () use ($gift, $student): RedirectResponse {
