@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Http;
 use Plugins\Modules\CourseManagement\Models\Course;
 use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
 use Plugins\Modules\UniversalPayment\Services\StorefrontPaymentGatewayService;
+use Plugins\Modules\ReferralIncome\Services\ReferralIncomeService;
 use Tests\TestCase;
 
 class CourseGiftCommerceTest extends TestCase
@@ -121,7 +122,11 @@ class CourseGiftCommerceTest extends TestCase
     }
     public function test_sslcommerz_course_cart_callback_preserves_order_metadata_and_activates_course_once(): void
     {
+        $this->activatePlugins(['course-management', 'fees-management', 'marketing-management', 'universal-payment', 'gateway-sslcommerz', 'referral-income']);
         $buyer = $this->createUserWithRole('student');
+        $referrer = $this->createUserWithRole('teacher');
+        $referrals = app(ReferralIncomeService::class);
+        $referrals->applyCode($buyer, $referrals->createOrGetCode($referrer));
         $course = Course::query()->create([
             'code' => 'CALLBACK-COURSE-001',
             'title' => 'Callback Verified Course',
@@ -248,6 +253,16 @@ class CourseGiftCommerceTest extends TestCase
         ]);
         $this->assertSame(1, DB::table('enrollments')->where('user_id', $buyer->id)->where('course_id', $course->id)->count());
         $this->assertSame(1, DB::table('fee_invoices')->where('invoice_number', 'like', 'CART-%')->count());
+        $this->assertDatabaseHas('referral_commissions', [
+            'referrer_user_id' => $referrer->id,
+            'referred_user_id' => $buyer->id,
+            'source_type' => 'course_cart_order',
+            'source_id' => (string) $orderId,
+            'commission_amount' => 100,
+            'commission_percent' => 10,
+            'currency' => 'BDT',
+            'status' => 'pending',
+        ]);
     }
 
     public function test_definitive_gateway_rejections_mark_course_gifts_and_vouchers_as_payment_failed(): void
