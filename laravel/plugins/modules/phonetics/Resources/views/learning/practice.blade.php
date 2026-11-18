@@ -39,6 +39,20 @@
         <div class="rounded-xl border bg-white p-8 text-center text-slate-500 md:col-span-2">No vocabulary has been assigned to this course, lesson or batch yet.</div>
         @endforelse
     </section>
+    @if($exams->isNotEmpty())
+    <section class="space-y-3">
+        <h2 class="text-xl font-extrabold">Available examinations</h2>
+        <div class="grid gap-3 md:grid-cols-2">
+            @foreach($exams as $exam)
+            <article class="rounded-xl border bg-white p-5">
+                <h3 class="font-bold">{{ $exam->title }}</h3>
+                <p class="mt-1 text-sm text-slate-500">{{ $exam->questions()->count() }} questions · {{ $exam->duration_minutes > 0 ? $exam->duration_minutes.' minutes' : 'Untimed' }} · Pass {{ $exam->pass_percentage }}%</p>
+                <a class="mt-3 inline-block rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white" href="{{ route('plugins.phonetics.learning.exams.start',['courseSlug'=>request()->route('courseSlug'),'examSlug'=>$exam->slug,'lesson'=>$lessonRef]) }}">Start exam</a>
+            </article>
+            @endforeach
+        </div>
+    </section>
+    @endif
 </main>
 <script>
 (() => {
