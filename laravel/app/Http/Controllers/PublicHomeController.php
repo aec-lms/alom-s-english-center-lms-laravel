@@ -212,6 +212,26 @@ class PublicHomeController extends Controller
         $course = $courses->firstWhere('slug', $slug);
         if ($course === null) abort(404);
 
+        $socialProofSettings = $this->courseSocialProofSettings();
+        if (Schema::hasTable('course_view_events')) {
+            $visitorKey = hash_hmac(
+                'sha256',
+                (string) session()->getId() . '|' . (string) $requestIp = request()->ip() . '|' . (string) request()->userAgent(),
+                (string) config('app.key')
+            );
+            DB::table('course_view_events')->insertOrIgnore([
+                'course_id' => $course->id,
+                'visitor_hash' => $visitorKey,
+                'viewed_on' => now()->toDateString(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+        $courseViews = Schema::hasTable('course_view_events')
+            ? (int) DB::table('course_view_events')->where('course_id', $course->id)->count()
+            : 0;
+        $coursePurchases = $this->verifiedCoursePurchaseCount((int) $course->id);
+
         $lessons = collect();
         if (Schema::hasTable('course_lessons') && !empty($course->id)) {
             $lessons = DB::table('course_lessons')->where('course_id', $course->id)->orderBy('sort_order')->get();
@@ -233,7 +253,40 @@ class PublicHomeController extends Controller
             $linkedPost = DB::table('cms_posts')->where('id', $course->cms_post_id)->first();
         }
 
-        return view('public.course-show', compact('course', 'lessons', 'syllabus', 'linkedPost'));
+        return view('public.course-show', compact('course', 'lessons', 'syllabus', 'linkedPost', 'socialProofSettings', 'courseViews', 'coursePurchases'));
+    }
+
+
+    private function courseSocialProofSettings(): array
+    {
+        $defaults = ['enabled' => true, 'show_views' => true, 'show_purchases' => true, 'show_on_cards' => true, 'show_on_details' => true];
+        if (!Schema::hasTable('system_settings')) {
+            return $defaults;
+        }
+        $raw = SystemSetting::query()->where('key', 'course.social_proof')->value('value');
+        $stored = is_string($raw) ? json_decode($raw, true) : [];
+        return array_merge($defaults, is_array($stored) ? $stored : []);
+    }
+
+    private function verifiedCoursePurchaseCount(int $courseId): int
+    {
+        if (!Schema::hasTable('enrollments')) {
+            return 0;
+        }
+        return (int) DB::table('enrollments')
+            ->where('course_id', $courseId)
+            ->whereIn('status', ['active', 'completed'])
+            ->where(function ($query): void {
+                $query->whereNull('invoice_id')
+                    ->orWhereExists(function ($invoiceQuery): void {
+                        $invoiceQuery->selectRaw('1')
+                            ->from('fee_invoices')
+                            ->whereColumn('fee_invoices.id', 'enrollments.invoice_id')
+                            ->where('fee_invoices.status', 'paid')
+                            ->whereRaw('fee_invoices.paid_amount + 0.01 >= fee_invoices.net_amount');
+                    });
+            })
+            ->count();
     }
 
     public function checkCoupon(Request $request): JsonResponse
