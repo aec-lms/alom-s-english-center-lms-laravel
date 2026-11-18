@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Core\Plugins\PluginManager;
+use App\Models\SystemSetting;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -186,6 +187,18 @@ class PublicHomeController extends Controller
         $searchTerm = mb_substr(trim((string) $request->query('q', '')), 0, 100);
         $courses = $this->catalogCourses();
 
+        $courseSocialProofSettings = $this->courseSocialProofSettings();
+        $courseSocialProofStats = [];
+        if (($courseSocialProofSettings['enabled'] ?? false) && ($courseSocialProofSettings['show_on_cards'] ?? true)) {
+            foreach ($courses as $catalogCourse) {
+                $courseSocialProofStats[$catalogCourse->id] = [
+                    'views' => Schema::hasTable('course_view_events')
+                        ? (int) DB::table('course_view_events')->where('course_id', $catalogCourse->id)->count()
+                        : 0,
+                    'purchases' => $this->verifiedCoursePurchaseCount((int) $catalogCourse->id),
+                ];
+            }
+        }
         $categories = $courses->pluck('category')->filter()->unique()->values();
         $filteredCourses = $activeCategory === 'all' || $activeCategory === ''
             ? $courses
@@ -203,7 +216,7 @@ class PublicHomeController extends Controller
             })->values();
         }
 
-        return view('public.courses', compact('courses', 'categories', 'filteredCourses', 'activeCategory', 'searchTerm'));
+        return view('public.courses', compact('courses', 'categories', 'filteredCourses', 'activeCategory', 'searchTerm', 'courseSocialProofSettings', 'courseSocialProofStats'));
     }
 
     public function courseShow(string $slug): View
@@ -216,7 +229,7 @@ class PublicHomeController extends Controller
         if (Schema::hasTable('course_view_events')) {
             $visitorKey = hash_hmac(
                 'sha256',
-                (string) session()->getId() . '|' . (string) $requestIp = request()->ip() . '|' . (string) request()->userAgent(),
+                (string) session()->getId() . '|' . (string) request()->ip() . '|' . (string) request()->userAgent(),
                 (string) config('app.key')
             );
             DB::table('course_view_events')->insertOrIgnore([
