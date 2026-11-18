@@ -2,21 +2,21 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\AssignmentManagement\\Http\\Controllers;
+namespace Plugins\Modules\AssignmentManagement\Http\Controllers;
 
-use App\\Core\\Plugins\\PluginManager;
-use App\\Core\\Security\\AuditLogger;
-use App\\Http\\Controllers\\Controller;
-use Illuminate\\Http\\RedirectResponse;
-use Illuminate\\Http\\Request;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Facades\\Schema;
-use Illuminate\\Support\\Facades\\Storage;
-use Illuminate\\Validation\\ValidationException;
-use Illuminate\\Support\\Str;
-use Illuminate\\View\\View;
-use Plugins\\Modules\\AssignmentManagement\\Models\\Assignment;
-use Plugins\\Modules\\AssignmentManagement\\Models\\AssignmentSubmission;
+use App\Core\Plugins\PluginManager;
+use App\Core\Security\AuditLogger;
+use App\Http\Controllers\Controller;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Str;
+use Illuminate\View\View;
+use Plugins\Modules\AssignmentManagement\Models\Assignment;
+use Plugins\Modules\AssignmentManagement\Models\AssignmentSubmission;
 use Throwable;
 
 class AssignmentController extends Controller
