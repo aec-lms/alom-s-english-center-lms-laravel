@@ -29,7 +29,7 @@
             @foreach($courses as $course)
                 <article class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm flex flex-col">
                     @if($course->thumbnail)
-                        <img src="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($course->thumbnail) }}"
+                        <img src="{{ $course->thumbnail }}"
                              alt="{{ $course->title }}" loading="lazy"
                              class="w-full aspect-video object-cover">
                     @endif
