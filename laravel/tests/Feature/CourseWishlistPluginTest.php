@@ -77,4 +77,65 @@ class CourseWishlistPluginTest extends TestCase
         $this->assertDatabaseHas('plugins', ['slug' => 'course-wishlist', 'is_installed' => true, 'is_enabled' => true]);
         $this->actingAs($student)->get(route('plugins.course-wishlist.index'))->assertStatus(503);
     }
+
+    public function test_student_can_manage_their_wishlist_through_the_versioned_mobile_api(): void
+    {
+        [$student, , $courseId] = $this->setupWishlist();
+        $token = $student->createToken('wishlist-mobile')->plainTextToken;
+
+        $this->getJson('/api/v1/my/wishlist')->assertUnauthorized();
+
+        $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->getJson('/api/v1/my/wishlist')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 0);
+
+        $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson('/api/v1/my/wishlist/' . $courseId)
+            ->assertCreated()
+            ->assertJsonPath('message', 'Course saved to your wishlist.');
+
+        $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->getJson('/api/v1/my/wishlist')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.id', $courseId)
+            ->assertJsonPath('data.0.title', 'Wishlist English Course');
+
+        $otherStudent = $this->createUserWithRole('student');
+        $otherToken = $otherStudent->createToken('other-wishlist-mobile')->plainTextToken;
+        app('auth')->forgetGuards();
+        $this->withHeader('Authorization', 'Bearer ' . $otherToken)
+            ->deleteJson('/api/v1/my/wishlist/' . $courseId)
+            ->assertOk()
+            ->assertJsonPath('removed', false);
+
+        app('auth')->forgetGuards();
+        $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->deleteJson('/api/v1/my/wishlist/' . $courseId)
+            ->assertOk()
+            ->assertJsonPath('removed', true);
+
+        $this->assertDatabaseMissing('course_wishlists', [
+            'user_id' => $student->id,
+            'course_id' => $courseId,
+        ]);
+    }
+
+    public function test_mobile_wishlist_rejects_non_students_and_unpublished_or_out_of_branch_courses(): void
+    {
+        [$student, $teacher, $courseId] = $this->setupWishlist();
+        $teacherToken = $teacher->createToken('teacher-wishlist-mobile')->plainTextToken;
+
+        $this->withHeader('Authorization', 'Bearer ' . $teacherToken)
+            ->getJson('/api/v1/my/wishlist')
+            ->assertForbidden();
+
+        DB::table('courses')->where('id', $courseId)->update(['status' => 'draft']);
+        $studentToken = $student->createToken('student-wishlist-mobile')->plainTextToken;
+        app('auth')->forgetGuards();
+        $this->withHeader('Authorization', 'Bearer ' . $studentToken)
+            ->postJson('/api/v1/my/wishlist/' . $courseId)
+            ->assertNotFound();
+    }
 }

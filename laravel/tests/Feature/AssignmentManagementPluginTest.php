@@ -150,4 +150,112 @@ class AssignmentManagementPluginTest extends TestCase
             ->assertOk();
     }
 
+
+    public function test_student_can_view_and_submit_assignments_through_the_mobile_api(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['assignment-management']);
+        Storage::fake('local');
+        $teacher = $this->createUserWithRole('teacher');
+        $student = $this->createUserWithRole('student');
+        $otherStudent = $this->createUserWithRole('student');
+
+        $assignmentId = DB::table('assignment_tasks')->insertGetId([
+            'created_by' => $teacher->id,
+            'title' => 'Mobile Grammar Task',
+            'instructions' => 'Explain the present perfect tense.',
+            'max_score' => 10,
+            'allow_late' => false,
+            'status' => 'published',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $studentToken = $student->createToken('student-assignment-mobile')->plainTextToken;
+        $this->getJson('/api/v1/my/assignments')->assertUnauthorized();
+
+        $this->withHeader('Authorization', 'Bearer ' . $studentToken)
+            ->getJson('/api/v1/my/assignments')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.title', 'Mobile Grammar Task')
+            ->assertJsonPath('data.0.submission', null);
+
+        $this->withHeader('Authorization', 'Bearer ' . $studentToken)
+            ->getJson('/api/v1/my/assignments/' . $assignmentId)
+            ->assertOk()
+            ->assertJsonPath('data.instructions', 'Explain the present perfect tense.');
+
+        $this->withHeader('Authorization', 'Bearer ' . $studentToken)
+            ->postJson('/api/v1/my/assignments/' . $assignmentId . '/submit', [
+                'answer_text' => 'The present perfect connects past actions to the present.',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.status', 'submitted')
+            ->assertJsonPath('data.has_attachment', false);
+
+        $submissionId = (int) DB::table('assignment_submissions')
+            ->where('assignment_id', $assignmentId)
+            ->where('student_id', $student->id)
+            ->value('id');
+
+        $this->withHeader('Authorization', 'Bearer ' . $studentToken)
+            ->getJson('/api/v1/my/assignments/' . $assignmentId)
+            ->assertOk()
+            ->assertJsonPath('data.submission.id', $submissionId)
+            ->assertJsonPath('data.submission.status', 'submitted');
+
+        $attachmentPath = 'assignment-submissions/'.$assignmentId.'/private-answer.pdf';
+        Storage::disk('local')->put($attachmentPath, 'private attachment');
+        DB::table('assignment_submissions')->where('id', $submissionId)->update(['attachment_path' => $attachmentPath]);
+
+        $otherToken = $otherStudent->createToken('other-student-assignment-mobile')->plainTextToken;
+        app('auth')->forgetGuards();
+        $this->withHeader('Authorization', 'Bearer ' . $otherToken)
+            ->getJson('/api/v1/my/assignments/submissions/' . $submissionId . '/attachment')
+            ->assertForbidden();
+    }
+
+    public function test_mobile_assignment_api_rejects_non_students_and_prevents_replacing_graded_work(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['assignment-management']);
+        $teacher = $this->createUserWithRole('teacher');
+        $student = $this->createUserWithRole('student');
+        $assignmentId = DB::table('assignment_tasks')->insertGetId([
+            'created_by' => $teacher->id,
+            'title' => 'Graded Mobile Task',
+            'instructions' => 'Already graded.',
+            'max_score' => 10,
+            'allow_late' => false,
+            'status' => 'published',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('assignment_submissions')->insert([
+            'assignment_id' => $assignmentId,
+            'student_id' => $student->id,
+            'answer_text' => 'Completed answer.',
+            'submitted_at' => now(),
+            'status' => 'graded',
+            'score' => 9,
+            'feedback' => 'Excellent.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $teacherToken = $teacher->createToken('teacher-assignment-mobile')->plainTextToken;
+        $this->withHeader('Authorization', 'Bearer ' . $teacherToken)
+            ->getJson('/api/v1/my/assignments')
+            ->assertForbidden();
+
+        $studentToken = $student->createToken('graded-assignment-mobile')->plainTextToken;
+        app('auth')->forgetGuards();
+        $this->withHeader('Authorization', 'Bearer ' . $studentToken)
+            ->postJson('/api/v1/my/assignments/' . $assignmentId . '/submit', [
+                'answer_text' => 'Try to replace graded work.',
+            ])
+            ->assertStatus(409);
+    }
+
 }
