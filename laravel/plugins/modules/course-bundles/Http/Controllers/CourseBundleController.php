@@ -123,7 +123,13 @@ class CourseBundleController extends Controller
 
         $branchIds = $courses->pluck('branch_id')->filter()->unique();
         abort_if($branchIds->count() > 1, 422, 'A bundle cannot combine courses from different branches.');
-        $branchId = $branchIds->first() ?? $student->branch_id;
+        if ($bundle->branch_id !== null && $student->branch_id !== null) {
+            abort_unless((int) $bundle->branch_id === (int) $student->branch_id, 403, 'This bundle is outside your assigned branch.');
+        }
+        if (Schema::hasTable('batches') && Schema::hasColumn('batches', 'status')) {
+            abort_if(DB::table('batches')->whereIn('course_id', $courses->pluck('id'))->where('status', 'open')->exists(), 409, 'A course in this bundle has an open batch. Contact the admissions office to enroll in the correct batch.');
+        }
+        $branchId = $bundle->branch_id ?? $branchIds->first() ?? $student->branch_id;
         if ($branchId !== null && $student->branch_id !== null && (int) $branchId !== (int) $student->branch_id) {
             abort(403, 'This bundle is outside your assigned branch.');
         }
@@ -277,7 +283,8 @@ class CourseBundleController extends Controller
     private function publishedBundleCourses(CourseBundle $bundle)
     {
         $ids = $bundle->items->pluck('course_id')->all();
-        return DB::table('courses')->whereIn('id', $ids)->where('status', 'published')->get();
+        $available = DB::table('courses')->whereIn('id', $ids)->where('status', 'published')->get()->keyBy('id');
+        return collect($ids)->map(fn ($id) => $available->get($id))->filter()->values();
     }
 
     private function syncItems(CourseBundle $bundle, array $ids): void
