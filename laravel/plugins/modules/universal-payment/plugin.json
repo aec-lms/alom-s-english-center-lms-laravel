@@ -56,6 +56,7 @@
         "gateway-paypal",
         "gateway-sslcommerz",
         "gateway-stripe",
-        "payment-management"
+        "payment-management",
+        "referral-income"
     ]
 }
