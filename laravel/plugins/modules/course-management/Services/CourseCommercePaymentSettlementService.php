@@ -170,11 +170,20 @@ class CourseCommercePaymentSettlementService
             throw new RuntimeException('Gifted course is no longer available; manual reconciliation is required.');
         }
 
+        $subtotal = round((float) ($gift->subtotal_amount ?? $gift->amount), 2);
+        $discount = round((float) ($gift->discount_amount ?? 0), 2);
+        if (abs(round($subtotal - $discount, 2) - (float) $gift->amount) > 0.01) {
+            throw new RuntimeException('Gift coupon totals do not match the paid amount.');
+        }
+        if (filled($gift->coupon_reservation_key)) {
+            app(CourseCouponService::class)->redeem((string) $gift->coupon_reservation_key);
+        }
+
         $invoice = $this->createPaidInvoice(
             $transaction,
             (int) ($course->branch_id ?? $transaction->branch_id ?? 0) ?: null,
-            (float) $gift->amount,
-            0,
+            $subtotal,
+            $discount,
             (float) $gift->amount,
             (string) $gift->currency,
             'GIFT'
