@@ -69,7 +69,9 @@ class InstructorMobileApiController extends Controller
     {
         [$actor,$ids]=$this->teacher($request);
         abort_unless(app(PluginManager::class)->isEnabled('assignment-management') && Schema::hasTable('assignment_tasks') && Schema::hasTable('assignment_submissions'),409,'Assignment Management is not enabled.');
-        $rows=DB::table('assignment_tasks')->where(function($q)use($actor,$ids){$q->where('created_by',$actor->id)->orWhereIn('course_id',$ids);})\n            ->when($actor->branch_id,fn($q)=>$q->where(function($branch)use($actor){$branch->whereNull('branch_id')->orWhere('branch_id',$actor->branch_id);}))\n            ->orderByDesc('created_at')->paginate(30);
+        $rows=DB::table('assignment_tasks')->where(function($q)use($actor,$ids){$q->where('created_by',$actor->id)->orWhereIn('course_id',$ids);})
+            ->when($actor->branch_id,fn($q)=>$q->where(function($branch)use($actor){$branch->whereNull('branch_id')->orWhere('branch_id',$actor->branch_id);}))
+            ->orderByDesc('created_at')->paginate(30);
         return response()->json(['data'=>$rows->items(),'meta'=>['current_page'=>$rows->currentPage(),'last_page'=>$rows->lastPage(),'total'=>$rows->total()]]);
     }
 
@@ -139,7 +141,9 @@ class InstructorMobileApiController extends Controller
         [, $ids]=$this->teacher($request);
         $course=DB::table('courses')->where('slug',$slug)->whereIn('id',$ids)->first(); abort_unless($course,404);
         $data=$request->validate(['title'=>['required','string','max:180'],'content'=>['nullable','string','max:50000'],'order'=>['nullable','integer','min:0'],'video_url'=>['nullable','url','max:255','regex:/^https:\/\/(www\.)?(youtube\.com|youtu\.be|vimeo\.com)\//i'],'is_preview'=>['sometimes','boolean']]);
-        $id=DB::table('course_lessons')->insertGetId(['course_id'=>$course->id,'title'=>$data['title'],'content'=>($data['content']??'').(!empty($data['video_url'])?"\n\nVideo: ".$data['video_url']:''),'sort_order'=>$data['order']??0,'created_at'=>now(),'updated_at'=>now()]);
+        $id=DB::table('course_lessons')->insertGetId(['course_id'=>$course->id,'title'=>$data['title'],'content'=>($data['content']??'').(!empty($data['video_url'])?"
+
+Video: ".$data['video_url']:''),'sort_order'=>$data['order']??0,'created_at'=>now(),'updated_at'=>now()]);
         return response()->json(['message'=>'Lesson created.','lesson'=>DB::table('course_lessons')->find($id)],201);
     }
 
