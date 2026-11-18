@@ -70,7 +70,7 @@ document.querySelectorAll('form[action="{{ route('plugins.question-bank.question
         const textarea = form.querySelector('[name="options_text"]');
         if (!textarea) return;
         form.querySelectorAll('input[name="options[]"]').forEach(input => input.remove());
-        textarea.value.split(/\\r?\\n/).map(x => x.trim()).filter(Boolean).forEach(option => {
+        textarea.value.split(/\r?\n/).map(x => x.trim()).filter(Boolean).forEach(option => {
             const input = document.createElement('input');
             input.type = 'hidden'; input.name = 'options[]'; input.value = option; form.appendChild(input);
         });
