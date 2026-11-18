@@ -24,6 +24,7 @@ final class PhoneticsLearningController extends Controller
     public function index(Request $request, string $courseSlug): View
     {
         $course = $this->catalog->course($courseSlug);
+        $this->catalog->assertCourseAvailable($course);
         $courseRef = $this->catalog->courseId($course);
         $setting = PhoneticSetting::current();
         abort_unless($setting->enabled, 404);
