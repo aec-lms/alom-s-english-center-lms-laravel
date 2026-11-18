@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Core\Plugins\PluginManager;
 use App\Core\Plugins\PluginManifest;
 use App\Models\PluginRecord;
+use App\Models\PluginSetting;
 use Illuminate\Support\Facades\File;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -136,7 +137,10 @@ class AllPluginsIndependentAcceptanceTest extends TestCase
         $this->assertTrue($manager->isEnabled($slug), "{$slug} did not enable after reinstall");
 
         // Verify reset removes non-default configuration and reapplies every declared default.
-        $manager->saveSettings($slug, ['acceptance_probe' => 'non-default-value']);
+        PluginSetting::query()->updateOrCreate(
+            ['plugin_slug' => $slug, 'setting_key' => 'acceptance_probe'],
+            ['setting_value' => 'non-default-value', 'is_encrypted' => false]
+        );
         $manager->resetSettingsToDefaults($slug);
         $this->assertNull($manager->getSetting($slug, 'acceptance_probe'), "{$slug} retained a custom setting after default reset");
         foreach ($manifest->settingsSchema as $field) {
