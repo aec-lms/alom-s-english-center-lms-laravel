@@ -164,7 +164,7 @@ class StorefrontPaymentGatewayService
                 throw new RuntimeException('This payment is not linked to a registered paid-exam student.');
             }
 
-            $exam = DB::table('exams')->where('id', $locked->learn_earn_exam_id)->where('is_published', true)->first();
+            $exam = DB::table('exams')->where('id', $locked->learn_earn_exam_id)->where('is_published', true)->lockForUpdate()->first();
             if (!$exam || ($exam->learn_earn_type ?? 'free') !== 'paid'
                 || (float) $exam->access_price <= 0
                 || abs((float) $exam->access_price - (float) $locked->amount) > 0.01) {
@@ -224,7 +224,7 @@ class StorefrontPaymentGatewayService
                 throw new RuntimeException('This payment is not linked to a registered e-book buyer.');
             }
 
-            $item = DB::table('storefront_items')->where('id', $locked->storefront_item_id)->where('type', 'ebook')->where('is_active', true)->first();
+            $item = DB::table('storefront_items')->where('id', $locked->storefront_item_id)->where('type', 'ebook')->where('is_active', true)->lockForUpdate()->first();
             if (!$item || (float) $item->price <= 0 || abs((float) $item->price - (float) $locked->amount) > 0.01) {
                 throw new RuntimeException('The e-book price changed or the item is no longer available. Manual review is required.');
             }
