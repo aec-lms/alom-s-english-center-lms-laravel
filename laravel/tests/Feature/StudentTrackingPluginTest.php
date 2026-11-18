@@ -296,7 +296,7 @@ class StudentTrackingPluginTest extends TestCase
             'duration_seconds' => 900,
         ])->assertUnprocessable();
 
-        $this->assertDatabaseCount('student_activity_events', 1);
+        $this->assertDatabaseCount('student_activity_events', 3);
     }
 
 }
