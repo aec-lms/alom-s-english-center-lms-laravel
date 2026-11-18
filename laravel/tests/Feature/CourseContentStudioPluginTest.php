@@ -6,6 +6,8 @@ namespace Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 
 class CourseContentStudioPluginTest extends TestCase
@@ -152,4 +154,40 @@ class CourseContentStudioPluginTest extends TestCase
         $this->actingAs($student)->get('/courses/'.$slug.'/content/locked-course-lesson')->assertForbidden();
         $this->assertDatabaseCount('course_content_progress',0);
     }
+
+    public function test_lesson_files_are_stored_privately_and_require_enrollment(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management','course-content-studio']);
+        Storage::fake('local');
+        Storage::fake('public');
+        $admin=$this->createUserWithRole('admin');
+        $student=$this->createUserWithRole('student');
+        $course=$this->course();
+        $slug=DB::table('courses')->where('id',$course)->value('slug');
+
+        $this->actingAs($admin)->post('/admin/course-content-studio/posts',[
+            'title'=>'Private PDF lesson',
+            'long_description'=>'Private lesson file.',
+            'access_type'=>'course_enrollment',
+            'status'=>'published',
+            'content_file'=>UploadedFile::fake()->create('lesson.pdf',30,'application/pdf'),
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $post=DB::table('course_content_posts')->where('slug','private-pdf-lesson')->first();
+        $this->assertNotNull($post->content_file_path);
+        Storage::disk('local')->assertExists($post->content_file_path);
+        Storage::disk('public')->assertMissing($post->content_file_path);
+
+        DB::table('course_curriculum_items')->insert([
+            'course_id'=>$course,'course_content_post_id'=>$post->id,'position'=>10,'is_preview'=>false,'is_active'=>true,'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        $this->actingAs($student)->get('/courses/'.$slug.'/content/private-pdf-lesson/file')->assertForbidden();
+
+        DB::table('enrollments')->insert([
+            'user_id'=>$student->id,'course_id'=>$course,'status'=>'active','created_at'=>now(),'updated_at'=>now(),
+        ]);
+        $this->actingAs($student)->get('/courses/'.$slug.'/content/private-pdf-lesson/file')->assertOk();
+    }
+
 }
