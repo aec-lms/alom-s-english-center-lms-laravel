@@ -152,6 +152,11 @@ class CommerceCartController extends Controller
         abort_unless(app(\App\Core\Plugins\PluginManager::class)->isEnabled('universal-payment'), 503, 'Universal Payment must be enabled.');
 
         $user = $request->user();
+        $unresolvedOrder = DB::table('commerce_orders')->where('user_id', $user->id)
+            ->whereIn('status', ['awaiting_payment', 'risk_review'])
+            ->whereIn('payment_status', ['unpaid', 'pending', 'risk_review'])
+            ->exists();
+        abort_if($unresolvedOrder, 409, 'A previous order is awaiting payment confirmation or reconciliation. Please contact support before starting another checkout.');
         $cart = $this->activeCart((int) $user->id);
         $cartItems = DB::table('commerce_cart_items')->where('cart_id', $cart->id)->lockForUpdate()->get();
         abort_if($cartItems->isEmpty(), 422, 'Your cart is empty.');
@@ -233,12 +238,13 @@ class CommerceCartController extends Controller
                 'payment_method_id' => $data['payment_method_id'] ?? '',
                 'idempotency_key' => 'aec-order-' . $order->order_number,
             ]);
+            DB::table('commerce_orders')->where('id', $order->id)->update(['payment_status' => 'pending', 'updated_at' => now()]);
             if (!empty($payment['redirect_url'])) return redirect()->away($payment['redirect_url']);
             return redirect()->route('plugins.commerce_cart.index')
                 ->with('status', 'Order ' . $order->order_number . ' is awaiting payment confirmation. Follow the secure payment instructions shown by your selected gateway.');
         } catch (\Throwable $exception) {
             report($exception);
-            DB::table('commerce_orders')->where('id', $order->id)->update(['payment_status' => 'failed', 'updated_at' => now()]);
+            DB::table('commerce_orders')->where('id', $order->id)->update(['status' => 'risk_review', 'payment_status' => 'risk_review', 'updated_at' => now()]);
             return redirect()->route('plugins.commerce_cart.index')
                 ->withErrors(['gateway' => 'Your order was saved, but the payment session could not be started. No access has been granted. Contact support with order ' . $order->order_number . ' before retrying.']);
         }
