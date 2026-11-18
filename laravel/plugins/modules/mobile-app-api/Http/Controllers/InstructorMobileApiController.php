@@ -468,9 +468,68 @@ class InstructorMobileApiController extends Controller
 
     public function attendancePolicy(Request $request): JsonResponse
     {
-        $this->teacher($request);
-        abort_unless(app(PluginManager::class)->isEnabled('attendance-management'),409,'Attendance Management is disabled.');
-        return response()->json(['offline_sync_enabled'=>false,'allow_excused'=>false,'max_location_age_minutes'=>10,'message'=>'Offline GPS attendance sync is disabled until location-consent and audit storage are enabled. Use the online attendance register.']);
+        [$actor] = $this->teacher($request);
+        $ready = app(PluginManager::class)->isEnabled('attendance-management')
+            && app(PluginManager::class)->isEnabled('course-management')
+            && app(PluginManager::class)->isEnabled('student-management')
+            && Schema::hasTable('attendance_gps_consents')
+            && Schema::hasTable('attendance_entries')
+            && Schema::hasTable('attendance_entry_audit_logs')
+            && Schema::hasTable('course_teacher_assignments');
+        $consented = $ready && DB::table('attendance_gps_consents')
+            ->where('user_id', $actor->id)
+            ->where('policy_version', 'instructor-offline-gps-v1')
+            ->whereNotNull('consented_at')
+            ->whereNull('revoked_at')
+            ->exists();
+
+        return response()->json([
+            'offline_sync_enabled' => $consented,
+            'gps_consent_granted' => $consented,
+            'consent_required' => $ready && !$consented,
+            'allow_excused' => false,
+            'max_location_age_minutes' => 10,
+            'max_location_accuracy_meters' => 100,
+            'message' => !$ready
+                ? 'Offline GPS attendance sync requires Attendance, Course, Student and audit integrations.'
+                : ($consented ? 'Offline GPS attendance sync is enabled for this instructor device.' : 'Review and accept the location-use notice before enabling offline attendance sync.'),
+        ]);
+    }
+
+    public function grantAttendanceGpsConsent(Request $request): JsonResponse
+    {
+        [$actor] = $this->teacher($request);
+        abort_unless(app(PluginManager::class)->isEnabled('attendance-management')
+            && Schema::hasTable('attendance_gps_consents')
+            && Schema::hasTable('attendance_entry_audit_logs'), 409, 'Attendance consent storage is unavailable.');
+
+        DB::table('attendance_gps_consents')->where('user_id', $actor->id)
+            ->where('policy_version', 'instructor-offline-gps-v1')
+            ->whereNull('revoked_at')
+            ->update(['revoked_at' => now(), 'updated_at' => now()]);
+
+        DB::table('attendance_gps_consents')->insert([
+            'user_id' => $actor->id,
+            'policy_version' => 'instructor-offline-gps-v1',
+            'consented_at' => now(),
+            'revoked_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return response()->json(['consented' => true, 'offline_sync_enabled' => true]);
+    }
+
+    public function revokeAttendanceGpsConsent(Request $request): JsonResponse
+    {
+        [$actor] = $this->teacher($request);
+        abort_unless(Schema::hasTable('attendance_gps_consents'), 409, 'Attendance consent storage is unavailable.');
+        $updated = DB::table('attendance_gps_consents')->where('user_id', $actor->id)
+            ->where('policy_version', 'instructor-offline-gps-v1')
+            ->whereNull('revoked_at')
+            ->update(['revoked_at' => now(), 'updated_at' => now()]);
+
+        return response()->json(['consented' => false, 'revoked' => $updated > 0]);
     }
 
     public function createAttendanceQr(Request $request,int $batch): JsonResponse
