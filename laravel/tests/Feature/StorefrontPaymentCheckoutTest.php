@@ -146,4 +146,55 @@ final class StorefrontPaymentCheckoutTest extends TestCase
         Http::assertSentCount(1);
     }
 
+    public function test_stale_pending_ebook_checkout_is_not_replaced_before_provider_reconciliation(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['storefront-catalog', 'universal-payment', 'gateway-sslcommerz']);
+
+        $buyer = $this->createUserWithRole('student');
+        $itemId = DB::table('storefront_items')->insertGetId([
+            'type' => 'ebook',
+            'slug' => 'stale-pending-guide',
+            'title' => 'Stale Pending Guide',
+            'category' => 'English',
+            'price' => 220,
+            'original_price' => 250,
+            'is_free' => false,
+            'pages' => 25,
+            'stock_count' => 0,
+            'summary' => 'A private digital guide.',
+            'download_url' => 'private:ebooks/stale-pending-guide.pdf',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('universal_payment_transactions')->insert([
+            'reference' => 'UPAY-STALE-PENDING-001',
+            'payer_name' => $buyer->name,
+            'payer_contact' => '01712345678',
+            'item_title' => 'Stale Pending Guide',
+            'gateway' => 'sslcommerz',
+            'currency' => 'BDT',
+            'amount' => 220,
+            'status' => 'pending',
+            'user_id' => $buyer->id,
+            'storefront_item_id' => $itemId,
+            'created_at' => now()->subMinutes(45),
+            'updated_at' => now()->subMinutes(45),
+        ]);
+
+        $this->actingAs($buyer)
+            ->post('/universal-checkout', [
+                'payer_name' => $buyer->name,
+                'payer_contact' => '01712345678',
+                'item_title' => 'Stale Pending Guide',
+                'gateway' => 'sslcommerz',
+                'storefront_item_id' => $itemId,
+            ])
+            ->assertStatus(409);
+
+        $this->assertDatabaseCount('universal_payment_transactions', 1);
+    }
+
 }
