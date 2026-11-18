@@ -55,7 +55,7 @@ class PluginCenterController extends Controller
         $manifest = $this->plugins->discoverManifests()[$slug] ?? null;
         abort_unless($manifest !== null, 404);
 
-        return response(\\App\\Core\\Plugins\\PluginIconRegistry::faviconSvg($manifest->icon), 200, [
+        return response(\App\Core\Plugins\PluginIconRegistry::faviconSvg($manifest->icon), 200, [
             'Content-Type' => 'image/svg+xml; charset=UTF-8',
             'Cache-Control' => 'public, max-age=3600, stale-while-revalidate=86400',
             'X-Content-Type-Options' => 'nosniff',
