@@ -48,13 +48,15 @@ class BackupService
             if (!$zip->addFile($jsonlPath, 'database.jsonl')) {
                 throw new RuntimeException('Unable to add streamed database snapshot to backup archive.');
             }
-            $zip->addFromString('manifest.json', json_encode([
+            if (!$zip->addFromString('manifest.json', json_encode([
                 'backup_format' => 2,
                 'core_version' => config('lms.core_version'),
                 'created_at' => now()->toIso8601String(),
                 'includes_files' => $includePrivateFiles,
                 'tables' => $tableNames,
-            ], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT));
+            ], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT))) {
+                throw new RuntimeException('Unable to add backup manifest to archive.');
+            }
 
             if ($includePrivateFiles) {
                 $privateDir = (string) config('lms.private_storage_path');
@@ -369,7 +371,7 @@ class BackupService
     private function resolveBackupPath(BackupRecord $backup): ?string
     {
         $backupDir = (string) config('lms.backup_path');
-        if ($backupDir === '' || !is_dir($backupDir)) {
+        if ($backupDir === '' || is_link($backupDir) || !is_dir($backupDir)) {
             return null;
         }
 
@@ -700,7 +702,9 @@ class BackupService
         foreach ($iterator as $file) {
             if ($file->isFile() && !$file->isLink()) {
                 $relative = ltrim(str_replace($sourceDir, '', $file->getPathname()), DIRECTORY_SEPARATOR);
-                $zip->addFile($file->getPathname(), $zipPrefix . '/' . str_replace('\\', '/', $relative));
+                if (!$zip->addFile($file->getPathname(), $zipPrefix . '/' . str_replace('\\', '/', $relative))) {
+                    throw new RuntimeException('Unable to add private file to backup archive: ' . $relative);
+                }
             }
         }
     }
