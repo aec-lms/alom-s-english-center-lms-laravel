@@ -801,9 +801,9 @@ class PluginManager
         }
 
         $checksums = [];
-        $iterator = new \\RecursiveIteratorIterator(
-            new \\RecursiveDirectoryIterator($root, \\FilesystemIterator::SKIP_DOTS),
-            \\RecursiveIteratorIterator::SELF_FIRST
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::SELF_FIRST
         );
         foreach ($iterator as $entry) {
             if ($entry->isLink()) {
