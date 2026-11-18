@@ -20,19 +20,6 @@ return new class extends Migration {
                 $table->timestamps();
             });
         }
-
-        // The relationship table belongs to Guardian Management. Keep student_id
-        // unconstrained so Guardian Management can install before Student Management.
-        if (!Schema::hasTable('guardian_student')) {
-            Schema::create('guardian_student', function (Blueprint $table): void {
-                $table->id();
-                $table->foreignId('guardian_id')->constrained('guardians')->cascadeOnDelete();
-                $table->unsignedBigInteger('student_id')->index();
-                $table->boolean('is_primary')->default(true);
-                $table->timestamps();
-                $table->unique(['guardian_id', 'student_id']);
-            });
-        }
     }
 
     public function down(): void
