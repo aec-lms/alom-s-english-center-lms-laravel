@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
+use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use RuntimeException;
 
 class StorefrontPaymentGatewayService
@@ -321,6 +322,8 @@ class StorefrontPaymentGatewayService
             ]);
             DB::table('course_carts')->where('id', $order->cart_id)->update(['status' => 'completed', 'updated_at' => now()]);
 
+            app(\Plugins\Modules\UniversalPayment\Services\ExternalTransactionReferenceRegistry::class)
+                ->claim((string) $locked->gateway, $externalReference, (int) $locked->id);
             $locked->update([
                 'status' => 'verified',
                 'external_trx_id' => $externalReference,
@@ -377,7 +380,7 @@ class StorefrontPaymentGatewayService
             $sender = DB::table('users')->where('id', $gift->sender_user_id)->first();
             if (!$sender) throw new RuntimeException('Gift sender account could not be found.');
             $studentProfile = Schema::hasTable('students') ? DB::table('students')->where('user_id', $sender->id)->first() : null;
-            $invoice = PluginsModulesFeesManagementModelsFeeInvoice::query()->create([
+            $invoice = FeeInvoice::query()->create([
                 'invoice_number' => 'GIFT-' . strtoupper(substr(bin2hex(random_bytes(6)), 0, 10)),
                 'student_id' => $studentProfile->id ?? null,
                 'payer_name' => $sender->name,
@@ -399,8 +402,6 @@ class StorefrontPaymentGatewayService
                 'paid_at' => now(),
                 'updated_at' => now(),
             ]);
-            app(\Plugins\Modules\UniversalPayment\Services\ExternalTransactionReferenceRegistry::class)
-                ->claim((string) $locked->gateway, $externalReference, (int) $locked->id);
             app(\Plugins\Modules\UniversalPayment\Services\ExternalTransactionReferenceRegistry::class)
                 ->claim((string) $locked->gateway, $externalReference, (int) $locked->id);
             $locked->update([
