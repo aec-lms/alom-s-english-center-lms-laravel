@@ -250,4 +250,63 @@ class CourseGiftCommerceTest extends TestCase
         $this->assertSame(1, DB::table('fee_invoices')->where('invoice_number', 'like', 'CART-%')->count());
     }
 
+    public function test_definitive_gateway_rejections_mark_course_gifts_and_vouchers_as_payment_failed(): void
+    {
+        $this->activatePlugins(['gateway-sslcommerz']);
+        $sender = $this->createUserWithRole('student');
+        $course = Course::query()->create([
+            'code' => 'FAILED-GIFT-001',
+            'title' => 'Failed Gift Checkout Course',
+            'slug' => 'failed-gift-checkout-course',
+            'price' => 1500,
+            'status' => 'published',
+        ]);
+        app(PluginManager::class)->saveSettings('gateway-sslcommerz', [
+            'store_id' => 'test-store-id',
+            'store_password' => 'test-store-password',
+            'sandbox_mode' => '1',
+        ]);
+        Http::fake([
+            'https://sandbox.sslcommerz.com/gwprocess/v4/api.php' => Http::response([
+                'status' => 'FAILED',
+                'failedreason' => 'Test provider rejection',
+            ], 200),
+        ]);
+
+        $this->actingAs($sender)->from('/courses/' . $course->slug)
+            ->post('/student/course-commerce/gifts/' . $course->id, [
+                'recipient_email' => 'gift-failure-recipient@example.test',
+                'recipient_name' => 'Gift Recipient',
+                'payer_contact' => '01712345678',
+            ])->assertRedirect('/courses/' . $course->slug)->assertSessionHasErrors('gift');
+
+        $this->assertDatabaseHas('course_gifts', [
+            'sender_user_id' => $sender->id,
+            'recipient_email' => 'gift-failure-recipient@example.test',
+            'status' => 'payment_failed',
+        ]);
+        $this->assertDatabaseHas('universal_payment_transactions', [
+            'user_id' => $sender->id,
+            'status' => 'failed',
+            'gateway' => 'sslcommerz',
+        ]);
+
+        $this->actingAs($sender)->from('/student/course-commerce/vouchers/buy')
+            ->post('/student/course-commerce/vouchers/buy', [
+                'recipient_email' => 'voucher-failure-recipient@example.test',
+                'recipient_name' => 'Voucher Recipient',
+                'amount' => 1200,
+                'payer_contact' => '01712345678',
+            ])->assertRedirect('/student/course-commerce/vouchers/buy')->assertSessionHasErrors('voucher');
+
+        $this->assertDatabaseHas('course_gift_vouchers', [
+            'sender_user_id' => $sender->id,
+            'recipient_email' => 'voucher-failure-recipient@example.test',
+            'status' => 'payment_failed',
+        ]);
+        $this->assertSame(2, DB::table('universal_payment_transactions')
+            ->where('user_id', $sender->id)->where('gateway', 'sslcommerz')->where('status', 'failed')->count());
+        Http::assertSentCount(2);
+    }
+
 }
