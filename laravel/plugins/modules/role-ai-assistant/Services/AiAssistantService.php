@@ -189,7 +189,7 @@ class AiAssistantService
     private function dispatchProviderRequest(string $provider, string $model, string $apiKey, string $systemInstruction, string $prompt, int $maxTokens, ?string $imageData = null): array
     {
         if ($provider === 'openai') {
-            $resp = Http::withToken($apiKey)->timeout(20)->post('https://api.openai.com/v1/chat/completions', [
+            $resp = Http::withToken($apiKey)->timeout($imageData === null ? 20 : 60)->post('https://api.openai.com/v1/chat/completions', [
                 'model' => $model,
                 'max_tokens' => $maxTokens,
                 'messages' => [
