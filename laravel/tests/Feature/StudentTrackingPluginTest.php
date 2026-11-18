@@ -210,4 +210,72 @@ class StudentTrackingPluginTest extends TestCase
         ]);
     }
 
+    public function test_course_enabled_tracking_requires_real_enrollment_and_uses_canonical_lesson_metadata(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['student-tracking', 'course-management']);
+
+        $student = $this->createUserWithRole('student');
+        $otherStudent = $this->createUserWithRole('student');
+        $courseId = DB::table('courses')->insertGetId([
+            'code' => 'TRACK-REAL-001',
+            'title' => 'Canonical SSC English Course',
+            'slug' => 'canonical-ssc-english-course',
+            'description' => 'Course used by the tracking integrity regression test.',
+            'price' => 0,
+            'status' => 'published',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $lessonId = DB::table('course_lessons')->insertGetId([
+            'course_id' => $courseId,
+            'title' => 'Canonical Tense Lesson',
+            'content' => 'Lesson content',
+            'sort_order' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('enrollments')->insert([
+            'user_id' => $student->id,
+            'course_id' => $courseId,
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($student)->postJson('/student-tracking/events', [
+            'event_type' => 'lesson_completed',
+            'subject_type' => 'lesson',
+            'subject_id' => (string) $lessonId,
+            'duration_seconds' => 900,
+            'metadata' => [
+                'course_title' => 'Forged Course Title',
+                'lesson_title' => 'Forged Lesson Title',
+                'result_percent' => 100,
+            ],
+        ])->assertCreated();
+
+        $event = StudentActivityEvent::query()->firstOrFail();
+        $this->assertSame('Canonical SSC English Course', $event->metadata['course_title']);
+        $this->assertSame('Canonical Tense Lesson', $event->metadata['lesson_title']);
+        $this->assertSame('student_portal', $event->metadata['source']);
+        $this->assertArrayNotHasKey('result_percent', $event->metadata);
+
+        $this->actingAs($otherStudent)->postJson('/student-tracking/events', [
+            'event_type' => 'lesson_completed',
+            'subject_type' => 'lesson',
+            'subject_id' => (string) $lessonId,
+            'duration_seconds' => 900,
+        ])->assertForbidden();
+
+        $this->actingAs($student)->postJson('/student-tracking/events', [
+            'event_type' => 'lesson_completed',
+            'subject_type' => 'lesson',
+            'subject_id' => 'lesson-not-real',
+            'duration_seconds' => 900,
+        ])->assertUnprocessable();
+
+        $this->assertDatabaseCount('student_activity_events', 1);
+    }
+
 }
