@@ -41,6 +41,7 @@ class CommerceCartController extends Controller
 
     public function add(Request $request): RedirectResponse
     {
+        abort_unless($request->user()?->hasRole('student'), 403, 'Only student accounts can add learning products to the shopping cart.');
         $data = $request->validate([
             'item_type' => ['required', 'string', 'in:course,ebook,mock_test,exam,subscription,live_class,other'],
             'item_id' => ['required', 'integer', 'min:1'],
@@ -200,12 +201,22 @@ class CommerceCartController extends Controller
                     'metadata' => json_encode($fresh['metadata']), 'created_at' => now(), 'updated_at' => now(),
                 ]);
                 if ($fresh['type'] === 'course' && Schema::hasTable('enrollments')
-                    && Schema::hasColumn('enrollments', 'invoice_id')
-                    && !DB::table('enrollments')->where('user_id', $user->id)->where('course_id', $fresh['id'])->exists()) {
-                    DB::table('enrollments')->insert([
-                        'user_id' => $user->id, 'course_id' => $fresh['id'], 'branch_id' => $user->branch_id ?? null,
-                        'invoice_id' => $invoice->id, 'status' => 'pending', 'created_at' => now(), 'updated_at' => now(),
-                    ]);
+                    && Schema::hasColumn('enrollments', 'invoice_id')) {
+                    $existingEnrollment = DB::table('enrollments')->where('user_id', $user->id)
+                        ->where('course_id', $fresh['id'])->lockForUpdate()->first();
+                    if ($existingEnrollment && in_array($existingEnrollment->status, ['active', 'completed'], true)) {
+                        throw new \\RuntimeException('You already have access to course: ' . $fresh['title']);
+                    }
+                    if ($existingEnrollment && $existingEnrollment->status === 'pending') {
+                        DB::table('enrollments')->where('id', $existingEnrollment->id)->update([
+                            'invoice_id' => $invoice->id, 'updated_at' => now(),
+                        ]);
+                    } elseif (!$existingEnrollment) {
+                        DB::table('enrollments')->insert([
+                            'user_id' => $user->id, 'course_id' => $fresh['id'], 'branch_id' => $user->branch_id ?? null,
+                            'invoice_id' => $invoice->id, 'status' => 'pending', 'created_at' => now(), 'updated_at' => now(),
+                        ]);
+                    }
                 }
             }
             DB::table('commerce_carts')->where('id', $cart->id)->update(['status' => 'converted', 'updated_at' => now()]);
