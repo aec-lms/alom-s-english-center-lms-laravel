@@ -31,7 +31,7 @@
         ];
     }
     if (auth()->check() && auth()->user()->hasRole('student')
-        && app(\\App\\Core\\Plugins\\PluginManager::class)->isEnabled('commerce-cart')
+        && app(\App\Core\Plugins\PluginManager::class)->isEnabled('commerce-cart')
         && Route::has('plugins.commerce_cart.index')) {
         $navLinks[] = [
             'label' => 'Shopping Cart',
