@@ -5,6 +5,12 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Database\Schema\Blueprint;
+use Plugins\Modules\FeesManagement\Models\FeeInvoice;
+use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
+use Plugins\Modules\PaymentManagement\Services\PaymentSettlementService;
+use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
 use Plugins\Modules\ReferralIncome\Services\ReferralIncomeService;
 use Tests\TestCase;
 
@@ -64,6 +70,140 @@ class ReferralIncomePluginTest extends TestCase
             'referrer_user_id' => $teacher->id,
             'commission_amount' => 200,
             'commission_percent' => 10,
+        ]);
+    }
+
+    public function test_verified_manual_invoice_payment_completes_order_and_records_teacher_commission(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['referral-income', 'universal-payment', 'fees-management']);
+
+        $teacher = $this->createUserWithRole('teacher');
+        $buyer = $this->createUserWithRole('student');
+        $admin = $this->createUserWithRole('admin');
+        $referrals = app(ReferralIncomeService::class);
+        $referrals->applyCode($buyer, $referrals->createOrGetCode($teacher));
+
+        $invoice = FeeInvoice::query()->create([
+            'invoice_number' => 'REF-UPAY-' . $buyer->id,
+            'payer_name' => $buyer->name,
+            'payer_email' => $buyer->email,
+            'payer_phone' => '01712345678',
+            'subtotal_amount' => 5000,
+            'discount_amount' => 0,
+            'net_amount' => 5000,
+            'paid_amount' => 0,
+            'currency' => 'BDT',
+            'status' => 'unpaid',
+        ]);
+
+        Schema::create('commerce_orders', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('user_id');
+            $table->unsignedBigInteger('invoice_id');
+            $table->string('status', 30);
+            $table->string('payment_status', 30);
+            $table->timestamps();
+        });
+        $orderId = DB::table('commerce_orders')->insertGetId([
+            'user_id' => $buyer->id,
+            'invoice_id' => $invoice->id,
+            'status' => 'awaiting_payment',
+            'payment_status' => 'pending',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $transaction = UniversalPaymentTransaction::query()->create([
+            'reference' => 'REF-UPAY-' . $buyer->id,
+            'payer_name' => $buyer->name,
+            'payer_contact' => '01712345678',
+            'item_title' => 'Unified cart order',
+            'gateway' => 'bank_cash',
+            'currency' => 'BDT',
+            'amount' => 5000,
+            'external_trx_id' => 'BANK-REF-' . $buyer->id,
+            'status' => 'pending',
+            'user_id' => $buyer->id,
+            'fee_invoice_id' => $invoice->id,
+        ]);
+
+        $this->actingAs($admin)->post('/plugins/universal-payment/transactions/' . $transaction->id . '/status', [
+            'status' => 'verified',
+            'payment_reference' => 'BANK-VERIFIED-' . $buyer->id,
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('commerce_orders', [
+            'id' => $orderId,
+            'status' => 'completed',
+            'payment_status' => 'paid',
+        ]);
+        $this->assertDatabaseHas('referral_commissions', [
+            'referrer_user_id' => $teacher->id,
+            'referred_user_id' => $buyer->id,
+            'source_type' => 'commerce_order',
+            'source_id' => (string) $orderId,
+            'commission_amount' => 500,
+            'status' => 'pending',
+        ]);
+    }
+
+    public function test_online_payment_settlement_records_referral_commission_after_full_invoice_payment(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['referral-income', 'payment-management', 'fees-management']);
+
+        $student = $this->createUserWithRole('student');
+        $referrer = $this->createUserWithRole('student');
+        $referrals = app(ReferralIncomeService::class);
+        $referrals->applyCode($student, $referrals->createOrGetCode($referrer));
+
+        $invoice = FeeInvoice::query()->create([
+            'invoice_number' => 'REF-ONLINE-' . $student->id,
+            'payer_name' => $student->name,
+            'payer_email' => $student->email,
+            'payer_phone' => '01712345678',
+            'subtotal_amount' => 10000,
+            'discount_amount' => 0,
+            'net_amount' => 10000,
+            'paid_amount' => 0,
+            'currency' => 'BDT',
+            'status' => 'unpaid',
+        ]);
+        Schema::create('commerce_orders', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('user_id');
+            $table->unsignedBigInteger('invoice_id');
+            $table->string('status', 30);
+            $table->string('payment_status', 30);
+            $table->timestamps();
+        });
+        $orderId = DB::table('commerce_orders')->insertGetId([
+            'user_id' => $student->id, 'invoice_id' => $invoice->id,
+            'status' => 'awaiting_payment', 'payment_status' => 'pending',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $transaction = PaymentTransaction::query()->create([
+            'transaction_ref' => 'REF-PAY-' . $student->id,
+            'invoice_id' => $invoice->id,
+            'gateway_slug' => 'gateway-stripe',
+            'amount' => 10000,
+            'currency' => 'BDT',
+            'status' => 'initiated',
+        ]);
+
+        app(PaymentSettlementService::class)->settleTransaction($transaction, 'STRIPE-PAID-' . $student->id);
+
+        $this->assertDatabaseHas('commerce_orders', [
+            'id' => $orderId, 'status' => 'completed', 'payment_status' => 'paid',
+        ]);
+        $this->assertDatabaseHas('referral_commissions', [
+            'referrer_user_id' => $referrer->id,
+            'referred_user_id' => $student->id,
+            'source_type' => 'commerce_order',
+            'source_id' => (string) $orderId,
+            'commission_amount' => 500,
+            'status' => 'pending',
         ]);
     }
 
