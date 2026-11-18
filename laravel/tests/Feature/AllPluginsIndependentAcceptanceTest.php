@@ -144,7 +144,7 @@ class AllPluginsIndependentAcceptanceTest extends TestCase
         $publicKey = sodium_crypto_sign_publickey($keyPair);
         $checksumsHash = hash_file('sha256', $packageRoot . '/checksums.json');
         $manifestHash = hash_file('sha256', $packageRoot . '/plugin.json');
-        $signedMessage = implode("\\n", [
+        $signedMessage = implode("\n", [
             'AEC-LMS-PLUGIN-SIGNATURE-V1',
             $slug,
             $updatedVersion,
