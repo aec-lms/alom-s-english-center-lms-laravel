@@ -222,7 +222,7 @@ class PortalController extends Controller
                 'pending_enrollments' => Schema::hasTable('enrollments') ? DB::table('enrollments')->where('branch_id', $branchId)->where('status', 'pending')->count() : 0,
                 'unpaid_invoices' => $branchInvoices ? (clone $branchInvoices)->whereIn('status', ['unpaid', 'partial'])->count() : 0,
                 'collected_revenue' => $branchInvoices && Schema::hasColumn('fee_invoices', 'paid_amount')
-                    ? (float) (clone $branchInvoices)->sum('paid_amount')
+                    ? (float) (clone $branchInvoices)->whereIn('status', ['paid', 'partial'])->sum('paid_amount')
                     : 0,
                 'attendance_today' => $branchAttendance
                     ? (clone $branchAttendance)->whereDate('attendance_date', now()->toDateString())->count()
