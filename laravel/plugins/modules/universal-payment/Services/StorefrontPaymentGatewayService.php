@@ -7,6 +7,7 @@ namespace Plugins\Modules\UniversalPayment\Services;
 use App\Core\Plugins\PluginManager;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
 use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
@@ -337,7 +338,7 @@ class StorefrontPaymentGatewayService
 
     private function grantCourseGiftAccess(UniversalPaymentTransaction $transaction, string $externalReference, array $providerDetails, array $notes): UniversalPaymentTransaction
     {
-        return DB::transaction(function () use ($transaction, $externalReference, $providerDetails, $notes): UniversalPaymentTransaction {
+        $verified = DB::transaction(function () use ($transaction, $externalReference, $providerDetails, $notes): UniversalPaymentTransaction {
             $locked = UniversalPaymentTransaction::query()->whereKey($transaction->id)->lockForUpdate()->firstOrFail();
             if ($locked->status === 'verified') return $locked;
 
@@ -413,6 +414,32 @@ class StorefrontPaymentGatewayService
 
             return $locked->fresh();
         }, 3);
+
+        $giftId = (int) ($notes['course_gift_id'] ?? 0);
+        if ($giftId > 0 && Schema::hasColumn('course_gifts', 'notification_sent_at')) {
+            $gift = DB::table('course_gifts')->where('id', $giftId)->where('status', 'paid')->first();
+            if ($gift && !$gift->notification_sent_at) {
+                try {
+                    $token = decrypt((string) $gift->redeem_token_encrypted);
+                    $redeemUrl = url('/student/course-commerce/gifts/redeem/' . $token);
+                    $courseTitle = (string) DB::table('courses')->where('id', $gift->course_id)->value('title');
+                    $message = "You have received a course gift: {$courseTitle}\\n\\n";
+                    if (filled($gift->recipient_name)) $message .= "Hello {$gift->recipient_name},\\n\\n";
+                    if (filled($gift->message)) $message .= "Message from the sender: {$gift->message}\\n\\n";
+                    $message .= "Sign in or register using this email address, then open the link below to redeem your gift:\\n{$redeemUrl}\\n\\n";
+                    $message .= "This gift expires on " . ($gift->expires_at ?? 'the expiry date shown in your account') . ".";
+                    Mail::raw($message, function ($mail) use ($gift, $courseTitle): void {
+                        $mail->to((string) $gift->recipient_email)->subject('You received a course gift: ' . $courseTitle);
+                    });
+                    DB::table('course_gifts')->where('id', $giftId)->whereNull('notification_sent_at')
+                        ->update(['notification_sent_at' => now(), 'updated_at' => now()]);
+                } catch (\\Throwable $exception) {
+                    report($exception);
+                }
+            }
+        }
+
+        return $verified;
     }
 
     private function grantExamAccess(UniversalPaymentTransaction $transaction, string $externalReference, array $providerDetails): UniversalPaymentTransaction
