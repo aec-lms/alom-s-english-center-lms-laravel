@@ -62,9 +62,9 @@ class PaymentSettlementService
                     foreach ($orderItems as $orderItem) {
                         $itemDetails = json_decode((string) ($orderItem->metadata ?? '{}'), true) ?: [];
                         $entitlementDetails = $itemDetails['entitlement'] ?? $itemDetails;
-                        $durationDays = $orderItem->item_type === 'subscription'
-                            ? max(1, min(3650, (int) ($entitlementDetails['duration_days'] ?? 30)))
-                            : null;
+                        $durationDays = isset($entitlementDetails['duration_days'])
+                            ? max(1, min(3650, (int) $entitlementDetails['duration_days']))
+                            : ($orderItem->item_type === 'subscription' ? 30 : null);
                         DB::table('commerce_entitlements')->insertOrIgnore([
                             'user_id' => $order->user_id,
                             'order_item_id' => $orderItem->id,
