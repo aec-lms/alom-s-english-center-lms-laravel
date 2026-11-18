@@ -213,6 +213,8 @@ class MediaLibraryAndDigitalEbookTest extends TestCase
         $download->assertOk()
             ->assertHeader('X-Content-Type-Options', 'nosniff')
             ->assertHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate')
+            ->assertHeader('Pragma', 'no-cache')
+            ->assertHeader('Referrer-Policy', 'same-origin')
             ->assertHeader('Content-Type', 'application/pdf');
 
         DB::table('storefront_items')->where('id', $itemId)->update([

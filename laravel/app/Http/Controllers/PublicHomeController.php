@@ -439,17 +439,19 @@ class PublicHomeController extends Controller
             $mime = (new \finfo(FILEINFO_MIME_TYPE))->file($absolutePath) ?: 'application/octet-stream';
             abort_unless($mime === 'application/pdf', 415, 'The protected e-book is not a PDF file.');
 
-            return response()->download(
+            $response = response()->download(
                 $absolutePath,
-                \Illuminate\Support\Str::slug($item->title) . '.pdf',
-                [
-                    'Content-Type' => 'application/pdf',
-                    'X-Content-Type-Options' => 'nosniff',
-                    'Cache-Control' => 'private, no-store, no-cache, must-revalidate',
-                    'Pragma' => 'no-cache',
-                    'Referrer-Policy' => 'same-origin',
-                ]
+                \Illuminate\Support\Str::slug($item->title) . '.pdf'
             );
+            // BinaryFileResponse applies a public cache default during construction;
+            // set privacy headers after creating the response so it cannot override them.
+            $response->headers->set('Content-Type', 'application/pdf');
+            $response->headers->set('X-Content-Type-Options', 'nosniff');
+            $response->headers->set('Cache-Control', 'private, no-store, no-cache, must-revalidate');
+            $response->headers->set('Pragma', 'no-cache');
+            $response->headers->set('Referrer-Policy', 'same-origin');
+
+            return $response;
         }
 
         if ($isFree && filter_var($storedPath, FILTER_VALIDATE_URL)) {
