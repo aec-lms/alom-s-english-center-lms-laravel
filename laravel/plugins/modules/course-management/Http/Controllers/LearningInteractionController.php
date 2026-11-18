@@ -101,7 +101,9 @@ class LearningInteractionController extends Controller
 
     public function liveQuestions(Request $request, int $liveClass): JsonResponse
     {
-        $class = $this->authorizedLiveParticipant($request, $liveClass);
+        $class = $this->authorizedLiveClass($request, $liveClass);
+        $canAnswer = $this->canTeachLiveClass($request, $class);
+        abort_unless($canAnswer || $this->isActiveLiveParticipant($request, $liveClass), 403, 'Join this class or sign in as its instructor to view Q&A.');
         $items = DB::table('live_class_discussions as discussions')
             ->join('users', 'users.id', '=', 'discussions.user_id')
             ->where('discussions.live_class_id', $liveClass)
@@ -122,7 +124,7 @@ class LearningInteractionController extends Controller
             ->get();
         return response()->json([
             'questions' => $items,
-            'can_answer' => $this->canTeachLiveClass($request, $class),
+            'can_answer' => $canAnswer,
         ])->header('Cache-Control', 'private, no-store');
     }
 
@@ -162,7 +164,7 @@ class LearningInteractionController extends Controller
 
     public function answerLiveQuestion(Request $request, int $liveClass, int $question): JsonResponse
     {
-        $class = $this->authorizedLiveParticipant($request, $liveClass);
+        $class = $this->authorizedLiveClass($request, $liveClass);
         abort_unless($this->canTeachLiveClass($request, $class), 403, 'Only the class instructor or an authorized course manager can answer questions.');
         $data = $request->validate(['body' => ['required', 'string', 'min:2', 'max:2000']]);
         $body = trim(strip_tags($data['body']));
@@ -184,7 +186,7 @@ class LearningInteractionController extends Controller
 
     public function moderateLiveQuestion(Request $request, int $liveClass, int $question): JsonResponse
     {
-        $class = $this->authorizedLiveParticipant($request, $liveClass);
+        $class = $this->authorizedLiveClass($request, $liveClass);
         abort_unless($this->canTeachLiveClass($request, $class), 403);
         $data = $request->validate([
             'status' => ['sometimes', 'in:visible,hidden'],
@@ -224,16 +226,27 @@ class LearningInteractionController extends Controller
         return $row;
     }
 
-    private function authorizedLiveParticipant(Request $request, int $liveClass): object
+    private function authorizedLiveClass(Request $request, int $liveClass): object
     {
         $class = DB::table('live_classes')->where('id', $liveClass)->whereNull('deleted_at')->first();
         abort_unless($class && in_array($class->status, ['upcoming', 'live'], true), 404);
         $course = DB::table('courses')->where('id', $class->course_id)->first();
         abort_unless($course, 404);
         $this->assertActiveEnrollment($request, (int) $course->id, $course->branch_id);
-        abort_unless(DB::table('live_class_participants')->where('live_class_id', $liveClass)
-            ->where('user_id', $request->user()->id)->whereNull('left_at')->where('last_seen_at', '>=', now()->subMinutes(2))->exists(),
-            403, 'Join the live class before opening its Q&A panel.');
+        return $class;
+    }
+
+    private function isActiveLiveParticipant(Request $request, int $liveClass): bool
+    {
+        return DB::table('live_class_participants')->where('live_class_id', $liveClass)
+            ->where('user_id', $request->user()->id)->whereNull('left_at')
+            ->where('last_seen_at', '>=', now()->subMinutes(2))->exists();
+    }
+
+    private function authorizedLiveParticipant(Request $request, int $liveClass): object
+    {
+        $class = $this->authorizedLiveClass($request, $liveClass);
+        abort_unless($this->isActiveLiveParticipant($request, $liveClass), 403, 'Join the live class before using its Q&A panel.');
         return $class;
     }
 
