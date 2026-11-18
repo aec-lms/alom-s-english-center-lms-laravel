@@ -14,7 +14,7 @@ class StorefrontPaymentGatewayService
 {
     public function __construct(private readonly PluginManager $plugins) {}
 
-    public function initiateSslcommerz(UniversalPaymentTransaction $transaction, object $item, object $user, string $payerContact): string
+    public function initiateSslcommerz(UniversalPaymentTransaction $transaction, object $item, object $user, string $payerContact, array $context = []): string
     {
         if (!$this->plugins->isEnabled('gateway-sslcommerz')) {
             throw new RuntimeException('Enable the dedicated SSLCOMMERZ Gateway plugin before accepting e-book payments.');
@@ -69,12 +69,14 @@ class StorefrontPaymentGatewayService
             throw new RuntimeException('SSLCOMMERZ could not create a valid hosted checkout session. Check gateway credentials and sandbox/live mode.');
         }
 
+        $existingNotes = json_decode((string) $transaction->notes, true);
+        $existingNotes = is_array($existingNotes) ? $existingNotes : [];
         $transaction->update([
-            'notes' => json_encode([
+            'notes' => json_encode(array_merge($existingNotes, $context, [
                 'provider' => 'sslcommerz',
                 'session_key' => (string) ($data['sessionkey'] ?? ''),
                 'mode' => $sandbox ? 'sandbox' : 'live',
-            ], JSON_THROW_ON_ERROR),
+            ]), JSON_THROW_ON_ERROR),
         ]);
 
         return $checkoutUrl;
@@ -126,7 +128,12 @@ class StorefrontPaymentGatewayService
         }
 
         if ((string) ($data['risk_level'] ?? '0') === '1') {
-            $transaction->update(['status' => 'risk_review', 'notes' => json_encode(['provider' => 'sslcommerz', 'risk_review' => true])]);
+            $existingNotes = json_decode((string) $transaction->notes, true);
+            $existingNotes = is_array($existingNotes) ? $existingNotes : [];
+            $transaction->update([
+                'status' => 'risk_review',
+                'notes' => json_encode(array_merge($existingNotes, ['provider' => 'sslcommerz', 'risk_review' => true]), JSON_THROW_ON_ERROR),
+            ]);
             throw new RuntimeException('SSLCOMMERZ flagged this payment for manual risk review. E-book access was not granted.');
         }
 
@@ -134,6 +141,13 @@ class StorefrontPaymentGatewayService
             'bank_transaction_id' => (string) ($data['bank_tran_id'] ?? ''),
             'validation_status' => strtoupper((string) $data['status']),
         ];
+
+        $notes = json_decode((string) $transaction->notes, true);
+        $purpose = is_array($notes) ? ($notes['purpose'] ?? null) : null;
+        if (in_array($purpose, ['course_cart', 'course_gift', 'course_gift_voucher'], true)) {
+            return app(\\Plugins\\Modules\\CourseManagement\\Services\\CourseCommercePaymentSettlementService::class)
+                ->settle($transaction, $validationId, $providerDetails);
+        }
 
         if ($transaction->learn_earn_exam_id) {
             return $this->grantExamAccess($transaction, $validationId, $providerDetails);
