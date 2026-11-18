@@ -19,7 +19,7 @@
             <div class="col-md-3"><label class="form-label">Marks</label><input name="default_marks" type="number" min="0.01" step="0.01" value="1" class="form-control" required></div>
             <div class="col-md-3"><label class="form-label">Negative marks</label><input name="default_negative_marks" type="number" min="0" step="0.01" value="0" class="form-control"></div>
             <div class="col-12"><label class="form-label">Question</label><textarea name="prompt" class="form-control" rows="3" required></textarea></div>
-            <div class="col-md-6"><label class="form-label">MCQ options (one per line)</label><textarea name="options_text" id="qb-options" class="form-control" rows="4"></textarea><input type="hidden" name="options" value=""></div>
+            <div class="col-md-6"><label class="form-label">MCQ options (one per line)</label><textarea name="options_text" id="qb-options" class="form-control" rows="4"></textarea></div>
             <div class="col-md-6"><label class="form-label">Correct answer / written marking guide</label><textarea name="correct_answer" class="form-control" rows="4"></textarea></div>
             <div class="col-12"><label class="form-label">Explanation (optional)</label><textarea name="explanation" class="form-control" rows="2"></textarea></div>
             <div class="col-12"><button class="btn btn-primary">Save question</button></div>
@@ -43,31 +43,51 @@
         </form>
     </div></div>
 
-    <div class="card"><div class="card-header fw-semibold">Question bank</div><div class="table-responsive"><table class="table table-hover align-middle mb-0">
+    <div class="card"><div class="card-header fw-semibold">Question bank</div><div class="card-body border-bottom"><form method="GET" class="row g-2"><div class="col-md-2"><select name="exam_category" class="form-select"><option value="">All categories</option><option value="bcs">BCS</option><option value="bank_job">Bank Job</option><option value="admission">Admission</option></select></div><div class="col-md-2"><select name="question_type" class="form-select"><option value="">All types</option><option value="mcq">MCQ</option><option value="written">Written</option></select></div><div class="col-md-2"><input name="subject" class="form-control" placeholder="Subject"></div><div class="col-md-2"><select name="difficulty" class="form-select"><option value="">All levels</option><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select></div><div class="col-md-3"><input name="search" class="form-control" placeholder="Search question"></div><div class="col-md-1"><button class="btn btn-outline-primary">Filter</button></div></form></div><div class="table-responsive"><table class="table table-hover align-middle mb-0">
         <thead><tr><th>ID</th><th>Category</th><th>Type</th><th>Subject / Topic</th><th>Question</th><th>Level</th><th>Marks</th></tr></thead>
-        <tbody>@forelse($questions as $question)<tr><td>{{ $question->id }}</td><td>{{ strtoupper(str_replace('_',' ',$question->exam_category)) }}</td><td>{{ strtoupper($question->question_type) }}</td><td>{{ $question->subject }}<small class="d-block text-muted">{{ $question->topic }}</small></td><td>{{ \Illuminate\Support\Str::limit($question->prompt,100) }}</td><td>{{ ucfirst($question->difficulty) }}</td><td>{{ $question->default_marks }}</td></tr>@empty<tr><td colspan="7" class="text-center text-muted py-4">No questions found. Add the first question above.</td></tr>@endforelse</tbody>
+        <tbody>@forelse($questions as $question)<tr><td>{{ $question->id }}</td><td>{{ strtoupper(str_replace('_',' ',$question->exam_category)) }}</td><td>{{ strtoupper($question->question_type) }}</td><td>{{ $question->subject }}<small class="d-block text-muted">{{ $question->topic }}</small></td><td>{{ \Illuminate\Support\Str::limit($question->prompt,100) }}</td><td>{{ ucfirst($question->difficulty) }}</td><td>{{ $question->default_marks }}</td></tr>
+<tr><td colspan="7"><details><summary class="text-primary">Edit / delete question #{{ $question->id }}</summary>
+<form method="POST" action="{{ route('plugins.question-bank.questions.update',$question) }}" class="row g-2 p-3">@csrf @method('PUT')
+<div class="col-md-2"><select name="exam_category" class="form-select"><option value="bcs" @selected($question->exam_category==='bcs')>BCS</option><option value="bank_job" @selected($question->exam_category==='bank_job')>Bank Job</option><option value="admission" @selected($question->exam_category==='admission')>Admission</option></select></div>
+<div class="col-md-2"><select name="question_type" class="form-select"><option value="mcq" @selected($question->question_type==='mcq')>MCQ</option><option value="written" @selected($question->question_type==='written')>Written</option></select></div>
+<div class="col-md-2"><input name="subject" class="form-control" value="{{ $question->subject }}" required></div><div class="col-md-2"><input name="topic" class="form-control" value="{{ $question->topic }}" placeholder="Topic"></div>
+<div class="col-md-2"><select name="difficulty" class="form-select"><option value="easy" @selected($question->difficulty==='easy')>Easy</option><option value="medium" @selected($question->difficulty==='medium')>Medium</option><option value="hard" @selected($question->difficulty==='hard')>Hard</option></select></div>
+<div class="col-md-1"><input name="default_marks" type="number" step="0.01" min="0.01" class="form-control" value="{{ $question->default_marks }}"></div><div class="col-md-1"><input name="default_negative_marks" type="number" step="0.01" min="0" class="form-control" value="{{ $question->default_negative_marks }}"></div>
+<div class="col-12"><textarea name="prompt" class="form-control" rows="2" required>{{ $question->prompt }}</textarea></div>
+<div class="col-md-6"><label class="form-label">MCQ options (one per line)</label><textarea name="options_text" class="form-control qb-edit-options" rows="3">{{ implode("\\n",$question->options ?? []) }}</textarea></div>
+<div class="col-md-6"><label class="form-label">Correct answer / marking guide</label><textarea name="correct_answer" class="form-control" rows="3">{{ $question->correct_answer }}</textarea></div>
+<div class="col-12"><textarea name="explanation" class="form-control" rows="2" placeholder="Explanation">{{ $question->explanation }}</textarea></div>
+<div class="col-12 d-flex gap-2"><button class="btn btn-sm btn-primary">Update question</button></form>
+<form method="POST" action="{{ route('plugins.question-bank.questions.destroy',$question) }}" onsubmit="return confirm('Move this question to recycle state?')">@csrf @method('DELETE')<button class="btn btn-sm btn-outline-danger">Delete</button></form></div>
+</details></td></tr>@empty<tr><td colspan="7" class="text-center text-muted py-4">No questions found. Add the first question above.</td></tr>@endforelse</tbody>
     </table></div><div class="card-footer">{{ $questions->links() }}</div></div>
 
     @if($papers->isNotEmpty())<div class="card mt-4"><div class="card-header fw-semibold">Recent generated papers</div><div class="list-group list-group-flush">@foreach($papers as $paper)<a class="list-group-item list-group-item-action" href="{{ route('plugins.question-bank.papers.show',$paper) }}">{{ $paper->title }} <span class="text-muted">({{ strtoupper(str_replace('_',' ',$paper->exam_category)) }})</span></a>@endforeach</div></div>@endif
 </div>
 <script>
-document.querySelectorAll('form[action="{{ route('plugins.question-bank.questions.store') }}"]').forEach(form => form.addEventListener('submit', () => {
-    const text = form.querySelector('#qb-options').value.trim();
-    const hidden = form.querySelector('input[name="options"]');
-    hidden.value = JSON.stringify(text ? text.split(/\r?\n/).map(x => x.trim()).filter(Boolean) : []);
-}));
+document.querySelectorAll('form[action="{{ route('plugins.question-bank.questions.store') }}"], form[action*="/questions/"]').forEach(form => {
+    form.addEventListener('submit', () => {
+        const textarea = form.querySelector('[name="options_text"]');
+        if (!textarea) return;
+        form.querySelectorAll('input[name="options[]"]').forEach(input => input.remove());
+        textarea.value.split(/\\r?\\n/).map(x => x.trim()).filter(Boolean).forEach(option => {
+            const input = document.createElement('input');
+            input.type = 'hidden'; input.name = 'options[]'; input.value = option; form.appendChild(input);
+        });
+    });
+});
 const mode = document.getElementById('qb-mode');
 const manual = document.getElementById('qb-manual');
 const count = document.getElementById('qb-count');
 mode?.addEventListener('change', () => { manual.hidden = mode.value !== 'manual'; count.hidden = mode.value !== 'random'; });
 manual.hidden = true;
-document.querySelector('form[action="{{ route('plugins.question-bank.papers.store') }}"]')?.addEventListener('submit', e => {
+document.querySelector('form[action="{{ route('plugins.question-bank.papers.store') }}"]')?.addEventListener('submit', () => {
+    const holder = document.getElementById('qb-question-ids').parentElement;
+    document.getElementById('qb-question-ids').remove();
     if (mode.value === 'manual') {
         const ids = document.getElementById('qb-ids').value.split(',').map(x => x.trim()).filter(Boolean);
-        const holder = document.getElementById('qb-question-ids').parentElement;
-        document.getElementById('qb-question-ids').remove();
         ids.forEach(id => { const input = document.createElement('input'); input.type='hidden'; input.name='question_ids[]'; input.value=id; holder.appendChild(input); });
-    } else { document.getElementById('qb-question-ids').remove(); }
+    }
 });
 </script>
 @endsection
