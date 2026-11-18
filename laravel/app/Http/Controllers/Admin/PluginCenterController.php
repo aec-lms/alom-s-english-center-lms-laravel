@@ -18,6 +18,7 @@ use Plugins\Modules\GatewaySslcommerz\Services\SslcommerzGatewayService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\Response;
 
 class PluginCenterController extends Controller
 {
@@ -33,6 +34,7 @@ class PluginCenterController extends Controller
 
         $records = PluginRecord::query()->orderBy('category')->orderBy('name')->get()->map(function (PluginRecord $record) use ($manifests, $recentLogs) {
             $manifest = $manifests[$record->slug] ?? null;
+            $record->setAttribute('icon', $manifest?->icon ?? PluginIconRegistry::resolve($record->slug, $record->category));
             $record->setAttribute('is_compatible', $manifest ? $this->plugins->isCompatible($manifest) : false);
             $record->setAttribute('has_settings', $manifest && count($manifest->settingsSchema) > 0);
             $record->setAttribute('manifest_version', $manifest?->version ?? $record->version);
@@ -44,6 +46,20 @@ class PluginCenterController extends Controller
         $archives = Schema::hasTable('plugin_archives') ? PluginArchive::query()->latest('deleted_at')->get() : collect();
 
         return view('admin.plugins.index', compact('records', 'archives'));
+    }
+
+    public function favicon(string $slug): Response
+    {
+        abort_unless(preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/', $slug) === 1, 404);
+
+        $manifest = $this->plugins->discoverManifests()[$slug] ?? null;
+        abort_unless($manifest !== null, 404);
+
+        return response(\\App\\Core\\Plugins\\PluginIconRegistry::faviconSvg($manifest->icon), 200, [
+            'Content-Type' => 'image/svg+xml; charset=UTF-8',
+            'Cache-Control' => 'public, max-age=3600, stale-while-revalidate=86400',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
     }
 
     public function upload(Request $request): RedirectResponse
