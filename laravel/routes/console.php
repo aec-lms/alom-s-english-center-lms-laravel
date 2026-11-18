@@ -8,3 +8,5 @@ Schedule::command('lms:plugins:sync')->daily();
 Schedule::command('lms:health-check --recover')->everyMinute()->withoutOverlapping(2);
 Schedule::command('lms:backup-create --without-files')->dailyAt('02:00')->withoutOverlapping(120);
 Schedule::command('lms:backup-create')->weeklyOn(0, '02:30')->withoutOverlapping(180);
+Schedule::command('lms:backup:offsite --no-download-verify')->dailyAt('03:00')->withoutOverlapping(180);
+Schedule::command('lms:backup:offsite')->weeklyOn(0, '04:00')->withoutOverlapping(240);

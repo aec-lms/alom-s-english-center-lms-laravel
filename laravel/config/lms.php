@@ -19,6 +19,14 @@ return [
     'update_staging_path' => storage_path('app/updates'),
     'plugin_signing_key' => env('AEC_PLUGIN_SIGNING_KEY'),
     'backup_encryption_key' => env('AEC_BACKUP_ENCRYPTION_KEY'),
+    'backup_offsite' => [
+        'endpoint' => env('AEC_BACKUP_S3_ENDPOINT'),
+        'region' => env('AEC_BACKUP_S3_REGION'),
+        'bucket' => env('AEC_BACKUP_S3_BUCKET'),
+        'access_key' => env('AEC_BACKUP_S3_ACCESS_KEY'),
+        'secret_key' => env('AEC_BACKUP_S3_SECRET_KEY'),
+        'prefix' => env('AEC_BACKUP_S3_PREFIX', 'aec-lms-backups'),
+    ],
     'fresh_install_policy' => [
         'require_empty_database' => true,
         'forbid_legacy_import' => true,
