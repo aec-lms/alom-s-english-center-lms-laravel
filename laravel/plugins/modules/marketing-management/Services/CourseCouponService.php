@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Plugins\Modules\MarketingManagement\Services;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Plugins\Modules\MarketingManagement\Models\PromoCoupon;
@@ -18,8 +19,10 @@ class CourseCouponService
             throw ValidationException::withMessages(['coupon_code' => 'This coupon is invalid or inactive.']);
         }
         $this->assertEligible($coupon, $userId, $courseIds, $subtotal);
+        $this->assertUsageAvailable($coupon, $userId);
+        $discount = $this->discount($coupon, $subtotal);
         return ['coupon_id' => (int) $coupon->id, 'code' => $coupon->code, 'subtotal' => round($subtotal, 2),
-            'discount' => $this->discount($coupon, $subtotal), 'total' => round(max(0, $subtotal - $this->discount($coupon, $subtotal)), 2)];
+            'discount' => $discount, 'total' => round(max(0, $subtotal - $discount), 2)];
     }
 
     public function reserve(string $code, int $userId, array $courseIds, float $subtotal): array
@@ -30,24 +33,7 @@ class CourseCouponService
                 throw ValidationException::withMessages(['coupon_code' => 'This coupon is invalid or inactive.']);
             }
             $this->assertEligible($coupon, $userId, $courseIds, $subtotal);
-            $activeReservations = DB::table('promo_coupon_redemptions')->where('coupon_id', $coupon->id)
-                ->where('status', 'reserved')->where(function ($q): void {
-                    $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
-                })->count();
-            if ((int) $coupon->used_count + $activeReservations >= (int) $coupon->max_uses) {
-                throw ValidationException::withMessages(['coupon_code' => 'This coupon has reached its usage limit.']);
-            }
-            $perUserLimit = $coupon->per_user_limit;
-            if ($perUserLimit !== null) {
-                $userUses = DB::table('promo_coupon_redemptions')->where('coupon_id', $coupon->id)
-                    ->where('user_id', $userId)->whereIn('status', ['reserved', 'redeemed'])
-                    ->where(function ($q): void {
-                        $q->where('status', 'redeemed')->orWhereNull('expires_at')->orWhere('expires_at', '>', now());
-                    })->count();
-                if ($userUses >= (int) $perUserLimit) {
-                    throw ValidationException::withMessages(['coupon_code' => 'You have reached this coupon usage limit.']);
-                }
-            }
+            $this->assertUsageAvailable($coupon, $userId);
             $discount = $this->discount($coupon, $subtotal);
             $key = (string) Str::uuid();
             DB::table('promo_coupon_redemptions')->insert([
@@ -94,7 +80,8 @@ class CourseCouponService
                 throw ValidationException::withMessages(['coupon_code' => 'Coupon reservation is no longer valid.']);
             }
 
-            if ((int) $coupon->used_count >= (int) $coupon->max_uses) {
+            $maxUses = (int) ($coupon->getRawOriginal('max_uses') ?? 0);
+            if ($maxUses > 0 && (int) $coupon->used_count >= $maxUses) {
                 throw ValidationException::withMessages(['coupon_code' => 'Coupon usage limit was reached.']);
             }
 
@@ -128,8 +115,39 @@ class CourseCouponService
         if (is_array($allowed) && $allowed !== [] && array_diff($courseIds, array_map('intval', $allowed)) !== []) {
             throw ValidationException::withMessages(['coupon_code' => 'This coupon does not apply to every course in your cart.']);
         }
-        if ($coupon->first_purchase_only && DB::table('enrollments')->where('user_id', $userId)->whereIn('status', ['active', 'completed'])->exists()) {
-            throw ValidationException::withMessages(['coupon_code' => 'This coupon is available only for a first purchase.']);
+        if ($coupon->first_purchase_only) {
+            if (!Schema::hasTable('enrollments')) {
+                throw ValidationException::withMessages(['coupon_code' => 'First-purchase eligibility cannot be verified right now.']);
+            }
+            if (DB::table('enrollments')->where('user_id', $userId)->whereIn('status', ['active', 'completed'])->exists()) {
+                throw ValidationException::withMessages(['coupon_code' => 'This coupon is available only for a first purchase.']);
+            }
+        }
+    }
+
+    private function assertUsageAvailable(PromoCoupon $coupon, int $userId): void
+    {
+        $maxUses = (int) ($coupon->getRawOriginal('max_uses') ?? 0);
+        if ($maxUses > 0) {
+            $activeReservations = DB::table('promo_coupon_redemptions')->where('coupon_id', $coupon->id)
+                ->where('status', 'reserved')
+                ->where(function ($query): void {
+                    $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
+                })->count();
+            if ((int) $coupon->used_count + $activeReservations >= $maxUses) {
+                throw ValidationException::withMessages(['coupon_code' => 'This coupon has reached its usage limit.']);
+            }
+        }
+
+        if ($coupon->per_user_limit !== null) {
+            $userUses = DB::table('promo_coupon_redemptions')->where('coupon_id', $coupon->id)
+                ->where('user_id', $userId)->whereIn('status', ['reserved', 'redeemed'])
+                ->where(function ($query): void {
+                    $query->where('status', 'redeemed')->orWhereNull('expires_at')->orWhere('expires_at', '>', now());
+                })->count();
+            if ($userUses >= (int) $coupon->per_user_limit) {
+                throw ValidationException::withMessages(['coupon_code' => 'You have reached this coupon usage limit.']);
+            }
         }
     }
 
