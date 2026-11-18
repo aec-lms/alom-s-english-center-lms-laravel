@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use Illuminate\\Support\\Facades\\Route;
-use Plugins\\Modules\\CommerceCart\\Http\\Controllers\\CommerceCartController;
+use Illuminate\Support\Facades\Route;
+use Plugins\Modules\CommerceCart\Http\Controllers\CommerceCartController;
 
 Route::middleware(['web', 'installed', 'auth', 'plugin:commerce-cart'])
     ->prefix('cart')
