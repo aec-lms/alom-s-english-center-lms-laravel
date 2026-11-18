@@ -192,6 +192,12 @@ class StorefrontPaymentGatewayService
                 return $locked->fresh();
             }
 
+            app(ExternalTransactionReferenceRegistry::class)->claim(
+                (string) $locked->gateway,
+                $externalReference,
+                (int) $locked->id
+            );
+
             DB::table('learn_earn_exam_access')->updateOrInsert(
                 ['exam_id' => $exam->id, 'user_id' => $locked->user_id],
                 [
@@ -246,6 +252,12 @@ class StorefrontPaymentGatewayService
 
                 return $locked->fresh();
             }
+
+            app(ExternalTransactionReferenceRegistry::class)->claim(
+                (string) $locked->gateway,
+                $externalReference,
+                (int) $locked->id
+            );
 
             DB::table('storefront_item_access')->updateOrInsert(
                 ['storefront_item_id' => $locked->storefront_item_id, 'user_id' => $locked->user_id],
