@@ -46,6 +46,7 @@ class CourseAssessmentsMobileApiTest extends TestCase
             'updated_at' => now(),
         ]);
 
+        app('auth')->forgetGuards();
         $this->withToken($tokenA)->getJson('/api/v1/my-learning/assessments')
             ->assertOk()->assertJsonPath('data.0.id', $set);
 
@@ -106,7 +107,7 @@ class CourseAssessmentsMobileApiTest extends TestCase
 
         $start = $this->withToken($token)->postJson('/api/v1/my-learning/assessments/'.$set.'/start')
             ->assertCreated();
-        $deadline = \Carbon::parse($start->json('attempt.deadline_at'));
+        $deadline = \Illuminate\Support\Carbon::parse($start->json('attempt.deadline_at'));
         $this->assertTrue($deadline->equalTo($availableUntil));
 
         $closedSet = $this->createSet(null, null, 'Closed Assessment', [
