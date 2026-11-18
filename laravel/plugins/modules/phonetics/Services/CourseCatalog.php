@@ -144,7 +144,15 @@ final class CourseCatalog
 
     public function assertAccess(object $user, string $courseRef, string $audience = 'both', ?string $batchRef = null): void
     {
-        if (method_exists($user, 'hasRole') && $user->hasRole('admin')) {
+        $adminRoles = config('phonetics.access.admin_roles', ['admin']);
+        if (method_exists($user, 'hasRole')) {
+            foreach ($adminRoles as $role) {
+                if ($user->hasRole($role)) {
+                    return;
+                }
+            }
+        }
+        if ((bool) data_get($user, 'is_admin', false)) {
             return;
         }
 
