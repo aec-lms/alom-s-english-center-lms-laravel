@@ -101,3 +101,18 @@ The exact candidate's GitHub Actions checks completed successfully:
 - Composer Security Audit workflow `43872996475`: passed on the immediately preceding candidate; no Composer manifest or lockfile changes were made between that audit and this candidate.
 
 **Still open:** plugin-specific feature acceptance for every business workflow; payment/email/SMS/marketing provider sandbox tests requiring approved credentials; real cPanel staging installation and migration/rollback validation; and a real staging 300-user load test. The LMS live-class module currently relies on external meeting providers, so the 300-user web-tier test does not prove that an external Zoom/Meet/Teams room supports 300 attendees. No plugin is being marked fully feature-accepted or production-certified by these common lifecycle checks.
+
+
+## Current main inventory reconciliation (2026-11-18)
+
+The historical matrix above is a 39-plugin snapshot and is not the current inventory. A recursive tree scan of current main at `aff05c40eaedbc5f01950bfb764bace999f1a369` found **44** plugin manifests. The five additional slugs absent from the historical table are:
+
+| Additional plugin | Inventory status | Functional acceptance |
+|---|---|---|
+| `flash-sale` | Manifest present on current main | Not yet functionally accepted by this matrix |
+| `learn-and-earn` | Manifest present on current main | Not yet functionally accepted by this matrix |
+| `media-library` | Manifest present on current main | Not yet functionally accepted by this matrix |
+| `student-tracing` | Manifest present on current main | Not yet functionally accepted by this matrix |
+| `student-tracking` | Manifest present on current main | Not yet functionally accepted by this matrix |
+
+This reconciles the count only; it does not certify these five modules or change the acceptance status of the original 39. The 39/39 common lifecycle result documented above applies only to its named historical candidate and must not be extrapolated to current main or treated as full feature acceptance. Re-run the common lifecycle suite and feature-specific acceptance against the exact current main candidate before updating any plugin to accepted.
