@@ -36,7 +36,7 @@
     </div>
     <button class="rounded-lg bg-slate-900 px-5 py-2.5 font-semibold text-white">Save assessment set</button>
   </form>
-  <section class="overflow-x-auto rounded-2xl border bg-white p-4"><h2 class="mb-3 font-bold">Existing assessment sets</h2><table class="w-full text-sm"><thead><tr class="border-b text-left"><th class="py-3">Assessment</th><th>Course</th><th>Status</th><th>Questions</th><th>Attempts</th><th></th></tr></thead><tbody>
+  <section class="overflow-x-auto rounded-2xl border bg-white p-4"><div class="mb-3 flex items-center justify-between"><h2 class="font-bold">Existing assessment sets</h2><a href="{{ route('plugins.course-assessments.grading.index') }}" class="text-sm text-sky-700 underline">Written answer grading</a></div><table class="w-full text-sm"><thead><tr class="border-b text-left"><th class="py-3">Assessment</th><th>Course</th><th>Status</th><th>Questions</th><th>Attempts</th><th></th></tr></thead><tbody>
   @forelse($sets as $set)<tr class="border-b"><td class="py-3"><strong>{{ $set->title }}</strong><div class="text-xs text-slate-500">{{ $set->description }}</div></td><td>{{ $set->course_id ? ($courses->firstWhere('id',$set->course_id)->title ?? 'Course #'.$set->course_id) : 'Standalone' }}</td><td>{{ $set->status }}</td><td>{{ $set->questions_count }}</td><td>{{ $set->attempts_count }}</td><td>@if($set->status!=='published')<form method="POST" action="{{ route('plugins.course-assessments.admin.publish',$set) }}">@csrf @method('PATCH')<button class="text-sky-700 underline">Publish</button></form>@endif</td></tr>@empty<tr><td colspan="6" class="py-6 text-center text-slate-500">No assessment sets yet.</td></tr>@endforelse
   </tbody></table>{{ $sets->links() }}</section>
 </div>
