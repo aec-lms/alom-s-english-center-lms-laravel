@@ -6,6 +6,7 @@ namespace Plugins\Modules\AssignmentManagement\Http\Controllers;
 
 use App\Core\Plugins\PluginManager;
 use App\Http\Controllers\Controller;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -200,6 +201,126 @@ class AssignmentController extends Controller
         abort_unless($record->attachment_path && Storage::disk('local')->exists($record->attachment_path), 404);
 
         return Storage::disk('local')->download($record->attachment_path);
+    }
+
+
+    public function apiIndex(Request $request): JsonResponse
+    {
+        $student = $request->user();
+        abort_unless($student && $student->hasRole('student'), 403);
+        $assignments = Assignment::query()
+            ->where('status', 'published')
+            ->where(fn ($query) => $query->whereNull('branch_id')->orWhere('branch_id', $student->branch_id))
+            ->with(['submissions' => fn ($query) => $query->where('student_id', $student->id)])
+            ->latest()
+            ->paginate(20);
+
+        return response()->json([
+            'data' => $assignments->getCollection()->map(fn (Assignment $assignment): array => $this->studentAssignmentData($assignment)),
+            'meta' => [
+                'current_page' => $assignments->currentPage(),
+                'last_page' => $assignments->lastPage(),
+                'per_page' => $assignments->perPage(),
+                'total' => $assignments->total(),
+            ],
+        ]);
+    }
+
+    public function apiShow(Request $request, int $assignment): JsonResponse
+    {
+        $student = $request->user();
+        abort_unless($student && $student->hasRole('student'), 403);
+        $item = Assignment::query()
+            ->where('status', 'published')
+            ->where(fn ($query) => $query->whereNull('branch_id')->orWhere('branch_id', $student->branch_id))
+            ->with(['submissions' => fn ($query) => $query->where('student_id', $student->id)])
+            ->findOrFail($assignment);
+
+        return response()->json(['data' => $this->studentAssignmentData($item)]);
+    }
+
+    public function apiSubmit(Request $request, int $assignment): JsonResponse
+    {
+        $student = $request->user();
+        abort_unless($student && $student->hasRole('student'), 403);
+        $item = Assignment::query()
+            ->where('status', 'published')
+            ->where(fn ($query) => $query->whereNull('branch_id')->orWhere('branch_id', $student->branch_id))
+            ->findOrFail($assignment);
+
+        if ($item->due_at && now()->greaterThan($item->due_at) && !$item->allow_late) {
+            return response()->json(['message' => 'The submission deadline has passed.'], 422);
+        }
+
+        $validated = $request->validate([
+            'answer_text' => ['nullable', 'string', 'max:30000'],
+            'attachment' => ['nullable', 'file', 'mimes:pdf,doc,docx,txt,jpg,jpeg,png,zip', 'max:20480'],
+        ]);
+        if (trim((string) ($validated['answer_text'] ?? '')) === '' && !$request->hasFile('attachment')) {
+            return response()->json(['message' => 'Write an answer or attach a file.'], 422);
+        }
+
+        $existing = AssignmentSubmission::query()
+            ->where('assignment_id', $item->id)
+            ->where('student_id', $student->id)
+            ->first();
+        if ($existing && $existing->status === 'graded') {
+            return response()->json(['message' => 'This submission has already been graded and cannot be replaced.'], 409);
+        }
+
+        $path = $request->hasFile('attachment')
+            ? $request->file('attachment')->store('assignment-submissions/'.$item->id, 'local')
+            : ($existing?->attachment_path);
+
+        $submission = AssignmentSubmission::query()->updateOrCreate(
+            ['assignment_id' => $item->id, 'student_id' => $student->id],
+            [
+                'answer_text' => $validated['answer_text'] ?? null,
+                'attachment_path' => $path,
+                'submitted_at' => now(),
+                'status' => 'submitted',
+                'score' => null,
+                'feedback' => null,
+                'graded_by' => null,
+                'graded_at' => null,
+            ]
+        );
+
+        return response()->json([
+            'message' => 'Assignment submitted successfully.',
+            'data' => [
+                'id' => $submission->id,
+                'status' => $submission->status,
+                'submitted_at' => $submission->submitted_at?->toIso8601String(),
+                'score' => $submission->score,
+                'feedback' => $submission->feedback,
+                'has_attachment' => filled($submission->attachment_path),
+            ],
+        ], $existing ? 200 : 201);
+    }
+
+    private function studentAssignmentData(Assignment $assignment): array
+    {
+        $submission = $assignment->submissions->first();
+
+        return [
+            'id' => $assignment->id,
+            'title' => $assignment->title,
+            'instructions' => $assignment->instructions,
+            'course_id' => $assignment->course_id,
+            'due_at' => $assignment->due_at?->toIso8601String(),
+            'max_score' => $assignment->max_score,
+            'allow_late' => $assignment->allow_late,
+            'submission' => $submission ? [
+                'id' => $submission->id,
+                'answer_text' => $submission->answer_text,
+                'status' => $submission->status,
+                'submitted_at' => $submission->submitted_at?->toIso8601String(),
+                'score' => $submission->score,
+                'feedback' => $submission->feedback,
+                'has_attachment' => filled($submission->attachment_path),
+            ] : null,
+        ];
     }
 
     private function ensureAssignedBranch($actor): void
