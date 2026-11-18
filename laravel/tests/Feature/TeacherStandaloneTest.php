@@ -74,6 +74,8 @@ class TeacherStandaloneTest extends TestCase
         $this->markSystemInstalled();
         $this->activatePlugins(['teacher-management']);
         $admin = $this->createUserWithRole('admin');
+        $image = UploadedFile::fake()->image('teacher-photo.jpg');
+        $spoofedUpload = new UploadedFile($image->getPathname(), 'teacher-photo.php', 'image/jpeg', null, true);
 
         $this->actingAs($admin)->post('/admin/teachers', [
             'name' => 'Safe Upload Teacher',
@@ -82,11 +84,7 @@ class TeacherStandaloneTest extends TestCase
             'specialization' => 'English Grammar',
             'is_active' => '1',
             // Keep real JPEG bytes while deliberately changing only the client filename.
-            'photo' => (function (): UploadedFile {
-                $image = UploadedFile::fake()->image('teacher-photo.jpg');
-
-                return new UploadedFile($image->getPathname(), 'teacher-photo.php', 'image/jpeg', null, true);
-            })(),
+            'photo' => $spoofedUpload,
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         $teacher = Teacher::query()->where('employee_code', 'SAFE-UPLOAD-001')->firstOrFail();
