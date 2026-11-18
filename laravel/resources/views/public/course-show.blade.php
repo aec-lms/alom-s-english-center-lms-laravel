@@ -123,6 +123,17 @@
                         </a>
                     @endauth
 
+                    @auth
+                        @if (auth()->user()->hasRole('student') && app(\App\Core\Plugins\PluginManager::class)->isEnabled('course-wishlist') && Route::has('plugins.course-wishlist.store'))
+                            <form method="POST" action="{{ route('plugins.course-wishlist.store', $course->id) }}">
+                                @csrf
+                                <button type="submit" class="w-full mt-3 py-3 px-5 rounded-xl border border-sky-200 bg-sky-50 hover:bg-sky-100 text-sky-800 text-sm font-bold transition-colors">
+                                    {{ __('Save to My Wishlist') }}
+                                </button>
+                            </form>
+                        @endif
+                    @endauth
+
                     <p class="text-[11px] text-center text-slate-400">Instant access on Web, Apple iOS &amp; Google Android apps after enrollment.</p>
                 </div>
                 @include('public.partials.widget-area', ['area' => 'course-sidebar'])
