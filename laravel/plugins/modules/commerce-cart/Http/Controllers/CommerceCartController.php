@@ -20,6 +20,17 @@ class CommerceCartController extends Controller
 {
     public function __construct(private readonly CommerceCatalog $catalog) {}
 
+
+    public function publicServices(): View
+    {
+        $services = DB::table('commerce_sellables')->where('is_active', true)
+            ->whereIn('type', ['subscription', 'live_class', 'other'])
+            ->where(fn ($query) => $query->whereNull('available_from')->orWhere('available_from', '<=', now()))
+            ->where(fn ($query) => $query->whereNull('available_until')->orWhere('available_until', '>', now()))
+            ->orderBy('type')->orderBy('title')->get();
+        return view('commerce-cart::services', compact('services'));
+    }
+
     public function index(Request $request): View
     {
         $cart = $this->activeCart((int) $request->user()->id);
