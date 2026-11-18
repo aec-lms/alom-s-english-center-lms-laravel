@@ -131,30 +131,63 @@ class InstructorMobileApiController extends Controller
     public function lessons(Request $request,string $slug): JsonResponse
     {
         [, $ids]=$this->teacher($request);
-        $course=DB::table('courses')->where('slug',$slug)->whereIn('id',$ids)->first(); abort_unless($course,404);
+        $course=DB::table('courses')->where('slug',$slug)->whereIn('id',$ids)->first();
+        abort_unless($course,404);
         $rows=DB::table('course_lessons')->where('course_id',$course->id)->orderBy('sort_order')->orderBy('id')->get();
-        return response()->json(['data'=>$rows,'meta'=>['total'=>$rows->count()]]);
+        return response()->json(['data'=>$rows->map(fn($row)=>$this->lessonData($row))->values(),'meta'=>['total'=>$rows->count()]]);
     }
 
     public function storeLesson(Request $request,string $slug): JsonResponse
     {
         [, $ids]=$this->teacher($request);
-        $course=DB::table('courses')->where('slug',$slug)->whereIn('id',$ids)->first(); abort_unless($course,404);
-        $data=$request->validate(['title'=>['required','string','max:180'],'content'=>['nullable','string','max:50000'],'order'=>['nullable','integer','min:0'],'video_url'=>['nullable','url','max:255','regex:/^https:\/\/(www\.)?(youtube\.com|youtu\.be|vimeo\.com)\//i'],'is_preview'=>['sometimes','boolean']]);
-        $id=DB::table('course_lessons')->insertGetId(['course_id'=>$course->id,'title'=>$data['title'],'content'=>($data['content']??'').(!empty($data['video_url'])?"
-
-Video: ".$data['video_url']:''),'sort_order'=>$data['order']??0,'created_at'=>now(),'updated_at'=>now()]);
-        return response()->json(['message'=>'Lesson created.','lesson'=>DB::table('course_lessons')->find($id)],201);
+        $course=DB::table('courses')->where('slug',$slug)->whereIn('id',$ids)->first();
+        abort_unless($course,404);
+        $data=$request->validate([
+            'title'=>['required','string','max:180'],
+            'content'=>['nullable','string','max:50000'],
+            'duration_minutes'=>['nullable','integer','min:0','max:600'],
+            'order'=>['nullable','integer','min:0'],
+            'video_url'=>['nullable','url','max:255','regex:/^https:\/\/(www\.)?(youtube\.com|youtu\.be|vimeo\.com)\//i'],
+            'is_preview'=>['sometimes','boolean'],
+        ]);
+        $id=DB::table('course_lessons')->insertGetId([
+            'course_id'=>$course->id,'title'=>$data['title'],'content'=>$data['content']??null,
+            'sort_order'=>$data['order']??0,'video_url'=>$data['video_url']??null,
+            'duration_minutes'=>$data['duration_minutes']??0,'is_preview'=>(bool)($data['is_preview']??false),
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        return response()->json(['message'=>'Lesson created.','lesson'=>$this->lessonData(DB::table('course_lessons')->find($id))],201);
     }
 
     public function updateLesson(Request $request,string $slug,int $lesson): JsonResponse
     {
         [, $ids]=$this->teacher($request);
-        $course=DB::table('courses')->where('slug',$slug)->whereIn('id',$ids)->first(); abort_unless($course,404);
+        $course=DB::table('courses')->where('slug',$slug)->whereIn('id',$ids)->first();
+        abort_unless($course,404);
         abort_unless(DB::table('course_lessons')->where('id',$lesson)->where('course_id',$course->id)->exists(),404);
-        $data=$request->validate(['title'=>['required','string','max:180'],'content'=>['nullable','string','max:50000'],'sort_order'=>['nullable','integer','min:0']]);
-        DB::table('course_lessons')->where('id',$lesson)->update(['title'=>$data['title'],'content'=>$data['content']??null,'sort_order'=>$data['order']??0,'updated_at'=>now()]);
-        return response()->json(['message'=>'Lesson updated.','lesson'=>DB::table('course_lessons')->find($lesson)]);
+        $data=$request->validate([
+            'title'=>['required','string','max:180'],
+            'content'=>['nullable','string','max:50000'],
+            'duration_minutes'=>['nullable','integer','min:0','max:600'],
+            'order'=>['nullable','integer','min:0'],
+            'video_url'=>['nullable','url','max:255','regex:/^https:\/\/(www\.)?(youtube\.com|youtu\.be|vimeo\.com)\//i'],
+            'is_preview'=>['sometimes','boolean'],
+        ]);
+        DB::table('course_lessons')->where('id',$lesson)->update([
+            'title'=>$data['title'],'content'=>$data['content']??null,'sort_order'=>$data['order']??0,
+            'video_url'=>$data['video_url']??null,'duration_minutes'=>$data['duration_minutes']??0,
+            'is_preview'=>(bool)($data['is_preview']??false),'updated_at'=>now(),
+        ]);
+        return response()->json(['message'=>'Lesson updated.','lesson'=>$this->lessonData(DB::table('course_lessons')->find($lesson))]);
+    }
+
+    private function lessonData(object $row): array
+    {
+        return [
+            'id'=>$row->id,'course_id'=>$row->course_id,'title'=>$row->title,'content'=>$row->content,
+            'duration_minutes'=>(int)($row->duration_minutes??0),'order'=>(int)$row->sort_order,
+            'video_url'=>$row->video_url??null,'is_preview'=>(bool)($row->is_preview??false),
+        ];
     }
 
     public function destroyLesson(Request $request,string $slug,int $lesson): JsonResponse
