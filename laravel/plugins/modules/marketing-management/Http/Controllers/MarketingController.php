@@ -41,8 +41,22 @@ class MarketingController extends Controller
             'validity_days' => 180,
             'allow_personal_message' => true,
         ], is_array($commerceSetting?->value) ? $commerceSetting->value : (json_decode((string) $commerceSetting?->value, true) ?: []));
+        $giftVouchers = Schema::hasTable('course_gift_vouchers')
+            ? DB::table('course_gift_vouchers')
+                ->leftJoin('users as senders', 'senders.id', '=', 'course_gift_vouchers.sender_user_id')
+                ->orderByDesc('course_gift_vouchers.id')
+                ->limit(100)
+                ->get([
+                    'course_gift_vouchers.id', 'course_gift_vouchers.recipient_email',
+                    'course_gift_vouchers.recipient_name', 'course_gift_vouchers.currency',
+                    'course_gift_vouchers.amount', 'course_gift_vouchers.remaining_amount',
+                    'course_gift_vouchers.status', 'course_gift_vouchers.expires_at',
+                    'course_gift_vouchers.paid_at', 'course_gift_vouchers.redeemed_at',
+                    'course_gift_vouchers.recipient_user_id', 'senders.name as sender_name',
+                ])
+            : collect();
 
-        return view('marketing-management::index', compact('campaigns', 'coupons', 'courses', 'giftVoucherSettings'));
+        return view('marketing-management::index', compact('campaigns', 'coupons', 'courses', 'giftVoucherSettings', 'giftVouchers'));
     }
 
     public function storeCampaign(Request $request): RedirectResponse
@@ -144,6 +158,35 @@ class MarketingController extends Controller
         ]);
 
         return back()->with('status', "Coupon '{$coupon->code}' settings updated.");
+    }
+
+    public function updateGiftVoucherStatus(Request $request, int $voucherId): RedirectResponse
+    {
+        $this->ensureCentralAdmin($request->user());
+        abort_unless(Schema::hasTable('course_gift_vouchers'), 404, 'Gift voucher storage is unavailable.');
+        $validated = $request->validate(['status' => ['required', 'in:paid,suspended']]);
+
+        DB::transaction(function () use ($request, $voucherId, $validated): void {
+            $voucher = DB::table('course_gift_vouchers')->where('id', $voucherId)->lockForUpdate()->first();
+            abort_unless($voucher, 404, 'Gift voucher not found.');
+            abort_unless(in_array($voucher->status, ['paid', 'suspended'], true), 409,
+                'Only paid, unclaimed gift vouchers can be suspended or reactivated.');
+            abort_unless($voucher->recipient_user_id === null, 409, 'A claimed gift voucher cannot be changed.');
+            if ($validated['status'] === 'paid') {
+                abort_if($voucher->expires_at && now()->greaterThan($voucher->expires_at), 410,
+                    'An expired gift voucher cannot be reactivated.');
+            }
+            DB::table('course_gift_vouchers')->where('id', $voucherId)->update([
+                'status' => $validated['status'],
+                'updated_at' => now(),
+            ]);
+            $this->audit->log('marketing.gift_voucher_status_updated', 'course_gift_voucher', (string) $voucherId, [
+                'from' => $voucher->status,
+                'to' => $validated['status'],
+            ]);
+        }, 3);
+
+        return back()->with('status', 'Gift voucher status updated.');
     }
 
     public function updateGiftVoucherSettings(Request $request): RedirectResponse
