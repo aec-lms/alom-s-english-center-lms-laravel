@@ -95,6 +95,7 @@ class CourseCommerceAdminControlsTest extends TestCase
             'minimum_subtotal' => 0,
             'applies_to_course_ids' => [],
             'first_purchase_only' => false,
+            'gift_only' => false,
         ]);
 
         $this->actingAs($admin)->patch(route('plugins.marketing.coupons.update', $coupon->id), [
@@ -103,6 +104,7 @@ class CourseCommerceAdminControlsTest extends TestCase
             'max_uses' => 50,
             'minimum_subtotal' => 500,
             'is_active' => '0',
+            'gift_only' => '1',
             'applies_to_course_ids' => [],
         ])->assertRedirect();
 
@@ -111,5 +113,6 @@ class CourseCommerceAdminControlsTest extends TestCase
         $this->assertSame(15, $coupon->discount_percent);
         $this->assertSame(3, $coupon->used_count);
         $this->assertSame(50, $coupon->max_uses);
+        $this->assertTrue($coupon->gift_only);
     }
 }
