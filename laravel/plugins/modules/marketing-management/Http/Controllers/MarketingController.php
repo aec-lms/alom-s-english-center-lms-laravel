@@ -32,8 +32,16 @@ class MarketingController extends Controller
         $courses = Schema::hasTable('courses')
             ? DB::table('courses')->where('status', 'published')->orderBy('title')->get(['id', 'title'])
             : collect();
+        $commerceSetting = SystemSetting::query()->where('key', 'course_commerce.gift_vouchers')->first();
+        $giftVoucherSettings = array_merge([
+            'enabled' => true,
+            'minimum_amount' => 100,
+            'maximum_amount' => 100000,
+            'validity_days' => 180,
+            'allow_personal_message' => true,
+        ], is_array($commerceSetting?->value) ? $commerceSetting->value : (json_decode((string) $commerceSetting?->value, true) ?: []));
 
-        return view('marketing-management::index', compact('campaigns', 'coupons', 'courses'));
+        return view('marketing-management::index', compact('campaigns', 'coupons', 'courses', 'giftVoucherSettings'));
     }
 
     public function storeCampaign(Request $request): RedirectResponse
@@ -93,6 +101,72 @@ class MarketingController extends Controller
 
         return back()->with('status', "Promo coupon '{$coupon->code}' ({$coupon->discount_percent}% OFF) created.");
     }
+    public function updateCoupon(Request $request, int $couponId): RedirectResponse
+    {
+        $this->ensureCentralAdmin($request->user());
+        $coupon = PromoCoupon::query()->lockForUpdate()->findOrFail($couponId);
+        $validated = $request->validate([
+            'discount_type' => ['required', 'in:percent,fixed'],
+            'discount_percent' => ['nullable', 'required_if:discount_type,percent', 'integer', 'min:1', 'max:100'],
+            'discount_amount' => ['nullable', 'required_if:discount_type,fixed', 'numeric', 'min:0.01', 'max:100000000'],
+            'max_uses' => ['nullable', 'integer', 'min:0', 'max:100000'],
+            'minimum_subtotal' => ['nullable', 'numeric', 'min:0', 'max:100000000'],
+            'maximum_discount' => ['nullable', 'numeric', 'min:0.01', 'max:100000000'],
+            'per_user_limit' => ['nullable', 'integer', 'min:1', 'max:100000'],
+            'starts_at' => ['nullable', 'date'],
+            'expires_at' => ['nullable', 'date', 'after_or_equal:starts_at'],
+            'applies_to_course_ids' => ['nullable', 'array', 'max:100'],
+            'applies_to_course_ids.*' => ['required', 'integer', 'distinct', 'exists:courses,id'],
+            'first_purchase_only' => ['nullable', 'boolean'],
+            'is_active' => ['required', 'boolean'],
+        ]);
+        $coupon->update([
+            'discount_type' => $validated['discount_type'],
+            'discount_percent' => (int) ($validated['discount_percent'] ?? 0),
+            'discount_amount' => $validated['discount_amount'] ?? null,
+            'max_uses' => (int) ($validated['max_uses'] ?? 0),
+            'minimum_subtotal' => $validated['minimum_subtotal'] ?? 0,
+            'maximum_discount' => $validated['maximum_discount'] ?? null,
+            'per_user_limit' => $validated['per_user_limit'] ?? null,
+            'starts_at' => $validated['starts_at'] ?? null,
+            'expires_at' => $validated['expires_at'] ?? null,
+            'applies_to_course_ids' => array_values(array_map('intval', $validated['applies_to_course_ids'] ?? [])),
+            'first_purchase_only' => $request->boolean('first_purchase_only'),
+            'is_active' => (bool) $validated['is_active'],
+        ]);
+        $this->audit->log('marketing.coupon_updated', 'promo_coupon', (string) $coupon->id, [
+            'code' => $coupon->code, 'is_active' => $coupon->is_active,
+        ]);
+
+        return back()->with('status', "Coupon '{$coupon->code}' settings updated.");
+    }
+
+    public function updateGiftVoucherSettings(Request $request): RedirectResponse
+    {
+        $this->ensureCentralAdmin($request->user());
+        $validated = $request->validate([
+            'enabled' => ['nullable', 'boolean'],
+            'minimum_amount' => ['required', 'numeric', 'min:1', 'max:1000000'],
+            'maximum_amount' => ['required', 'numeric', 'gte:minimum_amount', 'max:10000000'],
+            'validity_days' => ['required', 'integer', 'min:1', 'max:1095'],
+            'allow_personal_message' => ['nullable', 'boolean'],
+        ]);
+        $settings = [
+            'enabled' => $request->boolean('enabled'),
+            'minimum_amount' => round((float) $validated['minimum_amount'], 2),
+            'maximum_amount' => round((float) $validated['maximum_amount'], 2),
+            'validity_days' => (int) $validated['validity_days'],
+            'allow_personal_message' => $request->boolean('allow_personal_message'),
+        ];
+        SystemSetting::query()->updateOrCreate(
+            ['key' => 'course_commerce.gift_vouchers'],
+            ['value' => json_encode($settings, JSON_THROW_ON_ERROR), 'is_encrypted' => false, 'updated_by' => $request->user()->id]
+        );
+        $this->audit->log('marketing.gift_voucher_settings_updated', 'system_setting', 'course_commerce.gift_vouchers');
+
+        return back()->with('status', 'Gift voucher settings updated.');
+    }
+
     private function ensureCentralAdmin($actor): void
     {
         abort_unless($actor && $actor->hasRole('admin'), 403, 'Only a central administrator can manage global marketing campaigns and coupons.');
