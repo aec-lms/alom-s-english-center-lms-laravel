@@ -20,6 +20,16 @@
             'external' => false,
         ];
     }
+    if (auth()->check() && auth()->user()->hasRole('guardian')
+        && app(\App\Core\Plugins\PluginManager::class)->isEnabled('guardian-portal')
+        && Route::has('plugins.guardian-portal.dashboard')) {
+        $navLinks[] = [
+            'label' => 'Guardian Portal',
+            'url' => route('plugins.guardian-portal.dashboard'),
+            'active' => request()->routeIs('plugins.guardian-portal.*'),
+            'external' => false,
+        ];
+    }
 @endphp
 
 <header data-header-style="{{ $headerLayout['style'] }}" class="w-full bg-white border-b border-slate-200/80 {{ $headerLayout['sticky'] ? 'sticky top-0' : 'relative' }} z-40 shadow-2xs">
