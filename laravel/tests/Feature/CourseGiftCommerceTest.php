@@ -105,6 +105,12 @@ class CourseGiftCommerceTest extends TestCase
             'status' => 'completed',
             'reference' => 'gift-voucher-credit:' . $voucherId,
         ]);
+        $this->assertDatabaseHas('course_gift_voucher_redemptions', [
+            'voucher_id' => $voucherId,
+            'user_id' => $recipient->id,
+            'course_id' => null,
+            'amount' => 1200,
+        ]);
 
         $this->actingAs($recipient)->post('/student/course-commerce/vouchers/redeem/' . $token)->assertStatus(409);
         $this->assertSame(1, DB::table('course_gift_wallet_transactions')->where('reference', 'gift-voucher-credit:' . $voucherId)->count());
