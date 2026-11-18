@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\ExpenseManagement\\Http\\Controllers;
+namespace Plugins\Modules\ExpenseManagement\Http\Controllers;
 
-use App\\Core\\Plugins\\PluginManager;
-use App\\Core\\Security\\AuditLogger;
-use App\\Http\\Controllers\\Controller;
-use Illuminate\\Http\\RedirectResponse;
-use Illuminate\\Http\\Request;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Facades\\Schema;
-use Illuminate\\View\\View;
-use Plugins\\Modules\\ExpenseManagement\\Models\\Expense;
+use App\Core\Plugins\PluginManager;
+use App\Core\Security\AuditLogger;
+use App\Http\Controllers\Controller;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\View\View;
+use Plugins\Modules\ExpenseManagement\Models\Expense;
 
 class ExpenseController extends Controller
 {
