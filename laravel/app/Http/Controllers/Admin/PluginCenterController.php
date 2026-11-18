@@ -285,9 +285,17 @@ class PluginCenterController extends Controller
             $item = PluginArchive::query()->findOrFail($archive);
             $trashRoot = realpath(storage_path('app/plugin-recycle-bin'));
             $archivePath = realpath($item->archive_path);
-            if (!$trashRoot || !$archivePath || !is_dir($archivePath)
-                || !str_starts_with($archivePath, $trashRoot . DIRECTORY_SEPARATOR)) {
+            if (!$trashRoot || !$archivePath || !is_dir($archivePath) || is_link($item->archive_path)
+                || !str_starts_with($archivePath, rtrim($trashRoot, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR)) {
                 throw new RuntimeException('Archived plugin path is missing or outside the protected recycle-bin directory.');
+            }
+
+            // Never create a "verified" recovery copy from an archive that has
+            // already been modified since it entered the recycle bin.
+            $sourceChecksums = $this->directoryChecksums($archivePath);
+            $expectedChecksums = $item->files_sha256;
+            if (!is_array($expectedChecksums) || $expectedChecksums === [] || $sourceChecksums !== $expectedChecksums) {
+                throw new RuntimeException('Permanent deletion cancelled: archived plugin integrity verification failed.');
             }
 
             $backupId = 'archive-' . (int) $item->id . '-' . substr(hash('sha256', $item->plugin_slug), 0, 12);
@@ -305,8 +313,7 @@ class PluginCenterController extends Controller
             }
             @chmod($backupPath, 0700);
 
-            $sourceChecksums = $this->directoryChecksums($archivePath);
-            if ($sourceChecksums === [] || $sourceChecksums !== $this->directoryChecksums($backupPath)) {
+            if ($sourceChecksums !== $this->directoryChecksums($backupPath)) {
                 File::deleteDirectory($backupPath);
                 throw new RuntimeException('Permanent deletion cancelled: private recovery snapshot failed integrity verification.');
             }

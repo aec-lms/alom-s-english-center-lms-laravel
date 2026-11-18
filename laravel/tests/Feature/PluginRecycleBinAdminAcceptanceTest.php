@@ -108,6 +108,45 @@ class PluginRecycleBinAdminAcceptanceTest extends TestCase
             }
         }
     }
+    public function test_permanent_delete_rejects_a_tampered_archive_without_creating_a_recovery_copy(): void
+    {
+        $this->markSystemInstalled();
+        $slug = 'tampered-permanent-delete-' . strtolower(substr(bin2hex(random_bytes(4)), 0, 8));
+        $modulePath = $this->createProbePlugin($slug);
+        $archivePath = null;
+        $backupPath = null;
+
+        try {
+            $manager = app(PluginManager::class);
+            $manager->syncCatalog();
+            $manager->install($slug);
+            $admin = $this->createUserWithRole('admin');
+
+            $this->actingAs($admin)->post('/admin/plugins/' . $slug . '/delete')->assertSessionHas('status');
+            $archive = PluginArchive::query()->where('plugin_slug', $slug)->firstOrFail();
+            $archivePath = $archive->archive_path;
+            File::append($archivePath . '/plugin.json', "\\n/* tampered after archival */");
+
+            $this->actingAs($admin)
+                ->post('/admin/plugins/recycle-bin/' . $archive->id . '/permanent-delete')
+                ->assertSessionHasErrors('plugin');
+
+            $backupId = 'archive-' . (int) $archive->id . '-' . substr(hash('sha256', $slug), 0, 12);
+            $backupPath = storage_path('app/plugin-permanent-delete-backups/' . $backupId);
+            $this->assertDirectoryExists($archivePath);
+            $this->assertDirectoryDoesNotExist($backupPath);
+            $this->assertDatabaseHas('plugin_archives', ['id' => $archive->id]);
+        } finally {
+            File::deleteDirectory($modulePath);
+            if ($archivePath && is_dir($archivePath)) {
+                File::deleteDirectory($archivePath);
+            }
+            if ($backupPath && is_dir($backupPath)) {
+                File::deleteDirectory($backupPath);
+            }
+        }
+    }
+
     public function test_restore_preserves_previously_disabled_plugin_state(): void
     {
         $this->markSystemInstalled();
