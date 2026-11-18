@@ -13,6 +13,7 @@ return new class extends Migration {
         if (!Schema::hasTable('student_trace_events')) {
             Schema::create('student_trace_events', function (Blueprint $table): void {
                 $table->id();
+                $table->unsignedBigInteger('legacy_event_id')->nullable()->unique();
                 $table->unsignedBigInteger('student_id')->nullable()->index();
                 $table->unsignedBigInteger('branch_id')->nullable()->index();
                 $table->unsignedBigInteger('actor_id')->nullable()->index();
@@ -47,6 +48,7 @@ return new class extends Migration {
             ->chunkById(500, function ($rows) use ($sourceHasStudent, $sourceHasBranch, $sourceHasActor, $sourceHasMetadata): void {
                 foreach ($rows as $row) {
                     $payload = [
+                        'legacy_event_id' => $row->id ?? null,
                         'student_id' => $sourceHasStudent ? ($row->student_id ?? null) : null,
                         'branch_id' => $sourceHasBranch ? ($row->branch_id ?? null) : null,
                         'actor_id' => $sourceHasActor ? ($row->actor_id ?? null) : null,
