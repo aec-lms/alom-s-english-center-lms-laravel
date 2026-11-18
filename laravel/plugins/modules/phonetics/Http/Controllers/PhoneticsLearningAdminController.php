@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace Plugins\Modules\Phonetics\Http\Controllers;
 
-use App\Http\Controllers\Controller;
+use Illuminate\Routing\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
-use App\Models\User;
 use Plugins\Modules\Phonetics\Models\PhoneticBatchMembership;
 use Plugins\Modules\Phonetics\Models\PhoneticEntry;
 use Plugins\Modules\Phonetics\Models\PhoneticExam;
@@ -27,11 +26,27 @@ final class PhoneticsLearningAdminController extends Controller
             'categories' => $this->catalog->categories(),
             'courses' => $this->catalog->courses(),
             'batches' => $this->catalog->batches(),
-            'students' => User::query()->orderBy('name')->limit(500)->get(['id', 'name', 'email']),
+            'students' => $this->studentOptions(),
             'batchMembers' => PhoneticBatchMembership::query()->with('user')->where('lms_driver', $this->catalog->driver())->latest()->paginate(20, ['*'], 'members'),
             'words' => PhoneticEntry::query()->where('is_active', true)->orderBy('word')->get(),
             'assignments' => PhoneticLearningAssignment::query()->with('word')->latest()->paginate(20, ['*'], 'assignments'),
             'exams' => PhoneticExam::query()->withCount('questions')->latest()->paginate(20, ['*'], 'exams'),
+        ]);
+    }
+
+    private function studentOptions()
+    {
+        $map = config('phonetics.users', []);
+        $table = $map['table'] ?? 'users';
+        $id = $map['id'] ?? 'id';
+        $name = $map['name'] ?? 'name';
+        $email = $map['email'] ?? 'email';
+        foreach ([$table, $id, $name, $email] as $identifier) {
+            abort_unless(is_string($identifier) && preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $identifier) === 1, 500, 'Invalid user table mapping.');
+        }
+        abort_unless(\\Illuminate\\Support\\Facades\\Schema::hasTable($table), 503, 'Configured user table is unavailable.');
+        return DB::table($table)->orderBy($name)->limit(500)->get([
+            $id.' as id', $name.' as name', $email.' as email',
         ]);
     }
 
