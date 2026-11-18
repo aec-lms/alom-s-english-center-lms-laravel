@@ -260,7 +260,7 @@ class PluginManager
         return $updated;
     }
 
-    public function installOrUpdateFromZip(string $zipPath, ?int $actorId = null): PluginRecord
+    public function installOrUpdateFromZip(string $zipPath, ?int $actorId = null, ?string $signaturePath = null): PluginRecord
     {
         if (!is_file($zipPath)) {
             throw new RuntimeException('Uploaded plugin archive could not be read.');
@@ -289,6 +289,10 @@ class PluginManager
 
             $packageRoot = dirname($manifestFile);
             $this->verifyPackageIntegrity($packageRoot);
+            if ($signaturePath === null || !is_file($signaturePath)) {
+                throw new RuntimeException('Unsigned plugin ZIP uploads are blocked. Provide a trusted Ed25519 detached signature.');
+            }
+            $signatureMetadata = app(PluginSignatureVerifier::class)->verify($packageRoot, $signaturePath);
 
             $manifest = PluginManifest::fromDirectory($packageRoot);
             if ($manifest->isCore || $manifest->slug === config('plugins.core_identifier')) {
@@ -348,6 +352,17 @@ class PluginManager
                 $record = $alreadyInstalled
                     ? $this->updatePlugin($manifest->slug, $actorId)
                     : $this->install($manifest->slug, $actorId);
+                $record->forceFill([
+                    'signature_key_id' => $signatureMetadata['key_id'],
+                    'signature_algorithm' => $signatureMetadata['algorithm'],
+                    'signature_checksums_sha256' => $signatureMetadata['checksums_sha256'],
+                    'signature_verified_at' => $signatureMetadata['verified_at'],
+                ])->save();
+                $this->audit->log('plugin.signature_verified', 'plugin', $manifest->slug, [
+                    'key_id' => $signatureMetadata['key_id'],
+                    'algorithm' => $signatureMetadata['algorithm'],
+                    'checksums_sha256' => $signatureMetadata['checksums_sha256'],
+                ], $actorId);
 
                 if ($rollbackDir && is_dir($rollbackDir)) {
                     File::deleteDirectory($rollbackDir);
