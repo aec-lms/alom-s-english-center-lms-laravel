@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'api_client.dart';
 import 'qr_attendance_page.dart';
 
@@ -25,11 +25,11 @@ class _StudentGateState extends State<StudentGate> {
   @override
   void initState() {
     super.initState();
-    api.restoreSession().then((v) { if (mounted) setState(() { signedIn = v; loading = false; }); });
+    api.restoreSession().then((v) { if (mounted) { setState(() { signedIn = v; loading = false; }); } });
   }
   @override
   Widget build(BuildContext context) {
-    if (loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (loading) { return const Scaffold(body: Center(child: CircularProgressIndicator())); }
     return signedIn ? StudentHome(api: api, onLogout: () => setState(() => signedIn = false))
       : StudentLogin(api: api, onLogin: () => setState(() => signedIn = true));
   }
@@ -51,8 +51,8 @@ class _StudentLoginState extends State<StudentLogin> {
   Future<void> submit() async {
     setState(() { busy = true; error = null; });
     try { await widget.api.login(email.text, password.text); widget.onLogin(); }
-    catch (e) { if (mounted) setState(() => error = e.toString()); }
-    finally { if (mounted) setState(() => busy = false); }
+    catch (e) { if (mounted) { setState(() => error = e.toString()); } }
+    finally { if (mounted) { setState(() => busy = false); } }
   }
   @override
   Widget build(BuildContext context) => Scaffold(body: Center(child: ConstrainedBox(
@@ -124,10 +124,10 @@ class _DataList extends StatelessWidget {
   @override
   Widget build(BuildContext context) => FutureBuilder<Map<String, dynamic>>(future: future, builder: (context, snapshot) {
     if (snapshot.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
-    if (snapshot.hasError) return Center(child: Text(snapshot.error.toString()));
+    if (snapshot.hasError) { return Center(child: Text(snapshot.error.toString())); }
     final value = snapshot.data?[keyName];
     final List<dynamic> items = value is List ? value : value is Map && value['data'] is List ? value['data'] as List : [];
-    if (items.isEmpty) return Center(child: Text('No ' + title + ' available.'));
+    if (items.isEmpty) { return Center(child: Text('No $title available.')); }
     return RefreshIndicator(onRefresh: () async { onRefresh(); },
       child: ListView.builder(itemCount: items.length, itemBuilder: (_, i) {
         final item = Map<String, dynamic>.from(items[i] as Map);
