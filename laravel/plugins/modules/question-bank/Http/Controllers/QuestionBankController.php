@@ -2,18 +2,18 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\QuestionBank\\Http\\Controllers;
+namespace Plugins\Modules\QuestionBank\Http\Controllers;
 
-use App\\Core\\Plugins\\PluginManager;
-use App\\Core\\Security\\AuditLogger;
-use App\\Http\\Controllers\\Controller;
-use Illuminate\\Http\\RedirectResponse;
-use Illuminate\\Http\\Request;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\View\\View;
-use Plugins\\Modules\\QuestionBank\\Models\\Question;
-use Plugins\\Modules\\QuestionBank\\Models\\QuestionPaper;
-use Plugins\\Modules\\QuestionBank\\Models\\QuestionPaperItem;
+use App\Core\Plugins\PluginManager;
+use App\Core\Security\AuditLogger;
+use App\Http\Controllers\Controller;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\View\View;
+use Plugins\Modules\QuestionBank\Models\Question;
+use Plugins\Modules\QuestionBank\Models\QuestionPaper;
+use Plugins\Modules\QuestionBank\Models\QuestionPaperItem;
 
 class QuestionBankController extends Controller
 {
@@ -232,7 +232,7 @@ class QuestionBankController extends Controller
         abort_unless(
             $actor->branch_id
             && app(PluginManager::class)->isEnabled('branch-management')
-            && \\Illuminate\\Support\\Facades\\Schema::hasTable('branches')
+            && \Illuminate\Support\Facades\Schema::hasTable('branches')
             && DB::table('branches')->where('id', $actor->branch_id)->where('is_active', true)->exists(),
             403,
             'Branch manager must be assigned to an active branch.'
