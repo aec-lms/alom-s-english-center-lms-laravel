@@ -262,5 +262,7 @@
             </script>
         @endif
     @endif
+
+    @include('role-ai-assistant::components.student-teacher')
 </body>
 </html>
