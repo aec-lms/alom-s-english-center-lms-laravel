@@ -132,6 +132,10 @@ final class CourseCatalog
         $query = $this->table($membership)
             ->where($membership['user_id'] ?? 'user_id', $user->getAuthIdentifier())
             ->where($membership['batch_id'] ?? 'batch_id', $batchRef);
+        $driverColumn = $membership['driver_column'] ?? null;
+        if ($driverColumn && $this->hasColumn($membership, $driverColumn)) {
+            $query->where($driverColumn, $this->driver());
+        }
         if (!empty($membership['active_column']) && $this->hasColumn($membership, $membership['active_column'])) {
             $query->where($membership['active_column'], $membership['active_value'] ?? 1);
         }
@@ -191,17 +195,7 @@ final class CourseCatalog
         abort_unless($query->exists(), 403, 'An active course enrollment is required.');
 
         if ($batchRef !== null && $batchRef !== '') {
-            $membership = config('phonetics.catalog.batch_memberships', []);
-            if (!$this->available($membership)) {
-                throw new ServiceUnavailableHttpException(null, 'Batch membership mapping is not configured for this LMS.');
-            }
-            $member = $this->table($membership)
-                ->where($membership['user_id'] ?? 'user_id', $user->getAuthIdentifier())
-                ->where($membership['batch_id'] ?? 'batch_id', $batchRef);
-            if (!empty($membership['active_column']) && $this->hasColumn($membership, $membership['active_column'])) {
-                $member->where($membership['active_column'], $membership['active_value'] ?? 1);
-            }
-            abort_unless($member->exists(), 403, 'This activity is restricted to another batch.');
+            abort_unless($this->isBatchMember($user, $batchRef), 403, 'This activity is restricted to another batch.');
         }
     }
 
