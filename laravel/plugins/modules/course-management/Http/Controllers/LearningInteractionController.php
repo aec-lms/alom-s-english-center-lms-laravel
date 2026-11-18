@@ -110,10 +110,16 @@ class LearningInteractionController extends Controller
             ->orderByDesc('discussions.is_pinned')
             ->orderBy('discussions.created_at')
             ->limit(200)
-            ->get([
+            ->select([
                 'discussions.id', 'discussions.parent_id', 'discussions.body', 'discussions.is_pinned',
                 'discussions.created_at', 'discussions.user_id', 'users.name as author_name',
-            ]);
+            ])
+            ->selectSub(
+                DB::table('live_class_discussion_votes')->selectRaw('COUNT(*)')
+                    ->whereColumn('discussion_id', 'discussions.id'),
+                'votes_count'
+            )
+            ->get();
         return response()->json([
             'questions' => $items,
             'can_answer' => $this->canTeachLiveClass($request, $class),
