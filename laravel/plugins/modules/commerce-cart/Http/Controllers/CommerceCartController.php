@@ -74,6 +74,99 @@ class CommerceCartController extends Controller
         return back()->with('status', 'Item removed from cart.');
     }
 
+
+    public function checkout(Request $request, UniversalPaymentOrchestrator $payments): RedirectResponse
+    {
+        $data = $request->validate([
+            'gateway' => ['required', 'in:gateway-sslcommerz,gateway-stripe,gateway-paypal'],
+            'payer_name' => ['required', 'string', 'max:160'],
+            'payer_email' => ['required', 'email', 'max:180'],
+            'payer_phone' => ['required', 'string', 'max:40'],
+            'payment_method_id' => ['nullable', 'string', 'max:120'],
+        ]);
+        abort_unless(Schema::hasTable('fee_invoices') && app(\\App\\Core\\Plugins\\PluginManager::class)->isEnabled('fees-management'), 503, 'The Fees & Invoicing module must be enabled for checkout.');
+        abort_unless(app(\\App\\Core\\Plugins\\PluginManager::class)->isEnabled('universal-payment'), 503, 'Universal Payment must be enabled.');
+
+        $user = $request->user();
+        $cart = $this->activeCart((int) $user->id);
+        $cartItems = DB::table('commerce_cart_items')->where('cart_id', $cart->id)->lockForUpdate()->get();
+        abort_if($cartItems->isEmpty(), 422, 'Your cart is empty.');
+
+        $resolved = [];
+        foreach ($cartItems as $cartItem) {
+            $fresh = $this->catalog->resolve((string) $cartItem->item_type, (int) $cartItem->item_id);
+            if ((float) $fresh['price'] !== (float) $cartItem->unit_price) {
+                DB::table('commerce_cart_items')->where('id', $cartItem->id)->update([
+                    'unit_price' => $fresh['price'], 'title_snapshot' => $fresh['title'], 'updated_at' => now(),
+                ]);
+            }
+            $resolved[] = [$cartItem, $fresh];
+        }
+        $currencies = collect($resolved)->pluck(1)->pluck('currency')->unique();
+        abort_unless($currencies->count() === 1, 422, 'A single order cannot mix currencies.');
+        $subtotal = round(collect($resolved)->sum(fn ($pair) => $pair[1]['price'] * (int) $pair[0]->quantity), 2);
+        abort_if($subtotal <= 0, 422, 'The checkout total must be greater than zero.');
+
+        $order = DB::transaction(function () use ($user, $cart, $resolved, $subtotal, $data, $currencies): object {
+            $invoice = FeeInvoice::query()->create([
+                'invoice_number' => 'WEB-' . strtoupper(Str::random(10)),
+                'student_id' => null,
+                'payer_name' => $data['payer_name'],
+                'payer_email' => strtolower($data['payer_email']),
+                'payer_phone' => $data['payer_phone'],
+                'branch_id' => $user->branch_id ?? null,
+                'subtotal_amount' => $subtotal,
+                'discount_amount' => 0,
+                'net_amount' => $subtotal,
+                'paid_amount' => 0,
+                'currency' => $currencies->first(),
+                'status' => 'unpaid',
+                'due_date' => now()->addDays(7)->toDateString(),
+            ]);
+            $orderId = DB::table('commerce_orders')->insertGetId([
+                'order_number' => 'AEC-' . strtoupper(Str::random(10)), 'user_id' => $user->id,
+                'invoice_id' => $invoice->id, 'branch_id' => $user->branch_id ?? null,
+                'currency' => $currencies->first(), 'subtotal' => $subtotal, 'discount_total' => 0,
+                'grand_total' => $subtotal, 'status' => 'awaiting_payment', 'payment_status' => 'unpaid',
+                'billing_snapshot' => json_encode(['name' => $data['payer_name'], 'email' => $data['payer_email'], 'phone' => $data['payer_phone']]),
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+            foreach ($resolved as [$cartItem, $fresh]) {
+                $orderItemId = DB::table('commerce_order_items')->insertGetId([
+                    'order_id' => $orderId, 'item_type' => $fresh['type'], 'item_id' => $fresh['id'],
+                    'title_snapshot' => $fresh['title'], 'quantity' => $cartItem->quantity,
+                    'unit_price' => $fresh['price'], 'line_total' => round($fresh['price'] * $cartItem->quantity, 2),
+                    'metadata' => json_encode($fresh['metadata']), 'created_at' => now(), 'updated_at' => now(),
+                ]);
+                if ($fresh['type'] === 'course' && Schema::hasTable('enrollments')
+                    && Schema::hasColumn('enrollments', 'invoice_id')
+                    && !DB::table('enrollments')->where('user_id', $user->id)->where('course_id', $fresh['id'])->exists()) {
+                    DB::table('enrollments')->insert([
+                        'user_id' => $user->id, 'course_id' => $fresh['id'], 'branch_id' => $user->branch_id ?? null,
+                        'invoice_id' => $invoice->id, 'status' => 'pending', 'created_at' => now(), 'updated_at' => now(),
+                    ]);
+                }
+            }
+            DB::table('commerce_carts')->where('id', $cart->id)->update(['status' => 'converted', 'updated_at' => now()]);
+            return DB::table('commerce_orders')->where('id', $orderId)->first();
+        });
+
+        try {
+            $payment = $payments->initiate($data['gateway'], FeeInvoice::query()->findOrFail($order->invoice_id), [
+                'payment_method_id' => $data['payment_method_id'] ?? '',
+                'idempotency_key' => 'aec-order-' . $order->order_number,
+            ]);
+            if (!empty($payment['redirect_url'])) return redirect()->away($payment['redirect_url']);
+            return redirect()->route('plugins.commerce_cart.index')
+                ->with('status', 'Order ' . $order->order_number . ' is awaiting payment confirmation. Follow the secure payment instructions shown by your selected gateway.');
+        } catch (\\Throwable $exception) {
+            report($exception);
+            DB::table('commerce_orders')->where('id', $order->id)->update(['payment_status' => 'failed', 'updated_at' => now()]);
+            return redirect()->route('plugins.commerce_cart.index')
+                ->withErrors(['gateway' => 'Your order was saved, but the payment session could not be started. No access has been granted. Contact support with order ' . $order->order_number . ' before retrying.']);
+        }
+    }
+
     private function activeCart(int $userId): object
     {
         return DB::transaction(function () use ($userId): object {
