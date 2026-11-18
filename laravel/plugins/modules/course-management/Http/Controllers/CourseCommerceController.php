@@ -106,6 +106,132 @@ class CourseCommerceController extends Controller
         return redirect()->route('course-commerce.cart')->with('status', 'Course removed from your cart.');
     }
 
+    public function gift(Request $request, int $courseId): RedirectResponse
+    {
+        $student = $this->student($request);
+        $validated = $request->validate([
+            'recipient_email' => ['required', 'email:rfc', 'max:190'],
+            'recipient_name' => ['nullable', 'string', 'max:160'],
+            'message' => ['nullable', 'string', 'max:1000'],
+            'payer_contact' => ['required', 'string', 'min:7', 'max:40'],
+        ]);
+        $this->assertCheckoutReady();
+        abort_unless(Schema::hasTable('course_gifts') && Schema::hasColumn('course_gifts', 'payment_transaction_id')
+            && Schema::hasColumn('course_gifts', 'redeem_token_encrypted'), 503, 'Gift course storage is not ready.');
+
+        $course = DB::table('courses')->where('id', $courseId)->where('status', 'published')->first();
+        abort_unless($course, 404, 'This course is not available for gifting.');
+        $this->assertCourseBranch($student, $course);
+        $this->assertNoOpenBatch($courseId);
+        abort_if(strtolower(trim($validated['recipient_email'])) === strtolower(trim((string) $student->email)), 422,
+            'You cannot gift a course to your own account.');
+
+        $created = DB::transaction(function () use ($student, $course, $validated): array {
+            $token = Str::random(64);
+            $giftId = DB::table('course_gifts')->insertGetId([
+                'sender_user_id' => $student->id,
+                'recipient_user_id' => DB::table('users')->whereRaw('LOWER(email) = ?', [strtolower(trim($validated['recipient_email']))])->value('id'),
+                'recipient_email' => strtolower(trim($validated['recipient_email'])),
+                'recipient_name' => $validated['recipient_name'] ?? null,
+                'message' => $validated['message'] ?? null,
+                'course_id' => $course->id,
+                'redeem_token_hash' => hash('sha256', $token),
+                'redeem_token_encrypted' => encrypt($token),
+                'status' => 'awaiting_payment',
+                'currency' => strtoupper((string) config('lms.default_currency', 'BDT')),
+                'amount' => round((float) $course->price, 2),
+                'expires_at' => now()->addDays(90),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $transaction = UniversalPaymentTransaction::query()->create([
+                'reference' => 'GIFT-' . strtoupper(Str::random(10)),
+                'payer_name' => $student->name,
+                'payer_contact' => trim($validated['payer_contact']),
+                'item_title' => 'Gift Course: ' . $course->title,
+                'gateway' => 'sslcommerz',
+                'currency' => strtoupper((string) config('lms.default_currency', 'BDT')),
+                'amount' => round((float) $course->price, 2),
+                'external_trx_id' => null,
+                'user_id' => $student->id,
+                'branch_id' => $course->branch_id ?? $this->assignedBranchId($student),
+                'status' => 'pending',
+                'notes' => json_encode(['purpose' => 'course_gift', 'course_gift_id' => $giftId], JSON_THROW_ON_ERROR),
+            ]);
+            DB::table('course_gifts')->where('id', $giftId)->update([
+                'payment_transaction_id' => $transaction->id,
+                'updated_at' => now(),
+            ]);
+
+            return ['gift_id' => $giftId, 'transaction' => $transaction, 'token' => $token];
+        }, 3);
+
+        try {
+            $url = app(StorefrontPaymentGatewayService::class)->initiateSslcommerz(
+                $created['transaction'],
+                (object) ['title' => 'Gift Course #' . $created['gift_id']],
+                $student,
+                trim($validated['payer_contact']),
+                ['purpose' => 'course_gift', 'course_gift_id' => $created['gift_id']]
+            );
+
+            return redirect()->away($url);
+        } catch (\\Throwable $exception) {
+            report($exception);
+            DB::transaction(function () use ($created): void {
+                $transaction = UniversalPaymentTransaction::query()->whereKey($created['transaction']->id)->lockForUpdate()->first();
+                if ($transaction && $transaction->status === 'pending') {
+                    $transaction->update(['status' => 'failed']);
+                    DB::table('course_gifts')->where('id', $created['gift_id'])->where('status', 'awaiting_payment')
+                        ->update(['status' => 'payment_failed', 'updated_at' => now()]);
+                }
+            }, 3);
+
+            return back()->withErrors(['gift' => 'Secure gift checkout could not be started. Please try again.']);
+        }
+    }
+
+    public function redeemGift(Request $request, string $token): RedirectResponse
+    {
+        $student = $this->student($request);
+        abort_unless(preg_match('/^[A-Za-z0-9]{40,80}$/', $token) === 1, 404);
+        $gift = DB::table('course_gifts')->where('redeem_token_hash', hash('sha256', $token))->first();
+        abort_unless($gift && $gift->status === 'paid', 404, 'This gift is not available for redemption.');
+        abort_if($gift->expires_at && now()->greaterThan($gift->expires_at), 410, 'This gift has expired.');
+        abort_unless(hash_equals(strtolower((string) $gift->recipient_email), strtolower((string) $student->email)),
+            403, 'Sign in with the email address that received this gift.');
+        abort_if($gift->sender_user_id === $student->id, 403, 'The sender cannot redeem their own gift.');
+
+        return DB::transaction(function () use ($gift, $student): RedirectResponse {
+            $locked = DB::table('course_gifts')->where('id', $gift->id)->lockForUpdate()->first();
+            abort_unless($locked && $locked->status === 'paid', 409, 'This gift has already been redeemed or is no longer available.');
+            $course = DB::table('courses')->where('id', $locked->course_id)->where('status', 'published')->first();
+            abort_unless($course, 409, 'The gifted course is currently unavailable. Please contact support.');
+            $this->assertCourseBranch($student, $course);
+            abort_if(DB::table('enrollments')->where('user_id', $student->id)->where('course_id', $course->id)
+                ->whereIn('status', ['pending', 'active', 'completed'])->exists(), 409, 'You already have access to this course.');
+
+            DB::table('enrollments')->insert([
+                'user_id' => $student->id,
+                'course_id' => $course->id,
+                'branch_id' => $course->branch_id ?? $this->assignedBranchId($student),
+                'invoice_id' => $locked->invoice_id,
+                'status' => 'active',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            DB::table('course_gifts')->where('id', $locked->id)->update([
+                'recipient_user_id' => $student->id,
+                'status' => 'redeemed',
+                'redeemed_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            return redirect()->route('plugins.enrollments.my')->with('status', 'Gift redeemed. The course is now available in your learning area.');
+        }, 3);
+    }
+
     public function checkout(Request $request): RedirectResponse
     {
         $student = $this->student($request);
@@ -140,7 +266,7 @@ class CourseCommerceController extends Controller
                 abort_if(abs((float) $course->price - (float) $cartItem->unit_price) > 0.01, 409, 'A course price changed. Review your cart before paying.');
                 $this->assertNoOpenBatch((int) $course->id);
                 abort_if(DB::table('enrollments')->where('user_id', $student->id)->where('course_id', $course->id)
-                    ->whereIn('status', ['pending', 'active'])->exists(), 409, 'You already have a pending or active enrollment in one of the selected courses.');
+                    ->whereIn('status', ['pending', 'active', 'completed'])->exists(), 409, 'You already have a pending or active enrollment in one of the selected courses.');
             }
 
             abort_unless(Schema::hasColumn('enrollments', 'invoice_id'), 503, 'Paid course enrollment requires invoice-linked enrollment support.');
