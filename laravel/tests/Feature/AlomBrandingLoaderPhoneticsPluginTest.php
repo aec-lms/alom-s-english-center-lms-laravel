@@ -71,4 +71,21 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
   }
  }
 
+
+ public function test_loader_admin_settings_save_audit_and_core_branding_link():void{
+  $this->markSystemInstalled();
+  $this->activatePlugins(['al-branding-loader']);
+  $admin=$this->createUserWithRole('admin');
+  $this->actingAs($admin)->get('/admin/al-branding-loader')->assertOk()->assertSee('Open Branding Settings');
+  $this->actingAs($admin)->put('/admin/al-branding-loader',[
+   'enabled'=>1,'headline'=>"Alom's English Center",'subtext'=>'Preparing your classroom',
+   'animation_style'=>'shimmer-sweep','background_color'=>'#112233','accent_color'=>'#445566',
+   'text_color'=>'#FFFFFF','backdrop_blur'=>1,'show_progress_label'=>1,'respect_reduced_motion'=>1,
+   'min_duration_ms'=>500,'fade_duration_ms'=>250,'max_timeout_ms'=>5000,
+   'trigger_mode'=>'every-load','excluded_paths_text'=>"admin/*\napi/*",
+  ])->assertRedirect('/admin/al-branding-loader')->assertSessionHas('status');
+  $this->assertDatabaseHas('alom_english_center_loader_settings',['animation_style'=>'shimmer-sweep','background_color'=>'#112233','enabled'=>true]);
+  $this->assertDatabaseHas('audit_logs',['action'=>'al_branding_loader.settings.updated','entity_id'=>'al-branding-loader']);
+ }
+
 }
