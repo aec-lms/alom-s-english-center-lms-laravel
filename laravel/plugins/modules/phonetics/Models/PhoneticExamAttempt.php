@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
-namespace Plugins\\Modules\\Phonetics\\Models;
-use Illuminate\\Database\\Eloquent\\Model;
+namespace Plugins\Modules\Phonetics\Models;
+use Illuminate\Database\Eloquent\Model;
 final class PhoneticExamAttempt extends Model
 {
     protected $table='phonetic_exam_attempts';
