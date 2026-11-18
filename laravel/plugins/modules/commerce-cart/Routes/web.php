@@ -5,6 +5,15 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Route;
 use Plugins\Modules\CommerceCart\Http\Controllers\CommerceCartController;
 
+Route::middleware(['web', 'installed', 'auth', 'plugin:commerce-cart', 'permission:commerce.orders.manage'])
+    ->prefix('admin/commerce')
+    ->name('plugins.commerce_cart.admin.')
+    ->group(function (): void {
+        Route::get('/sellables', [CommerceCartController::class, 'sellables'])->name('sellables');
+        Route::post('/sellables', [CommerceCartController::class, 'storeSellable'])->name('sellables.store');
+        Route::patch('/sellables/{sellable}/toggle', [CommerceCartController::class, 'toggleSellable'])->name('sellables.toggle');
+    });
+
 Route::middleware(['web', 'installed', 'auth', 'plugin:commerce-cart'])
     ->prefix('cart')
     ->name('plugins.commerce_cart.')
