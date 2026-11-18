@@ -9,8 +9,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
-use App\Models\User;
-use Plugins\Modules\ReferralIncome\Services\ReferralIncomeService;
 use RuntimeException;
 
 class PaymentSettlementService
@@ -32,6 +30,12 @@ class PaymentSettlementService
             $lockedTx = PaymentTransaction::query()->where('id', $transaction->id)->lockForUpdate()->firstOrFail();
             if ($lockedTx->status === 'settled') {
                 return $lockedTx;
+            }
+
+            // A verified late callback must never resurrect a fully refunded
+            // transaction or credit its invoice a second time.
+            if ($lockedTx->status === 'refunded') {
+                throw new RuntimeException('A refunded transaction cannot be settled again.');
             }
 
             $invoice = FeeInvoice::query()->where('id', $lockedTx->invoice_id)->lockForUpdate()->firstOrFail();
@@ -59,27 +63,6 @@ class PaymentSettlementService
                     ->where('invoice_id', $invoice->id)
                     ->where('status', 'pending')
                     ->update(['status' => 'active', 'updated_at' => now()]);
-            }
-
-            if ($newPaid >= (float) $invoice->net_amount
-                && app(\App\Core\Plugins\PluginManager::class)->isEnabled('referral-income')
-                && Schema::hasTable('commerce_orders')) {
-                $order = DB::table('commerce_orders')->where('invoice_id', $invoice->id)->lockForUpdate()->first();
-                if ($order) {
-                    $orderUpdates = ['status' => 'completed', 'payment_status' => 'paid', 'updated_at' => now()];
-                    if (Schema::hasColumn('commerce_orders', 'paid_at')) $orderUpdates['paid_at'] = now();
-                    DB::table('commerce_orders')->where('id', $order->id)->update($orderUpdates);
-                    $buyer = User::query()->find((int) $order->user_id);
-                    if ($buyer) {
-                        app(ReferralIncomeService::class)->recordSettledPurchase(
-                            $buyer,
-                            'commerce_order',
-                            (string) $order->id,
-                            (float) $invoice->net_amount,
-                            (string) $invoice->currency
-                        );
-                    }
-                }
             }
 
             $this->audit->log('payment.settled', 'payment_transaction', (string) $lockedTx->id, [
