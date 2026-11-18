@@ -124,4 +124,39 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
   $this->assertDatabaseHas('alom_english_center_phonetic_entries',['id'=>$entry->id,'word'=>'ship']);
  }
 
+
+ public function test_admin_can_assign_words_by_course_lesson_and_create_server_graded_exams():void{
+  $this->markSystemInstalled();
+  $this->activatePlugins(['course-management','phonetics']);
+  $admin=$this->createUserWithRole('admin');
+  $student=$this->createUserWithRole('student');
+  $categoryId=DB::table('course_categories')->insertGetId(['name'=>'General English','slug'=>'general-english','description'=>null,'color'=>'blue','is_active'=>true,'created_at'=>now(),'updated_at'=>now()]);
+  $courseId=DB::table('courses')->insertGetId(['code'=>'VOCAB-001','branch_id'=>null,'category_id'=>$categoryId,'title'=>'Vocabulary Starter','category'=>'General English','slug'=>'vocabulary-starter','description'=>'Course for vocabulary tests','price'=>0,'status'=>'published','created_at'=>now(),'updated_at'=>now()]);
+  $lessonId=DB::table('course_lessons')->insertGetId(['course_id'=>$courseId,'title'=>'Lesson One','content'=>null,'sort_order'=>1,'created_at'=>now(),'updated_at'=>now()]);
+  DB::table('enrollments')->insert(['user_id'=>$student->id,'course_id'=>$courseId,'branch_id'=>null,'status'=>'active','created_at'=>now(),'updated_at'=>now()]);
+  $word=PhoneticEntry::query()->create(['word'=>'aec-vocabulary-test','category'=>'rhoticity','uk_ipa'=>'/ˈtest/','us_ipa'=>'/ˈtɛst/','is_active'=>true,'sort_order'=>500]);
+  $this->actingAs($admin)->post('/admin/phonetics/learning/assignments',[
+   'course_ref'=>(string)$courseId,'course_category_ref'=>(string)$categoryId,'lesson_ref'=>(string)$lessonId,
+   'word_id'=>$word->id,'audience'=>'free','is_required'=>1,
+  ])->assertSessionHas('status');
+  $this->assertDatabaseHas('phonetic_learning_assignments',['course_ref'=>(string)$courseId,'lesson_ref'=>(string)$lessonId,'word_id'=>$word->id,'audience'=>'free']);
+  $this->actingAs($admin)->post('/admin/phonetics/learning/exams',[
+   'title'=>'Lesson One Vocabulary Exam','description'=>'Test the assigned words','course_ref'=>(string)$courseId,
+   'course_category_ref'=>(string)$categoryId,'lesson_ref'=>(string)$lessonId,'audience'=>'free',
+   'duration_minutes'=>10,'pass_percentage'=>60,'max_attempts'=>2,'question_count'=>1,
+   'word_ids'=>[$word->id],'shuffle_questions'=>1,'shuffle_options'=>1,'show_result_immediately'=>1,'status'=>'published',
+  ])->assertSessionHas('status');
+  $exam=DB::table('phonetic_exams')->where('slug','lesson-one-vocabulary-exam')->first();
+  $this->assertNotNull($exam);
+  $this->assertDatabaseHas('phonetic_exam_questions',['exam_id'=>$exam->id,'word_id'=>$word->id]);
+  $this->actingAs($student)->get('/courses/vocabulary-starter/phonetics-learning?lesson='.$lessonId)->assertOk()->assertSee('aec-vocabulary-test')->assertSee('Lesson One Vocabulary Exam');
+  $this->actingAs($student)->get('/courses/vocabulary-starter/phonetics-learning/exams/lesson-one-vocabulary-exam?lesson='.$lessonId)->assertOk();
+  $attempt=DB::table('phonetic_exam_attempts')->where('exam_id',$exam->id)->where('user_id',$student->id)->first();
+  $question=DB::table('phonetic_exam_questions')->where('exam_id',$exam->id)->first();
+  $this->actingAs($student)->post('/courses/vocabulary-starter/phonetics-learning/exams/lesson-one-vocabulary-exam/attempts/'.$attempt->id.'?lesson='.$lessonId,[
+   'answers'=>[$question->id=>$question->answer_key],
+  ])->assertOk()->assertSee('Congratulations');
+  $this->assertDatabaseHas('phonetic_exam_attempts',['id'=>$attempt->id,'status'=>'submitted','passed'=>true]);
+ }
+
 }
