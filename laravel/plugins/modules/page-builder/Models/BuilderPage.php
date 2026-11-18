@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Plugins\Modules\PageBuilder\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class BuilderPage extends Model
@@ -23,6 +24,11 @@ class BuilderPage extends Model
         'seo_description',
         'is_published',
     ];
+
+    public function revisions(): HasMany
+    {
+        return $this->hasMany(BuilderPageRevision::class, 'builder_page_id')->orderByDesc('version');
+    }
 
     protected $casts = [
         'blocks_json' => 'array',
