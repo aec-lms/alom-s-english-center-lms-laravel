@@ -25,6 +25,7 @@ use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\InstallerController;
 use App\Http\Controllers\PublicHomeController;
 use App\Http\Controllers\PortalController;
+use App\Http\Controllers\ProfileSettingsController;
 use Illuminate\Support\Facades\Route;
 
 // Browser-based Fresh Installer (permanently locked after installation)
@@ -59,6 +60,7 @@ Route::middleware('installed')->group(function (): void {
     Route::get('/refund-policy', [PublicHomeController::class, 'legalPage'])->defaults('slug', 'refund-policy')->name('public.refund');
     Route::get('/profile', [PublicHomeController::class, 'profile'])->name('public.profile' );
     Route::get('/dashboard', [PortalController::class, 'index'])->middleware('auth')->name('portal.dashboard');
+    Route::get('/u/{username}', [ProfileSettingsController::class, 'showPublic'])->where('username', '[A-Za-z0-9_]{3,40}')->name('profile.public');
     Route::middleware('auth')->prefix('profile/settings')->name('profile.settings')->group(function (): void {
         Route::get('/', [ProfileSettingsController::class, 'edit'])->name('edit');
         Route::put('/', [ProfileSettingsController::class, 'update'])->name('update');

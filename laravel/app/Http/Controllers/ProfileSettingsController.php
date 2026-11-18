@@ -17,6 +17,16 @@ class ProfileSettingsController extends Controller
         'x', 'whatsapp', 'telegram', 'github',
     ];
 
+    public function showPublic(string $username): View
+    {
+        $user = \App\Models\User::query()
+            ->where('username', strtolower($username))
+            ->where('profile_is_public', true)
+            ->firstOrFail();
+
+        return view('profile.public', ['profile' => $user]);
+    }
+
     public function edit(Request $request): View
     {
         return view('profile.settings', ['user' => $request->user()]);
@@ -26,6 +36,10 @@ class ProfileSettingsController extends Controller
     {
         $user = $request->user();
         abort_unless($user, 401);
+
+        if (is_string($request->input('username'))) {
+            $request->merge(['username' => strtolower(trim($request->input('username')))]);
+        }
 
         $validated = $request->validate([
             'username' => [
@@ -42,15 +56,15 @@ class ProfileSettingsController extends Controller
             'avatar' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:3072'],
             'cover' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
             'social_links' => ['nullable', 'array'],
-            'social_links.facebook' => ['nullable', 'url', 'max:2048'],
-            'social_links.instagram' => ['nullable', 'url', 'max:2048'],
-            'social_links.youtube' => ['nullable', 'url', 'max:2048'],
-            'social_links.linkedin' => ['nullable', 'url', 'max:2048'],
-            'social_links.tiktok' => ['nullable', 'url', 'max:2048'],
-            'social_links.x' => ['nullable', 'url', 'max:2048'],
-            'social_links.whatsapp' => ['nullable', 'url', 'max:2048'],
-            'social_links.telegram' => ['nullable', 'url', 'max:2048'],
-            'social_links.github' => ['nullable', 'url', 'max:2048'],
+            'social_links.facebook' => ['nullable', 'url', 'regex:/^https?:\\/\\//i', 'max:2048'],
+            'social_links.instagram' => ['nullable', 'url', 'regex:/^https?:\\/\\//i', 'max:2048'],
+            'social_links.youtube' => ['nullable', 'url', 'regex:/^https?:\\/\\//i', 'max:2048'],
+            'social_links.linkedin' => ['nullable', 'url', 'regex:/^https?:\\/\\//i', 'max:2048'],
+            'social_links.tiktok' => ['nullable', 'url', 'regex:/^https?:\\/\\//i', 'max:2048'],
+            'social_links.x' => ['nullable', 'url', 'regex:/^https?:\\/\\//i', 'max:2048'],
+            'social_links.whatsapp' => ['nullable', 'url', 'regex:/^https?:\\/\\//i', 'max:2048'],
+            'social_links.telegram' => ['nullable', 'url', 'regex:/^https?:\\/\\//i', 'max:2048'],
+            'social_links.github' => ['nullable', 'url', 'regex:/^https?:\\/\\//i', 'max:2048'],
         ]);
 
         $user->username = isset($validated['username']) && $validated['username'] !== ''

@@ -24,16 +24,6 @@ class User extends Authenticatable
         'branch_id',
         'is_active',
         'email_verified_at',
-        'username',
-        'display_name',
-        'avatar_path',
-        'cover_path',
-        'headline',
-        'bio',
-        'location',
-        'website',
-        'social_links',
-        'profile_is_public',
     ];
 
     protected $hidden = [
