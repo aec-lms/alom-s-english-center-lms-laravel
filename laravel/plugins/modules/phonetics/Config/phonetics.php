@@ -41,6 +41,13 @@ return [
             'title' => 'name',
             'course_title' => 'course_title',
         ],
+        'batch_memberships' => [
+            'table' => env('PHONETICS_BATCH_MEMBERSHIPS_TABLE', 'batch_students'),
+            'user_id' => 'user_id',
+            'batch_id' => 'batch_id',
+            'active_column' => 'status',
+            'active_value' => 'active',
+        ],
         'enrollments' => [
             'table' => env('PHONETICS_ENROLLMENTS_TABLE', 'enrollments'),
             'user_id' => 'user_id',
