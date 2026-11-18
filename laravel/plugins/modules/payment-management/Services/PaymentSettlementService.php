@@ -77,6 +77,19 @@ class PaymentSettlementService
                             'created_at' => now(),
                             'updated_at' => now(),
                         ]);
+                        if ($orderItem->item_type === 'mock_test' && $orderItem->item_id
+                            && Schema::hasTable('learn_earn_exam_access')) {
+                            DB::table('learn_earn_exam_access')->updateOrInsert(
+                                ['exam_id' => $orderItem->item_id, 'user_id' => $order->user_id],
+                                [
+                                    'status' => 'granted',
+                                    'payment_reference' => $order->order_number,
+                                    'granted_at' => now(),
+                                    'created_at' => now(),
+                                    'updated_at' => now(),
+                                ]
+                            );
+                        }
                         if ($orderItem->item_type === 'ebook' && $orderItem->item_id
                             && Schema::hasTable('storefront_item_access')) {
                             DB::table('storefront_item_access')->insertOrIgnore([
