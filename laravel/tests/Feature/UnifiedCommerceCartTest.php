@@ -12,7 +12,7 @@ final class UnifiedCommerceCartTest extends TestCase
     public function test_student_can_add_subscription_and_live_class_pass_to_one_cart_using_server_prices(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['commerce-cart']);
+        $this->activatePlugins(['commerce-cart', 'course-management']);
         $student = $this->createUserWithRole('student');
 
         $subscriptionId = DB::table('commerce_sellables')->insertGetId([
