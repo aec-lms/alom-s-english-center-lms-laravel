@@ -95,6 +95,27 @@ class CourseCouponServiceTest extends TestCase
         }
     }
 
+    public function test_gift_only_coupon_is_rejected_for_regular_cart_and_allowed_for_gift_checkout(): void
+    {
+        $student = $this->createUserWithRole('student');
+        $coupon = $this->coupon(['gift_only' => true]);
+        $service = new CourseCouponService();
+
+        try {
+            $service->reserve($coupon->code, (int) $student->id, [601], 500);
+            $this->fail('Gift-only coupons must not apply to regular course purchases.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('coupon_code', $exception->errors());
+        }
+
+        $giftReservation = $service->reserve($coupon->code, (int) $student->id, [601], 500, true);
+        $this->assertSame($coupon->code, $giftReservation['code']);
+        $this->assertDatabaseHas('promo_coupon_redemptions', [
+            'reservation_key' => $giftReservation['reservation_key'],
+            'status' => 'reserved',
+        ]);
+    }
+
     public function test_releasing_a_reservation_frees_the_global_coupon_slot(): void
     {
         $first = $this->createUserWithRole('student');
@@ -129,6 +150,7 @@ class CourseCouponServiceTest extends TestCase
             'starts_at' => null,
             'applies_to_course_ids' => [],
             'first_purchase_only' => false,
+            'gift_only' => false,
         ], $overrides));
     }
 }
