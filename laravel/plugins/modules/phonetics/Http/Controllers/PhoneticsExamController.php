@@ -24,6 +24,7 @@ final class PhoneticsExamController extends Controller
         $setting = PhoneticSetting::current();
         abort_unless($setting->enabled, 404);
         $course = $this->catalog->course($courseSlug);
+        $this->catalog->assertCourseAvailable($course);
         $courseRef = $this->catalog->courseId($course);
         if ($setting->require_course_enrollment) {
             $this->catalog->assertAccess($request->user(), $courseRef);
