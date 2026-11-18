@@ -51,6 +51,9 @@
             <label class="text-sm font-semibold">Pass mark (%)<input type="number" name="pass_percentage" min="1" max="100" value="60" class="mt-1 w-full rounded border p-2"></label>
             <label class="text-sm font-semibold">Maximum attempts (0 = unlimited)<input type="number" name="max_attempts" min="0" max="50" value="0" class="mt-1 w-full rounded border p-2"></label>
             <label class="text-sm font-semibold">Number of questions<input type="number" name="question_count" min="1" max="100" value="10" class="mt-1 w-full rounded border p-2"></label>
+            <label class="text-sm font-semibold">Question type<select name="question_type" class="mt-1 w-full rounded border p-2"><option value="identify-ipa">Choose the correct IPA</option><option value="identify-accent">Identify British or American accent</option></select></label>
+            <label class="text-sm font-semibold">Available from<input type="datetime-local" name="available_from" class="mt-1 w-full rounded border p-2"></label>
+            <label class="text-sm font-semibold">Available until<input type="datetime-local" name="available_until" class="mt-1 w-full rounded border p-2"></label>
             <label class="text-sm font-semibold md:col-span-3">Choose vocabulary words (select at least the question count)
                 <select name="word_ids[]" multiple required size="8" class="mt-1 w-full rounded border p-2">@foreach($words as $word)<option value="{{ $word->id }}">{{ $word->word }} — {{ $word->category }} — {{ $word->uk_ipa }} / {{ $word->us_ipa }}</option>@endforeach</select>
             </label>
