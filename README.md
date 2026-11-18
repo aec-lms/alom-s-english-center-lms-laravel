@@ -65,3 +65,8 @@ See [Production backup requirements and restore rehearsal](docs/PRODUCTION-BACKU
 - [External staging release gates](docs/EXTERNAL-STAGING-REHEARSAL.md)
 - [Core update and rollback rehearsal](docs/CORE-UPGRADE-ROLLBACK-REHEARSAL.md)
 - [Production backup and restore rehearsal](docs/PRODUCTION-BACKUP-RESTORE.md)
+
+
+## Disaster recovery and encrypted off-site backups
+
+See [Disaster recovery: automated encrypted off-site backups](docs/DISASTER-RECOVERY-OFFSITE-BACKUPS.md) for S3-compatible off-site sync, cPanel scheduler setup, remote checksum verification, recovery objectives, and isolated restore drills. Off-site uploads require a separately provisioned private bucket and credentials; do not consider DR accepted until the first remote download verification and a full isolated restore drill pass.
