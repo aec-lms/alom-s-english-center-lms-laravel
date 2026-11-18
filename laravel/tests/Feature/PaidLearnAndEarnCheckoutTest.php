@@ -125,6 +125,56 @@ class PaidLearnAndEarnCheckoutTest extends TestCase
         $this->assertSame(1, DB::table('learn_earn_exam_access')
             ->where('exam_id', $exam->id)->where('user_id', $student->id)->count());
     }
+
+    public function test_missing_gateway_credentials_fail_checkout_without_creating_an_indefinite_risk_hold(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins([
+            'course-management',
+            'exam-management',
+            'learn-and-earn',
+            'universal-payment',
+            'gateway-sslcommerz',
+        ]);
+
+        $course = Course::query()->create([
+            'code' => 'LEARN-EARN-NO-GATEWAY',
+            'title' => 'Gateway Setup Course',
+            'slug' => 'gateway-setup-course',
+            'price' => 0,
+            'status' => 'published',
+        ]);
+        $exam = Exam::query()->create([
+            'course_id' => $course->id,
+            'title' => 'Gateway Setup Exam',
+            'duration_minutes' => 30,
+            'pass_marks' => 5,
+            'learn_earn_type' => 'paid',
+            'access_price' => 125,
+            'is_published' => true,
+        ]);
+        $student = $this->createUserWithRole('student');
+
+        $this->actingAs($student)
+            ->from("/learn-and-earn/exams/{$exam->id}")
+            ->post("/learn-and-earn/exams/{$exam->id}/checkout", [
+                'payer_contact' => '01700000000',
+            ])
+            ->assertRedirect("/learn-and-earn/exams/{$exam->id}")
+            ->assertSessionHasErrors('payment');
+
+        $this->assertDatabaseHas('universal_payment_transactions', [
+            'user_id' => $student->id,
+            'learn_earn_exam_id' => $exam->id,
+            'status' => 'failed',
+        ]);
+        $this->assertDatabaseMissing('universal_payment_transactions', [
+            'user_id' => $student->id,
+            'learn_earn_exam_id' => $exam->id,
+            'status' => 'risk_review',
+        ]);
+    }
+
     public function test_ambiguous_gateway_timeout_holds_exam_checkout_for_reconciliation_instead_of_allowing_double_payment(): void
     {
         $this->markSystemInstalled();
