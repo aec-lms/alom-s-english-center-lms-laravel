@@ -1,5 +1,7 @@
 <!doctype html>
-@php($rtl = in_array(substr(strtolower(str_replace('_', '-', app()->getLocale())), 0, 2), ['ar', 'fa', 'he', 'ur', 'ps', 'dv'], true))
+@php
+    $rtl = in_array(substr(strtolower(str_replace('_', '-', app()->getLocale())), 0, 2), ['ar', 'fa', 'he', 'ur', 'ps', 'dv'], true);
+@endphp
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}" dir="{{ $rtl ? 'rtl' : 'ltr' }}">
 <head>
     <meta charset="utf-8">
