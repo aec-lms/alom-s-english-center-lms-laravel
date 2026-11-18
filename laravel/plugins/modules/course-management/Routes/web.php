@@ -47,6 +47,24 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:course-management'])
             ->middleware('throttle:10,1')->name('leave');
     });
 
+Route::middleware(['web', 'installed', 'auth', 'plugin:course-management'])
+    ->prefix('student/course-commerce')
+    ->name('course-commerce.')
+    ->group(function (): void {
+        Route::get('/cart', [\Plugins\Modules\CourseManagement\Http\Controllers\CourseCommerceController::class, 'cart'])->name('cart');
+        Route::post('/cart/items/{course}', [\Plugins\Modules\CourseManagement\Http\Controllers\CourseCommerceController::class, 'add'])->whereNumber('course')->name('cart.add');
+        Route::delete('/cart/items/{item}', [\Plugins\Modules\CourseManagement\Http\Controllers\CourseCommerceController::class, 'remove'])->whereNumber('item')->name('cart.remove');
+        Route::post('/checkout', [\Plugins\Modules\CourseManagement\Http\Controllers\CourseCommerceController::class, 'checkout'])->middleware('throttle:10,1')->name('checkout');
+        Route::get('/gifts/redeem/{token}', [\Plugins\Modules\CourseManagement\Http\Controllers\CourseCommerceController::class, 'giftRedeemForm'])->where('token', '[A-Za-z0-9]{40,80}')->name('gifts.redeem-form');
+        Route::post('/gifts/redeem/{token}', [\Plugins\Modules\CourseManagement\Http\Controllers\CourseCommerceController::class, 'redeemGift'])->where('token', '[A-Za-z0-9]{40,80}')->middleware('throttle:5,1')->name('gifts.redeem');
+        Route::get('/vouchers/buy', [\Plugins\Modules\CourseManagement\Http\Controllers\CourseCommerceController::class, 'voucherForm'])->name('vouchers.form');
+        Route::post('/vouchers/buy', [\Plugins\Modules\CourseManagement\Http\Controllers\CourseCommerceController::class, 'purchaseVoucher'])->middleware('throttle:5,1')->name('vouchers.purchase');
+        Route::get('/vouchers/redeem/{token}', [\Plugins\Modules\CourseManagement\Http\Controllers\CourseCommerceController::class, 'voucherRedeemForm'])->where('token', '[A-Za-z0-9]{40,80}')->name('vouchers.redeem-form');
+        Route::post('/vouchers/redeem/{token}', [\Plugins\Modules\CourseManagement\Http\Controllers\CourseCommerceController::class, 'redeemVoucher'])->where('token', '[A-Za-z0-9]{40,80}')->middleware('throttle:5,1')->name('vouchers.redeem');
+        Route::get('/gifts/{course}/send', [\Plugins\Modules\CourseManagement\Http\Controllers\CourseCommerceController::class, 'giftForm'])->whereNumber('course')->name('gifts.form');
+        Route::post('/gifts/{course}', [\Plugins\Modules\CourseManagement\Http\Controllers\CourseCommerceController::class, 'gift'])->whereNumber('course')->middleware('throttle:5,1')->name('gifts.create');
+    });
+
 Route::middleware(['web', 'installed', 'auth', 'plugin:course-management'])->group(function (): void {
     Route::get('/my-learning/enrollments', [\Plugins\Modules\CourseManagement\Http\Controllers\EnrollmentController::class, 'my'])
         ->name('plugins.enrollments.my');

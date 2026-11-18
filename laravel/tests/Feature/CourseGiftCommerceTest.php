@@ -1,0 +1,368 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Feature;
+
+use App\Core\Plugins\PluginManager;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Plugins\Modules\CourseManagement\Models\Course;
+use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
+use Plugins\Modules\UniversalPayment\Services\StorefrontPaymentGatewayService;
+use Tests\TestCase;
+
+class CourseGiftCommerceTest extends TestCase
+{
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management', 'fees-management', 'marketing-management', 'universal-payment']);
+    }
+
+    public function test_paid_course_gift_can_only_be_redeemed_by_recipient_email_and_only_once(): void
+    {
+        $sender = $this->createUserWithRole('student');
+        $recipient = $this->createUserWithRole('student');
+        $recipient->update(['email' => 'gift-recipient@example.test']);
+        $course = Course::query()->create([
+            'code' => 'GIFT-IELTS-001',
+            'title' => 'Gifted IELTS Course',
+            'slug' => 'gifted-ielts-course',
+            'price' => 1500,
+            'status' => 'published',
+        ]);
+        $token = str_repeat('G', 64);
+        $giftId = DB::table('course_gifts')->insertGetId([
+            'sender_user_id' => $sender->id,
+            'recipient_user_id' => null,
+            'recipient_email' => $recipient->email,
+            'course_id' => $course->id,
+            'invoice_id' => null,
+            'redeem_token_hash' => hash('sha256', $token),
+            'redeem_token_encrypted' => encrypt($token),
+            'status' => 'paid',
+            'currency' => 'BDT',
+            'amount' => 1500,
+            'paid_at' => now(),
+            'expires_at' => now()->addDays(30),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $wrongRecipient = $this->createUserWithRole('student');
+        $this->actingAs($wrongRecipient)->post('/student/course-commerce/gifts/redeem/' . $token)->assertForbidden();
+
+        $this->actingAs($recipient)->post('/student/course-commerce/gifts/redeem/' . $token)
+            ->assertRedirect(route('plugins.enrollments.my'));
+        $this->assertDatabaseHas('course_gifts', ['id' => $giftId, 'status' => 'redeemed', 'recipient_user_id' => $recipient->id]);
+        $this->assertDatabaseHas('enrollments', ['user_id' => $recipient->id, 'course_id' => $course->id, 'status' => 'active']);
+
+        $this->actingAs($recipient)->post('/student/course-commerce/gifts/redeem/' . $token)->assertStatus(409);
+        $this->assertSame(1, DB::table('enrollments')->where('user_id', $recipient->id)->where('course_id', $course->id)->count());
+    }
+
+    public function test_paid_gift_voucher_is_credited_to_recipient_wallet_exactly_once(): void
+    {
+        $sender = $this->createUserWithRole('student');
+        $recipient = $this->createUserWithRole('student');
+        $recipient->update(['email' => 'voucher-recipient@example.test']);
+        $token = str_repeat('V', 64);
+        $voucherId = DB::table('course_gift_vouchers')->insertGetId([
+            'sender_user_id' => $sender->id,
+            'recipient_email' => $recipient->email,
+            'recipient_name' => 'Voucher Recipient',
+            'message' => 'Enjoy your learning!',
+            'redeem_token_hash' => hash('sha256', $token),
+            'redeem_token_encrypted' => encrypt($token),
+            'currency' => 'BDT',
+            'amount' => 1200,
+            'remaining_amount' => 1200,
+            'status' => 'paid',
+            'paid_at' => now(),
+            'expires_at' => now()->addDays(30),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $wrongRecipient = $this->createUserWithRole('student');
+        $this->actingAs($wrongRecipient)->post('/student/course-commerce/vouchers/redeem/' . $token)->assertForbidden();
+
+        $this->actingAs($recipient)->post('/student/course-commerce/vouchers/redeem/' . $token)
+            ->assertRedirect(route('course-commerce.cart'));
+        $this->assertDatabaseHas('course_gift_vouchers', [
+            'id' => $voucherId,
+            'status' => 'redeemed',
+            'recipient_user_id' => $recipient->id,
+            'remaining_amount' => 0,
+        ]);
+        $this->assertDatabaseHas('course_gift_wallets', [
+            'user_id' => $recipient->id,
+            'currency' => 'BDT',
+            'balance' => 1200,
+        ]);
+        $this->assertDatabaseHas('course_gift_wallet_transactions', [
+            'voucher_id' => $voucherId,
+            'user_id' => $recipient->id,
+            'type' => 'credit',
+            'status' => 'completed',
+            'reference' => 'gift-voucher-credit:' . $voucherId,
+        ]);
+        $this->assertDatabaseHas('course_gift_voucher_redemptions', [
+            'voucher_id' => $voucherId,
+            'user_id' => $recipient->id,
+            'course_id' => null,
+            'amount' => 1200,
+        ]);
+
+        $this->actingAs($recipient)->post('/student/course-commerce/vouchers/redeem/' . $token)->assertStatus(409);
+        $this->assertSame(1, DB::table('course_gift_wallet_transactions')->where('reference', 'gift-voucher-credit:' . $voucherId)->count());
+    }
+    public function test_sslcommerz_course_cart_callback_preserves_order_metadata_and_activates_course_once(): void
+    {
+        $buyer = $this->createUserWithRole('student');
+        $course = Course::query()->create([
+            'code' => 'CALLBACK-COURSE-001',
+            'title' => 'Callback Verified Course',
+            'slug' => 'callback-verified-course',
+            'price' => 1000,
+            'status' => 'published',
+        ]);
+        app(PluginManager::class)->saveSettings('gateway-sslcommerz', [
+            'store_id' => 'test-store-id',
+            'store_password' => 'test-store-password',
+            'sandbox_mode' => '1',
+        ]);
+
+        $cartId = DB::table('course_carts')->insertGetId([
+            'user_id' => $buyer->id,
+            'status' => 'checkout_pending',
+            'currency' => 'BDT',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $orderId = DB::table('course_cart_orders')->insertGetId([
+            'cart_id' => $cartId,
+            'user_id' => $buyer->id,
+            'branch_id' => null,
+            'invoice_id' => null,
+            'payment_transaction_id' => null,
+            'coupon_id' => null,
+            'coupon_code' => null,
+            'coupon_reservation_key' => null,
+            'subtotal_amount' => 1000,
+            'discount_amount' => 0,
+            'net_amount' => 1000,
+            'wallet_credit_amount' => 0,
+            'wallet_reservation_key' => null,
+            'currency' => 'BDT',
+            'status' => 'awaiting_payment',
+            'paid_at' => null,
+            'expires_at' => now()->addMinutes(30),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('course_cart_order_items')->insert([
+            'order_id' => $orderId,
+            'course_id' => $course->id,
+            'course_title' => $course->title,
+            'unit_price' => 1000,
+            'position' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $transaction = UniversalPaymentTransaction::query()->create([
+            'reference' => 'COURSE-CALLBACK-' . $buyer->id,
+            'payer_name' => $buyer->name,
+            'payer_contact' => '01712345678',
+            'item_title' => 'Course Cart Order #' . $orderId,
+            'gateway' => 'sslcommerz',
+            'currency' => 'BDT',
+            'amount' => 1000,
+            'external_trx_id' => null,
+            'user_id' => $buyer->id,
+            'branch_id' => null,
+            'status' => 'pending',
+            'notes' => json_encode(['purpose' => 'course_cart', 'course_cart_order_id' => $orderId], JSON_THROW_ON_ERROR),
+        ]);
+        DB::table('course_cart_orders')->where('id', $orderId)->update([
+            'payment_transaction_id' => $transaction->id,
+            'updated_at' => now(),
+        ]);
+
+        Http::fake([
+            'https://sandbox.sslcommerz.com/gwprocess/v4/api.php' => Http::response([
+                'status' => 'SUCCESS',
+                'GatewayPageURL' => 'https://sandbox.sslcommerz.com/gateway/checkout',
+                'sessionkey' => 'course-session-key',
+            ], 200),
+            'https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php*' => Http::response([
+                'status' => 'VALID',
+                'tran_id' => $transaction->reference,
+                'val_id' => 'COURSE-VALIDATION-1',
+                'currency' => 'BDT',
+                'amount' => '1000.00',
+                'risk_level' => '0',
+                'bank_tran_id' => 'BANK-COURSE-1',
+            ], 200),
+        ]);
+
+        $gateway = app(StorefrontPaymentGatewayService::class);
+        $checkoutUrl = $gateway->initiateSslcommerz(
+            $transaction,
+            (object) ['title' => 'Callback Verified Course'],
+            $buyer,
+            '01712345678',
+            ['purpose' => 'course_cart', 'course_cart_order_id' => $orderId]
+        );
+        $this->assertSame('https://sandbox.sslcommerz.com/gateway/checkout', $checkoutUrl);
+        $notes = json_decode((string) $transaction->fresh()->notes, true);
+        $this->assertSame('course_cart', $notes['purpose'] ?? null);
+        $this->assertSame($orderId, (int) ($notes['course_cart_order_id'] ?? 0));
+
+        $gateway->verifySslcommerz([
+            'tran_id' => $transaction->reference,
+            'val_id' => 'COURSE-VALIDATION-1',
+        ]);
+        $gateway->verifySslcommerz([
+            'tran_id' => $transaction->reference,
+            'val_id' => 'COURSE-VALIDATION-1',
+        ]);
+
+        $this->assertDatabaseHas('universal_payment_transactions', [
+            'id' => $transaction->id,
+            'status' => 'verified',
+            'external_trx_id' => 'BANK-COURSE-1',
+        ]);
+        $this->assertDatabaseHas('course_cart_orders', [
+            'id' => $orderId,
+            'status' => 'paid',
+        ]);
+        $this->assertDatabaseHas('course_carts', ['id' => $cartId, 'status' => 'completed']);
+        $this->assertDatabaseHas('enrollments', [
+            'user_id' => $buyer->id,
+            'course_id' => $course->id,
+            'status' => 'active',
+        ]);
+        $this->assertSame(1, DB::table('enrollments')->where('user_id', $buyer->id)->where('course_id', $course->id)->count());
+        $this->assertSame(1, DB::table('fee_invoices')->where('invoice_number', 'like', 'CART-%')->count());
+    }
+
+    public function test_definitive_gateway_rejections_mark_course_gifts_and_vouchers_as_payment_failed(): void
+    {
+        $this->activatePlugins(['course-management', 'fees-management', 'marketing-management', 'universal-payment', 'gateway-sslcommerz']);
+        $sender = $this->createUserWithRole('student');
+        $course = Course::query()->create([
+            'code' => 'FAILED-GIFT-001',
+            'title' => 'Failed Gift Checkout Course',
+            'slug' => 'failed-gift-checkout-course',
+            'price' => 1500,
+            'status' => 'published',
+        ]);
+        app(PluginManager::class)->saveSettings('gateway-sslcommerz', [
+            'store_id' => 'test-store-id',
+            'store_password' => 'test-store-password',
+            'sandbox_mode' => '1',
+        ]);
+        Http::fake([
+            'https://sandbox.sslcommerz.com/gwprocess/v4/api.php' => Http::response([
+                'status' => 'FAILED',
+                'failedreason' => 'Test provider rejection',
+            ], 200),
+        ]);
+
+        $this->actingAs($sender)->from('/courses/' . $course->slug)
+            ->post('/student/course-commerce/gifts/' . $course->id, [
+                'recipient_email' => 'gift-failure-recipient@example.test',
+                'recipient_name' => 'Gift Recipient',
+                'payer_contact' => '01712345678',
+            ])->assertRedirect('/courses/' . $course->slug)->assertSessionHasErrors('gift');
+
+        $this->assertDatabaseHas('course_gifts', [
+            'sender_user_id' => $sender->id,
+            'recipient_email' => 'gift-failure-recipient@example.test',
+            'status' => 'payment_failed',
+        ]);
+        $this->assertDatabaseHas('universal_payment_transactions', [
+            'user_id' => $sender->id,
+            'status' => 'failed',
+            'gateway' => 'sslcommerz',
+        ]);
+
+        $this->actingAs($sender)->from('/student/course-commerce/vouchers/buy')
+            ->post('/student/course-commerce/vouchers/buy', [
+                'recipient_email' => 'voucher-failure-recipient@example.test',
+                'recipient_name' => 'Voucher Recipient',
+                'amount' => 1200,
+                'payer_contact' => '01712345678',
+            ])->assertRedirect('/student/course-commerce/vouchers/buy')->assertSessionHasErrors('voucher');
+
+        $this->assertDatabaseHas('course_gift_vouchers', [
+            'sender_user_id' => $sender->id,
+            'recipient_email' => 'voucher-failure-recipient@example.test',
+            'status' => 'payment_failed',
+        ]);
+        $this->assertSame(2, DB::table('universal_payment_transactions')
+            ->where('user_id', $sender->id)->where('gateway', 'sslcommerz')->where('status', 'failed')->count());
+        Http::assertSentCount(2);
+    }
+
+    public function test_student_cannot_start_a_second_course_checkout_while_an_order_is_unresolved(): void
+    {
+        $this->activatePlugins(['course-management', 'fees-management', 'marketing-management', 'universal-payment', 'gateway-sslcommerz']);
+        $buyer = $this->createUserWithRole('student');
+        $course = Course::query()->create([
+            'code' => 'DUPLICATE-CHECKOUT-001',
+            'title' => 'Duplicate Checkout Guard Course',
+            'slug' => 'duplicate-checkout-guard-course',
+            'price' => 1000,
+            'status' => 'published',
+        ]);
+        $pendingCartId = DB::table('course_carts')->insertGetId([
+            'user_id' => $buyer->id, 'status' => 'checkout_pending', 'currency' => 'BDT',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $activeCartId = DB::table('course_carts')->insertGetId([
+            'user_id' => $buyer->id, 'status' => 'active', 'currency' => 'BDT',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('course_cart_items')->insert([
+            'cart_id' => $activeCartId, 'course_id' => $course->id, 'unit_price' => 1000,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('course_cart_orders')->insert([
+            'cart_id' => $pendingCartId,
+            'user_id' => $buyer->id,
+            'branch_id' => null,
+            'invoice_id' => null,
+            'payment_transaction_id' => null,
+            'coupon_id' => null,
+            'coupon_code' => null,
+            'coupon_reservation_key' => null,
+            'subtotal_amount' => 1000,
+            'discount_amount' => 0,
+            'net_amount' => 1000,
+            'wallet_credit_amount' => 0,
+            'wallet_reservation_key' => null,
+            'currency' => 'BDT',
+            'status' => 'awaiting_payment',
+            'paid_at' => null,
+            'expires_at' => now()->addMinutes(30),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($buyer)->post('/student/course-commerce/cart/items/' . $course->id)
+            ->assertStatus(409);
+        $this->actingAs($buyer)->post('/student/course-commerce/checkout', [
+            'payer_contact' => '01712345678',
+        ])->assertStatus(409);
+
+        $this->assertDatabaseCount('course_cart_orders', 1);
+        $this->assertDatabaseHas('course_carts', ['id' => $activeCartId, 'status' => 'active']);
+        $this->assertDatabaseCount('universal_payment_transactions', 0);
+    }
+
+}

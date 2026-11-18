@@ -13,9 +13,6 @@
                     <span aria-hidden="true">✦</span> Customize my profile
                 </a>
             </div>
-            @if (in_array($role, ['student', 'teacher'], true) && Route::has('plugins.referral_income.member.dashboard'))
-                <a href="{{ route('plugins.referral_income.member.dashboard') }}" class="rounded-xl border border-emerald-200/40 bg-emerald-400/15 px-4 py-2.5 text-sm font-bold text-emerald-100 backdrop-blur transition hover:bg-emerald-400/25">Referral Income</a>
-            @endif
             @if (in_array($role, ['student', 'guardian']) && Route::has('plugins.attendance.portal'))
                 <a href="{{ route('plugins.attendance.portal') }}" class="rounded-xl border border-white/25 bg-white/10 px-4 py-2.5 text-sm font-bold text-white backdrop-blur transition hover:bg-white/20">My Attendance</a>
             @endif
@@ -72,8 +69,8 @@
                                          aria-valuenow="{{ $enrollment->progress_percent }}"
                                          aria-valuetext="{{ __(':completed of :total lessons completed', ['completed' => $enrollment->completed_lessons, 'total' => $enrollment->total_lessons]) }}"
                                          class="h-2 overflow-hidden rounded-full bg-slate-100">
-                                        <div data-progress-fill class="h-full rounded-full bg-gradient-to-r from-sky-600 to-blue-600"
-                                             style="width: {{ $enrollment->progress_percent }}%;"></div>
+                                        <div data-progress-fill data-progress-target="{{ max(0, min(100, (int) $enrollment->progress_percent)) }}" class="h-full rounded-full bg-gradient-to-r from-sky-600 via-blue-600 to-cyan-500 shadow-[0_0_10px_rgba(14,165,233,.22)]"
+                                             style="width: 0%;"></div>
                                     </div>
                                     <p class="mt-1 text-[11px] text-slate-500">{{ $enrollment->completed_lessons }} / {{ $enrollment->total_lessons }} {{ __('lessons completed') }}</p>
                                 </div>
@@ -191,4 +188,53 @@
         @endif
     </main>
 </div>
+<style>
+    [data-progress-fill] {
+        width: 0;
+        transition: width 1.15s cubic-bezier(.22,1,.36,1);
+        position: relative;
+        overflow: hidden;
+    }
+    [data-progress-fill]::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(105deg, transparent 20%, rgba(255,255,255,.42) 48%, transparent 76%);
+        transform: translateX(-110%);
+        animation: student-progress-sheen 2.4s ease-in-out .8s infinite;
+    }
+    @keyframes student-progress-sheen {
+        0%, 35% { transform: translateX(-110%); }
+        75%, 100% { transform: translateX(110%); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        [data-progress-fill] { transition: none !important; }
+        [data-progress-fill]::after { animation: none !important; }
+    }
+</style>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const bars = document.querySelectorAll('[data-progress-fill][data-progress-target]');
+    const animateBar = (bar) => {
+        const target = Math.max(0, Math.min(100, Number(bar.dataset.progressTarget) || 0));
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            bar.style.width = target + '%';
+            return;
+        }
+        requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.width = target + '%'; }));
+    };
+    if (!('IntersectionObserver' in window)) {
+        bars.forEach(animateBar);
+        return;
+    }
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+            if (!entry.isIntersecting) return;
+            animateBar(entry.target);
+            observer.unobserve(entry.target);
+        });
+    }, { threshold: 0.2 });
+    bars.forEach((bar) => observer.observe(bar));
+});
+</script>
 @endsection
