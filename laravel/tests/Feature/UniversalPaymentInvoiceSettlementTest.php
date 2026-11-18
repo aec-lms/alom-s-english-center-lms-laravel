@@ -247,4 +247,65 @@ class UniversalPaymentInvoiceSettlementTest extends TestCase
         ]);
     }
 
+    public function test_manual_provider_reference_cannot_be_reused_across_different_invoices(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['student-management', 'fees-management', 'universal-payment']);
+
+        $studentUser = $this->createUserWithRole('student');
+        $firstInvoice = FeeInvoice::query()->create([
+            'invoice_number' => 'UPAY-DUP-A-' . $studentUser->id,
+            'payer_name' => $studentUser->name,
+            'payer_email' => $studentUser->email,
+            'subtotal_amount' => 500,
+            'discount_amount' => 0,
+            'net_amount' => 500,
+            'paid_amount' => 0,
+            'currency' => 'BDT',
+            'status' => 'unpaid',
+        ]);
+        $secondInvoice = FeeInvoice::query()->create([
+            'invoice_number' => 'UPAY-DUP-B-' . $studentUser->id,
+            'payer_name' => $studentUser->name,
+            'payer_email' => $studentUser->email,
+            'subtotal_amount' => 700,
+            'discount_amount' => 0,
+            'net_amount' => 700,
+            'paid_amount' => 0,
+            'currency' => 'BDT',
+            'status' => 'unpaid',
+        ]);
+
+        $this->actingAs($studentUser)->post('/universal-checkout', [
+            'payer_name' => $studentUser->name,
+            'payer_contact' => '01712345678',
+            'item_title' => 'First invoice',
+            'gateway' => 'bank_cash',
+            'external_trx_id' => 'BANK-REPLAY-001',
+            'fee_invoice_id' => $firstInvoice->id,
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        // Provider transaction IDs are normalized before claiming, so casing
+        // differences cannot be used to submit the same receipt twice.
+        $this->actingAs($studentUser)->post('/universal-checkout', [
+            'payer_name' => $studentUser->name,
+            'payer_contact' => '01712345678',
+            'item_title' => 'Second invoice',
+            'gateway' => 'bank_cash',
+            'external_trx_id' => 'bank-replay-001',
+            'fee_invoice_id' => $secondInvoice->id,
+        ])->assertSessionHasErrors('external_trx_id');
+
+        $this->assertDatabaseCount('universal_payment_transactions', 1);
+        $this->assertDatabaseCount('universal_payment_reference_claims', 1);
+        $this->assertDatabaseHas('fee_invoices', [
+            'id' => $firstInvoice->id,
+            'paid_amount' => 0,
+        ]);
+        $this->assertDatabaseHas('fee_invoices', [
+            'id' => $secondInvoice->id,
+            'paid_amount' => 0,
+        ]);
+    }
+
 }
