@@ -26,6 +26,10 @@
             <label class="block text-sm font-bold text-slate-700">Personal message (optional)
                 <textarea name="message" maxlength="1000" rows="3" class="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 font-normal">{{ old('message') }}</textarea>
             </label>
+            <label class="block text-sm font-bold text-slate-700">Gift coupon (optional)
+                <input name="coupon_code" maxlength="40" value="{{ old('coupon_code') }}" placeholder="Enter gift coupon code" class="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 font-normal uppercase">
+                <span class="mt-1 block text-xs font-normal text-slate-500">Only eligible active coupons can be applied. Discount is confirmed before secure payment.</span>
+            </label>
             <label class="block text-sm font-bold text-slate-700">Payer mobile number
                 <input name="payer_contact" required minlength="7" maxlength="40" value="{{ old('payer_contact', auth()->user()->phone) }}" placeholder="01XXXXXXXXX" class="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 font-normal">
             </label>
