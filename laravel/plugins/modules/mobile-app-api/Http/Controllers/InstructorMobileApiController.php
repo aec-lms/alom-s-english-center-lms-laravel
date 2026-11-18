@@ -43,12 +43,12 @@ class InstructorMobileApiController extends Controller
             ->join('users', 'users.id', '=', 'enrollments.user_id')
             ->where('enrollments.course_id', $course->id)
             ->whereIn('enrollments.status', ['active', 'completed'])
-            ->when($course->branch_id !== null, fn ($q) => $q->where('enrollments.branch_id', $course->branch_id))
+            ->where('enrollments.branch_id', $course->branch_id)
             ->when($actor->branch_id !== null, fn ($q) => $q->where('enrollments.branch_id', $actor->branch_id));
 
         if ($hasStudentDirectory) {
             $studentsQuery->join('students', 'students.user_id', '=', 'users.id')
-                ->when($course->branch_id !== null, fn ($q) => $q->where('students.branch_id', $course->branch_id))
+                ->where('students.branch_id', $course->branch_id)
                 ->when($actor->branch_id !== null, fn ($q) => $q->where('students.branch_id', $actor->branch_id))
                 ->when(Schema::hasColumn('students', 'deleted_at'), fn ($q) => $q->whereNull('students.deleted_at'));
         }
