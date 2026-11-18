@@ -392,7 +392,13 @@ class InstructorMobileApiController extends Controller
             'read_at' => $row->read_at,
             'is_read' => $row->read_at !== null,
         ]);
-        $unreadCount = $rows->getCollection()->whereNull('read_at')->count();
+        $unreadCount = DB::table('notices')
+            ->leftJoin('notice_reads', fn ($join) => $join->on('notice_reads.notice_id', '=', 'notices.id')->where('notice_reads.user_id', '=', $actor->id))
+            ->whereIn('notices.audience_role', ['all', 'teacher'])
+            ->where(fn ($q) => $q->whereNull('notices.branch_id')->orWhere('notices.branch_id', $actor->branch_id))
+            ->where(fn ($q) => $q->whereNull('notices.published_at')->orWhere('notices.published_at', '<=', now()))
+            ->whereNull('notice_reads.read_at')
+            ->count();
 
         return response()->json([
             'data' => $items,
