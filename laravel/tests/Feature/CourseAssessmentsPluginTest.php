@@ -102,7 +102,7 @@ class CourseAssessmentsPluginTest extends TestCase
 
         $this->get(route('plugins.course-assessments.student.take',$attemptId))
             ->assertOk()->assertSee('Choose the correct form of the verb.')
-            ->assertDontSee('goes')->assertDontSee('Third person singular takes');
+            ->assertDontSee('Third person singular takes')->assertDontSee('correct_option');
 
         $attemptQuestion=(int)DB::table('course_assessment_attempt_questions')->where('attempt_id',$attemptId)->value('id');
         $this->putJson(route('plugins.course-assessments.student.answer',[$attemptId,$attemptQuestion]),['selected_option'=>1])
@@ -135,7 +135,7 @@ class CourseAssessmentsPluginTest extends TestCase
 
         $this->actingAs($student)->from(route('plugins.course-assessments.student.index'))
             ->post(route('plugins.course-assessments.student.start',$set))
-            ->assertSessionHasErrors();
+            ->assertForbidden();
         $this->assertDatabaseCount('course_assessment_attempts',1);
     }
 }
