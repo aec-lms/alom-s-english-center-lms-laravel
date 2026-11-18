@@ -164,6 +164,30 @@ class AssignmentManagementPluginTest extends TestCase
             'branch_id' => $branchA,
         ]);
 
+        $studentB = $this->createUserWithRole('student', $branchB);
+        $otherBranchAssignment = DB::table('assignment_tasks')->insertGetId([
+            'branch_id' => $branchB,
+            'created_by' => $teacher->id,
+            'title' => 'Other branch assignment',
+            'instructions' => 'Private branch task.',
+            'max_score' => 10,
+            'status' => 'published',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $otherBranchSubmission = DB::table('assignment_submissions')->insertGetId([
+            'assignment_id' => $otherBranchAssignment,
+            'student_id' => $studentB->id,
+            'answer_text' => 'Branch B answer.',
+            'submitted_at' => now(),
+            'status' => 'submitted',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->actingAs($teacher)->post("/admin/assignments/submissions/{$otherBranchSubmission}/grade", [
+            'score' => 5,
+        ])->assertForbidden();
+
         $admin = $this->createUserWithRole('admin');
         $this->actingAs($admin)->post('/admin/assignments', $payload + ['branch_id' => 999999])
             ->assertStatus(422);
