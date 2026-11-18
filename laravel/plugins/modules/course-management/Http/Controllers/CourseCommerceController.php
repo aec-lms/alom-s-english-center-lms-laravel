@@ -58,7 +58,7 @@ class CourseCommerceController extends Controller
         $this->assertNoOpenBatch($courseId);
 
         abort_if(DB::table('enrollments')->where('user_id', $student->id)->where('course_id', $courseId)
-            ->whereIn('status', ['pending', 'active'])->exists(), 409, 'You already have a pending or active enrollment in this course.');
+            ->whereIn('status', ['pending', 'active', 'completed'])->exists(), 409, 'You already have a pending or active enrollment in this course.');
 
         DB::transaction(function () use ($student, $course): void {
             DB::table('users')->where('id', $student->id)->lockForUpdate()->first();
@@ -129,9 +129,10 @@ class CourseCommerceController extends Controller
 
             $branchIds = $courses->pluck('branch_id')->filter()->unique();
             abort_if($branchIds->count() > 1, 422, 'Courses from different branches cannot be purchased in one cart.');
-            $branchId = $branchIds->first() ?? $student->branch_id;
+            $assignedBranchId = $this->assignedBranchId($student);
+            $branchId = $branchIds->isNotEmpty() ? (int) $branchIds->first() : $assignedBranchId;
             if ($branchId !== null) {
-                abort_unless($student->branch_id !== null && (int) $branchId === (int) $student->branch_id, 403, 'Your cart contains a course outside your assigned branch.');
+                abort_unless($assignedBranchId !== null && $branchId === $assignedBranchId, 403, 'Your cart contains a course outside your assigned branch.');
             }
 
             foreach ($cartItems as $cartItem) {
@@ -340,8 +341,21 @@ class CourseCommerceController extends Controller
     private function assertCourseBranch($student, object $course): void
     {
         if ($course->branch_id !== null) {
-            abort_unless($student->branch_id !== null && (int) $student->branch_id === (int) $course->branch_id, 403, 'This course is outside your assigned branch.');
+            $assignedBranchId = $this->assignedBranchId($student);
+            abort_unless($assignedBranchId !== null && $assignedBranchId === (int) $course->branch_id, 403, 'This course is outside your assigned branch.');
         }
+    }
+
+    private function assignedBranchId($student): ?int
+    {
+        if ($this->plugins->isEnabled('student-management') && Schema::hasTable('students')) {
+            $profileBranch = DB::table('students')->where('user_id', $student->id)->value('branch_id');
+            if ($profileBranch !== null) {
+                return (int) $profileBranch;
+            }
+        }
+
+        return $student->branch_id !== null ? (int) $student->branch_id : null;
     }
 
     private function assertNoOpenBatch(int $courseId): void
