@@ -300,7 +300,7 @@ class CourseCommerceController extends Controller
         abort_if(strtolower(trim($validated['recipient_email'])) === strtolower(trim((string) $student->email)), 422,
             'You cannot send a gift voucher to your own account.');
 
-        $created = DB::transaction(function () use ($student, $validated): array {
+        $created = DB::transaction(function () use ($student, $validated, $voucherSettings): array {
             $token = Str::random(64);
             $amount = round((float) $validated['amount'], 2);
             $voucherId = DB::table('course_gift_vouchers')->insertGetId([
