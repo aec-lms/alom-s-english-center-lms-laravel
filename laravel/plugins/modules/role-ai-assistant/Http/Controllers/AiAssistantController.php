@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Plugins\Modules\RoleAiAssistant\Models\AiAssistantLog;
 use Plugins\Modules\RoleAiAssistant\Services\AiAssistantService;
+use Plugins\Modules\RoleAiAssistant\Services\AiAssistantUsageLimitException;
 
 class AiAssistantController extends Controller
 {
@@ -37,6 +38,8 @@ class AiAssistantController extends Controller
         try {
             $result = $this->assistant->queryAssistant($request->user(), $validated['prompt']);
             return response()->json($result);
+        } catch (AiAssistantUsageLimitException $e) {
+            return response()->json(['error' => $e->getMessage()], 429);
         } catch (\Throwable $e) {
             report($e);
             return response()->json(['error' => 'AEC LMS AI Assistant is temporarily unavailable. Please check your access or contact the administrator.'], 503);

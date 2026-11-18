@@ -48,6 +48,22 @@
             "label": "Max Output Tokens",
             "type": "text",
             "secret": false
+        },
+        {
+            "key": "daily_token_budget",
+            "label": "Institution Daily AI Token Budget",
+            "type": "text",
+            "secret": false,
+            "default": "50000",
+            "help": "Maximum provider tokens reserved/consumed across all users per local calendar day. Set 0 to block paid AI requests."
+        },
+        {
+            "key": "daily_request_limit",
+            "label": "Daily AI Requests Per User",
+            "type": "text",
+            "secret": false,
+            "default": "20",
+            "help": "Maximum provider requests per user per local calendar day. Set 0 to block paid AI requests."
         }
     ],
     "admin_menu": [

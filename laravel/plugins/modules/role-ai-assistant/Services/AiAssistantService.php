@@ -19,6 +19,7 @@ class AiAssistantService
     public function __construct(
         private readonly PluginManager $plugins,
         private readonly AuditLogger $audit,
+        private readonly AiAssistantUsageBudget $usageBudget,
     ) {}
 
     public function isRoleAllowed(User $user): bool
@@ -72,9 +73,43 @@ class AiAssistantService
         $maxTokens = min(8192, max(64, (int) $this->plugins->getSetting('role-ai-assistant', 'max_tokens', '1024')));
         $systemInstruction = $this->systemPromptForRole($roleSlug);
 
-        $reply = $apiKey === ''
-            ? $this->offlineRoleGuidance($roleSlug, $prompt)
-            : $this->dispatchProviderRequest($provider, $model, $apiKey, $systemInstruction, $prompt, $maxTokens);
+        $reservationId = null;
+        $actualTokens = 0;
+
+        if ($apiKey === '') {
+            $reply = $this->offlineRoleGuidance($roleSlug, $prompt);
+            $actualTokens = strlen($systemInstruction) + strlen($prompt) + strlen($reply);
+        } else {
+            $estimatedPromptTokens = max(1, strlen($systemInstruction) + strlen($prompt) + 16);
+            $dailyTokenBudget = max(0, (int) $this->plugins->getSetting('role-ai-assistant', 'daily_token_budget', '50000'));
+            $dailyRequestLimit = max(0, (int) $this->plugins->getSetting('role-ai-assistant', 'daily_request_limit', '20'));
+            $reservation = $this->usageBudget->reserve(
+                (int) $user->id,
+                $roleSlug,
+                $provider,
+                $model,
+                $estimatedPromptTokens,
+                $maxTokens,
+                $dailyTokenBudget,
+                $dailyRequestLimit
+            );
+
+            if ($reservation === null) {
+                throw new AiAssistantUsageLimitException('The daily AI token or request budget has been reached. Please try again tomorrow or contact the administrator.');
+            }
+
+            $reservationId = $reservation;
+            $completionLimit = min($maxTokens, max(1, (int) $this->reservationCompletionLimit($reservation)));
+            try {
+                $providerResult = $this->dispatchProviderRequest($provider, $model, $apiKey, $systemInstruction, $prompt, $completionLimit);
+                $reply = $providerResult['reply'];
+                $actualTokens = $providerResult['tokens'] ?? (strlen($systemInstruction) + strlen($prompt) + strlen($reply));
+                $this->usageBudget->settle($reservationId, $actualTokens);
+            } catch (\Throwable $exception) {
+                $this->usageBudget->markUncertain($reservationId);
+                throw $exception;
+            }
+        }
 
         if (Schema::hasTable('ai_assistant_logs')) {
             AiAssistantLog::query()->create([
@@ -83,7 +118,7 @@ class AiAssistantService
                 'provider' => $apiKey === '' ? 'built-in' : $provider,
                 'model' => $apiKey === '' ? 'built-in' : $model,
                 'prompt_excerpt' => '[content withheld]',
-                'tokens_estimated' => (int) ceil((strlen($prompt) + strlen($reply)) / 4),
+                'tokens_estimated' => max(0, $actualTokens),
                 'status' => 'completed',
             ]);
         }
@@ -95,6 +130,13 @@ class AiAssistantService
         ], $user->id);
 
         return ['assistant' => 'AEC LMS AI Assistant', 'role' => $roleSlug, 'reply' => $reply];
+    }
+
+    private function reservationCompletionLimit(int $reservationId): int
+    {
+        return (int) \Illuminate\Support\Facades\DB::table('ai_assistant_usage_reservations')
+            ->where('id', $reservationId)
+            ->value('completion_limit');
     }
 
     private function systemPromptForRole(string $role): string
@@ -116,7 +158,7 @@ class AiAssistantService
         return "আপনার {$label} প্যানেলের AEC LMS AI Assistant বর্তমানে অফলাইন মোডে আছে। Admin Settings থেকে AI integration configure করলে পূর্ণ AI সহায়তা চালু হবে। আপনার প্রশ্নটি আবার চেষ্টা করুন অথবা Admin-এর সঙ্গে যোগাযোগ করুন।";
     }
 
-    private function dispatchProviderRequest(string $provider, string $model, string $apiKey, string $systemInstruction, string $prompt, int $maxTokens): string
+    private function dispatchProviderRequest(string $provider, string $model, string $apiKey, string $systemInstruction, string $prompt, int $maxTokens): array
     {
         if ($provider === 'openai') {
             $resp = Http::withToken($apiKey)->timeout(20)->post('https://api.openai.com/v1/chat/completions', [
@@ -130,11 +172,13 @@ class AiAssistantService
             if (!$resp->successful()) {
                 throw new RuntimeException('AI service request failed. Please check the Admin integration settings.');
             }
-            $reply = (string) data_get($resp->json(), 'choices.0.message.content', '');
+            $payload = $resp->json();
+            $reply = (string) data_get($payload, 'choices.0.message.content', '');
             if ($reply === '') {
                 throw new RuntimeException('AI service returned an empty response.');
             }
-            return $reply;
+            $usage = data_get($payload, 'usage.total_tokens');
+            return ['reply' => $reply, 'tokens' => is_numeric($usage) && (int) $usage > 0 ? (int) $usage : null];
         }
 
         $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model) . ':generateContent';
@@ -146,10 +190,12 @@ class AiAssistantService
         if (!$resp->successful()) {
             throw new RuntimeException('AI service request failed. Please check the Admin integration settings.');
         }
-        $reply = (string) data_get($resp->json(), 'candidates.0.content.parts.0.text', '');
+        $payload = $resp->json();
+        $reply = (string) data_get($payload, 'candidates.0.content.parts.0.text', '');
         if ($reply === '') {
             throw new RuntimeException('AI service returned an empty response.');
         }
-        return $reply;
+        $usage = data_get($payload, 'usageMetadata.totalTokenCount');
+        return ['reply' => $reply, 'tokens' => is_numeric($usage) && (int) $usage > 0 ? (int) $usage : null];
     }
 }
