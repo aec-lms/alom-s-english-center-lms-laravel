@@ -129,6 +129,43 @@ class MobileApi {
     return _decode(response);
   }
 
+  Future<Map<String, dynamic>> postMultipart(
+    String path,
+    Map<String, String> fields, {
+    String? attachmentPath,
+    String? attachmentName,
+  }) async {
+    final token = await readToken();
+    if (token == null || token.isEmpty) {
+      throw const MobileApiException('Please sign in again.', 401);
+    }
+
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$baseUrl$path'),
+    )
+      ..headers['Accept'] = 'application/json'
+      ..headers['Authorization'] = 'Bearer $token'
+      ..fields.addAll(fields);
+
+    if (attachmentPath != null && attachmentPath.isNotEmpty) {
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'attachment',
+          attachmentPath,
+          filename: attachmentName,
+        ),
+      );
+    }
+
+    final streamed = await client.send(request);
+    final response = await http.Response.fromStream(streamed);
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      await storage.delete(key: _tokenKey);
+    }
+    return _decode(response);
+  }
+
   Future<void> logout() async {
     final token = await readToken();
     try {
