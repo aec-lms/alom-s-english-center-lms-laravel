@@ -45,8 +45,54 @@ class PortalController extends Controller
                 $enrollments = DB::table('enrollments')
                     ->join('courses', 'enrollments.course_id', '=', 'courses.id')
                     ->where('enrollments.user_id', $user->id)
-                    ->select('enrollments.id', 'enrollments.status as enrollment_status', 'enrollments.created_at', 'courses.title', 'courses.slug', 'courses.price')
+                    ->select('enrollments.id', 'enrollments.status as enrollment_status', 'enrollments.created_at', 'courses.id as course_id', 'courses.title', 'courses.slug', 'courses.price')
                     ->orderByDesc('enrollments.id')->get();
+
+                $trackableCourseIds = $enrollments
+                    ->whereIn('enrollment_status', ['active', 'completed'])
+                    ->pluck('course_id')
+                    ->filter()
+                    ->unique()
+                    ->values();
+
+                $progressByCourse = collect();
+                $hasProgressSchema = Schema::hasTable('course_curriculum_items')
+                    && Schema::hasTable('course_content_posts')
+                    && Schema::hasTable('course_content_progress')
+                    && Schema::hasColumn('course_curriculum_items', 'is_active')
+                    && Schema::hasColumn('course_curriculum_items', 'is_preview')
+                    && Schema::hasColumn('course_content_posts', 'published_at')
+                    && Schema::hasColumn('course_content_progress', 'completed_at');
+
+                if ($trackableCourseIds->isNotEmpty() && $hasProgressSchema) {
+                    $progressByCourse = DB::table('course_curriculum_items as curriculum')
+                        ->join('course_content_posts as posts', 'posts.id', '=', 'curriculum.course_content_post_id')
+                        ->leftJoin('course_content_progress as progress', function ($join) use ($user): void {
+                            $join->on('progress.course_curriculum_item_id', '=', 'curriculum.id')
+                                ->where('progress.user_id', '=', $user->id)
+                                ->whereNotNull('progress.completed_at');
+                        })
+                        ->whereIn('curriculum.course_id', $trackableCourseIds)
+                        ->where('curriculum.is_active', true)
+                        ->where('curriculum.is_preview', false)
+                        ->where('posts.status', 'published')
+                        ->whereNotNull('posts.published_at')
+                        ->where('posts.published_at', '<=', now())
+                        ->groupBy('curriculum.course_id')
+                        ->select('curriculum.course_id')
+                        ->selectRaw('COUNT(curriculum.id) as total_lessons, COUNT(progress.id) as completed_lessons')
+                        ->get()
+                        ->keyBy('course_id');
+                }
+
+                $enrollments->each(function ($enrollment) use ($progressByCourse): void {
+                    $progress = $progressByCourse->get($enrollment->course_id);
+                    $enrollment->total_lessons = (int) ($progress->total_lessons ?? 0);
+                    $enrollment->completed_lessons = (int) ($progress->completed_lessons ?? 0);
+                    $enrollment->progress_percent = $enrollment->total_lessons > 0
+                        ? min(100, (int) round(($enrollment->completed_lessons / $enrollment->total_lessons) * 100))
+                        : 0;
+                });
             }
             if ($student && Schema::hasTable('fee_invoices')) {
                 $invoices = DB::table('fee_invoices')->where('student_id', $student->id)->latest('id')->limit(20)->get();
