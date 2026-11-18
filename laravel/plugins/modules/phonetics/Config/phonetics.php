@@ -13,12 +13,19 @@ declare(strict_types=1);
 */
 return [
     'standalone' => env('PHONETICS_STANDALONE', false),
-    'middleware' => [
-        'practice' => ['web', 'installed', 'plugin:phonetics'],
-        'attempt' => ['web', 'installed', 'plugin:phonetics', 'auth'],
-        'exam' => ['web', 'installed', 'plugin:phonetics', 'auth'],
-        'admin' => ['web', 'installed', 'auth', 'plugin:phonetics', 'permission:phonetics.manage'],
-    ],
+    'middleware' => env('PHONETICS_STANDALONE', false)
+        ? [
+            'practice' => ['web'],
+            'attempt' => ['web', 'auth'],
+            'exam' => ['web', 'auth'],
+            'admin' => ['web', 'auth', 'can:manage-phonetics'],
+        ]
+        : [
+            'practice' => ['web', 'installed', 'plugin:phonetics'],
+            'attempt' => ['web', 'installed', 'plugin:phonetics', 'auth'],
+            'exam' => ['web', 'installed', 'plugin:phonetics', 'auth'],
+            'admin' => ['web', 'installed', 'auth', 'plugin:phonetics', 'permission:phonetics.manage'],
+        ],
     'users' => [
         'table' => env('PHONETICS_USERS_TABLE', 'users'),
         'id' => 'id',
