@@ -2,24 +2,34 @@
 
 declare(strict_types=1);
 
-namespace App\Http\Controllers\Admin;
+namespace App\\Http\\Controllers\\Admin;
 
-use App\Core\Plugins\PluginManager;
-use App\Http\Controllers\Controller;
-use App\Models\AuditLog;
-use App\Models\BackupRecord;
-use App\Models\PluginRecord;
-use App\Models\SystemSetting;
-use App\Models\User;
-use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
-use Illuminate\View\View;
+use App\\Core\\Plugins\\PluginManager;
+use App\\Http\\Controllers\\Controller;
+use App\\Models\\AuditLog;
+use App\\Models\\BackupRecord;
+use App\\Models\\PluginRecord;
+use App\\Models\\SystemSetting;
+use App\\Models\\User;
+use Illuminate\\Http\\RedirectResponse;
+use Illuminate\\Http\\Request;
+use Illuminate\\Support\\Facades\\DB;
+use Illuminate\\Support\\Facades\\Schema;
+use Illuminate\\View\\View;
 
 class DashboardController extends Controller
 {
     private const WIDGETS = ['users', 'plugins', 'backups', 'audit_trail', 'system_info'];
+
+    private const MOTION_DEFAULTS = [
+        'enabled' => true,
+        'preset' => 'premium',
+        'speed' => 'normal',
+        'intensity' => 'medium',
+        'loading' => 'shimmer',
+        'counters' => true,
+        'hover' => true,
+    ];
 
     public function index(Request $request): View
     {
@@ -43,8 +53,9 @@ class DashboardController extends Controller
             $widgets = array_values(array_intersect($widgets, ['users']));
         }
         $setupIncomplete = !$isBranchManager && SystemSetting::query()->where('key', 'setup.wizard.completed')->value('value') !== '1';
+        $motionSettings = $this->motionSettings();
 
-        return view('admin.dashboard', compact('metrics', 'recentAudits', 'widgets', 'setupIncomplete', 'isBranchManager'));
+        return view('admin.dashboard', compact('metrics', 'recentAudits', 'widgets', 'setupIncomplete', 'isBranchManager', 'motionSettings'));
     }
 
     public function saveWidgets(Request $request): RedirectResponse
@@ -78,6 +89,65 @@ class DashboardController extends Controller
         return redirect()->route('admin.dashboard')->with('status', 'Dashboard layout saved for your account.');
     }
 
+    public function saveMotionSettings(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'enabled' => ['sometimes', 'boolean'],
+            'preset' => ['required', 'in:subtle,premium,dynamic'],
+            'speed' => ['required', 'in:slow,normal,fast'],
+            'intensity' => ['required', 'in:low,medium,high'],
+            'loading' => ['required', 'in:shimmer,minimal,none'],
+            'counters' => ['sometimes', 'boolean'],
+            'hover' => ['sometimes', 'boolean'],
+        ]);
+
+        $settings = [
+            'enabled' => $request->boolean('enabled'),
+            'preset' => $validated['preset'],
+            'speed' => $validated['speed'],
+            'intensity' => $validated['intensity'],
+            'loading' => $validated['loading'],
+            'counters' => $request->boolean('counters'),
+            'hover' => $request->boolean('hover'),
+        ];
+
+        SystemSetting::query()->updateOrCreate(
+            ['key' => 'dashboard.motion.global'],
+            ['value' => json_encode($settings, JSON_THROW_ON_ERROR), 'updated_by' => $request->user()->id, 'is_encrypted' => false],
+        );
+
+        AuditLog::query()->create([
+            'user_id' => $request->user()->id,
+            'action' => 'admin.dashboard.motion.updated',
+            'entity_type' => 'admin_dashboard',
+            'entity_id' => 'global',
+            'ip_address' => $request->ip(),
+            'metadata' => $settings,
+        ]);
+
+        return redirect()->route('admin.dashboard')->with('status', 'Dashboard motion and loading preferences saved.');
+    }
+
+    private function motionSettings(): array
+    {
+        $value = SystemSetting::query()->where('key', 'dashboard.motion.global')->value('value');
+        if (!is_string($value) || $value === '') {
+            return self::MOTION_DEFAULTS;
+        }
+
+        try {
+            $stored = json_decode($value, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\\JsonException) {
+            return self::MOTION_DEFAULTS;
+        }
+
+        if (!is_array($stored)) {
+            return self::MOTION_DEFAULTS;
+        }
+
+        return array_replace(self::MOTION_DEFAULTS, array_intersect_key($stored, self::MOTION_DEFAULTS));
+    }
+
     private function ensureAssignedBranch($actor): void
     {
         abort_unless(
@@ -104,7 +174,7 @@ class DashboardController extends Controller
 
         try {
             $stored = json_decode($value, true, 512, JSON_THROW_ON_ERROR);
-        } catch (\JsonException) {
+        } catch (\\JsonException) {
             return $defaults;
         }
 
