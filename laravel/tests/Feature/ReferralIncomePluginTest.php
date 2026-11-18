@@ -97,19 +97,37 @@ class ReferralIncomePluginTest extends TestCase
             'status' => 'unpaid',
         ]);
 
-        Schema::create('commerce_orders', function (Blueprint $table): void {
-            $table->id();
-            $table->unsignedBigInteger('user_id');
-            $table->unsignedBigInteger('invoice_id');
-            $table->string('status', 30);
-            $table->string('payment_status', 30);
-            $table->timestamps();
-        });
+        if (!Schema::hasTable('commerce_orders')) {
+            Schema::create('commerce_orders', function (Blueprint $table): void {
+                $table->id();
+                $table->string('order_number', 32)->unique();
+                $table->unsignedBigInteger('user_id');
+                $table->unsignedBigInteger('invoice_id')->nullable()->index();
+                $table->unsignedBigInteger('branch_id')->nullable()->index();
+                $table->string('currency', 8)->default('BDT');
+                $table->decimal('subtotal', 10, 2);
+                $table->decimal('discount_total', 10, 2)->default(0);
+                $table->decimal('grand_total', 10, 2);
+                $table->string('status', 24)->default('awaiting_payment');
+                $table->string('payment_status', 24)->default('unpaid');
+                $table->json('billing_snapshot')->nullable();
+                $table->timestamp('paid_at')->nullable();
+                $table->timestamps();
+            });
+        }
         $orderId = DB::table('commerce_orders')->insertGetId([
+            'order_number' => 'REF-ORDER-' . $buyer->id,
             'user_id' => $buyer->id,
             'invoice_id' => $invoice->id,
+            'branch_id' => null,
+            'currency' => 'BDT',
+            'subtotal' => 5000,
+            'discount_total' => 0,
+            'grand_total' => 5000,
             'status' => 'awaiting_payment',
             'payment_status' => 'pending',
+            'billing_snapshot' => json_encode(['name' => $buyer->name]),
+            'paid_at' => null,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
@@ -170,17 +188,30 @@ class ReferralIncomePluginTest extends TestCase
             'currency' => 'BDT',
             'status' => 'unpaid',
         ]);
-        Schema::create('commerce_orders', function (Blueprint $table): void {
-            $table->id();
-            $table->unsignedBigInteger('user_id');
-            $table->unsignedBigInteger('invoice_id');
-            $table->string('status', 30);
-            $table->string('payment_status', 30);
-            $table->timestamps();
-        });
+        if (!Schema::hasTable('commerce_orders')) {
+            Schema::create('commerce_orders', function (Blueprint $table): void {
+                $table->id();
+                $table->string('order_number', 32)->unique();
+                $table->unsignedBigInteger('user_id');
+                $table->unsignedBigInteger('invoice_id')->nullable()->index();
+                $table->unsignedBigInteger('branch_id')->nullable()->index();
+                $table->string('currency', 8)->default('BDT');
+                $table->decimal('subtotal', 10, 2);
+                $table->decimal('discount_total', 10, 2)->default(0);
+                $table->decimal('grand_total', 10, 2);
+                $table->string('status', 24)->default('awaiting_payment');
+                $table->string('payment_status', 24)->default('unpaid');
+                $table->json('billing_snapshot')->nullable();
+                $table->timestamp('paid_at')->nullable();
+                $table->timestamps();
+            });
+        }
         $orderId = DB::table('commerce_orders')->insertGetId([
-            'user_id' => $student->id, 'invoice_id' => $invoice->id,
+            'order_number' => 'REF-ORDER-ONLINE-' . $student->id,
+            'user_id' => $student->id, 'invoice_id' => $invoice->id, 'branch_id' => null,
+            'currency' => 'BDT', 'subtotal' => 10000, 'discount_total' => 0, 'grand_total' => 10000,
             'status' => 'awaiting_payment', 'payment_status' => 'pending',
+            'billing_snapshot' => json_encode(['name' => $student->name]), 'paid_at' => null,
             'created_at' => now(), 'updated_at' => now(),
         ]);
         $transaction = PaymentTransaction::query()->create([
