@@ -14,6 +14,6 @@ Route::middleware(['web','installed','auth','plugin:learn-and-earn','permission:
 Route::middleware(['web','installed','auth','plugin:learn-and-earn'])->prefix('learn-and-earn/exams')->name('plugins.learn_earn.student.')->group(function(){
  Route::get('/',[LearnAndEarnController::class,'publicExams'])->name('index');
  Route::get('/{exam}',[LearnAndEarnController::class,'showExam'])->name('show');
- Route::post('/{exam}/checkout',[LearnAndEarnController::class,'purchaseExam'])->name('checkout');
- Route::post('/{exam}/attempt',[LearnAndEarnController::class,'submitAttempt'])->name('attempt');
+ Route::post('/{exam}/checkout',[LearnAndEarnController::class,'purchaseExam'])->middleware('throttle:5,1')->name('checkout');
+ Route::post('/{exam}/attempt',[LearnAndEarnController::class,'submitAttempt'])->middleware('throttle:10,1')->name('attempt');
 });
