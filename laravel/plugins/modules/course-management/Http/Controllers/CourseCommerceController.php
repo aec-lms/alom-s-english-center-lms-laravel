@@ -106,6 +106,17 @@ class CourseCommerceController extends Controller
         return redirect()->route('course-commerce.cart')->with('status', 'Course removed from your cart.');
     }
 
+    public function giftForm(Request $request, int $courseId): View
+    {
+        $student = $this->student($request);
+        $course = DB::table('courses')->where('id', $courseId)->where('status', 'published')->first();
+        abort_unless($course, 404, 'This course is not available for gifting.');
+        $this->assertCourseBranch($student, $course);
+        $this->assertNoOpenBatch($courseId);
+
+        return view('course-management::commerce.gift', compact('course'));
+    }
+
     public function gift(Request $request, int $courseId): RedirectResponse
     {
         $student = $this->student($request);
