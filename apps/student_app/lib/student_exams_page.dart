@@ -287,9 +287,7 @@ class _StudentExamAttemptPageState extends State<StudentExamAttemptPage> {
                         const Spacer(),
                         Text(
                           remainingLabel,
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                fontFeatures: const [FontFeature.tabularFigures()],
-                              ),
+                          style: Theme.of(context).textTheme.titleLarge,
                         ),
                       ],
                     ),
