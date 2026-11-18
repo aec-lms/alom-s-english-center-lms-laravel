@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Plugins\Modules\SupportCenter\Http\Controllers;
 
+use App\Core\Plugins\PluginManager;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 use Plugins\Modules\SupportCenter\Models\SupportTicket;
 use Plugins\Modules\SupportCenter\Models\SupportTicketMessage;
@@ -58,6 +60,7 @@ class SupportTicketController extends Controller
     public function adminIndex(Request $request): View
     {
         $actor = $request->user();
+        $this->ensureActiveBranch($actor);
         $tickets = SupportTicket::query()
             ->when($actor->hasRole('branch_manager'), fn ($q) => $q->where('branch_id', $actor->branch_id ?: -1))
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->string('status')))
@@ -186,9 +189,23 @@ class SupportTicketController extends Controller
 
     private function adminScopedTicket($actor, int $ticket): SupportTicket
     {
+        $this->ensureActiveBranch($actor);
         return SupportTicket::query()
             ->when($actor->hasRole('branch_manager'), fn ($q) => $q->where('branch_id', $actor->branch_id ?: -1))
             ->findOrFail($ticket);
+    }
+
+    private function ensureActiveBranch($actor): void
+    {
+        if ($actor && $actor->hasRole('branch_manager')) {
+            abort_unless((int) ($actor->branch_id ?? 0) > 0
+                && app(PluginManager::class)->isEnabled('branch-management')
+                && Schema::hasTable('branches')
+                && DB::table('branches')->where('id', $actor->branch_id)->where('is_active', true)->exists(),
+                403,
+                'Branch manager must be assigned to an active branch.'
+            );
+        }
     }
 
     private function ticketData(SupportTicket $ticket): array
