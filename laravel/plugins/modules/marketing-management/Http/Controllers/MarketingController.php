@@ -94,6 +94,7 @@ class MarketingController extends Controller
             'applies_to_course_ids' => ['nullable', 'array', 'max:100'],
             'applies_to_course_ids.*' => ['required', 'integer', 'distinct', 'exists:courses,id'],
             'first_purchase_only' => ['nullable', 'boolean'],
+            'gift_only' => ['nullable', 'boolean'],
         ]);
 
         $coupon = PromoCoupon::query()->create([
@@ -111,6 +112,7 @@ class MarketingController extends Controller
             'expires_at' => $validated['expires_at'] ?? null,
             'applies_to_course_ids' => array_values(array_map('intval', $validated['applies_to_course_ids'] ?? [])),
             'first_purchase_only' => $request->boolean('first_purchase_only'),
+            'gift_only' => $request->boolean('gift_only'),
             'is_active' => true,
         ]);
 
@@ -139,6 +141,7 @@ class MarketingController extends Controller
             'applies_to_course_ids' => ['nullable', 'array', 'max:100'],
             'applies_to_course_ids.*' => ['required', 'integer', 'distinct', 'exists:courses,id'],
             'first_purchase_only' => ['nullable', 'boolean'],
+            'gift_only' => ['nullable', 'boolean'],
             'is_active' => ['sometimes', 'boolean'],
         ]);
         $couponCode = DB::transaction(function () use ($request, $couponId, $validated): string {
@@ -156,6 +159,7 @@ class MarketingController extends Controller
                 'expires_at' => $validated['expires_at'] ?? null,
                 'applies_to_course_ids' => array_values(array_map('intval', $validated['applies_to_course_ids'] ?? [])),
                 'first_purchase_only' => $request->boolean('first_purchase_only'),
+                'gift_only' => $request->boolean('gift_only'),
                 'is_active' => $request->boolean('is_active'),
             ]);
             $this->audit->log('marketing.coupon_updated', 'promo_coupon', (string) $coupon->id, [
