@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\SupportCenter\\Models;
+namespace Plugins\Modules\SupportCenter\Models;
 
-use Illuminate\\Database\\Eloquent\\Model;
-use Illuminate\\Database\\Eloquent\\Relations\\BelongsTo;
-use Illuminate\\Database\\Eloquent\\Relations\\HasMany;
-use Illuminate\\Database\\Eloquent\\Relations\\HasOne;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class SupportTicket extends Model
 {
@@ -20,7 +20,7 @@ class SupportTicket extends Model
 
     public function user(): BelongsTo
     {
-        return $this->belongsTo(\\App\\Models\\User::class);
+        return $this->belongsTo(\App\Models\User::class);
     }
 
     public function messages(): HasMany
