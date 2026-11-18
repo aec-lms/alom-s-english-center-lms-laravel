@@ -43,8 +43,8 @@
                     <p class="text-sm text-slate-500">{{ $user->email }}</p>
                 </div>
                 <div class="grid gap-3 sm:grid-cols-2">
-                    <label class="block text-xs font-semibold text-slate-600">Profile picture <input type="file" name="avatar" accept="image/jpeg,image/png,image/webp" class="mt-1 block w-full text-xs file:mr-2 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:font-bold file:text-indigo-700"></label>
-                    <label class="block text-xs font-semibold text-slate-600">Cover photo <input type="file" name="cover" accept="image/jpeg,image/png,image/webp" class="mt-1 block w-full text-xs file:mr-2 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:font-bold file:text-indigo-700"></label>
+                    <label class="block text-xs font-semibold text-slate-600">Profile picture <input type="file" name="avatar" accept="image/jpeg,image/png,image/webp" data-profile-file="avatar" class="mt-1 block w-full text-xs file:mr-2 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:font-bold file:text-indigo-700"><span class="mt-1 block font-normal text-slate-500">Live preview · JPG, PNG or WebP · max 3 MB</span></label>
+                    <label class="block text-xs font-semibold text-slate-600">Cover photo <input type="file" name="cover" accept="image/jpeg,image/png,image/webp" data-profile-file="cover" class="mt-1 block w-full text-xs file:mr-2 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:font-bold file:text-indigo-700"><span class="mt-1 block font-normal text-slate-500">Live preview · JPG, PNG or WebP · max 5 MB</span></label>
                 </div>
             </div>
         </section>
@@ -97,4 +97,26 @@
         </div>
     </form>
 </div>
+<script>
+(() => {
+    const urls = [];
+    document.querySelectorAll('[data-profile-file]').forEach((input) => {
+        input.addEventListener('change', () => {
+            const file = input.files && input.files[0];
+            if (!file) return;
+            const kind = input.dataset.profileFile;
+            const preview = document.querySelector('[data-profile-preview="' + kind + '"]');
+            if (!preview) return;
+            if (urls[kind]) URL.revokeObjectURL(urls[kind]);
+            urls[kind] = URL.createObjectURL(file);
+            preview.src = urls[kind];
+            preview.classList.remove('hidden');
+            preview.classList.add('block');
+            const placeholder = document.querySelector('[data-profile-' + kind + '-placeholder]');
+            if (placeholder) placeholder.classList.add('hidden');
+        });
+    });
+    window.addEventListener('pagehide', () => urls.forEach((url) => url && URL.revokeObjectURL(url)));
+})();
+</script>
 @endsection
