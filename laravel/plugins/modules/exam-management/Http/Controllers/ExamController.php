@@ -187,7 +187,7 @@ class ExamController extends Controller
         if ($exam->starts_at && now()->lt($exam->starts_at)) {
             abort(403, 'This exam has not started yet.');
         }
-        if ($exam->ends_at && now()->gt($exam->ends_at)) {
+        if ($exam->ends_at && now()->greaterThanOrEqualTo($exam->ends_at)) {
             abort(403, 'The exam submission window has closed.');
         }
         if (Schema::hasColumn('exams', 'learn_earn_type') && $exam->learn_earn_type === 'paid') {
@@ -216,7 +216,7 @@ class ExamController extends Controller
             $expiredPending = false;
             if ($pending) {
                 $deadline = $pending->started_at?->copy()->addMinutes((int) $lockedExam->duration_minutes);
-                if ($deadline && now()->greaterThan($deadline)) {
+                if ($deadline && now()->greaterThanOrEqualTo($deadline)) {
                     $pending->update([
                         'submitted_answers' => [],
                         'score_obtained' => 0,
@@ -294,7 +294,7 @@ class ExamController extends Controller
             abort(403, 'Exam is outside your assigned branch.');
         }
         if ($exam->starts_at && now()->lt($exam->starts_at)) abort(403, 'This exam has not started yet.');
-        if ($exam->ends_at && now()->gt($exam->ends_at)) abort(403, 'The exam submission window has closed.');
+        if ($exam->ends_at && now()->greaterThanOrEqualTo($exam->ends_at)) abort(403, 'The exam submission window has closed.');
         if (Schema::hasColumn('exams', 'learn_earn_type') && $exam->learn_earn_type === 'paid') {
             abort_unless(Schema::hasTable('learn_earn_exam_access') && DB::table('learn_earn_exam_access')->where('exam_id', $exam->id)->where('user_id', $actor->id)->where('status', 'granted')->exists(), 403, 'Payment is required before saving this exam.');
         }
@@ -316,7 +316,7 @@ class ExamController extends Controller
 
             abort_if($attempt->submitted_at !== null, 409, 'This exam attempt is already submitted.');
             $deadline = $attempt->started_at?->copy()->addMinutes((int) $lockedExam->duration_minutes);
-            if (!$deadline || now()->greaterThan($deadline)) {
+            if (!$deadline || now()->greaterThanOrEqualTo($deadline)) {
                 abort(409, 'The exam time has expired.');
             }
 
@@ -362,7 +362,7 @@ class ExamController extends Controller
             abort(403, 'Exam is outside your assigned branch.');
         }
         if ($exam->starts_at && now()->lt($exam->starts_at)) abort(403, 'This exam has not started yet.');
-        if ($exam->ends_at && now()->gt($exam->ends_at)) abort(403, 'The exam submission window has closed.');
+        if ($exam->ends_at && now()->greaterThanOrEqualTo($exam->ends_at)) abort(403, 'The exam submission window has closed.');
 
         $validated = $request->validate([
             'attempt_id' => ['required', 'integer'],
@@ -384,7 +384,7 @@ class ExamController extends Controller
             $deadline = $attempt->started_at?->copy()->addMinutes((int) $exam->duration_minutes);
             $total = (float) $questions->sum('marks');
 
-            if (!$deadline || now()->greaterThan($deadline)) {
+            if (!$deadline || now()->greaterThanOrEqualTo($deadline)) {
                 $attempt->update([
                     'submitted_answers' => [],
                     'score_obtained' => 0,
@@ -481,7 +481,7 @@ class ExamController extends Controller
         abort_unless($exam->is_published, 404);
         abort_if($exam->branch_id !== null && (int) $actor->branch_id !== (int) $exam->branch_id, 403, 'Exam is outside your assigned branch.');
         abort_if($exam->starts_at && now()->lt($exam->starts_at), 403, 'This exam has not started yet.');
-        abort_if($exam->ends_at && now()->gt($exam->ends_at), 403, 'The exam submission window has closed.');
+        abort_if($exam->ends_at && now()->greaterThanOrEqualTo($exam->ends_at), 403, 'The exam submission window has closed.');
 
         if (Schema::hasColumn('exams', 'learn_earn_type') && $exam->learn_earn_type === 'paid') {
             abort_unless(
@@ -509,7 +509,7 @@ class ExamController extends Controller
             $expiredPending = false;
             if ($pending) {
                 $deadline = $pending->started_at?->copy()->addMinutes((int) $lockedExam->duration_minutes);
-                if ($deadline && now()->greaterThan($deadline)) {
+                if ($deadline && now()->greaterThanOrEqualTo($deadline)) {
                     $pending->update([
                         'submitted_answers' => [],
                         'score_obtained' => 0,
@@ -573,7 +573,7 @@ class ExamController extends Controller
         abort_unless($actor && $actor->hasRole('student'), 403, 'Only student accounts can submit exam attempts.');
         abort_if($exam->branch_id !== null && (int) $actor->branch_id !== (int) $exam->branch_id, 403, 'Exam is outside your assigned branch.');
         abort_if($exam->starts_at && now()->lt($exam->starts_at), 403, 'This exam has not started yet.');
-        abort_if($exam->ends_at && now()->gt($exam->ends_at), 403, 'The exam submission window has closed.');
+        abort_if($exam->ends_at && now()->greaterThanOrEqualTo($exam->ends_at), 403, 'The exam submission window has closed.');
 
         if (Schema::hasColumn('exams', 'learn_earn_type') && $exam->learn_earn_type === 'paid') {
             abort_unless(
@@ -605,7 +605,7 @@ class ExamController extends Controller
             $deadline = $record->started_at?->copy()->addMinutes((int) $lockedExam->duration_minutes);
             $total = (float) $questions->sum('marks');
 
-            if (!$deadline || now()->greaterThan($deadline)) {
+            if (!$deadline || now()->greaterThanOrEqualTo($deadline)) {
                 $record->update([
                     'submitted_answers' => [],
                     'score_obtained' => 0,
