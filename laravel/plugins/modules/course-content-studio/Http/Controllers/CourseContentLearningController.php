@@ -52,9 +52,11 @@ class CourseContentLearningController extends Controller
         $enrolled=$user && $user->hasRole('student') && DB::table('enrollments')->where('user_id',$user->id)->where('course_id',$courseRow->id)->whereIn('status',['active','completed'])->exists();
         abort_unless($content->access_type==='free' || $item->is_preview || $enrolled || $this->canManageCourse($user,(int)$courseRow->id),403);
         abort_unless($content->content_file_path && Storage::disk('local')->exists($content->content_file_path),404);
+        $mime=$content->content_file_mime?:'application/octet-stream';
+        $inline=in_array($mime,['application/pdf','video/mp4','audio/mpeg','image/jpeg','image/png','image/webp','image/gif'],true);
         return response()->file(Storage::disk('local')->path($content->content_file_path),[
-            'Content-Type'=>$content->content_file_mime?:'application/octet-stream',
-            'Content-Disposition'=>'inline; filename="'.str_replace('"','',$content->content_file_name?:'lesson-file').'"',
+            'Content-Type'=>$mime,
+            'Content-Disposition'=>($inline?'inline':'attachment').'; filename="'.str_replace('"','',$content->content_file_name?:'lesson-file').'"',
             'X-Content-Type-Options'=>'nosniff','Cache-Control'=>'private, no-store, max-age=0','Referrer-Policy'=>'same-origin',
         ]);
     }
