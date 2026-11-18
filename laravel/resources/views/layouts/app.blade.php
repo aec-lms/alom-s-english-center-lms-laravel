@@ -263,6 +263,8 @@
         @endif
     @endif
 
-    @include('role-ai-assistant::components.student-teacher')
+    @if ($pluginManager->isEnabled('role-ai-assistant'))
+        @include('role-ai-assistant::components.student-teacher')
+    @endif
 </body>
 </html>
