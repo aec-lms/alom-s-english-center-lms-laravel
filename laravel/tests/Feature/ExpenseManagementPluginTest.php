@@ -116,6 +116,19 @@ class ExpenseManagementPluginTest extends TestCase
             'created_at' => now(), 'updated_at' => now(),
         ]);
 
+        $this->actingAs($admin)->post('/admin/expenses', [
+            'branch_id' => $branchId,
+            'category' => 'Utilities',
+            'title' => 'Admin assigned branch expense',
+            'amount' => 250,
+            'payment_method' => 'bank',
+            'expense_date' => now()->toDateString(),
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('expenses', [
+            'title' => 'Admin assigned branch expense',
+            'branch_id' => $branchId,
+        ]);
+
         $roleId = DB::table('roles')->where('slug', 'branch_manager')->value('id');
         $this->assertNotNull($roleId);
         foreach (['expenses.view', 'expenses.manage'] as $slug) {
