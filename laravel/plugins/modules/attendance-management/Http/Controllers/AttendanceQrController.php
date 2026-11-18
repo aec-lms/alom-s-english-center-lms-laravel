@@ -43,6 +43,7 @@ class AttendanceQrController extends Controller
         }
 
         DB::transaction(function () use ($mapping, $students, $actor): void {
+            AttendanceBatchMapping::query()->whereKey($mapping->id)->lockForUpdate()->firstOrFail();
             DB::table('attendance_batch_rosters')->where('attendance_batch_mapping_id', $mapping->id)
                 ->update(['is_active' => false, 'updated_at' => now()]);
             foreach ($students as $student) {
