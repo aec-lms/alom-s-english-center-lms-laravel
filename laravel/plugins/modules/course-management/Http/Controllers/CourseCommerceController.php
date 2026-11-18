@@ -66,6 +66,7 @@ class CourseCommerceController extends Controller
 
         DB::transaction(function () use ($student, $course): void {
             DB::table('users')->where('id', $student->id)->lockForUpdate()->first();
+            $this->assertNoUnresolvedOrder((int) $student->id);
             $cart = DB::table('course_carts')->where('user_id', $student->id)->where('status', 'active')->lockForUpdate()->first();
             if (!$cart) {
                 $cartId = DB::table('course_carts')->insertGetId([
@@ -457,6 +458,7 @@ class CourseCommerceController extends Controller
         $couponService = new CourseCouponService();
         $created = DB::transaction(function () use ($student, $validated, $couponService): array {
             DB::table('users')->where('id', $student->id)->lockForUpdate()->first();
+            $this->assertNoUnresolvedOrder((int) $student->id);
             $cart = DB::table('course_carts')->where('user_id', $student->id)->where('status', 'active')->lockForUpdate()->first();
             abort_unless($cart, 422, 'Your course cart is empty.');
 
@@ -710,6 +712,19 @@ class CourseCommerceController extends Controller
             'status' => 'paid',
             'due_date' => now()->toDateString(),
         ]);
+    }
+
+    private function assertNoUnresolvedOrder(int $userId): void
+    {
+        if (!Schema::hasTable('course_cart_orders')) {
+            return;
+        }
+
+        $hasUnresolvedOrder = DB::table('course_cart_orders')->where('user_id', $userId)
+            ->whereIn('status', ['awaiting_payment', 'risk_review'])->exists();
+
+        abort_if($hasUnresolvedOrder, 409,
+            'A previous course order is awaiting payment confirmation or reconciliation. Contact support before starting another checkout.');
     }
 
     private function assertCheckoutReady(): void
