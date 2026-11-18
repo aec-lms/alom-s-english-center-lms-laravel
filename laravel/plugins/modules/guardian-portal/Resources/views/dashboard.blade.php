@@ -93,7 +93,7 @@
                         <h2 class="font-bold text-slate-900">Recent learning activity</h2>
                         <div class="mt-3 divide-y divide-slate-100">
                             @forelse ($activities as $activity)
-                                <div class="py-3"><p class="text-sm font-medium text-slate-800">{{ str($activity->event_type)->replace('_', ' ')->title() }}</p><p class="text-xs text-slate-500">{{ $activity->occurred_at }} · {{ $activity->duration_seconds ? gmdate('H:i:s', $activity->duration_seconds) : '—' }}</p></div>
+                                <div class="py-3"><p class="text-sm font-medium text-slate-800">{{ $activity->metadata['lesson_title'] ?? $activity->metadata['course_title'] ?? str($activity->event_type)->replace('_', ' ')->title() }}</p><p class="text-xs text-slate-500">{{ $activity->occurred_at }} · {{ $activity->duration_seconds ? gmdate('H:i:s', $activity->duration_seconds) : '—' }}</p></div>
                             @empty
                                 <p class="py-4 text-sm text-slate-500">No recent learning activity available, or Student Tracking is disabled.</p>
                             @endforelse
