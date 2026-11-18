@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Plugins\Modules\MobileAppApi\Http\Controllers;
 
+use App\Core\Plugins\PluginManager;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,7 +17,7 @@ class InstructorMobileApiController extends Controller
     {
         $actor = $request->user();
         abort_unless($actor && $actor->hasRole('teacher'), 403);
-        abort_unless(Schema::hasTable('course_teacher_assignments') && Schema::hasTable('courses'), 409, 'Course teacher assignments are not configured.');
+        abort_unless(app(PluginManager::class)->isEnabled('course-management') && Schema::hasTable('course_teacher_assignments') && Schema::hasTable('courses'), 409, 'Course teacher assignments are not configured.');
         $ids = DB::table('course_teacher_assignments')->where('teacher_user_id', $actor->id)->pluck('course_id')->map(fn ($id) => (int) $id)->all();
         return [$actor, $ids];
     }
@@ -36,7 +37,7 @@ class InstructorMobileApiController extends Controller
         $course = DB::table('courses')->where('slug',$slug)->whereIn('id',$ids)->first();
         abort_unless($course,404);
         $students = DB::table('enrollments')->join('users','users.id','=','enrollments.user_id')
-            ->where('enrollments.course_id',$course->id)->whereIn('enrollments.status',['active','completed'])
+            ->where('enrollments.course_id',$course->id)->where('enrollments.branch_id',$course->branch_id)->whereIn('enrollments.status',['active','completed'])
             ->when($actor->branch_id,fn($q)=>$q->where('enrollments.branch_id',$actor->branch_id))
             ->select('users.id','users.name','users.email','enrollments.status','enrollments.created_at')
             ->orderBy('users.name')->paginate(50);
@@ -67,15 +68,15 @@ class InstructorMobileApiController extends Controller
     public function assignments(Request $request): JsonResponse
     {
         [$actor,$ids]=$this->teacher($request);
-        abort_unless(Schema::hasTable('assignment_tasks') && Schema::hasTable('assignment_submissions'),409,'Assignment Management is not enabled.');
-        $rows=DB::table('assignment_tasks')->where('created_by',$actor->id)->orWhereIn('course_id',$ids)->orderByDesc('created_at')->paginate(30);
+        abort_unless(app(PluginManager::class)->isEnabled('assignment-management') && Schema::hasTable('assignment_tasks') && Schema::hasTable('assignment_submissions'),409,'Assignment Management is not enabled.');
+        $rows=DB::table('assignment_tasks')->where(function($q)use($actor,$ids){$q->where('created_by',$actor->id)->orWhereIn('course_id',$ids);})\n            ->when($actor->branch_id,fn($q)=>$q->where(function($branch)use($actor){$branch->whereNull('branch_id')->orWhere('branch_id',$actor->branch_id);}))\n            ->orderByDesc('created_at')->paginate(30);
         return response()->json(['data'=>$rows->items(),'meta'=>['current_page'=>$rows->currentPage(),'last_page'=>$rows->lastPage(),'total'=>$rows->total()]]);
     }
 
     public function storeAssignment(Request $request,int $batch): JsonResponse
     {
         [$actor,$ids]=$this->teacher($request);
-        abort_unless(Schema::hasTable('assignment_tasks') && Schema::hasTable('batches'),409);
+        abort_unless(app(PluginManager::class)->isEnabled('assignment-management') && app(PluginManager::class)->isEnabled('course-management') && Schema::hasTable('assignment_tasks') && Schema::hasTable('batches'),409);
         $record=DB::table('batches')->where('id',$batch)->whereIn('course_id',$ids)->first();
         abort_unless($record && (!$actor->branch_id || (int)$record->branch_id===(int)$actor->branch_id),404);
         $data=$request->validate(['title'=>['required','string','max:180'],'instructions'=>['required','string','max:20000'],'due_at'=>['nullable','date','after:now'],'max_score'=>['required','numeric','gt:0','max:100000'],'allow_late'=>['sometimes','boolean']]);
@@ -108,7 +109,7 @@ class InstructorMobileApiController extends Controller
     public function exams(Request $request): JsonResponse
     {
         [$actor,$ids]=$this->teacher($request);
-        abort_unless(Schema::hasTable('exams'),409,'Exam Management is not enabled.');
+        abort_unless(app(PluginManager::class)->isEnabled('exam-management') && Schema::hasTable('exams'),409,'Exam Management is not enabled.');
         $rows=DB::table('exams')->whereIn('course_id',$ids)->where('is_published',true)
             ->select('exams.*')->orderByDesc('created_at')->paginate(30);
         $data=$rows->getCollection()->map(fn($e)=>['id'=>$e->id,'title'=>$e->title,'status'=>$e->is_published?'published':'draft','course'=>DB::table('courses')->where('id',$e->course_id)->value('title'),'questions_count'=>Schema::hasTable('exam_questions')?DB::table('exam_questions')->where('exam_id',$e->id)->count():0,'submitted_attempts_count'=>Schema::hasTable('exam_attempts')?DB::table('exam_attempts')->where('exam_id',$e->id)->count():0]);
@@ -137,8 +138,8 @@ class InstructorMobileApiController extends Controller
     {
         [, $ids]=$this->teacher($request);
         $course=DB::table('courses')->where('slug',$slug)->whereIn('id',$ids)->first(); abort_unless($course,404);
-        $data=$request->validate(['title'=>['required','string','max:180'],'content'=>['nullable','string','max:50000'],'sort_order'=>['nullable','integer','min:0'],'video_url'=>['nullable','url','max:255','regex:/^https:\/\/(www\.)?(youtube\.com|youtu\.be|vimeo\.com)\//i'],'is_preview'=>['sometimes','boolean']]);
-        $id=DB::table('course_lessons')->insertGetId(['course_id'=>$course->id,'title'=>$data['title'],'content'=>($data['content']??'').(!empty($data['video_url'])?"\n\nVideo: ".$data['video_url']:''),'sort_order'=>$data['sort_order']??0,'created_at'=>now(),'updated_at'=>now()]);
+        $data=$request->validate(['title'=>['required','string','max:180'],'content'=>['nullable','string','max:50000'],'order'=>['nullable','integer','min:0'],'video_url'=>['nullable','url','max:255','regex:/^https:\/\/(www\.)?(youtube\.com|youtu\.be|vimeo\.com)\//i'],'is_preview'=>['sometimes','boolean']]);
+        $id=DB::table('course_lessons')->insertGetId(['course_id'=>$course->id,'title'=>$data['title'],'content'=>($data['content']??'').(!empty($data['video_url'])?"\n\nVideo: ".$data['video_url']:''),'sort_order'=>$data['order']??0,'created_at'=>now(),'updated_at'=>now()]);
         return response()->json(['message'=>'Lesson created.','lesson'=>DB::table('course_lessons')->find($id)],201);
     }
 
@@ -148,7 +149,7 @@ class InstructorMobileApiController extends Controller
         $course=DB::table('courses')->where('slug',$slug)->whereIn('id',$ids)->first(); abort_unless($course,404);
         abort_unless(DB::table('course_lessons')->where('id',$lesson)->where('course_id',$course->id)->exists(),404);
         $data=$request->validate(['title'=>['required','string','max:180'],'content'=>['nullable','string','max:50000'],'sort_order'=>['nullable','integer','min:0']]);
-        DB::table('course_lessons')->where('id',$lesson)->update(['title'=>$data['title'],'content'=>$data['content']??null,'sort_order'=>$data['sort_order']??0,'updated_at'=>now()]);
+        DB::table('course_lessons')->where('id',$lesson)->update(['title'=>$data['title'],'content'=>$data['content']??null,'sort_order'=>$data['order']??0,'updated_at'=>now()]);
         return response()->json(['message'=>'Lesson updated.','lesson'=>DB::table('course_lessons')->find($lesson)]);
     }
 
