@@ -244,6 +244,7 @@ class CommerceCartController extends Controller
     private function activeCart(int $userId): object
     {
         return DB::transaction(function () use ($userId): object {
+            DB::table('users')->where('id', $userId)->lockForUpdate()->firstOrFail();
             $cart = DB::table('commerce_carts')->where('user_id', $userId)->where('status', 'active')->lockForUpdate()->first();
             if ($cart) return $cart;
             $id = DB::table('commerce_carts')->insertGetId([
