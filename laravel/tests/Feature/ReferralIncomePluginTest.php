@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Models\Permission;
+use App\Models\Role;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Database\Schema\Blueprint;
@@ -289,4 +291,51 @@ class ReferralIncomePluginTest extends TestCase
         $this->assertDatabaseHas('referral_payout_requests', ['id' => $payout->id, 'status' => 'paid']);
         $this->assertDatabaseHas('referral_commissions', ['id' => $commissionId, 'status' => 'paid']);
     }
+    public function test_foreign_currency_commissions_are_not_mixed_into_local_bdt_payouts(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['referral-income']);
+
+        $teacher = $this->createUserWithRole('teacher');
+        $buyer = $this->createUserWithRole('student');
+        $service = app(ReferralIncomeService::class);
+        $service->applyCode($buyer, $service->createOrGetCode($teacher));
+        $commissionId = $service->recordSettledPurchase($buyer, 'international_order', 'USD-ORDER-1', 100000, 'USD');
+
+        DB::table('referral_commissions')->where('id', $commissionId)->update(['status' => 'approved']);
+
+        $this->actingAs($teacher)->post('/my-referrals/payout', [
+            'method' => 'bkash',
+            'account_details' => '01712345678',
+        ])->assertSessionHasErrors('payout');
+
+        $this->assertDatabaseCount('referral_payout_requests', 0);
+        $this->assertDatabaseHas('referral_commissions', [
+            'id' => $commissionId,
+            'currency' => 'USD',
+            'status' => 'approved',
+            'payout_request_id' => null,
+        ]);
+        $this->actingAs($teacher)->get('/my-referrals')->assertOk()->assertSee('USD');
+    }
+
+    public function test_branch_manager_cannot_view_global_referral_finance_even_with_manage_permission(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['referral-income', 'branch-management']);
+        $branchId = DB::table('branches')->insertGetId([
+            'code' => 'REF-MGR-' . uniqid(),
+            'name' => 'Referral Branch',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $manager = $this->createUserWithRole('branch_manager', (int) $branchId);
+        $role = Role::query()->where('slug', 'branch_manager')->firstOrFail();
+        $permission = Permission::query()->where('slug', 'referral_income.manage')->firstOrFail();
+        $role->permissions()->syncWithoutDetaching([$permission->id]);
+
+        $this->actingAs($manager)->get('/admin/referral-income')->assertForbidden();
+    }
+
 }
