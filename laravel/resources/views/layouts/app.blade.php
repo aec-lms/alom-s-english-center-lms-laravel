@@ -170,6 +170,9 @@
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900 antialiased">
+    @if ($pluginManager->isEnabled('al-branding-loader'))
+        @include('al-branding-loader::components.loading-screen')
+    @endif
     @yield('content')
 
     @if ($popupEnabled && \Illuminate\Support\Facades\Schema::hasTable('visitor_popups'))
