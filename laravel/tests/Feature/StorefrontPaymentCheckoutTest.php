@@ -40,6 +40,14 @@ final class StorefrontPaymentCheckoutTest extends TestCase
             'updated_at' => now(),
         ]);
 
+        $this->actingAs($buyer)
+            ->get('/ebooks/atomic-checkout-guide')
+            ->assertOk()
+            ->assertSee('PREMIUM CHECKOUT')
+            ->assertSee('Continue to your details')
+            ->assertSee('SSLCOMMERZ Secure Checkout')
+            ->assertSee('Ready for secure payment');
+
         Http::fake([
             'https://sandbox.sslcommerz.com/gwprocess/v4/api.php' => Http::response([
                 'status' => 'SUCCESS',
