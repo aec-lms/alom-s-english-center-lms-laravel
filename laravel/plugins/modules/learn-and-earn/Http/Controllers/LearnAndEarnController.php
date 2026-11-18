@@ -316,13 +316,7 @@ class LearnAndEarnController extends Controller
             $pendingCheckout = UniversalPaymentTransaction::query()
                 ->where('user_id', $student->id)
                 ->where('learn_earn_exam_id', $exam->id)
-                ->where(function ($query): void {
-                    $query->where('status', 'risk_review')
-                        ->orWhere(function ($pending): void {
-                            $pending->where('status', 'pending')
-                                ->where('created_at', '>=', now()->subMinutes(30));
-                        });
-                })
+                ->whereIn('status', ['pending', 'risk_review'])
                 ->exists();
             abort_if($pendingCheckout, 409, 'A checkout for this exam is already pending or requires payment reconciliation. Contact support before retrying.');
 
