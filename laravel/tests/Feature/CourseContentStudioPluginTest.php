@@ -116,7 +116,7 @@ class CourseContentStudioPluginTest extends TestCase
         $teacher=$this->createUserWithRole('teacher');
         $student=$this->createUserWithRole('student');
         $course=$this->course();
-        $post=$this->post($teacher->id,'student-learning-lesson');
+        $post=$this->createContentPost($teacher->id,'student-learning-lesson');
         DB::table('enrollments')->insert([
             'user_id'=>$student->id,'course_id'=>$course,'status'=>'active','created_at'=>now(),'updated_at'=>now(),
         ]);
@@ -143,7 +143,7 @@ class CourseContentStudioPluginTest extends TestCase
         $admin=$this->createUserWithRole('admin');
         $student=$this->createUserWithRole('student');
         $course=$this->course();
-        $post=$this->post($admin->id,'locked-course-lesson');
+        $post=$this->createContentPost($admin->id,'locked-course-lesson');
         DB::table('course_curriculum_items')->insert([
             'course_id'=>$course,'course_content_post_id'=>$post,'position'=>10,'is_preview'=>false,'is_active'=>true,'created_at'=>now(),'updated_at'=>now(),
         ]);
