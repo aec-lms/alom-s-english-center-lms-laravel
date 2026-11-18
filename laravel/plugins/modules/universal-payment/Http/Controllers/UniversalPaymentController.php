@@ -16,6 +16,8 @@ use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
 use Plugins\Modules\UniversalPayment\Services\StorefrontPaymentGatewayService;
+use App\Models\User;
+use Plugins\Modules\ReferralIncome\Services\ReferralIncomeService;
 
 class UniversalPaymentController extends Controller
 {
