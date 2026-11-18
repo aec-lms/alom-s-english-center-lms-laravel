@@ -16,6 +16,8 @@ use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
 use Plugins\Modules\UniversalPayment\Services\StorefrontPaymentGatewayService;
+use App\Models\User;
+use Plugins\Modules\ReferralIncome\Services\ReferralIncomeService;
 
 class UniversalPaymentController extends Controller
 {
@@ -233,6 +235,27 @@ class UniversalPaymentController extends Controller
                             ->where('invoice_id', $invoice->id)
                             ->where('status', 'pending')
                             ->update(['status' => 'active', 'updated_at' => now()]);
+                    }
+
+                    if ($newPaid + 0.01 >= (float) $invoice->net_amount
+                        && $this->plugins->isEnabled('referral-income')
+                        && Schema::hasTable('commerce_orders')) {
+                        $order = DB::table('commerce_orders')->where('invoice_id', $invoice->id)->lockForUpdate()->first();
+                        if ($order) {
+                            $orderUpdates = ['status' => 'completed', 'payment_status' => 'paid', 'updated_at' => now()];
+                            if (Schema::hasColumn('commerce_orders', 'paid_at')) $orderUpdates['paid_at'] = now();
+                            DB::table('commerce_orders')->where('id', $order->id)->update($orderUpdates);
+                            $buyer = User::query()->find((int) $order->user_id);
+                            if ($buyer) {
+                                app(ReferralIncomeService::class)->recordSettledPurchase(
+                                    $buyer,
+                                    'commerce_order',
+                                    (string) $order->id,
+                                    (float) $invoice->net_amount,
+                                    (string) $invoice->currency
+                                );
+                            }
+                        }
                     }
                 }
             }
