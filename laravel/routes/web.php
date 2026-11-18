@@ -79,6 +79,9 @@ Route::middleware('installed')->group(function (): void {
         Route::post('/dashboard/widgets', [DashboardController::class, 'saveWidgets'])
             ->name('dashboard.widgets')
             ->middleware('permission:core.dashboard.view');
+        Route::post('/dashboard/motion', [DashboardController::class, 'saveMotionSettings'])
+            ->name('dashboard.motion')
+            ->middleware(['permission:core.settings.manage', 'central.admin']);
         Route::prefix('setup-wizard')->name('setup-wizard.')->middleware(['permission:core.settings.manage', 'central.admin'])->group(function (): void {
             Route::get('/', [SetupWizardController::class, 'index'])->name('index');
             Route::post('/complete', [SetupWizardController::class, 'complete'])->name('complete');

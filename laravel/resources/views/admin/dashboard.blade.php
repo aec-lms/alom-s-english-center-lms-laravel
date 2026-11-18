@@ -29,6 +29,36 @@
             <h1 class="text-2xl font-extrabold text-slate-900">Core System Overview</h1>
             <p class="text-xs text-slate-500">Your dashboard layout is saved per administrator account.</p>
         </div>
+        @can('core.settings.manage')
+            <details class="relative">
+                <summary class="cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm">Motion &amp; Loading</summary>
+                <form method="POST" action="{{ route('admin.dashboard.motion') }}" class="absolute right-0 z-30 mt-2 grid w-[min(92vw,24rem)] gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
+                    @csrf
+                    <div><h2 class="text-sm font-bold text-slate-900">Dashboard experience</h2><p class="text-xs text-slate-500">Global settings for supported dashboard widgets.</p></div>
+                    <label class="flex items-center justify-between gap-3 text-sm font-semibold text-slate-700">Enable motion
+                        <input type="checkbox" name="enabled" value="1" @checked($motionSettings['enabled']) class="rounded border-slate-300">
+                    </label>
+                    <label class="grid gap-1 text-xs font-semibold text-slate-600">Motion preset
+                        <select name="preset" class="rounded-lg border border-slate-300 px-3 py-2 text-sm"><option value="subtle" @selected($motionSettings['preset'] === 'subtle')>Subtle</option><option value="premium" @selected($motionSettings['preset'] === 'premium')>Premium</option><option value="dynamic" @selected($motionSettings['preset'] === 'dynamic')>Dynamic</option></select>
+                    </label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <label class="grid gap-1 text-xs font-semibold text-slate-600">Speed
+                            <select name="speed" class="rounded-lg border border-slate-300 px-2 py-2 text-sm"><option value="slow" @selected($motionSettings['speed'] === 'slow')>Slow</option><option value="normal" @selected($motionSettings['speed'] === 'normal')>Normal</option><option value="fast" @selected($motionSettings['speed'] === 'fast')>Fast</option></select>
+                        </label>
+                        <label class="grid gap-1 text-xs font-semibold text-slate-600">Intensity
+                            <select name="intensity" class="rounded-lg border border-slate-300 px-2 py-2 text-sm"><option value="low" @selected($motionSettings['intensity'] === 'low')>Low</option><option value="medium" @selected($motionSettings['intensity'] === 'medium')>Medium</option><option value="high" @selected($motionSettings['intensity'] === 'high')>High</option></select>
+                        </label>
+                    </div>
+                    <label class="grid gap-1 text-xs font-semibold text-slate-600">Loading indicator
+                        <select name="loading" class="rounded-lg border border-slate-300 px-3 py-2 text-sm"><option value="shimmer" @selected($motionSettings['loading'] === 'shimmer')>Premium shimmer</option><option value="minimal" @selected($motionSettings['loading'] === 'minimal')>Minimal progress</option><option value="none" @selected($motionSettings['loading'] === 'none')>Off</option></select>
+                    </label>
+                    <label class="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" name="counters" value="1" @checked($motionSettings['counters']) class="rounded border-slate-300"> Animate statistic counters</label>
+                    <label class="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" name="hover" value="1" @checked($motionSettings['hover']) class="rounded border-slate-300"> Enable card hover effects</label>
+                    <p class="text-[11px] leading-relaxed text-slate-500">System-level Reduced Motion preferences always override animation. Settings apply globally to supported dashboards.</p>
+                    <button type="submit" class="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white">Save experience settings</button>
+                </form>
+            </details>
+        @endcan
         <details class="relative">
             <summary class="cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm">Customize Dashboard</summary>
             <form method="POST" action="{{ route('admin.dashboard.widgets') }}" class="absolute right-0 z-20 mt-2 w-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
@@ -59,22 +89,46 @@
         </details>
     </div>
 
-    <div id="dashboard-widgets" class="grid gap-4">
+    <style>
+    #dashboard-widgets[data-motion-enabled="true"] [data-dashboard-widget] { animation: aec-dashboard-enter var(--aec-motion-duration, 620ms) cubic-bezier(.2,.8,.2,1) both; }
+    #dashboard-widgets[data-motion-enabled="true"][data-motion-preset="subtle"] [data-dashboard-widget] { animation-name: aec-dashboard-fade; }
+    #dashboard-widgets[data-motion-enabled="true"][data-motion-preset="dynamic"] [data-dashboard-widget] { animation-name: aec-dashboard-rise; }
+    #dashboard-widgets[data-motion-enabled="true"][data-motion-intensity="low"] [data-dashboard-widget] { animation-duration: 420ms; }
+    #dashboard-widgets[data-motion-enabled="true"][data-motion-intensity="high"] [data-dashboard-widget] { animation-duration: 820ms; }
+    #dashboard-widgets[data-motion-enabled="true"][data-motion-speed="slow"] { --aec-motion-duration: 900ms; }
+    #dashboard-widgets[data-motion-enabled="true"][data-motion-speed="fast"] { --aec-motion-duration: 360ms; }
+    #dashboard-widgets[data-motion-enabled="true"][data-motion-speed="normal"] { --aec-motion-duration: 620ms; }
+    #dashboard-widgets[data-motion-enabled="true"][data-motion-hover="true"] [data-dashboard-widget] { transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease; }
+    #dashboard-widgets[data-motion-enabled="true"][data-motion-hover="true"] [data-dashboard-widget]:hover { transform: translateY(-3px); box-shadow: 0 16px 36px rgba(15,23,42,.09); border-color: rgba(100,116,139,.38); }
+    #dashboard-widgets[data-motion-enabled="true"][data-motion-loading="shimmer"]::before { content:""; display:block; height:3px; border-radius:999px; background:linear-gradient(90deg,transparent,#60a5fa,#a78bfa,transparent); background-size:200% 100%; animation:aec-dashboard-shimmer 1.6s ease-in-out 1; }
+    #dashboard-widgets[data-motion-enabled="true"][data-motion-loading="minimal"]::before { content:""; display:block; height:2px; border-radius:999px; background:var(--aec-primary); transform-origin:left; animation:aec-dashboard-progress 650ms ease-out 1 both; }
+    @keyframes aec-dashboard-enter { from { opacity:0; transform:translateY(14px) scale(.99); } to { opacity:1; transform:translateY(0) scale(1); } }
+    @keyframes aec-dashboard-fade { from { opacity:0; } to { opacity:1; } }
+    @keyframes aec-dashboard-rise { from { opacity:0; transform:translateY(24px) scale(.985); } to { opacity:1; transform:translateY(0) scale(1); } }
+    @keyframes aec-dashboard-shimmer { from { background-position:100% 0; opacity:.5; } to { background-position:-100% 0; opacity:1; } }
+    @keyframes aec-dashboard-progress { from { transform:scaleX(.15); opacity:.45; } to { transform:scaleX(1); opacity:1; } }
+    @media (prefers-reduced-motion: reduce) {
+        #dashboard-widgets[data-motion-enabled="true"] [data-dashboard-widget],
+        #dashboard-widgets[data-motion-enabled="true"][data-motion-hover="true"] [data-dashboard-widget],
+        #dashboard-widgets[data-motion-enabled="true"][data-motion-loading]::before { animation:none !important; transition:none !important; transform:none !important; }
+    }
+</style>
+<div id="dashboard-widgets" class="grid gap-4" data-motion-enabled="{{ $motionSettings['enabled'] ? 'true' : 'false' }}" data-motion-preset="{{ $motionSettings['preset'] }}" data-motion-speed="{{ $motionSettings['speed'] }}" data-motion-intensity="{{ $motionSettings['intensity'] }}" data-motion-loading="{{ $motionSettings['loading'] }}" data-motion-counters="{{ $motionSettings['counters'] ? 'true' : 'false' }}" data-motion-hover="{{ $motionSettings['hover'] ? 'true' : 'false' }}">
         @foreach ($widgets as $widget)
             @if ($widget === 'users')
                 <section data-dashboard-widget="users" class="rounded-2xl border border-slate-200 bg-white p-5">
                     <div class="text-xs text-slate-500">Registered Accounts</div>
-                    <div class="mt-1 text-2xl font-extrabold">{{ $metrics['users'] }}</div>
+                    <div class="mt-1 text-2xl font-extrabold"><span data-count-to="{{ $metrics['users'] }}">{{ $metrics['users'] }}</span></div>
                 </section>
             @elseif ($widget === 'plugins')
                 <section data-dashboard-widget="plugins" class="rounded-2xl border border-slate-200 bg-white p-5">
                     <div class="flex flex-wrap items-center justify-between gap-2"><h2 class="text-sm font-bold text-slate-900">Plugin Overview</h2><span class="text-xs text-slate-500">{{ $metrics['plugins_total'] }} discovered</span></div>
-                    <div class="mt-2 text-2xl font-extrabold text-emerald-700">{{ $metrics['plugins_enabled'] }} <span class="text-sm font-medium text-slate-500">active</span></div>
+                    <div class="mt-2 text-2xl font-extrabold text-emerald-700"><span data-count-to="{{ $metrics['plugins_enabled'] }}">{{ $metrics['plugins_enabled'] }}</span> <span class="text-sm font-medium text-slate-500">active</span></div>
                 </section>
             @elseif ($widget === 'backups')
                 <section data-dashboard-widget="backups" class="rounded-2xl border border-slate-200 bg-white p-5">
                     <div class="text-xs text-slate-500">Encrypted Backups</div>
-                    <div class="mt-1 text-2xl font-extrabold">{{ $metrics['backups'] }}</div>
+                    <div class="mt-1 text-2xl font-extrabold"><span data-count-to="{{ $metrics['backups'] }}">{{ $metrics['backups'] }}</span></div>
                 </section>
             @elseif ($widget === 'system_info')
                 <section data-dashboard-widget="system_info" class="rounded-2xl border border-slate-200 bg-white p-5">
@@ -109,6 +163,23 @@
 </div>
 <script>
 (() => {
+    const dashboard = document.getElementById('dashboard-widgets');
+    if (dashboard?.dataset.motionEnabled === 'true' && dashboard.dataset.motionCounters === 'true' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        const duration = dashboard.dataset.motionSpeed === 'fast' ? 520 : dashboard.dataset.motionSpeed === 'slow' ? 1250 : 850;
+        dashboard.querySelectorAll('[data-count-to]').forEach((node, index) => {
+            const target = Number(node.dataset.countTo);
+            if (!Number.isFinite(target) || target < 0 || target > 1000000000) return;
+            const start = performance.now() + index * 90;
+            const tick = now => {
+                const progress = Math.min(1, Math.max(0, (now - start) / duration));
+                const eased = 1 - Math.pow(1 - progress, 3);
+                node.textContent = Math.round(target * eased).toLocaleString();
+                if (progress < 1) requestAnimationFrame(tick);
+            };
+            node.textContent = '0';
+            requestAnimationFrame(tick);
+        });
+    }
     const list = document.getElementById('dashboard-widget-order');
     if (!list) return;
     let dragged = null;
@@ -137,7 +208,7 @@
         if (button.dataset.move === 'down' && row.nextElementSibling) list.insertBefore(row.nextElementSibling, row);
     });
     document.getElementById('dashboard-reset-order')?.addEventListener('click', () => {
-        rows().forEach((row, index) => {
+        rows().forEach(row => {
             list.appendChild(row);
             row.querySelector('input[type=checkbox]').checked = true;
         });
