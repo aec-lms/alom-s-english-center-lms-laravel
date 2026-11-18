@@ -34,6 +34,12 @@
         && app(\App\Core\Plugins\PluginManager::class)->isEnabled('commerce-cart')
         && Route::has('plugins.commerce_cart.index')) {
         $navLinks[] = [
+            'label' => 'Learning Services',
+            'url' => route('plugins.commerce_cart.services'),
+            'active' => request()->routeIs('plugins.commerce_cart.services'),
+            'external' => false,
+        ];
+        $navLinks[] = [
             'label' => 'Shopping Cart',
             'url' => route('plugins.commerce_cart.index'),
             'active' => request()->routeIs('plugins.commerce_cart.*'),
