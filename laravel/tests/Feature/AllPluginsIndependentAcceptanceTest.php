@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\File;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 use ZipArchive;
+use RuntimeException;
 
 class AllPluginsIndependentAcceptanceTest extends TestCase
 {
@@ -33,6 +34,38 @@ class AllPluginsIndependentAcceptanceTest extends TestCase
         usort($slugs, static fn (array $left, array $right): int => strcmp($left[0], $right[0]));
 
         return $slugs;
+    }
+
+    public function test_legacy_plugin_recycle_bin_rejects_a_symlinked_package_source(): void
+    {
+        $modulesRoot = realpath((string) config('plugins.modules_path'));
+        $this->assertNotFalse($modulesRoot);
+
+        $outside = storage_path('framework/testing/legacy-plugin-outside-' . bin2hex(random_bytes(5)));
+        $link = $modulesRoot . DIRECTORY_SEPARATOR . 'legacy-symlink-fixture';
+        File::ensureDirectoryExists($outside);
+        File::put($outside . DIRECTORY_SEPARATOR . 'outside.txt', 'must remain untouched');
+
+        if (!@symlink($outside, $link)) {
+            File::deleteDirectory($outside);
+            $this->markTestSkipped('The test environment does not permit creating symbolic links.');
+        }
+
+        try {
+            try {
+                app(PluginManager::class)->deleteToRecycleBin('legacy-symlink-fixture');
+                $this->fail('A symlinked plugin source must never be moved into the recycle bin.');
+            } catch (RuntimeException $exception) {
+                $this->assertStringContainsString('outside the registered modules directory', $exception->getMessage());
+            }
+
+            $this->assertTrue(is_link($link), 'The symlink itself must remain untouched.');
+            $this->assertFileExists($outside . DIRECTORY_SEPARATOR . 'outside.txt');
+            $this->assertSame('must remain untouched', File::get($outside . DIRECTORY_SEPARATOR . 'outside.txt'));
+        } finally {
+            @unlink($link);
+            File::deleteDirectory($outside);
+        }
     }
 
     #[DataProvider('pluginSlugs')]
@@ -167,8 +200,11 @@ class AllPluginsIndependentAcceptanceTest extends TestCase
         // Verify the irreversible Recycle Bin action for every plugin, while
         // retaining the manager's private recovery snapshot for test isolation.
         $secondRecycle = $manager->deleteToRecycleBin($slug);
-        $manager->permanentlyDeleteFromRecycleBin($secondRecycle['archive']);
+        $archiveSource = storage_path('app/plugin-recycle-bin/' . $secondRecycle['archive']);
         $privateBackup = storage_path('app/plugin-permanent-delete-backups/' . $secondRecycle['archive']);
+        File::ensureDirectoryExists(dirname($privateBackup));
+        $this->assertTrue(File::copyDirectory($archiveSource, $privateBackup), "{$slug} retry fixture could not create an existing recovery snapshot");
+        $manager->permanentlyDeleteFromRecycleBin($secondRecycle['archive']);
         $this->assertDirectoryExists($privateBackup, "{$slug} permanent delete must create a verified recovery backup");
         $this->assertSame([], $manager->recycledPlugins(), "{$slug} archive must leave the Recycle Bin after permanent delete");
         $this->assertTrue(File::copyDirectory($privateBackup, $directory), "{$slug} source fixture could not be restored from its private backup");
