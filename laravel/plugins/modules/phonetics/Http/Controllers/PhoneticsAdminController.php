@@ -188,7 +188,7 @@ final class PhoneticsAdminController extends Controller
                 }
             }
 
-            unset($data['uk_audio'], $data['us_audio'], $data['card_bg_image']);
+            unset($data['uk_audio'], $data['us_audio'], $data['card_bg_image'], $data['remove_uk_audio'], $data['remove_us_audio'], $data['remove_card_bg_image']);
 
             DB::transaction(function () use ($request, $entry, $data): void {
                 $entry->update($data);
