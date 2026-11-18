@@ -52,7 +52,8 @@ class InstructorMobileApiController extends Controller
             ->when($actor->branch_id,fn($q)=>$q->where('batches.branch_id',$actor->branch_id))
             ->select('batches.id','batches.name as title','batches.course_id','batches.branch_id','courses.title as course','courses.slug as course_slug','batches.capacity')
             ->orderBy('batches.name')->paginate(50);
-        return response()->json(['data'=>$rows->items(),'meta'=>['current_page'=>$rows->currentPage(),'last_page'=>$rows->lastPage(),'total'=>$rows->total()]]);
+        $batchData=$rows->getCollection()->map(function($row){$row->status='active';$row->assignments_count=Schema::hasTable('assignment_tasks')?DB::table('assignment_tasks')->where('course_id',$row->course_id)->count():0;return $row;});
+        return response()->json(['data'=>$batchData,'meta'=>['current_page'=>$rows->currentPage(),'last_page'=>$rows->lastPage(),'total'=>$rows->total()]]);
     }
 
     public function showBatch(Request $request,int $batch): JsonResponse
@@ -72,7 +73,8 @@ class InstructorMobileApiController extends Controller
         $rows=DB::table('assignment_tasks')->where(function($q)use($actor,$ids){$q->where('created_by',$actor->id)->orWhereIn('course_id',$ids);})
             ->when($actor->branch_id,fn($q)=>$q->where(function($branch)use($actor){$branch->whereNull('branch_id')->orWhere('branch_id',$actor->branch_id);}))
             ->orderByDesc('created_at')->paginate(30);
-        return response()->json(['data'=>$rows->items(),'meta'=>['current_page'=>$rows->currentPage(),'last_page'=>$rows->lastPage(),'total'=>$rows->total()]]);
+        $items=$rows->getCollection()->map(function($row){$row->batch=DB::table('courses')->where('id',$row->course_id)->value('title')??'Course assignment';$row->max_marks=$row->max_score;$row->submissions_count=DB::table('assignment_submissions')->where('assignment_id',$row->id)->count();return $row;});
+        return response()->json(['data'=>$items,'meta'=>['current_page'=>$rows->currentPage(),'last_page'=>$rows->lastPage(),'total'=>$rows->total()]]);
     }
 
     public function storeAssignment(Request $request,int $batch): JsonResponse
@@ -93,7 +95,8 @@ class InstructorMobileApiController extends Controller
         abort_unless($item,404);
         $rows=DB::table('assignment_submissions')->join('users','users.id','=','assignment_submissions.student_id')->where('assignment_id',$assignment)
             ->select('assignment_submissions.*','users.name as student_name','users.email as student_email')->orderByDesc('submitted_at')->paginate(50);
-        return response()->json(['assignment'=>$item,'data'=>$rows->items(),'meta'=>['current_page'=>$rows->currentPage(),'last_page'=>$rows->lastPage(),'total'=>$rows->total()]]);
+        $items=$rows->getCollection()->map(fn($row)=>['id'=>$row->id,'status'=>$row->status,'submitted_at'=>$row->submitted_at,'score'=>$row->score,'feedback'=>$row->feedback,'answer'=>$row->answer_text,'student'=>['id'=>$row->student_id,'name'=>$row->student_name,'email'=>$row->student_email]]);
+        return response()->json(['assignment'=>['id'=>$item->id,'title'=>$item->title,'max_marks'=>$item->max_score],'data'=>$items,'meta'=>['current_page'=>$rows->currentPage(),'last_page'=>$rows->lastPage(),'total'=>$rows->total()]]);
     }
 
     public function grade(Request $request,int $assignment,int $submission): JsonResponse
@@ -125,7 +128,11 @@ class InstructorMobileApiController extends Controller
         abort_unless($record,404);
         $rows=DB::table('exam_attempts')->join('users','users.id','=','exam_attempts.user_id')->where('exam_id',$exam)
             ->select('exam_attempts.*','users.name as student_name')->orderByDesc('submitted_at')->paginate(50);
-        return response()->json(['exam'=>['id'=>$record->id,'title'=>$record->title,'pass_marks'=>$record->pass_marks],'data'=>$rows->items(),'meta'=>['current_page'=>$rows->currentPage(),'last_page'=>$rows->lastPage(),'total'=>$rows->total()]]);
+        $count=DB::table('exam_attempts')->where('exam_id',$exam)->count();
+        $passed=DB::table('exam_attempts')->where('exam_id',$exam)->where('passed',true)->count();
+        $average=DB::table('exam_attempts')->where('exam_id',$exam)->avg('score_obtained');
+        $items=$rows->getCollection()->map(fn($row)=>['id'=>$row->id,'score'=>(float)$row->score_obtained,'passed'=>(bool)$row->passed,'submitted_at'=>$row->submitted_at,'student'=>['id'=>$row->user_id,'name'=>$row->student_name]]);
+        return response()->json(['exam'=>['id'=>$record->id,'title'=>$record->title,'pass_marks'=>$record->pass_marks,'course'=>DB::table('courses')->where('id',$record->course_id)->value('title'),'batch'=>'Course assessments'],'summary'=>['submitted_attempts'=>$count,'passed_attempts'=>$passed,'pass_rate'=>$count?round($passed*100/$count,1):0,'average_score'=>$average===null?null:round((float)$average,2)],'data'=>$items,'meta'=>['current_page'=>$rows->currentPage(),'last_page'=>$rows->lastPage(),'total'=>$rows->total()]]);
     }
 
     public function lessons(Request $request,string $slug): JsonResponse
