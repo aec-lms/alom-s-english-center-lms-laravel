@@ -293,8 +293,28 @@ class StorefrontPaymentGatewayService
                 return $locked->fresh();
             }
 
+            $buyer = DB::table('users')->where('id', $locked->user_id)->first();
+            if (!$buyer) {
+                throw new RuntimeException('The course buyer account no longer exists.');
+            }
+            $buyerBranchId = $buyer->branch_id ?? null;
+            if (Schema::hasTable('students') && Schema::hasColumn('students', 'user_id') && Schema::hasColumn('students', 'branch_id')) {
+                $profileBranchId = DB::table('students')->where('user_id', $buyer->id)->value('branch_id');
+                if ($profileBranchId !== null) $buyerBranchId = $profileBranchId;
+            }
+            foreach ($courses as $course) {
+                $courseBranchId = $course->branch_id ?? null;
+                if ($courseBranchId !== null && ((int) ($order->branch_id ?? 0) !== (int) $courseBranchId
+                    || (int) ($buyerBranchId ?? 0) !== (int) $courseBranchId)) {
+                    $locked->update(['status' => 'risk_review', 'external_trx_id' => $externalReference,
+                        'notes' => json_encode(array_merge($notes, ['risk_review' => true, 'reason' => 'course_order_branch_mismatch']), JSON_THROW_ON_ERROR)]);
+                    DB::table('course_cart_orders')->where('id', $orderId)->update(['status' => 'risk_review', 'updated_at' => now()]);
+                    return $locked->fresh();
+                }
+            }
+
             $existingEnrollment = DB::table('enrollments')->where('user_id', $locked->user_id)
-                ->whereIn('course_id', $courseIds)->whereIn('status', ['pending', 'active'])->exists();
+                ->whereIn('course_id', $courseIds)->whereIn('status', ['pending', 'active', 'completed'])->exists();
             if ($existingEnrollment) {
                 $locked->update(['status' => 'risk_review', 'external_trx_id' => $externalReference,
                     'notes' => json_encode(array_merge($notes, ['risk_review' => true, 'reason' => 'enrollment_exists_after_checkout']), JSON_THROW_ON_ERROR)]);
@@ -419,7 +439,9 @@ class StorefrontPaymentGatewayService
             }
 
             $course = DB::table('courses')->where('id', $gift->course_id)->where('status', 'published')->first();
-            if (!$course || abs((float) $course->price - (float) $gift->amount) > 0.01) {
+            if (!$course || abs((float) $course->price - (float) $gift->amount) > 0.01
+                || (($course->branch_id ?? null) !== null
+                    && (int) $course->branch_id !== (int) ($locked->branch_id ?? 0))) {
                 $locked->update(['status' => 'risk_review', 'external_trx_id' => $externalReference,
                     'notes' => json_encode(array_merge($notes, ['risk_review' => true, 'reason' => 'gift_course_price_or_availability_changed']), JSON_THROW_ON_ERROR)]);
                 DB::table('course_gifts')->where('id', $giftId)->update(['status' => 'risk_review', 'updated_at' => now()]);
