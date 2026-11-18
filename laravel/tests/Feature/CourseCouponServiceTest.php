@@ -2,13 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Validation\\ValidationException;
-use Plugins\\Modules\\MarketingManagement\\Models\\PromoCoupon;
-use Plugins\\Modules\\MarketingManagement\\Services\\CourseCouponService;
-use Tests\\TestCase;
+use Illuminate\Validation\ValidationException;
+use Plugins\Modules\MarketingManagement\Models\PromoCoupon;
+use Plugins\Modules\MarketingManagement\Services\CourseCouponService;
+use Tests\TestCase;
 
 class CourseCouponServiceTest extends TestCase
 {
