@@ -8,6 +8,7 @@ use App\Core\Contracts\PluginInterface;
 use App\Core\Plugins\PluginManifest;
 use App\Core\Plugins\PluginManager;
 use App\Models\Permission;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
@@ -260,6 +261,15 @@ class PluginCriticalRegressionTest extends TestCase
         $this->assertStringContainsString("Schema::create('jobs'", $migration);
         $this->assertStringContainsString("Schema::create('job_batches'", $migration);
         $this->assertStringContainsString("Schema::create('failed_jobs'", $migration);
+    }
+
+    public function test_notification_delivery_job_is_unique_per_notification_to_prevent_duplicate_dispatch(): void
+    {
+        $job = new DeliverNotificationJob(481);
+
+        $this->assertInstanceOf(ShouldBeUnique::class, $job);
+        $this->assertSame('481', $job->uniqueId());
+        $this->assertSame(3600, $job->uniqueFor);
     }
 
     public function test_notification_email_job_marks_sent_only_after_mail_transport_returns(): void
