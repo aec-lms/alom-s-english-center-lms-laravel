@@ -6,7 +6,10 @@ namespace App\Providers;
 
 use App\Core\Plugins\AdminMenuRegistry;
 use App\Models\SystemSetting;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
