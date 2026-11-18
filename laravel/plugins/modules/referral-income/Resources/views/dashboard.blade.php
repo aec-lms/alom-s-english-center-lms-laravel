@@ -6,12 +6,12 @@
     <div class="rounded-2xl border bg-white p-5">
         <p class="text-sm text-slate-500">Your referral code</p>
         <div class="mt-2 flex flex-wrap items-center gap-3"><strong class="font-mono text-2xl tracking-widest">{{ $code }}</strong><button type="button" onclick="navigator.clipboard?.writeText('{{ $code }}')" class="rounded-lg bg-slate-900 px-4 py-2 text-white">Copy code</button></div>
-        <p class="mt-2 text-xs text-slate-500">Share this code with a new learner or teacher. Referral attribution can only be applied once per account.</p>
+        <p class="mt-2 break-all text-sm text-blue-700">{{ $referralUrl }}</p><p class="mt-2 text-xs text-slate-500">Share this link with a new learner or teacher. Referral attribution can only be applied once per account.</p>
     </div>
     <div class="grid gap-3 sm:grid-cols-3">
         <div class="rounded-xl border bg-white p-4"><p class="text-xs text-slate-500">Referrals</p><strong class="text-2xl">{{ $referralCount }}</strong></div>
         <div class="rounded-xl border bg-white p-4"><p class="text-xs text-slate-500">Pending commission</p><strong class="text-2xl">৳{{ number_format((float)($stats->pending ?? 0), 2) }}</strong></div>
-        <div class="rounded-xl border bg-white p-4"><p class="text-xs text-slate-500">Paid income</p><strong class="text-2xl">৳{{ number_format((float)($stats->paid ?? 0), 2) }}</strong></div>
+        <div class="rounded-xl border bg-white p-4"><p class="text-xs text-slate-500">Approved balance</p><strong class="text-2xl">৳{{ number_format((float)($stats->available ?? 0), 2) }}</strong></div><div class="rounded-xl border bg-white p-4"><p class="text-xs text-slate-500">Paid income</p><strong class="text-2xl">৳{{ number_format((float)($stats->paid ?? 0), 2) }}</strong></div>
     </div>
     <form method="POST" action="{{ route('plugins.referral_income.member.apply') }}" class="rounded-xl border bg-white p-4">@csrf
         <h2 class="font-semibold">Apply a referral code</h2><div class="mt-2 flex flex-wrap gap-2"><input name="referral_code" required maxlength="32" placeholder="Enter referral code" class="rounded-lg border px-3 py-2"><button class="rounded-lg bg-blue-600 px-4 py-2 text-white">Apply code</button></div>
