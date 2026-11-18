@@ -95,6 +95,9 @@ final class PhoneticsAdminController extends Controller
             'uk_audio' => ['nullable', 'file', 'mimetypes:audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/ogg,application/ogg,audio/mp4,audio/webm,video/webm', 'max:5120'],
             'us_audio' => ['nullable', 'file', 'mimetypes:audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/ogg,application/ogg,audio/mp4,audio/webm,video/webm', 'max:5120'],
             'card_bg_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'remove_uk_audio' => ['nullable', 'boolean'],
+            'remove_us_audio' => ['nullable', 'boolean'],
+            'remove_card_bg_image' => ['nullable', 'boolean'],
         ]);
 
         $newPaths = [];
@@ -165,19 +168,23 @@ final class PhoneticsAdminController extends Controller
         $data['card_animation'] = $data['card_animation'] ?? $entry->card_animation ?? 'none';
 
         try {
-            foreach (['uk_audio' => 'audio/uk', 'us_audio' => 'audio/us', 'card_bg_image' => 'images/cards'] as $field => $directory) {
+            $mediaFields = [
+                'uk_audio' => ['directory' => 'audio/uk', 'column' => 'uk_audio_path', 'remove' => 'remove_uk_audio'],
+                'us_audio' => ['directory' => 'audio/us', 'column' => 'us_audio_path', 'remove' => 'remove_us_audio'],
+                'card_bg_image' => ['directory' => 'images/cards', 'column' => 'card_bg_image_path', 'remove' => 'remove_card_bg_image'],
+            ];
+            foreach ($mediaFields as $field => $media) {
+                $column = $media['column'];
                 if ($request->hasFile($field)) {
-                    $column = match ($field) {
-                        'uk_audio' => 'uk_audio_path',
-                        'us_audio' => 'us_audio_path',
-                        default => 'card_bg_image_path',
-                    };
-                    $path = $this->storeMedia($request->file($field), $directory);
+                    $path = $this->storeMedia($request->file($field), $media['directory']);
                     $newPaths[] = $path;
                     if ($entry->{$column}) {
                         $oldPaths[] = $entry->{$column};
                     }
                     $data[$column] = $path;
+                } elseif ($request->boolean($media['remove']) && $entry->{$column}) {
+                    $oldPaths[] = $entry->{$column};
+                    $data[$column] = null;
                 }
             }
 
