@@ -12,7 +12,14 @@
 
         <section id="protected-player" class="hidden bg-slate-950 rounded-2xl overflow-hidden shadow-lg">
             <div class="relative bg-black aspect-video flex items-center justify-center">
-                <video id="protected-video" class="hidden w-full h-full" controls controlsList="nodownload noplaybackrate" disablePictureInPicture playsinline oncontextmenu="return false"></video>
+                <video id="protected-video" class="hidden w-full h-full" controls controlsList="nodownload noplaybackrate noremoteplayback" disablePictureInPicture disableRemotePlayback playsinline oncontextmenu="return false"></video>
+                <div id="protected-video-ended" class="hidden absolute inset-0 z-10 bg-slate-950/95 text-white flex-col items-center justify-center gap-3 p-6 text-center">
+                    <span class="text-3xl" aria-hidden="true">✓</span>
+                    <h2 class="text-lg font-extrabold">Lesson completed</h2>
+                    <p class="text-sm text-white/70">Continue with the next lesson in this course when you are ready.</p>
+                    <button type="button" id="protected-next-lesson" class="hidden rounded-xl bg-sky-600 px-5 py-3 text-sm font-bold text-white hover:bg-sky-500">Continue to next lesson</button>
+                    <button type="button" id="protected-close-ended" class="rounded-xl border border-white/30 px-4 py-2 text-xs font-semibold text-white">Stay on this lesson</button>
+                </div>
                 <audio id="protected-audio" class="hidden w-full" controls controlsList="nodownload" oncontextmenu="return false"></audio>
                 <iframe id="protected-pdf" class="hidden w-full h-[75vh] bg-white" title="Protected lesson PDF" referrerpolicy="same-origin"></iframe>
                 <div id="protected-watermark" class="pointer-events-none absolute inset-0 overflow-hidden flex items-center justify-center">
@@ -94,6 +101,9 @@
     const title = document.getElementById('protected-player-title');
     const download = document.getElementById('protected-download');
     const noDownload = document.getElementById('protected-no-download');
+    const endedPanel = document.getElementById('protected-video-ended');
+    const nextLessonButton = document.getElementById('protected-next-lesson');
+    let activeLessonButton = null;
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
     const recordLessonCompletion = async (button, player) => {
         if (!window.fetch || !csrfToken) return;
@@ -123,8 +133,22 @@
         }
     };
     video.addEventListener('ended', () => {
-        const active = document.querySelector('.protected-lesson-open[data-lesson-id="' + title.dataset.lessonId + '"]');
-        if (active) recordLessonCompletion(active, video);
+        if (activeLessonButton) recordLessonCompletion(activeLessonButton, video);
+        endedPanel.classList.remove('hidden');
+        endedPanel.classList.add('flex');
+        const ordered = Array.from(buttons);
+        const next = ordered[ordered.indexOf(activeLessonButton) + 1];
+        if (next) {
+            nextLessonButton.classList.remove('hidden');
+            nextLessonButton.onclick = () => { endedPanel.classList.add('hidden'); endedPanel.classList.remove('flex'); next.click(); };
+        } else {
+            nextLessonButton.classList.add('hidden');
+            nextLessonButton.onclick = null;
+        }
+    });
+    document.getElementById('protected-close-ended')?.addEventListener('click', () => {
+        endedPanel.classList.add('hidden');
+        endedPanel.classList.remove('flex');
     });
     audio.addEventListener('ended', () => {
         const active = document.querySelector('.protected-lesson-open[data-lesson-id="' + title.dataset.lessonId + '"]');
@@ -149,6 +173,8 @@
             if (!response.ok) throw new Error(response.status === 403 ? 'Your course access is not active.' : 'Unable to open this lesson.');
             const access = await response.json();
             stopPlayers();
+            endedPanel.classList.add('hidden'); endedPanel.classList.remove('flex');
+            activeLessonButton = button;
             panel.classList.remove('hidden');
             title.textContent = button.dataset.title || 'Protected lesson';
             title.dataset.lessonId = button.dataset.lessonId || '';
