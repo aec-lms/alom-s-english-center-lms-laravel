@@ -13,6 +13,8 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Mail;
 use Plugins\Modules\NotificationCenter\Models\LmsNotification;
 use Plugins\Modules\PushNotifications\Services\FirebaseCloudMessagingService;
@@ -152,12 +154,29 @@ class DeliverNotificationJob implements ShouldQueue, ShouldBeUnique
 
     public function failed(?Throwable $exception): void
     {
+        $notification = LmsNotification::query()->find($this->notificationId);
+        $isPush = $notification?->channel === 'push';
+        $failureMessage = $isPush
+            ? 'Push delivery failed after retry attempts. Check Firebase configuration and server logs.'
+            : 'Mail transport failed after retry attempts. Check server mail logs.';
+
+        if ($isPush && Schema::hasTable('push_notification_deliveries')) {
+            DB::table('push_notification_deliveries')
+                ->where('notification_id', $this->notificationId)
+                ->where('status', 'pending')
+                ->update([
+                    'status' => 'failed',
+                    'last_error' => $failureMessage,
+                    'updated_at' => now(),
+                ]);
+        }
+
         LmsNotification::query()
             ->whereKey($this->notificationId)
             ->whereNotIn('status', ['sent', 'read'])
             ->update([
                 'status' => 'failed',
-                'last_error' => 'Mail transport failed after retry attempts. Check server mail logs.',
+                'last_error' => $failureMessage,
                 'processed_at' => now(),
             ]);
     }

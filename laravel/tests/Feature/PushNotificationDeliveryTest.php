@@ -153,4 +153,43 @@ class PushNotificationDeliveryTest extends TestCase
         $this->assertSame('no_devices', app(FirebaseCloudMessagingService::class)->deliver($notification));
         Http::assertNothingSent();
     }
+    public function test_authenticated_mobile_client_can_register_and_refresh_its_fcm_device_token(): void
+    {
+        [, $user] = $this->prepareModules();
+        $token = $user->createToken('push-token-registration')->plainTextToken;
+        $payload = [
+            'platform' => 'android',
+            'device_name' => 'Student Android',
+            'device_id' => 'stable-fcm-device-id',
+            'app_version' => '1.0.0',
+            'push_token' => 'first-fcm-registration-token',
+        ];
+
+        $this->withToken($token)->postJson('/api/v1/push-token', $payload)
+            ->assertOk()
+            ->assertJsonPath('message', 'Mobile push token registered.');
+
+        $this->assertDatabaseHas('mobile_device_tokens', [
+            'user_id' => $user->id,
+            'device_id' => 'stable-fcm-device-id',
+            'push_token' => 'first-fcm-registration-token',
+            'is_active' => true,
+        ]);
+
+        $payload['push_token'] = 'refreshed-fcm-registration-token';
+        $this->withToken($token)->postJson('/api/v1/push-token', $payload)->assertOk();
+
+        $this->assertDatabaseHas('mobile_device_tokens', [
+            'user_id' => $user->id,
+            'device_id' => 'stable-fcm-device-id',
+            'push_token' => 'refreshed-fcm-registration-token',
+            'is_active' => true,
+        ]);
+        $this->assertDatabaseMissing('mobile_device_tokens', [
+            'user_id' => $user->id,
+            'device_id' => 'stable-fcm-device-id',
+            'push_token' => 'first-fcm-registration-token',
+        ]);
+    }
+
 }

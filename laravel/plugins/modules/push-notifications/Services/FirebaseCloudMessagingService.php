@@ -66,6 +66,14 @@ class FirebaseCloudMessagingService
             return 'not_configured';
         }
 
+        $payloadBytes = strlen(json_encode([
+            'notification' => ['title' => (string) $notification->title, 'body' => (string) $notification->message],
+            'data' => ['notification_id' => (string) $notification->id, 'screen' => 'notifications'],
+        ], JSON_THROW_ON_ERROR));
+        if ($payloadBytes > 4000) {
+            return 'payload_too_large';
+        }
+
         foreach ($devices as $device) {
             DB::table('push_notification_deliveries')->insertOrIgnore([
                 'notification_id' => $notification->id,
@@ -77,15 +85,7 @@ class FirebaseCloudMessagingService
             ]);
         }
 
-        $payloadBytes = strlen(json_encode([
-            'notification' => ['title' => (string) $notification->title, 'body' => (string) $notification->message],
-            'data' => ['notification_id' => (string) $notification->id, 'screen' => 'notifications'],
-        ], JSON_THROW_ON_ERROR));
-        if ($payloadBytes > 4000) {
-            return 'payload_too_large';
-        }
-
-        $accessToken = $this->accessToken($credentials);
+                $accessToken = $this->accessToken($credentials);
         $endpoint = 'https://fcm.googleapis.com/v1/projects/'.rawurlencode($credentials['project_id']).'/messages:send';
         $sentCount = 0;
 
