@@ -100,7 +100,11 @@ class MarketingController extends Controller
 
         $this->audit->log('marketing.coupon_created', 'promo_coupon', (string) $coupon->id, ['code' => $coupon->code]);
 
-        return back()->with('status', "Promo coupon '{$coupon->code}' ({$coupon->discount_percent}% OFF) created.");
+        $discountLabel = $coupon->discount_type === 'fixed'
+            ? number_format((float) $coupon->discount_amount, 2) . ' BDT OFF'
+            : $coupon->discount_percent . '% OFF';
+
+        return back()->with('status', "Promo coupon '{$coupon->code}' ({$discountLabel}) created.");
     }
     public function updateCoupon(Request $request, int $couponId): RedirectResponse
     {
