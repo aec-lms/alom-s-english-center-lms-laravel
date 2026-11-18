@@ -313,7 +313,9 @@ class MobileApi {
           headers: {
             'Accept': 'application/json',
             'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
           },
+          body: jsonEncode({'device_id': await _deviceId()}),
         );
       } finally {
         await storage.delete(key: _tokenKey);
