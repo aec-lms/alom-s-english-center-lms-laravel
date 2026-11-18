@@ -31,7 +31,14 @@ final class PhoneticsExamController extends Controller
         $this->assertAudience($exam, $course);
 
         if ($exam->max_attempts > 0) {
-            $count = PhoneticExamAttempt::query()->where('exam_id', $exam->id)->where('user_id', $request->user()->id)->where('status', 'submitted')->count();
+            $count = PhoneticExamAttempt::query()
+                ->where('exam_id', $exam->id)
+                ->where('user_id', $request->user()->id)
+                ->where(function ($attempts): void {
+                    $attempts->where('status', 'submitted')
+                        ->orWhere(fn ($active) => $active->where('status', 'in_progress')
+                            ->where(fn ($expiry) => $expiry->whereNull('expires_at')->orWhere('expires_at', '>', now())));
+                })->count();
             abort_if($count >= $exam->max_attempts, 403, 'You have used all attempts for this examination.');
         }
 
