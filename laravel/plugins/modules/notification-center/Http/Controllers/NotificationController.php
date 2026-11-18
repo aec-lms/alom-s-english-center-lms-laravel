@@ -15,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Plugins\Modules\NotificationCenter\Models\LmsNotification;
 use Plugins\Modules\NotificationCenter\Jobs\DeliverNotificationJob;
+use Plugins\Modules\PushNotifications\Services\FirebaseCloudMessagingService;
 
 class NotificationController extends Controller
 {
@@ -63,6 +64,7 @@ class NotificationController extends Controller
             'in_app' => 'sent',
             'email' => $this->emailDeliveryConfigured($recipient) ? 'queued' : 'not_configured',
             'sms' => $this->sendSms($recipient, $validated['message']),
+            'push' => app(FirebaseCloudMessagingService::class)->canDeliverTo((int) $recipient->id) ? 'queued' : 'not_configured',
             default => 'provider_not_implemented',
         };
 
@@ -75,7 +77,7 @@ class NotificationController extends Controller
             'status' => $status,
         ]);
 
-        if ($validated['channel'] === 'email' && $status === 'queued') {
+        if (in_array($validated['channel'], ['email', 'push'], true) && $status === 'queued') {
             DeliverNotificationJob::dispatch((int) $record->id)->afterCommit();
         }
 
@@ -88,10 +90,12 @@ class NotificationController extends Controller
             'sent' => $validated['channel'] === 'in_app'
                 ? 'In-app notification added to the user inbox.'
                 : 'Email accepted by the configured mail transport.',
-            'queued' => 'Email queued for delivery. Final delivery status updates after the SMTP worker processes it.',
+            'queued' => $record->channel === 'push'
+                ? 'Push notification queued for Firebase delivery. Final status updates after the worker processes it.'
+                : 'Email queued for delivery. Final delivery status updates after the SMTP worker processes it.',
             'submitted' => 'SMS submitted to the provider; handset delivery is not confirmed.',
             'not_configured' => ucfirst($validated['channel']) . ' was not sent because its provider is not configured.',
-            'provider_not_implemented' => 'Push notifications are not connected yet. The notification was recorded but not sent.',
+            'provider_not_implemented' => 'No verified delivery adapter is configured for this channel. The notification was recorded but not sent.',
             'failed' => ucfirst($validated['channel']) . ' delivery failed. Check the provider settings and recipient details.',
             'delivery_unknown' => 'Provider delivery could not be confirmed. Check the provider portal before retrying.',
             default => 'Notification recorded with status: ' . $status,
