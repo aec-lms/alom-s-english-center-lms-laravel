@@ -299,6 +299,54 @@ PHP;
         File::deleteDirectory($targetDir);
     }
 
+    public function test_zip_uploader_rejects_a_symlinked_existing_plugin_target_without_touching_its_destination(): void
+    {
+        $this->markSystemInstalled();
+
+        $slug = 'symlink-target-probe';
+        $modulesRoot = realpath((string) config('plugins.modules_path'));
+        $this->assertNotFalse($modulesRoot);
+        $targetDir = $modulesRoot . DIRECTORY_SEPARATOR . $slug;
+        $outsideDir = storage_path('app/plugin-outside-target-' . uniqid('', true));
+        $zipPath = sys_get_temp_dir() . '/symlink_target_' . uniqid('', true) . '.zip';
+        File::ensureDirectoryExists($outsideDir);
+        File::put($outsideDir . DIRECTORY_SEPARATOR . 'keep.txt', 'must remain untouched');
+
+        $manifest = json_encode([
+            'slug' => $slug,
+            'name' => 'Symlink Target Probe',
+            'version' => '1.0.0',
+            'core_compatibility' => '^2.0',
+            'dependencies' => [],
+        ], JSON_THROW_ON_ERROR);
+        $zip = new ZipArchive();
+        $this->assertTrue($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true);
+        $zip->addFromString($slug . '/plugin.json', $manifest);
+        $zip->addFromString($slug . '/checksums.json', json_encode([
+            'plugin.json' => hash('sha256', $manifest),
+        ], JSON_THROW_ON_ERROR));
+        $zip->close();
+
+        try {
+            $this->assertTrue(symlink($outsideDir, $targetDir));
+            try {
+                app(PluginManager::class)->installOrUpdateFromZip($zipPath);
+                $this->fail('Expected the plugin uploader to reject a symlinked target.');
+            } catch (RuntimeException $exception) {
+                $this->assertStringContainsString('symbolic link', $exception->getMessage());
+            }
+
+            $this->assertTrue(is_link($targetDir));
+            $this->assertSame('must remain untouched', File::get($outsideDir . DIRECTORY_SEPARATOR . 'keep.txt'));
+        } finally {
+            if (is_link($targetDir)) {
+                @unlink($targetDir);
+            }
+            File::deleteDirectory($outsideDir);
+            @unlink($zipPath);
+        }
+    }
+
     public function test_zip_uploader_rejects_path_traversal_and_corrupted_checksums(): void
     {
         $this->markSystemInstalled();
