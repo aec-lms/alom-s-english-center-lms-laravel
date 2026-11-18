@@ -726,9 +726,19 @@ class PluginManager
 
         // Keep a private, integrity-checked recovery snapshot before permanent removal.
         $backupRoot = storage_path('app/plugin-permanent-delete-backups');
+        if (is_link($backupRoot)) {
+            throw new RuntimeException('Permanent-delete recovery directory cannot be a symbolic link.');
+        }
         File::ensureDirectoryExists($backupRoot);
-        @chmod($backupRoot, 0700);
-        $backupPath = $backupRoot . DIRECTORY_SEPARATOR . $archiveName;
+        $resolvedBackupRoot = realpath($backupRoot);
+        if (!$resolvedBackupRoot || !is_dir($resolvedBackupRoot)) {
+            throw new RuntimeException('Permanent-delete recovery directory is missing or unsafe.');
+        }
+        @chmod($resolvedBackupRoot, 0700);
+        $backupPath = $resolvedBackupRoot . DIRECTORY_SEPARATOR . $archiveName;
+        if (file_exists($backupPath) || is_link($backupPath)) {
+            throw new RuntimeException('A private recovery snapshot already exists; permanent deletion was cancelled.');
+        }
         if (!File::copyDirectory($source, $backupPath)) {
             File::deleteDirectory($backupPath);
             throw new RuntimeException('Permanent delete cancelled: could not create a private backup.');
