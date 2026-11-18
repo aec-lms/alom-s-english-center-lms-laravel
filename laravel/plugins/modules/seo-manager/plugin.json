@@ -32,6 +32,12 @@
             "label": "Canonical Base URL",
             "type": "text",
             "secret": false
+        },
+        {
+            "key": "robots_txt",
+            "label": "Robots.txt content",
+            "type": "text",
+            "secret": false
         }
     ],
     "admin_menu": [
