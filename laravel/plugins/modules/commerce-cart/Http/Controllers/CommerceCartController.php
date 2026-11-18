@@ -203,6 +203,16 @@ class CommerceCartController extends Controller
         abort_if($subtotal <= 0, 422, 'The checkout total must be greater than zero.');
 
         $order = DB::transaction(function () use ($user, $cart, $resolved, $subtotal, $data, $currencies): object {
+            // Serialize checkout attempts per student; the lock is held through order creation.
+            abort_unless(DB::table('users')->where('id', $user->id)->lockForUpdate()->first(), 404);
+            $hasUnresolvedOrder = DB::table('commerce_orders')->where('user_id', $user->id)
+                ->whereIn('status', ['awaiting_payment', 'risk_review'])
+                ->whereIn('payment_status', ['unpaid', 'pending', 'risk_review'])
+                ->exists();
+            abort_if($hasUnresolvedOrder, 409, 'A previous order is awaiting payment confirmation or reconciliation.');
+            $lockedCart = DB::table('commerce_carts')->where('id', $cart->id)
+                ->where('user_id', $user->id)->where('status', 'active')->lockForUpdate()->first();
+            abort_unless($lockedCart, 409, 'Your cart has already been checked out. Refresh the page before trying again.');
             $invoice = FeeInvoice::query()->create([
                 'invoice_number' => 'WEB-' . strtoupper(Str::random(10)),
                 'student_id' => null,
