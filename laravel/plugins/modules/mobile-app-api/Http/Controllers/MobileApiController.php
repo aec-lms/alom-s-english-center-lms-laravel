@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Laravel\Sanctum\PersonalAccessToken;
 use Plugins\Modules\CourseManagement\Models\Course;
 use Plugins\Modules\CourseManagement\Models\Enrollment;
 use Plugins\Modules\MobileAppApi\Models\MobileDeviceToken;
@@ -209,13 +210,24 @@ class MobileApiController extends Controller
     public function logout(Request $request): JsonResponse
     {
         $user = $request->user();
-        if ($user && $user->currentAccessToken()) {
-            $user->currentAccessToken()->delete();
+        $plainTextToken = $request->bearerToken();
+
+        // Revoke the exact bearer token presented by this client. This avoids
+        // relying on a guard's current token when it is a transient session token.
+        if ($user && is_string($plainTextToken) && $plainTextToken !== '') {
+            $accessToken = PersonalAccessToken::findToken($plainTextToken);
+            if ($accessToken && (int) $accessToken->tokenable_id === (int) $user->getKey()) {
+                $accessToken->delete();
+            }
+        }
+
+        $currentToken = $user?->currentAccessToken();
+        if ($currentToken instanceof PersonalAccessToken) {
+            $currentToken->delete();
         }
 
         return response()->json(['message' => 'Signed out successfully.']);
     }
-
     public function registerPushToken(Request $request): JsonResponse
     {
         $validated = $request->validate([
