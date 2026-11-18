@@ -472,6 +472,13 @@ class UniversalPaymentController extends Controller
     {
         try {
             $transaction = $this->storefrontGateway->verifySslcommerz($request->all());
+            $checkoutNotes = json_decode((string) $transaction->notes, true);
+            if (is_array($checkoutNotes) && ($checkoutNotes['purpose'] ?? null) === 'course_cart') {
+                return redirect('/student/course-commerce/cart')->with($transaction->status === 'risk_review' ? 'status' : 'status',
+                    $transaction->status === 'risk_review'
+                        ? 'Payment was received but course access requires manual review. Please contact support.'
+                        : 'Payment verified. Your purchased courses are now active.');
+            }
             if ($transaction->status === 'risk_review') {
                 if ($transaction->learn_earn_exam_id) {
                     return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)
@@ -492,6 +499,10 @@ class UniversalPaymentController extends Controller
             report($exception);
             $reference = trim((string) $request->input('tran_id', ''));
             $transaction = UniversalPaymentTransaction::query()->where('reference', $reference)->first();
+            $checkoutNotes = json_decode((string) ($transaction?->notes ?? ''), true);
+            if (is_array($checkoutNotes) && ($checkoutNotes['purpose'] ?? null) === 'course_cart') {
+                return redirect('/student/course-commerce/cart')->withErrors(['payment' => 'Payment could not yet be verified. No course access has been granted.']);
+            }
             if ($transaction?->learn_earn_exam_id) {
                 return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)
                     ->withErrors(['payment' => 'Payment could not yet be verified. No exam access has been granted.']);
@@ -519,6 +530,15 @@ class UniversalPaymentController extends Controller
     public function sslcommerzFailed(Request $request): RedirectResponse
     {
         $transaction = $this->storefrontGateway->markSslcommerzFailed($request->all(), 'failed');
+        $checkoutNotes = json_decode((string) $transaction->notes, true);
+        if (is_array($checkoutNotes) && ($checkoutNotes['purpose'] ?? null) === 'course_cart') {
+            if (in_array($transaction->status, ['verified', 'risk_review'], true)) {
+                return redirect('/student/course-commerce/cart')->with('status', $transaction->status === 'verified'
+                    ? 'Payment was already verified; your course access remains available.'
+                    : 'Payment requires manual review. Course access has not been granted yet.');
+            }
+            return redirect('/student/course-commerce/cart')->withErrors(['payment' => 'Payment was not completed. Your cart is available to try again.']);
+        }
         if (in_array($transaction->status, ['verified', 'risk_review'], true)) {
             $message = $transaction->status === 'verified'
                 ? 'Payment was already verified; your access remains available.'
@@ -541,6 +561,15 @@ class UniversalPaymentController extends Controller
     public function sslcommerzCancelled(Request $request): RedirectResponse
     {
         $transaction = $this->storefrontGateway->markSslcommerzFailed($request->all(), 'cancelled');
+        $checkoutNotes = json_decode((string) $transaction->notes, true);
+        if (is_array($checkoutNotes) && ($checkoutNotes['purpose'] ?? null) === 'course_cart') {
+            if (in_array($transaction->status, ['verified', 'risk_review'], true)) {
+                return redirect('/student/course-commerce/cart')->with('status', $transaction->status === 'verified'
+                    ? 'Payment was already verified; your course access remains available.'
+                    : 'Payment requires manual review. Course access has not been granted yet.');
+            }
+            return redirect('/student/course-commerce/cart')->with('status', 'Payment was cancelled. Your cart is available to try again.');
+        }
         if (in_array($transaction->status, ['verified', 'risk_review'], true)) {
             $message = $transaction->status === 'verified'
                 ? 'Payment was already verified; your access remains available.'
