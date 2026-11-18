@@ -80,6 +80,48 @@ class CommerceCartController extends Controller
     }
 
 
+
+    public function sellables(): View
+    {
+        abort_unless(auth()->user()?->can('commerce.orders.manage'), 403);
+        $sellables = DB::table('commerce_sellables')->latest('id')->paginate(30);
+        return view('commerce-cart::sellables', compact('sellables'));
+    }
+
+    public function storeSellable(Request $request): RedirectResponse
+    {
+        abort_unless($request->user()?->can('commerce.orders.manage'), 403);
+        $data = $request->validate([
+            'type' => ['required', 'in:subscription,live_class,other'],
+            'title' => ['required', 'string', 'max:200'],
+            'sku' => ['nullable', 'string', 'max:80'],
+            'description' => ['nullable', 'string', 'max:3000'],
+            'price' => ['required', 'numeric', 'min:0.01', 'max:500000'],
+            'currency' => ['required', 'string', 'regex:/^[A-Z]{3}$/'],
+            'duration_days' => ['nullable', 'integer', 'min:1', 'max:3650'],
+            'is_active' => ['nullable', 'boolean'],
+        ]);
+        $entitlement = ['type' => $data['type']];
+        if ($data['type'] === 'subscription') $entitlement['duration_days'] = (int) ($data['duration_days'] ?? 30);
+        DB::table('commerce_sellables')->insert([
+            'type' => $data['type'], 'title' => $data['title'], 'sku' => $data['sku'] ?? null,
+            'description' => $data['description'] ?? null, 'price' => $data['price'],
+            'currency' => strtoupper($data['currency']), 'entitlement' => json_encode($entitlement),
+            'is_active' => $request->boolean('is_active', true),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        return back()->with('status', 'Paid service added to the unified store catalogue.');
+    }
+
+    public function toggleSellable(Request $request, int $sellable): RedirectResponse
+    {
+        abort_unless($request->user()?->can('commerce.orders.manage'), 403);
+        $record = DB::table('commerce_sellables')->where('id', $sellable)->first();
+        abort_unless($record, 404);
+        DB::table('commerce_sellables')->where('id', $sellable)->update(['is_active' => !$record->is_active, 'updated_at' => now()]);
+        return back()->with('status', 'Store catalogue availability updated.');
+    }
+
     public function checkout(Request $request, UniversalPaymentOrchestrator $payments): RedirectResponse
     {
         $data = $request->validate([
