@@ -186,6 +186,47 @@ PHP);
     }
 
 
+    public function test_route_registration_failure_restores_previous_plugin_catalog_state(): void
+    {
+        $this->markSystemInstalled();
+
+        $slug = 'route-rollback-probe';
+        $pluginDir = (string) config('plugins.modules_path') . DIRECTORY_SEPARATOR . $slug;
+        File::ensureDirectoryExists($pluginDir . DIRECTORY_SEPARATOR . 'Routes');
+        file_put_contents($pluginDir . DIRECTORY_SEPARATOR . 'plugin.json', json_encode([
+            'slug' => $slug,
+            'name' => 'Route Rollback Probe',
+            'version' => '2.0.0',
+            'core_compatibility' => '^2.0',
+            'dependencies' => [],
+        ], JSON_THROW_ON_ERROR));
+        file_put_contents($pluginDir . DIRECTORY_SEPARATOR . 'Routes' . DIRECTORY_SEPARATOR . 'web.php', "<?php this is deliberately invalid PHP");
+
+        $previous = PluginRecord::query()->create([
+            'slug' => $slug,
+            'name' => 'Route Rollback Probe (catalog)',
+            'version' => '1.0.0',
+            'is_installed' => false,
+            'is_enabled' => false,
+        ]);
+
+        try {
+            try {
+                app(PluginManager::class)->install($slug);
+                $this->fail('Expected route registration to fail.');
+            } catch (\ParseError) {
+                // The route file is intentionally invalid to simulate a post-commit failure.
+            }
+
+            $restored = PluginRecord::query()->where('slug', $slug)->firstOrFail();
+            $this->assertSame($previous->version, $restored->version);
+            $this->assertFalse($restored->is_installed);
+            $this->assertFalse($restored->is_enabled);
+        } finally {
+            File::deleteDirectory($pluginDir);
+        }
+    }
+
     public function test_failed_plugin_install_restores_module_files_and_catalog_state(): void
     {
         $this->markSystemInstalled();
