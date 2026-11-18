@@ -22,6 +22,6 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:expense-management'])
             Route::post('/{expense}/review', [ExpenseController::class, 'review'])->whereNumber('expense')->name('review');
         });
         Route::middleware('permission:expenses.export')->get('/export.csv', [ExpenseController::class, 'export'])->name('export');
-        Route::get('/{expense}/receipt', [ExpenseController::class, 'downloadReceipt'])->whereNumber('expense')->name('receipt');
+        Route::get('/{expense}/receipt', [ExpenseController::class, 'downloadReceipt'])->whereNumber('expense')->middleware('permission:expenses.view')->name('receipt');
         Route::post('/recycle-bin/{expense}/restore', [ExpenseController::class, 'restore'])->whereNumber('expense')->middleware('permission:expenses.manage')->name('restore');
     });
