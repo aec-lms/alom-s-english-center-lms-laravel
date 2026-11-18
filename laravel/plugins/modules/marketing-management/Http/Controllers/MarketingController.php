@@ -81,6 +81,7 @@ class MarketingController extends Controller
         $this->ensureCentralAdmin($request->user());
         $validated = $request->validate([
             'code' => ['required', 'string', 'max:40', 'unique:promo_coupons,code'],
+            'description' => ['nullable', 'string', 'max:200'],
             'discount_type' => ['sometimes', 'in:percent,fixed'],
             'discount_percent' => ['nullable', 'required_if:discount_type,percent', 'integer', 'min:1', 'max:100'],
             'discount_amount' => ['nullable', 'required_if:discount_type,fixed', 'numeric', 'min:0.01', 'max:100000000'],
@@ -97,6 +98,7 @@ class MarketingController extends Controller
 
         $coupon = PromoCoupon::query()->create([
             'code' => strtoupper(trim($validated['code'])),
+            'description' => $validated['description'] ?? null,
             'discount_type' => $validated['discount_type'] ?? 'percent',
             'discount_percent' => (int) ($validated['discount_percent'] ?? 0),
             'discount_amount' => $validated['discount_amount'] ?? null,
@@ -124,6 +126,7 @@ class MarketingController extends Controller
     {
         $this->ensureCentralAdmin($request->user());
         $validated = $request->validate([
+            'description' => ['nullable', 'string', 'max:200'],
             'discount_type' => ['required', 'in:percent,fixed'],
             'discount_percent' => ['nullable', 'required_if:discount_type,percent', 'integer', 'min:1', 'max:100'],
             'discount_amount' => ['nullable', 'required_if:discount_type,fixed', 'numeric', 'min:0.01', 'max:100000000'],
@@ -141,6 +144,7 @@ class MarketingController extends Controller
         $couponCode = DB::transaction(function () use ($request, $couponId, $validated): string {
             $coupon = PromoCoupon::query()->lockForUpdate()->findOrFail($couponId);
             $coupon->update([
+                'description' => $validated['description'] ?? null,
                 'discount_type' => $validated['discount_type'],
                 'discount_percent' => (int) ($validated['discount_percent'] ?? 0),
                 'discount_amount' => $validated['discount_amount'] ?? null,
