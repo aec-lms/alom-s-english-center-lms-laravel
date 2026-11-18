@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\MarketingManagement\\Services;
+namespace Plugins\Modules\MarketingManagement\Services;
 
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Str;
-use Illuminate\\Validation\\ValidationException;
-use Plugins\\Modules\\MarketingManagement\\Models\\PromoCoupon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+use Plugins\Modules\MarketingManagement\Models\PromoCoupon;
 
 class CourseCouponService
 {
