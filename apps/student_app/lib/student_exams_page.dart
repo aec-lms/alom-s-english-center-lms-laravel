@@ -329,20 +329,26 @@ class _StudentExamAttemptPageState extends State<StudentExamAttemptPage> {
                               ),
                               Text('Marks: ${question['marks'] ?? 0}'),
                               const SizedBox(height: 8),
-                              for (var optionIndex = 0; optionIndex < options.length; optionIndex++)
-                                RadioListTile<int>(
-                                  contentPadding: EdgeInsets.zero,
-                                  dense: true,
-                                  value: optionIndex,
-                                  groupValue: answers[id],
-                                  title: Text(options[optionIndex].toString()),
-                                  onChanged: submitting || result != null
-                                      ? null
-                                      : (value) {
-                                          if (value == null) return;
-                                          setState(() => answers[id] = value);
-                                        },
+                              RadioGroup<int>(
+                                groupValue: answers[id],
+                                onChanged: submitting || result != null
+                                    ? null
+                                    : (value) {
+                                        if (value == null) return;
+                                        setState(() => answers[id] = value);
+                                      },
+                                child: Column(
+                                  children: [
+                                    for (var optionIndex = 0; optionIndex < options.length; optionIndex++)
+                                      RadioListTile<int>(
+                                        contentPadding: EdgeInsets.zero,
+                                        dense: true,
+                                        value: optionIndex,
+                                        title: Text(options[optionIndex].toString()),
+                                      ),
+                                  ],
                                 ),
+                              ),
                             ],
                           ),
                         ),
