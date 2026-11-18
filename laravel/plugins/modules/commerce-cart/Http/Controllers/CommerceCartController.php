@@ -34,6 +34,7 @@ class CommerceCartController extends Controller
 
     public function index(Request $request): View
     {
+        abort_unless($request->user()?->hasRole('student'), 403);
         $cart = $this->activeCart((int) $request->user()->id);
         $items = DB::table('commerce_cart_items')->where('cart_id', $cart->id)->orderBy('id')->get();
         $subtotal = (float) $items->sum(fn ($item) => (float) $item->unit_price * (int) $item->quantity);
@@ -48,14 +49,17 @@ class CommerceCartController extends Controller
             'item_id' => ['required', 'integer', 'min:1'],
             'quantity' => ['nullable', 'integer', 'min:1', 'max:20'],
         ]);
-        $item = $this->catalog->resolve($data['item_type'], (int) $data['item_id']);
+        $item = $this->catalog->resolve($data['item_type'], (int) $data['item_id'], $request->user());
         if ($item['type'] !== 'other' && (int) ($data['quantity'] ?? 1) !== 1) {
             return back()->withErrors(['quantity' => 'Course access, eBooks, exams, subscriptions and live-class passes can only be purchased once per order.']);
         }
         $cart = $this->activeCart((int) $request->user()->id);
 
-        DB::transaction(function () use ($cart, $item, $data): void {
-            $existing = DB::table('commerce_cart_items')->where('cart_id', $cart->id)
+        DB::transaction(function () use ($cart, $item, $data, $request): void {
+            $lockedCart = DB::table('commerce_carts')->where('id', $cart->id)
+                ->where('user_id', $request->user()->id)->where('status', 'active')->lockForUpdate()->first();
+            abort_unless($lockedCart, 409, 'This cart has already been checked out. Start a new cart before adding more items.');
+            $existing = DB::table('commerce_cart_items')->where('cart_id', $lockedCart->id)
                 ->where('item_type', $item['type'])->where('item_id', $item['id'])->lockForUpdate()->first();
             // Access grants are single-quantity products. Repeated Add to Cart
             // requests must remain idempotent instead of creating an invalid quantity.
@@ -83,31 +87,42 @@ class CommerceCartController extends Controller
 
     public function update(Request $request, int $item): RedirectResponse
     {
+        abort_unless($request->user()?->hasRole('student'), 403);
         $data = $request->validate(['quantity' => ['required', 'integer', 'min:1', 'max:20']]);
         $cart = $this->activeCart((int) $request->user()->id);
-        $cartItem = DB::table('commerce_cart_items')->where('id', $item)->where('cart_id', $cart->id)->first();
-        abort_unless($cartItem, 404);
 
-        if ($cartItem->item_type !== 'other' && (int) $data['quantity'] !== 1) {
-            return back()->withErrors([
-                'quantity' => 'Course access, eBooks, exams, subscriptions and live-class passes can only be purchased once per order.',
-            ]);
-        }
+        DB::transaction(function () use ($request, $cart, $item, $data): void {
+            $lockedCart = DB::table('commerce_carts')->where('id', $cart->id)
+                ->where('user_id', $request->user()->id)->where('status', 'active')->lockForUpdate()->first();
+            abort_unless($lockedCart, 409, 'This cart has already been checked out.');
+            $cartItem = DB::table('commerce_cart_items')->where('id', $item)->where('cart_id', $lockedCart->id)->lockForUpdate()->first();
+            abort_unless($cartItem, 404);
 
-        DB::table('commerce_cart_items')->where('id', $item)->where('cart_id', $cart->id)
-            ->update(['quantity' => $data['quantity'], 'updated_at' => now()]);
+            if ($cartItem->item_type !== 'other' && (int) $data['quantity'] !== 1) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'quantity' => 'Course access, eBooks, exams, subscriptions and live-class passes can only be purchased once per order.',
+                ]);
+            }
+
+            DB::table('commerce_cart_items')->where('id', $item)->where('cart_id', $lockedCart->id)
+                ->update(['quantity' => $data['quantity'], 'updated_at' => now()]);
+        });
         return back()->with('status', 'Cart quantity updated.');
     }
 
     public function remove(Request $request, int $item): RedirectResponse
     {
+        abort_unless($request->user()?->hasRole('student'), 403);
         $cart = $this->activeCart((int) $request->user()->id);
-        $deleted = DB::table('commerce_cart_items')->where('id', $item)->where('cart_id', $cart->id)->delete();
-        abort_unless($deleted, 404);
+        DB::transaction(function () use ($request, $cart, $item): void {
+            $lockedCart = DB::table('commerce_carts')->where('id', $cart->id)
+                ->where('user_id', $request->user()->id)->where('status', 'active')->lockForUpdate()->first();
+            abort_unless($lockedCart, 409, 'This cart has already been checked out.');
+            $deleted = DB::table('commerce_cart_items')->where('id', $item)->where('cart_id', $lockedCart->id)->delete();
+            abort_unless($deleted, 404);
+        });
         return back()->with('status', 'Item removed from cart.');
     }
-
-
 
     public function orders(): View
     {
@@ -170,6 +185,7 @@ class CommerceCartController extends Controller
 
     public function checkout(Request $request, UniversalPaymentOrchestrator $payments): RedirectResponse
     {
+        abort_unless($request->user()?->hasRole('student'), 403);
         $data = $request->validate([
             'gateway' => ['required', 'in:gateway-sslcommerz,gateway-stripe,gateway-paypal'],
             'payer_name' => ['required', 'string', 'max:160'],
@@ -178,7 +194,7 @@ class CommerceCartController extends Controller
             'payment_method_id' => ['nullable', 'string', 'max:120'],
         ]);
         abort_unless(Schema::hasTable('fee_invoices') && app(PluginManager::class)->isEnabled('fees-management'), 503, 'The Fees & Invoicing module must be enabled for checkout.');
-        abort_unless(app(\App\Core\Plugins\PluginManager::class)->isEnabled('universal-payment'), 503, 'Universal Payment must be enabled.');
+        abort_unless(app(PluginManager::class)->isEnabled('universal-payment'), 503, 'Universal Payment must be enabled.');
 
         try {
             $payments->assertGatewayReady($data['gateway']);
@@ -187,44 +203,48 @@ class CommerceCartController extends Controller
         }
 
         $user = $request->user();
-        $unresolvedOrder = DB::table('commerce_orders')->where('user_id', $user->id)
-            ->whereIn('status', ['awaiting_payment', 'risk_review'])
-            ->whereIn('payment_status', ['unpaid', 'pending', 'risk_review'])
-            ->exists();
-        abort_if($unresolvedOrder, 409, 'A previous order is awaiting payment confirmation or reconciliation. Please contact support before starting another checkout.');
         $cart = $this->activeCart((int) $user->id);
-        $cartItems = DB::table('commerce_cart_items')->where('cart_id', $cart->id)->lockForUpdate()->get();
-        abort_if($cartItems->isEmpty(), 422, 'Your cart is empty.');
 
-        $resolved = [];
-        foreach ($cartItems as $cartItem) {
-            $fresh = $this->catalog->resolve((string) $cartItem->item_type, (int) $cartItem->item_id);
-            if ($fresh['type'] !== 'other' && (int) $cartItem->quantity !== 1) {
-                abort(422, 'Access-based products must have quantity one. Remove the duplicate quantity and try again.');
-            }
-            if ((float) $fresh['price'] !== (float) $cartItem->unit_price) {
-                DB::table('commerce_cart_items')->where('id', $cartItem->id)->update([
-                    'unit_price' => $fresh['price'], 'title_snapshot' => $fresh['title'], 'updated_at' => now(),
-                ]);
-            }
-            $resolved[] = [$cartItem, $fresh];
-        }
-        $currencies = collect($resolved)->pluck(1)->pluck('currency')->unique();
-        abort_unless($currencies->count() === 1, 422, 'A single order cannot mix currencies.');
-        $subtotal = round(collect($resolved)->sum(fn ($pair) => $pair[1]['price'] * (int) $pair[0]->quantity), 2);
-        abort_if($subtotal <= 0, 422, 'The checkout total must be greater than zero.');
-
-        $order = DB::transaction(function () use ($user, $cart, $resolved, $subtotal, $data, $currencies): object {
-            // Serialize checkout attempts per student; the lock is held through order creation.
+        // Lock and re-read the cart and every item in one transaction. Never
+        // create an order from a stale cart snapshot captured before the lock.
+        $order = DB::transaction(function () use ($user, $cart, $data): object {
             abort_unless(DB::table('users')->where('id', $user->id)->lockForUpdate()->first(), 404);
             $hasUnresolvedOrder = DB::table('commerce_orders')->where('user_id', $user->id)
                 ->whereIn('status', ['awaiting_payment', 'risk_review'])
                 ->whereIn('payment_status', ['unpaid', 'pending', 'risk_review'])
                 ->exists();
             abort_if($hasUnresolvedOrder, 409, 'A previous order is awaiting payment confirmation or reconciliation.');
+
             $lockedCart = DB::table('commerce_carts')->where('id', $cart->id)
                 ->where('user_id', $user->id)->where('status', 'active')->lockForUpdate()->first();
             abort_unless($lockedCart, 409, 'Your cart has already been checked out. Refresh the page before trying again.');
+
+            $cartItems = DB::table('commerce_cart_items')->where('cart_id', $lockedCart->id)
+                ->orderBy('id')->lockForUpdate()->get();
+            abort_if($cartItems->isEmpty(), 422, 'Your cart is empty.');
+
+            $resolved = [];
+            foreach ($cartItems as $cartItem) {
+                $fresh = $this->catalog->resolve((string) $cartItem->item_type, (int) $cartItem->item_id, $user);
+                if ($fresh['type'] !== 'other' && (int) $cartItem->quantity !== 1) {
+                    abort(422, 'Access-based products must have quantity one. Remove the duplicate quantity and try again.');
+                }
+                if ((float) $fresh['price'] !== (float) $cartItem->unit_price) {
+                    DB::table('commerce_cart_items')->where('id', $cartItem->id)->update([
+                        'unit_price' => $fresh['price'],
+                        'title_snapshot' => $fresh['title'],
+                        'metadata' => json_encode($fresh['metadata']),
+                        'updated_at' => now(),
+                    ]);
+                }
+                $resolved[] = [$cartItem, $fresh];
+            }
+
+            $currencies = collect($resolved)->pluck(1)->pluck('currency')->unique();
+            abort_unless($currencies->count() === 1, 422, 'A single order cannot mix currencies.');
+            $subtotal = round(collect($resolved)->sum(fn ($pair) => $pair[1]['price'] * (int) $pair[0]->quantity), 2);
+            abort_if($subtotal <= 0, 422, 'The checkout total must be greater than zero.');
+
             $invoice = FeeInvoice::query()->create([
                 'invoice_number' => 'WEB-' . strtoupper(Str::random(10)),
                 'student_id' => null,
@@ -241,20 +261,35 @@ class CommerceCartController extends Controller
                 'due_date' => now()->addDays(7)->toDateString(),
             ]);
             $orderId = DB::table('commerce_orders')->insertGetId([
-                'order_number' => 'AEC-' . strtoupper(Str::random(10)), 'user_id' => $user->id,
-                'invoice_id' => $invoice->id, 'branch_id' => $user->branch_id ?? null,
-                'currency' => $currencies->first(), 'subtotal' => $subtotal, 'discount_total' => 0,
-                'grand_total' => $subtotal, 'status' => 'awaiting_payment', 'payment_status' => 'unpaid',
+                'order_number' => 'AEC-' . strtoupper(Str::random(10)),
+                'user_id' => $user->id,
+                'invoice_id' => $invoice->id,
+                'branch_id' => $user->branch_id ?? null,
+                'currency' => $currencies->first(),
+                'subtotal' => $subtotal,
+                'discount_total' => 0,
+                'grand_total' => $subtotal,
+                'status' => 'awaiting_payment',
+                'payment_status' => 'unpaid',
                 'billing_snapshot' => json_encode(['name' => $data['payer_name'], 'email' => $data['payer_email'], 'phone' => $data['payer_phone']]),
-                'created_at' => now(), 'updated_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
+
             foreach ($resolved as [$cartItem, $fresh]) {
-                $orderItemId = DB::table('commerce_order_items')->insertGetId([
-                    'order_id' => $orderId, 'item_type' => $fresh['type'], 'item_id' => $fresh['id'],
-                    'title_snapshot' => $fresh['title'], 'quantity' => $cartItem->quantity,
-                    'unit_price' => $fresh['price'], 'line_total' => round($fresh['price'] * $cartItem->quantity, 2),
-                    'metadata' => json_encode($fresh['metadata']), 'created_at' => now(), 'updated_at' => now(),
+                DB::table('commerce_order_items')->insert([
+                    'order_id' => $orderId,
+                    'item_type' => $fresh['type'],
+                    'item_id' => $fresh['id'],
+                    'title_snapshot' => $fresh['title'],
+                    'quantity' => $cartItem->quantity,
+                    'unit_price' => $fresh['price'],
+                    'line_total' => round($fresh['price'] * $cartItem->quantity, 2),
+                    'metadata' => json_encode($fresh['metadata']),
+                    'created_at' => now(),
+                    'updated_at' => now(),
                 ]);
+
                 if ($fresh['type'] === 'course' && Schema::hasTable('enrollments')
                     && Schema::hasColumn('enrollments', 'invoice_id')) {
                     $existingEnrollment = DB::table('enrollments')->where('user_id', $user->id)
@@ -263,18 +298,30 @@ class CommerceCartController extends Controller
                         throw new \RuntimeException('You already have access to course: ' . $fresh['title']);
                     }
                     if ($existingEnrollment && $existingEnrollment->status === 'pending') {
+                        if (isset($existingEnrollment->branch_id) && $existingEnrollment->branch_id !== null
+                            && $user->branch_id !== null && (int) $existingEnrollment->branch_id !== (int) $user->branch_id) {
+                            throw new \RuntimeException('An existing pending enrollment belongs to a different branch.');
+                        }
                         DB::table('enrollments')->where('id', $existingEnrollment->id)->update([
-                            'invoice_id' => $invoice->id, 'updated_at' => now(),
+                            'invoice_id' => $invoice->id,
+                            'branch_id' => $user->branch_id ?? null,
+                            'updated_at' => now(),
                         ]);
                     } elseif (!$existingEnrollment) {
                         DB::table('enrollments')->insert([
-                            'user_id' => $user->id, 'course_id' => $fresh['id'], 'branch_id' => $user->branch_id ?? null,
-                            'invoice_id' => $invoice->id, 'status' => 'pending', 'created_at' => now(), 'updated_at' => now(),
+                            'user_id' => $user->id,
+                            'course_id' => $fresh['id'],
+                            'branch_id' => $user->branch_id ?? null,
+                            'invoice_id' => $invoice->id,
+                            'status' => 'pending',
+                            'created_at' => now(),
+                            'updated_at' => now(),
                         ]);
                     }
                 }
             }
-            DB::table('commerce_carts')->where('id', $cart->id)->update(['status' => 'converted', 'updated_at' => now()]);
+
+            DB::table('commerce_carts')->where('id', $lockedCart->id)->update(['status' => 'converted', 'updated_at' => now()]);
             return DB::table('commerce_orders')->where('id', $orderId)->first();
         });
 
@@ -284,7 +331,9 @@ class CommerceCartController extends Controller
                 'idempotency_key' => 'aec-order-' . $order->order_number,
             ]);
             DB::table('commerce_orders')->where('id', $order->id)->update(['payment_status' => 'pending', 'updated_at' => now()]);
-            if (!empty($payment['redirect_url'])) return redirect()->away($payment['redirect_url']);
+            if (!empty($payment['redirect_url'])) {
+                return redirect()->away($payment['redirect_url']);
+            }
             return redirect()->route('plugins.commerce_cart.index')
                 ->with('status', 'Order ' . $order->order_number . ' is awaiting payment confirmation. Follow the secure payment instructions shown by your selected gateway.');
         } catch (\Throwable $exception) {
@@ -295,13 +344,10 @@ class CommerceCartController extends Controller
                 'payment_status' => $ambiguous ? 'risk_review' : 'failed',
                 'updated_at' => now(),
             ]);
-            if (!$ambiguous) {
-                DB::table('commerce_carts')->where('id', $cart->id)->update(['status' => 'active', 'updated_at' => now()]);
-            }
             return redirect()->route('plugins.commerce_cart.index')
                 ->withErrors(['gateway' => $ambiguous
                     ? 'The gateway response was ambiguous. Do not retry yet; contact support with order ' . $order->order_number . ' for reconciliation.'
-                    : 'The gateway could not start checkout. Your cart is available to retry after the issue is corrected. No access has been granted.']);
+                    : 'The gateway could not start checkout. No access was granted. You can add the items to a new cart and try again.']);
         }
     }
 
