@@ -75,6 +75,7 @@ return [
         'free_price_operator' => '<=',
         'free_price_value' => 0,
         'admin_roles' => ['admin', 'super_admin'],
+        'course_active_statuses' => ['published', 'active'],
         'paid_enrollment_statuses' => ['active', 'completed'],
     ],
 ];
