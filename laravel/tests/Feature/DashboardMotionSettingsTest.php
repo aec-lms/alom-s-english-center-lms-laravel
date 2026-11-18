@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use App\\Models\\SystemSetting;
-use Tests\\TestCase;
+use App\Models\SystemSetting;
+use Tests\TestCase;
 
 class DashboardMotionSettingsTest extends TestCase
 {
