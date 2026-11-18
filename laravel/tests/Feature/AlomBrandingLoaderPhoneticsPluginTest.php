@@ -27,7 +27,7 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
   $this->actingAs($student)->get('/courses/british-american-phonetics/phonetics-practice')->assertOk();
   $challenge=session('phonetics.challenge');
   $this->assertIsArray($challenge);
-  $this->assertSame($entry->id,$challenge['entry_id']);
+  $challengeEntry=PhoneticEntry::query()->findOrFail($challenge['entry_id']);
   $this->actingAs($student)->postJson('/courses/british-american-phonetics/phonetics-practice/attempts',[
    'selected_answer'=>$challenge['expected'],
    'is_correct'=>false,
@@ -35,7 +35,7 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
    'target_accent'=>'us',
    'quiz_mode'=>'identify-accent',
   ])->assertOk()->assertJson(['saved'=>true,'correct'=>true]);
-  $this->assertDatabaseHas('alom_english_center_phonetic_attempts',['user_id'=>$student->id,'entry_id'=>$entry->id,'is_correct'=>true]);
+  $this->assertDatabaseHas('alom_english_center_phonetic_attempts',['user_id'=>$student->id,'entry_id'=>$challengeEntry->id,'is_correct'=>true]);
   DB::table('enrollments')->where('user_id',$student->id)->delete();
   $this->actingAs($student)->get('/courses/british-american-phonetics/phonetics-practice')->assertForbidden();
  }
@@ -46,12 +46,13 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
   $admin=$this->createUserWithRole('admin');
   try{
    $this->actingAs($admin)->post('/admin/phonetics',[
-    'word'=>'water','category'=>'rhoticity','uk_ipa'=>'/ˈwɔːtə/','us_ipa'=>'/ˈwɔːtər/',
+    'word'=>'aec-test-water','category'=>'rhoticity','uk_ipa'=>'/ˈwɔːtə/','us_ipa'=>'/ˈwɔːtər/',
     'uk_audio'=>UploadedFile::fake()->create('british.mp3',100,'audio/mpeg'),
     'us_audio'=>UploadedFile::fake()->create('american.mp3',100,'audio/mpeg'),
     'card_bg_image'=>UploadedFile::fake()->image('card.png',120,80),
    ])->assertSessionHas('status');
-   $entry=PhoneticEntry::query()->where('word','water')->firstOrFail();
+   $entry=PhoneticEntry::query()->where('word','aec-test-water')->firstOrFail();
+   $this->assertNotNull($entry->uk_audio_path,'UK audio path was not saved');
    $this->assertFileExists(public_path($entry->uk_audio_path));
    $this->assertFileExists(public_path($entry->us_audio_path));
    $this->assertFileExists(public_path($entry->card_bg_image_path));
@@ -59,7 +60,7 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
    $this->assertDatabaseHas('audit_logs',['action'=>'phonetics.entry.created','entity_id'=>(string)$entry->id]);
    $oldUkPath=$entry->uk_audio_path;
    $this->actingAs($admin)->put('/admin/phonetics/'.$entry->id,[
-    'word'=>'water','category'=>'rhoticity','uk_ipa'=>'/ˈwɔːtə/','us_ipa'=>'/ˈwɔːtər/',
+    'word'=>'aec-test-water','category'=>'rhoticity','uk_ipa'=>'/ˈwɔːtə/','us_ipa'=>'/ˈwɔːtər/',
     'is_active'=>1,'remove_uk_audio'=>1,
    ])->assertSessionHas('status');
    $entry->refresh();
