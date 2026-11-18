@@ -478,6 +478,15 @@ class CourseCommerceController extends Controller
             }
             $discount = round((float) ($coupon['discount'] ?? 0), 2);
             $total = round(max(0, $subtotal - $discount), 2);
+            $walletCredit = 0.0;
+            if (Schema::hasTable('course_gift_wallets')) {
+                $wallet = DB::table('course_gift_wallets')->where('user_id', $student->id)
+                    ->where('currency', $currency)->lockForUpdate()->first();
+                if ($wallet && (float) $wallet->balance > 0) {
+                    $walletCredit = round(min($total, (float) $wallet->balance), 2);
+                }
+            }
+            $gatewayAmount = round(max(0, $total - $walletCredit), 2);
 
             $orderId = DB::table('course_cart_orders')->insertGetId([
                 'cart_id' => $cart->id,
@@ -489,8 +498,9 @@ class CourseCommerceController extends Controller
                 'subtotal_amount' => $subtotal,
                 'discount_amount' => $discount,
                 'net_amount' => $total,
+                'wallet_credit_amount' => $walletCredit,
                 'currency' => $currency,
-                'status' => $total > 0 ? 'awaiting_payment' : 'processing',
+                'status' => $gatewayAmount > 0 ? 'awaiting_payment' : 'processing',
                 'expires_at' => now()->addMinutes(30),
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -509,9 +519,34 @@ class CourseCommerceController extends Controller
                 ]);
             }
 
+            if ($walletCredit > 0) {
+                $wallet = DB::table('course_gift_wallets')->where('user_id', $student->id)->where('currency', $currency)->lockForUpdate()->first();
+                abort_unless($wallet && (float) $wallet->balance >= $walletCredit, 409, 'Your gift wallet balance changed. Please retry checkout.');
+                $walletReservation = 'course-cart-wallet:' . $orderId;
+                DB::table('course_gift_wallets')->where('id', $wallet->id)->update([
+                    'balance' => round((float) $wallet->balance - $walletCredit, 2),
+                    'updated_at' => now(),
+                ]);
+                DB::table('course_gift_wallet_transactions')->insert([
+                    'wallet_id' => $wallet->id,
+                    'user_id' => $student->id,
+                    'type' => 'debit',
+                    'status' => 'reserved',
+                    'reference' => $walletReservation,
+                    'amount' => $walletCredit,
+                    'metadata' => json_encode(['order_id' => $orderId], JSON_THROW_ON_ERROR),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+                DB::table('course_cart_orders')->where('id', $orderId)->update([
+                    'wallet_reservation_key' => $walletReservation,
+                    'updated_at' => now(),
+                ]);
+            }
+
             DB::table('course_carts')->where('id', $cart->id)->update(['status' => 'checkout_pending', 'updated_at' => now()]);
 
-            if ($total <= 0) {
+            if ($gatewayAmount <= 0) {
                 $this->activateOrder($orderId, $student, $branchId, $couponService);
                 return ['order_id' => $orderId, 'transaction' => null, 'coupon_key' => $coupon['reservation_key'] ?? null, 'free' => true];
             }
@@ -523,7 +558,7 @@ class CourseCommerceController extends Controller
                 'item_title' => 'Course Cart Order #' . $orderId,
                 'gateway' => 'sslcommerz',
                 'currency' => $currency,
-                'amount' => $total,
+                'amount' => $gatewayAmount,
                 'external_trx_id' => null,
                 'user_id' => $student->id,
                 'branch_id' => $branchId,
@@ -620,6 +655,10 @@ class CourseCommerceController extends Controller
             'updated_at' => now(),
         ]);
         DB::table('course_carts')->where('id', $order->cart_id)->update(['status' => 'completed', 'updated_at' => now()]);
+        if (filled($order->wallet_reservation_key)) {
+            DB::table('course_gift_wallet_transactions')->where('reference', $order->wallet_reservation_key)
+                ->where('status', 'reserved')->update(['status' => 'completed', 'updated_at' => now()]);
+        }
     }
 
     private function createPaidInvoice($student, ?int $branchId, float $subtotal, float $discount, float $total, string $currency, string $prefix): FeeInvoice
