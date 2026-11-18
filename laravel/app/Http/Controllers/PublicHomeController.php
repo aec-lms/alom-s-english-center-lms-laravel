@@ -25,8 +25,11 @@ class PublicHomeController extends Controller
             'students' => Schema::hasTable('students') ? DB::table('students')->count() : 0,
             'courses' => Schema::hasTable('courses') ? DB::table('courses')->where('status', 'published')->count() : 0,
             'teachers' => Schema::hasTable('teachers') ? DB::table('teachers')->count() : 0,
-            'videos' => Schema::hasTable('course_lessons') && Schema::hasColumn('course_lessons', 'media_mime')
-                ? DB::table('course_lessons')->whereNotNull('media_path')->where('media_mime', 'like', 'video/%')->count()
+            'videos' => Schema::hasTable('course_lessons')
+                && Schema::hasColumn('course_lessons', 'media_path')
+                && Schema::hasColumn('course_lessons', 'media_mime')
+                ? DB::table('course_lessons')->whereNotNull('media_path')->where('media_path', '<>', '')
+                    ->where('media_mime', 'like', 'video/%')->count()
                 : 0,
         ];
 
