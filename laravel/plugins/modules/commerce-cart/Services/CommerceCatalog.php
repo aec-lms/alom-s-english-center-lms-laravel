@@ -56,8 +56,9 @@ class CommerceCatalog
     {
         $this->requireTable('storefront_items');
         $item = DB::table('storefront_items')->where('id', $id)->where('type', 'ebook')->where('is_active', true)->first();
-        if (!$item || (bool) ($item->is_free ?? false) || (float) $item->price <= 0) {
-            throw ValidationException::withMessages(['item' => 'This paid eBook is not currently available.']);
+        if (!$item || (bool) ($item->is_free ?? false) || (float) $item->price <= 0
+            || !str_starts_with((string) ($item->download_url ?? ''), 'private:')) {
+            throw ValidationException::withMessages(['item' => 'This paid eBook is unavailable or does not have a protected private PDF.']);
         }
         return $this->snapshot('ebook', $id, (string) $item->title, (float) $item->price, ['storefront_item_id' => $id]);
     }
