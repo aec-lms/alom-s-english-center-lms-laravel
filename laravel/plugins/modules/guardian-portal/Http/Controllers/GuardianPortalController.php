@@ -7,7 +7,6 @@ namespace Plugins\Modules\GuardianPortal\Http\Controllers;
 use App\Core\Plugins\PluginManager;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
@@ -21,6 +20,7 @@ class GuardianPortalController extends Controller
 
         $plugins = app(PluginManager::class);
         $guardianIntegration = $plugins->isEnabled('guardian-management')
+            && $plugins->isEnabled('student-management')
             && Schema::hasTable('guardians')
             && Schema::hasTable('guardian_student')
             && Schema::hasTable('students');
@@ -57,7 +57,7 @@ class GuardianPortalController extends Controller
         $selectedId = $request->query('student');
         $selected = null;
         if ($selectedId !== null && $selectedId !== '') {
-            abort_unless(ctype_digit((string) $selectedId), 404);
+            abort_unless(is_scalar($selectedId) && ctype_digit((string) $selectedId), 404);
             $selected = $children->firstWhere('student_id', (int) $selectedId);
             abort_unless($selected, 404, 'This student is not linked to your guardian account.');
         } elseif ($children->isNotEmpty()) {
@@ -104,15 +104,16 @@ class GuardianPortalController extends Controller
             }
 
             if ($plugins->isEnabled('attendance-management')) {
-                if (Schema::hasTable('attendance_entries')) {
-                    $attendance = DB::table('attendance_entries')->where('student_id', $selected->student_id)->latest('attendance_date')->limit(20)->get();
-                } elseif (Schema::hasTable('attendance_records')) {
-                    $attendance = DB::table('attendance_records')->where('student_id', $selected->student_id)->latest('attendance_date')->limit(20)->get();
+                $attendanceTable = Schema::hasTable('attendance_entries') ? 'attendance_entries'
+                    : (Schema::hasTable('attendance_records') ? 'attendance_records' : null);
+                if ($attendanceTable !== null) {
+                    $attendanceQuery = DB::table($attendanceTable)->where('student_id', $selected->student_id);
+                    $summary['attendance_total'] = (clone $attendanceQuery)->count();
+                    $summary['attendance_present'] = (clone $attendanceQuery)->where('status', 'present')->count();
+                    $summary['attendance_absent'] = (clone $attendanceQuery)->where('status', 'absent')->count();
+                    $summary['attendance_late'] = (clone $attendanceQuery)->where('status', 'late')->count();
+                    $attendance = $attendanceQuery->latest('attendance_date')->limit(20)->get();
                 }
-                $summary['attendance_total'] = $attendance->count();
-                $summary['attendance_present'] = $attendance->where('status', 'present')->count();
-                $summary['attendance_absent'] = $attendance->where('status', 'absent')->count();
-                $summary['attendance_late'] = $attendance->where('status', 'late')->count();
             }
 
             if ($plugins->isEnabled('exam-management') && Schema::hasTable('exam_attempts') && Schema::hasTable('exams')) {
@@ -131,9 +132,11 @@ class GuardianPortalController extends Controller
             }
 
             if ($plugins->isEnabled('fees-management') && Schema::hasTable('fee_invoices')) {
-                $invoices = DB::table('fee_invoices')->where('student_id', $selected->student_id)
-                    ->latest('created_at')->limit(10)->get();
-                $summary['unpaid_amount'] = (float) $invoices->sum(fn ($invoice) => max(0, (float) $invoice->net_amount - (float) $invoice->paid_amount));
+                $invoiceQuery = DB::table('fee_invoices')->where('student_id', $selected->student_id);
+                $summary['unpaid_amount'] = (float) (clone $invoiceQuery)
+                    ->selectRaw('COALESCE(SUM(CASE WHEN net_amount > paid_amount THEN net_amount - paid_amount ELSE 0 END), 0) as outstanding')
+                    ->value('outstanding');
+                $invoices = $invoiceQuery->latest('created_at')->limit(10)->get();
             }
 
             if ($plugins->isEnabled('notice-board') && Schema::hasTable('notices')) {
