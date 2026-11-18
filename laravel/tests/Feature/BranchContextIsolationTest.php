@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Core\Plugins\PluginManager;
 use Illuminate\Support\Facades\DB;
 use Plugins\Modules\NotificationCenter\Jobs\DeliverNotificationJob;
+use Plugins\Modules\CourseManagement\Models\Course;
 use Tests\TestCase;
 
 class BranchContextIsolationTest extends TestCase
@@ -35,6 +36,39 @@ class BranchContextIsolationTest extends TestCase
         $this->withHeader('Authorization', 'Bearer ' . $token)
             ->getJson('/api/v1/auth/me')
             ->assertForbidden();
+    }
+
+
+    public function test_mobile_course_catalog_is_limited_to_the_authenticated_branch(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'mobile-app-api', 'course-management']);
+
+        $branchA = DB::table('branches')->insertGetId([
+            'code' => 'MCA-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'name' => 'Mobile Catalog Branch A',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $branchB = DB::table('branches')->insertGetId([
+            'code' => 'MCB-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'name' => 'Mobile Catalog Branch B',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $manager = $this->createUserWithRole('branch_manager', $branchA);
+        $token = $manager->createToken('branch-catalog-test')->plainTextToken;
+
+        Course::query()->create(['code' => 'MOBILE-A', 'title' => 'Branch A Published Course', 'slug' => 'branch-a-published-course', 'price' => 0, 'status' => 'published', 'branch_id' => $branchA]);
+        Course::query()->create(['code' => 'MOBILE-B', 'title' => 'Branch B Private Course', 'slug' => 'branch-b-private-course', 'price' => 0, 'status' => 'published', 'branch_id' => $branchB]);
+
+        $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->getJson('/api/v1/courses')
+            ->assertOk()
+            ->assertSee('Branch A Published Course')
+            ->assertDontSee('Branch B Private Course');
     }
 
     public function test_reports_do_not_disclose_global_plugin_inventory_to_branch_manager(): void
