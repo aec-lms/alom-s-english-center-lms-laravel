@@ -47,6 +47,16 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:course-management'])
             ->middleware('throttle:10,1')->name('leave');
     });
 
+Route::middleware(['web', 'installed', 'auth', 'plugin:course-management'])
+    ->prefix('student/course-commerce')
+    ->name('course-commerce.')
+    ->group(function (): void {
+        Route::get('/cart', [\Plugins\Modules\CourseManagement\Http\Controllers\CourseCommerceController::class, 'cart'])->name('cart');
+        Route::post('/cart/items/{course}', [\Plugins\Modules\CourseManagement\Http\Controllers\CourseCommerceController::class, 'add'])->whereNumber('course')->name('cart.add');
+        Route::delete('/cart/items/{item}', [\Plugins\Modules\CourseManagement\Http\Controllers\CourseCommerceController::class, 'remove'])->whereNumber('item')->name('cart.remove');
+        Route::post('/checkout', [\Plugins\Modules\CourseManagement\Http\Controllers\CourseCommerceController::class, 'checkout'])->middleware('throttle:10,1')->name('checkout');
+    });
+
 Route::middleware(['web', 'installed', 'auth', 'plugin:course-management'])->group(function (): void {
     Route::get('/my-learning/enrollments', [\Plugins\Modules\CourseManagement\Http\Controllers\EnrollmentController::class, 'my'])
         ->name('plugins.enrollments.my');
