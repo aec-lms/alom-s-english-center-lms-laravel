@@ -15,6 +15,9 @@ Route::middleware(['web', 'installed', 'plugin:quiz-contest'])->group(function (
         ->group(function (): void {
             Route::get('/', [QuizContestController::class, 'adminIndex'])->name('index');
             Route::post('/', [QuizContestController::class, 'store'])->name('store');
+            Route::get('/{contest}/edit', [QuizContestController::class, 'edit'])->whereNumber('contest')->name('edit');
+            Route::put('/{contest}', [QuizContestController::class, 'update'])->whereNumber('contest')->name('update');
+            Route::patch('/{contest}/status', [QuizContestController::class, 'updateStatus'])->whereNumber('contest')->name('status');
             Route::get('/{contest}/entries', [QuizContestController::class, 'adminEntries'])->whereNumber('contest')->name('entries');
             Route::post('/{contest}/publish-results', [QuizContestController::class, 'publishResults'])->whereNumber('contest')->name('publish-results');
         });
