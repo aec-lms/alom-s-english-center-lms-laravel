@@ -159,6 +159,9 @@ class CommerceCartController extends Controller
         $resolved = [];
         foreach ($cartItems as $cartItem) {
             $fresh = $this->catalog->resolve((string) $cartItem->item_type, (int) $cartItem->item_id);
+            if ($fresh['type'] !== 'other' && (int) $cartItem->quantity !== 1) {
+                abort(422, 'Access-based products must have quantity one. Remove the duplicate quantity and try again.');
+            }
             if ((float) $fresh['price'] !== (float) $cartItem->unit_price) {
                 DB::table('commerce_cart_items')->where('id', $cartItem->id)->update([
                     'unit_price' => $fresh['price'], 'title_snapshot' => $fresh['title'], 'updated_at' => now(),
