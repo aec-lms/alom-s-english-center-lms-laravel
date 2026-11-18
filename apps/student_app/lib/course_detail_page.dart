@@ -19,6 +19,7 @@ class CourseDetailPage extends StatefulWidget {
 class _CourseDetailPageState extends State<CourseDetailPage> {
   late Future<Map<String, dynamic>> course;
   late Future<Map<String, dynamic>> lessons;
+  bool savingWishlist = false;
 
   @override
   void initState() {
@@ -30,6 +31,27 @@ class _CourseDetailPageState extends State<CourseDetailPage> {
     final slug = Uri.encodeComponent(widget.slug);
     course = widget.api.get('/courses/$slug');
     lessons = widget.api.get('/courses/$slug/lessons');
+  }
+
+  Future<void> saveToWishlist(int courseId) async {
+    if (savingWishlist) return;
+    setState(() => savingWishlist = true);
+    try {
+      await widget.api.postJson('/my/wishlist/$courseId', {});
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Course saved to your wishlist.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.toString())),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => savingWishlist = false);
+    }
   }
 
   @override
@@ -78,6 +100,23 @@ class _CourseDetailPageState extends State<CourseDetailPage> {
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
                       child: Text('Price: ${item['price']}'),
+                    ),
+                  if (item['id'] is num)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 16),
+                      child: OutlinedButton.icon(
+                        onPressed: savingWishlist
+                            ? null
+                            : () => saveToWishlist((item['id'] as num).toInt()),
+                        icon: savingWishlist
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.favorite_outline),
+                        label: const Text('Save to wishlist'),
+                      ),
                     ),
                   const SizedBox(height: 16),
                   Text(
