@@ -11,6 +11,7 @@ use App\Models\PluginSetting;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 use RuntimeException;
 use Tests\TestCase;
 use ZipArchive;
@@ -26,14 +27,14 @@ class PluginLifecycleTest extends TestCase
         try {
             $manager->saveSettings('universal-payment', ['unlisted_setting' => 'unexpected']);
             $this->fail('Undeclared plugin settings must be rejected.');
-        } catch (\\Illuminate\\Validation\\ValidationException $exception) {
+        } catch (ValidationException $exception) {
             $this->assertArrayHasKey('settings.unlisted_setting', $exception->errors());
         }
 
         try {
             $manager->saveSettings('universal-payment', ['allow_offline_payments' => 'sometimes']);
             $this->fail('Values outside manifest select options must be rejected.');
-        } catch (\\Illuminate\\Validation\\ValidationException $exception) {
+        } catch (ValidationException $exception) {
             $this->assertArrayHasKey('settings.allow_offline_payments', $exception->errors());
         }
 
