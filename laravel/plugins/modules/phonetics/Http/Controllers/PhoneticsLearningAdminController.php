@@ -93,7 +93,7 @@ final class PhoneticsLearningAdminController extends Controller
     {
         $data = $request->validate([
             'batch_ref' => ['required', 'string', 'max:128'],
-            'user_id' => ['required', 'integer'],
+            'user_id' => ['required', 'string', 'max:128'],
         ]);
         $userMap = config('phonetics.users', []);
         $userTable = $userMap['table'] ?? 'users';
