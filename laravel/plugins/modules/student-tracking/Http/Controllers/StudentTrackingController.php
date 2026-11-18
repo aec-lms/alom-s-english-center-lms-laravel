@@ -96,7 +96,11 @@ class StudentTrackingController extends Controller
         ]);
 
         $metadata = $validated['metadata'] ?? [];
+        $durationSeconds = $validated['duration_seconds'] ?? null;
         if (app(PluginManager::class)->isEnabled('course-management')) {
+            // In integrated LMS mode, client-reported duration is untrusted.
+            // Only derive it from a recent server-recorded lesson-start event.
+            $durationSeconds = null;
             abort_unless(
                 Schema::hasTable('course_lessons')
                     && Schema::hasTable('courses')
@@ -141,6 +145,21 @@ class StudentTrackingController extends Controller
                 'lesson_title' => $lesson->lesson_title,
                 'source' => 'student_portal',
             ];
+
+            if ($validated['event_type'] === 'lesson_completed') {
+                $started = \\Plugins\\Modules\\StudentTracking\\Models\\StudentActivityEvent::query()
+                    ->where('user_id', $request->user()->id)
+                    ->where('event_type', 'lesson_started')
+                    ->where('subject_type', 'lesson')
+                    ->where('subject_id', (string) $lesson->id)
+                    ->where('occurred_at', '>=', now()->subHours(6))
+                    ->latest('occurred_at')
+                    ->first();
+
+                if ($started?->occurred_at) {
+                    $durationSeconds = min(21600, max(0, (int) $started->occurred_at->diffInSeconds(now())));
+                }
+            }
         }
 
         $event = $tracker->record(
@@ -148,7 +167,7 @@ class StudentTrackingController extends Controller
             $validated['event_type'],
             $validated['subject_type'] ?? null,
             $validated['subject_id'] ?? null,
-            $validated['duration_seconds'] ?? null,
+            $durationSeconds,
             $metadata,
         );
 
