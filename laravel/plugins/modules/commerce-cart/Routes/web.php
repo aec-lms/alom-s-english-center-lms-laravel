@@ -14,6 +14,9 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:commerce-cart', 'permissi
         Route::patch('/sellables/{sellable}/toggle', [CommerceCartController::class, 'toggleSellable'])->name('sellables.toggle');
     });
 
+Route::middleware(['web', 'installed', 'plugin:commerce-cart'])
+    ->get('/learning-services', [CommerceCartController::class, 'publicServices'])->name('plugins.commerce_cart.services');
+
 Route::middleware(['web', 'installed', 'auth', 'plugin:commerce-cart'])
     ->prefix('cart')
     ->name('plugins.commerce_cart.')
