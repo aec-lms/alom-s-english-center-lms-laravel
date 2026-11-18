@@ -205,7 +205,7 @@ class CommerceCartController extends Controller
                     $existingEnrollment = DB::table('enrollments')->where('user_id', $user->id)
                         ->where('course_id', $fresh['id'])->lockForUpdate()->first();
                     if ($existingEnrollment && in_array($existingEnrollment->status, ['active', 'completed'], true)) {
-                        throw new \\RuntimeException('You already have access to course: ' . $fresh['title']);
+                        throw new \RuntimeException('You already have access to course: ' . $fresh['title']);
                     }
                     if ($existingEnrollment && $existingEnrollment->status === 'pending') {
                         DB::table('enrollments')->where('id', $existingEnrollment->id)->update([
