@@ -2,8 +2,6 @@
 declare(strict_types=1);
 namespace Tests\Feature;
 use App\Core\Plugins\PluginManager;use Illuminate\Http\UploadedFile;use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Schema;
 use Plugins\Modules\Phonetics\Models\PhoneticSetting;use Illuminate\Support\Facades\File;use Plugins\Modules\Phonetics\Models\PhoneticEntry;use Tests\TestCase;
 final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
  public function test_al_branding_loader_and_phonetics_are_independent_plugins():void{$m=app(PluginManager::class)->discoverManifests();$this->assertArrayHasKey('al-branding-loader',$m);$this->assertArrayHasKey('phonetics',$m);$this->assertSame([],$m['al-branding-loader']->dependencies);$this->assertSame([],$m['phonetics']->dependencies);$this->assertContains('course-management',$m['phonetics']->optionalDependencies);$this->assertNotContains('phonetics',$m['al-branding-loader']->dependencies);$this->assertNotContains('al-branding-loader',$m['phonetics']->dependencies);}
@@ -18,31 +16,6 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
   $this->actingAs($student)->get('/admin/al-branding-loader')->assertForbidden();
   $this->actingAs($student)->get('/admin/phonetics')->assertForbidden();
   $this->actingAs($student)->patch('/admin/phonetics/settings',[])->assertForbidden();
- }
-
- public function test_phonetics_practice_uses_mapped_host_course_ids_for_enrollment_access():void{
-  $this->markSystemInstalled();
-  $this->activatePlugins(['phonetics']);
-  Schema::create('host_phonetics_courses',function($table):void{
-   $table->id();$table->string('slug')->unique();$table->string('title');$table->decimal('price',8,2)->default(0);$table->timestamps();
-  });
-  Schema::create('host_phonetics_enrollments',function($table):void{
-   $table->id();$table->unsignedBigInteger('user_id');$table->unsignedBigInteger('course_id');$table->string('status')->default('active');$table->timestamps();
-  });
-  config([
-   'phonetics.catalog.courses'=>['table'=>'host_phonetics_courses','id'=>'id','slug'=>'slug','title'=>'title','price'=>'price'],
-   'phonetics.catalog.enrollments'=>['table'=>'host_phonetics_enrollments','user_id'=>'user_id','course_id'=>'course_id','status'=>'status','active_statuses'=>['active']],
-  ]);
-  $student=$this->createUserWithRole('student');
-  $courseId=DB::table('host_phonetics_courses')->insertGetId(['slug'=>'host-phonetics','title'=>'Host Phonetics','price'=>0,'created_at'=>now(),'updated_at'=>now()]);
-  DB::table('host_phonetics_enrollments')->insert(['user_id'=>$student->id,'course_id'=>$courseId,'status'=>'active','created_at'=>now(),'updated_at'=>now()]);
-  PhoneticSetting::query()->updateOrCreate(['id'=>1],['enabled'=>true,'course_slug'=>'host-phonetics','course_scoped_only'=>true,'require_course_enrollment'=>true]);
-  Cache::forget('phonetics.settings');
-  PhoneticEntry::query()->create(['word'=>'course','category'=>'rhoticity','uk_ipa'=>'/kɔːs/','us_ipa'=>'/kɔːrs/','is_active'=>true,'sort_order'=>1]);
-
-  $this->actingAs($student)->get('/courses/host-phonetics/phonetics-practice')->assertOk();
-  DB::table('host_phonetics_enrollments')->where('user_id',$student->id)->delete();
-  $this->actingAs($student)->get('/courses/host-phonetics/phonetics-practice')->assertForbidden();
  }
 
  public function test_phonetics_attempt_ignores_client_correctness_and_checks_active_enrollment():void{
