@@ -212,7 +212,7 @@ class MediaLibraryAndDigitalEbookTest extends TestCase
         $download = $this->actingAs($student)->get('/ebooks/protected-guide/download');
         $download->assertOk()
             ->assertHeader('X-Content-Type-Options', 'nosniff')
-            ->assertHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate')
+            ->assertHeader('Cache-Control', 'must-revalidate, no-cache, no-store, private')
             ->assertHeader('Pragma', 'no-cache')
             ->assertHeader('Referrer-Policy', 'same-origin')
             ->assertHeader('Content-Type', 'application/pdf');
