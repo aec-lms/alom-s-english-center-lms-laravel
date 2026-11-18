@@ -441,7 +441,7 @@ class PublicHomeController extends Controller
 
             return response()->download(
                 $absolutePath,
-                \Illuminate\\Support\\Str::slug($item->title) . '.pdf',
+                \Illuminate\Support\Str::slug($item->title) . '.pdf',
                 [
                     'Content-Type' => 'application/pdf',
                     'X-Content-Type-Options' => 'nosniff',
