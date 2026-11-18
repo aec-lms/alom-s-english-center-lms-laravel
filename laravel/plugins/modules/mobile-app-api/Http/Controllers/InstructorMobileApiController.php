@@ -36,24 +36,47 @@ class InstructorMobileApiController extends Controller
         [$actor, $ids] = $this->teacher($request);
         $course = DB::table('courses')->where('slug', $slug)->whereIn('id', $ids)->first();
         abort_unless($course, 404);
-        abort_unless(app(PluginManager::class)->isEnabled('student-management') && Schema::hasTable('students'), 409, 'Student Management is not enabled.');
 
-        $students = DB::table('students')
-            ->join('users', 'users.id', '=', 'students.user_id')
-            ->join('enrollments', 'enrollments.user_id', '=', 'students.user_id')
+        $hasStudentDirectory = app(PluginManager::class)->isEnabled('student-management')
+            && Schema::hasTable('students');
+        $studentsQuery = DB::table('enrollments')
+            ->join('users', 'users.id', '=', 'enrollments.user_id')
             ->where('enrollments.course_id', $course->id)
             ->whereIn('enrollments.status', ['active', 'completed'])
-            ->when($course->branch_id !== null, fn ($q) => $q->where('students.branch_id', $course->branch_id))
-            ->when($actor->branch_id !== null, fn ($q) => $q->where('students.branch_id', $actor->branch_id))
-            ->when(Schema::hasColumn('students', 'deleted_at'), fn ($q) => $q->whereNull('students.deleted_at'))
-            ->select('students.id as student_id', 'students.student_code', 'students.user_id', 'users.name', 'users.email', 'enrollments.status', 'enrollments.created_at')
+            ->when($course->branch_id !== null, fn ($q) => $q->where('enrollments.branch_id', $course->branch_id))
+            ->when($actor->branch_id !== null, fn ($q) => $q->where('enrollments.branch_id', $actor->branch_id));
+
+        if ($hasStudentDirectory) {
+            $studentsQuery->join('students', 'students.user_id', '=', 'users.id')
+                ->when($course->branch_id !== null, fn ($q) => $q->where('students.branch_id', $course->branch_id))
+                ->when($actor->branch_id !== null, fn ($q) => $q->where('students.branch_id', $actor->branch_id))
+                ->when(Schema::hasColumn('students', 'deleted_at'), fn ($q) => $q->whereNull('students.deleted_at'));
+        }
+
+        $studentSelect = $hasStudentDirectory
+            ? ['students.id as student_id', 'students.student_code']
+            : [DB::raw('users.id as student_id'), DB::raw('NULL as student_code')];
+
+        $students = $studentsQuery
+            ->select(array_merge($studentSelect, ['users.id as user_id', 'users.name', 'users.email', 'enrollments.status', 'enrollments.created_at']))
+            ->distinct()
             ->orderBy('users.name')
             ->paginate(50);
 
         $items = $students->getCollection()->map(fn ($row) => [
-            'student' => ['id' => $row->student_id, 'student_code' => $row->student_code, 'user_id' => $row->user_id, 'name' => $row->name, 'email' => $row->email],
+            'id' => $row->user_id,
+            'name' => $row->name,
+            'email' => $row->email,
+            'student_code' => $row->student_code,
             'status' => $row->status,
             'enrolled_at' => $row->created_at,
+            'student' => [
+                'id' => $row->student_id,
+                'student_code' => $row->student_code,
+                'user_id' => $row->user_id,
+                'name' => $row->name,
+                'email' => $row->email,
+            ],
         ]);
 
         return response()->json([
@@ -78,6 +101,7 @@ class InstructorMobileApiController extends Controller
     {
         [$actor, $ids] = $this->teacher($request);
         abort_unless(Schema::hasTable('batches'), 409, 'Course batches are unavailable.');
+
         $record = DB::table('batches')->join('courses', 'courses.id', '=', 'batches.course_id')
             ->where('batches.id', $batch)
             ->whereIn('batches.course_id', $ids)
@@ -86,20 +110,26 @@ class InstructorMobileApiController extends Controller
             ->first();
         abort_unless($record, 404);
 
-        abort_unless(app(PluginManager::class)->isEnabled('student-management') && Schema::hasTable('students'), 409, 'Student Management is not enabled.');
+        $hasStudentDirectory = app(PluginManager::class)->isEnabled('student-management')
+            && Schema::hasTable('students');
         $mapping = Schema::hasTable('attendance_batch_mappings')
             ? DB::table('attendance_batch_mappings')->where('source_type', 'course_batch')->where('source_id', $record->id)->first()
             : null;
-        $rosterConfigured = $mapping && Schema::hasTable('attendance_batch_rosters')
+        $rosterConfigured = $hasStudentDirectory && $mapping && Schema::hasTable('attendance_batch_rosters')
             && DB::table('attendance_batch_rosters')->where('attendance_batch_mapping_id', $mapping->id)->where('is_active', true)->exists();
 
-        $studentQuery = DB::table('students')
-            ->join('users', 'users.id', '=', 'students.user_id')
-            ->join('enrollments', 'enrollments.user_id', '=', 'students.user_id')
+        $studentQuery = DB::table('enrollments')
+            ->join('users', 'users.id', '=', 'enrollments.user_id')
             ->where('enrollments.course_id', $record->course_id)
+            ->where('enrollments.branch_id', $record->branch_id)
             ->whereIn('enrollments.status', ['active', 'completed'])
-            ->where('students.branch_id', $record->branch_id)
-            ->when(Schema::hasColumn('students', 'deleted_at'), fn ($q) => $q->whereNull('students.deleted_at'));
+            ->when($actor->branch_id !== null, fn ($q) => $q->where('enrollments.branch_id', $actor->branch_id));
+
+        if ($hasStudentDirectory) {
+            $studentQuery->join('students', 'students.user_id', '=', 'users.id')
+                ->where('students.branch_id', $record->branch_id)
+                ->when(Schema::hasColumn('students', 'deleted_at'), fn ($q) => $q->whereNull('students.deleted_at'));
+        }
 
         if ($rosterConfigured) {
             $studentQuery->join('attendance_batch_rosters', 'attendance_batch_rosters.student_id', '=', 'students.id')
@@ -107,15 +137,29 @@ class InstructorMobileApiController extends Controller
                 ->where('attendance_batch_rosters.is_active', true);
         }
 
+        $studentSelect = $hasStudentDirectory
+            ? ['students.id as student_id', 'students.student_code']
+            : [DB::raw('users.id as student_id'), DB::raw('NULL as student_code')];
+
         $students = $studentQuery
-            ->select('students.id as student_id', 'students.student_code', 'students.user_id', 'users.name', 'users.email', 'enrollments.status')
+            ->select(array_merge($studentSelect, ['users.id as user_id', 'users.name', 'users.email', 'enrollments.status']))
             ->distinct()
             ->orderBy('users.name')
             ->paginate(50);
 
         $items = $students->getCollection()->map(fn ($row) => [
-            'student' => ['id' => $row->student_id, 'student_code' => $row->student_code, 'user_id' => $row->user_id, 'name' => $row->name, 'email' => $row->email],
+            'id' => $row->user_id,
+            'name' => $row->name,
+            'email' => $row->email,
+            'student_code' => $row->student_code,
             'status' => $row->status,
+            'student' => [
+                'id' => $row->student_id,
+                'student_code' => $row->student_code,
+                'user_id' => $row->user_id,
+                'name' => $row->name,
+                'email' => $row->email,
+            ],
         ]);
 
         return response()->json([
