@@ -1,0 +1,35 @@
+name: Flutter Instructor App
+
+on:
+  pull_request:
+    paths:
+      - 'apps/instructor_app/**'
+      - '.github/workflows/flutter-instructor-app.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/instructor_app/**'
+      - '.github/workflows/flutter-instructor-app.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flutter-instructor-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  instructor-app:
+    runs-on: ubuntu-latest
+    container: ghcr.io/cirruslabs/flutter:stable
+    defaults:
+      run:
+        working-directory: apps/instructor_app
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Resolve dependencies
+        run: flutter pub get
+      - name: Analyze
+        run: flutter analyze --fatal-infos
+      - name: Unit and widget tests
+        run: flutter test --reporter expanded
