@@ -221,6 +221,17 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
  }
 
 
+ public function test_course_access_fails_closed_without_a_publication_status_mapping():void{
+  Schema::create('phonetics_course_status_guard',function(Blueprint $table):void{$table->string('id',20)->primary();$table->decimal('price',10,2)->default(0);});
+  try{
+   config(['phonetics.catalog.courses'=>['table'=>'phonetics_course_status_guard','id'=>'id','title'=>'title','price'=>'price']]);
+   $this->expectException(ServiceUnavailableHttpException::class);
+   app(CourseCatalog::class)->assertCourseAvailable((object)['id'=>'course-1','price'=>0]);
+  }finally{
+   Schema::dropIfExists('phonetics_course_status_guard');
+  }
+ }
+
  public function test_enrollment_mapping_without_an_active_status_column_fails_closed():void{
   Schema::create('phonetics_guard_courses',function(Blueprint $table):void{$table->string('id',20)->primary();$table->decimal('price',10,2)->default(0);$table->string('status',20)->default('published');});
   Schema::create('phonetics_guard_enrollments',function(Blueprint $table):void{$table->id();$table->string('user_id',128);$table->string('course_id',20);});
