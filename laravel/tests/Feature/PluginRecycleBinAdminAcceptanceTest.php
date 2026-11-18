@@ -21,6 +21,12 @@ class PluginRecycleBinAdminAcceptanceTest extends TestCase
             'version' => '1.0.0',
             'core_compatibility' => '^2.0',
             'dependencies' => [],
+            'settings_schema' => [[
+                'key' => 'probe_setting',
+                'label' => 'Probe setting',
+                'type' => 'text',
+                'secret' => false,
+            ]],
         ], JSON_THROW_ON_ERROR));
 
         return $modulePath;
