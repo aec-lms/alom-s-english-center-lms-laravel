@@ -2,7 +2,7 @@
 declare(strict_types=1);
 namespace Tests\Feature;
 use App\Core\Plugins\PluginManager;use Illuminate\Database\Schema\Blueprint;use Illuminate\Http\UploadedFile;use Illuminate\Support\Facades\DB;use Illuminate\Support\Facades\Schema;
-use Plugins\Modules\Phonetics\Models\PhoneticSetting;use Plugins\Modules\Phonetics\Services\CourseCatalog;use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;use Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException;use Illuminate\Support\Facades\File;use Plugins\Modules\Phonetics\Models\PhoneticEntry;use Tests\TestCase;
+use Plugins\Modules\Phonetics\Models\PhoneticSetting;use Plugins\Modules\Phonetics\Services\CourseCatalog;use Plugins\Modules\Phonetics\Providers\StandalonePhoneticsServiceProvider;use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;use Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException;use Illuminate\Support\Facades\File;use Plugins\Modules\Phonetics\Models\PhoneticEntry;use Tests\TestCase;
 final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
  public function test_al_branding_loader_and_phonetics_are_independent_plugins():void{$m=app(PluginManager::class)->discoverManifests();$this->assertArrayHasKey('al-branding-loader',$m);$this->assertArrayHasKey('phonetics',$m);$this->assertSame([],$m['al-branding-loader']->dependencies);$this->assertSame([],$m['phonetics']->dependencies);$this->assertContains('course-management',$m['phonetics']->optionalDependencies);$this->assertNotContains('phonetics',$m['al-branding-loader']->dependencies);$this->assertNotContains('al-branding-loader',$m['phonetics']->dependencies);}
  public function test_admin_routes_are_permission_protected():void{
@@ -278,6 +278,20 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
    Schema::dropIfExists('phonetics_branch_memberships');
    Schema::dropIfExists('phonetics_branch_batches');
   }
+ }
+
+
+ public function test_standalone_provider_uses_generic_middleware_and_preserves_host_overrides():void{
+  config([
+   'phonetics.standalone'=>true,
+   'phonetics.middleware'=>['practice'=>['web','verified']],
+  ]);
+  $provider=new StandalonePhoneticsServiceProvider(app());
+  $provider->register();
+  $this->assertSame(['web','verified'],config('phonetics.middleware.practice'));
+  $this->assertSame(['web','auth'],config('phonetics.middleware.attempt'));
+  $this->assertSame(['web','auth'],config('phonetics.middleware.exam'));
+  $this->assertSame(['web','auth','can:manage-phonetics'],config('phonetics.middleware.admin'));
  }
 
 }
