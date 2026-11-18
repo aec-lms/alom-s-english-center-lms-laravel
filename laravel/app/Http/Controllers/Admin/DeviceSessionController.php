@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Admin;
 
+use App\Core\Security\AuditLogger;
 use App\Http\Controllers\Controller;
 use App\Models\DeviceSession;
 use Illuminate\Http\RedirectResponse;
@@ -13,6 +14,8 @@ use Illuminate\View\View;
 
 class DeviceSessionController extends Controller
 {
+    public function __construct(private readonly AuditLogger $audit) {}
+
     public function index(Request $request): View
     {
         $filters = $request->validate([
@@ -65,8 +68,11 @@ class DeviceSessionController extends Controller
                 'updated_at' => now(),
             ]);
 
-        return $revoked > 0
-            ? back()->with('success', __('The selected session has been revoked.'))
-            : back()->with('info', __('This session is already revoked.'));
+        if ($revoked > 0) {
+            $this->audit->log('security.device_session_revoked', 'device_session', (string) $deviceSession->id);
+            return back()->with('success', __('The selected session has been revoked.'));
+        }
+
+        return back()->with('info', __('This session is already revoked.'));
     }
 }
