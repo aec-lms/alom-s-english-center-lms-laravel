@@ -280,8 +280,9 @@ class PageBuilderController extends Controller
     {
         $lastVersion = (int) (BuilderPageRevision::query()
             ->where('builder_page_id', $page->id)
+            ->orderByDesc('version')
             ->lockForUpdate()
-            ->max('version') ?? 0);
+            ->value('version') ?? 0);
 
         return BuilderPageRevision::query()->create([
             'builder_page_id' => $page->id,
