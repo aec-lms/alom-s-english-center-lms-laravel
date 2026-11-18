@@ -117,10 +117,13 @@ final class StorefrontPaymentCheckoutTest extends TestCase
         // A definite provider rejection is safe to retry; network timeouts are
         // covered separately and must remain in risk_review until reconciled.
         Http::fake([
-            'https://sandbox.sslcommerz.com/gwprocess/v4/api.php' => Http::response([
-                'status' => 'FAILED',
-                'failedreason' => 'Invalid test credentials',
-            ], 400),
+            'https://sandbox.sslcommerz.com/gwprocess/v4/api.php' => Http::sequence()
+                ->push(['status' => 'FAILED', 'failedreason' => 'Invalid test credentials'], 400)
+                ->push([
+                    'status' => 'SUCCESS',
+                    'GatewayPageURL' => 'https://sandbox.sslcommerz.com/gateway/checkout',
+                    'sessionkey' => 'retry-session-key',
+                ], 200),
         ]);
 
         $this->actingAs($buyer)
@@ -135,14 +138,6 @@ final class StorefrontPaymentCheckoutTest extends TestCase
             'status' => 'failed',
         ]);
 
-        Http::fake([
-            'https://sandbox.sslcommerz.com/gwprocess/v4/api.php' => Http::response([
-                'status' => 'SUCCESS',
-                'GatewayPageURL' => 'https://sandbox.sslcommerz.com/gateway/checkout',
-                'sessionkey' => 'retry-session-key',
-            ], 200),
-        ]);
-
         $this->actingAs($buyer)
             ->post('/universal-checkout', $payload)
             ->assertRedirect('https://sandbox.sslcommerz.com/gateway/checkout');
@@ -154,7 +149,7 @@ final class StorefrontPaymentCheckoutTest extends TestCase
             'status' => 'pending',
             'amount' => 180,
         ]);
-        Http::assertSentCount(1);
+        Http::assertSentCount(2);
     }
 
     public function test_stale_pending_ebook_checkout_is_not_replaced_before_provider_reconciliation(): void
