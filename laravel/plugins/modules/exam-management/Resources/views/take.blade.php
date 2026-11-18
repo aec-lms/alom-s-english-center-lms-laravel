@@ -16,7 +16,7 @@
             <div class="rounded-xl border border-rose-200 bg-rose-50 text-rose-700 p-4 text-sm">{{ $errors->first() }}</div>
         @endif
 
-        <form method="POST" action="{{ route('plugins.exams.attempt', $exam) }}" class="space-y-4" onsubmit="return confirm('Submit your answers now? You cannot change them after submission.')">
+        <form method="POST" action="{{ route('plugins.exams.attempt', $exam) }}" data-autosave-url="{{ route('plugins.exams.autosave', $exam) }}" data-attempt-id="{{ $attempt->id }}" class="space-y-4" onsubmit="return confirm('Submit your answers now? You cannot change them after submission.')">
             @csrf
             <input type="hidden" name="attempt_id" value="{{ $attempt->id }}">
             @foreach($questions as $index => $question)
@@ -28,13 +28,14 @@
                     <div class="grid sm:grid-cols-2 gap-2">
                         @foreach((array) $question->options as $optionIndex => $option)
                             <label class="flex items-start gap-3 rounded-xl border border-slate-200 p-3 hover:border-sky-400 cursor-pointer">
-                                <input type="radio" name="answers[{{ $question->id }}]" value="{{ $optionIndex }}" class="mt-1" required>
+                                <input type="radio" name="answers[{{ $question->id }}]" value="{{ $optionIndex }}" class="mt-1" @checked((string) data_get($attempt->submitted_answers ?? [], (string) $question->id) === (string) $optionIndex) required>
                                 <span class="text-sm text-slate-700">{{ $option }}</span>
                             </label>
                         @endforeach
                     </div>
                 </section>
             @endforeach
+            <p id="exam-autosave-status" class="text-xs text-slate-500" role="status" aria-live="polite">Answers save automatically as you choose them.</p>
             <div class="flex justify-end">
                 <button type="submit" class="rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold px-6 py-3">Submit Exam</button>
             </div>
@@ -43,15 +44,46 @@
     <script>
         (() => {
             const timer = document.getElementById("exam-countdown");
-            if (!timer) return;
-            const deadline = new Date(timer.dataset.deadline).getTime();
-            const render = () => {
-                const seconds = Math.max(0, Math.floor((deadline - Date.now()) / 1000));
-                timer.textContent = String(Math.floor(seconds / 60)).padStart(2, "0") + ":" + String(seconds % 60).padStart(2, "0");
-                if (seconds <= 0) timer.textContent = "Time expired — submit to record your attempt";
-            };
-            render();
-            window.setInterval(render, 1000);
+            if (timer) {
+                const deadline = new Date(timer.dataset.deadline).getTime();
+                const render = () => {
+                    const seconds = Math.max(0, Math.floor((deadline - Date.now()) / 1000));
+                    timer.textContent = String(Math.floor(seconds / 60)).padStart(2, "0") + ":" + String(seconds % 60).padStart(2, "0");
+                    if (seconds <= 0) timer.textContent = "Time expired — submit to record your attempt";
+                };
+                render();
+                window.setInterval(render, 1000);
+            }
+            const form = document.querySelector("form[data-autosave-url]");
+            const status = document.getElementById("exam-autosave-status");
+            if (!form || !status) return;
+            const csrf = form.querySelector('input[name="_token"]')?.value;
+            let queue = Promise.resolve();
+            form.querySelectorAll('input[type="radio"][name^="answers["]').forEach((input) => {
+                input.addEventListener("change", () => {
+                    const match = input.name.match(/^answers\[(\d+)\]$/);
+                    if (!match) return;
+                    status.textContent = "Saving answer…";
+                    queue = queue.then(() => fetch(form.dataset.autosaveUrl, {
+                        method: "POST",
+                        credentials: "same-origin",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "Accept": "application/json",
+                            "X-CSRF-TOKEN": csrf || ""
+                        },
+                        body: JSON.stringify({
+                            attempt_id: Number(form.dataset.attemptId),
+                            answers: { [match[1]]: Number(input.value) }
+                        })
+                    })).then(async (response) => {
+                        if (!response.ok) throw new Error("Autosave was not accepted");
+                        status.textContent = "All selected answers saved.";
+                    }).catch(() => {
+                        status.textContent = "Autosave unavailable — your current selections remain in this form. Submit before time expires.";
+                    });
+                });
+            });
         })();
     </script>
 </div>
