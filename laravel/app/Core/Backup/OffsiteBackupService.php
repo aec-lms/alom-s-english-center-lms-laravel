@@ -80,9 +80,12 @@ class OffsiteBackupService
         $access = (string) config('lms.backup_offsite.access_key');
         $secret = (string) config('lms.backup_offsite.secret_key');
         $prefix = trim((string) config('lms.backup_offsite.prefix', 'aec-lms-backups'), '/');
+        $endpointParts = parse_url($endpoint);
 
-        if (!str_starts_with($endpoint, 'https://') || parse_url($endpoint, PHP_URL_HOST) === false
-            || $region === '' || $bucket === '' || $access === '' || $secret === ''
+        if (!is_array($endpointParts) || ($endpointParts['scheme'] ?? null) !== 'https'
+            || !is_string($endpointParts['host'] ?? null) || $endpointParts['host'] === ''
+            || isset($endpointParts['user']) || isset($endpointParts['pass'])
+            || $region === '' || $bucket === '' || $access === '' || $secret === '' || $prefix === ''
             || preg_match('/^[a-zA-Z0-9][a-zA-Z0-9._-]{1,62}$/', $bucket) !== 1
             || str_contains($endpoint, '?') || str_contains($endpoint, '#')
             || preg_match('/(^|\\/)\\.\\.?($|\\/)/', $prefix) === 1) {
