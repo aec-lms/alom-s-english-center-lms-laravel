@@ -204,7 +204,6 @@ class PublicHomeController extends Controller
                                 ->whereColumn('fee_invoices.id', 'enrollments.invoice_id')
                                 ->where('fee_invoices.status', 'paid')
                                 ->whereRaw('fee_invoices.paid_amount + 0.01 >= fee_invoices.net_amount');
-                        });
                 });
             } else {
                 $purchaseQuery->whereRaw('1 = 0');
