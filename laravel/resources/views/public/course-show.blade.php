@@ -31,6 +31,16 @@
                     </div>
                     <div class="p-6 sm:p-8 space-y-4">
                         <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ $course->title }}</h1>
+                        @if (($socialProofSettings['enabled'] ?? false) && ($socialProofSettings['show_on_details'] ?? true))
+                            <div class="flex flex-wrap items-center gap-4 text-xs text-slate-500">
+                                @if ($socialProofSettings['show_views'] ?? true)
+                                    <span class="inline-flex items-center gap-1.5"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg><strong class="text-slate-800">{{ number_format($courseViews) }}</strong> views</span>
+                                @endif
+                                @if ($socialProofSettings['show_purchases'] ?? true)
+                                    <span class="inline-flex items-center gap-1.5"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 3h2l2.4 12.2a2 2 0 0 0 2 1.6h8.8a2 2 0 0 0 1.9-1.4L22 8H6"/><circle cx="10" cy="21" r="1"/><circle cx="19" cy="21" r="1"/></svg><strong class="text-slate-800">{{ number_format($coursePurchases) }}</strong> purchased</span>
+                                @endif
+                            </div>
+                        @endif
                         <div class="flex flex-wrap items-center gap-4 text-xs text-slate-600">
                             <span>Instructor: <strong class="text-slate-900">{{ $course->instructor_name ?? "Alom's English Center" }}</strong></span>
                             <span>Duration: <strong class="text-slate-900">{{ $course->duration_weeks ?? 12 }} Weeks</strong></span>
