@@ -32,6 +32,8 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:exam-management'])
     ->group(function (): void {
         Route::get('/exams/{exam}/take', [ExamController::class, 'take'])
             ->name('plugins.exams.take')->middleware('throttle:20,1');
+        Route::get('/exams/{exam}/attempts', [ExamController::class, 'history'])
+            ->name('plugins.exams.history')->middleware('throttle:30,1');
         Route::post('/exams/{exam}/attempt', [ExamController::class, 'submitAttempt'])
             ->name('plugins.exams.attempt')->middleware('throttle:5,1');
         Route::post('/exams/{exam}/attempt/autosave', [ExamController::class, 'saveAttemptAnswers'])
