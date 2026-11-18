@@ -38,23 +38,21 @@ class MobileApi {
   Future<String?> readToken() => storage.read(key: _tokenKey);
 
   Future<String> _deviceId() async {
-    final old = await storage.read(key: _deviceKey);
-    if (old != null && RegExp(r'^[a-f0-9]{64}$').hasMatch(old)) {
-      return old;
+    final existing = await storage.read(key: _deviceKey);
+    if (existing != null && RegExp(r'^[a-f0-9]{64}$').hasMatch(existing)) {
+      return existing;
     }
 
     final random = Random.secure();
     final value = List<int>.generate(32, (_) => random.nextInt(256))
-        .map((v) => v.toRadixString(16).padLeft(2, '0'))
+        .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
         .join();
     await storage.write(key: _deviceKey, value: value);
     return value;
   }
 
   Future<bool> restoreSession() async {
-    if (await readToken() == null) {
-      return false;
-    }
+    if (await readToken() == null) return false;
     try {
       await get('/auth/me');
       return true;
@@ -95,9 +93,7 @@ class MobileApi {
   Future<Map<String, dynamic>> get(String path) async {
     final token = await readToken();
     final headers = <String, String>{'Accept': 'application/json'};
-    if (token != null) {
-      headers['Authorization'] = 'Bearer $token';
-    }
+    if (token != null) headers['Authorization'] = 'Bearer $token';
 
     final response = await client.get(
       Uri.parse('$baseUrl$path'),
@@ -165,8 +161,7 @@ class MobileApi {
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw MobileApiException(
-        data['message']?.toString() ??
-            'Request failed: \${response.statusCode}',
+        data['message']?.toString() ?? 'Request failed: ${response.statusCode}',
         response.statusCode,
       );
     }
