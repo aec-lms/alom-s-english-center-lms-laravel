@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use Illuminate\\Support\\Facades\\Route;
-use Plugins\\Modules\\ExpenseManagement\\Http\\Controllers\\ExpenseController;
+use Illuminate\Support\Facades\Route;
+use Plugins\Modules\ExpenseManagement\Http\Controllers\ExpenseController;
 
 Route::middleware(['web', 'installed', 'auth', 'plugin:expense-management', 'permission:expenses.manage'])
     ->prefix('admin/expenses')
