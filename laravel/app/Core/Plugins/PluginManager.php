@@ -520,10 +520,8 @@ class PluginManager
         $record = PluginRecord::query()->where('slug', $slug)->first();
         $wasInstalled = (bool) ($record?->is_installed);
         $wasEnabled = (bool) ($record?->is_enabled);
-        if ($wasInstalled) {
-            $this->uninstall($slug, false, $actorId);
-        }
 
+        // Validate the destination before changing the plugin's lifecycle state.
         $trashRoot = storage_path('app/plugin-recycle-bin');
         if (is_link($trashRoot)) {
             throw new RuntimeException('Plugin recycle-bin directory cannot be a symbolic link.');
@@ -534,6 +532,10 @@ class PluginManager
             throw new RuntimeException('Plugin recycle-bin directory is missing or unsafe.');
         }
         $trashRoot = $resolvedTrashRoot;
+
+        if ($wasInstalled) {
+            $this->uninstall($slug, false, $actorId);
+        }
         $token = now()->format('YmdHis') . '-' . bin2hex(random_bytes(5));
         $archiveName = $slug . '-' . $token;
         $destination = $trashRoot . DIRECTORY_SEPARATOR . $archiveName;
@@ -565,6 +567,10 @@ class PluginManager
             'files_sha256' => $packageChecksums,
         ];
         $metadataPath = $trashRoot . DIRECTORY_SEPARATOR . $archiveName . '.json';
+        if (file_exists($metadataPath) || is_link($metadataPath)) {
+            File::moveDirectory($destination, $source);
+            throw new RuntimeException('Recycle-bin metadata destination already exists; the plugin package was returned.');
+        }
         $written = File::put($metadataPath, json_encode($metadata, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
         if ($written === false) {
             File::moveDirectory($destination, $source);
