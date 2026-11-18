@@ -52,6 +52,7 @@ return new class extends Migration {
 
         if (Schema::hasTable('promo_coupons')) {
             Schema::table('promo_coupons', function (Blueprint $table): void {
+                if (!Schema::hasColumn('promo_coupons', 'description')) $table->string('description', 200)->nullable();
                 if (!Schema::hasColumn('promo_coupons', 'discount_type')) $table->string('discount_type', 16)->default('percent');
                 if (!Schema::hasColumn('promo_coupons', 'discount_amount')) $table->decimal('discount_amount', 10, 2)->nullable();
                 if (!Schema::hasColumn('promo_coupons', 'minimum_subtotal')) $table->decimal('minimum_subtotal', 10, 2)->default(0);
