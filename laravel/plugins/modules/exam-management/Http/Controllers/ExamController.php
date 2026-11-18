@@ -274,6 +274,9 @@ class ExamController extends Controller
         }
         if ($exam->starts_at && now()->lt($exam->starts_at)) abort(403, 'This exam has not started yet.');
         if ($exam->ends_at && now()->gt($exam->ends_at)) abort(403, 'The exam submission window has closed.');
+        if (Schema::hasColumn('exams', 'learn_earn_type') && $exam->learn_earn_type === 'paid') {
+            abort_unless(Schema::hasTable('learn_earn_exam_access') && DB::table('learn_earn_exam_access')->where('exam_id', $exam->id)->where('user_id', $actor->id)->where('status', 'granted')->exists(), 403, 'Payment is required before saving this exam.');
+        }
 
         $validated = $request->validate([
             'attempt_id' => ['required', 'integer'],
