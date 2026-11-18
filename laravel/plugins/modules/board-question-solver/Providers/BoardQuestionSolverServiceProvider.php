@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\BoardQuestionSolver\\Providers;
+namespace Plugins\Modules\BoardQuestionSolver\Providers;
 
-use App\\Core\\Plugins\\BasePluginServiceProvider;
+use App\Core\Plugins\BasePluginServiceProvider;
 
 class BoardQuestionSolverServiceProvider extends BasePluginServiceProvider
 {
