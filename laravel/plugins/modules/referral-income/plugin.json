@@ -9,15 +9,25 @@
   "dependencies": [],
   "provider": "Plugins\\Modules\\ReferralIncome\\Providers\\ReferralIncomeServiceProvider",
   "permissions": [
-    {"slug": "referral_income.manage", "name": "Manage Referral Income"}
-  ],
-  "settings_schema": [
-    {"key": "student_commission_percent", "label": "Student referral commission (%)", "type": "number", "secret": false, "default": "5"},
-    {"key": "teacher_commission_percent", "label": "Teacher referral commission (%)", "type": "number", "secret": false, "default": "10"},
-    {"key": "minimum_payout", "label": "Minimum payout amount (BDT)", "type": "number", "secret": false, "default": "500"}
+    {
+      "slug": "referral_income.manage",
+      "name": "Manage Referral Income"
+    }
   ],
   "admin_menu": [
-    {"group": "Finance", "label": "Referral Income", "route": "plugins.referral_income.admin.index", "order": 115, "permission": "referral_income.manage"}
+    {
+      "group": "Finance",
+      "label": "Referral Income",
+      "route": "plugins.referral_income.admin.index",
+      "order": 115,
+      "permission": "referral_income.manage"
+    }
   ],
-  "optional_dependencies": ["student-management", "teacher-management", "commerce-cart", "universal-payment", "payment-management"]
+  "optional_dependencies": [
+    "student-management",
+    "teacher-management",
+    "commerce-cart",
+    "universal-payment",
+    "payment-management"
+  ]
 }
