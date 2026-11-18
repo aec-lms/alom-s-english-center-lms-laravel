@@ -22,7 +22,7 @@ class ReferralIncomePluginTest extends TestCase
         $this->activatePlugins(['referral-income']);
 
         $admin = $this->createUserWithRole('admin');
-        $this->actingAs($admin)->get('/admin/referral-income')->assertOk()->assertSee('Student & Teacher Referral Income');
+        $this->actingAs($admin)->get('/admin/referral-income')->assertOk()->assertSee('Referral Income');
 
         $studentReferrer = $this->createUserWithRole('student');
         $buyer = $this->createUserWithRole('student');
