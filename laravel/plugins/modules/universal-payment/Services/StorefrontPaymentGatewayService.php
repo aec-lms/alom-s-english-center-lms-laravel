@@ -128,18 +128,33 @@ class StorefrontPaymentGatewayService
             ));
         }
 
+        $notes = json_decode((string) $transaction->notes, true);
+        $notes = is_array($notes) ? $notes : [];
+
         if ((string) ($data['risk_level'] ?? '0') === '1') {
-            $transaction->update(['status' => 'risk_review', 'notes' => json_encode(['provider' => 'sslcommerz', 'risk_review' => true])]);
-            throw new RuntimeException('SSLCOMMERZ flagged this payment for manual risk review. E-book access was not granted.');
+            DB::transaction(function () use ($transaction, $notes): void {
+                $locked = UniversalPaymentTransaction::query()->whereKey($transaction->id)->lockForUpdate()->firstOrFail();
+                if ($locked->status === 'verified') return;
+                $locked->update([
+                    'status' => 'risk_review',
+                    'notes' => json_encode(array_merge($notes, ['provider' => 'sslcommerz', 'risk_review' => true, 'reason' => 'provider_risk_level_flag']), JSON_THROW_ON_ERROR),
+                ]);
+                if (($notes['purpose'] ?? null) === 'course_gift' && Schema::hasTable('course_gifts')) {
+                    DB::table('course_gifts')->where('id', (int) ($notes['course_gift_id'] ?? 0))
+                        ->where('status', 'awaiting_payment')->update(['status' => 'risk_review', 'updated_at' => now()]);
+                }
+                if (($notes['purpose'] ?? null) === 'course_cart' && Schema::hasTable('course_cart_orders')) {
+                    DB::table('course_cart_orders')->where('id', (int) ($notes['course_cart_order_id'] ?? 0))
+                        ->where('status', 'awaiting_payment')->update(['status' => 'risk_review', 'updated_at' => now()]);
+                }
+            }, 3);
+            throw new RuntimeException('SSLCOMMERZ flagged this payment for manual risk review. Course or gift access was not granted.');
         }
 
         $providerDetails = [
             'bank_transaction_id' => (string) ($data['bank_tran_id'] ?? ''),
             'validation_status' => strtoupper((string) $data['status']),
         ];
-
-        $notes = json_decode((string) $transaction->notes, true);
-        $notes = is_array($notes) ? $notes : [];
         if (($notes['purpose'] ?? null) === 'course_cart') {
             return $this->grantCourseCartAccess($transaction, $validationId, $providerDetails, $notes);
         }
