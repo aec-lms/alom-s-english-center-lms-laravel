@@ -161,6 +161,28 @@ final class CourseCatalog
         $query = $this->table($enrollment)
             ->where($enrollment['user_id'] ?? 'user_id', $user->getAuthIdentifier())
             ->where($enrollment['course_id'] ?? 'course_id', $this->courseId($course));
+
+        // Preserve the host LMS branch boundary when its catalog exposes branch IDs.
+        $branchId = data_get($user, 'branch_id');
+        if ($branchId !== null) {
+            $courseBranchColumn = $courseMap['branch_id'] ?? 'branch_id';
+            if ($this->hasColumn($courseMap, $courseBranchColumn)) {
+                $courseBranchId = data_get($course, $courseBranchColumn);
+                abort_unless(
+                    $courseBranchId === null || (string) $courseBranchId === (string) $branchId,
+                    403,
+                    'Course belongs to another branch.'
+                );
+            }
+
+            $enrollmentBranchColumn = $enrollment['branch_id'] ?? 'branch_id';
+            if ($this->hasColumn($enrollment, $enrollmentBranchColumn)) {
+                $query->where(fn ($branch) => $branch
+                    ->whereNull($enrollmentBranchColumn)
+                    ->orWhere($enrollmentBranchColumn, $branchId));
+            }
+        }
+
         $statusColumn = $enrollment['status'] ?? null;
         $activeStatuses = $enrollment['active_statuses'] ?? ['active', 'completed'];
         if ($statusColumn && $this->hasColumn($enrollment, $statusColumn)) {
