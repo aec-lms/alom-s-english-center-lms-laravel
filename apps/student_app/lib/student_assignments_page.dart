@@ -136,13 +136,12 @@ class _StudentAssignmentDetailPageState
   }
 
   Future<void> pickAttachment() async {
-    final result = await FilePicker.platform.pickFiles(
+    final files = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf', 'doc', 'docx', 'txt', 'jpg', 'jpeg', 'png', 'zip'],
-      withData: false,
     );
-    if (!mounted || result == null || result.files.isEmpty) return;
-    setState(() => attachment = result.files.first);
+    if (!mounted || files.isEmpty) return;
+    setState(() => attachment = files.first);
   }
 
   Future<void> submit() async {
