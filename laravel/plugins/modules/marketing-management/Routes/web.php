@@ -12,4 +12,7 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:marketing-management', 'p
         Route::get('/', [MarketingController::class, 'index'])->name('index');
         Route::post('/campaigns', [MarketingController::class, 'storeCampaign'])->name('campaigns.store');
         Route::post('/coupons', [MarketingController::class, 'storeCoupon'])->name('coupons.store');
+        Route::patch('/coupons/{coupon}', [MarketingController::class, 'updateCoupon'])->whereNumber('coupon')->name('coupons.update');
+        Route::put('/gift-voucher-settings', [MarketingController::class, 'updateGiftVoucherSettings'])->name('gift-voucher-settings.update');
+        Route::patch('/gift-vouchers/{voucher}/status', [MarketingController::class, 'updateGiftVoucherStatus'])->whereNumber('voucher')->name('gift-vouchers.status');
     });
