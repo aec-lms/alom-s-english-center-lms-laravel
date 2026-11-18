@@ -28,6 +28,7 @@
             <form method="POST" action="{{ route('plugins.marketing.coupons.store') }}" class="grid gap-3 text-xs">
                 @csrf
                 <input name="code" required maxlength="40" placeholder="Coupon Code (e.g. IELTS20) *" class="rounded-lg border border-slate-300 px-3 py-2 font-mono uppercase">
+                <input name="description" maxlength="200" placeholder="Internal description / offer label" class="rounded-lg border border-slate-300 px-3 py-2">
                 <div class="grid grid-cols-2 gap-3">
                     <label class="grid gap-1 text-slate-600">Discount type
                         <select name="discount_type" required class="rounded-lg border border-slate-300 px-3 py-2">
@@ -78,6 +79,7 @@
             <div class="border border-slate-200 rounded-xl p-3 flex items-center justify-between gap-3">
                 <div>
                     <div class="font-bold font-mono text-sm text-slate-900">{{ $coupon->code }} &mdash; {{ $coupon->discount_type === 'fixed' ? number_format((float) $coupon->discount_amount, 2) . ' BDT OFF' : $coupon->discount_percent . '% OFF' }}</div>
+                    @if ($coupon->description)<div class="text-slate-600">{{ $coupon->description }}</div>@endif
                     <div class="text-slate-500">Used {{ $coupon->used_count }} / {{ (int) $coupon->max_uses > 0 ? $coupon->max_uses : 'Unlimited' }} &middot; Per student {{ $coupon->per_user_limit ?? 'Unlimited' }} &middot; Expires {{ $coupon->expires_at?->toDateString() ?? 'No expiry' }}</div>
                 </div>
                 <span class="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 font-bold text-[11px]">{{ $coupon->is_active ? 'Active' : 'Disabled' }}</span>
@@ -132,6 +134,7 @@
                         Enabled for new checkouts
                     </label>
                 </div>
+                <label class="block text-xs text-slate-600">Offer description<input name="description" maxlength="200" value="{{ $coupon->description }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"></label>
                 <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-xs">
                     <label class="grid gap-1 text-slate-600">Discount type
                         <select name="discount_type" class="rounded-lg border border-slate-300 px-3 py-2">
