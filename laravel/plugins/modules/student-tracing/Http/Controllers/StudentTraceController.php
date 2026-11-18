@@ -6,7 +6,6 @@ namespace Plugins\Modules\StudentTracing\Http\Controllers;
 
 use App\Core\Plugins\PluginManager;
 use App\Http\Controllers\Controller;
-use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -28,8 +27,8 @@ class StudentTraceController extends Controller
 
         $events = collect();
         $total = 0;
-        if (Schema::hasTable('student_activity_events')) {
-            $query = DB::table('student_activity_events')
+        if (Schema::hasTable('student_trace_events')) {
+            $query = DB::table('student_trace_events')
                 ->when($actor && $actor->hasRole('branch_manager'), fn ($q) => $q->where('branch_id', (int) $actor->branch_id))
                 ->when($request->filled('student_id'), fn ($q) => $q->where('student_id', (int) $request->input('student_id')))
                 ->when($request->filled('event_type'), fn ($q) => $q->where('event_type', $request->string('event_type')->toString()))
@@ -45,7 +44,7 @@ class StudentTraceController extends Controller
 
     public function export(Request $request): StreamedResponse
     {
-        abort_unless(Schema::hasTable('student_activity_events'), 404);
+        abort_unless(Schema::hasTable('student_trace_events'), 404);
         $validated = $request->validate([
             'student_id' => ['nullable', 'integer', 'min:1'],
             'event_type' => ['nullable', 'in:student.created,student.updated,student.deleted,attendance.created,attendance.updated,attendance.deleted,enrollment.created,enrollment.updated,enrollment.deleted,exam_attempt.created,exam_attempt.updated,exam_attempt.deleted'],
@@ -55,7 +54,7 @@ class StudentTraceController extends Controller
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
 
-        $query = DB::table('student_activity_events')
+        $query = DB::table('student_trace_events')
             ->when($actor && $actor->hasRole('branch_manager'), fn ($q) => $q->where('branch_id', (int) $actor->branch_id))
             ->when($request->filled('student_id'), fn ($q) => $q->where('student_id', (int) $request->input('student_id')))
             ->when($request->filled('event_type'), fn ($q) => $q->where('event_type', $validated['event_type']))
