@@ -29,7 +29,7 @@ class PublicHomeController extends Controller
             'videos' => Schema::hasTable('course_lessons')
                 && Schema::hasColumn('course_lessons', 'media_path')
                 && Schema::hasColumn('course_lessons', 'media_mime')
-                ? DB::table('course_lessons')->whereNotNull('media_path')->where('media_path', '<>')
+                ? DB::table('course_lessons')->whereNotNull('media_path')->where('media_path', '<>', '')
                     ->where('media_mime', 'like', 'video/%')->count()
                 : 0,
         ];
