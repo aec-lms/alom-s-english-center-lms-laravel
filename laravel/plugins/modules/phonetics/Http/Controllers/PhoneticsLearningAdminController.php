@@ -29,6 +29,7 @@ final class PhoneticsLearningAdminController extends Controller
             'courses' => $this->catalog->courses(),
             'batches' => $this->catalog->batches(),
             'students' => $this->studentOptions(),
+            'userNameColumn' => config('phonetics.users.name', 'name'),
             'batchMembers' => PhoneticBatchMembership::query()->with('user')->where('lms_driver', $this->catalog->driver())->latest()->paginate(20, ['*'], 'members'),
             'words' => PhoneticEntry::query()->where('is_active', true)->orderBy('word')->get(),
             'assignments' => PhoneticLearningAssignment::query()->where('lms_driver', $this->catalog->driver())->with('word')->latest()->paginate(20, ['*'], 'assignments'),
