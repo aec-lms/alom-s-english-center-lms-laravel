@@ -369,7 +369,7 @@ class BackupService
     private function resolveBackupPath(BackupRecord $backup): ?string
     {
         $backupDir = (string) config('lms.backup_path');
-        if ($backupDir === '' || !is_dir($backupDir)) {
+        if ($backupDir === '' || is_link($backupDir) || !is_dir($backupDir)) {
             return null;
         }
 
@@ -700,7 +700,9 @@ class BackupService
         foreach ($iterator as $file) {
             if ($file->isFile() && !$file->isLink()) {
                 $relative = ltrim(str_replace($sourceDir, '', $file->getPathname()), DIRECTORY_SEPARATOR);
-                $zip->addFile($file->getPathname(), $zipPrefix . '/' . str_replace('\\', '/', $relative));
+                if (!$zip->addFile($file->getPathname(), $zipPrefix . '/' . str_replace('\\', '/', $relative))) {
+                    throw new RuntimeException('Unable to add private file to backup archive: ' . $relative);
+                }
             }
         }
     }
