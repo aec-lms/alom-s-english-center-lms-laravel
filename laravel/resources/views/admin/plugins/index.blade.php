@@ -26,9 +26,12 @@
             <div class="bg-white rounded-2xl border border-slate-200 p-5 flex flex-col justify-between space-y-4">
                 <div class="space-y-2">
                     <div class="flex items-start justify-between gap-2">
-                        <div>
-                            <h2 class="text-sm font-bold text-slate-900">{{ $plugin->name }}</h2>
-                            <div class="text-[11px] text-slate-500">v{{ $plugin->version }} · {{ $plugin->author }} · <span class="uppercase">{{ $plugin->category }}</span></div>
+                        <div class="flex items-start gap-3 min-w-0">
+                            <span class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700"><x-plugin-icon :name="$plugin->icon ?? 'puzzle'" class="h-6 w-6" /></span>
+                            <div class="min-w-0">
+                                <h2 class="text-sm font-bold text-slate-900">{{ $plugin->name }}</h2>
+                                <div class="text-[11px] text-slate-500">v{{ $plugin->version }} · {{ $plugin->author }} · <span class="uppercase">{{ $plugin->category }}</span></div>
+                            </div>
                         </div>
                         <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold {{ $plugin->is_enabled ? 'bg-emerald-100 text-emerald-800' : ($plugin->is_installed ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600') }}">
                             {{ $plugin->is_enabled ? 'Active' : ($plugin->is_installed ? 'Installed (Disabled)' : 'Available') }}
