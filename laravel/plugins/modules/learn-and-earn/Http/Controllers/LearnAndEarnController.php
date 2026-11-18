@@ -281,12 +281,12 @@ class LearnAndEarnController extends Controller
 
     public function purchaseExam(Request $request, int $examId, StorefrontPaymentGatewayService $gateway): RedirectResponse
     {
-        abort_unless($request->user() && $request->user()->hasRole('student'), 403, 'Student account required.');
+        $student = $request->user();
+        abort_unless($student && $student->hasRole('student'), 403, 'Student account required.');
         $this->ensureExamIntegration();
 
-        $exam = Exam::query()->findOrFail($examId);
-        abort_unless($exam->is_published && ($exam->learn_earn_type ?? 'free') === 'paid' && (float) $exam->access_price > 0, 404);
-        $this->assertStudentExamBranch($request, $exam);
+        $values = $request->validate(['payer_contact' => ['required', 'string', 'max:120']]);
+        abort_unless(filter_var((string) $student->email, FILTER_VALIDATE_EMAIL), 422, 'A valid account email is required for checkout.');
 
         abort_unless(
             app(PluginManager::class)->isEnabled('universal-payment')
@@ -297,43 +297,68 @@ class LearnAndEarnController extends Controller
             'Enable and configure Universal Payment and SSLCOMMERZ before purchasing paid exams.'
         );
 
-        if (DB::table('learn_earn_exam_access')
-            ->where('exam_id', $exam->id)
-            ->where('user_id', $request->user()->id)
-            ->where('status', 'granted')
-            ->exists()) {
-            return redirect('/learn-and-earn/exams/' . $exam->id)->with('status', 'You already have access to this exam.');
-        }
+        // Lock the exam row while checking access/pending sessions and creating
+        // the transaction. This serializes concurrent checkout attempts for the
+        // same exam and prevents duplicate provider charges.
+        $transaction = DB::transaction(function () use ($request, $student, $examId, $values): UniversalPaymentTransaction {
+            $exam = Exam::query()->whereKey($examId)->lockForUpdate()->firstOrFail();
+            abort_unless($exam->is_published && ($exam->learn_earn_type ?? 'free') === 'paid' && (float) $exam->access_price > 0, 404);
+            $this->assertStudentExamBranch($request, $exam);
 
-        $pendingCheckout = UniversalPaymentTransaction::query()
-            ->where('user_id', $request->user()->id)
-            ->where('learn_earn_exam_id', $exam->id)
-            ->where('status', 'pending')
-            ->where('created_at', '>=', now()->subMinutes(30))
-            ->exists();
-        abort_if($pendingCheckout, 409, 'A checkout for this exam is already pending. Wait for its result or contact the administrator before retrying.');
+            if (DB::table('learn_earn_exam_access')
+                ->where('exam_id', $exam->id)
+                ->where('user_id', $student->id)
+                ->where('status', 'granted')
+                ->exists()) {
+                abort(409, 'You already have access to this exam.');
+            }
 
-        $values = $request->validate(['payer_contact' => ['required', 'string', 'max:120']]);
-        abort_unless(filter_var((string) $request->user()->email, FILTER_VALIDATE_EMAIL), 422, 'A valid account email is required for checkout.');
+            $pendingCheckout = UniversalPaymentTransaction::query()
+                ->where('user_id', $student->id)
+                ->where('learn_earn_exam_id', $exam->id)
+                ->where(function ($query): void {
+                    $query->where('status', 'risk_review')
+                        ->orWhere(function ($pending): void {
+                            $pending->where('status', 'pending')
+                                ->where('created_at', '>=', now()->subMinutes(30));
+                        });
+                })
+                ->exists();
+            abort_if($pendingCheckout, 409, 'A checkout for this exam is already pending or requires payment reconciliation. Contact support before retrying.');
 
-        $transaction = UniversalPaymentTransaction::query()->create([
-            'reference' => 'UPAY-' . strtoupper(Str::random(10)),
-            'payer_name' => $request->user()->name,
-            'payer_contact' => $values['payer_contact'],
-            'item_title' => $exam->title,
-            'gateway' => 'sslcommerz',
-            'currency' => app(PluginManager::class)->getSetting('universal-payment', 'default_currency', (string) config('lms.default_currency', 'BDT')) ?: 'BDT',
-            'amount' => $exam->access_price,
-            'status' => 'pending',
-            'user_id' => $request->user()->id,
-            'learn_earn_exam_id' => $exam->id,
-        ]);
+            return UniversalPaymentTransaction::query()->create([
+                'reference' => 'UPAY-' . strtoupper(Str::random(10)),
+                'payer_name' => $student->name,
+                'payer_contact' => $values['payer_contact'],
+                'item_title' => $exam->title,
+                'gateway' => 'sslcommerz',
+                'currency' => app(PluginManager::class)->getSetting('universal-payment', 'default_currency', (string) config('lms.default_currency', 'BDT')) ?: 'BDT',
+                'amount' => $exam->access_price,
+                'status' => 'pending',
+                'user_id' => $student->id,
+                'learn_earn_exam_id' => $exam->id,
+            ]);
+        });
 
         try {
-            return redirect()->away($gateway->initiateSslcommerz($transaction, $exam, $request->user(), $values['payer_contact']));
-        } catch (\Throwable $exception) {
+            $exam = Exam::query()->findOrFail($examId);
+            return redirect()->away($gateway->initiateSslcommerz($transaction, $exam, $student, $values['payer_contact']));
+        } catch (\\Throwable $exception) {
             report($exception);
-            return back()->withErrors(['payment' => 'Unable to start secure checkout. No exam access was granted.']);
+            // A definitive provider rejection marks the transaction failed in
+            // the gateway service. A transport timeout is ambiguous: retain a
+            // risk-review hold so the student cannot accidentally pay twice.
+            DB::transaction(function () use ($transaction): void {
+                $locked = UniversalPaymentTransaction::query()->whereKey($transaction->id)->lockForUpdate()->first();
+                if ($locked && $locked->status === 'pending') {
+                    $locked->update([
+                        'status' => 'risk_review',
+                        'notes' => 'SSLCOMMERZ session initialization outcome is unknown. Reconcile with the provider before allowing a retry.',
+                    ]);
+                }
+            });
+
+            return back()->withErrors(['payment' => 'The payment session could not be confirmed. Please contact support before retrying; do not submit another payment.']);
         }
     }
 
