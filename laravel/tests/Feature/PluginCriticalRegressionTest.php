@@ -262,6 +262,15 @@ class PluginCriticalRegressionTest extends TestCase
         $this->assertStringContainsString("Schema::create('failed_jobs'", $migration);
     }
 
+    public function test_notification_delivery_job_is_unique_per_notification_to_prevent_duplicate_dispatch(): void
+    {
+        $job = new DeliverNotificationJob(481);
+
+        $this->assertInstanceOf(\\Illuminate\\Contracts\\Queue\\ShouldBeUnique::class, $job);
+        $this->assertSame('481', $job->uniqueId());
+        $this->assertSame(3600, $job->uniqueFor);
+    }
+
     public function test_notification_email_job_marks_sent_only_after_mail_transport_returns(): void
     {
         $this->markSystemInstalled();
