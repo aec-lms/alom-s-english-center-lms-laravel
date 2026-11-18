@@ -31,6 +31,7 @@ return [
         'id' => 'id',
         'name' => 'name',
         'email' => 'email',
+        'model' => env('PHONETICS_USER_MODEL'),
     ],
     'driver' => env('PHONETICS_LMS_DRIVER', 'aec'),
     'catalog' => [
