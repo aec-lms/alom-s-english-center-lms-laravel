@@ -33,6 +33,10 @@
                         </label>
                     @endforeach
                 </div>
+                <label class="flex items-start gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900">
+                    <input type="checkbox" name="allow_offline_payments" value="1" {{ $config['allow_offline_payments'] ? 'checked' : '' }} class="mt-0.5 rounded text-blue-600">
+                    <span><strong>Allow cash / bank transfer</strong><span class="block mt-0.5 text-[11px]">When disabled, new manual cash and bank-transfer submissions are rejected.</span></span>
+                </label>
             </div>
             <div class="space-y-3">
                 <div>
@@ -80,15 +84,11 @@
                     <input type="number" step="0.01" min="1" name="amount" required class="w-full rounded-xl border border-slate-300 px-3 py-2">
                 </div>
                 <div>
-                    <label class="font-semibold text-slate-700 block mb-1">External TrxID (Optional)</label>
-                    <input name="external_trx_id" class="w-full rounded-xl border border-slate-300 px-3 py-2 font-mono">
+                    <label class="font-semibold text-slate-700 block mb-1">External TrxID / Receipt Reference *</label>
+                    <input name="external_trx_id" required class="w-full rounded-xl border border-slate-300 px-3 py-2 font-mono">
                 </div>
-                <div>
-                    <label class="font-semibold text-slate-700 block mb-1">Initial Status</label>
-                    <select name="status" class="w-full rounded-xl border border-slate-300 px-3 py-2 bg-white">
-                        <option value="verified">Verified / Paid</option>
-                        <option value="pending">Pending Verification</option>
-                    </select>
+                <div class="col-span-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-900">
+                    Manual payment records always start as pending. An authorized reviewer must verify the receipt before the payment is treated as settled.
                 </div>
             </div>
             <button class="px-5 py-2.5 rounded-xl bg-[#0057FF] hover:bg-blue-700 text-white font-bold">Record Payment</button>
