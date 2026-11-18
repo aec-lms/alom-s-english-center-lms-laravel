@@ -1,40 +1,40 @@
 @extends('layouts.app')
 @section('title', 'My Dashboard — AEC LMS')
 @section('content')
-<div class="min-h-screen bg-slate-50">
+<div class="min-h-screen bg-gradient-to-br from-slate-50 via-white to-sky-50/70">
     @include('public.partials.navbar')
-    <main class="max-w-6xl mx-auto px-4 py-10 space-y-8">
-        <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+    <main class="mx-auto max-w-7xl space-y-8 px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+        <section class="relative isolate overflow-hidden rounded-3xl bg-gradient-to-br {{ $role === 'student' ? 'from-sky-950 via-cyan-900 to-teal-800' : ($role === 'teacher' ? 'from-indigo-950 via-violet-900 to-blue-800' : ($role === 'guardian' ? 'from-fuchsia-950 via-purple-900 to-indigo-800' : ($role === 'branch_manager' ? 'from-amber-950 via-orange-900 to-rose-800' : 'from-slate-950 via-indigo-950 to-sky-900'))) }} px-6 py-8 text-white shadow-xl sm:px-9 sm:py-10"><div aria-hidden="true" class="pointer-events-none absolute -right-16 -top-24 h-72 w-72 rounded-full bg-sky-400/20 blur-3xl"></div><div aria-hidden="true" class="pointer-events-none absolute -bottom-28 left-1/3 h-64 w-64 rounded-full bg-violet-400/20 blur-3xl"></div><div class="relative flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
             <div>
-                <p class="text-xs font-bold uppercase tracking-wider text-sky-700">{{ ucwords(str_replace('_', ' ', $role)) }} Portal</p>
-                <h1 class="text-3xl font-extrabold text-slate-900 mt-1">Welcome, {{ $user->name }}</h1>
-                <p class="text-sm text-slate-500 mt-1">{{ $user->email }}</p>
+                <p class="text-xs font-extrabold uppercase tracking-[.22em] text-sky-200">{{ ucwords(str_replace('_', ' ', $role)) }} Portal</p>
+                <h1 class="mt-2 text-3xl font-black tracking-tight text-white sm:text-4xl">Welcome, {{ $user->name }}</h1>
+                <p class="mt-2 text-sm text-slate-300">{{ $user->email }}</p>
             </div>
             @if (in_array($role, ['student', 'guardian']) && Route::has('plugins.attendance.portal'))
-                <a href="{{ route('plugins.attendance.portal') }}" class="rounded-lg border border-sky-200 px-4 py-2.5 text-sm font-bold text-sky-700">My Attendance</a>
+                <a href="{{ route('plugins.attendance.portal') }}" class="rounded-xl border border-white/25 bg-white/10 px-4 py-2.5 text-sm font-bold text-white backdrop-blur transition hover:bg-white/20">My Attendance</a>
             @endif
             @if ($role === 'student' && Route::has('plugins.enrollments.my'))
-                <a href="{{ route('plugins.enrollments.my') }}" class="rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-bold text-white">My Enrollments</a>
+                <a href="{{ route('plugins.enrollments.my') }}" class="rounded-xl bg-white px-4 py-2.5 text-sm font-extrabold text-slate-900 shadow-lg transition hover:bg-sky-50">My Enrollments</a>
                 @if (Route::has('public.exams'))
-                    <a href="{{ route('public.exams') }}" class="rounded-lg border border-indigo-200 px-4 py-2.5 text-sm font-bold text-indigo-700">Available Exams</a>
+                    <a href="{{ route('public.exams') }}" class="rounded-xl border border-white/25 bg-white/10 px-4 py-2.5 text-sm font-bold text-white backdrop-blur transition hover:bg-white/20">Available Exams</a>
                 @endif
             @elseif (in_array($role, ['branch_manager', 'accountant']) && Route::has('plugins.enrollments.index'))
-                <a href="{{ route('plugins.enrollments.index') }}" class="rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-bold text-white">Course Enrollments</a>
+                <a href="{{ route('plugins.enrollments.index') }}" class="rounded-xl bg-white px-4 py-2.5 text-sm font-extrabold text-slate-900 shadow-lg transition hover:bg-sky-50">Course Enrollments</a>
             @endif
             @if ($role === 'student' && $boardQuestionSolverAvailable)
-                <a href="{{ route('student.board-solver.index') }}" class="rounded-lg border border-violet-200 bg-violet-50 px-4 py-2.5 text-sm font-bold text-violet-800">{{ __('Board Question Solver') }}</a>
+                <a href="{{ route('student.board-solver.index') }}" class="rounded-xl border border-violet-200/40 bg-violet-400/15 px-4 py-2.5 text-sm font-bold text-violet-100 backdrop-blur transition hover:bg-violet-400/25">{{ __('Board Question Solver') }}</a>
             @endif
-        </div>
+        </div></section>
 
         @if (session('status'))
             <div class="rounded-lg bg-emerald-50 text-emerald-800 px-4 py-3 text-sm">{{ session('status') }}</div>
         @endif
 
-        <section class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <section aria-label="Dashboard summary" class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             @forelse ($metrics as $label => $value)
-                <div class="bg-white rounded-xl border border-slate-200 p-4">
-                    <div class="text-xs text-slate-500 capitalize">{{ str_replace('_', ' ', $label) }}</div>
-                    <div class="text-2xl font-extrabold text-slate-900 mt-1">{{ $value }}</div>
+                <div class="group relative overflow-hidden rounded-2xl border border-white border-t-4 {{ $role === 'student' ? 'border-t-teal-500' : ($role === 'teacher' ? 'border-t-violet-500' : ($role === 'guardian' ? 'border-t-fuchsia-500' : ($role === 'branch_manager' ? 'border-t-orange-500' : 'border-t-sky-500'))) }} bg-white p-4 shadow-sm ring-1 ring-slate-200/70 transition duration-200 hover:-translate-y-0.5 hover:shadow-lg sm:p-5">
+                    <div class="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">{{ str_replace('_', ' ', $label) }}</div>
+                    <div class="mt-2 text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">{{ $value }}</div>
                 </div>
             @empty
                 <div class="col-span-full text-sm text-slate-500">Your portal information will appear here when your profile and modules are configured.</div>
@@ -43,12 +43,12 @@
 
         @if ($role === 'student')
             @if (!$student)
-                <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Your student profile has not been created yet. Please contact the admissions office.</div>
+                <div class="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900 shadow-sm">Your student profile has not been created yet. Please contact the admissions office.</div>
             @endif
-            <section class="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
-                <h2 class="font-extrabold text-slate-900">My Courses</h2>
+            <section class="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6 space-y-4">
+                <h2 class="text-lg font-black tracking-tight text-slate-900">My Courses</h2>
                 @forelse ($enrollments as $enrollment)
-                    <div class="border-t border-slate-100 pt-3">
+                    <div class="rounded-2xl border border-slate-100 bg-slate-50/70 p-4 transition hover:border-sky-200 hover:bg-sky-50/40">
                         <div class="flex items-center justify-between gap-3">
                             <div><div class="font-semibold text-sm">{{ $enrollment->title }}</div><div class="text-xs text-slate-500">৳{{ number_format((float) $enrollment->price, 2) }}</div></div>
                             <span class="text-xs font-bold uppercase {{ $enrollment->enrollment_status === 'active' ? 'text-emerald-700' : 'text-amber-700' }}">{{ $enrollment->enrollment_status }}</span>
@@ -80,65 +80,65 @@
                     <p class="text-sm text-slate-500">No course enrollments yet.</p>
                 @endforelse
             </section>
-            <section class="grid md:grid-cols-2 gap-4">
-                <div class="bg-white rounded-2xl border border-slate-200 p-5">
-                    <h2 class="font-extrabold mb-3">Fee Invoices</h2>
+            <section class="grid gap-4 lg:grid-cols-2">
+                <div class="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+                    <h2 class="mb-4 text-lg font-black tracking-tight text-slate-900">Fee Invoices</h2>
                     @forelse ($invoices as $invoice)
-                        <div class="border-t py-2 text-sm flex justify-between gap-3"><span>{{ $invoice->invoice_number }}</span><span>{{ $invoice->currency }} {{ number_format((float) $invoice->net_amount, 2) }} · {{ $invoice->status }}</span></div>
+                        <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 py-3 text-sm"><span>{{ $invoice->invoice_number }}</span><span>{{ $invoice->currency }} {{ number_format((float) $invoice->net_amount, 2) }} · {{ $invoice->status }}</span></div>
                     @empty
                         <p class="text-sm text-slate-500">No invoices.</p>
                     @endforelse
                 </div>
-                <div class="bg-white rounded-2xl border border-slate-200 p-5">
-                    <h2 class="font-extrabold mb-3">Recent Exam Results</h2>
+                <div class="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+                    <h2 class="mb-4 text-lg font-black tracking-tight text-slate-900">Recent Exam Results</h2>
                     @forelse ($attempts as $attempt)
-                        <div class="border-t py-2 text-sm flex justify-between gap-3"><span>{{ $attempt->exam_title }}</span><span>{{ $attempt->score_obtained }}/{{ $attempt->total_marks }}</span></div>
+                        <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 py-3 text-sm"><span>{{ $attempt->exam_title }}</span><span>{{ $attempt->score_obtained }}/{{ $attempt->total_marks }}</span></div>
                     @empty
                         <p class="text-sm text-slate-500">No exam attempts.</p>
                     @endforelse
                 </div>
             </section>
         @elseif ($role === 'teacher')
-            <section class="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
-                <h2 class="font-extrabold">My Assigned Courses</h2>
+            <section class="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6 space-y-4">
+                <h2 class="text-lg font-black tracking-tight text-slate-900">My Assigned Courses</h2>
                 @forelse ($courses as $course)
-                    <div class="border-t pt-3 text-sm"><a class="font-semibold text-sky-700" href="{{ route('public.courses.show', $course->slug) }}">{{ $course->title }}</a></div>
+                    <div class="rounded-2xl border border-slate-100 bg-slate-50/70 p-4 text-sm transition hover:border-sky-200 hover:bg-sky-50/40"><a class="font-semibold text-sky-700" href="{{ route('public.courses.show', $course->slug) }}">{{ $course->title }}</a></div>
                 @empty
                     <p class="text-sm text-slate-500">No courses are assigned to your teacher profile yet.</p>
                 @endforelse
             </section>
-            <section class="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
-                <h2 class="font-extrabold">Live Classes</h2>
+            <section class="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6 space-y-4">
+                <h2 class="text-lg font-black tracking-tight text-slate-900">Live Classes</h2>
                 @forelse ($liveClasses as $liveClass)
-                    <div class="border-t pt-3 text-sm flex justify-between gap-3"><span>{{ $liveClass->title }}</span><span>{{ $liveClass->starts_at }} · {{ $liveClass->status }}</span></div>
+                    <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/70 px-4 py-3 text-sm"><span>{{ $liveClass->title }}</span><span>{{ $liveClass->starts_at }} · {{ $liveClass->status }}</span></div>
                 @empty
                     <p class="text-sm text-slate-500">No live classes scheduled.</p>
                 @endforelse
             </section>
         @elseif ($role === 'guardian')
-            <section class="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
-                <h2 class="font-extrabold">Linked Students</h2>
+            <section class="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6 space-y-4">
+                <h2 class="text-lg font-black tracking-tight text-slate-900">Linked Students</h2>
                 @forelse ($children as $child)
-                    <div class="border-t pt-3 text-sm"><div class="font-semibold">{{ $child->name }}</div><div class="text-slate-500">{{ $child->student_code }} · {{ $child->email }}</div></div>
+                    <div class="rounded-2xl border border-slate-100 bg-slate-50/70 p-4 text-sm transition hover:border-sky-200 hover:bg-sky-50/40"><div class="font-semibold">{{ $child->name }}</div><div class="text-slate-500">{{ $child->student_code }} · {{ $child->email }}</div></div>
                 @empty
                     <p class="text-sm text-slate-500">No student profiles are linked to your guardian account.</p>
                 @endforelse
             </section>
-            <section class="bg-white rounded-2xl border border-slate-200 p-5">
-                <h2 class="font-extrabold mb-3">Linked Student Invoices</h2>
+            <section class="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+                <h2 class="mb-4 text-lg font-black tracking-tight text-slate-900">Linked Student Invoices</h2>
                 @forelse ($invoices as $invoice)
-                    <div class="border-t py-2 text-sm flex justify-between gap-3"><span>{{ $invoice->invoice_number }}</span><span>{{ $invoice->currency }} {{ number_format((float) $invoice->net_amount, 2) }} · {{ $invoice->status }}</span></div>
+                    <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 py-3 text-sm"><span>{{ $invoice->invoice_number }}</span><span>{{ $invoice->currency }} {{ number_format((float) $invoice->net_amount, 2) }} · {{ $invoice->status }}</span></div>
                 @empty
                     <p class="text-sm text-slate-500">No invoices.</p>
                 @endforelse
             </section>
         @elseif ($role === 'branch_manager')
-            <div class="rounded-xl bg-white border border-slate-200 p-5 text-sm text-slate-600">All counts and enrollment records shown here are restricted to your assigned branch.</div>
+            <div class="rounded-3xl border border-sky-200 bg-gradient-to-br from-sky-50 to-indigo-50 p-6 text-sm text-slate-700 shadow-sm">All counts and enrollment records shown here are restricted to your assigned branch.</div>
         @elseif ($role === 'accountant')
-            <section class="bg-white rounded-2xl border border-slate-200 p-5">
-                <h2 class="font-extrabold mb-3">Recent Invoices</h2>
+            <section class="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+                <h2 class="mb-4 text-lg font-black tracking-tight text-slate-900">Recent Invoices</h2>
                 @forelse ($invoices as $invoice)
-                    <div class="border-t py-2 text-sm flex justify-between gap-3"><span>{{ $invoice->invoice_number }}</span><span>{{ $invoice->currency }} {{ number_format((float) $invoice->net_amount, 2) }} · {{ $invoice->status }}</span></div>
+                    <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 py-3 text-sm"><span>{{ $invoice->invoice_number }}</span><span>{{ $invoice->currency }} {{ number_format((float) $invoice->net_amount, 2) }} · {{ $invoice->status }}</span></div>
                 @empty
                     <p class="text-sm text-slate-500">No invoices found.</p>
                 @endforelse
@@ -146,10 +146,10 @@
         @endif
 
         @if (isset($notifications) && $notifications->isNotEmpty())
-            <section class="bg-white rounded-2xl border border-slate-200 p-5">
-                <h2 class="font-extrabold mb-3">My Notifications</h2>
+            <section class="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+                <h2 class="mb-4 text-lg font-black tracking-tight text-slate-900">My Notifications</h2>
                 @foreach ($notifications as $notification)
-                    <article class="border-t py-3">
+                    <article class="border-t border-slate-100 py-4 first:border-0">
                         <h3 class="font-semibold text-sm">{{ $notification->title }}</h3>
                         <p class="text-xs text-slate-600 mt-1">{{ $notification->message }}</p>
                         <p class="text-[11px] text-slate-400 mt-1">{{ $notification->created_at }}</p>
@@ -159,10 +159,10 @@
         @endif
 
         @if ($notices->isNotEmpty())
-            <section class="bg-white rounded-2xl border border-slate-200 p-5">
-                <h2 class="font-extrabold mb-3">Notices</h2>
+            <section class="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+                <h2 class="mb-4 text-lg font-black tracking-tight text-slate-900">Notices</h2>
                 @foreach ($notices as $notice)
-                    <article class="border-t py-3"><h3 class="font-semibold text-sm">{{ $notice->title }}</h3><p class="text-xs text-slate-600 mt-1">{{ strip_tags($notice->body) }}</p></article>
+                    <article class="border-t border-slate-100 py-4 first:border-0"><h3 class="font-semibold text-sm">{{ $notice->title }}</h3><p class="text-xs text-slate-600 mt-1">{{ strip_tags($notice->body) }}</p></article>
                 @endforeach
             </section>
         @endif
