@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use App\\Core\\Plugins\\PluginSignatureVerifier;
+use App\Core\Plugins\PluginSignatureVerifier;
 use RuntimeException;
-use Tests\\TestCase;
+use Tests\TestCase;
 
 class PluginSignatureVerifierTest extends TestCase
 {
@@ -27,7 +27,7 @@ class PluginSignatureVerifierTest extends TestCase
             $pair = sodium_crypto_sign_keypair();
             $secret = sodium_crypto_sign_secretkey($pair);
             $public = sodium_crypto_sign_publickey($pair);
-            $message = implode("\\n", [
+            $message = implode("\n", [
                 'AEC-LMS-PLUGIN-SIGNATURE-V1',
                 'signed-test-plugin',
                 '1.2.3',
