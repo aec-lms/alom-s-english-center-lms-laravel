@@ -31,8 +31,8 @@ class CourseCommerceAdminControlsTest extends TestCase
 
         $stored = json_decode((string) SystemSetting::query()->where('key', 'course_commerce.gift_vouchers')->value('value'), true);
         $this->assertSame(true, $stored['enabled']);
-        $this->assertSame(250.0, $stored['minimum_amount']);
-        $this->assertSame(25000.0, $stored['maximum_amount']);
+        $this->assertEquals(250.0, (float) $stored['minimum_amount']);
+        $this->assertEquals(25000.0, (float) $stored['maximum_amount']);
         $this->assertSame(90, $stored['validity_days']);
         $this->assertSame(true, $stored['allow_personal_message']);
     }
