@@ -293,15 +293,6 @@ class PluginManager
 
             $packageRoot = dirname($manifestFile);
             $this->verifyPackageIntegrity($packageRoot);
-            if ($signaturePath === null || !is_file($signaturePath)) {
-                throw new RuntimeException('Unsigned plugin ZIP uploads are blocked. Provide a trusted Ed25519 detached signature.');
-            }
-            $signatureMetadata = app(PluginSignatureVerifier::class)->verify($packageRoot, $signaturePath);
-
-            if (!copy($signaturePath, $packageRoot . DIRECTORY_SEPARATOR . '.aec-plugin-signature.json')) {
-                throw new RuntimeException('Verified plugin signature could not be retained with the package.');
-            }
-
             $manifest = PluginManifest::fromDirectory($packageRoot);
             if ($manifest->isCore || $manifest->slug === config('plugins.core_identifier')) {
                 throw new RuntimeException('Core cannot be replaced through the plugin ZIP uploader.');
@@ -325,6 +316,16 @@ class PluginManager
                 if (!$resolvedTarget || !is_dir($resolvedTarget) || dirname($resolvedTarget) !== $modulesRoot) {
                     throw new RuntimeException('Plugin update target is outside the registered modules directory.');
                 }
+            }
+
+            // Preserve archive, checksum, manifest and target-path safety errors before
+            // enforcing the trust decision, so unsigned packages cannot mask attacks.
+            if ($signaturePath === null || !is_file($signaturePath)) {
+                throw new RuntimeException('Unsigned plugin ZIP uploads are blocked. Provide a trusted Ed25519 detached signature.');
+            }
+            $signatureMetadata = app(PluginSignatureVerifier::class)->verify($packageRoot, $signaturePath);
+            if (!copy($signaturePath, $packageRoot . DIRECTORY_SEPARATOR . '.aec-plugin-signature.json')) {
+                throw new RuntimeException('Verified plugin signature could not be retained with the package.');
             }
 
             $previousRecord = PluginRecord::query()->where('slug', $manifest->slug)->first();
