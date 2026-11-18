@@ -232,7 +232,9 @@ class LearningInteractionController extends Controller
         abort_unless($class && in_array($class->status, ['upcoming', 'live'], true), 404);
         $course = DB::table('courses')->where('id', $class->course_id)->first();
         abort_unless($course, 404);
-        $this->assertActiveEnrollment($request, (int) $course->id, $course->branch_id);
+        if (!$this->canTeachLiveClass($request, $class)) {
+            $this->assertActiveEnrollment($request, (int) $course->id, $course->branch_id);
+        }
         return $class;
     }
 
