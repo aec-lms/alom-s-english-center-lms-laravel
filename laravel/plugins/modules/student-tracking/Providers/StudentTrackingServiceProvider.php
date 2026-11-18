@@ -130,7 +130,7 @@ class StudentTrackingServiceProvider extends BasePluginServiceProvider
     private function listenForLiveClassAndCertificateEvents(): void
     {
         $this->listenForModelEvent(
-            'Plugins\\\\Modules\\\\CourseManagement\\\\Models\\\\LiveClassParticipant',
+            'Plugins\\Modules\\CourseManagement\\Models\\LiveClassParticipant',
             'live_class_joined',
             'user_id',
             'live_class_id',
@@ -139,7 +139,7 @@ class StudentTrackingServiceProvider extends BasePluginServiceProvider
         );
 
         Event::listen(
-            'eloquent.created: Plugins\\\\Modules\\\\CertificateManagement\\\\Models\\\\CertificateRecord',
+            'eloquent.created: Plugins\\Modules\\CertificateManagement\\Models\\CertificateRecord',
             function (object $certificate): void {
                 if (!app(PluginManager::class)->isEnabled('student-tracking')
                     || !app(PluginManager::class)->isEnabled('student-management')
