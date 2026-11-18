@@ -32,6 +32,9 @@ final class CourseCatalog
     public function courses(?string $categoryRef = null): array
     {
         $map = config('phonetics.catalog.courses', []);
+        if (!$this->available($map)) {
+            return [];
+        }
         $query = $this->table($map);
         if ($categoryRef !== null && $categoryRef !== '' && $this->hasColumn($map, $map['category_id'] ?? 'category_id')) {
             $query->where($map['category_id'] ?? 'category_id', $categoryRef);
