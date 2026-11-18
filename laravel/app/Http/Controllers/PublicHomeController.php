@@ -410,7 +410,7 @@ class PublicHomeController extends Controller
 
         $storedPath = (string) $item->download_url;
         if (str_starts_with($storedPath, 'private:')) {
-            $path = str_replace('\\\\', '/', substr($storedPath, 8));
+            $path = str_replace('\\', '/', substr($storedPath, 8));
             $segments = explode('/', $path);
             abort_if(
                 $path === ''
