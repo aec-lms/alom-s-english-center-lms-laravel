@@ -81,6 +81,7 @@ class StudentTrackingServiceProvider extends BasePluginServiceProvider
             }
         });
 
+        $this->listenForLiveClassAndCertificateEvents();
         $this->listenForAttendanceEvents();
     }
 
@@ -124,6 +125,58 @@ class StudentTrackingServiceProvider extends BasePluginServiceProvider
                 report($exception);
             }
         });
+    }
+
+    private function listenForLiveClassAndCertificateEvents(): void
+    {
+        $this->listenForModelEvent(
+            'Plugins\\Modules\\CourseManagement\\Models\\LiveClassParticipant',
+            'live_class_joined',
+            'user_id',
+            'live_class_id',
+            'live_class',
+            fn (object $model): array => ['source' => 'live-class-participant'],
+        );
+
+        Event::listen(
+            'eloquent.created: Plugins\\Modules\\CertificateManagement\\Models\\CertificateRecord',
+            function (object $certificate): void {
+                if (!app(PluginManager::class)->isEnabled('student-tracking')
+                    || !app(PluginManager::class)->isEnabled('student-management')
+                    || !Schema::hasTable('student_activity_events')
+                    || !Schema::hasTable('students')
+                    || ($certificate->status ?? 'issued') !== 'issued') {
+                    return;
+                }
+
+                $studentCode = (string) ($certificate->student_code ?? '');
+                if ($studentCode === '') {
+                    return;
+                }
+
+                $userId = (int) DB::table('students')->where('student_code', $studentCode)->value('user_id');
+                if ($userId <= 0) {
+                    return;
+                }
+
+                try {
+                    app(StudentActivityTracker::class)->record(
+                        $userId,
+                        'certificate_earned',
+                        'certificate',
+                        $certificate->id ?? null,
+                        null,
+                        [
+                            'course_title' => $certificate->course_title ?? '',
+                            'source' => 'certificate-issued',
+                        ],
+                        Auth::id(),
+                    );
+                } catch (Throwable $exception) {
+                    report($exception);
+                }
+            },
+        );
     }
 
     private function listenForAttendanceEvents(): void
