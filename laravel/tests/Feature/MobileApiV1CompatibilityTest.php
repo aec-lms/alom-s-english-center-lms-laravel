@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use Illuminate\Support\Facades\Auth;
 use Tests\TestCase;
 
 class MobileApiV1CompatibilityTest extends TestCase
@@ -60,6 +61,8 @@ class MobileApiV1CompatibilityTest extends TestCase
             ->postJson('/api/v1/auth/logout')
             ->assertOk();
         $this->assertDatabaseMissing('personal_access_tokens', ['tokenable_id' => $student->id]);
+        // Clear the test application's cached Sanctum guard between simulated HTTP requests.
+        Auth::forgetGuards();
         $this->withHeader('Authorization', 'Bearer ' . $token)
             ->getJson('/api/v1/auth/me')
             ->assertUnauthorized();
