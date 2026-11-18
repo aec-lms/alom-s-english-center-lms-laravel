@@ -16,7 +16,7 @@ return new class extends Migration {
                 $table->string('currency', 8)->default('BDT');
                 $table->string('status', 20)->default('active')->index();
                 $table->timestamps();
-                $table->unique(['user_id', 'status']);
+                $table->index(['user_id', 'status']);
             });
         }
 
