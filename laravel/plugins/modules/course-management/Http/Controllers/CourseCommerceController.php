@@ -265,6 +265,173 @@ class CourseCommerceController extends Controller
         }, 3);
     }
 
+    public function voucherForm(Request $request): View
+    {
+        $this->student($request);
+
+        return view('course-management::commerce.voucher');
+    }
+
+    public function purchaseVoucher(Request $request): RedirectResponse
+    {
+        $student = $this->student($request);
+        $validated = $request->validate([
+            'recipient_email' => ['required', 'email:rfc', 'max:190'],
+            'recipient_name' => ['nullable', 'string', 'max:160'],
+            'message' => ['nullable', 'string', 'max:1000'],
+            'amount' => ['required', 'numeric', 'min:100', 'max:100000'],
+            'payer_contact' => ['required', 'string', 'min:7', 'max:40'],
+        ]);
+        $this->assertCheckoutReady();
+        abort_unless(Schema::hasTable('course_gift_vouchers') && Schema::hasTable('course_gift_wallets')
+            && Schema::hasTable('course_gift_wallet_transactions'), 503, 'Gift voucher storage is not ready.');
+        abort_if(strtolower(trim($validated['recipient_email'])) === strtolower(trim((string) $student->email)), 422,
+            'You cannot send a gift voucher to your own account.');
+
+        $created = DB::transaction(function () use ($student, $validated): array {
+            $token = Str::random(64);
+            $amount = round((float) $validated['amount'], 2);
+            $voucherId = DB::table('course_gift_vouchers')->insertGetId([
+                'sender_user_id' => $student->id,
+                'recipient_email' => strtolower(trim($validated['recipient_email'])),
+                'recipient_name' => $validated['recipient_name'] ?? null,
+                'message' => $validated['message'] ?? null,
+                'redeem_token_hash' => hash('sha256', $token),
+                'redeem_token_encrypted' => encrypt($token),
+                'currency' => strtoupper((string) config('lms.default_currency', 'BDT')),
+                'amount' => $amount,
+                'remaining_amount' => $amount,
+                'status' => 'awaiting_payment',
+                'expires_at' => now()->addDays(180),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            $transaction = UniversalPaymentTransaction::query()->create([
+                'reference' => 'VOUCHER-' . strtoupper(Str::random(10)),
+                'payer_name' => $student->name,
+                'payer_contact' => trim($validated['payer_contact']),
+                'item_title' => 'Gift Voucher #' . $voucherId,
+                'gateway' => 'sslcommerz',
+                'currency' => strtoupper((string) config('lms.default_currency', 'BDT')),
+                'amount' => $amount,
+                'external_trx_id' => null,
+                'user_id' => $student->id,
+                'branch_id' => $student->branch_id,
+                'status' => 'pending',
+                'notes' => json_encode(['purpose' => 'course_gift_voucher', 'course_gift_voucher_id' => $voucherId], JSON_THROW_ON_ERROR),
+            ]);
+            DB::table('course_gift_vouchers')->where('id', $voucherId)->update([
+                'payment_transaction_id' => $transaction->id,
+                'updated_at' => now(),
+            ]);
+
+            return ['voucher_id' => $voucherId, 'transaction' => $transaction];
+        }, 3);
+
+        try {
+            $url = app(StorefrontPaymentGatewayService::class)->initiateSslcommerz(
+                $created['transaction'],
+                (object) ['title' => 'Gift Voucher #' . $created['voucher_id']],
+                $student,
+                trim($validated['payer_contact']),
+                ['purpose' => 'course_gift_voucher', 'course_gift_voucher_id' => $created['voucher_id']]
+            );
+
+            return redirect()->away($url);
+        } catch (\Throwable $exception) {
+            report($exception);
+            $ambiguous = $exception instanceof ConnectionException;
+            DB::transaction(function () use ($created, $ambiguous): void {
+                $transaction = UniversalPaymentTransaction::query()->whereKey($created['transaction']->id)->lockForUpdate()->first();
+                if ($transaction && $transaction->status === 'pending') {
+                    $transaction->update(['status' => $ambiguous ? 'risk_review' : 'failed']);
+                    DB::table('course_gift_vouchers')->where('id', $created['voucher_id'])->where('status', 'awaiting_payment')
+                        ->update(['status' => $ambiguous ? 'risk_review' : 'payment_failed', 'updated_at' => now()]);
+                }
+            }, 3);
+
+            return back()->withErrors(['voucher' => $ambiguous
+                ? 'The payment session outcome is unknown. Contact support before retrying this voucher.'
+                : 'Secure voucher checkout could not be started. Please try again.']);
+        }
+    }
+
+    public function voucherRedeemForm(Request $request, string $token): View
+    {
+        $student = $this->student($request);
+        abort_unless(preg_match('/^[A-Za-z0-9]{40,80}$/', $token) === 1, 404);
+        $voucher = DB::table('course_gift_vouchers')->where('redeem_token_hash', hash('sha256', $token))
+            ->where('status', 'paid')->first();
+        abort_unless($voucher, 404, 'This gift voucher is not available.');
+        abort_if($voucher->expires_at && now()->greaterThan($voucher->expires_at), 410, 'This gift voucher has expired.');
+        abort_unless(hash_equals(strtolower((string) $voucher->recipient_email), strtolower((string) $student->email)),
+            403, 'Sign in with the email address that received this voucher.');
+        return view('course-management::commerce.voucher-redeem', compact('voucher', 'token'));
+    }
+
+    public function redeemVoucher(Request $request, string $token): RedirectResponse
+    {
+        $student = $this->student($request);
+        abort_unless(preg_match('/^[A-Za-z0-9]{40,80}$/', $token) === 1, 404);
+
+        DB::transaction(function () use ($student, $token): void {
+            $voucher = DB::table('course_gift_vouchers')->where('redeem_token_hash', hash('sha256', $token))
+                ->lockForUpdate()->first();
+            abort_unless($voucher && $voucher->status === 'paid', 409, 'This gift voucher has already been claimed or is unavailable.');
+            abort_if($voucher->expires_at && now()->greaterThan($voucher->expires_at), 410, 'This gift voucher has expired.');
+            abort_unless(hash_equals(strtolower((string) $voucher->recipient_email), strtolower((string) $student->email)),
+                403, 'Sign in with the email address that received this voucher.');
+
+            $currency = strtoupper((string) $voucher->currency);
+            $wallet = DB::table('course_gift_wallets')->where('user_id', $student->id)->where('currency', $currency)->lockForUpdate()->first();
+            if (!$wallet) {
+                $walletId = DB::table('course_gift_wallets')->insertGetId([
+                    'user_id' => $student->id, 'currency' => $currency, 'balance' => 0,
+                    'created_at' => now(), 'updated_at' => now(),
+                ]);
+                $wallet = DB::table('course_gift_wallets')->where('id', $walletId)->lockForUpdate()->first();
+            }
+
+            $reference = 'gift-voucher-credit:' . $voucher->id;
+            abort_if(DB::table('course_gift_wallet_transactions')->where('reference', $reference)->exists(), 409,
+                'This voucher has already been credited to a wallet.');
+            DB::table('course_gift_wallets')->where('id', $wallet->id)->update([
+                'balance' => round((float) $wallet->balance + (float) $voucher->remaining_amount, 2),
+                'updated_at' => now(),
+            ]);
+            DB::table('course_gift_wallet_transactions')->insert([
+                'wallet_id' => $wallet->id,
+                'user_id' => $student->id,
+                'voucher_id' => $voucher->id,
+                'type' => 'credit',
+                'status' => 'completed',
+                'reference' => $reference,
+                'amount' => $voucher->remaining_amount,
+                'metadata' => json_encode(['source' => 'gift_voucher_claim'], JSON_THROW_ON_ERROR),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            DB::table('course_gift_voucher_redemptions')->insert([
+                'voucher_id' => $voucher->id,
+                'user_id' => $student->id,
+                'course_id' => null,
+                'invoice_id' => null,
+                'amount' => $voucher->remaining_amount,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            DB::table('course_gift_vouchers')->where('id', $voucher->id)->update([
+                'recipient_user_id' => $student->id,
+                'remaining_amount' => 0,
+                'status' => 'redeemed',
+                'redeemed_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }, 3);
+
+        return redirect()->route('course-commerce.cart')->with('status', 'Gift voucher claimed. Its value is now available in your course wallet and will be applied automatically at checkout.');
+    }
+
     public function checkout(Request $request): RedirectResponse
     {
         $student = $this->student($request);
