@@ -58,7 +58,7 @@ class MarketingController extends Controller
         $this->ensureCentralAdmin($request->user());
         $validated = $request->validate([
             'code' => ['required', 'string', 'max:40', 'unique:promo_coupons,code'],
-            'discount_type' => ['required', 'in:percent,fixed'],
+            'discount_type' => ['sometimes', 'in:percent,fixed'],
             'discount_percent' => ['nullable', 'required_if:discount_type,percent', 'integer', 'min:1', 'max:100'],
             'discount_amount' => ['nullable', 'required_if:discount_type,fixed', 'numeric', 'min:0.01', 'max:100000000'],
             'max_uses' => ['nullable', 'integer', 'min:0', 'max:100000'],
@@ -74,7 +74,7 @@ class MarketingController extends Controller
 
         $coupon = PromoCoupon::query()->create([
             'code' => strtoupper(trim($validated['code'])),
-            'discount_type' => $validated['discount_type'],
+            'discount_type' => $validated['discount_type'] ?? 'percent',
             'discount_percent' => (int) ($validated['discount_percent'] ?? 0),
             'discount_amount' => $validated['discount_amount'] ?? null,
             'max_uses' => (int) ($validated['max_uses'] ?? 0),
