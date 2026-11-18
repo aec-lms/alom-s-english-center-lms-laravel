@@ -29,8 +29,20 @@ class OffsiteBackupService
                     }
 
                     $key = $config['prefix'] . '/' . app()->environment() . '/' . basename($real);
-                    $this->request($config, 'PUT', $key, $real);
-                    $result['uploaded']++;
+                    $metadata = is_array($record->metadata) ? $record->metadata : [];
+                    $offsite = is_array($metadata['offsite'] ?? null) ? $metadata['offsite'] : [];
+                    $alreadyUploaded = ($offsite['sha256'] ?? null) === $record->checksum_sha256;
+                    if (!$alreadyUploaded) {
+                        $this->request($config, 'PUT', $key, $real);
+                        $metadata['offsite'] = [
+                            'provider' => 's3-compatible',
+                            'object_key' => $key,
+                            'sha256' => $record->checksum_sha256,
+                            'uploaded_at' => now()->toIso8601String(),
+                        ];
+                        $record->forceFill(['metadata' => $metadata])->save();
+                        $result['uploaded']++;
+                    }
 
                     if ($verifyDownloads) {
                         $download = tempnam(sys_get_temp_dir(), 'aec_offsite_verify_');
@@ -61,17 +73,18 @@ class OffsiteBackupService
     /** @return array{endpoint:string,region:string,bucket:string,access:string,secret:string,prefix:string} */
     private function configuration(): array
     {
-        $endpoint = rtrim((string) env('AEC_BACKUP_S3_ENDPOINT'), '/');
-        $region = trim((string) env('AEC_BACKUP_S3_REGION'));
-        $bucket = trim((string) env('AEC_BACKUP_S3_BUCKET'));
-        $access = (string) env('AEC_BACKUP_S3_ACCESS_KEY');
-        $secret = (string) env('AEC_BACKUP_S3_SECRET_KEY');
-        $prefix = trim((string) env('AEC_BACKUP_S3_PREFIX', 'aec-lms-backups'), '/');
+        $endpoint = rtrim((string) config('lms.backup_offsite.endpoint'), '/');
+        $region = trim((string) config('lms.backup_offsite.region'));
+        $bucket = trim((string) config('lms.backup_offsite.bucket'));
+        $access = (string) config('lms.backup_offsite.access_key');
+        $secret = (string) config('lms.backup_offsite.secret_key');
+        $prefix = trim((string) config('lms.backup_offsite.prefix', 'aec-lms-backups'), '/');
 
         if (!str_starts_with($endpoint, 'https://') || parse_url($endpoint, PHP_URL_HOST) === false
             || $region === '' || $bucket === '' || $access === '' || $secret === ''
             || preg_match('/^[a-zA-Z0-9][a-zA-Z0-9._-]{1,62}$/', $bucket) !== 1
-            || str_contains($endpoint, '?') || str_contains($endpoint, '#')) {
+            || str_contains($endpoint, '?') || str_contains($endpoint, '#')
+            || preg_match('/(^|\\/)\\.\\.?($|\\/)/', $prefix) === 1) {
             throw new RuntimeException('Off-site backup is not configured. Set an HTTPS S3-compatible endpoint, region, bucket, access key, and secret key in the private environment.');
         }
 
