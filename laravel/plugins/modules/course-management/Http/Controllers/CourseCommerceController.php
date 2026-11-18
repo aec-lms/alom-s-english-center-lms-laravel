@@ -620,6 +620,21 @@ class CourseCommerceController extends Controller
                 if (!$ambiguous && filled($created['coupon_key'])) {
                     $couponService->release((string) $created['coupon_key']);
                 }
+                if (!$ambiguous && $order && filled($order->wallet_reservation_key)) {
+                    $walletEntry = DB::table('course_gift_wallet_transactions')->where('reference', $order->wallet_reservation_key)
+                        ->where('status', 'reserved')->lockForUpdate()->first();
+                    if ($walletEntry) {
+                        $wallet = DB::table('course_gift_wallets')->where('id', $walletEntry->wallet_id)->lockForUpdate()->first();
+                        if ($wallet) {
+                            DB::table('course_gift_wallets')->where('id', $wallet->id)->update([
+                                'balance' => round((float) $wallet->balance + (float) $walletEntry->amount, 2),
+                                'updated_at' => now(),
+                            ]);
+                        }
+                        DB::table('course_gift_wallet_transactions')->where('id', $walletEntry->id)
+                            ->update(['status' => 'reversed', 'updated_at' => now()]);
+                    }
+                }
             }, 3);
 
             return back()->withErrors(['checkout' => $ambiguous
