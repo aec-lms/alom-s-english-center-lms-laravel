@@ -82,7 +82,7 @@ return new class extends Migration {
                 $table->id();
                 $table->foreignId('voucher_id')->constrained('course_gift_vouchers')->cascadeOnDelete();
                 $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
-                $table->unsignedBigInteger('course_id')->index();
+                $table->unsignedBigInteger('course_id')->nullable()->index();
                 $table->unsignedBigInteger('invoice_id')->nullable()->index();
                 $table->decimal('amount', 10, 2);
                 $table->timestamps();
