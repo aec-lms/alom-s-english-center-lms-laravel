@@ -16,6 +16,7 @@ use App\Http\Controllers\Admin\RolePermissionController;
 use App\Http\Controllers\Admin\AdminMenuController;
 use App\Http\Controllers\Admin\SiteNavigationController;
 use App\Http\Controllers\Admin\InstitutionSettingsController;
+use App\Http\Controllers\Admin\CourseSocialProofSettingsController;
 use App\Http\Controllers\Admin\HealthMonitorController;
 use App\Http\Controllers\Admin\RecycleBinController;
 use App\Http\Controllers\Admin\PluginCenterController;
