@@ -143,6 +143,10 @@ class StorefrontPaymentGatewayService
                     DB::table('course_gifts')->where('id', (int) ($notes['course_gift_id'] ?? 0))
                         ->where('status', 'awaiting_payment')->update(['status' => 'risk_review', 'updated_at' => now()]);
                 }
+                if (($notes['purpose'] ?? null) === 'course_gift_voucher' && Schema::hasTable('course_gift_vouchers')) {
+                    DB::table('course_gift_vouchers')->where('id', (int) ($notes['course_gift_voucher_id'] ?? 0))
+                        ->where('status', 'awaiting_payment')->update(['status' => 'risk_review', 'updated_at' => now()]);
+                }
                 if (($notes['purpose'] ?? null) === 'course_cart' && Schema::hasTable('course_cart_orders')) {
                     DB::table('course_cart_orders')->where('id', (int) ($notes['course_cart_order_id'] ?? 0))
                         ->where('status', 'awaiting_payment')->update(['status' => 'risk_review', 'updated_at' => now()]);
@@ -160,6 +164,9 @@ class StorefrontPaymentGatewayService
         }
         if (($notes['purpose'] ?? null) === 'course_gift') {
             return $this->grantCourseGiftAccess($transaction, $validationId, $providerDetails, $notes);
+        }
+        if (($notes['purpose'] ?? null) === 'course_gift_voucher') {
+            return $this->grantCourseGiftVoucher($transaction, $validationId, $providerDetails, $notes);
         }
 
         if ($transaction->learn_earn_exam_id) {
@@ -187,6 +194,13 @@ class StorefrontPaymentGatewayService
                 $giftId = (int) ($notes['course_gift_id'] ?? 0);
                 if ($giftId > 0 && Schema::hasTable('course_gifts')) {
                     DB::table('course_gifts')->where('id', $giftId)->where('status', 'awaiting_payment')
+                        ->update(['status' => 'payment_failed', 'updated_at' => now()]);
+                }
+            }
+            if (($notes['purpose'] ?? null) === 'course_gift_voucher') {
+                $voucherId = (int) ($notes['course_gift_voucher_id'] ?? 0);
+                if ($voucherId > 0 && Schema::hasTable('course_gift_vouchers')) {
+                    DB::table('course_gift_vouchers')->where('id', $voucherId)->where('status', 'awaiting_payment')
                         ->update(['status' => 'payment_failed', 'updated_at' => now()]);
                 }
             }
@@ -466,6 +480,95 @@ class StorefrontPaymentGatewayService
                         $mail->to((string) $gift->recipient_email)->subject('You received a course gift: ' . $courseTitle);
                     });
                     DB::table('course_gifts')->where('id', $giftId)->whereNull('notification_sent_at')
+                        ->update(['notification_sent_at' => now(), 'updated_at' => now()]);
+                } catch (\Throwable $exception) {
+                    report($exception);
+                }
+            }
+        }
+
+        return $verified;
+    }
+
+    private function grantCourseGiftVoucher(UniversalPaymentTransaction $transaction, string $externalReference, array $providerDetails, array $notes): UniversalPaymentTransaction
+    {
+        $verified = DB::transaction(function () use ($transaction, $externalReference, $providerDetails, $notes): UniversalPaymentTransaction {
+            $locked = UniversalPaymentTransaction::query()->whereKey($transaction->id)->lockForUpdate()->firstOrFail();
+            if ($locked->status === 'verified') return $locked;
+
+            $voucherId = (int) ($notes['course_gift_voucher_id'] ?? 0);
+            if ($voucherId < 1 || !Schema::hasTable('course_gift_vouchers') || !Schema::hasTable('fee_invoices')
+                || !Schema::hasColumn('course_gift_vouchers', 'payment_transaction_id')) {
+                throw new RuntimeException('The gift voucher order could not be located safely.');
+            }
+            $voucher = DB::table('course_gift_vouchers')->where('id', $voucherId)->lockForUpdate()->first();
+            if (!$voucher || (int) $voucher->payment_transaction_id !== (int) $locked->id
+                || (int) $voucher->sender_user_id !== (int) $locked->user_id
+                || abs((float) $voucher->amount - (float) $locked->amount) > 0.01
+                || strtoupper((string) $voucher->currency) !== strtoupper((string) $locked->currency)) {
+                throw new RuntimeException('Gift voucher order and verified payment details do not match.');
+            }
+            if (in_array($voucher->status, ['paid', 'redeemed'], true)) {
+                $locked->update(['status' => 'verified', 'external_trx_id' => $externalReference,
+                    'verified_at' => $locked->verified_at ?? now()]);
+                return $locked->fresh();
+            }
+            if ($voucher->status !== 'awaiting_payment'
+                || ($voucher->expires_at && now()->greaterThan($voucher->expires_at))) {
+                $locked->update(['status' => 'risk_review', 'external_trx_id' => $externalReference,
+                    'notes' => json_encode(array_merge($notes, ['risk_review' => true, 'reason' => 'voucher_expired_or_not_payable']), JSON_THROW_ON_ERROR)]);
+                DB::table('course_gift_vouchers')->where('id', $voucherId)->update(['status' => 'risk_review', 'updated_at' => now()]);
+                return $locked->fresh();
+            }
+
+            $sender = DB::table('users')->where('id', $voucher->sender_user_id)->first();
+            if (!$sender) throw new RuntimeException('Gift voucher sender account could not be found.');
+            $studentProfile = Schema::hasTable('students') ? DB::table('students')->where('user_id', $sender->id)->first() : null;
+            $invoice = FeeInvoice::query()->create([
+                'invoice_number' => 'VOUCHER-' . strtoupper(substr(bin2hex(random_bytes(6)), 0, 10)),
+                'student_id' => $studentProfile->id ?? null,
+                'payer_name' => $sender->name,
+                'payer_email' => $sender->email,
+                'payer_phone' => $locked->payer_contact,
+                'branch_id' => $locked->branch_id,
+                'subtotal_amount' => $voucher->amount,
+                'discount_amount' => 0,
+                'net_amount' => $voucher->amount,
+                'paid_amount' => $voucher->amount,
+                'currency' => strtoupper((string) $voucher->currency),
+                'status' => 'paid',
+                'due_date' => now()->toDateString(),
+            ]);
+            DB::table('course_gift_vouchers')->where('id', $voucherId)->update([
+                'status' => 'paid', 'paid_at' => now(), 'updated_at' => now(),
+            ]);
+            app(\Plugins\Modules\UniversalPayment\Services\ExternalTransactionReferenceRegistry::class)
+                ->claim((string) $locked->gateway, $externalReference, (int) $locked->id);
+            $locked->update([
+                'status' => 'verified',
+                'external_trx_id' => $externalReference,
+                'verified_at' => now(),
+                'notes' => json_encode(array_merge($notes, ['provider' => $locked->gateway], $providerDetails), JSON_THROW_ON_ERROR),
+            ]);
+            return $locked->fresh();
+        }, 3);
+
+        $voucherId = (int) ($notes['course_gift_voucher_id'] ?? 0);
+        if ($voucherId > 0 && Schema::hasColumn('course_gift_vouchers', 'notification_sent_at')) {
+            $voucher = DB::table('course_gift_vouchers')->where('id', $voucherId)->where('status', 'paid')->first();
+            if ($voucher && !$voucher->notification_sent_at) {
+                try {
+                    $token = decrypt((string) $voucher->redeem_token_encrypted);
+                    $redeemUrl = url('/student/course-commerce/vouchers/redeem/' . $token);
+                    $message = "You have received an AEC course gift voucher worth {$voucher->currency} " . number_format((float) $voucher->amount, 2) . ".\\n\\n";
+                    if (filled($voucher->recipient_name)) $message .= "Hello {$voucher->recipient_name},\\n\\n";
+                    if (filled($voucher->message)) $message .= "Message from the sender: {$voucher->message}\\n\\n";
+                    $message .= "Sign in or register using this email address, then open this link to claim the voucher to your course wallet:\\n{$redeemUrl}\\n\\n";
+                    $message .= "The voucher expires on {$voucher->expires_at}.";
+                    Mail::raw($message, function ($mail) use ($voucher): void {
+                        $mail->to((string) $voucher->recipient_email)->subject('You received an AEC course gift voucher');
+                    });
+                    DB::table('course_gift_vouchers')->where('id', $voucherId)->whereNull('notification_sent_at')
                         ->update(['notification_sent_at' => now(), 'updated_at' => now()]);
                 } catch (\Throwable $exception) {
                     report($exception);
