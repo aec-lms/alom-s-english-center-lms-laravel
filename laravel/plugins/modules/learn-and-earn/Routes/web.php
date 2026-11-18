@@ -6,6 +6,8 @@ Route::middleware(['web','installed','auth','plugin:learn-and-earn','permission:
  Route::get('/',[LearnAndEarnController::class,'index'])->name('index');
  Route::post('/categories',[LearnAndEarnController::class,'storeCategory'])->name('categories.store');
  Route::post('/questions',[LearnAndEarnController::class,'storeQuestion'])->name('questions.store');
+ Route::put('/questions/{question}',[LearnAndEarnController::class,'updateQuestion'])->whereNumber('question')->name('questions.update');
+ Route::patch('/questions/{question}/status',[LearnAndEarnController::class,'toggleQuestion'])->whereNumber('question')->name('questions.status');
  Route::post('/exams',[LearnAndEarnController::class,'storeExam'])->name('exams.store');
  Route::post('/exams/{exam}/grant-access',[LearnAndEarnController::class,'grantAccess'])->name('exams.grant');
 });
