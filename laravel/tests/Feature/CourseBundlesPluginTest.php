@@ -53,6 +53,56 @@ class CourseBundlesPluginTest extends TestCase
         $this->assertDatabaseCount('course_bundle_order_courses', 2);
         $this->assertDatabaseHas('enrollments', ['user_id' => $student->id, 'course_id' => $first, 'status' => 'active']);
         $this->assertDatabaseHas('enrollments', ['user_id' => $student->id, 'course_id' => $second, 'status' => 'active']);
+
+        $this->actingAs($student)->post('/course-bundles/free-english-starter/checkout')
+            ->assertStatus(409);
+        $this->assertDatabaseCount('course_bundle_orders', 1);
+    }
+
+    public function test_branch_specific_bundles_are_hidden_from_other_or_unassigned_students(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'course-management', 'course-bundles']);
+        $admin = $this->createUserWithRole('admin');
+        $branchA = DB::table('branches')->insertGetId([
+            'code' => 'BND-A', 'name' => 'Bundle Branch A', 'is_active' => true,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $branchB = DB::table('branches')->insertGetId([
+            'code' => 'BND-B', 'name' => 'Bundle Branch B', 'is_active' => true,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $first = $this->createPublishedCourse('Branch A Grammar');
+        $second = $this->createPublishedCourse('Branch A Writing');
+        DB::table('courses')->whereIn('id', [$first, $second])->update(['branch_id' => $branchA]);
+        $bundleId = DB::table('course_bundles')->insertGetId([
+            'branch_id' => $branchA,
+            'created_by' => $admin->id,
+            'title' => 'Branch A Starter',
+            'slug' => 'branch-a-starter',
+            'price' => 0,
+            'status' => 'published',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->attachCourses($bundleId, [$first, $second]);
+
+        $unassigned = $this->createUserWithRole('student');
+        $otherBranchStudent = $this->createUserWithRole('student', $branchB);
+        $assignedStudent = $this->createUserWithRole('student', $branchA);
+
+        $this->actingAs($unassigned)->get('/course-bundles')->assertOk()->assertDontSee('Branch A Starter');
+        $this->actingAs($unassigned)->get('/course-bundles/branch-a-starter')->assertNotFound();
+        $this->actingAs($otherBranchStudent)->post('/course-bundles/branch-a-starter/checkout')->assertNotFound();
+
+        $this->actingAs($assignedStudent)->post('/course-bundles/branch-a-starter/checkout')
+            ->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('course_bundle_orders', [
+            'bundle_id' => $bundleId,
+            'user_id' => $assignedStudent->id,
+            'branch_id' => $branchA,
+            'status' => 'completed',
+        ]);
     }
 
     public function test_paid_bundle_creates_one_invoice_and_pending_enrollments_for_immutable_course_snapshot(): void
