@@ -16,7 +16,7 @@
                 <div role="alert" class="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">@foreach ($errors->all() as $error)<p>{{ $error }}</p>@endforeach</div>
             @endif
             <label class="block text-sm font-bold text-slate-700">Voucher amount (BDT)
-                <input type="number" name="amount" required min="{{ $voucherSettings['minimum_amount'] }}" max="{{ $voucherSettings['maximum_amount'] }}" step="0.01" value="{{ old('amount', 500) }}" class="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 font-normal">
+                <input type="number" name="amount" required min="{{ $voucherSettings['minimum_amount'] }}" max="{{ $voucherSettings['maximum_amount'] }}" step="0.01" value="{{ old('amount', max(500, (float) $voucherSettings['minimum_amount'])) }}" class="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 font-normal">
             </label>
             <label class="block text-sm font-bold text-slate-700">Recipient email
                 <input type="email" name="recipient_email" required maxlength="190" value="{{ old('recipient_email') }}" placeholder="friend@example.com" class="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 font-normal">
