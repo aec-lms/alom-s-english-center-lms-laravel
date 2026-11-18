@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\SiteIdentityController;
 use App\Http\Controllers\Admin\SiteLayoutController;
 use App\Http\Controllers\Admin\SiteWidgetController;
 use App\Http\Controllers\Admin\AuditLogController;
+use App\Http\Controllers\Admin\DeviceSessionController;
 use App\Http\Controllers\Admin\BackupController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\SetupWizardController;
@@ -196,5 +197,10 @@ Route::middleware('installed')->group(function (): void {
         Route::get('/audit-logs', [AuditLogController::class, 'index'])
             ->name('audit.index')
             ->middleware(['permission:core.audit.view', 'central.admin']);
+
+        Route::prefix('security/sessions')->name('security.sessions.')->middleware(['permission:core.audit.view', 'central.admin'])->group(function (): void {
+            Route::get('/', [DeviceSessionController::class, 'index'])->name('index');
+            Route::patch('/{deviceSession}/revoke', [DeviceSessionController::class, 'revoke'])->name('revoke');
+        });
     });
 });
