@@ -688,6 +688,11 @@ class StorefrontPaymentGatewayService
                 'verified_at' => now(),
                 'notes' => json_encode(array_merge(['provider' => $locked->gateway, 'purpose' => 'learn_earn_exam'], $providerDetails), JSON_THROW_ON_ERROR),
             ]);
+            $buyer = User::query()->find((int) $locked->user_id);
+            if ($buyer) {
+                $this->recordReferralPurchase($buyer, 'paid_exam', (string) $locked->id,
+                    (float) $locked->amount, (string) $locked->currency);
+            }
 
             return $locked->fresh();
         });
@@ -748,6 +753,11 @@ class StorefrontPaymentGatewayService
                 'verified_at' => now(),
                 'notes' => json_encode(array_merge(['provider' => $locked->gateway], $providerDetails), JSON_THROW_ON_ERROR),
             ]);
+            $buyer = User::query()->find((int) $locked->user_id);
+            if ($buyer) {
+                $this->recordReferralPurchase($buyer, 'ebook_purchase', (string) $locked->id,
+                    (float) $locked->amount, (string) $locked->currency);
+            }
 
             return $locked->fresh();
         });
