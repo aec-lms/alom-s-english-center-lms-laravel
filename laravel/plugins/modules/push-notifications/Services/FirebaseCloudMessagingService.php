@@ -77,6 +77,14 @@ class FirebaseCloudMessagingService
             ]);
         }
 
+        $payloadBytes = strlen(json_encode([
+            'notification' => ['title' => (string) $notification->title, 'body' => (string) $notification->message],
+            'data' => ['notification_id' => (string) $notification->id, 'screen' => 'notifications'],
+        ], JSON_THROW_ON_ERROR));
+        if ($payloadBytes > 4000) {
+            return 'payload_too_large';
+        }
+
         $accessToken = $this->accessToken($credentials);
         $endpoint = 'https://fcm.googleapis.com/v1/projects/'.rawurlencode($credentials['project_id']).'/messages:send';
         $sentCount = 0;
@@ -125,6 +133,15 @@ class FirebaseCloudMessagingService
             }
 
             $errorCode = data_get($response->json(), 'error.details.0.errorCode');
+            if ($response->status() === 401) {
+                Cache::forget($this->accessTokenCacheKey($credentials));
+                DB::table('push_notification_deliveries')->where('id', $receipt->id)->update([
+                    'last_error' => 'Firebase access token was rejected; a fresh token will be requested on retry.',
+                    'updated_at' => now(),
+                ]);
+                throw new RuntimeException('Firebase access token was rejected; refresh will be attempted.');
+            }
+
             if ($errorCode === 'UNREGISTERED') {
                 DB::table('mobile_device_tokens')->where('id', $device->id)->update([
                     'is_active' => false,
@@ -182,7 +199,7 @@ class FirebaseCloudMessagingService
 
     private function accessToken(array $credentials): string
     {
-        $cacheKey = 'fcm_oauth_token_'.hash('sha256', $credentials['project_id'].'|'.$credentials['client_email']);
+        $cacheKey = $this->accessTokenCacheKey($credentials);
         return Cache::remember($cacheKey, now()->addMinutes(50), function () use ($credentials): string {
             $privateKey = openssl_pkey_get_private($credentials['private_key']);
             if ($privateKey === false) {
@@ -216,6 +233,11 @@ class FirebaseCloudMessagingService
 
             return $response->json('access_token');
         });
+    }
+
+    private function accessTokenCacheKey(array $credentials): string
+    {
+        return 'fcm_oauth_token_'.hash('sha256', $credentials['project_id'].'|'.$credentials['client_email']);
     }
 
     private function base64UrlEncode(string $value): string
