@@ -28,8 +28,6 @@ class MobileApiController extends Controller
     public function config(Request $request): JsonResponse
     {
         $cfg = $this->loadMobileConfig();
-        $branchId = app(BranchAccess::class)->assignedBranchId($actor);
-        $branchId = app(BranchAccess::class)->assignedBranchId($actor);
         $platform = strtolower((string) $request->query('platform', 'all'));
 
         return response()->json([
