@@ -116,7 +116,10 @@ class ReferralIncomeController extends Controller
         $data = $request->validate(['status' => ['required', 'in:approved,rejected,paid'], 'admin_note' => ['nullable', 'string', 'max:1000']]);
         DB::transaction(function () use ($request, $payout, $data): void {
             $record = DB::table('referral_payout_requests')->where('id', $payout)->lockForUpdate()->first();
-            abort_unless($record && $record->status === 'pending' || ($record && $record->status === 'approved' && $data['status'] === 'paid'), 404);
+            $validTransition = $record !== null
+                && (($record->status === 'pending' && in_array($data['status'], ['approved', 'rejected'], true))
+                    || ($record->status === 'approved' && $data['status'] === 'paid'));
+            abort_unless($validTransition, 422, 'Invalid payout status transition.');
             DB::table('referral_payout_requests')->where('id', $payout)->update([
                 'status' => $data['status'], 'admin_note' => $data['admin_note'] ?? null,
                 'reviewed_by' => $request->user()->id, 'reviewed_at' => now(),
