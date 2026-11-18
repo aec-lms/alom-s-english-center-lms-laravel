@@ -64,7 +64,7 @@ class NotificationController extends Controller
             'in_app' => 'sent',
             'email' => $this->emailDeliveryConfigured($recipient) ? 'queued' : 'not_configured',
             'sms' => $this->sendSms($recipient, $validated['message']),
-            'push' => app(FirebaseCloudMessagingService::class)->canDeliverTo((int) $recipient->id) ? 'queued' : 'not_configured',
+            'push' => $this->plugins->isEnabled('push-notifications') && app(FirebaseCloudMessagingService::class)->canDeliverTo((int) $recipient->id) ? 'queued' : 'not_configured',
             default => 'provider_not_implemented',
         };
 
