@@ -90,7 +90,7 @@ class CommerceCartController extends Controller
             'payment_method_id' => ['nullable', 'string', 'max:120'],
         ]);
         abort_unless(Schema::hasTable('fee_invoices') && app(PluginManager::class)->isEnabled('fees-management'), 503, 'The Fees & Invoicing module must be enabled for checkout.');
-        abort_unless(app(\\App\\Core\\Plugins\\PluginManager::class)->isEnabled('universal-payment'), 503, 'Universal Payment must be enabled.');
+        abort_unless(app(\App\Core\Plugins\PluginManager::class)->isEnabled('universal-payment'), 503, 'Universal Payment must be enabled.');
 
         $user = $request->user();
         $cart = $this->activeCart((int) $user->id);
@@ -164,7 +164,7 @@ class CommerceCartController extends Controller
             if (!empty($payment['redirect_url'])) return redirect()->away($payment['redirect_url']);
             return redirect()->route('plugins.commerce_cart.index')
                 ->with('status', 'Order ' . $order->order_number . ' is awaiting payment confirmation. Follow the secure payment instructions shown by your selected gateway.');
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             report($exception);
             DB::table('commerce_orders')->where('id', $order->id)->update(['payment_status' => 'failed', 'updated_at' => now()]);
             return redirect()->route('plugins.commerce_cart.index')
