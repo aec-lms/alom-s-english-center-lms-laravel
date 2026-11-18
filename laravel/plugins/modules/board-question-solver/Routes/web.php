@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use Illuminate\\Support\\Facades\\Route;
-use Plugins\\Modules\\BoardQuestionSolver\\Http\\Controllers\\BoardQuestionSolverController;
+use Illuminate\Support\Facades\Route;
+use Plugins\Modules\BoardQuestionSolver\Http\Controllers\BoardQuestionSolverController;
 
 Route::middleware(['web', 'installed', 'auth', 'plugin:board-question-solver'])->group(function (): void {
     Route::prefix('student/board-question-solver')
