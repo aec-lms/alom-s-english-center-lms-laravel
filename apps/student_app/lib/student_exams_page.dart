@@ -43,7 +43,9 @@ class _StudentExamsPageState extends State<StudentExamsPage> {
   }
 
   @override
-  Widget build(BuildContext context) => FutureBuilder<Map<String, dynamic>>(
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const Text('My Exams')),
+        body: FutureBuilder<Map<String, dynamic>>(
         future: exams,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
@@ -89,6 +91,7 @@ class _StudentExamsPageState extends State<StudentExamsPage> {
             ),
           );
         },
+      ),
       );
 }
 
