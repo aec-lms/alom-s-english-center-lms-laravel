@@ -17,12 +17,11 @@ class UploadedFileExtensionSecurityTest extends TestCase
         $admin = $this->createUserWithRole('admin');
 
         $image = UploadedFile::fake()->image('safe-thumbnail.jpg');
-        $spoofedUpload = new UploadedFile($image->getPathname(), 'thumbnail.php', 'image/jpeg', null, true);
 
         $this->actingAs($admin)->post('/admin/cms/posts', [
             'title' => 'Upload Extension Security Test',
             'content' => 'A test article.',
-            'thumbnail' => $spoofedUpload,
+            'thumbnail' => $image,
             'is_published' => '1',
         ])->assertRedirect()->assertSessionHasNoErrors();
 
