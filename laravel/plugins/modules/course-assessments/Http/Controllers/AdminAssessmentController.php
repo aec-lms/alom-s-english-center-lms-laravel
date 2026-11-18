@@ -21,6 +21,7 @@ class AdminAssessmentController extends Controller
     public function index(Request $request): View
     {
         $actor = $request->user();
+        $this->ensureBranchAccess($actor);
         $sets = AssessmentSet::query()
             ->withCount(['questions','attempts'])
             ->when($actor?->hasRole('branch_manager'), fn ($q) => $q->where('branch_id', (int) $actor->branch_id))
@@ -44,6 +45,7 @@ class AdminAssessmentController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $actor = $request->user();
+        $this->ensureBranchAccess($actor);
         $data = $request->validate([
             'course_id'=>['nullable','integer'],
             'title'=>['required','string','max:180'],
@@ -74,9 +76,8 @@ class AdminAssessmentController extends Controller
             $course = DB::table('courses')->where('id',$data['course_id'])->whereNull('deleted_at')->first();
             abort_unless($course,422,'Selected course is unavailable.');
         }
-        if ($actor?->hasRole('branch_manager')) {
-            abort_unless($actor->branch_id && app(PluginManager::class)->isEnabled('branch-management'),403,'Branch manager must be assigned to an active branch.');
-            if ($course) abort_unless((int)$course->branch_id === (int)$actor->branch_id,403,'Course belongs to another branch.');
+        if ($actor?->hasRole('branch_manager') && $course) {
+            abort_unless((int) $course->branch_id === (int) $actor->branch_id, 403, 'Course belongs to another branch.');
         }
         $source = collect();
         if (!empty($data['source_question_ids'])) {
@@ -135,15 +136,32 @@ class AdminAssessmentController extends Controller
 
     public function publish(Request $request, AssessmentSet $set): RedirectResponse
     {
-        $this->ensureSetBranch($request->user(),$set);
+        $this->ensureBranchAccess($request->user());
+        $this->ensureSetBranch($request->user(), $set);
         abort_unless($set->questions()->exists(),422,'Add questions before publishing.');
         $set->update(['status'=>'published']);
         $this->audit->log('course_assessment.published','course_assessment_set',(string)$set->id,[]);
         return back()->with('status','Assessment published.');
     }
 
-    private function ensureSetBranch($actor,AssessmentSet $set): void
+    private function ensureBranchAccess($actor): void
     {
-        if($actor?->hasRole('branch_manager')) abort_unless($actor->branch_id && (int)$set->branch_id===(int)$actor->branch_id,403,'Branch isolation violation.');
+        if (!$actor?->hasRole('branch_manager')) return;
+
+        abort_unless(
+            $actor->branch_id
+                && app(PluginManager::class)->isEnabled('branch-management')
+                && Schema::hasTable('branches')
+                && DB::table('branches')->where('id', $actor->branch_id)->where('is_active', true)->exists(),
+            403,
+            'Branch manager must be assigned to an active branch.'
+        );
+    }
+
+    private function ensureSetBranch($actor, AssessmentSet $set): void
+    {
+        if ($actor?->hasRole('branch_manager')) {
+            abort_unless((int) $set->branch_id === (int) $actor->branch_id, 403, 'Branch isolation violation.');
+        }
     }
 }
