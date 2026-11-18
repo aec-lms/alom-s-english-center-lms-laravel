@@ -9,14 +9,10 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:assignment-management'])
     ->prefix('admin/assignments')
     ->name('plugins.assignments.')
     ->group(function (): void {
-        Route::middleware('permission:assignments.manage')->group(function (): void {
-            Route::get('/', [AssignmentController::class, 'index'])->name('index');
-            Route::post('/', [AssignmentController::class, 'store'])->name('store');
-        });
-        Route::middleware('permission:assignments.grade')->group(function (): void {
-            Route::post('/submissions/{submission}/grade', [AssignmentController::class, 'grade'])->whereNumber('submission')->name('grade');
-            Route::get('/submissions/{submission}/attachment', [AssignmentController::class, 'downloadSubmission'])->whereNumber('submission')->name('attachment');
-        });
+        Route::get('/', [AssignmentController::class, 'index'])->name('index');
+        Route::post('/', [AssignmentController::class, 'store'])->name('store');
+        Route::post('/submissions/{submission}/grade', [AssignmentController::class, 'grade'])->whereNumber('submission')->name('grade');
+        Route::get('/submissions/{submission}/attachment', [AssignmentController::class, 'downloadSubmission'])->whereNumber('submission')->name('attachment');
     });
 
 Route::middleware(['web', 'installed', 'auth', 'plugin:assignment-management'])
