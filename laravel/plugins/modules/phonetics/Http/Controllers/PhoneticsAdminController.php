@@ -2,8 +2,8 @@
 declare(strict_types=1);
 namespace Plugins\Modules\Phonetics\Http\Controllers;
 
-use App\Http\Controllers\Controller;
-use App\Models\AuditLog;
+use Illuminate\Routing\Controller;
+use Plugins\Modules\Phonetics\Models\PhoneticAuditEvent;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
@@ -268,7 +268,7 @@ final class PhoneticsAdminController extends Controller
 
     private function recordAudit(Request $request, string $action, string $entityType, string $entityId, array $metadata = []): void
     {
-        AuditLog::query()->create([
+        PhoneticAuditEvent::query()->create([
             'user_id' => $request->user()?->id,
             'action' => $action,
             'entity_type' => $entityType,
