@@ -11,6 +11,7 @@ use Illuminate\View\View;
 use Plugins\Modules\Phonetics\Models\PhoneticExam;
 use Plugins\Modules\Phonetics\Models\PhoneticExamAttempt;
 use Plugins\Modules\Phonetics\Models\PhoneticExamQuestion;
+use Plugins\Modules\Phonetics\Models\PhoneticSetting;
 use Plugins\Modules\Phonetics\Services\CourseCatalog;
 
 final class PhoneticsExamController extends Controller
@@ -20,6 +21,7 @@ final class PhoneticsExamController extends Controller
     public function start(Request $request, string $courseSlug, string $examSlug): View
     {
         abort_unless($request->user(), 401);
+        abort_unless(PhoneticSetting::current()->enabled, 404);
         $course = $this->catalog->course($courseSlug);
         $courseRef = $this->catalog->courseId($course);
         $this->catalog->assertAccess($request->user(), $courseRef);
