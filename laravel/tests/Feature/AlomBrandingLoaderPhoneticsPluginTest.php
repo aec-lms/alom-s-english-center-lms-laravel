@@ -46,13 +46,14 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
    $this->assertFileExists(public_path($entry->card_bg_image_path));
    $this->assertNotNull($entry->uk_audio_url);
    $this->assertDatabaseHas('audit_logs',['action'=>'phonetics.entry.created','entity_id'=>(string)$entry->id]);
+   $oldUkPath=$entry->uk_audio_path;
    $this->actingAs($admin)->put('/admin/phonetics/'.$entry->id,[
     'word'=>'water','category'=>'rhoticity','uk_ipa'=>'/ˈwɔːtə/','us_ipa'=>'/ˈwɔːtər/',
     'is_active'=>1,'remove_uk_audio'=>1,
    ])->assertSessionHas('status');
    $entry->refresh();
    $this->assertNull($entry->uk_audio_path);
-   $this->assertFileDoesNotExist(public_path('uploads/alom-english-center/phonetics/audio/uk/'.basename($entry->uk_audio_path??'removed.mp3')));
+   $this->assertFileDoesNotExist(public_path($oldUkPath));
    $this->assertNotNull($entry->us_audio_path);
    $this->actingAs($admin)->patch('/admin/phonetics/settings',[
     'enabled'=>1,'require_course_enrollment'=>1,'show_articulatory_notes'=>1,
