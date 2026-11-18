@@ -86,6 +86,7 @@ final class PhoneticsExamController extends Controller
     public function submit(Request $request, string $courseSlug, string $examSlug, PhoneticExamAttempt $attempt): View
     {
         abort_unless($request->user(), 401);
+        abort_unless(PhoneticSetting::current()->enabled, 404);
         $course = $this->catalog->course($courseSlug);
         $courseRef = $this->catalog->courseId($course);
         $this->catalog->assertAccess($request->user(), $courseRef);
