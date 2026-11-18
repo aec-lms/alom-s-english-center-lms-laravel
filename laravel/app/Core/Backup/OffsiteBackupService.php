@@ -31,7 +31,8 @@ class OffsiteBackupService
                     $key = $config['prefix'] . '/' . app()->environment() . '/' . basename($real);
                     $metadata = is_array($record->metadata) ? $record->metadata : [];
                     $offsite = is_array($metadata['offsite'] ?? null) ? $metadata['offsite'] : [];
-                    $alreadyUploaded = ($offsite['sha256'] ?? null) === $record->checksum_sha256;
+                    $alreadyUploaded = ($offsite['sha256'] ?? null) === $record->checksum_sha256
+                        && ($offsite['object_key'] ?? null) === $key;
                     if (!$alreadyUploaded) {
                         $this->request($config, 'PUT', $key, $real);
                         $metadata['offsite'] = [
