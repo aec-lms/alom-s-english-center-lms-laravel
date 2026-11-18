@@ -94,23 +94,37 @@ class UniversalPaymentController extends Controller
         $proofFile = $request->file('proof_file');
         $proofPath = $proofFile?->store('universal-payment-proofs', 'local');
 
-        $tx = UniversalPaymentTransaction::query()->create([
-            'reference' => 'UPAY-' . strtoupper(Str::random(8)),
-            'payer_name' => $validated['payer_name'],
-            'payer_contact' => $validated['payer_contact'] ?? null,
-            'item_title' => $validated['item_title'],
-            'gateway' => $validated['gateway'],
-            'currency' => $this->plugins->getSetting('universal-payment', 'default_currency', 'BDT') ?: 'BDT',
-            'amount' => $validated['amount'],
-            'external_trx_id' => trim($validated['external_trx_id']),
-            'branch_id' => $actor?->branch_id,
-            'status' => 'pending',
-            'verified_by' => null,
-            'verified_at' => null,
-            'proof_path' => $proofPath,
-            'proof_mime' => $proofFile?->getMimeType(),
-            'proof_size' => $proofFile?->getSize(),
-        ]);
+        try {
+            $tx = DB::transaction(function () use ($validated, $actor, $proofPath, $proofFile): UniversalPaymentTransaction {
+                $transaction = UniversalPaymentTransaction::query()->create([
+                    'reference' => 'UPAY-' . strtoupper(Str::random(8)),
+                    'payer_name' => $validated['payer_name'],
+                    'payer_contact' => $validated['payer_contact'] ?? null,
+                    'item_title' => $validated['item_title'],
+                    'gateway' => $validated['gateway'],
+                    'currency' => $this->plugins->getSetting('universal-payment', 'default_currency', 'BDT') ?: 'BDT',
+                    'amount' => $validated['amount'],
+                    'external_trx_id' => trim($validated['external_trx_id']),
+                    'branch_id' => $actor?->branch_id,
+                    'status' => 'pending',
+                    'verified_by' => null,
+                    'verified_at' => null,
+                    'proof_path' => $proofPath,
+                    'proof_mime' => $proofFile?->getMimeType(),
+                    'proof_size' => $proofFile?->getSize(),
+                ]);
+
+                app(\\Plugins\\Modules\\UniversalPayment\\Services\\ExternalTransactionReferenceRegistry::class)
+                    ->claim($transaction->gateway, (string) $transaction->external_trx_id, (int) $transaction->id);
+
+                return $transaction;
+            });
+        } catch (\\Throwable $exception) {
+            if ($proofPath !== null) {
+                Storage::disk('local')->delete($proofPath);
+            }
+            throw $exception;
+        }
 
         $this->audit->log('universal_payment.recorded', 'universal_payment', $tx->reference, ['amount' => $tx->amount, 'gateway' => $tx->gateway]);
 
@@ -221,6 +235,11 @@ class UniversalPaymentController extends Controller
                             ->update(['status' => 'active', 'updated_at' => now()]);
                     }
                 }
+            }
+
+            if ($validated['status'] === 'verified') {
+                app(\\Plugins\\Modules\\UniversalPayment\\Services\\ExternalTransactionReferenceRegistry::class)
+                    ->claim($lockedTransaction->gateway, $reference, (int) $lockedTransaction->id);
             }
 
             $lockedTransaction->update([
@@ -342,7 +361,7 @@ class UniversalPaymentController extends Controller
                 $balance = round((float) $lockedInvoice->net_amount - (float) $lockedInvoice->paid_amount, 2);
                 abort_if($balance <= 0, 422, 'This invoice has no outstanding balance.');
 
-                return UniversalPaymentTransaction::query()->create([
+                $transaction = UniversalPaymentTransaction::query()->create([
                     'reference' => 'UPAY-' . strtoupper(Str::random(8)),
                     'payer_name' => $validated['payer_name'],
                     'payer_contact' => $validated['payer_contact'],
@@ -356,6 +375,11 @@ class UniversalPaymentController extends Controller
                     'fee_invoice_id' => $lockedInvoice->id,
                     'status' => 'pending',
                 ]);
+
+                app(\\Plugins\\Modules\\UniversalPayment\\Services\\ExternalTransactionReferenceRegistry::class)
+                    ->claim('bank_cash', (string) $transaction->external_trx_id, (int) $transaction->id);
+
+                return $transaction;
             });
         } else {
             // Serialize checkout creation on the storefront item row. A preflight
