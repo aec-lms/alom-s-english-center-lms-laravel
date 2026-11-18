@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Plugins\Modules\UniversalPayment\Services;
 
 use App\Core\Plugins\PluginManager;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
@@ -81,6 +82,16 @@ class StorefrontPaymentGatewayService
         ]);
 
         return $checkoutUrl;
+    }
+
+    public function recordReferralPurchase(User $buyer, string $sourceType, string|int $sourceId, float $amount, string $currency): void
+    {
+        if ($amount <= 0 || !$this->plugins->isEnabled('referral-income')) {
+            return;
+        }
+
+        app(\Plugins\Modules\ReferralIncome\Services\ReferralIncomeService::class)
+            ->recordSettledPurchase($buyer, $sourceType, (string) $sourceId, $amount, $currency);
     }
 
     public function verifySslcommerz(array $callback): UniversalPaymentTransaction
@@ -386,6 +397,11 @@ class StorefrontPaymentGatewayService
                 'updated_at' => now(),
             ]);
             DB::table('course_carts')->where('id', $order->cart_id)->update(['status' => 'completed', 'updated_at' => now()]);
+            $buyerUser = User::query()->find((int) $locked->user_id);
+            if ($buyerUser) {
+                $this->recordReferralPurchase($buyerUser, 'course_cart_order', (string) $orderId,
+                    (float) $order->net_amount, (string) $order->currency);
+            }
             if (filled($order->wallet_reservation_key) && Schema::hasTable('course_gift_wallet_transactions')) {
                 DB::table('course_gift_wallet_transactions')->where('reference', $order->wallet_reservation_key)
                     ->where('status', 'reserved')->update(['status' => 'completed', 'updated_at' => now()]);
@@ -473,6 +489,11 @@ class StorefrontPaymentGatewayService
                 'paid_at' => now(),
                 'updated_at' => now(),
             ]);
+            $senderUser = User::query()->find((int) $gift->sender_user_id);
+            if ($senderUser) {
+                $this->recordReferralPurchase($senderUser, 'course_gift', (string) $giftId,
+                    (float) $gift->amount, (string) $gift->currency);
+            }
             app(\Plugins\Modules\UniversalPayment\Services\ExternalTransactionReferenceRegistry::class)
                 ->claim((string) $locked->gateway, $externalReference, (int) $locked->id);
             $locked->update([
@@ -564,6 +585,11 @@ class StorefrontPaymentGatewayService
             DB::table('course_gift_vouchers')->where('id', $voucherId)->update([
                 'status' => 'paid', 'paid_at' => now(), 'updated_at' => now(),
             ]);
+            $senderUser = User::query()->find((int) $voucher->sender_user_id);
+            if ($senderUser) {
+                $this->recordReferralPurchase($senderUser, 'course_gift_voucher', (string) $voucherId,
+                    (float) $voucher->amount, (string) $voucher->currency);
+            }
             app(\Plugins\Modules\UniversalPayment\Services\ExternalTransactionReferenceRegistry::class)
                 ->claim((string) $locked->gateway, $externalReference, (int) $locked->id);
             $locked->update([
