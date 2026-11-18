@@ -71,6 +71,7 @@ final class PhoneticsLearningAdminController extends Controller
             'available_from' => ['nullable', 'date'],
             'available_until' => ['nullable', 'date', 'after_or_equal:available_from'],
         ]);
+        $this->validateScope($data);
         abort_if(
             empty($data['course_ref']) && empty($data['course_category_ref']),
             422,
@@ -141,6 +142,7 @@ final class PhoneticsLearningAdminController extends Controller
             'show_result_immediately' => ['nullable', 'boolean'],
             'status' => ['required', 'in:draft,published'],
         ]);
+        $this->validateScope($data);
         abort_if(empty($data['course_ref']) && empty($data['course_category_ref']), 422, 'Choose a course or course category for this exam.');
         abort_if(count($data['word_ids']) < $data['question_count'], 422, 'Select at least as many words as the exam question count.');
 
@@ -171,6 +173,7 @@ final class PhoneticsLearningAdminController extends Controller
             ]);
 
             $words = PhoneticEntry::query()->whereIn('id', $data['word_ids'])->where('is_active', true)->get()->shuffle()->take($data['question_count']);
+            abort_if($words->count() < $data['question_count'], 422, 'Some selected vocabulary words are archived. Select active words only.');
             foreach ($words->values() as $index => $word) {
                 $accent = random_int(0, 1) === 0 ? 'uk' : 'us';
                 $answer = $accent === 'uk' ? (string) $word->uk_ipa : (string) $word->us_ipa;
@@ -205,6 +208,31 @@ final class PhoneticsLearningAdminController extends Controller
         $exam->update(['status' => $data['status']]);
         $this->audit($request, 'phonetics.exam.status_updated', 'exam', (string) $exam->id, ['status' => $exam->status]);
         return back()->with('status', 'Exam status updated.');
+    }
+
+    private function validateScope(array $data): void
+    {
+        $courses = collect($this->catalog->courses());
+        $categories = collect($this->catalog->categories());
+        if (!empty($data['course_ref'])) {
+            $course = $courses->firstWhere('id', (string) $data['course_ref']);
+            abort_unless($course, 422, 'Select a valid course from the connected LMS.');
+            if (!empty($data['course_category_ref'])) {
+                abort_unless((string) $course['category_id'] === (string) $data['course_category_ref'], 422, 'The selected course does not belong to the selected category.');
+            }
+        }
+        if (!empty($data['course_category_ref'])) {
+            abort_unless($categories->contains(fn ($category) => (string) $category['id'] === (string) $data['course_category_ref']), 422, 'Select a valid course category.');
+        }
+        if (!empty($data['lesson_ref'])) {
+            abort_unless(!empty($data['course_ref']), 422, 'A lesson must belong to a selected course.');
+            $lessonIds = collect($this->catalog->lessons((string) $data['course_ref']))->pluck('id');
+            abort_unless($lessonIds->contains((string) $data['lesson_ref']), 422, 'Select a lesson belonging to the selected course.');
+        }
+        if (!empty($data['batch_ref'])) {
+            $batchIds = collect($this->catalog->batches())->pluck('id');
+            abort_unless($batchIds->contains((string) $data['batch_ref']), 422, 'Select a valid batch from the connected LMS.');
+        }
     }
 
     private function audit(Request $request, string $action, string $entityType, string $entityId, array $metadata = []): void
