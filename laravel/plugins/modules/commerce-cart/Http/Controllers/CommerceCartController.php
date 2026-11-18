@@ -121,13 +121,19 @@ class CommerceCartController extends Controller
             'type' => ['required', 'in:subscription,live_class,other'],
             'title' => ['required', 'string', 'max:200'],
             'sku' => ['nullable', 'string', 'max:80'],
-            'resource_id' => ['nullable', 'integer', 'min:1'],
+            'resource_id' => ['required_if:type,live_class', 'nullable', 'integer', 'min:1'],
             'description' => ['nullable', 'string', 'max:3000'],
             'price' => ['required', 'numeric', 'min:0.01', 'max:500000'],
             'currency' => ['required', 'string', 'regex:/^[A-Z]{3}$/'],
             'duration_days' => ['nullable', 'integer', 'min:1', 'max:3650'],
             'is_active' => ['nullable', 'boolean'],
         ]);
+        if ($data['type'] === 'live_class') {
+            abort_unless(Schema::hasTable('live_classes')
+                && DB::table('live_classes')->where('id', (int) $data['resource_id'])->exists(),
+                422,
+                'Select an existing Live Class before publishing a paid pass.');
+        }
         $entitlement = ['type' => $data['type']];
         if ($data['type'] === 'subscription' || !empty($data['duration_days'])) $entitlement['duration_days'] = (int) ($data['duration_days'] ?? 30);
         DB::table('commerce_sellables')->insert([
