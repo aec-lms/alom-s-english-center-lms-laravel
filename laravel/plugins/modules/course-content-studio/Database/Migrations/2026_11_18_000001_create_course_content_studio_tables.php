@@ -60,6 +60,7 @@ return new class extends Migration {
                 $table->string('section_title', 120)->nullable();
                 $table->unsignedInteger('position')->default(0);
                 $table->boolean('is_preview')->default(false);
+                $table->boolean('is_active')->default(true);
                 $table->unsignedSmallInteger('duration_minutes')->nullable();
                 $table->timestamps();
                 $table->unique(['course_id', 'course_content_post_id'], 'ccs_course_post_unique');
