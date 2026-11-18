@@ -147,7 +147,12 @@ final class CourseCatalog
             throw new ServiceUnavailableHttpException(null, 'Course price mapping is required to enforce free/paid learning access.');
         }
 
-        return (float) data_get($course, $column, 0) > 0;
+        $price = data_get($course, $column);
+        if (!is_numeric($price)) {
+            throw new ServiceUnavailableHttpException(null, 'The connected LMS returned an invalid course price; access classification is unavailable.');
+        }
+
+        return (float) $price > 0;
     }
 
     public function isBatchMember(object $user, string $batchRef): bool
