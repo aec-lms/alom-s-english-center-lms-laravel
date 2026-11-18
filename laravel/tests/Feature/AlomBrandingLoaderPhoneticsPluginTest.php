@@ -164,9 +164,9 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
  public function test_phonetics_user_reference_columns_are_portable_and_have_no_host_user_foreign_key():void{
   $this->markSystemInstalled();
   $this->activatePlugins(['phonetics']);
-  $this->assertSame('string',Schema::getColumnType('alom_english_center_phonetic_attempts','user_id'));
-  $this->assertSame('string',Schema::getColumnType('phonetic_exam_attempts','user_id'));
-  $this->assertSame('string',Schema::getColumnType('phonetic_batch_memberships','user_id'));
+  $this->assertContains(Schema::getColumnType('alom_english_center_phonetic_attempts','user_id'),['string','varchar']);
+  $this->assertContains(Schema::getColumnType('phonetic_exam_attempts','user_id'),['string','varchar']);
+  $this->assertContains(Schema::getColumnType('phonetic_batch_memberships','user_id'),['string','varchar']);
   $foreignKeys=collect(Schema::getForeignKeys('phonetic_exam_attempts'));
   $this->assertFalse($foreignKeys->contains(fn($foreignKey)=>in_array('user_id',$foreignKey['columns']??[],true)));
  }
