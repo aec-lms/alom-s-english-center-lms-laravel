@@ -72,6 +72,7 @@ class DeliverNotificationJob implements ShouldQueue, ShouldBeUnique
                     'sent' => null,
                     'no_devices' => 'No active registered mobile device is available for this user.',
                     'not_configured' => 'Firebase or Mobile App API is not configured or enabled.',
+                    'payload_too_large' => 'Push notification content exceeds the Firebase payload limit.',
                     default => 'Firebase did not accept the push notification.',
                 },
                 'processed_at' => now(),
