@@ -272,6 +272,8 @@ class ExamController extends Controller
         if ($exam->branch_id !== null && (int) $actor->branch_id !== (int) $exam->branch_id) {
             abort(403, 'Exam is outside your assigned branch.');
         }
+        if ($exam->starts_at && now()->lt($exam->starts_at)) abort(403, 'This exam has not started yet.');
+        if ($exam->ends_at && now()->gt($exam->ends_at)) abort(403, 'The exam submission window has closed.');
 
         $validated = $request->validate([
             'attempt_id' => ['required', 'integer'],
@@ -291,7 +293,7 @@ class ExamController extends Controller
             abort_if($attempt->submitted_at !== null, 409, 'This exam attempt is already submitted.');
             $deadline = $attempt->started_at?->copy()->addMinutes((int) $lockedExam->duration_minutes);
             if (!$deadline || now()->greaterThan($deadline)) {
-                abort(409, 'The exam time has expired.', ['expired' => true]);
+                abort(409, 'The exam time has expired.');
             }
 
             $questions = $lockedExam->questions()->get(['id', 'options']);
