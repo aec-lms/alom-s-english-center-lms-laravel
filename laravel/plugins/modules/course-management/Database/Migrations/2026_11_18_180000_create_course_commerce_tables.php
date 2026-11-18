@@ -61,6 +61,7 @@ return new class extends Migration {
                 if (!Schema::hasColumn('promo_coupons', 'starts_at')) $table->timestamp('starts_at')->nullable();
                 if (!Schema::hasColumn('promo_coupons', 'applies_to_course_ids')) $table->json('applies_to_course_ids')->nullable();
                 if (!Schema::hasColumn('promo_coupons', 'first_purchase_only')) $table->boolean('first_purchase_only')->default(false);
+                if (!Schema::hasColumn('promo_coupons', 'gift_only')) $table->boolean('gift_only')->default(false);
             });
             if (!Schema::hasTable('promo_coupon_redemptions')) {
                 Schema::create('promo_coupon_redemptions', function (Blueprint $table): void {
