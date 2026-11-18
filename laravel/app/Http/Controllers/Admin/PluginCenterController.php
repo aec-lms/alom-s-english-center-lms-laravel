@@ -201,11 +201,15 @@ class PluginCenterController extends Controller
             if ($destination && is_dir($destination) && $source && !file_exists($source)) {
                 File::moveDirectory($destination, $source);
             }
-            if ($source && is_dir($source) && $wasInstalled) {
+            if ($source && is_dir($source) && $wasInstalled && ($disabledByOperation || $uninstalledByOperation)) {
                 try {
-                    $this->plugins->install($slug, auth()->id());
-                    if (!$wasEnabled) {
-                        $this->plugins->disable($slug, auth()->id());
+                    if ($uninstalledByOperation) {
+                        $this->plugins->install($slug, auth()->id());
+                        if (!$wasEnabled) {
+                            $this->plugins->disable($slug, auth()->id());
+                        }
+                    } elseif ($disabledByOperation && $wasEnabled) {
+                        $this->plugins->enable($slug, auth()->id());
                     }
                 } catch (\Throwable $rollbackError) {
                     report($rollbackError);
