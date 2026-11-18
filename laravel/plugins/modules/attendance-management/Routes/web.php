@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Route;
 use Plugins\Modules\AttendanceManagement\Http\Controllers\AttendanceController;
+use Plugins\Modules\AttendanceManagement\Http\Controllers\AttendanceAuditController;
 use Plugins\Modules\AttendanceManagement\Http\Controllers\AttendanceQrController;
 use Plugins\Modules\AttendanceManagement\Http\Controllers\AttendanceSyncController;
 
