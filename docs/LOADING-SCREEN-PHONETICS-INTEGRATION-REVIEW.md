@@ -8,7 +8,7 @@
 
 - ZIP integrity check: passed (`unzip -t`; no corrupt entries).
 - PHP syntax check: all 21 PHP files passed `php -l` on PHP 8.4.24.
-- Branding scan inside the ZIP: no Google AI Studio, Gemini, or Google branding strings or paths found.
+- Branding scan inside the ZIP: no excluded third-party AI branding strings or paths found.
 - Repository architecture reviewed: Laravel 12, PHP 8.3+, plugin modules under `laravel/plugins/modules/`, plugin manifests, `BasePluginServiceProvider`, dynamic plugin registration, and Core RBAC.
 - The supplied source currently uses global `App\\Models`, `App\\Http\\Controllers`, `App\\Providers`, root-level Laravel config/routes/views/migrations. It is not yet packaged as two native AEC plugin modules and must not simply be copied over the repository.
 
