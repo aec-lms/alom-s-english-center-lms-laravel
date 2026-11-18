@@ -1,0 +1,22 @@
+{
+  "slug": "expense-management",
+  "name": "Expense Management & Finance Summary",
+  "version": "1.0.0",
+  "author": "Alom's English Center",
+  "category": "finance",
+  "description": "Branch-aware expense ledger, private receipt attachments, approval workflow, date/category filters and net finance summary.",
+  "core_compatibility": "^2.0",
+  "dependencies": [],
+  "optional_dependencies": ["branch-management", "payment-management", "universal-payment", "reports-analytics"],
+  "provider": "Plugins\\Modules\\ExpenseManagement\\Providers\\ExpenseManagementServiceProvider",
+  "permissions": [
+    {"slug": "expenses.view", "name": "View expenses and finance summary"},
+    {"slug": "expenses.manage", "name": "Create and manage expenses"},
+    {"slug": "expenses.approve", "name": "Approve or reject expenses"},
+    {"slug": "expenses.export", "name": "Export expense reports"}
+  ],
+  "settings_schema": [],
+  "admin_menu": [
+    {"group": "Finance & Gateways", "label": "Expenses & Finance", "route": "plugins.expenses.index", "order": 120, "permission": "expenses.view"}
+  ]
+}
