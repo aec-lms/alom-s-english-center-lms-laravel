@@ -89,7 +89,7 @@ class QuizContestController extends Controller
             });
         } catch (QueryException $exception) {
             // The unique (contest, user) index is the final guard against concurrent duplicate entries.
-            if (str_contains(strtolower($exception->getMessage()), 'unique')) {
+            if (str_contains(strtolower($exception->getMessage()), 'unique') || str_contains(strtolower($exception->getMessage()), 'duplicate entry')) {
                 abort(409, 'You have already participated in this contest.');
             }
             throw $exception;
@@ -130,7 +130,7 @@ class QuizContestController extends Controller
             'questions.*.correct_option' => ['required', 'integer', 'between:0,3'],
         ]);
 
-        $branchId = $this->resolvedBranchId($actor, $data['branch_id'] ?? null);
+        $branchId = $this->resolvedBranchId($actor, isset($data['branch_id']) ? (int) $data['branch_id'] : null);
         $contest = DB::transaction(function () use ($actor, $data, $branchId): QuizContest {
             $contest = QuizContest::query()->create([
                 'created_by' => $actor->id,
