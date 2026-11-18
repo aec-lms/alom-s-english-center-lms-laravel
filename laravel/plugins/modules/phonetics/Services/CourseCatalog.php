@@ -87,9 +87,55 @@ final class CourseCatalog
     public function course(string $courseRef): object
     {
         $map = config('phonetics.catalog.courses', []);
-        $course = $this->table($map)->where($map['id'] ?? 'id', $courseRef)->first();
+        $query = $this->table($map);
+        $idColumn = $map['id'] ?? 'id';
+        $course = $query->where($idColumn, $courseRef)->first();
+        if (!$course && !empty($map['slug']) && $this->hasColumn($map, $map['slug'])) {
+            $course = $this->table($map)->where($map['slug'], $courseRef)->first();
+        }
         abort_unless($course, 404, 'Course not found in the connected LMS.');
         return $course;
+    }
+
+    public function courseId(object $course): string
+    {
+        $map = config('phonetics.catalog.courses', []);
+        return (string) data_get($course, $map['id'] ?? 'id');
+    }
+
+    public function courseCategoryId(object $course): ?string
+    {
+        $map = config('phonetics.catalog.courses', []);
+        $column = $map['category_id'] ?? null;
+        if (!$column || !$this->hasColumn($map, $column)) {
+            return null;
+        }
+        $value = data_get($course, $column);
+        return $value === null ? null : (string) $value;
+    }
+
+    public function isPaid(object $course): bool
+    {
+        $map = config('phonetics.catalog.courses', []);
+        $column = $map['price'] ?? null;
+        return $column && $this->hasColumn($map, $column)
+            ? (float) data_get($course, $column, 0) > 0
+            : false;
+    }
+
+    public function isBatchMember(object $user, string $batchRef): bool
+    {
+        $membership = config('phonetics.catalog.batch_memberships', []);
+        if (!$this->available($membership)) {
+            throw new ServiceUnavailableHttpException(null, 'Batch membership mapping is not configured for this LMS.');
+        }
+        $query = $this->table($membership)
+            ->where($membership['user_id'] ?? 'user_id', $user->getAuthIdentifier())
+            ->where($membership['batch_id'] ?? 'batch_id', $batchRef);
+        if (!empty($membership['active_column']) && $this->hasColumn($membership, $membership['active_column'])) {
+            $query->where($membership['active_column'], $membership['active_value'] ?? 1);
+        }
+        return $query->exists();
     }
 
     public function assertAccess(object $user, string $courseRef, string $audience = 'both', ?string $batchRef = null): void
