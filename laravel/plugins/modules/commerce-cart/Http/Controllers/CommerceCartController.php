@@ -10,6 +10,11 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use Plugins\Modules\CommerceCart\Services\CommerceCatalog;
+use Plugins\Modules\FeesManagement\Models\FeeInvoice;
+use Plugins\Modules\UniversalPayment\Services\UniversalPaymentOrchestrator;
+use App\Core\Plugins\PluginManager;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 class CommerceCartController extends Controller
 {
@@ -84,7 +89,7 @@ class CommerceCartController extends Controller
             'payer_phone' => ['required', 'string', 'max:40'],
             'payment_method_id' => ['nullable', 'string', 'max:120'],
         ]);
-        abort_unless(Schema::hasTable('fee_invoices') && app(\\App\\Core\\Plugins\\PluginManager::class)->isEnabled('fees-management'), 503, 'The Fees & Invoicing module must be enabled for checkout.');
+        abort_unless(Schema::hasTable('fee_invoices') && app(PluginManager::class)->isEnabled('fees-management'), 503, 'The Fees & Invoicing module must be enabled for checkout.');
         abort_unless(app(\\App\\Core\\Plugins\\PluginManager::class)->isEnabled('universal-payment'), 503, 'Universal Payment must be enabled.');
 
         $user = $request->user();
