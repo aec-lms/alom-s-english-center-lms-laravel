@@ -116,3 +116,76 @@ The historical matrix above is a 39-plugin snapshot and is not the current inven
 | `student-tracking` | Manifest present on current main | Not yet functionally accepted by this matrix |
 
 This reconciles the count only; it does not certify these five modules or change the acceptance status of the original 39. The 39/39 common lifecycle result documented above applies only to its named historical candidate and must not be extrapolated to current main or treated as full feature acceptance. Re-run the common lifecycle suite and feature-specific acceptance against the exact current main candidate before updating any plugin to accepted.
+
+
+## Current-main acceptance checkpoint (2026-11-18, commit 6b84fe1069bdf1caeb391f25b598e4737c7e1f9a)
+
+The current-main CI checks for this exact commit have now all completed successfully:
+- Laravel test workflow: SQLite suite passed.
+- Laravel MySQL workflow: MySQL suite passed.
+- Browser E2E smoke workflow: passed.
+- Composer lockfile/security audit: passed.
+
+The current tree contains 44 plugin manifests. The parameterized `AllPluginsIndependentAcceptanceTest` discovers plugin slugs from the module directories at runtime, so its lifecycle scenarios include all 44 manifests on this candidate rather than a hard-coded historical list. Its common lifecycle assertions cover provider autoload, independent install/enable, ZIP update, disable/re-enable, uninstall/reinstall, settings reset, Recycle Bin restore, and permanent-delete recovery handling. This is lifecycle acceptance only, not proof that every plugin's complete business feature set is correct.
+
+### Current 44-plugin inventory and focused test references
+
+| Plugin slug | Focused feature-test evidence in current test tree | Acceptance interpretation |
+|---|---|---|
+| `admin-boosting` | `BoostCampaignSafetyTest`, `BranchManagerCampaignFailClosedTest` | Partial targeted coverage |
+| `admission-management` | `AcademicAndExamWorkflowTest`, `AdditionalModulesWorkflowTest` | Partial targeted coverage |
+| `attendance-management` | `AttendanceRegisterWorkflowTest`, `AttendanceStandaloneIndexTest` | Targeted workflow coverage |
+| `batch-management` | `BatchAndClassManagementTest` | Targeted workflow coverage |
+| `branch-management` | `BranchManagerDashboardIsolationTest`, `BranchManagerFailClosedTest`, `BranchManagerTrackingFailClosedTest` | Targeted isolation/security coverage |
+| `carousel-builder` | `GrowthAndMarketingPluginsAcceptanceTest` | Targeted CRUD/security coverage |
+| `certificate-management` | `AcademicAndExamWorkflowTest` | Partial targeted coverage |
+| `class-management` | `BatchAndClassManagementTest` | Targeted workflow coverage |
+| `cms-website` | `CmsWebsiteSafetyTest`, `WebsiteBuildersTest` | Targeted safety/builder coverage |
+| `course-management` | `CourseBranchIsolationTest`, `CourseOptionalIntegrationsTest` | Targeted isolation/integration coverage |
+| `email-notifications` | `EmailNotificationsTest` | Targeted workflow coverage |
+| `exam-management` | `AcademicAndExamWorkflowTest`, `ExamStandaloneTest` | Targeted workflow coverage |
+| `fees-management` | `FeeBranchIsolationTest`, `FeesStandaloneTest` | Targeted workflow coverage |
+| `flash-sale` | `FlashSaleEnrollmentTest` | Targeted enrollment coverage |
+| `gateway-card` | `FinanceAndPaymentGatewayTest` | Shared gateway coverage; provider-specific sandbox still open |
+| `gateway-paypal` | `FinanceAndPaymentGatewayTest` | Shared gateway coverage; provider-specific sandbox still open |
+| `gateway-sslcommerz` | `PluginSettingsResetBackupTest`, `FinanceAndPaymentGatewayTest` | Settings/security plus shared gateway coverage; sandbox still open |
+| `gateway-stripe` | `FinanceAndPaymentGatewayTest` | Shared gateway coverage; provider-specific sandbox still open |
+| `gmail-marketing` | `GrowthAndMarketingPluginsAcceptanceTest` | Campaign/configuration coverage; live SMTP delivery not proven |
+| `google-console` | `GrowthAndMarketingPluginsAcceptanceTest` | Configuration coverage; external verification not proven |
+| `guardian-management` | `GuardianStandaloneTest` | Targeted workflow coverage |
+| `hr-staff-management` | `PluginCriticalRegressionTest`, `AdditionalModulesWorkflowTest` | Partial targeted coverage |
+| `learn-and-earn` | `PaidLearnAndEarnCheckoutTest` | Targeted checkout coverage |
+| `library-management` | `MediaLibraryAndDigitalEbookTest` | Targeted workflow coverage |
+| `marketing-management` | `MarketingGlobalDataAdminOnlyTest`, `BoostCampaignSafetyTest` | Partial targeted coverage |
+| `media-library` | `MediaLibraryAndDigitalEbookTest` | Targeted workflow coverage |
+| `meta-pixel` | `GrowthAndMarketingPluginsAcceptanceTest` | Configuration/privacy coverage; live event delivery not proven |
+| `mobile-app-api` | `MobileAppSecurityTest`, `MobileAppUpdateAndPublicParityTest` | Targeted API/security coverage |
+| `notice-board` | `NoticeBoardBranchSafetyTest` | Targeted authorization/branch coverage |
+| `notification-center` | `NotificationCenterTest` | Targeted workflow coverage |
+| `page-builder` | `PageBuilderBlocksTest`, `WebsiteBuildersTest` | Targeted builder coverage |
+| `payment-management` | `FinanceAndPaymentGatewayTest`, `PaymentBranchIsolationTest` | Shared payment/isolation coverage |
+| `reports-analytics` | `GrowthAndMarketingPluginsAcceptanceTest` | Reports/export coverage |
+| `role-ai-assistant` | `AiAssistantSecurityTest`, `PluginCriticalRegressionTest` | Targeted security/configuration coverage |
+| `seo-manager` | `GrowthAndMarketingPluginsAcceptanceTest` | Targeted SEO configuration/robots/sitemap coverage |
+| `slider-builder` | `WebsiteBuildersTest`, `SiteLayoutBuilderTest` | Shared builder coverage |
+| `sms-gateway` | `SmsGatewayTest` | Configuration/dispatch workflow coverage; live carrier delivery not proven |
+| `storefront-catalog` | `StorefrontCatalogAcceptanceTest`, `StorefrontProviderContractTest` | Targeted catalog/provider-contract coverage |
+| `student-management` | `StudentStandaloneTest`, `StudentTracingIndependenceTest` | Targeted workflow/integration coverage |
+| `student-tracing` | `StudentTracingIndependenceTest`, `StudentTracingPluginTest` | Targeted event/independence coverage |
+| `student-tracking` | `StudentTrackingPluginTest` | Targeted event validation/recording coverage |
+| `teacher-management` | `TeacherStandaloneTest`, `StudentTeacherBranchOptionsTest` | Targeted workflow/branch-option coverage |
+| `universal-payment` | `UniversalPaymentGatewayToggleTest`, `UniversalPaymentInvoiceSettlementTest`, `UniversalPaymentProofTest`, `PluginCriticalRegressionTest` | Targeted payment/security/settlement coverage; live provider settlement still open |
+| `visitor-popup-ads` | `VisitorPopupSecurityTest`, `PluginCriticalRegressionTest` | Targeted CRUD/security coverage |
+
+**Interpretation:** “Targeted” means a named automated feature test exists in the current test tree and passed as part of the current-main CI run. It does not mean exhaustive acceptance of every screen, edge case, permission, upgrade path, localization, or production integration. “Partial” and “shared” explicitly indicate narrower coverage.
+
+### Remaining acceptance gaps
+
+- Run a dedicated feature-by-feature acceptance checklist for each plugin, including authorization matrix, validation failures, empty states, pagination, localization, audit logs, and failure/rollback behavior.
+- Exercise each payment gateway against its own approved provider sandbox, including signed webhooks, duplicate callbacks, refunds, reconciliation, and failure paths. Current generic payment tests do not substitute for these.
+- Verify SMTP and SMS delivery with controlled test accounts; verify Google Search Console, GA4/GTM, Meta Pixel/CAPI with actual test events and consent behavior.
+- Test clean cPanel install/upgrade/rollback on the target PHP 8.3 hosting profile and restore a production-sized backup into a separate disposable database.
+- Run a provider-backed 300+ participant live-class test. Application/web-tier tests do not prove external meeting-provider room capacity.
+- Review PR #31 separately; do not merge its divergent draft branch until its base/history are reconciled and its complete diff is revalidated against current main.
+
+No production deployment or live data migration is authorized by this CI result.
