@@ -6,6 +6,11 @@ return [
     'modules_path' => base_path('plugins/modules'),
     'core_identifier' => 'aec-lms-core',
     'supported_core_constraint' => '^2.0',
+    // JSON map of key_id => base64-encoded Ed25519 public key.
+    'signature_keys' => (static function (): array {
+        $decoded = json_decode((string) env('LMS_PLUGIN_SIGNATURE_PUBLIC_KEYS', '{}'), true);
+        return is_array($decoded) ? $decoded : [];
+    })(),
     'protected_tables' => [
         'users',
         'roles',

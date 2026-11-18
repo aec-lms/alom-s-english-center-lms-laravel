@@ -135,17 +135,49 @@ class AllPluginsIndependentAcceptanceTest extends TestCase
         }
         $zip->close();
 
+        // The ZIP update fixture must follow the production trusted-signature path.
+        if (!function_exists('sodium_crypto_sign_keypair')) {
+            $this->markTestSkipped('PHP sodium extension is required for signed plugin packages.');
+        }
+        $keyPair = sodium_crypto_sign_keypair();
+        $secretKey = sodium_crypto_sign_secretkey($keyPair);
+        $publicKey = sodium_crypto_sign_publickey($keyPair);
+        $checksumsHash = hash_file('sha256', $packageRoot . '/checksums.json');
+        $manifestHash = hash_file('sha256', $packageRoot . '/plugin.json');
+        $signedMessage = implode("\n", [
+            'AEC-LMS-PLUGIN-SIGNATURE-V1',
+            $slug,
+            $updatedVersion,
+            $checksumsHash,
+            $manifestHash,
+        ]);
+        $signaturePath = sys_get_temp_dir() . '/aec-plugin-signature-' . bin2hex(random_bytes(8)) . '.json';
+        File::put($signaturePath, json_encode([
+            'key_id' => 'acceptance-test',
+            'signature' => base64_encode(sodium_crypto_sign_detached($signedMessage, $secretKey)),
+        ], JSON_THROW_ON_ERROR));
+        config(['plugins.signature_keys' => ['acceptance-test' => base64_encode($publicKey)]]);
+
         try {
-            $updatedRecord = $manager->installOrUpdateFromZip($zipPath);
+            $updatedRecord = $manager->installOrUpdateFromZip($zipPath, null, $signaturePath);
             $this->assertSame($updatedVersion, $updatedRecord->fresh()->version, "{$slug} ZIP update did not apply its newer version");
         } finally {
             @unlink($zipPath);
+            @unlink($signaturePath);
             File::deleteDirectory($packageRoot);
             // Keep the repository fixture version stable for the remaining tests.
             File::put($directory . '/plugin.json', $originalManifest);
             if (File::exists($directory . '/checksums.json')) {
                 File::delete($directory . '/checksums.json');
             }
+            // The fixture restores the original first-party source tree, so clear
+            // the temporary signature metadata written by the ZIP update probe.
+            PluginRecord::query()->where('slug', $slug)->update([
+                'signature_key_id' => null,
+                'signature_algorithm' => null,
+                'signature_checksums_sha256' => null,
+                'signature_verified_at' => null,
+            ]);
         }
 
         $manager->disable($slug);

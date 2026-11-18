@@ -13,7 +13,8 @@
 
         <form method="POST" action="{{ route('admin.plugins.upload') }}" enctype="multipart/form-data" class="flex flex-wrap items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl p-2.5">
             @csrf
-            <input type="file" name="plugin_zip" accept=".zip" required class="text-xs text-slate-600 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-slate-200 file:text-slate-700 file:font-semibold">
+            <label class="text-xs text-slate-600">Plugin ZIP <input type="file" name="plugin_zip" accept=".zip" required class="block mt-1 text-xs"></label>
+            <label class="text-xs text-slate-600">Detached signature JSON <input type="file" name="plugin_signature" accept=".json,.txt" required class="block mt-1 text-xs"></label>
             <button type="submit" class="px-3.5 py-2 rounded-lg bg-[#0057FF] hover:bg-blue-700 text-white text-xs font-bold">
                 Upload & Install / Update (.zip)
             </button>
@@ -53,6 +54,9 @@
                     </div>
                 </div>
 
+                @if ($plugin->signature_verified_at)
+                    <div class="text-[10px] text-emerald-700">Signed package verified · {{ $plugin->signature_algorithm }} · key {{ $plugin->signature_key_id }}</div>
+                @endif
                 <div class="flex flex-wrap gap-2 pt-3 border-t border-slate-100 text-xs">
                     @if (!$plugin->is_installed)
                         <form method="POST" action="{{ route('admin.plugins.install', $plugin->slug) }}">

@@ -319,13 +319,31 @@ PHP;
         $zip->addFromString($slug . '/checksums.json', $checksums);
         $zip->close();
 
+        $keyPair = sodium_crypto_sign_keypair();
+        $secretKey = sodium_crypto_sign_secretkey($keyPair);
+        $publicKey = sodium_crypto_sign_publickey($keyPair);
+        $message = implode("\n", [
+            'AEC-LMS-PLUGIN-SIGNATURE-V1',
+            $slug,
+            '1.0.0',
+            hash('sha256', $checksums),
+            hash('sha256', $manifest),
+        ]);
+        $signaturePath = sys_get_temp_dir() . '/rollback-probe-' . bin2hex(random_bytes(6)) . '.json';
+        File::put($signaturePath, json_encode([
+            'key_id' => 'lifecycle-test',
+            'signature' => base64_encode(sodium_crypto_sign_detached($message, $secretKey)),
+        ], JSON_THROW_ON_ERROR));
+        config(['plugins.signature_keys' => ['lifecycle-test' => base64_encode($publicKey)]]);
+
         $caught = null;
         try {
-            app(PluginManager::class)->installOrUpdateFromZip($zipPath);
+            app(PluginManager::class)->installOrUpdateFromZip($zipPath, null, $signaturePath);
         } catch (RuntimeException $exception) {
             $caught = $exception;
         } finally {
             @unlink($zipPath);
+            @unlink($signaturePath);
         }
 
         $this->assertInstanceOf(RuntimeException::class, $caught);
