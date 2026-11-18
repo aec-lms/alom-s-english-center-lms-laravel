@@ -118,7 +118,7 @@ class CommerceCartController extends Controller
             'is_active' => ['nullable', 'boolean'],
         ]);
         $entitlement = ['type' => $data['type']];
-        if ($data['type'] === 'subscription') $entitlement['duration_days'] = (int) ($data['duration_days'] ?? 30);
+        if ($data['type'] === 'subscription' || !empty($data['duration_days'])) $entitlement['duration_days'] = (int) ($data['duration_days'] ?? 30);
         DB::table('commerce_sellables')->insert([
             'type' => $data['type'], 'title' => $data['title'], 'sku' => $data['sku'] ?? null,
             'resource_id' => $data['resource_id'] ?? null,
