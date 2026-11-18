@@ -91,17 +91,84 @@ class StudentTrackingController extends Controller
             'event_type' => ['required', 'string', 'in:lesson_started,lesson_completed'],
             'subject_type' => ['nullable', 'string', 'max:60'],
             'subject_id' => ['nullable', 'string', 'max:100'],
-            'duration_seconds' => ['nullable', 'integer', 'min:0', 'max:86400'],
+            'duration_seconds' => ['nullable', 'integer', 'min:0', 'max:21600'],
             'metadata' => ['nullable', 'array'],
         ]);
+
+        $metadata = $validated['metadata'] ?? [];
+        $durationSeconds = $validated['duration_seconds'] ?? null;
+        if (app(PluginManager::class)->isEnabled('course-management')) {
+            // In integrated LMS mode, client-reported duration is untrusted.
+            // Only derive it from a recent server-recorded lesson-start event.
+            $durationSeconds = null;
+            abort_unless(
+                Schema::hasTable('course_lessons')
+                    && Schema::hasTable('courses')
+                    && Schema::hasTable('enrollments'),
+                409,
+                'Course lesson tracking is unavailable until the course tables are installed.'
+            );
+            abort_unless(
+                ($validated['subject_type'] ?? null) === 'lesson'
+                    && filter_var($validated['subject_id'] ?? null, FILTER_VALIDATE_INT) !== false
+                    && (int) ($validated['subject_id'] ?? 0) > 0,
+                422,
+                'A valid course lesson is required for learning activity tracking.'
+            );
+
+            $lesson = DB::table('course_lessons as lessons')
+                ->join('courses', 'courses.id', '=', 'lessons.course_id')
+                ->where('lessons.id', (int) $validated['subject_id'])
+                ->where('courses.status', 'published')
+                ->first([
+                    'lessons.id',
+                    'lessons.course_id',
+                    'lessons.title as lesson_title',
+                    'courses.title as course_title',
+                ]);
+            abort_unless($lesson, 404, 'The requested published lesson was not found.');
+
+            abort_unless(
+                DB::table('enrollments')
+                    ->where('user_id', $request->user()->id)
+                    ->where('course_id', $lesson->course_id)
+                    ->whereIn('status', ['active', 'completed'])
+                    ->exists(),
+                403,
+                'An active course enrollment is required to record this lesson activity.'
+            );
+
+            // Client-supplied titles and analytics are not trusted when the LMS
+            // can resolve the canonical course and lesson records.
+            $metadata = [
+                'course_title' => $lesson->course_title,
+                'lesson_title' => $lesson->lesson_title,
+                'source' => 'student_portal',
+            ];
+
+            if ($validated['event_type'] === 'lesson_completed') {
+                $started = \Plugins\Modules\StudentTracking\Models\StudentActivityEvent::query()
+                    ->where('user_id', $request->user()->id)
+                    ->where('event_type', 'lesson_started')
+                    ->where('subject_type', 'lesson')
+                    ->where('subject_id', (string) $lesson->id)
+                    ->where('occurred_at', '>=', now()->subHours(6))
+                    ->latest('occurred_at')
+                    ->first();
+
+                if ($started?->occurred_at) {
+                    $durationSeconds = min(21600, max(0, (int) $started->occurred_at->diffInSeconds(now())));
+                }
+            }
+        }
 
         $event = $tracker->record(
             (int) $request->user()->id,
             $validated['event_type'],
             $validated['subject_type'] ?? null,
             $validated['subject_id'] ?? null,
-            $validated['duration_seconds'] ?? null,
-            $validated['metadata'] ?? [],
+            $durationSeconds,
+            $metadata,
         );
 
         return response()->json(['recorded' => true, 'event_id' => $event->id], 201);
