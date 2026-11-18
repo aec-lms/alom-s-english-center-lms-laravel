@@ -170,6 +170,14 @@ class AllPluginsIndependentAcceptanceTest extends TestCase
             if (File::exists($directory . '/checksums.json')) {
                 File::delete($directory . '/checksums.json');
             }
+            // The fixture restores the original first-party source tree, so clear
+            // the temporary signature metadata written by the ZIP update probe.
+            PluginRecord::query()->where('slug', $slug)->update([
+                'signature_key_id' => null,
+                'signature_algorithm' => null,
+                'signature_checksums_sha256' => null,
+                'signature_verified_at' => null,
+            ]);
         }
 
         $manager->disable($slug);
