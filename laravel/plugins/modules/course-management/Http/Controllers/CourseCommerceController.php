@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Plugins\Modules\CourseManagement\Http\Controllers;
 
 use App\Core\Plugins\PluginManager;
+use App\Models\SystemSetting;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\RedirectResponse;
