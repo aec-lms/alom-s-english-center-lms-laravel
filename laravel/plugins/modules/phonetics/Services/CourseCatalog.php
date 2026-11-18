@@ -160,7 +160,7 @@ final class CourseCatalog
         }
         $query = $this->table($enrollment)
             ->where($enrollment['user_id'] ?? 'user_id', $user->getAuthIdentifier())
-            ->where($enrollment['course_id'] ?? 'course_id', $courseRef);
+            ->where($enrollment['course_id'] ?? 'course_id', $this->courseId($course));
         $statusColumn = $enrollment['status'] ?? null;
         $activeStatuses = $enrollment['active_statuses'] ?? ['active', 'completed'];
         if ($statusColumn && $this->hasColumn($enrollment, $statusColumn)) {
