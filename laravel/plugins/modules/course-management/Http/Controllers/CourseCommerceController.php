@@ -499,7 +499,7 @@ class CourseCommerceController extends Controller
             $discount = round((float) ($coupon['discount'] ?? 0), 2);
             $total = round(max(0, $subtotal - $discount), 2);
             $walletCredit = 0.0;
-            if (Schema::hasTable('course_gift_wallets')) {
+            if (Schema::hasTable('course_gift_wallets') && Schema::hasTable('course_gift_wallet_transactions')) {
                 $wallet = DB::table('course_gift_wallets')->where('user_id', $student->id)
                     ->where('currency', $currency)->lockForUpdate()->first();
                 if ($wallet && (float) $wallet->balance > 0) {
@@ -749,6 +749,8 @@ class CourseCommerceController extends Controller
             && Schema::hasTable('course_carts')
             && Schema::hasTable('course_cart_items')
             && Schema::hasTable('course_cart_orders')
+            && Schema::hasColumn('course_cart_orders', 'wallet_credit_amount')
+            && Schema::hasColumn('course_cart_orders', 'wallet_reservation_key')
             && Schema::hasTable('course_cart_order_items'), 503,
             'Enable Fees Management and apply the Course Commerce migrations before purchasing courses.');
     }
