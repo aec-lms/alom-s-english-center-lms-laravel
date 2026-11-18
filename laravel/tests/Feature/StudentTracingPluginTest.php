@@ -26,7 +26,7 @@ class StudentTracingPluginTest extends TestCase
         $manager->install('student-tracing');
         $this->assertTrue($manager->isEnabled('student-tracing'));
         $this->assertFalse($manager->isEnabled('student-management'));
-        $this->assertTrue(DB::getSchemaBuilder()->hasTable('student_activity_events'));
+        $this->assertTrue(DB::getSchemaBuilder()->hasTable('student_trace_events'));
 
         $student = (object) ['id' => 901, 'branch_id' => 12];
         Event::dispatch(
@@ -34,7 +34,7 @@ class StudentTracingPluginTest extends TestCase
             [$student]
         );
 
-        $this->assertDatabaseHas('student_activity_events', [
+        $this->assertDatabaseHas('student_trace_events', [
             'student_id' => 901,
             'branch_id' => 12,
             'event_type' => 'student.created',
@@ -57,7 +57,7 @@ class StudentTracingPluginTest extends TestCase
             'eloquent.deleted: Plugins\\Modules\\StudentManagement\\Models\\Student',
             [$deletedStudent]
         );
-        $this->assertDatabaseHas('student_activity_events', [
+        $this->assertDatabaseHas('student_trace_events', [
             'student_id' => 901,
             'branch_id' => 12,
             'event_type' => 'student.deleted',
@@ -83,9 +83,9 @@ class StudentTracingPluginTest extends TestCase
             [(object) ['id' => 907, 'user_id' => 904]]
         );
 
-        $this->assertDatabaseHas('student_activity_events', ['student_id' => 903, 'event_type' => 'attendance.created']);
-        $this->assertDatabaseHas('student_activity_events', ['student_id' => 903, 'event_type' => 'enrollment.created']);
-        $this->assertDatabaseHas('student_activity_events', ['student_id' => 903, 'event_type' => 'exam_attempt.created']);
+        $this->assertDatabaseHas('student_trace_events', ['student_id' => 903, 'event_type' => 'attendance.created']);
+        $this->assertDatabaseHas('student_trace_events', ['student_id' => 903, 'event_type' => 'enrollment.created']);
+        $this->assertDatabaseHas('student_trace_events', ['student_id' => 903, 'event_type' => 'exam_attempt.created']);
     }
 
     public function test_branch_manager_trace_timeline_and_csv_are_limited_to_assigned_branch(): void
@@ -110,7 +110,7 @@ class StudentTracingPluginTest extends TestCase
         $manager->roles()->first()->permissions()->syncWithoutDetaching([$viewPermission]);
 
         foreach ([['student_id' => 1101, 'branch_id' => $branchA], ['student_id' => 2202, 'branch_id' => $branchB]] as $row) {
-            DB::table('student_activity_events')->insert($row + [
+            DB::table('student_trace_events')->insert($row + [
                 'actor_id' => null,
                 'event_type' => 'student.created',
                 'metadata' => json_encode(['changed_fields' => []]),
@@ -141,7 +141,7 @@ class StudentTracingPluginTest extends TestCase
         $manager->syncCatalog();
         $manager->install('student-tracing');
 
-        DB::table('student_activity_events')->insert([
+        DB::table('student_trace_events')->insert([
             'student_id' => 902,
             'branch_id' => 12,
             'actor_id' => null,
@@ -155,7 +155,7 @@ class StudentTracingPluginTest extends TestCase
         $manager->disable('student-tracing');
         $manager->uninstall('student-tracing', false);
 
-        $this->assertDatabaseHas('student_activity_events', [
+        $this->assertDatabaseHas('student_trace_events', [
             'student_id' => 902,
             'event_type' => 'student.created',
         ]);
