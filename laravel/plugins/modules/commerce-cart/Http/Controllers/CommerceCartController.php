@@ -6,6 +6,7 @@ namespace Plugins\Modules\CommerceCart\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
@@ -161,6 +162,12 @@ class CommerceCartController extends Controller
         abort_unless(Schema::hasTable('fee_invoices') && app(PluginManager::class)->isEnabled('fees-management'), 503, 'The Fees & Invoicing module must be enabled for checkout.');
         abort_unless(app(\App\Core\Plugins\PluginManager::class)->isEnabled('universal-payment'), 503, 'Universal Payment must be enabled.');
 
+        try {
+            $payments->assertGatewayReady($data['gateway']);
+        } catch (\Throwable $exception) {
+            return back()->withErrors(['gateway' => $exception->getMessage()])->withInput();
+        }
+
         $user = $request->user();
         $unresolvedOrder = DB::table('commerce_orders')->where('user_id', $user->id)
             ->whereIn('status', ['awaiting_payment', 'risk_review'])
@@ -254,9 +261,19 @@ class CommerceCartController extends Controller
                 ->with('status', 'Order ' . $order->order_number . ' is awaiting payment confirmation. Follow the secure payment instructions shown by your selected gateway.');
         } catch (\Throwable $exception) {
             report($exception);
-            DB::table('commerce_orders')->where('id', $order->id)->update(['status' => 'risk_review', 'payment_status' => 'risk_review', 'updated_at' => now()]);
+            $ambiguous = $exception instanceof ConnectionException;
+            DB::table('commerce_orders')->where('id', $order->id)->update([
+                'status' => $ambiguous ? 'risk_review' : 'failed',
+                'payment_status' => $ambiguous ? 'risk_review' : 'failed',
+                'updated_at' => now(),
+            ]);
+            if (!$ambiguous) {
+                DB::table('commerce_carts')->where('id', $cart->id)->update(['status' => 'active', 'updated_at' => now()]);
+            }
             return redirect()->route('plugins.commerce_cart.index')
-                ->withErrors(['gateway' => 'Your order was saved, but the payment session could not be started. No access has been granted. Contact support with order ' . $order->order_number . ' before retrying.']);
+                ->withErrors(['gateway' => $ambiguous
+                    ? 'The gateway response was ambiguous. Do not retry yet; contact support with order ' . $order->order_number . ' for reconciliation.'
+                    : 'The gateway could not start checkout. Your cart is available to retry after the issue is corrected. No access has been granted.']);
         }
     }
 
