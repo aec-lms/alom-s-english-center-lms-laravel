@@ -37,6 +37,8 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
+            'social_links' => 'array',
+            'profile_is_public' => 'boolean',
         ];
     }
 
