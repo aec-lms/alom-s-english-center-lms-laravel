@@ -192,6 +192,24 @@ class CourseCommerceController extends Controller
         }
     }
 
+    public function giftRedeemForm(Request $request, string $token): View
+    {
+        $student = $this->student($request);
+        abort_unless(preg_match('/^[A-Za-z0-9]{40,80}$/', $token) === 1, 404);
+        $gift = DB::table('course_gifts')
+            ->join('courses', 'courses.id', '=', 'course_gifts.course_id')
+            ->where('course_gifts.redeem_token_hash', hash('sha256', $token))
+            ->where('course_gifts.status', 'paid')
+            ->first(['course_gifts.*', 'courses.title as course_title']);
+        abort_unless($gift, 404, 'This gift is not available for redemption.');
+        abort_if($gift->expires_at && now()->greaterThan($gift->expires_at), 410, 'This gift has expired.');
+        abort_unless(hash_equals(strtolower((string) $gift->recipient_email), strtolower((string) $student->email)),
+            403, 'Sign in with the email address that received this gift.');
+        abort_if((int) $gift->sender_user_id === (int) $student->id, 403, 'The sender cannot redeem their own gift.');
+
+        return view('course-management::commerce.gift-redeem', compact('gift', 'token'));
+    }
+
     public function redeemGift(Request $request, string $token): RedirectResponse
     {
         $student = $this->student($request);
