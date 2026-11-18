@@ -29,7 +29,9 @@ class MediaLibraryController extends Controller
             ->when($request->filled('type'), fn ($q) => $q->where('mime_type', 'like', $request->string('type') . '/%'))
             ->when($request->filled('collection'), fn ($q) => $q->where('collection', $request->string('collection')))
             ->latest()->paginate(36)->withQueryString();
-        $collections = MediaAsset::withTrashed()->select('collection')->distinct()->orderBy('collection')->pluck('collection');
+        $collectionQuery = MediaAsset::withTrashed();
+        $this->branches->scope($collectionQuery, $request->user());
+        $collections = $collectionQuery->select('collection')->distinct()->orderBy('collection')->pluck('collection');
 
         return view('media-library::index', compact('assets', 'collections', 'trash'));
     }
