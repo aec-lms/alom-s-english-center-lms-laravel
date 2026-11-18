@@ -14,7 +14,7 @@ class ExamAttemptAutosaveTest extends TestCase
         $this->markSystemInstalled();
         $this->activatePlugins(['exam-management']);
         $student = $this->createUserWithRole('student');
-        [$examId, $questionId] = $this->createExamFixture();
+        [$examId, $questionId, $secondQuestionId] = $this->createExamFixture();
 
         $page = $this->actingAs($student)->get("/exams/{$examId}/take")->assertOk();
         preg_match('/name="attempt_id" value="([0-9]+)"/', $page->getContent(), $match);
@@ -29,8 +29,17 @@ class ExamAttemptAutosaveTest extends TestCase
             ->assertOk()
             ->assertJsonPath('saved', true);
 
+        $this->actingAs($student)
+            ->postJson("/exams/{$examId}/attempt/autosave", [
+                'attempt_id' => $attemptId,
+                'answers' => [$secondQuestionId => 0],
+            ])
+            ->assertOk()
+            ->assertJsonPath('saved', true);
+
         $saved = json_decode((string) DB::table('exam_attempts')->where('id', $attemptId)->value('submitted_answers'), true);
         $this->assertSame(1, $saved[(string) $questionId] ?? null);
+        $this->assertSame(0, $saved[(string) $secondQuestionId] ?? null);
 
         $this->actingAs($student)
             ->get("/exams/{$examId}/take")
@@ -117,6 +126,16 @@ class ExamAttemptAutosaveTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        return [$examId, $questionId];
+        $secondQuestionId = DB::table('exam_questions')->insertGetId([
+            'exam_id' => $examId,
+            'prompt' => 'Choose the correct pronoun.',
+            'options' => json_encode(['he', 'they']),
+            'correct_option_index' => 0,
+            'marks' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return [$examId, $questionId, $secondQuestionId];
     }
 }
