@@ -633,24 +633,28 @@ class CourseCommerceController extends Controller
                 $transaction = UniversalPaymentTransaction::query()->whereKey($created['transaction']->id)->lockForUpdate()->first();
                 $order = DB::table('course_cart_orders')->where('id', $created['order_id'])->lockForUpdate()->first();
                 if ($transaction && $transaction->status === 'pending') {
+                    $existingNotes = json_decode((string) $transaction->notes, true);
+                    $existingNotes = is_array($existingNotes) ? $existingNotes : [];
                     $transaction->update([
                         'status' => $ambiguous ? 'risk_review' : 'failed',
-                        'notes' => json_encode(['purpose' => 'course_cart', 'course_cart_order_id' => $created['order_id'], 'risk_review' => $ambiguous], JSON_THROW_ON_ERROR),
+                        'notes' => json_encode(array_merge($existingNotes, ['purpose' => 'course_cart', 'course_cart_order_id' => $created['order_id'], 'risk_review' => $ambiguous]), JSON_THROW_ON_ERROR),
                     ]);
                 }
-                if ($order) {
+                $alreadySettled = $transaction && $transaction->status === 'verified';
+                $needsReview = $ambiguous || ($transaction && $transaction->status === 'risk_review');
+                if ($order && !$alreadySettled) {
                     DB::table('course_cart_orders')->where('id', $order->id)->update([
-                        'status' => $ambiguous ? 'risk_review' : 'payment_failed',
+                        'status' => $needsReview ? 'risk_review' : 'payment_failed',
                         'updated_at' => now(),
                     ]);
-                    if (!$ambiguous) {
+                    if (!$needsReview) {
                         DB::table('course_carts')->where('id', $order->cart_id)->update(['status' => 'active', 'updated_at' => now()]);
                     }
                 }
-                if (!$ambiguous && filled($created['coupon_key'])) {
+                if (!$alreadySettled && !$needsReview && filled($created['coupon_key'])) {
                     $couponService->release((string) $created['coupon_key']);
                 }
-                if (!$ambiguous && $order && filled($order->wallet_reservation_key)) {
+                if (!$alreadySettled && !$needsReview && $order && filled($order->wallet_reservation_key)) {
                     $walletEntry = DB::table('course_gift_wallet_transactions')->where('reference', $order->wallet_reservation_key)
                         ->where('status', 'reserved')->lockForUpdate()->first();
                     if ($walletEntry) {
