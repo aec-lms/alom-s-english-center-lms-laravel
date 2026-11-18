@@ -1,4 +1,8 @@
+import 'dart:async';
+
 import 'package:material_ui/material_ui.dart';
+import 'firebase_options.dart';
+import 'push_notification_service.dart';
 import 'api_client.dart';
 import 'course_detail_page.dart';
 import 'qr_attendance_page.dart';
@@ -6,7 +10,11 @@ import 'student_assignments_page.dart';
 import 'student_exams_page.dart';
 import 'student_wishlist_page.dart';
 
-void main() => runApp(const AlomStudentApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await initializeAecFirebase();
+  runApp(const AlomStudentApp());
+}
 
 class AlomStudentApp extends StatelessWidget {
   const AlomStudentApp({super.key});
@@ -25,17 +33,41 @@ class StudentGate extends StatefulWidget {
 }
 class _StudentGateState extends State<StudentGate> {
   final api = MobileApi();
+  late final pushNotifications = AecPushNotificationService(api);
   bool loading = true, signedIn = false;
+
   @override
   void initState() {
     super.initState();
-    api.restoreSession().then((v) { if (mounted) { setState(() { signedIn = v; loading = false; }); } });
+    api.restoreSession().then((restored) {
+      if (!mounted) return;
+      setState(() {
+        signedIn = restored;
+        loading = false;
+      });
+      if (restored) unawaited(pushNotifications.initialize());
+    });
   }
+
+  void _onLogin() {
+    setState(() => signedIn = true);
+    unawaited(pushNotifications.initialize());
+  }
+
+  @override
+  void dispose() {
+    unawaited(pushNotifications.dispose());
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (loading) { return const Scaffold(body: Center(child: CircularProgressIndicator())); }
-    return signedIn ? StudentHome(api: api, onLogout: () => setState(() => signedIn = false))
-      : StudentLogin(api: api, onLogin: () => setState(() => signedIn = true));
+    if (loading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    return signedIn
+        ? StudentHome(api: api, onLogout: () => setState(() => signedIn = false))
+        : StudentLogin(api: api, onLogin: _onLogin);
   }
 }
 
