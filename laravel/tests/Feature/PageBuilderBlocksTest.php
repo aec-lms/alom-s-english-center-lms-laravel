@@ -94,4 +94,19 @@ class PageBuilderBlocksTest extends TestCase
             ->assertDontSee('javascript:alert(1)')
             ->assertDontSee('data:text/html,bad');
     }
+    public function test_page_builder_announces_block_reordering_for_assistive_technology(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['page-builder']);
+        $admin = $this->createUserWithRole('admin');
+
+        $this->actingAs($admin)->get('/admin/page-builder')
+            ->assertOk()
+            ->assertSee('data-block-status', false)
+            ->assertSee('aria-live="polite"', false)
+            ->assertSee('aria-atomic="true"', false)
+            ->assertSee('aria-label="Move block up"', false)
+            ->assertSee('aria-label="Move block down"', false);
+    }
+
 }
