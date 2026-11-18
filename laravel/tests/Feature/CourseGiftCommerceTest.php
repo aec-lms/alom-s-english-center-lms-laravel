@@ -252,7 +252,7 @@ class CourseGiftCommerceTest extends TestCase
 
     public function test_definitive_gateway_rejections_mark_course_gifts_and_vouchers_as_payment_failed(): void
     {
-        $this->activatePlugins(['gateway-sslcommerz']);
+        $this->activatePlugins(['course-management', 'fees-management', 'marketing-management', 'universal-payment', 'gateway-sslcommerz']);
         $sender = $this->createUserWithRole('student');
         $course = Course::query()->create([
             'code' => 'FAILED-GIFT-001',
