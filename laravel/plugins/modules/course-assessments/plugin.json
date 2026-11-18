@@ -1,7 +1,7 @@
 {
   "slug": "course-assessments",
   "name": "Course Assessments & Question Sets",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "Alom's English Center",
   "category": "academic",
   "description": "Reusable course-linked quiz and written assessment sets with immutable attempt snapshots, timed attempts, autosave, history and manual grading.",
@@ -9,11 +9,28 @@
   "dependencies": [],
   "provider": "Plugins\\Modules\\CourseAssessments\\Providers\\CourseAssessmentsServiceProvider",
   "permissions": [
-    {"slug": "course_assessments.manage", "name": "Manage Course Assessments"},
-    {"slug": "course_assessments.grade", "name": "Grade Course Assessments"}
+    {
+      "slug": "course_assessments.manage",
+      "name": "Manage Course Assessments"
+    },
+    {
+      "slug": "course_assessments.grade",
+      "name": "Grade Course Assessments"
+    }
   ],
   "settings_schema": [],
   "admin_menu": [
-    {"group": "Academic & Operations", "label": "Course Assessments", "route": "plugins.course-assessments.admin.index", "order": 105, "permission": "course_assessments.manage"}
+    {
+      "group": "Academic & Operations",
+      "label": "Course Assessments",
+      "route": "plugins.course-assessments.admin.index",
+      "order": 105,
+      "permission": "course_assessments.manage"
+    }
+  ],
+  "optional_dependencies": [
+    "branch-management",
+    "course-management",
+    "question-bank"
   ]
 }
