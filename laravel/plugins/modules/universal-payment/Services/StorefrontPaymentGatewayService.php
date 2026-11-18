@@ -423,17 +423,17 @@ class StorefrontPaymentGatewayService
                     $token = decrypt((string) $gift->redeem_token_encrypted);
                     $redeemUrl = url('/student/course-commerce/gifts/redeem/' . $token);
                     $courseTitle = (string) DB::table('courses')->where('id', $gift->course_id)->value('title');
-                    $message = "You have received a course gift: {$courseTitle}\\n\\n";
-                    if (filled($gift->recipient_name)) $message .= "Hello {$gift->recipient_name},\\n\\n";
-                    if (filled($gift->message)) $message .= "Message from the sender: {$gift->message}\\n\\n";
-                    $message .= "Sign in or register using this email address, then open the link below to redeem your gift:\\n{$redeemUrl}\\n\\n";
+                    $message = "You have received a course gift: {$courseTitle}\n\n";
+                    if (filled($gift->recipient_name)) $message .= "Hello {$gift->recipient_name},\n\n";
+                    if (filled($gift->message)) $message .= "Message from the sender: {$gift->message}\n\n";
+                    $message .= "Sign in or register using this email address, then open the link below to redeem your gift:\n{$redeemUrl}\n\n";
                     $message .= "This gift expires on " . ($gift->expires_at ?? 'the expiry date shown in your account') . ".";
                     Mail::raw($message, function ($mail) use ($gift, $courseTitle): void {
                         $mail->to((string) $gift->recipient_email)->subject('You received a course gift: ' . $courseTitle);
                     });
                     DB::table('course_gifts')->where('id', $giftId)->whereNull('notification_sent_at')
                         ->update(['notification_sent_at' => now(), 'updated_at' => now()]);
-                } catch (\\Throwable $exception) {
+                } catch (\Throwable $exception) {
                     report($exception);
                 }
             }
