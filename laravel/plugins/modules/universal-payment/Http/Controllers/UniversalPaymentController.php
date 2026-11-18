@@ -455,9 +455,13 @@ class UniversalPaymentController extends Controller
                 DB::transaction(function () use ($tx): void {
                     $locked = UniversalPaymentTransaction::query()->whereKey($tx->id)->lockForUpdate()->first();
                     if ($locked && $locked->status === 'pending') {
+                        // The gateway service marks a definitive provider rejection
+                        // as failed before throwing. If it is still pending here,
+                        // the request may have timed out after the provider created
+                        // a session; require reconciliation before another charge.
                         $locked->update([
-                            'status' => 'failed',
-                            'notes' => 'SSLCOMMERZ checkout session could not be initialized.',
+                            'status' => 'risk_review',
+                            'notes' => 'SSLCOMMERZ session initialization outcome is unknown. Reconcile with the provider before allowing a retry.',
                         ]);
                     }
                 });
