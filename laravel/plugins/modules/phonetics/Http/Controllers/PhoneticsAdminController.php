@@ -269,7 +269,7 @@ final class PhoneticsAdminController extends Controller
     private function recordAudit(Request $request, string $action, string $entityType, string $entityId, array $metadata = []): void
     {
         PhoneticAuditEvent::query()->create([
-            'user_id' => $request->user()?->id,
+            'user_id' => $request->user()?->getAuthIdentifier(),
             'action' => $action,
             'entity_type' => $entityType,
             'entity_id' => $entityId,
