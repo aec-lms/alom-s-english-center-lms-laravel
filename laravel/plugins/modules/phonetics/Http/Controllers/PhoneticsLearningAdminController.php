@@ -141,6 +141,9 @@ final class PhoneticsLearningAdminController extends Controller
             'shuffle_options' => ['nullable', 'boolean'],
             'show_result_immediately' => ['nullable', 'boolean'],
             'status' => ['required', 'in:draft,published'],
+            'question_type' => ['required', 'in:identify-ipa,identify-accent'],
+            'available_from' => ['nullable', 'date'],
+            'available_until' => ['nullable', 'date', 'after_or_equal:available_from'],
         ]);
         $this->validateScope($data);
         abort_if(empty($data['course_ref']) && empty($data['course_category_ref']), 422, 'Choose a course or course category for this exam.');
@@ -170,25 +173,38 @@ final class PhoneticsLearningAdminController extends Controller
                 'shuffle_options' => $request->boolean('shuffle_options'),
                 'show_result_immediately' => $request->boolean('show_result_immediately'),
                 'status' => $data['status'],
+                'available_from' => $data['available_from'] ?? null,
+                'available_until' => $data['available_until'] ?? null,
             ]);
 
             $words = PhoneticEntry::query()->whereIn('id', $data['word_ids'])->where('is_active', true)->get()->shuffle()->take($data['question_count']);
             abort_if($words->count() < $data['question_count'], 422, 'Some selected vocabulary words are archived. Select active words only.');
             foreach ($words->values() as $index => $word) {
                 $accent = random_int(0, 1) === 0 ? 'uk' : 'us';
-                $answer = $accent === 'uk' ? (string) $word->uk_ipa : (string) $word->us_ipa;
-                $options = [
-                    ['value' => (string) $word->uk_ipa, 'label' => 'British English — '.$word->uk_ipa],
-                    ['value' => (string) $word->us_ipa, 'label' => 'American English — '.$word->us_ipa],
-                ];
+                if ($data['question_type'] === 'identify-accent') {
+                    $ipa = (string) $word->{$accent.'_ipa'};
+                    $prompt = 'Which accent uses '.$ipa.' for “'.$word->word.'”?';
+                    $answer = $accent;
+                    $options = [
+                        ['value' => 'uk', 'label' => 'British English'],
+                        ['value' => 'us', 'label' => 'American English'],
+                    ];
+                } else {
+                    $answer = $accent === 'uk' ? (string) $word->uk_ipa : (string) $word->us_ipa;
+                    $prompt = 'Choose the '.($accent === 'uk' ? 'British' : 'American').' IPA pronunciation for “'.$word->word.'”.';
+                    $options = [
+                        ['value' => (string) $word->uk_ipa, 'label' => 'British English — '.$word->uk_ipa],
+                        ['value' => (string) $word->us_ipa, 'label' => 'American English — '.$word->us_ipa],
+                    ];
+                }
                 if ($request->boolean('shuffle_options')) {
                     shuffle($options);
                 }
                 PhoneticExamQuestion::query()->create([
                     'exam_id' => $exam->id,
                     'word_id' => $word->id,
-                    'question_type' => 'identify-ipa',
-                    'prompt' => 'Choose the '.($accent === 'uk' ? 'British' : 'American').' IPA pronunciation for “'.$word->word.'”.',
+                    'question_type' => $data['question_type'],
+                    'prompt' => $prompt,
                     'options' => $options,
                     'answer_key' => $answer,
                     'marks' => 1,
