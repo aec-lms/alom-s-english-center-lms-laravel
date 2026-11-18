@@ -38,6 +38,7 @@ class LessonContentProtectionTest extends TestCase
 
     public function test_active_enrolled_student_receives_short_lived_signed_media_access(): void
     {
+        $this->freezeTime();
         [$student, $lessonId] = $this->createProtectedLesson('active');
 
         $response = $this->actingAs($student)->getJson(route('plugins.lesson-media.access', $lessonId));

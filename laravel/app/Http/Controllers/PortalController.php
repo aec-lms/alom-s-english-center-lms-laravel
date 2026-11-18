@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Core\Plugins\PluginManager;
 use Illuminate\Http\Request;
+use Plugins\Modules\RoleAiAssistant\Services\AiAssistantService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -24,6 +26,17 @@ class PortalController extends Controller
         $role = collect(['student', 'teacher', 'guardian', 'branch_manager', 'accountant'])
             ->first(fn (string $candidate) => $user->hasRole($candidate)) ?? 'user';
         $branchId = $user->branch_id;
+        $boardQuestionSolverAvailable = false;
+        if ($role === 'student') {
+            $pluginManager = app(PluginManager::class);
+            if ($pluginManager->isEnabled('board-question-solver')
+                && $pluginManager->isEnabled('role-ai-assistant')
+                && filter_var($pluginManager->getSetting('board-question-solver', 'enabled', '0'), FILTER_VALIDATE_BOOLEAN)
+                && $user->hasPermission('board-solver.use')) {
+                $assistant = app(AiAssistantService::class);
+                $boardQuestionSolverAvailable = $assistant->isRoleAllowed($user) && $assistant->isProviderConfigured();
+            }
+        }
         if ($role === 'branch_manager' && $branchId === null) abort(403, 'Branch manager account has no assigned branch.');
         $student = null;
         $teacher = null;
@@ -204,7 +217,7 @@ class PortalController extends Controller
         return view('portals.dashboard', compact(
             'user', 'role', 'student', 'teacher', 'guardian', 'enrollments',
             'invoices', 'attendance', 'attempts', 'courses', 'liveClasses',
-            'children', 'metrics', 'notices', 'notifications'
+            'children', 'metrics', 'notices', 'notifications', 'boardQuestionSolverAvailable'
         ));
     }
 }

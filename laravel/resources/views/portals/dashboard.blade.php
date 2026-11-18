@@ -21,6 +21,9 @@
             @elseif (in_array($role, ['branch_manager', 'accountant']) && Route::has('plugins.enrollments.index'))
                 <a href="{{ route('plugins.enrollments.index') }}" class="rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-bold text-white">Course Enrollments</a>
             @endif
+            @if ($role === 'student' && $boardQuestionSolverAvailable)
+                <a href="{{ route('student.board-solver.index') }}" class="rounded-lg border border-violet-200 bg-violet-50 px-4 py-2.5 text-sm font-bold text-violet-800">{{ __('Board Question Solver') }}</a>
+            @endif
         </div>
 
         @if (session('status'))
