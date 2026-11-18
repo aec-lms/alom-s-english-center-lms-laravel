@@ -132,6 +132,7 @@ class CourseCommerceController extends Controller
 
         $course = DB::table('courses')->where('id', $courseId)->where('status', 'published')->first();
         abort_unless($course, 404, 'This course is not available for gifting.');
+        abort_if((float) $course->price <= 0, 422, 'Free courses do not need a paid gift checkout.');
         $this->assertCourseBranch($student, $course);
         $this->assertNoOpenBatch($courseId);
         abort_if(strtolower(trim($validated['recipient_email'])) === strtolower(trim((string) $student->email)), 422,
@@ -190,16 +191,19 @@ class CourseCommerceController extends Controller
             return redirect()->away($url);
         } catch (\Throwable $exception) {
             report($exception);
-            DB::transaction(function () use ($created): void {
+            $ambiguous = $exception instanceof ConnectionException;
+            DB::transaction(function () use ($created, $ambiguous): void {
                 $transaction = UniversalPaymentTransaction::query()->whereKey($created['transaction']->id)->lockForUpdate()->first();
                 if ($transaction && $transaction->status === 'pending') {
-                    $transaction->update(['status' => 'failed']);
+                    $transaction->update(['status' => $ambiguous ? 'risk_review' : 'failed']);
                     DB::table('course_gifts')->where('id', $created['gift_id'])->where('status', 'awaiting_payment')
-                        ->update(['status' => 'payment_failed', 'updated_at' => now()]);
+                        ->update(['status' => $ambiguous ? 'risk_review' : 'payment_failed', 'updated_at' => now()]);
                 }
             }, 3);
 
-            return back()->withErrors(['gift' => 'Secure gift checkout could not be started. Please try again.']);
+            return back()->withErrors(['gift' => $ambiguous
+                ? 'The payment session outcome is unknown. Contact support before retrying this gift.'
+                : 'Secure gift checkout could not be started. Please try again.']);
         }
     }
 
