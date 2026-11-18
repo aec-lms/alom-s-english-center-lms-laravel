@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Http\Middleware\EnsureCentralAdmin;
+use App\Http\Middleware\EnsureDeviceSessionActive;
 use App\Http\Middleware\EnsureInstalled;
 use App\Http\Middleware\EnsureNotInstalled;
 use App\Http\Middleware\EnsurePluginEnabled;
@@ -19,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->web(append: [EnsureDeviceSessionActive::class]);
         $middleware->alias([
             'installed' => EnsureInstalled::class,
             'not.installed' => EnsureNotInstalled::class,
