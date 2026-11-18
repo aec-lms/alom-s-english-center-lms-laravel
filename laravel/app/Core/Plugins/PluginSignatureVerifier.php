@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\\Core\\Plugins;
+namespace App\Core\Plugins;
 
 use RuntimeException;
 
@@ -31,7 +31,7 @@ class PluginSignatureVerifier
 
         try {
             $signatureData = json_decode((string) file_get_contents($signaturePath), true, 32, JSON_THROW_ON_ERROR);
-        } catch (\\JsonException $exception) {
+        } catch (\JsonException $exception) {
             throw new RuntimeException('Plugin signature file is not valid JSON.', 0, $exception);
         }
 
@@ -67,7 +67,7 @@ class PluginSignatureVerifier
             throw new RuntimeException('Plugin package metadata could not be hashed.');
         }
 
-        $message = implode("\\n", [
+        $message = implode("\n", [
             'AEC-LMS-PLUGIN-SIGNATURE-V1',
             $manifest['slug'],
             $manifest['version'],
