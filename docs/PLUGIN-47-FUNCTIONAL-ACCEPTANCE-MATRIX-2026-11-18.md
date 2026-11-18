@@ -8,7 +8,7 @@ Audited commit: `a0deb699f74b98ffbe7a656050f246bb8f9f1e03`
 
 The current `laravel/plugins/modules/` directory contains **47 plugin packages**, each represented by a `plugin.json` manifest. The previous 39-plugin count is obsolete.
 
-The recursive repository tree contains 858 files beneath the plugin module directories. The Laravel test tree contains 78 Feature/Unit test files.
+The recursive repository tree contains 444 files beneath the plugin module directories. The Laravel test tree contains 78 Feature/Unit test files.
 
 ## CI evidence for the audited commit
 
