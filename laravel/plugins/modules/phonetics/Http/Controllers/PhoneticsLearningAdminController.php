@@ -230,6 +230,15 @@ final class PhoneticsLearningAdminController extends Controller
             abort_unless($lessonIds->contains((string) $data['lesson_ref']), 422, 'Select a lesson belonging to the selected course.');
         }
         if (!empty($data['batch_ref'])) {
+            $batch = $this->catalog->batch((string) $data['batch_ref']);
+            if (!empty($data['course_ref'])) {
+                $course = $this->catalog->course((string) $data['course_ref']);
+                $batchCourseColumn = config('phonetics.catalog.batches.course_title');
+                $courseTitleColumn = config('phonetics.catalog.courses.title', 'title');
+                $batchCourseTitle = $batchCourseColumn ? (string) data_get($batch, $batchCourseColumn, '') : '';
+                $courseTitle = (string) data_get($course, $courseTitleColumn, '');
+                abort_unless($batchCourseTitle === '' || $batchCourseTitle === $courseTitle, 422, 'The selected batch is linked to a different course.');
+            }
             $batchIds = collect($this->catalog->batches())->pluck('id');
             abort_unless($batchIds->contains((string) $data['batch_ref']), 422, 'Select a valid batch from the connected LMS.');
         }
