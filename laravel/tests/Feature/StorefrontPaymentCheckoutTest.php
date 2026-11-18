@@ -108,6 +108,12 @@ final class StorefrontPaymentCheckoutTest extends TestCase
             'storefront_item_id' => $itemId,
         ];
 
+        app(PluginManager::class)->saveSettings('gateway-sslcommerz', [
+            'store_id' => 'test-store-id',
+            'store_password' => 'test-store-password',
+            'sandbox_mode' => '1',
+        ]);
+
         // A definite provider rejection is safe to retry; network timeouts are
         // covered separately and must remain in risk_review until reconciled.
         Http::fake([
@@ -129,11 +135,6 @@ final class StorefrontPaymentCheckoutTest extends TestCase
             'status' => 'failed',
         ]);
 
-        app(PluginManager::class)->saveSettings('gateway-sslcommerz', [
-            'store_id' => 'test-store-id',
-            'store_password' => 'test-store-password',
-            'sandbox_mode' => '1',
-        ]);
         Http::fake([
             'https://sandbox.sslcommerz.com/gwprocess/v4/api.php' => Http::response([
                 'status' => 'SUCCESS',
