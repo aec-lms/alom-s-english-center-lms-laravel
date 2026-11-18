@@ -168,4 +168,16 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
   $this->assertDatabaseHas('phonetic_exam_attempts',['id'=>$attempt->id,'status'=>'submitted','passed'=>true]);
  }
 
+
+ public function test_phonetics_user_references_support_string_host_identifiers():void{
+  $this->markSystemInstalled();
+  $this->activatePlugins(['phonetics']);
+  $this->assertSame('string',Schema::getColumnType('alom_english_center_phonetic_attempts','user_id'));
+  $this->assertSame('string',Schema::getColumnType('phonetic_exam_attempts','user_id'));
+  $this->assertSame('string',Schema::getColumnType('phonetic_batch_memberships','user_id'));
+  $this->assertSame('string',Schema::getColumnType('phonetic_audit_events','user_id'));
+  $foreignKeys=collect(Schema::getForeignKeys('phonetic_exam_attempts'));
+  $this->assertFalse($foreignKeys->contains(fn($foreignKey)=>in_array('user_id',$foreignKey['columns']??[],true)));
+ }
+
 }
