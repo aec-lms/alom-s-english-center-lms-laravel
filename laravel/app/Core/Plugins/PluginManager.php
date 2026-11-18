@@ -331,10 +331,12 @@ class PluginManager
 
                 File::ensureDirectoryExists(dirname($targetDir));
                 if (is_dir($targetDir)) {
+                    // Treat the old target as replaced before deletion so a partial
+                    // filesystem failure still enters the snapshot-restore path.
+                    $targetReplaced = true;
                     if (!File::deleteDirectory($targetDir) || file_exists($targetDir)) {
                         throw new RuntimeException('Existing plugin package could not be safely removed before update.');
                     }
-                    $targetReplaced = true;
                 }
 
                 $targetReplaced = true;
