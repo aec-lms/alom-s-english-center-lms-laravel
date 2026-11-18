@@ -106,6 +106,18 @@ class ProfileSettingsTest extends TestCase
         $this->get(route('profile.public', ['username' => 'public_learner']))->assertNotFound();
     }
 
+    public function test_social_links_reject_non_http_schemes(): void
+    {
+        $this->markSystemInstalled();
+        $user = $this->createUserWithRole('student', 3, 'profile-links@aec.test');
+
+        $this->actingAs($user)->from(route('profile.settings.edit'))
+            ->put(route('profile.settings.update'), [
+                'social_links' => ['facebook' => 'javascript:alert(1)'],
+                'profile_is_public' => '1',
+            ])->assertSessionHasErrors('social_links.facebook');
+    }
+
     public function test_profile_settings_are_authenticated_and_uploads_are_validated(): void
     {
         $this->markSystemInstalled();
