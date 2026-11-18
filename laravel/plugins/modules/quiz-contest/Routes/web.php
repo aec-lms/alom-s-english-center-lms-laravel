@@ -8,7 +8,7 @@ use Plugins\Modules\QuizContest\Http\Controllers\QuizContestController;
 Route::middleware(['web', 'installed', 'plugin:quiz-contest'])->group(function (): void {
     Route::get('/quiz-contests', [QuizContestController::class, 'index'])->name('plugins.quiz-contest.index');
     Route::get('/quiz-contests/{contest}', [QuizContestController::class, 'show'])->whereNumber('contest')->name('plugins.quiz-contest.show');
-    Route::post('/quiz-contests/{contest}/submit', [QuizContestController::class, 'submit'])->whereNumber('contest')->middleware('auth')->name('plugins.quiz-contest.submit');
+    Route::post('/quiz-contests/{contest}/submit', [QuizContestController::class, 'submit'])->whereNumber('contest')->middleware(['auth', 'throttle:10,1'])->name('plugins.quiz-contest.submit');
 
     Route::prefix('admin/quiz-contests')->name('plugins.quiz-contest.admin.')
         ->middleware(['auth', 'permission:quiz.contests.manage'])
