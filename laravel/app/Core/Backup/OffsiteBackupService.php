@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace App\\Core\\Backup;
+namespace App\Core\Backup;
 
-use App\\Models\\BackupRecord;
+use App\Models\BackupRecord;
 use RuntimeException;
 
 class OffsiteBackupService
@@ -21,8 +21,10 @@ class OffsiteBackupService
                     $path = (string) $record->storage_path;
                     $root = realpath((string) config('lms.backup_path'));
                     $real = realpath($path);
+                    $localHash = $real ? hash_file('sha256', $real) : false;
                     if (!$root || !$real || is_link($path) || dirname($real) !== $root
-                        || !is_file($real) || !hash_equals((string) $record->checksum_sha256, (string) hash_file('sha256', $real))) {
+                        || !is_file($real) || !is_string($localHash)
+                        || !hash_equals((string) $record->checksum_sha256, $localHash)) {
                         throw new RuntimeException('Local backup is missing, unsafe, or failed its SHA-256 check.');
                     }
 
@@ -46,7 +48,7 @@ class OffsiteBackupService
                             @unlink($download);
                         }
                     }
-                } catch (\\Throwable $exception) {
+                } catch (\Throwable $exception) {
                     $result['failed']++;
                     report($exception);
                 }
@@ -85,9 +87,10 @@ class OffsiteBackupService
         $endpoint = parse_url($config['endpoint']);
         $host = (string) $endpoint['host'] . (isset($endpoint['port']) ? ':' . $endpoint['port'] : '');
         $basePath = rtrim((string) ($endpoint['path'] ?? ''), '/');
-        $uri = $basePath . '/' . rawurlencode($config['bucket']) . '/' . implode('/', array_map('rawurlencode', explode('/', $key)));
-        $url = $config['endpoint'] . '/' . rawurlencode($config['bucket']) . '/' . implode('/', array_map('rawurlencode', explode('/', $key)));
-        $date = gmdate('Ymd\\THis\\Z');
+        $encodedKey = implode('/', array_map('rawurlencode', explode('/', $key)));
+        $uri = $basePath . '/' . rawurlencode($config['bucket']) . '/' . $encodedKey;
+        $url = $config['endpoint'] . '/' . rawurlencode($config['bucket']) . '/' . $encodedKey;
+        $date = gmdate('Ymd\THis\Z');
         $day = substr($date, 0, 8);
         $payloadHash = $uploadPath !== null ? hash_file('sha256', $uploadPath) : hash('sha256', '');
         if (!is_string($payloadHash)) {
@@ -103,11 +106,11 @@ class OffsiteBackupService
         ksort($headers);
         $canonicalHeaders = '';
         foreach ($headers as $name => $value) {
-            $canonicalHeaders .= $name . ':' . trim($value) . "\\n";
+            $canonicalHeaders .= $name . ':' . trim($value) . "\n";
         }
-        $canonicalRequest = $method . "\\n" . $uri . "\\n\\n" . $canonicalHeaders . "\\n" . $signedHeaders . "\\n" . $payloadHash;
+        $canonicalRequest = $method . "\n" . $uri . "\n\n" . $canonicalHeaders . "\n" . $signedHeaders . "\n" . $payloadHash;
         $scope = $day . '/' . $config['region'] . '/s3/aws4_request';
-        $stringToSign = "AWS4-HMAC-SHA256\\n{$date}\\n{$scope}\\n" . hash('sha256', $canonicalRequest);
+        $stringToSign = "AWS4-HMAC-SHA256\n{$date}\n{$scope}\n" . hash('sha256', $canonicalRequest);
         $kDate = hash_hmac('sha256', $day, 'AWS4' . $config['secret'], true);
         $kRegion = hash_hmac('sha256', $config['region'], $kDate, true);
         $kService = hash_hmac('sha256', 's3', $kRegion, true);
