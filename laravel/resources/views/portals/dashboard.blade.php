@@ -18,6 +18,9 @@
                 @if (Route::has('course-commerce.cart'))
                     <a href="{{ route('course-commerce.cart') }}" class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-800">Course Cart</a>
                 @endif
+                @if (Route::has('course-commerce.vouchers.form'))
+                    <a href="{{ route('course-commerce.vouchers.form') }}" class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-800">Gift Voucher</a>
+                @endif
                 @if (Route::has('public.exams'))
                     <a href="{{ route('public.exams') }}" class="rounded-lg border border-indigo-200 px-4 py-2.5 text-sm font-bold text-indigo-700">Available Exams</a>
                 @endif
