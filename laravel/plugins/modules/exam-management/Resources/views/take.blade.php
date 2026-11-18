@@ -6,6 +6,7 @@
     <main class="max-w-4xl mx-auto px-4 py-8 space-y-6">
         <header class="bg-white border border-slate-200 rounded-2xl p-5">
             <a href="{{ route('portal.dashboard') }}" class="text-sm font-semibold text-sky-700">← Dashboard</a>
+            <a href="{{ route('plugins.exams.history', $exam) }}" class="ml-3 text-sm font-semibold text-sky-700">My attempt history</a>
             <h1 class="text-2xl font-extrabold text-slate-900 mt-3">{{ $exam->title }}</h1>
             <p class="text-sm text-slate-500 mt-2">{{ $exam->duration_minutes }} minutes · {{ $questions->count() }} questions · Pass marks: {{ $exam->pass_marks }}</p>
             <p class="text-xs text-slate-500 mt-2">Choose one answer for each question. Your score and time limit are enforced securely by the server.</p>
