@@ -12,27 +12,27 @@ use Plugins\Modules\MarketingManagement\Models\PromoCoupon;
 
 class CourseCouponService
 {
-    public function quote(string $code, int $userId, array $courseIds, float $subtotal): array
+    public function quote(string $code, int $userId, array $courseIds, float $subtotal, bool $giftPurchase = false): array
     {
         $coupon = PromoCoupon::query()->whereRaw('UPPER(code) = ?', [strtoupper(trim($code))])->first();
         if (!$coupon || !$coupon->is_active) {
             throw ValidationException::withMessages(['coupon_code' => 'This coupon is invalid or inactive.']);
         }
-        $this->assertEligible($coupon, $userId, $courseIds, $subtotal);
+        $this->assertEligible($coupon, $userId, $courseIds, $subtotal, $giftPurchase);
         $this->assertUsageAvailable($coupon, $userId);
         $discount = $this->discount($coupon, $subtotal);
         return ['coupon_id' => (int) $coupon->id, 'code' => $coupon->code, 'subtotal' => round($subtotal, 2),
             'discount' => $discount, 'total' => round(max(0, $subtotal - $discount), 2)];
     }
 
-    public function reserve(string $code, int $userId, array $courseIds, float $subtotal): array
+    public function reserve(string $code, int $userId, array $courseIds, float $subtotal, bool $giftPurchase = false): array
     {
-        return DB::transaction(function () use ($code, $userId, $courseIds, $subtotal): array {
+        return DB::transaction(function () use ($code, $userId, $courseIds, $subtotal, $giftPurchase): array {
             $coupon = PromoCoupon::query()->whereRaw('UPPER(code) = ?', [strtoupper(trim($code))])->lockForUpdate()->first();
             if (!$coupon || !$coupon->is_active) {
                 throw ValidationException::withMessages(['coupon_code' => 'This coupon is invalid or inactive.']);
             }
-            $this->assertEligible($coupon, $userId, $courseIds, $subtotal);
+            $this->assertEligible($coupon, $userId, $courseIds, $subtotal, $giftPurchase);
             $this->assertUsageAvailable($coupon, $userId);
             $discount = $this->discount($coupon, $subtotal);
             $key = (string) Str::uuid();
@@ -100,8 +100,11 @@ class CourseCouponService
             ->where('status', 'reserved')->update(['status' => 'released', 'updated_at' => now()]);
     }
 
-    private function assertEligible(PromoCoupon $coupon, int $userId, array $courseIds, float $subtotal): void
+    private function assertEligible(PromoCoupon $coupon, int $userId, array $courseIds, float $subtotal, bool $giftPurchase): void
     {
+        if ($coupon->gift_only && !$giftPurchase) {
+            throw ValidationException::withMessages(['coupon_code' => 'This coupon can only be used for gifted course purchases.']);
+        }
         if ($coupon->starts_at && now()->lt($coupon->starts_at)) {
             throw ValidationException::withMessages(['coupon_code' => 'This coupon is not active yet.']);
         }
