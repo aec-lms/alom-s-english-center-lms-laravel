@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: ["main"]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -46,6 +50,18 @@ jobs:
 
       - name: Install Composer dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Validate Composer metadata
+        run: composer validate --strict --no-check-publish
+
+      - name: PHP syntax lint across application and plugins
+        run: |
+          find app bootstrap config database plugins public routes tests -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Compile all Blade views
+        run: |
+          php artisan view:cache
+          php artisan view:clear
 
       - name: Composer security audit
         run: composer audit --locked --no-interaction

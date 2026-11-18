@@ -14,7 +14,7 @@ return new class extends Migration {
                 $table->id();
                 $table->string('lms_driver', 40)->default('aec');
                 $table->string('batch_ref', 128);
-                $table->unsignedBigInteger('user_id')->index();
+                $table->string('user_id', 128)->index();
                 $table->boolean('is_active')->default(true);
                 $table->timestamps();
                 $table->unique(['lms_driver', 'batch_ref', 'user_id'], 'phonetic_batch_member_unique');
