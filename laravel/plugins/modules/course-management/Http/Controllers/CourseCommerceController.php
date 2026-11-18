@@ -200,9 +200,11 @@ class CourseCommerceController extends Controller
                 $transaction = UniversalPaymentTransaction::query()->whereKey($created['transaction']->id)->lockForUpdate()->first();
                 if ($transaction && $transaction->status === 'pending') {
                     $transaction->update(['status' => $ambiguous ? 'risk_review' : 'failed']);
-                    DB::table('course_gifts')->where('id', $created['gift_id'])->where('status', 'awaiting_payment')
-                        ->update(['status' => $ambiguous ? 'risk_review' : 'payment_failed', 'updated_at' => now()]);
                 }
+                // The gateway service may already mark a definitive provider rejection as failed.
+                // Always transition the linked gift, but never downgrade an existing risk review.
+                DB::table('course_gifts')->where('id', $created['gift_id'])->where('status', 'awaiting_payment')
+                    ->update(['status' => $ambiguous ? 'risk_review' : 'payment_failed', 'updated_at' => now()]);
             }, 3);
 
             return back()->withErrors(['gift' => $ambiguous
@@ -354,9 +356,11 @@ class CourseCommerceController extends Controller
                 $transaction = UniversalPaymentTransaction::query()->whereKey($created['transaction']->id)->lockForUpdate()->first();
                 if ($transaction && $transaction->status === 'pending') {
                     $transaction->update(['status' => $ambiguous ? 'risk_review' : 'failed']);
-                    DB::table('course_gift_vouchers')->where('id', $created['voucher_id'])->where('status', 'awaiting_payment')
-                        ->update(['status' => $ambiguous ? 'risk_review' : 'payment_failed', 'updated_at' => now()]);
                 }
+                // Keep the voucher lifecycle aligned when the gateway service has already
+                // marked a rejected checkout as failed before the controller handles it.
+                DB::table('course_gift_vouchers')->where('id', $created['voucher_id'])->where('status', 'awaiting_payment')
+                    ->update(['status' => $ambiguous ? 'risk_review' : 'payment_failed', 'updated_at' => now()]);
             }, 3);
 
             return back()->withErrors(['voucher' => $ambiguous
