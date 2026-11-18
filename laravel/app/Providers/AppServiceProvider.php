@@ -20,6 +20,18 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Keep public endpoints in independent IP buckets. Generic throttle:N,1
+        // middleware shares counters across routes with the same limits and can
+        // otherwise make unrelated contact/recovery actions block one another.
+        RateLimiter::for('public-coupon-check', fn (Request $request) => Limit::perMinute(20)->by($request->ip()));
+        RateLimiter::for('public-contact', fn (Request $request) => Limit::perMinute(5)->by($request->ip()));
+        RateLimiter::for('auth-login', fn (Request $request) => Limit::perMinute(20)->by($request->ip()));
+        RateLimiter::for('auth-register', fn (Request $request) => Limit::perMinute(5)->by($request->ip()));
+        RateLimiter::for('password-reset-email', fn (Request $request) => Limit::perMinute(3)->by($request->ip()));
+        RateLimiter::for('password-otp-send', fn (Request $request) => Limit::perMinute(10)->by($request->ip()));
+        RateLimiter::for('password-otp-verify', fn (Request $request) => Limit::perMinute(20)->by($request->ip()));
+        RateLimiter::for('password-reset-submit', fn (Request $request) => Limit::perMinute(5)->by($request->ip()));
+
         $this->loadInstitutionDefaults();
 
         View::composer('layouts.admin', function ($view): void {
