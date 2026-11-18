@@ -14,7 +14,7 @@
 
 ## Plugin catalog
 
-There are currently **39 plugin manifests** in the repository. A manifest/catalog entry does not mean the module is fully implemented or production accepted; some workflows are foundations or partial implementations and still need full business logic, UI, authorization, branch scoping, integration and end-to-end tests.
+There are currently **47 plugin manifests** in the repository. A manifest/catalog entry does not mean the module is fully implemented or production accepted; some workflows are foundations or partial implementations and still need full business logic, UI, authorization, branch scoping, integration and end-to-end tests.
 
 The modules are independently identified under `plugins/modules/`:
 
@@ -57,6 +57,14 @@ The modules are independently identified under `plugins/modules/`:
 37. Storefront Catalog
 38. Mobile App API
 39. Role-based AI Assistant
+40. AL Branding & Loader
+41. Phonetics, Vocabulary & Exams
+42. Question Bank
+43. Flash Sale
+44. Learn & Earn
+45. Media Library
+46. Student Tracking
+47. Student Tracing
 
 Page Builder, Slider Builder, Carousel Builder and each payment gateway are separate plugins; gateway credentials and provider callbacks must remain isolated in their own plugin settings/services.
 
@@ -103,6 +111,6 @@ See [../docs/LARAVEL-CPANEL-DEPLOYMENT.md](../docs/LARAVEL-CPANEL-DEPLOYMENT.md)
 
 ## CI and release gates
 
-GitHub Actions runs the current Laravel feature suite on PHP 8.3 and builds/verifies the cPanel package. The test suite is not yet complete acceptance coverage for all 39 plugins. Provider sandbox callbacks, branch-isolation coverage across every module, large MySQL backup/restore, browser E2E, security review and a clean cPanel installation/restore rehearsal remain release blockers.
+GitHub Actions runs the current Laravel feature suite on PHP 8.3 and builds/verifies the cPanel package. The test suite is not yet complete acceptance coverage for all 47 plugins. Provider sandbox callbacks, branch-isolation coverage across every module, large MySQL backup/restore, browser E2E, security review and a clean cPanel installation/restore rehearsal remain release blockers.
 
 Do not merge or deploy as a production LMS until the release-readiness audit is closed.
