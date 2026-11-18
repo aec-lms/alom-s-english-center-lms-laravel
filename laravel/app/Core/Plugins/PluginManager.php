@@ -187,7 +187,7 @@ class PluginManager
         return $record;
     }
 
-    public function updatePlugin(string $slug, ?int $actorId = null): PluginRecord
+    public function updatePlugin(string $slug, ?int $actorId = null, bool $skipExistingSignatureCheck = false): PluginRecord
     {
         $manifest = $this->discoverManifests()[$slug] ?? throw new RuntimeException("Plugin {$slug} not found.");
         if (!$this->isCompatible($manifest)) {
@@ -198,6 +198,10 @@ class PluginManager
         $record = PluginRecord::query()->where('slug', $slug)->first();
         if (!$record || !$record->is_installed) {
             throw new RuntimeException("Plugin {$slug} must be installed before it can be updated.");
+        }
+
+        if (!$skipExistingSignatureCheck) {
+            $this->assertSignedInstalledPackage($record);
         }
 
         $fromVersion = $record->version;
@@ -294,6 +298,10 @@ class PluginManager
             }
             $signatureMetadata = app(PluginSignatureVerifier::class)->verify($packageRoot, $signaturePath);
 
+            if (!copy($signaturePath, $packageRoot . DIRECTORY_SEPARATOR . '.aec-plugin-signature.json')) {
+                throw new RuntimeException('Verified plugin signature could not be retained with the package.');
+            }
+
             $manifest = PluginManifest::fromDirectory($packageRoot);
             if ($manifest->isCore || $manifest->slug === config('plugins.core_identifier')) {
                 throw new RuntimeException('Core cannot be replaced through the plugin ZIP uploader.');
@@ -350,7 +358,7 @@ class PluginManager
                 }
 
                 $record = $alreadyInstalled
-                    ? $this->updatePlugin($manifest->slug, $actorId)
+                    ? $this->updatePlugin($manifest->slug, $actorId, true)
                     : $this->install($manifest->slug, $actorId);
                 $record->forceFill([
                     'signature_key_id' => $signatureMetadata['key_id'],
@@ -416,6 +424,7 @@ class PluginManager
     {
         $record = DB::transaction(function () use ($slug, $actorId): PluginRecord {
             $record = PluginRecord::query()->where('slug', $slug)->lockForUpdate()->firstOrFail();
+            $this->assertSignedInstalledPackage($record);
             if (!$record->is_installed) {
                 throw new RuntimeException("Plugin {$slug} must be installed before enabling.");
             }
@@ -1107,6 +1116,29 @@ class PluginManager
         }
     }
 
+
+    private function assertSignedInstalledPackage(PluginRecord $record): void
+    {
+        if (!$record->signature_key_id) {
+            return; // First-party source modules installed from the shipped codebase.
+        }
+
+        $modulesRoot = realpath((string) config('plugins.modules_path'));
+        $packageRoot = (string) config('plugins.modules_path') . DIRECTORY_SEPARATOR . $record->slug;
+        $resolvedPackage = realpath($packageRoot);
+        if (!$modulesRoot || !$resolvedPackage || dirname($resolvedPackage) !== $modulesRoot || is_link($packageRoot)) {
+            throw new RuntimeException('Signed plugin package is missing or outside the registered modules directory.');
+        }
+
+        $this->verifyPackageIntegrity($resolvedPackage);
+        $signaturePath = $resolvedPackage . DIRECTORY_SEPARATOR . '.aec-plugin-signature.json';
+        $metadata = app(PluginSignatureVerifier::class)->verify($resolvedPackage, $signaturePath);
+        if (!hash_equals((string) $record->signature_key_id, $metadata['key_id'])
+            || !hash_equals((string) $record->signature_checksums_sha256, $metadata['checksums_sha256'])) {
+            throw new RuntimeException('Installed plugin signature metadata no longer matches the trusted package record.');
+        }
+    }
+
     private function verifyPackageIntegrity(string $packageRoot): void
     {
         $checksumFile = $packageRoot . DIRECTORY_SEPARATOR . 'checksums.json';
@@ -1154,7 +1186,7 @@ class PluginManager
                 continue;
             }
             $relativePath = ltrim(str_replace($packageRoot, '', $file->getPathname()), DIRECTORY_SEPARATOR);
-            if ($relativePath === 'checksums.json') {
+            if (in_array($relativePath, ['checksums.json', '.aec-plugin-signature.json'], true)) {
                 continue;
             }
             if (!isset($verified[str_replace(DIRECTORY_SEPARATOR, '/', $relativePath)])) {
