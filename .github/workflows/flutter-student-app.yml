@@ -30,6 +30,28 @@ jobs:
           "$HOME/flutter/bin/flutter" --version
       - name: Generate native platform scaffolding
         run: flutter create --platforms=android,ios --project-name aloms_student_app .
+      - name: Ensure Gradle plugin repositories include Maven Central
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          settings = Path("android/settings.gradle.kts")
+          source = settings.read_text()
+          pattern = re.compile(r"(pluginManagement\\s*\\{.*?repositories\\s*\\{)(.*?)(\\n\\s*\\})", re.S)
+          match = pattern.search(source)
+          if match:
+              repositories = match.group(2)
+              if "mavenCentral()" not in repositories:
+                  if "google()" in repositories:
+                      repositories = repositories.replace("google()", "google()\\n        mavenCentral()", 1)
+                  else:
+                      repositories = "\\n        google()\\n        mavenCentral()\\n        gradlePluginPortal()\\n" + repositories
+                  source = source[:match.start(2)] + repositories + source[match.end(2):]
+          else:
+              source = "pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }\\n" + source
+          settings.write_text(source)
+          PY
       - name: Resolve dependencies
         run: flutter pub get
       - name: Check formatting
