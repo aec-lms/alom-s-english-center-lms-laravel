@@ -28,6 +28,7 @@
             <div class="text-xs font-bold uppercase tracking-[.18em] text-blue-600">Website Studio</div>
             <h1 class="mt-1 text-2xl font-extrabold text-slate-900">Visual Page Builder</h1>
             <p class="mt-1 max-w-2xl text-sm text-slate-500">Create landing pages with reusable content blocks. No HTML or coding required.</p>
+            <p data-block-status role="status" aria-live="polite" aria-atomic="true" class="mt-2 text-xs text-slate-500">Use drag-and-drop or the Up and Down controls to reorder blocks.</p>
         </div>
         <a href="{{ route('home') }}" target="_blank" rel="noopener" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700">View Website ↗</a>
     </header>
@@ -80,7 +81,7 @@
                     </div>
                     <div data-block-list class="space-y-3">
                         <div data-block draggable="true" class="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                            <div class="mb-3 flex items-center justify-between gap-2"><span class="text-xs font-bold text-slate-700">Block 1 · drag to reorder</span><div class="flex items-center gap-3"><button type="button" data-move-up class="text-xs font-semibold text-slate-600">↑ Up</button><button type="button" data-move-down class="text-xs font-semibold text-slate-600">↓ Down</button><button type="button" data-remove-block class="text-xs font-semibold text-rose-600">Remove</button></div></div>
+                            <div class="mb-3 flex items-center justify-between gap-2"><span class="text-xs font-bold text-slate-700">Block 1 · drag to reorder</span><div class="flex items-center gap-3"><button type="button" data-move-up aria-label="Move block up" class="text-xs font-semibold text-slate-600">↑ Up</button><button type="button" data-move-down aria-label="Move block down" class="text-xs font-semibold text-slate-600">↓ Down</button><button type="button" data-remove-block class="text-xs font-semibold text-rose-600">Remove</button></div></div>
                             <label class="text-xs font-semibold text-slate-600">Block type
                                 <select name="blocks[0][type]" data-block-type class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"><option value="text">Text</option><option value="heading">Heading</option><option value="image">Image</option><option value="button">Button</option><option value="spacer">Spacing</option><option value="course_grid">Course Grid</option><option value="instructor_grid">Instructor Grid</option></select>
                             </label>
@@ -142,7 +143,7 @@
                         <div class="space-y-3" data-block-list>
                             @foreach ($blocks as $index => $block)
                                 <div data-block draggable="true" class="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                                    <div class="mb-3 flex items-center justify-between gap-2"><span class="text-xs font-bold text-slate-700">Block {{ $index + 1 }} · drag to reorder</span><div class="flex items-center gap-3"><button type="button" data-move-up class="text-xs font-semibold text-slate-600">↑ Up</button><button type="button" data-move-down class="text-xs font-semibold text-slate-600">↓ Down</button><button type="button" data-remove-block class="text-xs font-semibold text-rose-600">Remove</button></div></div>
+                                    <div class="mb-3 flex items-center justify-between gap-2"><span class="text-xs font-bold text-slate-700">Block {{ $index + 1 }} · drag to reorder</span><div class="flex items-center gap-3"><button type="button" data-move-up aria-label="Move block up" class="text-xs font-semibold text-slate-600">↑ Up</button><button type="button" data-move-down aria-label="Move block down" class="text-xs font-semibold text-slate-600">↓ Down</button><button type="button" data-remove-block class="text-xs font-semibold text-rose-600">Remove</button></div></div>
                                     <label class="text-xs font-semibold text-slate-600">Block type<select name="blocks[{{ $index }}][type]" data-block-type class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">@foreach (['text'=>'Text','heading'=>'Heading','image'=>'Image','button'=>'Button','spacer'=>'Spacing','course_grid'=>'Course Grid','instructor_grid'=>'Instructor Grid'] as $key=>$label)<option value="{{ $key }}" @selected($block['type'] === $key)>{{ $label }}</option>@endforeach</select></label>
                                     <div data-field="content" class="mt-3 {{ $block['type'] === 'spacer' || $block['type'] === 'image' ? 'hidden' : '' }}"><label class="text-xs font-semibold text-slate-600">Text / Heading / Button label<textarea name="blocks[{{ $index }}][content]" rows="3" maxlength="12000" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">{{ $block['content'] }}</textarea></label></div>
                                     <div data-field="url" class="mt-3 {{ in_array($block['type'], ['image','button'], true) ? '' : 'hidden' }}"><label class="text-xs font-semibold text-slate-600">Image or button URL<input name="blocks[{{ $index }}][url]" maxlength="2048" value="{{ $block['url'] }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></label></div>
@@ -168,7 +169,7 @@
 
 <template id="page-block-template">
     <div data-block draggable="true" class="rounded-xl border border-slate-200 bg-slate-50 p-4">
-        <div class="mb-3 flex items-center justify-between gap-2"><span data-block-label class="text-xs font-bold text-slate-700">New block</span><div class="flex items-center gap-3"><button type="button" data-move-up class="text-xs font-semibold text-slate-600">↑ Up</button><button type="button" data-move-down class="text-xs font-semibold text-slate-600">↓ Down</button><button type="button" data-remove-block class="text-xs font-semibold text-rose-600">Remove</button></div></div>
+        <div class="mb-3 flex items-center justify-between gap-2"><span data-block-label class="text-xs font-bold text-slate-700">New block</span><div class="flex items-center gap-3"><button type="button" data-move-up aria-label="Move block up" class="text-xs font-semibold text-slate-600">↑ Up</button><button type="button" data-move-down aria-label="Move block down" class="text-xs font-semibold text-slate-600">↓ Down</button><button type="button" data-remove-block class="text-xs font-semibold text-rose-600">Remove</button></div></div>
         <label class="text-xs font-semibold text-slate-600">Block type<select data-name="type" data-block-type class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"><option value="text">Text</option><option value="heading">Heading</option><option value="image">Image</option><option value="button">Button</option><option value="spacer">Spacing</option><option value="course_grid">Course Grid</option><option value="instructor_grid">Instructor Grid</option></select></label>
         <div data-field="content" class="mt-3"><label class="text-xs font-semibold text-slate-600">Text / Heading / Button label<textarea data-name="content" rows="3" maxlength="12000" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></textarea></label></div>
         <div data-field="url" class="mt-3 hidden"><label class="text-xs font-semibold text-slate-600">Image or button URL<input data-name="url" maxlength="2048" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="/storage/... or https://..."></label></div>
@@ -183,6 +184,8 @@
     document.querySelectorAll('[data-block-list]').forEach((list) => {
         const form = list.closest('form');
         const addButton = form?.querySelector('[data-add-block]');
+        const status = document.querySelector('[data-block-status]');
+        const announce = (message) => { if (status) status.textContent = message; };
         const sync = (block) => {
             const type = block.querySelector('[data-block-type]')?.value || 'text';
             const visible = {
@@ -225,11 +228,13 @@
             if (event.target.closest('[data-move-up]') && current?.previousElementSibling) {
                 list.insertBefore(current, current.previousElementSibling);
                 renumber();
+                announce('Block moved up to position ' + ([...list.querySelectorAll('[data-block]')].indexOf(current) + 1) + '.');
                 return;
             }
             if (event.target.closest('[data-move-down]') && current?.nextElementSibling) {
                 list.insertBefore(current.nextElementSibling, current);
                 renumber();
+                announce('Block moved down to position ' + ([...list.querySelectorAll('[data-block]')].indexOf(current) + 1) + '.');
                 return;
             }
             if (event.target.closest('[data-remove-block]')) {
@@ -237,6 +242,7 @@
                 if (blocks.length <= 1) return;
                 current?.remove();
                 renumber();
+                announce('Block removed. ' + list.querySelectorAll('[data-block]').length + ' blocks remain.');
             }
         });
 
@@ -259,7 +265,11 @@
             list.insertBefore(dragged, after ? target.nextElementSibling : target);
         });
         list.addEventListener('drop', () => {
-            if (dragged) dragged.classList.remove('opacity-50');
+            if (dragged) {
+                const position = [...list.querySelectorAll('[data-block]')].indexOf(dragged) + 1;
+                dragged.classList.remove('opacity-50');
+                announce('Block moved to position ' + position + '.');
+            }
             dragged = null;
             renumber();
         });
@@ -274,6 +284,7 @@
             const block = fragment.querySelector('[data-block]');
             list.appendChild(fragment);
             renumber();
+            announce('Block ' + list.querySelectorAll('[data-block]').length + ' added.');
             block.querySelector('[data-block-type]')?.addEventListener('change', () => sync(block));
             sync(block);
         });
