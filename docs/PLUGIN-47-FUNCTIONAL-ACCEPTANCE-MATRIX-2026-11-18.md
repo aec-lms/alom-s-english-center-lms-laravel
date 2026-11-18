@@ -6,9 +6,9 @@ Audited commit: `a0deb699f74b98ffbe7a656050f246bb8f9f1e03`
 
 ## Verified repository inventory
 
-The current `laravel/plugins/modules/` directory contains **47 plugin packages**, each represented by a `plugin.json` manifest. The previous 39-plugin count is obsolete.
+The `laravel/plugins/modules/` directory contains **47 plugin packages**, each represented by a `plugin.json` manifest. The previous 39-plugin count is obsolete.
 
-The recursive repository tree contains 444 files beneath the plugin module directories. The Laravel test tree contains 78 Feature/Unit test files.
+A recursive Git tree audit at the audited commit confirms **905 entries beneath the plugin module directories**. The Laravel test tree contains 78 Feature/Unit test files.
 
 ## CI evidence for the audited commit
 
@@ -115,6 +115,7 @@ Before declaring every plugin fully functionally accepted, continue with the fol
 ## Acceptance status
 
 - Plugin inventory: **47/47 verified**.
+- Plugin module tree entries: **905 verified at the audited commit**.
 - Universal plugin lifecycle test: **47/47 covered; suite passed**.
 - Laravel automated suite: **317 passed / 3,822 assertions**.
 - MySQL 8.0.46 automated suite: **317 passed / 3,822 assertions**.
