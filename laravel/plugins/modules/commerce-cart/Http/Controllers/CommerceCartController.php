@@ -110,6 +110,7 @@ class CommerceCartController extends Controller
             'type' => ['required', 'in:subscription,live_class,other'],
             'title' => ['required', 'string', 'max:200'],
             'sku' => ['nullable', 'string', 'max:80'],
+            'resource_id' => ['nullable', 'integer', 'min:1'],
             'description' => ['nullable', 'string', 'max:3000'],
             'price' => ['required', 'numeric', 'min:0.01', 'max:500000'],
             'currency' => ['required', 'string', 'regex:/^[A-Z]{3}$/'],
@@ -120,6 +121,7 @@ class CommerceCartController extends Controller
         if ($data['type'] === 'subscription') $entitlement['duration_days'] = (int) ($data['duration_days'] ?? 30);
         DB::table('commerce_sellables')->insert([
             'type' => $data['type'], 'title' => $data['title'], 'sku' => $data['sku'] ?? null,
+            'resource_id' => $data['resource_id'] ?? null,
             'description' => $data['description'] ?? null, 'price' => $data['price'],
             'currency' => strtoupper($data['currency']), 'entitlement' => json_encode($entitlement),
             'is_active' => $request->boolean('is_active', true),
