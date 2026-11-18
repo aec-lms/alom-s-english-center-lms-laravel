@@ -221,4 +221,21 @@ class BoardQuestionSolverPluginTest extends TestCase
 
         Http::assertSentCount(1);
     }
+    public function test_board_solver_admin_settings_and_history_are_restricted_to_platform_admins(): void
+    {
+        $this->enablePlugins();
+        $branchManager = $this->createUserWithRole('branch_manager');
+        $permission = DB::table('permissions')->where('slug', 'board-solver.configure')->firstOrFail();
+        $branchManager->roles()->firstOrFail()->permissions()->syncWithoutDetaching([$permission->id]);
+
+        $this->actingAs($branchManager)->get('/admin/board-question-solver/settings')->assertForbidden();
+        $this->actingAs($branchManager)->get('/admin/board-question-solver/history')->assertForbidden();
+        $this->actingAs($branchManager)->put('/admin/board-question-solver/settings', [
+            'max_question_length' => 4000,
+            'max_image_kb' => 5120,
+            'daily_request_limit' => 10,
+            'default_language' => 'bn',
+        ])->assertForbidden();
+    }
+
 }
