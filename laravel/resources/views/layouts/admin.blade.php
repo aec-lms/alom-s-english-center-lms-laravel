@@ -6,7 +6,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Panel — ' . config('app.name'))</title>
-    @if (!empty($siteIdentity['favicon_url']))<link rel="icon" href="{{ $siteIdentity['favicon_url'] }}">@endif
+    @php
+        $activePluginFavicon = null;
+        $activeRouteName = request()->route()?->getName();
+        foreach (($pluginAdminMenu ?? []) as $pluginMenuGroup) {
+            foreach ($pluginMenuGroup as $pluginMenuItem) {
+                if (($pluginMenuItem['route'] ?? null) === $activeRouteName && !empty($pluginMenuItem['plugin'])) {
+                    $activePluginFavicon = route('admin.plugins.favicon', $pluginMenuItem['plugin']);
+                    break 2;
+                }
+            }
+        }
+    @endphp
+    @if ($activePluginFavicon)
+        <link rel="icon" type="image/svg+xml" href="{{ $activePluginFavicon }}">
+    @elseif (!empty($siteIdentity['favicon_url']))
+        <link rel="icon" href="{{ $siteIdentity['favicon_url'] }}">
+    @endif
     @inject('themeManager', 'App\\Core\\Appearance\\ThemeManager')
     <style>
         :root { {!! $themeManager->cssVariables() !!}; {!! $themeManager->cssDesignVariables() !!} }
