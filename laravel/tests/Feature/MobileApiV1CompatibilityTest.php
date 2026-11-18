@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use Tests\\TestCase;
+use Tests\TestCase;
 
 class MobileApiV1CompatibilityTest extends TestCase
 {
@@ -12,7 +12,6 @@ class MobileApiV1CompatibilityTest extends TestCase
     {
         $this->markSystemInstalled();
         $this->activatePlugins(['mobile-app-api', 'course-management', 'student-management']);
-
         $student = $this->createUserWithRole('student', email: 'mobile-v1-student@aec.test');
 
         $login = $this->postJson('/api/v1/auth/login', [
@@ -24,9 +23,7 @@ class MobileApiV1CompatibilityTest extends TestCase
             'app_version' => '1.0.0',
         ]);
 
-        $login->assertOk()
-            ->assertJsonStructure(['access_token', 'token', 'user' => ['id', 'name', 'email', 'branch_id']]);
-
+        $login->assertOk()->assertJsonStructure(['access_token', 'token', 'user' => ['id', 'name', 'email', 'branch_id']]);
         $this->assertSame($login->json('token'), $login->json('access_token'));
 
         $this->withHeader('Authorization', 'Bearer ' . $login->json('access_token'))
@@ -40,16 +37,13 @@ class MobileApiV1CompatibilityTest extends TestCase
     {
         $this->markSystemInstalled();
         $this->activatePlugins(['mobile-app-api', 'course-management']);
-
         $this->getJson('/api/v1/config')->assertOk();
         $this->getJson('/api/v1/courses')->assertOk();
         $this->getJson('/api/v1/home')->assertOk();
 
         $student = $this->createUserWithRole('student');
         $token = $student->createToken('mobile-v1-test')->plainTextToken;
-
         $this->getJson('/api/v1/courses/not-a-real-course/lessons')->assertUnauthorized();
-
         $this->withHeader('Authorization', 'Bearer ' . $token)
             ->getJson('/api/v1/courses/not-a-real-course/lessons')
             ->assertNotFound();
@@ -59,14 +53,12 @@ class MobileApiV1CompatibilityTest extends TestCase
     {
         $this->markSystemInstalled();
         $this->activatePlugins(['mobile-app-api']);
-
         $student = $this->createUserWithRole('student');
         $token = $student->createToken('mobile-v1-logout')->plainTextToken;
 
         $this->withHeader('Authorization', 'Bearer ' . $token)
             ->postJson('/api/v1/auth/logout')
             ->assertOk();
-
         $this->withHeader('Authorization', 'Bearer ' . $token)
             ->getJson('/api/v1/auth/me')
             ->assertUnauthorized();
