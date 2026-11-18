@@ -36,6 +36,11 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
    'quiz_mode'=>'identify-accent',
   ])->assertOk()->assertJson(['saved'=>true,'correct'=>true]);
   $this->assertDatabaseHas('alom_english_center_phonetic_attempts',['user_id'=>$student->id,'entry_id'=>$challengeEntry->id,'is_correct'=>true]);
+  // A challenge is single-use: replaying the same session token must not create another attempt.
+  $this->actingAs($student)->postJson('/courses/british-american-phonetics/phonetics-practice/attempts',[
+   'selected_answer'=>$challenge['expected'],
+  ])->assertStatus(409);
+  $this->assertSame(1,DB::table('alom_english_center_phonetic_attempts')->where('user_id',$student->id)->count());
   DB::table('enrollments')->where('user_id',$student->id)->delete();
   $this->actingAs($student)->get('/courses/british-american-phonetics/phonetics-practice')->assertForbidden();
  }
