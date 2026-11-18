@@ -226,7 +226,7 @@ class ExpenseController extends Controller
             $query->chunk(500, function ($rows) use ($output): void {
                 foreach ($rows as $row) {
                     fputcsv($output, [
-                        $row->expense_date?->toDateString(), $row->branch_id, $row->category,
+                        $row->expense_date?->toDateString(), $row->branch_id, $this->safeCsvCell($row->category),
                         $this->safeCsvCell($row->title), $row->amount, $row->payment_method, $this->safeCsvCell($row->reference),
                         $row->status, $this->safeCsvCell($row->creator?->name),
                     ]);
