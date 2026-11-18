@@ -161,12 +161,12 @@ Current main has green automated CI, but it is **not certified production-ready*
 
 This section supersedes the older branch/PR snapshot above; the earlier audit notes remain historical evidence.
 
-- Current `main` is `114e9b149e302a1991935153dbde33f91369e1ff` and contains **47 plugin manifests**. A manifest count is not functional acceptance.
+- Current `main` is `47b7e594c5ca1a70468ea3ad51be5008aed90709` and contains **47 plugin manifests**. A manifest count is not functional acceptance.
 - PR #104 (AL Branding & Loader plus independent Phonetics plugin integration) is merged. No production deployment is recorded.
-- Latest post-merge CI on `main` passed Browser E2E and Composer Security Audit, but the Laravel workflow failed on one stale Phonetics replay assertion: 315 tests passed and one test expected HTTP 409 from the legacy `phonetics-practice/attempts` route, which intentionally redirects (302). The MySQL 8 run failed on the same assertion.
+- The first post-merge run on `114e9b1` exposed one stale Phonetics replay assertion (315 tests passed, one failed on both SQLite and MySQL because the legacy URL intentionally redirects). PR #117 then corrected that assertion and merged as `a0deb699`; the follow-up main CI passed SQLite, MySQL, Browser E2E and Composer Security Audit. The latest `main` commit `47b7e594` only refreshes the 47-plugin acceptance documentation; its CI is queued.
 - PR #118 (`test/fix-phonetics-replay-endpoint`) is the active correction branch. It now also contains fail-closed course-price mapping, host-user UUID portability, forward schema migration, course-publication checks, exam-attempt concurrency protection, and broader regression tests. Its latest CI is pending; do not claim the fixes are verified until the exact PR head passes.
 - A PHP syntax lint across all application/plugin PHP files, Composer metadata validation and full Blade view compilation have been added to the Laravel CI workflow.
-- PR #117 separately hardens protected lesson and ebook delivery and remains subject to its own CI/review.
+- PR #117's protected lesson and private ebook delivery hardening has merged; its latest checks passed.
 - Release-blocker issue #14 remains open. Real cPanel installation/rollback, representative backup restore, official payment sandbox tests and authorized 300-participant conferencing validation still require an isolated staging environment and external provider access.
 
 **Current release status: NOT PRODUCTION-READY.** Do not deploy the current main build or use production data until all code checks and the external gates above are closed with recorded evidence.
