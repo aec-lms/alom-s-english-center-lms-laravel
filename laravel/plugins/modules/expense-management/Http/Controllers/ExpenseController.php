@@ -165,7 +165,7 @@ class ExpenseController extends Controller
 
         $collected = 0.0;
         $refunds = 0.0;
-        if ($this->plugins->isEnabled('payment-management') && Schema::hasTable('payment_transactions')) {
+        if (app(PluginManager::class)->isEnabled('payment-management') && Schema::hasTable('payment_transactions')) {
             $payments = DB::table('payment_transactions')->whereIn('status', ['settled', 'refunded'])
                 ->when($actor->hasRole('branch_manager') || $actor->hasRole('accountant'), fn ($q) => $q->where('branch_id', $actor->branch_id));
             if (!empty($filters['date_from'])) $payments->where('settled_at', '>=', $filters['date_from'] . ' 00:00:00');
@@ -184,7 +184,7 @@ class ExpenseController extends Controller
         }
 
         // Manual bank/cash receipts are recorded separately from gateway transactions.
-        if ($this->plugins->isEnabled('universal-payment') && Schema::hasTable('universal_payment_transactions')) {
+        if (app(PluginManager::class)->isEnabled('universal-payment') && Schema::hasTable('universal_payment_transactions')) {
             $manualReceipts = DB::table('universal_payment_transactions')
                 ->where('status', 'verified')
                 ->when($actor->hasRole('branch_manager') || $actor->hasRole('accountant'), fn ($q) => $q->where('branch_id', $actor->branch_id));
