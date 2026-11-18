@@ -163,7 +163,7 @@ class AuthAndRbacTest extends TestCase
 
         $this->post('/forgot-password/otp', ['email' => $user->email])->assertRedirect();
         $code = null;
-        Notification::assertSentTo($user, \\App\\Notifications\\PasswordRecoveryOtp::class, function ($notification) use (&$code): bool {
+        Notification::assertSentTo($user, \App\Notifications\PasswordRecoveryOtp::class, function ($notification) use (&$code): bool {
             $code = $notification->code;
             return true;
         });
