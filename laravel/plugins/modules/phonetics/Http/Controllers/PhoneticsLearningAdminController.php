@@ -31,6 +31,12 @@ final class PhoneticsLearningAdminController extends Controller
         ]);
     }
 
+    public function lessons(Request $request)
+    {
+        $data = $request->validate(['course_ref' => ['required', 'string', 'max:128']]);
+        return response()->json($this->catalog->lessons($data['course_ref']));
+    }
+
     public function storeAssignment(Request $request)
     {
         $data = $request->validate([
