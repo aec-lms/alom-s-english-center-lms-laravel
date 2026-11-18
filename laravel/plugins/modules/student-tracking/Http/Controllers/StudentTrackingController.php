@@ -8,6 +8,7 @@ use App\Core\Plugins\PluginManager;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 use Plugins\Modules\StudentTracking\Models\StudentActivityEvent;
@@ -49,6 +50,38 @@ class StudentTrackingController extends Controller
     {
         $events = StudentActivityEvent::query()->where('user_id', $request->user()->id)->latest('occurred_at')->paginate(30);
         return view('student-tracking::mine', compact('events'));
+    }
+
+    public function guardian(Request $request): View
+    {
+        $actor = $request->user();
+        abort_unless($actor && $actor->hasRole('guardian'), 403, 'Guardian accounts only.');
+        abort_unless(
+            app(PluginManager::class)->isEnabled('guardian-management')
+                && Schema::hasTable('guardians')
+                && Schema::hasTable('guardian_student')
+                && Schema::hasTable('students'),
+            404,
+            'Guardian-to-student linking is not enabled.',
+        );
+
+        $guardian = DB::table('guardians')->where('user_id', $actor->id)->first();
+        abort_unless($guardian, 404, 'Guardian profile not found.');
+
+        $linkedStudents = DB::table('guardian_student as gs')
+            ->join('students as s', 's.id', '=', 'gs.student_id')
+            ->join('users as u', 'u.id', '=', 's.user_id')
+            ->where('gs.guardian_id', $guardian->id)
+            ->select(['s.id as student_id', 's.user_id', 'u.name as student_name'])
+            ->orderBy('u.name')
+            ->get();
+
+        $events = StudentActivityEvent::query()
+            ->whereIn('user_id', $linkedStudents->pluck('user_id')->all())
+            ->latest('occurred_at')
+            ->paginate(30);
+
+        return view('student-tracking::guardian', compact('events', 'linkedStudents'));
     }
 
     public function record(Request $request, StudentActivityTracker $tracker): JsonResponse
