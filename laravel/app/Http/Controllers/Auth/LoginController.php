@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Core\Security\AuditLogger;
 use App\Http\Controllers\Controller;
+use App\Models\DeviceSession;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
@@ -48,6 +49,9 @@ class LoginController extends Controller
 
         RateLimiter::clear($throttleKey);
         $request->session()->regenerate();
+        if (Schema::hasTable('device_sessions')) {
+            DeviceSession::register($request, $request->user());
+        }
         $this->audit->log('auth.login_succeeded', 'user', (string) Auth::id());
 
         $defaultDestination = Auth::user()?->hasRole('admin') ? route('admin.dashboard') : route('portal.dashboard');
@@ -83,6 +87,9 @@ class LoginController extends Controller
 
         Auth::login($user);
         $request->session()->regenerate();
+        if (Schema::hasTable('device_sessions')) {
+            DeviceSession::register($request, $user);
+        }
         $this->audit->log('auth.registered', 'user', (string) $user->id);
 
         return redirect()->route('portal.dashboard')->with('status', "Welcome to Alom's English Center, {$user->name}!");
@@ -148,6 +155,13 @@ class LoginController extends Controller
     public function logout(Request $request): RedirectResponse
     {
         $this->audit->log('auth.logout', 'user', (string) Auth::id());
+        if (Auth::check() && Schema::hasTable('device_sessions')) {
+            DeviceSession::query()
+                ->where('user_id', Auth::id())
+                ->where('session_hash', DeviceSession::currentHash($request))
+                ->whereNull('revoked_at')
+                ->update(['revoked_at' => now(), 'revoke_reason' => 'User logged out', 'updated_at' => now()]);
+        }
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
