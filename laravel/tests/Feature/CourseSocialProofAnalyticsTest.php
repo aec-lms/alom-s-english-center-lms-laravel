@@ -37,8 +37,11 @@ class CourseSocialProofAnalyticsTest extends TestCase
             'status' => 'pending',
         ]);
 
-        $this->get('/course/' . $course->slug)->assertOk()->assertSeeText('0 purchased');
-        $this->get('/course/' . $course->slug)->assertOk();
+        $visitorId = str_repeat('a', 64);
+        $this->withSession(['course_view_visitor_id' => $visitorId])
+            ->get('/course/' . $course->slug)->assertOk()->assertSeeText('0 purchased');
+        $this->withSession(['course_view_visitor_id' => $visitorId])
+            ->get('/course/' . $course->slug)->assertOk();
 
         $this->assertSame(1, DB::table('course_view_events')->where('course_id', $course->id)->count());
         $this->assertSame(1, DB::table('enrollments')->where('course_id', $course->id)->where('status', 'active')->count());
