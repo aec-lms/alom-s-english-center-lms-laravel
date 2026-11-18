@@ -93,7 +93,8 @@ class CourseBundlesPluginTest extends TestCase
 
         $this->actingAs($unassigned)->get('/course-bundles')->assertOk()->assertDontSee('Branch A Starter');
         $this->actingAs($unassigned)->get('/course-bundles/branch-a-starter')->assertNotFound();
-        $this->actingAs($otherBranchStudent)->post('/course-bundles/branch-a-starter/checkout')->assertNotFound();
+        $this->actingAs($unassigned)->post('/course-bundles/branch-a-starter/checkout')->assertForbidden();
+        $this->actingAs($otherBranchStudent)->post('/course-bundles/branch-a-starter/checkout')->assertForbidden();
 
         $this->actingAs($assignedStudent)->post('/course-bundles/branch-a-starter/checkout')
             ->assertRedirect()->assertSessionHasNoErrors();
