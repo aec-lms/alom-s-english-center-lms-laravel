@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:material_ui/material_ui.dart';
-import 'package:flutter/widgets.dart';
 import 'firebase_options.dart';
 import 'push_notification_service.dart';
 import 'api_client.dart';

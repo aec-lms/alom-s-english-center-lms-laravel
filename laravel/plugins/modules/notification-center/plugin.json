@@ -36,5 +36,8 @@
             "order": 100,
             "permission": "notifications.manage"
         }
+    ],
+    "optional_dependencies": [
+        "push-notifications"
     ]
 }
