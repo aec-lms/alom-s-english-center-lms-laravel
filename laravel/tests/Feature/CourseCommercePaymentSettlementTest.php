@@ -6,6 +6,8 @@ namespace Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
 use Plugins\Modules\CourseManagement\Services\CourseCommercePaymentSettlementService;
+use Plugins\Modules\MarketingManagement\Models\PromoCoupon;
+use Plugins\Modules\MarketingManagement\Services\CourseCouponService;
 use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
 use Tests\TestCase;
 
