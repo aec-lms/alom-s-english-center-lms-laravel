@@ -7,6 +7,7 @@ namespace Plugins\Modules\UniversalPayment\Services;
 use App\Core\Plugins\PluginManager;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
 use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
 use RuntimeException;
 
