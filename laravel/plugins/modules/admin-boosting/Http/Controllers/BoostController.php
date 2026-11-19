@@ -33,7 +33,7 @@ class BoostController extends Controller
 
         $totals = [
             'campaigns' => $campaigns->count(),
-            'active' => $campaigns->filter(fn (BoostCampaign $campaign): bool => $this->isEligible($campaign))->count(),
+            'active' => $this->countEligibleCampaigns($campaigns),
             'impressions' => (int) $campaigns->sum('impressions'),
             'clicks' => (int) $campaigns->sum('clicks'),
         ];
@@ -205,6 +205,57 @@ class BoostController extends Controller
         return str_starts_with($destination, '/')
             && !str_starts_with($destination, '//')
             && !str_contains($destination, '\\');
+    }
+
+    /**
+     * Calculate the dashboard's eligible-campaign metric with bounded queries.
+     * Public click/impression tracking still performs a live per-campaign check.
+     */
+    private function countEligibleCampaigns($campaigns): int
+    {
+        $now = now();
+        $eligible = $campaigns->filter(fn (BoostCampaign $campaign): bool =>
+            $campaign->status === 'active'
+            && (!$campaign->starts_at || $campaign->starts_at <= $now)
+            && (!$campaign->ends_at || $campaign->ends_at >= $now)
+        );
+
+        $count = $eligible->filter(fn (BoostCampaign $campaign): bool =>
+            in_array($campaign->entity_type, ['institution', 'offer'], true)
+            && $campaign->entity_id === null
+        )->count();
+
+        if (Schema::hasTable('courses')) {
+            $courseIds = $eligible->where('entity_type', 'course')->pluck('entity_id')->filter()->unique()->values();
+            if ($courseIds->isNotEmpty()) {
+                $validCourseIds = DB::table('courses')->whereIn('id', $courseIds)
+                    ->where('status', 'published')
+                    ->when(Schema::hasColumn('courses', 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))
+                    ->pluck('id')->map(fn ($id): int => (int) $id)->all();
+                $count += $eligible->where('entity_type', 'course')
+                    ->filter(fn (BoostCampaign $campaign): bool => in_array((int) $campaign->entity_id, $validCourseIds, true))
+                    ->count();
+            }
+        }
+
+        if (app(PluginManager::class)->isEnabled('branch-management') && Schema::hasTable('branches')) {
+            $branchIds = $eligible->where('entity_type', 'branch')
+                ->filter(fn (BoostCampaign $campaign): bool => $campaign->placement === 'course_listing')
+                ->pluck('entity_id')->filter()->unique()->values();
+            if ($branchIds->isNotEmpty()) {
+                $validBranchIds = DB::table('branches')->whereIn('id', $branchIds)
+                    ->where('is_active', true)
+                    ->when(Schema::hasColumn('branches', 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))
+                    ->pluck('id')->map(fn ($id): int => (int) $id)->all();
+                $count += $eligible->where('entity_type', 'branch')
+                    ->filter(fn (BoostCampaign $campaign): bool =>
+                        $campaign->placement === 'course_listing'
+                        && in_array((int) $campaign->entity_id, $validBranchIds, true)
+                    )->count();
+            }
+        }
+
+        return $count;
     }
 
     private function isEligible(BoostCampaign $campaign): bool
