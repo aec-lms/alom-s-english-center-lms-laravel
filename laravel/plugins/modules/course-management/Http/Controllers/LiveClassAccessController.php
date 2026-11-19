@@ -203,7 +203,8 @@ class LiveClassAccessController extends Controller
             // restore may lock profile -> user, while this flow locks user first.
             // The user-row lock serializes normal profile updates and avoids a cycle.
             $profile = $profileQuery->first();
-            if ($profile && Schema::hasColumn('students', 'status')) {
+            abort_unless($profile, 403, 'An active student profile is required to access this live class.');
+            if (Schema::hasColumn('students', 'status')) {
                 abort_unless($profile->status === 'active', 403, 'This student profile is inactive.');
             }
         }
@@ -248,6 +249,9 @@ class LiveClassAccessController extends Controller
 
         if ($courseBranchId !== null && $assignedBranchId !== $courseBranchId) {
             abort(403, 'This live class is outside your assigned branch.');
+        }
+        if ($enrollment && $enrollment->branch_id !== null && $assignedBranchId !== (int) $enrollment->branch_id) {
+            abort(403, 'This enrollment is outside your assigned branch.');
         }
     }
 
