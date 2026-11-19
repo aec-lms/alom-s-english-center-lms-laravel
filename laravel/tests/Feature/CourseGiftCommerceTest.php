@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Core\Plugins\PluginManager;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\CourseManagement\Models\Course;
 use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
 use Plugins\Modules\UniversalPayment\Services\StorefrontPaymentGatewayService;
@@ -439,6 +440,82 @@ class CourseGiftCommerceTest extends TestCase
             'status' => 'active',
         ]);
         $this->assertDatabaseCount('universal_payment_transactions', 0);
+    }
+
+
+    public function test_refunded_or_partially_paid_source_invoice_blocks_gift_and_voucher_redemption(): void
+    {
+        $sender = $this->createUserWithRole('student');
+        $recipient = $this->createUserWithRole('student');
+        $recipient->update(['email' => 'refund-recipient@example.test']);
+        $course = Course::query()->create([
+            'code' => 'REFUNDED-GIFT-001',
+            'title' => 'Refunded Gift Course',
+            'slug' => 'refunded-gift-course',
+            'price' => 1500,
+            'status' => 'published',
+        ]);
+        $invoice = FeeInvoice::query()->create([
+            'invoice_number' => 'REFUNDED-GIFT-INV-' . $sender->id,
+            'payer_name' => $sender->name,
+            'payer_email' => $sender->email,
+            'subtotal_amount' => 1500,
+            'discount_amount' => 0,
+            'net_amount' => 1500,
+            'paid_amount' => 0,
+            'currency' => 'BDT',
+            'status' => 'refunded',
+        ]);
+
+        $giftToken = str_repeat('R', 64);
+        $giftId = DB::table('course_gifts')->insertGetId([
+            'sender_user_id' => $sender->id,
+            'recipient_user_id' => null,
+            'recipient_email' => $recipient->email,
+            'course_id' => $course->id,
+            'invoice_id' => $invoice->id,
+            'redeem_token_hash' => hash('sha256', $giftToken),
+            'redeem_token_encrypted' => encrypt($giftToken),
+            'status' => 'paid',
+            'currency' => 'BDT',
+            'amount' => 1500,
+            'paid_at' => now(),
+            'expires_at' => now()->addDays(30),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $voucherToken = str_repeat('S', 64);
+        $voucherId = DB::table('course_gift_vouchers')->insertGetId([
+            'sender_user_id' => $sender->id,
+            'recipient_user_id' => null,
+            'recipient_email' => $recipient->email,
+            'recipient_name' => 'Refund Recipient',
+            'message' => null,
+            'redeem_token_hash' => hash('sha256', $voucherToken),
+            'redeem_token_encrypted' => encrypt($voucherToken),
+            'invoice_id' => $invoice->id,
+            'currency' => 'BDT',
+            'amount' => 1200,
+            'remaining_amount' => 1200,
+            'status' => 'paid',
+            'paid_at' => now(),
+            'expires_at' => now()->addDays(30),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($recipient)
+            ->post('/student/course-commerce/gifts/redeem/' . $giftToken)
+            ->assertStatus(409);
+        $this->actingAs($recipient)
+            ->post('/student/course-commerce/vouchers/redeem/' . $voucherToken)
+            ->assertStatus(409);
+
+        $this->assertDatabaseHas('course_gifts', ['id' => $giftId, 'status' => 'paid']);
+        $this->assertDatabaseHas('course_gift_vouchers', ['id' => $voucherId, 'status' => 'paid']);
+        $this->assertDatabaseMissing('enrollments', ['user_id' => $recipient->id, 'course_id' => $course->id]);
+        $this->assertDatabaseMissing('course_gift_wallet_transactions', ['voucher_id' => $voucherId]);
+        $this->assertDatabaseMissing('course_gift_wallets', ['user_id' => $recipient->id, 'currency' => 'BDT']);
     }
 
 }
