@@ -121,7 +121,7 @@ final class UnifiedCommerceCartTest extends TestCase
         $this->assertNotNull($voucher);
         $this->assertSame('awaiting_payment', $voucher->status);
         $this->assertSame(2500.0, (float) $voucher->amount);
-        $this->assertSame('gift_voucher', DB::table('commerce_cart_items')->where('item_id', $voucher->id)->value('item_type'));
+        $this->assertSame('gift_voucher', DB::table('commerce_cart_items')->where('item_type', 'gift_voucher')->where('item_id', $voucher->id)->value('item_type'));
         $this->assertDatabaseCount('commerce_cart_items', 2);
 
         $payments = \Mockery::mock(UniversalPaymentOrchestrator::class);
