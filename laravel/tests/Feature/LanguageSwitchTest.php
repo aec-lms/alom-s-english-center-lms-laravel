@@ -12,12 +12,10 @@ class LanguageSwitchTest extends TestCase
     {
         $this->markSystemInstalled();
 
-        $this->post('/language/bn')->assertRedirect('/');
-        $this->assertSessionHas('locale', 'bn');
+        $this->post('/language/bn')->assertRedirect('/')->assertSessionHas('locale', 'bn');
         $this->get('/login')->assertOk()->assertSee('স্বাগতম!')->assertSee('লগইন');
 
-        $this->post('/language/en')->assertRedirect('/');
-        $this->assertSessionHas('locale', 'en');
+        $this->post('/language/en')->assertRedirect('/')->assertSessionHas('locale', 'en');
         $this->get('/login')->assertOk()->assertSee('Welcome Back!')->assertSee('Login');
     }
 
@@ -36,9 +34,8 @@ class LanguageSwitchTest extends TestCase
         $this->post('/language/fr')->assertNotFound();
         $this->withHeader('Referer', 'https://evil.example/redirect')
             ->post('/language/bn')
-            ->assertRedirect('/');
-
-        $this->assertSessionHas('locale', 'bn');
+            ->assertRedirect('/')
+            ->assertSessionHas('locale', 'bn');
     }
     public function test_session_locale_does_not_mutate_institution_default_locale(): void
     {
