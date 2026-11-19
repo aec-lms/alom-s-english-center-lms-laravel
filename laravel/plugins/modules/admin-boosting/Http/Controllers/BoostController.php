@@ -47,6 +47,9 @@ class BoostController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $validated = $request->validate($this->campaignRules($request, true));
+        $startsAt = $validated['starts_at'] ?? now();
+        $endsAt = $validated['ends_at'] ?? \\Illuminate\\Support\\Carbon::parse($startsAt)->addDays(30);
+
         $campaign = BoostCampaign::query()->create([
             'campaign_name' => $validated['campaign_name'],
             'entity_type' => $validated['entity_type'],
@@ -57,8 +60,8 @@ class BoostController extends Controller
             'destination_url' => ($validated['destination_url'] ?? null) ?: '/courses',
             'priority' => (int) ($validated['priority'] ?? 5),
             'status' => 'active',
-            'starts_at' => $validated['starts_at'] ?? now(),
-            'ends_at' => $validated['ends_at'] ?? now()->addDays(30),
+            'starts_at' => $startsAt,
+            'ends_at' => $endsAt,
         ]);
 
         $this->audit->log('boost.created', 'boost_campaign', (string) $campaign->id, [
