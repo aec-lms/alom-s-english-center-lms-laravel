@@ -17,7 +17,7 @@
 .lb-track{width:min(220px,70vw);height:3px;background:#ffffff44;overflow:hidden;border-radius:8px}.lb-track i{display:block;width:40%;height:100%;background:var(--lb-accent);animation:lb-sweep 1.2s ease-in-out infinite}
 .lb-style-minimal-pulse .lb-spin{animation:lb-pulse 1.1s ease-in-out infinite}.lb-style-shimmer-sweep:before{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 20%,#ffffff22 48%,transparent 76%);background-size:220% 100%;animation:lb-shimmer 2s linear infinite;pointer-events:none}.lb-style-curtain-reveal{transform:translateY(0);transition:transform var(--lb-fade) ease,opacity var(--lb-fade) ease}.lb-style-curtain-reveal.lb-hidden{transform:translateY(-100%)}
 @keyframes lb-spin{to{transform:rotate(360deg)}}@keyframes lb-sweep{to{transform:translateX(260%)}}@keyframes lb-pulse{50%{transform:scale(.82);opacity:.55}}@keyframes lb-shimmer{to{background-position-x:-220%}}
-@media(prefers-reduced-motion:reduce){#al-branding-loader.lb-respect-motion .lb-spin,#al-branding-loader.lb-respect-motion .lb-orbits i,#al-branding-loader.lb-respect-motion .lb-orbits b,#al-branding-loader.lb-respect-motion .lb-track i,#al-branding-loader.lb-respect-motion.lb-style-shimmer-sweep:before{animation:none}}
+@media(prefers-reduced-motion:reduce){#al-branding-loader.lb-respect-motion{transition-duration:.01ms!important;scroll-behavior:auto!important}#al-branding-loader.lb-respect-motion .lb-spin,#al-branding-loader.lb-respect-motion .lb-orbits i,#al-branding-loader.lb-respect-motion .lb-orbits b,#al-branding-loader.lb-respect-motion .lb-track i,#al-branding-loader.lb-respect-motion.lb-style-shimmer-sweep:before{animation:none!important;transition:none!important}}
 </style>
 <script>
 (function () {
@@ -119,7 +119,8 @@
         if (mode !== 'every-load' || event.defaultPrevented || event.button !== 0 ||
             event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
 
-        const link = event.target.closest('a[href]');
+        const target = event.target instanceof Element ? event.target : event.target?.parentElement;
+        const link = target?.closest('a[href]');
         if (!link || link.target || link.hasAttribute('download') ||
             link.getAttribute('rel')?.split(/\s+/).includes('external')) return;
 
