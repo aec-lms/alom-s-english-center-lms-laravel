@@ -259,7 +259,7 @@ class PaymentSettlementStateMachineTest extends TestCase
         $this->markSystemInstalled();
         $this->activatePlugins(['fees-management', 'payment-management', 'commerce-cart']);
 
-        foreach (['currency', 'total'] as $case) {
+        foreach (['currency', 'total', 'item_math'] as $case) {
             $buyer = $this->createUserWithRole('student');
             $invoice = FeeInvoice::query()->create([
                 'invoice_number' => 'ORDER-RECONCILE-' . strtoupper(uniqid()),
@@ -292,7 +292,7 @@ class PaymentSettlementStateMachineTest extends TestCase
                 'item_id' => 987650 + $buyer->id,
                 'title_snapshot' => 'Order reconciliation course',
                 'quantity' => 1,
-                'unit_price' => 500,
+                'unit_price' => $case === 'item_math' ? 400 : 500,
                 'line_total' => 500,
                 'metadata' => json_encode(['resource_id' => 987650 + $buyer->id], JSON_THROW_ON_ERROR),
                 'created_at' => now(),
@@ -315,9 +315,11 @@ class PaymentSettlementStateMachineTest extends TestCase
                 );
                 $this->fail('Inconsistent commerce order data must block fulfillment.');
             } catch (RuntimeException $exception) {
-                $expected = $case === 'currency'
-                    ? 'Commerce order currency does not match the invoice currency.'
-                    : 'Commerce order total does not match the invoice amount.';
+                $expected = match ($case) {
+                    'currency' => 'Commerce order currency does not match the invoice currency.',
+                    'total' => 'Commerce order total does not match the invoice amount.',
+                    default => 'A commerce order item quantity, unit price, and line total do not reconcile.',
+                };
                 $this->assertSame($expected, $exception->getMessage());
             }
 
