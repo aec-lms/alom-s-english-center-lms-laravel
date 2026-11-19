@@ -300,4 +300,39 @@ final class CmsContributorManagementTest extends TestCase
     }
 
 
+
+    public function test_reviewer_assignment_rejects_existing_coauthor_and_editor_when_fields_are_omitted(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+
+        $author = $this->createUserWithRole('student');
+        $coAuthor = $this->createUserWithRole('teacher');
+        $editor = $this->createUserWithRole('teacher');
+        $manager = $this->createUserWithRole('student');
+        $this->grantCmsRole($author, 'cms_contributor');
+        $this->grantCmsRole($coAuthor, 'cms_contributor');
+        $this->grantCmsRole($editor, 'cms_editor');
+        $this->grantCmsRole($manager, 'cms_author_manager');
+        $post = $this->createDraft($author, 'Existing Assignment Independence');
+
+        $post->forceFill(['assigned_editor_id' => $editor->id])->save();
+        $post->contributors()->sync([$coAuthor->id => ['contributor_type' => 'co_author', 'sort_order' => 1]]);
+
+        $this->actingAs($manager)->put('/admin/cms/editorial/posts/' . $post->id . '/assignments', [
+            'assigned_reviewer_id' => $coAuthor->id,
+        ])->assertStatus(422);
+
+        $this->actingAs($manager)->put('/admin/cms/editorial/posts/' . $post->id . '/assignments', [
+            'assigned_reviewer_id' => $editor->id,
+        ])->assertStatus(422);
+
+        $this->assertDatabaseHas('cms_posts', [
+            'id' => $post->id,
+            'assigned_editor_id' => $editor->id,
+            'assigned_reviewer_id' => null,
+        ]);
+    }
+
+
 }
