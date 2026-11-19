@@ -98,7 +98,7 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
         ]);
         $service->reverseSettledPurchase($buyer, 'commerce_order', $firstSourceId, $secondRefundId, 500.00, 'BDT');
         $this->assertDatabaseHas('referral_commissions', [
-            'source_id' => 'AEC-ORDER-1001',
+            'source_id' => $firstSourceId,
             'commission_amount' => 0,
             'status' => 'reversed',
         ]);
@@ -265,7 +265,7 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
         ]);
         $paymentId = DB::table('payment_transactions')->insertGetId([
             'transaction_ref' => 'RECOVERY-ADMIN-' . strtoupper(bin2hex(random_bytes(4))),
-            'invoice_id' => null,
+            'invoice_id' => $recoveryInvoiceId,
             'branch_id' => null,
             'gateway_slug' => 'offline',
             'amount' => 1000.00,
