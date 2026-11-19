@@ -441,17 +441,25 @@ class CmsController extends Controller
             abort_if($locked->is_published, 422);
             $this->lockEditorialAssignmentUsers($user, $validated, $locked);
             $this->validateEditorialAssignments($user, $validated, $locked);
-            $authorId = (int) ($validated['author_user_id'] ?? $locked->author_user_id);
-            if ($authorId) $this->assertCmsAuthor($authorId);
-            $author = $authorId ? User::query()->find($authorId) : null;
+            $authorId = array_key_exists('author_user_id', $validated)
+                ? (int) ($validated['author_user_id'] ?? 0)
+                : (int) ($locked->author_user_id ?? 0);
+            if ($authorId > 0) $this->assertCmsAuthor($authorId);
+            $author = $authorId > 0 ? User::query()->find($authorId) : null;
             $locked->forceFill([
-                'author_user_id' => $authorId ?: null,
+                'author_user_id' => $authorId > 0 ? $authorId : null,
                 'author' => $author?->name ?? $locked->author,
-                'assigned_editor_id' => $validated['assigned_editor_id'] ?? null,
-                'assigned_reviewer_id' => $validated['assigned_reviewer_id'] ?? null,
+                'assigned_editor_id' => array_key_exists('assigned_editor_id', $validated)
+                    ? ($validated['assigned_editor_id'] ?? null)
+                    : $locked->assigned_editor_id,
+                'assigned_reviewer_id' => array_key_exists('assigned_reviewer_id', $validated)
+                    ? ($validated['assigned_reviewer_id'] ?? null)
+                    : $locked->assigned_reviewer_id,
                 'updated_by' => $user->id,
             ])->save();
-            $this->syncCmsCoAuthors($locked, $validated['co_authors'] ?? [], $authorId ?: null);
+            if (array_key_exists('co_authors', $validated)) {
+                $this->syncCmsCoAuthors($locked, $validated['co_authors'] ?? [], $authorId > 0 ? $authorId : null);
+            }
             $this->audit->log('cms.post_assignments_updated', 'cms_post', (string) $locked->id, [
                 'author_user_id' => $authorId,
                 'assigned_editor_id' => $locked->assigned_editor_id,
