@@ -1318,7 +1318,7 @@ class PluginManager
      * Route files are required again after runtime installation so newly enabled
      * modules are available without restarting the application.
      */
-    private function loadPluginRoutes(PluginManifest $manifest): void
+    public function loadPluginRoutes(PluginManifest $manifest): void
     {
         foreach (['Routes/web.php', 'Routes/api.php'] as $relative) {
             $routeFile = rtrim($manifest->basePath, DIRECTORY_SEPARATOR)
