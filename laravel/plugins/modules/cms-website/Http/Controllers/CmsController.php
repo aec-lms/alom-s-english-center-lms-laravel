@@ -481,7 +481,7 @@ class CmsController extends Controller
         if (!in_array('cms_contributor', $newRoles, true) && !in_array('cms_editor', $newRoles, true)) {
             $hasAuthoredPosts = CmsPost::withTrashed()->where(fn ($q) => $q->where('author_user_id', $user->id)->orWhere('created_by', $user->id))->exists()
                 || (Schema::hasTable('cms_post_authors') && DB::table('cms_post_authors')->where('user_id', $user->id)->exists());
-            abort_if($hasAuthoredPosts, 422, 'Reassign this user's authored or co-authored posts before removing Contributor/Editor access.');
+            abort_if($hasAuthoredPosts, 422, "Reassign this user's authored or co-authored posts before removing Contributor/Editor access.");
         }
         if (!in_array('cms_editor', $newRoles, true)) {
             abort_if(CmsPost::withTrashed()->where('assigned_editor_id', $user->id)->exists(), 422, 'Reassign this user's editor assignments before removing Editor access.');
