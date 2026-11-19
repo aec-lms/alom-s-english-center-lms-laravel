@@ -149,6 +149,8 @@ class CmsWebsiteSafetyTest extends TestCase
         $this->assertSame('Original Title', $revision->title);
         $this->actingAs($admin)->post('/admin/cms/posts/' . $post->id . '/revisions/' . $revision->id . '/restore')->assertSessionHasNoErrors();
         $this->assertDatabaseHas('cms_posts', ['id' => $post->id, 'title' => 'Original Title', 'slug' => 'revision-test-post', 'content' => 'Original content']);
+        $this->assertSame(2, DB::table('cms_post_revisions')->where('post_id', $post->id)->count());
+        $this->assertDatabaseHas('cms_post_revisions', ['post_id' => $post->id, 'title' => 'Changed Title', 'content' => 'Changed content']);
     }
 
 
