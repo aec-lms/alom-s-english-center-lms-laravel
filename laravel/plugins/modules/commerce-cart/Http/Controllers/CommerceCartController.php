@@ -69,6 +69,7 @@ class CommerceCartController extends Controller
             if ($existing) {
                 DB::table('commerce_cart_items')->where('id', $existing->id)->update([
                     'quantity' => $quantity, 'unit_price' => $item['price'],
+                    'currency' => $item['currency'],
                     'title_snapshot' => $item['title'], 'metadata' => json_encode($item['metadata']),
                     'updated_at' => now(),
                 ]);
