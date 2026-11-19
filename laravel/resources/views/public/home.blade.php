@@ -88,7 +88,7 @@
             </button>
 
             <div class="w-full lg:w-[66%] max-w-[820px] relative rounded-2xl overflow-hidden border border-white/15 bg-[#021C2B] shadow-2xl">
-                <a id="hero-main-link" href="{{ $heroSlides[0]['cta_url'] }}" class="block relative aspect-[16/9] sm:h-[380px] lg:h-[400px] w-full">
+                <a id="hero-main-link" href="{{ $heroSlides[0]['cta_url'] }}" @if($heroSlides[0]['open_new_tab']) target="_blank" rel="noopener noreferrer" @endif class="block relative aspect-[16/9] sm:h-[380px] lg:h-[400px] w-full">
                     <picture><source id="hero-main-mobile" media="(max-width: 639px)" srcset="{{ $heroSlides[0]['mobile_image'] }}"><img id="hero-main-img" src="{{ $heroSlides[0]['image'] }}" alt="{{ $heroSlides[0]['title'] }}" class="w-full h-full object-cover"></picture>
                     <div id="hero-main-overlay" class="absolute inset-0 bg-gradient-to-t from-[#021824]/90 via-[#021824]/30 to-transparent" style="opacity: {{ $heroSlides[0]['overlay_opacity'] / 90 }}"></div>
                     <div id="hero-main-copy" @class(['absolute inset-x-0 bottom-12 px-6 sm:px-10 space-y-1.5', 'text-left' => $heroSlides[0]['text_alignment'] === 'left', 'text-center' => $heroSlides[0]['text_alignment'] === 'center', 'text-right' => $heroSlides[0]['text_alignment'] === 'right'])>
