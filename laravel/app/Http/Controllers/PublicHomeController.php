@@ -42,15 +42,21 @@ class PublicHomeController extends Controller
         ] : $liveStats;
 
         $sliders = collect();
+        $bannerSlides = collect();
         $leftReviews = collect();
         $rightReviews = collect();
 
         if (Schema::hasTable('cms_sliders')) {
-            $sliders = DB::table('cms_sliders')
-                ->where('key_name', 'hero')
-                ->where('is_active', true)
-                ->orderBy('sort_order')
-                ->get();
+            $visibleSlides = DB::table('cms_sliders')->where('is_active', true);
+            if (Schema::hasColumn('cms_sliders', 'starts_at')) {
+                $visibleSlides->where(fn ($query) => $query->whereNull('starts_at')->orWhere('starts_at', '<=', now()));
+            }
+            if (Schema::hasColumn('cms_sliders', 'ends_at')) {
+                $visibleSlides->where(fn ($query) => $query->whereNull('ends_at')->orWhere('ends_at', '>', now()));
+            }
+            $sliders = (clone $visibleSlides)->where('key_name', 'hero')->orderBy('sort_order')->orderBy('id')->get();
+            $bannerSlides = (clone $visibleSlides)->whereIn('key_name', ['banner_slider', 'course_promotion', 'announcement'])
+                ->orderBy('sort_order')->orderBy('id')->get();
         }
 
         if (Schema::hasTable('cms_carousels')) {
@@ -84,6 +90,7 @@ class PublicHomeController extends Controller
         return view('public.home', compact(
             'stats',
             'sliders',
+            'bannerSlides',
             'leftReviews',
             'rightReviews',
             'homepage',
