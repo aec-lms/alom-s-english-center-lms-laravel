@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use Plugins\\Modules\\AdminBoosting\\Models\\BoostCampaign;
-use Illuminate\\Support\\Facades\\DB;
-use Tests\\TestCase;
+use Illuminate\Support\Facades\DB;
+use Plugins\Modules\AdminBoosting\Models\BoostCampaign;
+use Tests\TestCase;
 
 class BoostCampaignSafetyTest extends TestCase
 {
