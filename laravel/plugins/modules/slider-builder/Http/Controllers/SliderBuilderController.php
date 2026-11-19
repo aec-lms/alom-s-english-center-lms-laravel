@@ -2,19 +2,19 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\SliderBuilder\\Http\\Controllers;
+namespace Plugins\Modules\SliderBuilder\Http\Controllers;
 
-use App\\Core\\Security\\AuditLogger;
-use App\\Http\\Controllers\\Controller;
-use Illuminate\\Http\\RedirectResponse;
-use Illuminate\\Http\\Request;
-use Illuminate\\Http\\UploadedFile;
-use Illuminate\\Support\\Facades\\File;
-use Illuminate\\Support\\Facades\\Schema;
-use Illuminate\\Support\\Str;
-use Illuminate\\Validation\\Rule;
-use Illuminate\\View\\View;
-use Plugins\\Modules\\SliderBuilder\\Models\\HeroSlider;
+use App\Core\Security\AuditLogger;
+use App\Http\Controllers\Controller;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
+use Illuminate\View\View;
+use Plugins\Modules\SliderBuilder\Models\HeroSlider;
 
 class SliderBuilderController extends Controller
 {
@@ -91,12 +91,12 @@ class SliderBuilderController extends Controller
             'title' => ['required', 'string', 'max:180'],
             'subtitle' => ['nullable', 'string', 'max:500'],
             'button_label' => ['nullable', 'string', 'max:60'],
-            'cta_url' => ['nullable', 'string', 'max:255', 'regex:#^(https?://[^\\s]+|/(?!/)[^\\s]*|#[A-Za-z][A-Za-z0-9_-]*)$#i'],
+            'cta_url' => ['nullable', 'string', 'max:255', 'regex:#^(https?://[^\s]+|/(?!/)[^\s]*|#[A-Za-z][A-Za-z0-9_-]*)$#i'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:65535'],
             'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:6144'],
             'mobile_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:6144'],
-            'image_path' => ['nullable', 'string', 'max:255', 'regex:#^/(?!/)(?!.*(?:\\.\\.|%2e|%2f))[A-Za-z0-9/_\\-.]+$#i'],
-            'mobile_image_path' => ['nullable', 'string', 'max:255', 'regex:#^/(?!/)(?!.*(?:\\.\\.|%2e|%2f))[A-Za-z0-9/_\\-.]+$#i'],
+            'image_path' => ['nullable', 'string', 'max:255', 'regex:#^/(?!/)(?!.*(?:\.\.|%2e|%2f))[A-Za-z0-9/_\-.]+$#i'],
+            'mobile_image_path' => ['nullable', 'string', 'max:255', 'regex:#^/(?!/)(?!.*(?:\.\.|%2e|%2f))[A-Za-z0-9/_\-.]+$#i'],
             'text_alignment' => ['required', Rule::in(['left', 'center', 'right'])],
             'transition' => ['required', Rule::in(['fade', 'slide'])],
             'overlay_opacity' => ['required', 'integer', 'min:0', 'max:90'],
@@ -121,7 +121,7 @@ class SliderBuilderController extends Controller
 
     private function deleteManagedImageIfUnused(?string $path): void
     {
-        if (!is_string($path) || !preg_match('~^/uploads/sliders/[A-Za-z0-9-]+\\.(?:jpg|jpeg|png|webp)$~i', $path)) {
+        if (!is_string($path) || !preg_match('~^/uploads/sliders/[A-Za-z0-9-]+\.(?:jpg|jpeg|png|webp)$~i', $path)) {
             return;
         }
         if (HeroSlider::withTrashed()->where('image_path', $path)->orWhere('mobile_image_path', $path)->exists()) {
