@@ -72,12 +72,33 @@ class PaymentSettlementService
                 // enrollment, and source course disagree about branch ownership.
                 $preflightOrders = DB::table('commerce_orders')->where('invoice_id', $invoice->id)->lockForUpdate()->get();
                 foreach ($preflightOrders as $preflightOrder) {
-                    if (Schema::hasColumn('commerce_orders', 'branch_id')
-                        && Schema::hasColumn('fee_invoices', 'branch_id')
-                        && $preflightOrder->branch_id !== null
-                        && $invoice->branch_id !== null
-                        && (int) $preflightOrder->branch_id !== (int) $invoice->branch_id) {
-                        throw new RuntimeException('Commerce order and invoice branch ownership do not match.');
+                    if (Schema::hasColumn('commerce_orders', 'branch_id') && Schema::hasColumn('fee_invoices', 'branch_id')) {
+                        $orderBranchId = $preflightOrder->branch_id !== null ? (int) $preflightOrder->branch_id : null;
+                        $invoiceBranchId = $invoice->branch_id !== null ? (int) $invoice->branch_id : null;
+                        if ($orderBranchId !== $invoiceBranchId) {
+                            throw new RuntimeException('Commerce order and invoice branch ownership do not match.');
+                        }
+
+                        $buyer = User::query()->find((int) $preflightOrder->user_id);
+                        if (!$buyer) {
+                            throw new RuntimeException('Commerce order student account no longer exists.');
+                        }
+
+                        $assignedBranchId = null;
+                        if (app(\\App\\Core\\Plugins\\PluginManager::class)->isEnabled('student-management')
+                            && Schema::hasTable('students')
+                            && Schema::hasColumn('students', 'branch_id')) {
+                            $profileBranchId = DB::table('students')->where('user_id', $buyer->id)->value('branch_id');
+                            if ($profileBranchId !== null) {
+                                $assignedBranchId = (int) $profileBranchId;
+                            }
+                        }
+                        if ($assignedBranchId === null && Schema::hasColumn('users', 'branch_id') && $buyer->branch_id !== null) {
+                            $assignedBranchId = (int) $buyer->branch_id;
+                        }
+                        if ($assignedBranchId !== $orderBranchId) {
+                            throw new RuntimeException('Student branch assignment changed after checkout; manual payment reconciliation is required.');
+                        }
                     }
                 }
                 if (Schema::hasTable('enrollments') && Schema::hasColumn('enrollments', 'invoice_id')
