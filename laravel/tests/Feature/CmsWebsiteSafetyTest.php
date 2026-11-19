@@ -46,6 +46,8 @@ class CmsWebsiteSafetyTest extends TestCase
 
         $post = DB::table('cms_posts')->where('title', 'Safe CMS Article')->first();
         $this->assertNotNull($post);
+        $this->assertFalse((bool) $post->is_published, 'A newly created post must never bypass editorial approval.');
+        $this->assertSame('draft', $post->editorial_status);
         $this->assertSame('/uploads/posts/article.webp', $post->thumbnail_path);
         $this->assertSame('https://cdn.example.test/guide.pdf', $post->pdf_path);
         $this->assertSame('/uploads/posts/pdf-thumbs/guide.webp', $post->pdf_thumbnail);
@@ -62,7 +64,7 @@ class CmsWebsiteSafetyTest extends TestCase
             'category' => 'General',
             'author' => 'AEC LMS',
             'content' => 'Existing content',
-            'is_published' => true,
+            'is_published' => false,
         ]);
 
         $this->actingAs($admin)->put('/admin/cms/posts/' . $post->id, [
@@ -153,6 +155,252 @@ class CmsWebsiteSafetyTest extends TestCase
 
 
 
+    public function test_editorial_review_requires_approval_before_workflow_publication(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+        $submitter = $this->createUserWithRole('admin');
+        $reviewer = $this->createUserWithRole('admin');
+        $post = CmsPost::query()->create(['slug' => 'editorial-review-test', 'title' => 'Editorial Review Test', 'category' => 'General', 'author' => 'Contributor', 'content' => 'Draft content', 'is_published' => false, 'editorial_status' => 'draft']);
+        $this->actingAs($submitter)->post('/admin/cms/posts/' . $post->id . '/submit-review')->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('cms_posts', ['id' => $post->id, 'editorial_status' => 'in_review', 'is_published' => false, 'submitted_by' => $submitter->id]);
+        $this->actingAs($submitter)->post('/admin/cms/posts/' . $post->id . '/approve')->assertForbidden();
+        $this->assertDatabaseHas('cms_posts', ['id' => $post->id, 'editorial_status' => 'in_review', 'is_published' => false]);
+        $this->actingAs($reviewer)->post('/admin/cms/posts/' . $post->id . '/approve')->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('cms_posts', ['id' => $post->id, 'editorial_status' => 'approved', 'is_published' => false, 'reviewed_by' => $reviewer->id]);
+        $this->actingAs($reviewer)->post('/admin/cms/posts/' . $post->id . '/publish-approved')->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('cms_posts', ['id' => $post->id, 'editorial_status' => 'published', 'is_published' => true]);
+    }
+
+    public function test_editorial_change_request_requires_and_persists_reviewer_feedback(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+        $submitter = $this->createUserWithRole('admin');
+        $reviewer = $this->createUserWithRole('admin');
+        $post = CmsPost::query()->create(['slug' => 'editorial-change-request', 'title' => 'Editorial Change Request', 'category' => 'General', 'author' => 'Contributor', 'content' => 'Draft content', 'created_by' => $submitter->id, 'submitted_by' => $submitter->id, 'is_published' => false, 'editorial_status' => 'in_review']);
+        $this->actingAs($submitter)->post('/admin/cms/posts/' . $post->id . '/request-changes', ['review_note' => 'Please add references.'])->assertForbidden();
+        $this->actingAs($reviewer)->post('/admin/cms/posts/' . $post->id . '/request-changes', ['review_note' => ''])->assertSessionHasErrors('review_note');
+        $this->assertDatabaseHas('cms_posts', ['id' => $post->id, 'editorial_status' => 'in_review']);
+        $this->actingAs($reviewer)->post('/admin/cms/posts/' . $post->id . '/request-changes', ['review_note' => 'Please add references.'])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('cms_posts', ['id' => $post->id, 'editorial_status' => 'changes_requested', 'review_note' => 'Please add references.']);
+    }
+
+
+    public function test_editing_an_approved_post_invalidates_approval_and_requires_resubmission(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+        $admin = $this->createUserWithRole('admin');
+        $post = CmsPost::query()->create([
+            'slug' => 'approved-content-edit',
+            'title' => 'Approved Content',
+            'category' => 'General',
+            'author' => 'AEC',
+            'content' => 'Approved body',
+            'is_published' => false,
+            'editorial_status' => 'approved',
+            'submitted_at' => now(),
+            'submitted_by' => 12345,
+            'reviewed_at' => now(),
+            'reviewed_by' => 67890,
+        ]);
+
+        $this->actingAs($admin)->put('/admin/cms/posts/' . $post->id, [
+            'title' => 'Changed After Approval',
+            'slug' => 'approved-content-edit',
+            'content' => 'Changed body must be reviewed again',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('cms_posts', [
+            'id' => $post->id,
+            'title' => 'Changed After Approval',
+            'is_published' => false,
+            'editorial_status' => 'draft',
+            'submitted_at' => null,
+            'submitted_by' => null,
+            'reviewed_at' => null,
+            'reviewed_by' => null,
+            'review_note' => null,
+        ]);
+    }
+
+    public function test_published_post_cannot_be_modified_through_the_draft_update_endpoint(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+        $admin = $this->createUserWithRole('admin');
+        $post = CmsPost::query()->create([
+            'slug' => 'live-post-protected',
+            'title' => 'Live Post',
+            'category' => 'General',
+            'author' => 'AEC',
+            'content' => 'Live approved body',
+            'is_published' => true,
+            'editorial_status' => 'published',
+        ]);
+
+        $this->actingAs($admin)->put('/admin/cms/posts/' . $post->id, [
+            'title' => 'Unreviewed Live Edit',
+            'slug' => 'live-post-protected',
+            'content' => 'Unreviewed changes',
+        ])->assertStatus(422);
+
+        $this->assertDatabaseHas('cms_posts', [
+            'id' => $post->id,
+            'title' => 'Live Post',
+            'content' => 'Live approved body',
+            'is_published' => true,
+            'editorial_status' => 'published',
+        ]);
+    }
+
+    public function test_revision_restore_never_restores_a_published_state_without_approval(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+        $admin = $this->createUserWithRole('admin');
+        $post = CmsPost::query()->create([
+            'slug' => 'draft-revision-restore',
+            'title' => 'Current Draft',
+            'category' => 'General',
+            'author' => 'AEC',
+            'content' => 'Current draft body',
+            'is_published' => false,
+            'editorial_status' => 'draft',
+        ]);
+        $revisionId = DB::table('cms_post_revisions')->insertGetId([
+            'post_id' => $post->id,
+            'user_id' => $admin->id,
+            'title' => 'Old Live Snapshot',
+            'slug' => 'draft-revision-restore',
+            'category' => 'General',
+            'category_id' => null,
+            'author' => 'AEC',
+            'excerpt' => null,
+            'content' => 'Old snapshot body',
+            'thumbnail_path' => null,
+            'pdf_path' => null,
+            'pdf_thumbnail' => null,
+            'seo_title' => null,
+            'seo_description' => null,
+            'is_published' => true,
+            'created_at' => now(),
+        ]);
+
+        $this->actingAs($admin)->post('/admin/cms/posts/' . $post->id . '/revisions/' . $revisionId . '/restore')
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('cms_posts', [
+            'id' => $post->id,
+            'title' => 'Old Live Snapshot',
+            'content' => 'Old snapshot body',
+            'is_published' => false,
+            'editorial_status' => 'draft',
+        ]);
+    }
+
+
+    public function test_original_post_creator_cannot_approve_even_when_another_admin_submitted_it(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+        $creator = $this->createUserWithRole('admin');
+        $submitter = $this->createUserWithRole('admin');
+        $post = CmsPost::query()->create([
+            'slug' => 'creator-review-separation',
+            'title' => 'Creator Review Separation',
+            'category' => 'General',
+            'author' => 'AEC',
+            'content' => 'Draft content',
+            'created_by' => $creator->id,
+            'author_user_id' => $creator->id,
+            'is_published' => false,
+            'editorial_status' => 'draft',
+        ]);
+
+        $this->actingAs($submitter)->post('/admin/cms/posts/' . $post->id . '/submit-review')->assertSessionHasNoErrors();
+        $this->actingAs($creator)->post('/admin/cms/posts/' . $post->id . '/approve')->assertForbidden();
+
+        $this->assertDatabaseHas('cms_posts', [
+            'id' => $post->id,
+            'editorial_status' => 'in_review',
+            'submitted_by' => $submitter->id,
+            'reviewed_by' => null,
+        ]);
+    }
+
+
+    public function test_live_post_revision_restore_is_rejected_without_mutating_published_content(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+        $admin = $this->createUserWithRole('admin');
+        $post = CmsPost::query()->create([
+            'slug' => 'published-revision-protected',
+            'title' => 'Published Original',
+            'category' => 'General',
+            'author' => 'AEC',
+            'content' => 'Live body must remain unchanged',
+            'is_published' => true,
+            'editorial_status' => 'published',
+        ]);
+        $revisionId = DB::table('cms_post_revisions')->insertGetId([
+            'post_id' => $post->id,
+            'user_id' => $admin->id,
+            'title' => 'Historical Snapshot',
+            'slug' => 'published-revision-protected',
+            'category' => 'General',
+            'category_id' => null,
+            'author' => 'AEC',
+            'excerpt' => null,
+            'content' => 'Historical body',
+            'thumbnail_path' => null,
+            'pdf_path' => null,
+            'pdf_thumbnail' => null,
+            'seo_title' => null,
+            'seo_description' => null,
+            'is_published' => false,
+            'created_at' => now(),
+        ]);
+
+        $this->actingAs($admin)->post('/admin/cms/posts/' . $post->id . '/revisions/' . $revisionId . '/restore')
+            ->assertStatus(422);
+
+        $this->assertDatabaseHas('cms_posts', [
+            'id' => $post->id,
+            'title' => 'Published Original',
+            'content' => 'Live body must remain unchanged',
+            'is_published' => true,
+            'editorial_status' => 'published',
+        ]);
+    }
+
+
+    public function test_new_post_cannot_bypass_editorial_review_with_publish_checkbox(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+        $author = $this->createUserWithRole('admin');
+
+        $this->actingAs($author)->post('/admin/cms/posts', [
+            'title' => 'Must Remain a Draft',
+            'slug' => 'must-remain-a-draft',
+            'category' => 'General',
+            'author' => 'Contributor',
+            'content' => 'This content must go through review.',
+            'is_published' => '1',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('cms_posts', [
+            'slug' => 'must-remain-a-draft',
+            'is_published' => false,
+            'editorial_status' => 'draft',
+            'submitted_by' => null,
+            'reviewed_by' => null,
+        ]);
+    }
+
     public function test_trashed_post_keeps_its_media_and_is_hidden_from_public_hub_until_restored(): void
     {
         $this->markSystemInstalled();
@@ -216,7 +464,7 @@ class CmsWebsiteSafetyTest extends TestCase
             'content' => 'Original article body.',
             'seo_title' => 'Original Search Title',
             'seo_description' => 'Original search description remains intact.',
-            'is_published' => true,
+            'is_published' => false,
         ]);
 
         $this->actingAs($admin)->put('/admin/cms/posts/' . $post->id, [
@@ -233,4 +481,4 @@ class CmsWebsiteSafetyTest extends TestCase
         ]);
     }
 
-}
+}\n

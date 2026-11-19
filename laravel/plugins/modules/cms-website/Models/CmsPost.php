@@ -27,9 +27,17 @@ class CmsPost extends Model
         'seo_description',
         'is_published',
         'publish_at',
+        'created_by',
+        'author_user_id',
+        'editorial_status',
+        'submitted_at',
+        'submitted_by',
+        'reviewed_at',
+        'reviewed_by',
+        'review_note',
     ];
 
-    protected $casts = ['is_published' => 'boolean', 'publish_at' => 'datetime'];
+    protected $casts = ['is_published' => 'boolean', 'publish_at' => 'datetime', 'submitted_at' => 'datetime', 'reviewed_at' => 'datetime'];
 
     public function categoryModel(): BelongsTo
     {
