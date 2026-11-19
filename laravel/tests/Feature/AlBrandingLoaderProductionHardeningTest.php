@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use Plugins\Modules\AlBrandingLoader\Models\LoaderSetting;
 use Tests\TestCase;
 
 final class AlBrandingLoaderProductionHardeningTest extends TestCase
@@ -49,4 +50,28 @@ final class AlBrandingLoaderProductionHardeningTest extends TestCase
 
         $this->assertStringContainsString('/(admin|api|payment|payments|checkout|webhook|webhooks|live-class|live-classes)', $view);
     }
+    public function test_model_respects_excluded_paths_and_keeps_public_pages_enabled(): void
+    {
+        $setting = new LoaderSetting([
+            'enabled' => true,
+            'excluded_paths' => ['admin/*', 'api/*', 'payment/*'],
+        ]);
+
+        $this->assertFalse($setting->shouldRenderForPath('admin/users'));
+        $this->assertFalse($setting->shouldRenderForPath('api/courses'));
+        $this->assertFalse($setting->shouldRenderForPath('payment/checkout'));
+        $this->assertTrue($setting->shouldRenderForPath('courses'));
+    }
+
+    public function test_logo_url_rejects_paths_outside_the_plugin_upload_directory(): void
+    {
+        $setting = new LoaderSetting(['logo_path' => 'uploads/other-plugin/logo.png']);
+
+        $this->assertNull($setting->logo_url);
+
+        $setting->logo_path = 'uploads/alom-english-center/loader/valid-logo.png';
+
+        $this->assertNotNull($setting->logo_url);
+    }
+
 }
