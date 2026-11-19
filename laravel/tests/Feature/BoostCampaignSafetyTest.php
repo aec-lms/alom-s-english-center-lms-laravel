@@ -96,6 +96,34 @@ class BoostCampaignSafetyTest extends TestCase
         $this->assertSame(1, $campaign->fresh()->clicks);
     }
 
+    public function test_default_campaign_end_date_is_thirty_days_after_a_future_start(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['admin-boosting', 'course-management']);
+        $admin = $this->createUserWithRole('admin');
+        $course = Course::query()->create([
+            'code' => 'BOOST-SCHEDULE-01',
+            'title' => 'Scheduled Course',
+            'slug' => 'scheduled-course',
+            'price' => 0,
+            'status' => 'published',
+        ]);
+        $futureStart = now()->addDays(10)->startOfMinute();
+
+        $this->actingAs($admin)->post('/plugins/boost', [
+            'campaign_name' => 'Future Campaign',
+            'entity_type' => 'course',
+            'entity_id' => $course->id,
+            'placement' => 'homepage_featured',
+            'destination_url' => '/courses',
+            'starts_at' => $futureStart->toDateTimeString(),
+        ])->assertRedirect();
+
+        $campaign = BoostCampaign::query()->where('campaign_name', 'Future Campaign')->firstOrFail();
+        $this->assertTrue($campaign->ends_at->greaterThan($campaign->starts_at));
+        $this->assertSame(30, $campaign->starts_at->diffInDays($campaign->ends_at));
+    }
+
     public function test_campaign_target_ids_must_resolve_and_global_target_switch_clears_old_id(): void
     {
         $this->markSystemInstalled();
