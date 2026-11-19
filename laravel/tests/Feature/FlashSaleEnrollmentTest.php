@@ -290,4 +290,49 @@ class FlashSaleEnrollmentTest extends TestCase
         }
     }
 
+    public function test_branch_specific_campaign_precedes_global_offer_even_with_lower_priority(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'course-management', 'flash-sale']);
+
+        $branchId = DB::table('branches')->insertGetId([
+            'code' => 'FLASH-PRIORITY-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'name' => 'Flash Priority Branch',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $course = Course::query()->create([
+            'branch_id' => $branchId,
+            'code' => 'FLASH-BRANCH-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'title' => 'Branch Campaign Course',
+            'slug' => 'branch-campaign-' . bin2hex(random_bytes(3)),
+            'price' => 1000,
+            'status' => 'published',
+        ]);
+
+        foreach ([
+            ['title' => 'Global premium priority', 'branch_id' => null, 'priority' => 900, 'discount_value' => 40],
+            ['title' => 'Branch-specific offer', 'branch_id' => $branchId, 'priority' => 1, 'discount_value' => 15],
+        ] as $campaign) {
+            DB::table('flash_sales')->insert($campaign + [
+                'course_id' => $course->id,
+                'discount_type' => 'percent',
+                'starts_at' => now()->subMinute(),
+                'ends_at' => now()->addDay(),
+                'is_published' => true,
+                'is_active' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $quote = app(\Plugins\Modules\FlashSale\Services\FlashSalePricingService::class)
+            ->quote((int) $course->id, (int) $branchId);
+
+        $this->assertSame('Branch-specific offer', $quote['sale']->title);
+        $this->assertEquals(150.00, $quote['discount']);
+        $this->assertEquals(850.00, $quote['total']);
+    }
+
 }
