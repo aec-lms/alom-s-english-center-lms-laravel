@@ -14,7 +14,7 @@ class BranchManagerDashboardIsolationTest extends TestCase
     public function test_branch_manager_only_sees_branch_user_count_and_cannot_select_global_widgets(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['branch-management', 'student-management', 'reports-analytics']);
+        $this->activatePlugins(['branch-management', 'student-management', 'reports-analytics', 'notification-center']);
 
         $branchA = DB::table('branches')->insertGetId([
             'code' => 'DASH-A-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
@@ -57,10 +57,12 @@ class BranchManagerDashboardIsolationTest extends TestCase
 
         $permissionId = DB::table('permissions')->where('slug', 'core.dashboard.view')->value('id');
         $reportsPermissionId = DB::table('permissions')->where('slug', 'reports.view')->value('id');
+        $notificationsPermissionId = DB::table('permissions')->where('slug', 'notifications.manage')->value('id');
         $this->assertNotNull($permissionId);
         $this->assertNotNull($reportsPermissionId);
-        $manager->roles()->first()->permissions()->syncWithoutDetaching([$permissionId, $reportsPermissionId]);
-        $managerB->roles()->first()->permissions()->syncWithoutDetaching([$permissionId, $reportsPermissionId]);
+        $this->assertNotNull($notificationsPermissionId);
+        $manager->roles()->first()->permissions()->syncWithoutDetaching([$permissionId, $reportsPermissionId, $notificationsPermissionId]);
+        $managerB->roles()->first()->permissions()->syncWithoutDetaching([$permissionId, $reportsPermissionId, $notificationsPermissionId]);
 
         SystemSetting::query()->updateOrCreate(
             ['key' => 'admin.dashboard.widgets.user.' . $manager->id],
@@ -96,6 +98,24 @@ class BranchManagerDashboardIsolationTest extends TestCase
         $this->actingAs($managerB)->get('/admin/reports')->assertOk()->assertViewHas('metrics', function (array $metrics): bool {
             return $metrics['users_count'] === 2 && $metrics['students_count'] === 1 && $metrics['audit_events'] === 0;
         });
+
+        $this->actingAs($manager)->post('/admin/notifications/dispatch', [
+            'user_id' => $studentA->id,
+            'channel' => 'in_app',
+            'title' => 'Branch A Notification',
+            'message' => 'Visible only inside branch A.',
+        ])->assertRedirect();
+        $this->assertDatabaseHas('lms_notifications', [
+            'user_id' => $studentA->id,
+            'branch_id' => $branchA,
+            'title' => 'Branch A Notification',
+        ]);
+        $this->actingAs($managerB)->post('/admin/notifications/dispatch', [
+            'user_id' => $studentA->id,
+            'channel' => 'in_app',
+            'title' => 'Cross Branch Attempt',
+            'message' => 'Must be rejected.',
+        ])->assertNotFound();
 
         $this->actingAs($manager)->post('/admin/dashboard/widgets', ['widgets' => ['plugins']])
             ->assertSessionHasErrors('widgets.0');
