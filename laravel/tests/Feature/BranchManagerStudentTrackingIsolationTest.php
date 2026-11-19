@@ -59,7 +59,7 @@ class BranchManagerStudentTrackingIsolationTest extends TestCase
 
         $this->actingAs($manager)->get('/admin/student-tracking')
             ->assertOk()
-            ->assertSee('Branch A Activity Visible')
+            ->assertSee('Student Learning Activity')->assertSee('Branch A Activity Visible')
             ->assertDontSee('Branch B Activity Private');
 
         $this->actingAs($manager)->get('/admin/student-tracking?student_id=' . $studentB->id)
