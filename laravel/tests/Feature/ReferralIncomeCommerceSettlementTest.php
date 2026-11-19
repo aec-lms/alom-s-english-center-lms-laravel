@@ -23,7 +23,7 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
     private function assertReferralCommissionForRole(string $referrerRole, float $percent): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['referral-income', 'student-management', 'teacher-management']);
+        $this->activatePlugins(['referral-income', 'student-management', 'teacher-management', 'payment-management']);
 
         $referrer = $this->createUserWithRole($referrerRole);
         $buyer = $this->createUserWithRole('student');
