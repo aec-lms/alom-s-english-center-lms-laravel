@@ -106,6 +106,33 @@
                             </form>
                         @endif
                     </div>
+
+                    <div class="grid gap-3 border-t border-slate-100 pt-3 lg:grid-cols-[1fr_auto] lg:items-center">
+                        <div class="space-y-2">
+                            <form method="POST" enctype="multipart/form-data" action="{{ route('plugins.admissions.documents.store', $app) }}" class="flex flex-wrap items-center gap-2">
+                                @csrf
+                                <label class="text-xs font-semibold text-slate-600" for="admission-document-{{ $app->id }}">Applicant document</label>
+                                <input id="admission-document-{{ $app->id }}" type="file" name="document" accept=".pdf,.jpg,.jpeg,.png" required class="max-w-xs text-xs">
+                                <button type="submit" class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Upload privately</button>
+                                <span class="text-[11px] text-slate-400">PDF/JPG/PNG · max 10 MB</span>
+                            </form>
+                            @if ($app->documents->isNotEmpty())
+                                <ul class="flex flex-wrap gap-2">
+                                    @foreach ($app->documents as $document)
+                                        <li><a href="{{ route('plugins.admissions.documents.download', [$app, $document]) }}" class="text-xs font-semibold text-sky-700 hover:underline">{{ $document->original_name }}</a><span class="ml-1 text-[10px] text-slate-400">({{ number_format($document->size_bytes / 1024, 0) }} KB)</span></li>
+                                    @endforeach
+                                </ul>
+                            @endif
+                        </div>
+                        @if ($app->status === 'approved' && !$app->converted_student_id && $studentConversionAvailable)
+                            <form method="POST" action="{{ route('plugins.admissions.convert_to_student', $app) }}" onsubmit="return confirm('Convert this approved applicant into a student account?')">
+                                @csrf
+                                <button type="submit" class="rounded-lg bg-emerald-700 px-4 py-2.5 text-xs font-bold text-white hover:bg-emerald-800">Convert to Student</button>
+                            </form>
+                        @elseif ($app->converted_student_id)
+                            <span class="text-xs font-semibold text-emerald-700">Student profile #{{ $app->converted_student_id }} created</span>
+                        @endif
+                    </div>
                 </article>
             @empty
                 <p class="rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-400">No applications match this view.</p>
