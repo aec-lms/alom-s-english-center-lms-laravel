@@ -967,7 +967,7 @@ final class UnifiedCommerceCartTest extends TestCase
     {
         $this->markSystemInstalled();
         $this->activatePlugins(['commerce-cart', 'course-management', 'fees-management', 'universal-payment', 'payment-management']);
-        app(\App\\Core\\Plugins\\PluginManager::class)->saveSettings('universal-payment', [
+        app(\App\Core\Plugins\PluginManager::class)->saveSettings('universal-payment', [
             'enabled_gateways' => 'bank_cash',
             'allow_offline_payments' => '1',
             'default_currency' => 'BDT',
