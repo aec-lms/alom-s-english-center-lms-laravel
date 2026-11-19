@@ -176,7 +176,7 @@ class CommerceCatalog
             && Schema::hasColumn('course_gifts', 'recipient_user_id')
             && $gift->recipient_user_id !== null) {
             $recipientBranchId = null;
-            if (app(\\App\\Core\\Plugins\\PluginManager::class)->isEnabled('student-management')
+            if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('student-management')
                 && Schema::hasTable('students')
                 && Schema::hasColumn('students', 'branch_id')) {
                 $recipientBranchId = DB::table('students')
