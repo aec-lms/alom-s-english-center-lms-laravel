@@ -108,7 +108,7 @@
             item.parentNode.insertBefore(dragged, item);
             const group = item.dataset.slideGroup;
             const ordered = Array.from(document.querySelectorAll('.slider-sort-item')).filter((node) => node.dataset.slideGroup === group);
-            const token = document.querySelector('meta[name="csrf-token"]')?.content;
+            const token = document.querySelector('meta[name="csrf-token"]')?.content || form?.querySelector('input[name="_token"]')?.value;
             try {
                 const response = await fetch(@json(route('plugins.slider_builder.reorder')), {
                     method: 'PATCH',
