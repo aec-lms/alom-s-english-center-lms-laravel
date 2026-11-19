@@ -219,7 +219,7 @@ final class UnifiedCommerceCartTest extends TestCase
         try {
             app(PaymentSettlementService::class)->settleTransaction($transaction, 'BANK-LATE-FAILED-001');
             $this->fail('A failed payment transaction must not be resurrected by a late callback.');
-        } catch (\\RuntimeException $exception) {
+        } catch (\RuntimeException $exception) {
             $this->assertSame('Only initiated payment transactions can be settled.', $exception->getMessage());
         }
 
