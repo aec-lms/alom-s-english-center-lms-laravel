@@ -151,9 +151,13 @@ class FlashSaleController extends Controller
                 'courses.slug as course_slug',
                 'courses.price as course_price'
             )
+            ->orderByRaw('CASE WHEN flash_sales.branch_id IS NULL THEN 0 ELSE 1 END DESC')
             ->orderByDesc('flash_sales.priority')
             ->orderBy('flash_sales.ends_at')
+            ->orderByDesc('flash_sales.id')
             ->get()
+            ->unique('course_id')
+            ->values()
             ->map(function (object $sale): object {
                 $price = (float) $sale->course_price;
                 $discount = $sale->discount_type === 'percent'
