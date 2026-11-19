@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Core\Plugins\PluginManager;
+use App\Providers\PluginServiceProvider;
 use App\Core\Versioning\VersionConstraint;
 use App\Models\PluginRecord;
 use App\Models\PluginSetting;
@@ -85,6 +86,59 @@ class PluginLifecycleTest extends TestCase
             $this->assertSame('plugins.route-once-probe.index', $matchingRoutes->first()->getName());
         } finally {
             File::deleteDirectory($pluginDir);
+        }
+    }
+
+    public function test_plugin_service_provider_does_not_re_register_routes_when_route_cache_is_active(): void
+    {
+        $this->markSystemInstalled();
+
+        $slug = 'cached-route-probe';
+        $pluginDir = (string) config('plugins.modules_path') . DIRECTORY_SEPARATOR . $slug;
+        File::ensureDirectoryExists($pluginDir . DIRECTORY_SEPARATOR . 'Routes');
+        file_put_contents($pluginDir . DIRECTORY_SEPARATOR . 'plugin.json', json_encode([
+            'slug' => $slug,
+            'name' => 'Cached Route Probe',
+            'version' => '1.0.0',
+            'core_compatibility' => '^2.0',
+            'dependencies' => [],
+        ], JSON_THROW_ON_ERROR));
+        file_put_contents(
+            $pluginDir . DIRECTORY_SEPARATOR . 'Routes' . DIRECTORY_SEPARATOR . 'web.php',
+            "<?php \\Illuminate\\Support\\Facades\\Route::get('/cached-route-probe', fn () => 'ok')->name('plugins.cached-route-probe.index');"
+        );
+
+        PluginRecord::query()->create([
+            'slug' => $slug,
+            'name' => 'Cached Route Probe',
+            'version' => '1.0.0',
+            'is_installed' => true,
+            'is_enabled' => true,
+        ]);
+
+        $cachePath = $this->app->getCachedRoutesPath();
+        $hadCache = is_file($cachePath);
+        $previousCache = $hadCache ? file_get_contents($cachePath) : null;
+
+        try {
+            File::ensureDirectoryExists(dirname($cachePath));
+            file_put_contents($cachePath, "<?php return [];");
+
+            $provider = new PluginServiceProvider($this->app);
+            $provider->boot(app(PluginManager::class));
+
+            $matchingRoutes = collect(app('router')->getRoutes())
+                ->filter(fn ($route): bool => $route->uri() === 'cached-route-probe');
+
+            $this->assertCount(0, $matchingRoutes, 'Cached plugin routes must not be loaded a second time.');
+        } finally {
+            if ($hadCache && $previousCache !== false) {
+                file_put_contents($cachePath, $previousCache);
+            } else {
+                @unlink($cachePath);
+            }
+            File::deleteDirectory($pluginDir);
+            PluginRecord::query()->where('slug', $slug)->delete();
         }
     }
 
