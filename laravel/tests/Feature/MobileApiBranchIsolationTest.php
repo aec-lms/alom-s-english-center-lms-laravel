@@ -129,6 +129,17 @@ class MobileApiBranchIsolationTest extends TestCase
             'is_published' => true,
         ]);
 
+        $this->getJson('/api/v1/courses')
+            ->assertOk()
+            ->assertJsonFragment(['title' => 'Global Mobile Course'])
+            ->assertJsonMissing(['title' => 'Mobile Branch A Course'])
+            ->assertJsonMissing(['title' => 'Mobile Branch B Course']);
+        $this->getJson('/api/v1/exams')
+            ->assertOk()
+            ->assertJsonFragment(['title' => 'Global Mobile Exam'])
+            ->assertJsonMissing(['title' => 'Mobile Branch A Exam'])
+            ->assertJsonMissing(['title' => 'Mobile Branch B Exam']);
+
         $token = $student->createToken('mobile-branch-test')->plainTextToken;
         $this->withToken($token)->getJson('/api/v1/courses')
             ->assertOk()
