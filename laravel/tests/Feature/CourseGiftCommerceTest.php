@@ -242,6 +242,61 @@ class CourseGiftCommerceTest extends TestCase
         $this->actingAs($recipient)->post('/student/course-commerce/vouchers/redeem/' . $token)->assertStatus(409);
         $this->assertSame(1, DB::table('course_gift_wallet_transactions')->where('reference', 'gift-voucher-credit:' . $voucherId)->count());
     }
+    public function test_voucher_sender_cannot_claim_their_own_voucher(): void
+    {
+        $sender = $this->createUserWithRole('student');
+        $token = str_repeat('S', 64);
+        $voucherId = DB::table('course_gift_vouchers')->insertGetId([
+            'sender_user_id' => $sender->id,
+            'recipient_email' => $sender->email,
+            'recipient_name' => $sender->name,
+            'redeem_token_hash' => hash('sha256', $token),
+            'redeem_token_encrypted' => encrypt($token),
+            'currency' => 'BDT',
+            'amount' => 1000,
+            'remaining_amount' => 1000,
+            'status' => 'paid',
+            'paid_at' => now(),
+            'expires_at' => now()->addDays(30),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($sender)->get('/student/course-commerce/vouchers/redeem/' . $token)->assertForbidden();
+        $this->actingAs($sender)->post('/student/course-commerce/vouchers/redeem/' . $token)->assertForbidden();
+
+        $this->assertDatabaseHas('course_gift_vouchers', ['id' => $voucherId, 'status' => 'paid', 'recipient_user_id' => null]);
+        $this->assertDatabaseMissing('course_gift_wallets', ['user_id' => $sender->id]);
+    }
+
+    public function test_voucher_redemption_rejects_remaining_balance_above_original_amount(): void
+    {
+        $sender = $this->createUserWithRole('student');
+        $recipient = $this->createUserWithRole('student');
+        $recipient->update(['email' => 'invalid-balance-recipient@example.test']);
+        $token = str_repeat('I', 64);
+        $voucherId = DB::table('course_gift_vouchers')->insertGetId([
+            'sender_user_id' => $sender->id,
+            'recipient_email' => $recipient->email,
+            'recipient_name' => 'Invalid Balance Recipient',
+            'redeem_token_hash' => hash('sha256', $token),
+            'redeem_token_encrypted' => encrypt($token),
+            'currency' => 'BDT',
+            'amount' => 1000,
+            'remaining_amount' => 1500,
+            'status' => 'paid',
+            'paid_at' => now(),
+            'expires_at' => now()->addDays(30),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($recipient)->post('/student/course-commerce/vouchers/redeem/' . $token)->assertStatus(409);
+
+        $this->assertDatabaseHas('course_gift_vouchers', ['id' => $voucherId, 'status' => 'paid', 'remaining_amount' => 1500]);
+        $this->assertDatabaseMissing('course_gift_wallets', ['user_id' => $recipient->id]);
+    }
+
     public function test_sslcommerz_course_cart_callback_preserves_order_metadata_and_activates_course_once(): void
     {
         $this->activatePlugins(['course-management', 'fees-management', 'marketing-management', 'universal-payment', 'gateway-sslcommerz', 'referral-income']);
