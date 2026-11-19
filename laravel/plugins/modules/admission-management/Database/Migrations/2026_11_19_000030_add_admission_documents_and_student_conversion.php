@@ -20,6 +20,9 @@ return new class extends Migration {
             if (!Schema::hasColumn('admission_applications', 'converted_at')) {
                 $table->timestamp('converted_at')->nullable();
             }
+            if (!Schema::hasColumn('admission_applications', 'admission_fee_invoice_id')) {
+                $table->unsignedBigInteger('admission_fee_invoice_id')->nullable()->index();
+            }
         });
 
         if (!Schema::hasTable('admission_documents')) {
