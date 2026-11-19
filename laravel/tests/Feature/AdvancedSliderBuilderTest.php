@@ -161,4 +161,35 @@ class AdvancedSliderBuilderTest extends TestCase
             ->assertDontSee('Private Recycled Slider Campaign');
     }
 
+    public function test_slider_updates_validate_schedule_against_omitted_existing_boundaries(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['slider-builder']);
+        $admin = $this->createUserWithRole('admin');
+        $start = now()->addDay()->startOfMinute();
+        $end = now()->addDays(3)->startOfMinute();
+        $slide = HeroSlider::query()->create([
+            'key_name' => 'hero',
+            'title' => 'Scheduled Slider',
+            'starts_at' => $start,
+            'ends_at' => $end,
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($admin)->put('/admin/slider-builder/' . $slide->id, [
+            'key_name' => 'hero',
+            'title' => 'Scheduled Slider',
+            'starts_at' => now()->addDays(4)->toDateTimeString(),
+        ])->assertSessionHasErrors('ends_at');
+
+        $this->actingAs($admin)->put('/admin/slider-builder/' . $slide->id, [
+            'key_name' => 'hero',
+            'title' => 'Scheduled Slider',
+            'ends_at' => now()->addHours(12)->toDateTimeString(),
+        ])->assertSessionHasErrors('ends_at');
+
+        $this->assertTrue($slide->fresh()->starts_at->equalTo($start));
+        $this->assertTrue($slide->fresh()->ends_at->equalTo($end));
+    }
+
 }
