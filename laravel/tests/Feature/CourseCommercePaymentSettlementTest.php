@@ -146,6 +146,61 @@ class CourseCommercePaymentSettlementTest extends TestCase
         $this->assertSame(1, DB::table('fee_invoices')->where('payer_email', $sender->email)->count());
     }
 
+    public function test_gift_voucher_settlement_rejects_sender_branch_changes_after_checkout(): void
+    {
+        $sender = $this->createUserWithRole('student');
+        $originalBranchId = 610;
+        DB::table('users')->where('id', $sender->id)->update(['branch_id' => $originalBranchId]);
+
+        $token = str_repeat('B', 64);
+        $voucherId = DB::table('course_gift_vouchers')->insertGetId([
+            'sender_user_id' => $sender->id,
+            'recipient_email' => 'voucher-branch@example.test',
+            'redeem_token_hash' => hash('sha256', $token),
+            'redeem_token_encrypted' => encrypt($token),
+            'currency' => 'BDT',
+            'amount' => 1500,
+            'remaining_amount' => 1500,
+            'status' => 'awaiting_payment',
+            'expires_at' => now()->addDays(90),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $transaction = $this->transaction($sender->id, 1500, [
+            'purpose' => 'course_gift_voucher',
+            'course_gift_voucher_id' => $voucherId,
+        ]);
+        $transaction->update(['branch_id' => $originalBranchId]);
+        DB::table('course_gift_vouchers')->where('id', $voucherId)->update(['payment_transaction_id' => $transaction->id]);
+
+        DB::table('users')->where('id', $sender->id)->update(['branch_id' => $originalBranchId + 1]);
+
+        try {
+            app(CourseCommercePaymentSettlementService::class)->settle(
+                $transaction->fresh(),
+                'BANK-VOUCHER-BRANCH-001',
+                ['validation_status' => 'VALID']
+            );
+            $this->fail('Voucher settlement must reject a sender whose branch changed after checkout.');
+        } catch (\\RuntimeException $exception) {
+            $this->assertSame(
+                'Course branch or student assignment changed after checkout; manual reconciliation is required.',
+                $exception->getMessage()
+            );
+        }
+
+        $this->assertDatabaseHas('course_gift_vouchers', [
+            'id' => $voucherId,
+            'status' => 'awaiting_payment',
+            'invoice_id' => null,
+        ]);
+        $this->assertDatabaseHas('universal_payment_transactions', [
+            'id' => $transaction->id,
+            'status' => 'pending',
+        ]);
+        $this->assertSame(0, DB::table('fee_invoices')->where('payer_email', $sender->email)->count());
+    }
+
     public function test_verified_gift_voucher_payment_creates_a_paid_invoice(): void
     {
         $sender = $this->createUserWithRole('student');
