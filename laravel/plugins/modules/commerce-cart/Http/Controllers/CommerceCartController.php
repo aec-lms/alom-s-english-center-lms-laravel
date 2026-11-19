@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Plugins\Modules\CommerceCart\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\SystemSetting;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Request;
