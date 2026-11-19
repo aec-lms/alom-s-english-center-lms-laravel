@@ -593,6 +593,12 @@ class PaymentSettlementStateMachineTest extends TestCase
                     'invoice_id' => $invoice->id,
                     'status' => 'active',
                 ]);
+
+                // Replaying the same bearer token must not create another entitlement.
+                $this->actingAs($recipient)->post('/student/course-commerce/gifts/redeem/' . $token)
+                    ->assertStatus(409);
+                $this->assertSame(1, DB::table('enrollments')
+                    ->where('user_id', $recipient->id)->where('course_id', $courseId)->count());
             } else {
                 $this->assertDatabaseCount('course_gift_wallets', 0);
                 $this->assertDatabaseCount('course_gift_wallet_transactions', 0);
@@ -611,6 +617,14 @@ class PaymentSettlementStateMachineTest extends TestCase
                     'status' => 'completed',
                 ]);
                 $this->assertSame(500.0, (float) DB::table('course_gift_wallets')->where('user_id', $recipient->id)->value('balance'));
+
+                // A replay must not credit the same voucher a second time.
+                $this->actingAs($recipient)->post('/student/course-commerce/vouchers/redeem/' . $token)
+                    ->assertStatus(409);
+                $this->assertSame(1, DB::table('course_gift_wallet_transactions')
+                    ->where('voucher_id', $draftId)->where('type', 'credit')->count());
+                $this->assertSame(500.0, (float) DB::table('course_gift_wallets')
+                    ->where('user_id', $recipient->id)->value('balance'));
             }
         }
     }
