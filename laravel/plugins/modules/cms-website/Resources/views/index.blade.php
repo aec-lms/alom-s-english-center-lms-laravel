@@ -14,6 +14,7 @@
 
     <div class="flex flex-wrap gap-2 border-b border-slate-200 pb-3" id="cms-admin-tabs">
         <button type="button" data-tab="posts" class="cms-tab-btn px-4 py-2 rounded-lg text-xs font-bold bg-[#0284C7] text-white">Posts &amp; PDFs ({{ $posts->count() }})</button>
+        <button type="button" data-tab="recycle-bin" class="cms-tab-btn px-4 py-2 rounded-lg text-xs font-bold bg-white border border-slate-200 text-slate-700">Recycle Bin ({{ $trashedPosts->count() }})</button>
         <button type="button" data-tab="categories" class="cms-tab-btn px-4 py-2 rounded-lg text-xs font-bold bg-white border border-slate-200 text-slate-700">CMS Categories ({{ $categories->count() }})</button>
         <button type="button" data-tab="homepage" class="cms-tab-btn px-4 py-2 rounded-lg text-xs font-bold bg-white border border-slate-200 text-slate-700">Homepage &amp; Footer A-to-Z</button>
         <button type="button" data-tab="inquiries" class="cms-tab-btn px-4 py-2 rounded-lg text-xs font-bold bg-white border border-slate-200 text-slate-700">Contact Inquiries ({{ $inquiries->count() }})</button>
@@ -120,6 +121,33 @@
                 <p class="text-xs text-slate-400">No blog posts created yet.</p>
             @endforelse
         </div>
+    </section>
+
+    <section id="tab-recycle-bin" class="cms-tab-panel hidden bg-white rounded-2xl border border-slate-200 p-5 space-y-4 text-xs">
+        <div>
+            <h2 class="text-sm font-bold text-slate-900">Post Recycle Bin</h2>
+            <p class="text-slate-500 mt-1">Deleted posts keep their media files until permanently deleted. Restore a post to return it to the live post list.</p>
+        </div>
+        @forelse ($trashedPosts as $trashedPost)
+            <div class="border border-slate-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                    <div class="font-bold text-sm text-slate-900">{{ $trashedPost->title }}</div>
+                    <div class="text-slate-500">/{{ $trashedPost->slug }} &middot; Deleted {{ optional($trashedPost->deleted_at)->format('d M Y, h:i A') }}</div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <form method="POST" action="{{ route('plugins.cms.posts.restore', $trashedPost->id) }}">
+                        @csrf
+                        <button type="submit" class="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold">Restore</button>
+                    </form>
+                    <form method="POST" action="{{ route('plugins.cms.posts.force-delete', $trashedPost->id) }}" onsubmit="return confirm('Permanently delete this post? This cannot be undone.')">
+                        @csrf @method('DELETE')
+                        <button type="submit" class="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-700 font-bold">Delete Permanently</button>
+                    </form>
+                </div>
+            </div>
+        @empty
+            <p class="text-slate-400">The post Recycle Bin is empty.</p>
+        @endforelse
     </section>
 
     <!-- TAB 2: CMS CATEGORIES CRUD -->
