@@ -29,11 +29,39 @@ class TeacherController extends Controller
     {
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
-        $teachers = Teacher::query()
+        $teacherQuery = Teacher::query()
             ->with('user')
-            ->when($actor && $actor->hasRole('branch_manager'), fn ($query) => $query->where('branch_id', $actor->branch_id))
+            ->when($actor && $actor->hasRole('branch_manager'), fn ($query) => $query->where('branch_id', $actor->branch_id));
+
+        $search = trim((string) $request->query('q', ''));
+        $status = (string) $request->query('status', 'all');
+        $specialization = trim((string) $request->query('specialization', ''));
+
+        $totalTeachers = (clone $teacherQuery)->count();
+        $activeTeachers = (clone $teacherQuery)->where('is_active', true)->count();
+        $inactiveTeachers = $totalTeachers - $activeTeachers;
+
+        $teachers = (clone $teacherQuery)
+            ->when($search !== '', function ($query) use ($search): void {
+                $query->where(function ($nested) use ($search): void {
+                    $nested->where('employee_code', 'like', '%' . $search . '%')
+                        ->orWhere('specialization', 'like', '%' . $search . '%')
+                        ->orWhereHas('user', function ($userQuery) use ($search): void {
+                            $userQuery->where('name', 'like', '%' . $search . '%')
+                                ->orWhere('email', 'like', '%' . $search . '%');
+                        });
+                });
+            })
+            ->when(in_array($status, ['active', 'inactive'], true), fn ($query) => $query->where('is_active', $status === 'active'))
+            ->when($specialization !== '', fn ($query) => $query->where('specialization', $specialization))
             ->latest()
-            ->paginate(25);
+            ->paginate(25)
+            ->withQueryString();
+
+        $specializations = (clone $teacherQuery)->whereNotNull('specialization')
+            ->where('specialization', '!=', '')
+            ->distinct()->orderBy('specialization')->pluck('specialization');
+
         $branches = Schema::hasTable('branches')
             ? DB::table('branches')
                 ->when($actor && $actor->hasRole('branch_manager'), fn ($query) => $query->where('id', $actor->branch_id))
@@ -41,7 +69,7 @@ class TeacherController extends Controller
                 ->get()
             : collect();
 
-        return view('teacher-management::index', compact('teachers', 'branches'));
+        return view('teacher-management::index', compact('teachers', 'branches', 'totalTeachers', 'activeTeachers', 'inactiveTeachers', 'search', 'status', 'specialization', 'specializations'));
     }
 
     public function store(Request $request): RedirectResponse
