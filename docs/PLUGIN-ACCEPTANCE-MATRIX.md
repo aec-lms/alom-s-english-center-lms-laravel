@@ -205,7 +205,24 @@ These are focused fixes, not a substitute for the complete per-plugin acceptance
 
 ### Candidate manifest/dependency reconciliation (2026-11-19)
 
-The current PR candidate contains at least 48 known plugin manifests: the 44 slugs in the historical current-main inventory plus assignment-management, push-notifications, commerce-cart and referral-income. This is a candidate-branch observation, not a replacement for a recursive release-tree inventory. The prior 44-plugin count remains a dated main-branch snapshot.
+A recursive Git tree scan of the exact PR #269 head `bf028e241a09579d30212135b74ded64602737cd` found **60 plugin manifests**. This supersedes the earlier partial estimate of 48. The exact 60 slugs are listed below; the 44-plugin count above remains a dated main-branch snapshot and the original 39-plugin matrix remains historical. Manifest presence is inventory only, not feature acceptance.
+
+| Current PR #269 plugin slug (60) |
+|---|
+| `admin-boosting`, `admission-management`, `al-branding-loader`, `assignment-management`, `attendance-management` |
+| `batch-management`, `board-question-solver`, `branch-management`, `carousel-builder`, `certificate-management` |
+| `class-management`, `cms-website`, `commerce-cart`, `course-assessments`, `course-bundles` |
+| `course-content-studio`, `course-management`, `course-wishlist`, `email-notifications`, `exam-management` |
+| `expense-management`, `fees-management`, `flash-sale`, `gateway-card`, `gateway-paypal` |
+| `gateway-sslcommerz`, `gateway-stripe`, `gmail-marketing`, `google-console`, `guardian-management` |
+| `guardian-portal`, `hr-staff-management`, `learn-and-earn`, `library-management`, `marketing-management` |
+| `media-library`, `meta-pixel`, `mobile-app-api`, `notice-board`, `notification-center` |
+| `page-builder`, `payment-management`, `phonetics`, `push-notifications`, `question-bank` |
+| `quiz-contest`, `referral-income`, `reports-analytics`, `role-ai-assistant`, `seo-manager` |
+| `slider-builder`, `sms-gateway`, `storefront-catalog`, `student-management`, `student-tracing` |
+| `student-tracking`, `support-center`, `teacher-management`, `universal-payment`, `visitor-popup-ads` |
+
+`phonetics` and `al-branding-loader` remain separate plugin manifests; neither is merged into another module. The count and slug list must be regenerated whenever the candidate head changes.
 
 A manifest-by-manifest dependency review found one dangling optional dependency: commerce-cart declared subscription-management, but no subscription-management plugin manifest exists in this candidate. The stale optional dependency has been removed. PluginSiblingDependencyAuditTest now also rejects required or optional manifest dependencies that do not resolve to a plugin manifest, in addition to checking direct sibling namespace references.
 
