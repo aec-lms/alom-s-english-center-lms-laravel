@@ -214,7 +214,7 @@ class AdvancedSliderBuilderTest extends TestCase
         $this->get('/')
             ->assertOk()
             ->assertSee('style="opacity: 0"', false)
-            ->assertSee('current.overlay_opacity ?? 45', false);
+            ->assertSee("opacityValue === '' ? 45 : opacityValue", false);
     }
 
 }
