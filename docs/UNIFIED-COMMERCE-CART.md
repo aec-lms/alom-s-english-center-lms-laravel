@@ -43,14 +43,17 @@ The `commerce_entitlements` table is the shared entitlement ledger. Other plugin
 
 Do not enable production checkout until provider sandbox acceptance is complete. The pull request does not configure merchant credentials or deploy the plugin to the live cPanel host.
 
-## Gift courses and gift vouchers — migration status
+## Gift courses and gift vouchers — unified-cart integration
 
-Gift-course and gift-voucher purchases are **not yet supported** as unified-cart line items. Their existing legacy checkout remains separate while the recipient-specific settlement adapter is implemented.
+Gift-course and gift-voucher drafts can now be created from **/cart/gifts** and added to the same unified cart as ordinary learning products. The student checkout still creates one invoice and one commerce order. Drafts are server-created; the browser supplies only the course/recipient or voucher amount/recipient fields. The catalog resolves price, currency, sender ownership, recipient identity, status, expiry and branch/course availability again when the item is added and at checkout.
 
-Do not add `gift_course` or `gift_voucher` to the generic buyer-entitlement flow. A generic entitlement is owned by the order buyer; a gift must instead fulfill a server-owned draft for its verified recipient. Payment settlement currently fails closed for unrecognized/special order-item types so a future gift item cannot accidentally grant access to the sender. Regression coverage includes both gift-only and mixed course-plus-gift orders: settlement must roll back atomically, leaving the invoice unpaid, order awaiting payment, transaction initiated, and buyer entitlement ledger empty.
+Each gift order item is linked to exactly one gift draft through `commerce_order_item_id`. Settlement validates that linkage, sender, recipient email, course/voucher state, item total, currency, invoice, order and branch snapshot before it updates the gift draft. The unified payment transaction ID and paid invoice are stored on the gift draft. A gift item never creates a buyer-owned `commerce_entitlements` record.
 
-The required adapter must bind each order item to exactly one server-created gift/voucher draft, reconcile the immutable amount/currency and branch snapshot against the settled invoice, and fulfill the recipient gift or voucher wallet only after full verified settlement. Duplicate callbacks must be idempotent across invoice creation, gift status, voucher token, wallet credit and ledger rows.
+- **Course gift:** the gift becomes paid only after the entire invoice is verified as paid. The recipient claims it through the existing student course-commerce gift redemption flow using the token and matching recipient email; enrollment is created for the recipient, not the sender.
+- **Gift voucher:** the voucher becomes paid after full invoice settlement. The recipient claims it through the existing voucher redemption flow; only then is a wallet credit and voucher redemption ledger row created. Payment settlement itself does not credit the sender's wallet.
+- **Duplicate settlement:** the payment transaction lock/state machine and draft row locks make issuance idempotent. A second transaction cannot attach itself to an already-linked/paid draft.
+- **Branch safety:** sender assignment and course branch are revalidated during settlement. A stale or reassigned draft fails the whole invoice/order transaction before gift issuance.
+- **Refund safety:** refunds for orders containing gift-course or gift-voucher items are currently blocked before any refund or invoice mutation. Recipient course access and pooled voucher-wallet spending do not yet have a complete item-level reversal ledger, so the system routes these refunds to manual reconciliation rather than risking unrecoverable wallet value or leaving a redeemed gift active.
 
-Voucher refunds require an explicit ledger reversal policy: reverse only unspent wallet value; do not silently claw back value already spent. Redeemed course gifts and spent voucher value require an audited manual-review/recovery policy. Provider refund confirmation and ambiguous-outcome reconciliation must precede local refunded state.
+The legacy dedicated gift checkout remains available during migration. New unified gift checkout must not be considered production accepted until payment-provider sandbox tests and a complete recipient-aware refund/reconciliation workflow are finished. Production merchant credentials are not configured by this PR.
 
-The legacy routes remain available during migration. This section is not an authorization to enable new gift checkout or to treat existing gift/voucher refund handling as complete.
