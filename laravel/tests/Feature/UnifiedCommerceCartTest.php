@@ -1011,6 +1011,10 @@ final class UnifiedCommerceCartTest extends TestCase
         $this->assertDatabaseHas('fee_invoices', ['id' => $order->invoice_id, 'status' => 'unpaid', 'paid_amount' => 0]);
 
         $admin = $this->createUserWithRole('admin');
+        $this->actingAs($admin)->get('/plugins/universal-payment')
+            ->assertOk()
+            ->assertSee('name="payment_reference"', false)
+            ->assertSee($manual->external_trx_id);
         $this->actingAs($admin)->post('/plugins/universal-payment/transactions/' . $manual->id . '/status', [
             'status' => 'verified',
             'payment_reference' => $manual->external_trx_id,
