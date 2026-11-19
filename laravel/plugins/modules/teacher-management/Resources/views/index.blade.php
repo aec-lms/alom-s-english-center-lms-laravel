@@ -12,6 +12,42 @@
         </a>
     </div>
 
+    <div class="grid sm:grid-cols-3 gap-3">
+        <div class="bg-white rounded-2xl border border-slate-200 p-4">
+            <div class="text-xs font-semibold text-slate-500">Total Teachers</div>
+            <div class="text-2xl font-extrabold text-slate-900 mt-1">{{ number_format($totalTeachers) }}</div>
+        </div>
+        <div class="bg-white rounded-2xl border border-emerald-200 p-4">
+            <div class="text-xs font-semibold text-emerald-700">Active Teachers</div>
+            <div class="text-2xl font-extrabold text-emerald-800 mt-1">{{ number_format($activeTeachers) }}</div>
+        </div>
+        <div class="bg-white rounded-2xl border border-amber-200 p-4">
+            <div class="text-xs font-semibold text-amber-700">Inactive Teachers</div>
+            <div class="text-2xl font-extrabold text-amber-800 mt-1">{{ number_format($inactiveTeachers) }}</div>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-2xl border border-slate-200 p-4">
+        <form method="GET" action="/admin/teachers" class="grid sm:grid-cols-4 gap-3 text-xs">
+            <input name="q" value="{{ $search }}" placeholder="Search name, email, employee code..." class="rounded-lg border border-slate-300 px-3 py-2 sm:col-span-2">
+            <select name="specialization" class="rounded-lg border border-slate-300 px-3 py-2 bg-white">
+                <option value="">All specializations</option>
+                @foreach ($specializations as $item)
+                    <option value="{{ $item }}" @selected($specialization === $item)>{{ $item }}</option>
+                @endforeach
+            </select>
+            <select name="status" class="rounded-lg border border-slate-300 px-3 py-2 bg-white">
+                <option value="all" @selected($status === 'all')>All statuses</option>
+                <option value="active" @selected($status === 'active')>Active</option>
+                <option value="inactive" @selected($status === 'inactive')>Inactive</option>
+            </select>
+            <div class="sm:col-span-4 flex flex-wrap gap-2">
+                <button type="submit" class="px-4 py-2 rounded-lg bg-slate-900 text-white font-bold">Apply Filters</button>
+                <a href="/admin/teachers" class="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 font-semibold">Reset</a>
+            </div>
+        </form>
+    </div>
+
     <div class="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
         <h2 class="text-sm font-bold text-slate-900">Add New Instructor</h2>
         <form method="POST" action="/admin/teachers" enctype="multipart/form-data" class="grid sm:grid-cols-3 gap-3 text-xs">
