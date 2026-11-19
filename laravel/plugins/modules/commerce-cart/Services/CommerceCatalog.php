@@ -130,7 +130,20 @@ class CommerceCatalog
         if ($resourceBranchId === null) {
             return; // Platform-wide catalogue items remain available to every branch.
         }
-        $userBranchId = $user && method_exists($user, 'getAttribute') ? $user->getAttribute('branch_id') : null;
+        $userBranchId = null;
+        if ($user && method_exists($user, 'getAuthIdentifier')
+            && app(\\App\\Core\\Plugins\\PluginManager::class)->isEnabled('student-management')
+            && Schema::hasTable('students')
+            && Schema::hasColumn('students', 'branch_id')) {
+            $profileBranchId = DB::table('students')->where('user_id', $user->getAuthIdentifier())->value('branch_id');
+            if ($profileBranchId !== null) {
+                $userBranchId = (int) $profileBranchId;
+            }
+        }
+        if ($userBranchId === null && $user && method_exists($user, 'getAttribute')) {
+            $accountBranchId = $user->getAttribute('branch_id');
+            $userBranchId = $accountBranchId !== null ? (int) $accountBranchId : null;
+        }
         if ($userBranchId === null || (int) $userBranchId !== (int) $resourceBranchId) {
             throw ValidationException::withMessages(['item' => 'This item is not available to your assigned branch.']);
         }
