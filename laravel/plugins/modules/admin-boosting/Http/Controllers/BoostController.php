@@ -48,7 +48,7 @@ class BoostController extends Controller
     {
         $validated = $request->validate($this->campaignRules($request, true));
         $startsAt = $validated['starts_at'] ?? now();
-        $endsAt = $validated['ends_at'] ?? \\Illuminate\\Support\\Carbon::parse($startsAt)->addDays(30);
+        $endsAt = $validated['ends_at'] ?? \Illuminate\Support\Carbon::parse($startsAt)->addDays(30);
 
         $campaign = BoostCampaign::query()->create([
             'campaign_name' => $validated['campaign_name'],
