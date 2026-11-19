@@ -73,6 +73,9 @@ class BoostController extends Controller
     {
         $validated = $request->validate($this->campaignRules($request, false));
         $before = $campaign->only(['status', 'placement', 'entity_type', 'entity_id', 'priority']);
+        if (in_array($validated['entity_type'], ['institution', 'offer'], true)) {
+            $validated['entity_id'] = null;
+        }
         $campaign->update($validated);
 
         $this->audit->log('boost.updated', 'boost_campaign', (string) $campaign->id, [
@@ -145,7 +148,7 @@ class BoostController extends Controller
         return [
             'campaign_name' => ['required', 'string', 'max:180'],
             'entity_type' => ['required', 'in:course,institution,branch,offer'],
-            'entity_id' => ['nullable', 'integer', 'min:1', function (string $attribute, mixed $value, Closure $fail) use ($request): void {
+            'entity_id' => ['required_if:entity_type,course,branch', 'nullable', 'integer', 'min:1', function (string $attribute, mixed $value, Closure $fail) use ($request): void {
                 if ($value === null || $value === '') {
                     return;
                 }
