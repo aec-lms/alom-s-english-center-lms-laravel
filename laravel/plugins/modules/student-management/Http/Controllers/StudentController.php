@@ -2,21 +2,21 @@
 
 declare(strict_types=1);
 
-namespace Plugins\Modules\StudentManagement\Http\Controllers;
+namespace Plugins\\Modules\\StudentManagement\\Http\\Controllers;
 
-use App\Core\Security\AuditLogger;
-use App\Core\Plugins\PluginManager;
-use App\Http\Controllers\Controller;
-use App\Models\Role;
-use App\Models\User;
-use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Str;
-use Illuminate\View\View;
-use Plugins\Modules\StudentManagement\Models\Student;
+use App\\Core\\Security\\AuditLogger;
+use App\\Core\\Plugins\\PluginManager;
+use App\\Http\\Controllers\\Controller;
+use App\\Models\\Role;
+use App\\Models\\User;
+use Illuminate\\Http\\RedirectResponse;
+use Illuminate\\Http\\Request;
+use Illuminate\\Support\\Facades\\DB;
+use Illuminate\\Support\\Facades\\Hash;
+use Illuminate\\Support\\Facades\\Schema;
+use Illuminate\\Support\\Str;
+use Illuminate\\View\\View;
+use Plugins\\Modules\\StudentManagement\\Models\\Student;
 
 class StudentController extends Controller
 {
@@ -62,11 +62,16 @@ class StudentController extends Controller
             $validated['branch_id'] = $actor->branch_id;
         }
 
+        // Never provision an account that cannot receive the canonical student role.
+        // Failing before the transaction avoids leaving an orphaned, privileged-less user.
+        $studentRole = Role::query()->where('slug', 'student')->first();
+        abort_unless($studentRole, 503, 'Student role is not configured. Contact an administrator.');
+
         $code = !empty($validated['student_code'])
             ? trim($validated['student_code'])
             : 'STU-' . strtoupper(Str::random(6));
 
-        $student = DB::transaction(function () use ($validated, $code): Student {
+        $student = DB::transaction(function () use ($validated, $code, $studentRole): Student {
             $user = User::query()->create([
                 'name' => $validated['name'],
                 'email' => strtolower($validated['email']),
@@ -75,9 +80,8 @@ class StudentController extends Controller
                 'branch_id' => $validated['branch_id'] ?? null,
                 'is_active' => ($validated['status'] ?? 'active') === 'active',
             ]);
-            if ($role = Role::query()->where('slug', 'student')->first()) {
-                $user->roles()->sync([$role->id]);
-            }
+            $user->roles()->sync([$studentRole->id]);
+
             return Student::query()->create([
                 'user_id' => $user->id,
                 'branch_id' => $validated['branch_id'] ?? null,
