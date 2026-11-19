@@ -327,4 +327,38 @@ class AdmissionManagementWorkflowTest extends TestCase
         $this->assertSame($invoice->id, $application->fresh()->admission_fee_invoice_id);
     }
 
+
+    public function test_conversion_rejects_existing_student_profile_from_another_branch(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['admission-management', 'student-management']);
+
+        $admin = $this->createUserWithRole('admin');
+        $studentUser = $this->createUserWithRole('student');
+        $studentUser->update(['branch_id' => null]);
+        $student = Student::query()->create([
+            'user_id' => $studentUser->id,
+            'branch_id' => 44,
+            'student_code' => 'STU-BRANCH-LOCK-01',
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+        ]);
+        $application = AdmissionApplication::query()->create([
+            'application_code' => 'ADM-BRANCH-LOCK-01',
+            'applicant_name' => $studentUser->name,
+            'email' => $studentUser->email,
+            'phone' => '01700000011',
+            'desired_course' => 'IELTS Academic',
+            'branch_id' => 55,
+            'status' => 'approved',
+        ]);
+
+        $this->actingAs($admin)->post('/admin/admissions/' . $application->id . '/convert-to-student')
+            ->assertStatus(409);
+
+        $this->assertNull($application->fresh()->converted_student_id);
+        $this->assertSame(44, (int) $student->fresh()->branch_id);
+        $this->assertNull($studentUser->fresh()->branch_id);
+    }
+
 }
