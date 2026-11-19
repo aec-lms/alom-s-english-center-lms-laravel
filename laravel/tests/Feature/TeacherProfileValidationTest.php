@@ -114,4 +114,36 @@ final class TeacherProfileValidationTest extends TestCase
         $this->assertSame($branchId, (int) $teacher->fresh()->user->branch_id);
     }
 
+
+    public function test_recycle_restore_reinstates_the_teacher_login_state(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['teacher-management']);
+        if (!\\Illuminate\\Support\\Facades\\Schema::hasColumn('teachers', 'deleted_user_was_active')) {
+            $this->markTestSkipped('Teacher recycle state migration is not installed.');
+        }
+
+        $admin = $this->createUserWithRole('admin');
+        $this->actingAs($admin)->post('/admin/teachers', [
+            'name' => 'Recycle Teacher',
+            'email' => 'recycle.teacher@aec.test',
+            'employee_code' => 'VALIDATE-TEACH-005',
+            'specialization' => 'English Grammar',
+            'password' => 'AecTeacher!2026Strong',
+            'is_active' => '1',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $teacher = Teacher::query()->where('employee_code', 'VALIDATE-TEACH-005')->firstOrFail();
+        $user = $teacher->user;
+
+        $this->actingAs($admin)->delete('/admin/teachers/' . $teacher->id)->assertRedirect();
+        $this->assertFalse((bool) $user->fresh()->is_active);
+        $this->assertNotNull($teacher->fresh()->deleted_at);
+
+        $teacher->fresh()->restore();
+
+        $this->assertTrue((bool) $user->fresh()->is_active);
+        $this->assertNull($teacher->fresh()->deleted_at);
+    }
+
 }
