@@ -39,6 +39,9 @@ class PaymentSettlementService
             if ($lockedTx->status === 'refunded') {
                 throw new RuntimeException('A refunded transaction cannot be settled again.');
             }
+            if ($lockedTx->status !== 'initiated') {
+                throw new RuntimeException('Only initiated payment transactions can be settled.');
+            }
 
             $invoice = FeeInvoice::query()->where('id', $lockedTx->invoice_id)->lockForUpdate()->firstOrFail();
             $newPaid = round((float) $invoice->paid_amount + (float) $lockedTx->amount, 2);
