@@ -31,7 +31,7 @@ final class PhoneticsSpeakingRecordingController extends Controller
         $data = $request->validate([
             'entry_id' => ['required', 'integer', 'exists:alom_english_center_phonetic_entries,id'],
             'recording' => ['required', 'file', 'mimetypes:audio/webm,video/webm,audio/ogg,application/ogg,audio/wav,audio/x-wav,audio/mpeg,audio/mp4,video/mp4', 'max:10240'],
-            'duration_seconds' => ['required', 'integer', 'min:1', 'max:120'],
+            'reported_duration_seconds' => ['required', 'integer', 'min:1', 'max:120'],
         ]);
 
         $entry = $this->assignedEntry($request, $course, (int) $data['entry_id']);
@@ -78,7 +78,7 @@ final class PhoneticsSpeakingRecordingController extends Controller
                     'storage_path' => $path,
                     'mime_type' => (string) $file->getMimeType(),
                     'size_bytes' => (int) $file->getSize(),
-                    'duration_seconds' => (int) $data['duration_seconds'],
+                    'reported_duration_seconds' => (int) $data['reported_duration_seconds'],
                     'status' => 'pending',
                 ]);
             });
@@ -111,7 +111,7 @@ final class PhoneticsSpeakingRecordingController extends Controller
             ->where('user_id', (string) $request->user()->getAuthIdentifier())
             ->latest()
             ->limit(50)
-            ->get(['id', 'entry_id', 'status', 'score', 'feedback', 'duration_seconds', 'created_at', 'reviewed_at']);
+            ->get(['id', 'entry_id', 'status', 'score', 'feedback', 'reported_duration_seconds', 'created_at', 'reviewed_at']);
 
         $items->each(function (PhoneticSpeakingRecording $item) use ($courseSlug): void {
             $item->setAttribute('audio_url', route('plugins.phonetics.learning.recordings.audio', [
