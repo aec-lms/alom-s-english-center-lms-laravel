@@ -576,12 +576,20 @@ class CmsController extends Controller
         }
         if (!empty($validated['assigned_reviewer_id'])) {
             $reviewerId = (int) $validated['assigned_reviewer_id'];
-            $primaryAuthorId = (int) ($validated['author_user_id'] ?? $post?->author_user_id ?? $actor->id);
+            $primaryAuthorId = (int) (array_key_exists('author_user_id', $validated)
+                ? ($validated['author_user_id'] ?? 0)
+                : ($post?->author_user_id ?? $actor->id));
             $creatorId = (int) ($post?->created_by ?? $actor->id);
-            $coAuthorIds = array_map('intval', $validated['co_authors'] ?? []);
+            $coAuthorIds = array_key_exists('co_authors', $validated)
+                ? array_map('intval', $validated['co_authors'] ?? [])
+                : ($post ? $post->contributors()->pluck('users.id')->map(static fn ($id): int => (int) $id)->all() : []);
+            $assignedEditorId = (int) (array_key_exists('assigned_editor_id', $validated)
+                ? ($validated['assigned_editor_id'] ?? 0)
+                : ($post?->assigned_editor_id ?? 0));
+
             abort_if($reviewerId === $primaryAuthorId || $reviewerId === $creatorId || $reviewerId === (int) $actor->id
                 || in_array($reviewerId, $coAuthorIds, true)
-                || (!empty($validated['assigned_editor_id']) && $reviewerId === (int) $validated['assigned_editor_id']),
+                || ($assignedEditorId > 0 && $reviewerId === $assignedEditorId),
                 422, 'The reviewer must be independent from the author, creator, co-authors, assigned editor and assigning manager.');
         }
     }
