@@ -614,7 +614,14 @@ class CmsController extends Controller
         $absolute = public_path(ltrim($path, '/'));
         $root = realpath(public_path('uploads'));
         $file = realpath($absolute);
-        if ($root && $file && str_starts_with($file, $root . DIRECTORY_SEPARATOR) && is_file($file)) @unlink($file);
+
+        // Never follow a symlink while deleting user-managed CMS media.
+        if (!$root || !$file || is_link($absolute) || $file !== $absolute
+            || !str_starts_with($file, $root . DIRECTORY_SEPARATOR) || !is_file($absolute)) {
+            return;
+        }
+
+        @unlink($absolute);
     }
 
     private function defaultHomepageConfig(): array
