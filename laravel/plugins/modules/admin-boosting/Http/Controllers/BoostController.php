@@ -149,7 +149,7 @@ class BoostController extends Controller
         return [
             'campaign_name' => ['required', 'string', 'max:180'],
             'entity_type' => ['required', 'in:course,institution,branch,offer'],
-            'entity_id' => ['required_if:entity_type,course,branch', 'nullable', 'integer', 'min:1', function (string $attribute, mixed $value, \\Closure $fail) use ($request): void {
+            'entity_id' => ['required_if:entity_type,course,branch', 'nullable', 'integer', 'min:1', function (string $attribute, mixed $value, \Closure $fail) use ($request): void {
                 if ($value === null || $value === '') {
                     return;
                 }
