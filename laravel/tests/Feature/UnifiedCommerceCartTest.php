@@ -108,7 +108,7 @@ final class UnifiedCommerceCartTest extends TestCase
         $this->assertDatabaseHas('commerce_cart_items', [
             'cart_id' => $cart->id, 'item_type' => 'live_class', 'item_id' => $livePassId, 'unit_price' => 250,
         ]);
-        $this->actingAs($student)->get('/cart')->assertOk()->assertSee('Premium Monthly')->assertSee('Live Speaking Workshop');
+        $this->actingAs($student)->get('/cart')->assertOk()->assertSee('Premium Monthly')->assertSee('Live Speaking Workshop')->assertSee('Stripe (Card)');
     }
 
     public function test_inactive_service_cannot_be_added_to_cart(): void
