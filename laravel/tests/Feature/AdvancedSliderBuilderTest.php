@@ -8,6 +8,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\File;
 use Plugins\Modules\SliderBuilder\Models\HeroSlider;
 use Tests\TestCase;
+use RuntimeException;
 
 class AdvancedSliderBuilderTest extends TestCase
 {
@@ -33,7 +34,7 @@ class AdvancedSliderBuilderTest extends TestCase
         $before = array_map(static fn ($file) => $file->getFilename(), File::files($directory));
 
         HeroSlider::creating(static function (): void {
-            throw new \RuntimeException('Simulated slider persistence failure.');
+            throw new RuntimeException('Simulated slider persistence failure.');
         });
 
         try {
@@ -45,7 +46,7 @@ class AdvancedSliderBuilderTest extends TestCase
                     'image' => UploadedFile::fake()->image('failed-upload.jpg'),
                 ]);
                 $this->fail('Expected the simulated persistence failure.');
-            } catch (\RuntimeException $exception) {
+            } catch (RuntimeException $exception) {
                 $this->assertSame('Simulated slider persistence failure.', $exception->getMessage());
             }
         } finally {
