@@ -147,6 +147,7 @@ class MobileApiBranchIsolationTest extends TestCase
         $this->withToken($token)->getJson('/api/v1/courses/' . DB::table('courses')->where('id', $courseB)->value('slug'))
             ->assertNotFound();
 
+        $globalSlug = DB::table('courses')->where('id', $globalCourse)->value('slug');
         $this->withToken($token)->getJson('/api/v1/courses/' . $globalSlug . '/lessons')->assertOk();
 
         DB::table('students')->where('user_id', $student->id)->update([
