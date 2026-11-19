@@ -11,6 +11,18 @@ use Tests\TestCase;
 
 class AdvancedSliderBuilderTest extends TestCase
 {
+    public function test_slider_builder_declares_the_cms_plugin_that_owns_its_storage(): void
+    {
+        $manifest = json_decode(
+            file_get_contents(base_path('plugins/modules/slider-builder/plugin.json')),
+            true,
+            512,
+            JSON_THROW_ON_ERROR
+        );
+
+        $this->assertContains('cms-website', $manifest['dependencies'] ?? []);
+    }
+
     public function test_admin_can_create_a_responsive_scheduled_slider(): void
     {
         $this->markSystemInstalled();
