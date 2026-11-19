@@ -67,9 +67,9 @@ class SliderBuilderController extends Controller
         $effectiveStart = array_key_exists('starts_at', $validated) ? $validated['starts_at'] : $slider->starts_at;
         $effectiveEnd = array_key_exists('ends_at', $validated) ? $validated['ends_at'] : $slider->ends_at;
         if ($effectiveStart && $effectiveEnd
-            && Carbon::parse($effectiveEnd)->lt(Carbon::parse($effectiveStart))) {
+            && Carbon::parse($effectiveEnd)->lte(Carbon::parse($effectiveStart))) {
             throw ValidationException::withMessages([
-                'ends_at' => 'The slide end date must be on or after its start date.',
+                'ends_at' => 'The slide end date must be after its start date.',
             ]);
         }
 
