@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use Illuminate\Support\Facades\DB;
+use App\Models\PluginSetting;
 use Plugins\Modules\AdmissionManagement\Models\AdmissionApplication;
 use Tests\TestCase;
 
@@ -200,4 +200,4 @@ class AdmissionManagementWorkflowTest extends TestCase
             'email' => 'closed-intake@aec.test',
         ]);
     }
-}\n
+}
