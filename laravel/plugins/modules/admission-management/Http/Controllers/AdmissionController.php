@@ -71,7 +71,7 @@ class AdmissionController extends Controller
 
     public function applyPublic(Request $request): RedirectResponse
     {
-        abort_if(app(PluginManager::class)->getSetting('admission-management', 'intake_status', 'open') === 'closed', 403, 'Admission applications are currently closed.');
+        abort_if(strtolower(trim((string) app(PluginManager::class)->getSetting('admission-management', 'intake_status', 'open'))) === 'closed', 403, 'Admission applications are currently closed.');
 
         $validated = $request->validate([
             'applicant_name' => ['required', 'string', 'max:160'],
@@ -176,7 +176,7 @@ class AdmissionController extends Controller
             'assigned_to' => ['nullable', 'integer', 'exists:users,id'],
         ]);
 
-        $updated = DB::transaction(function () use ($application, $actor, $validated): AdmissionApplication {
+        [$updated, $fromStatus] = DB::transaction(function () use ($application, $actor, $validated): array {
             $locked = AdmissionApplication::query()->lockForUpdate()->findOrFail($application->id);
             $this->assertApplicationBranchAccess($actor, $locked);
 
@@ -204,11 +204,11 @@ class AdmissionController extends Controller
                 'assigned_to' => $validated['assigned_to'] ?? $locked->assigned_to,
             ]);
 
-            return $locked->fresh();
+            return [$locked->fresh(), $current];
         }, 3);
 
         $this->audit->log('admission.reviewed', 'admission_application', (string) $updated->id, [
-            'from' => $application->status,
+            'from' => $fromStatus,
             'to' => $updated->status,
             'assigned_to' => $updated->assigned_to,
         ]);
