@@ -78,8 +78,8 @@ class PluginCategoryRegistryTest extends TestCase
             ->assertSee('Finance &amp; Commerce')
             ->assertSee('Content &amp; Website CMS')
             ->assertSee('Platform Branding')
-            ->assertSee('course-management')
-            ->assertSee('universal-payment');
+            ->assertSee('Course &amp; Academic Management')
+            ->assertSee('Universal Payment Gateway Plugin');
     }
 
     public function test_category_resolution_does_not_rewrite_manifest_category_values(): void
