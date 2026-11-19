@@ -19,7 +19,7 @@
         <article class="grid gap-4 border-b p-4 lg:grid-cols-[1fr_1.2fr]">
             <div>
                 <p class="font-bold">{{ $recording->word?->word ?? 'Archived vocabulary' }}</p>
-                <p class="mt-1 text-xs text-slate-500">Private student submission · {{ $recording->duration_seconds }} sec reported · {{ $recording->created_at?->format('d M Y, h:i A') }}</p>
+                <p class="mt-1 text-xs text-slate-500">Private student submission · {{ $recording->reported_duration_seconds }} sec reported · {{ $recording->created_at?->format('d M Y, h:i A') }}</p>
                 <span class="mt-2 inline-flex rounded-full px-2 py-1 text-xs {{ $recording->status === 'reviewed' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800' }}">{{ ucfirst($recording->status) }}</span>
                 <audio class="mt-3 w-full" controls preload="none" src="{{ route('plugins.phonetics.admin.learning.recordings.audio',['recording'=>$recording->id]) }}"></audio>
                 @if($recording->status === 'reviewed')
