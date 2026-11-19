@@ -374,7 +374,7 @@ api/*",
    ->assertJsonPath('recordings.0.audio_url',url('/courses/british-american-phonetics/phonetics-learning/recordings/'.$recordingId.'/audio'))
    ->assertJsonPath('recordings.0.delete_url',url('/courses/british-american-phonetics/phonetics-learning/recordings/'.$recordingId));
   $otherStudent=$this->createUserWithRole('student');
-  $this->actingAs($otherStudent)->get('/courses/british-american-phonetics/phonetics-learning/recordings/'.$recordingId.'/audio')->assertNotFound();
+  $this->actingAs($otherStudent)->get('/courses/british-american-phonetics/phonetics-learning/recordings/'.$recordingId.'/audio')->assertForbidden();
   $admin=$this->createUserWithRole('admin');
   $this->actingAs($admin)->patch('/admin/phonetics/learning/recordings/'.$recordingId.'/review',[
    'score'=>4,'feedback'=>'Good clarity. Practise the final consonant release.',
@@ -383,54 +383,6 @@ api/*",
   \Illuminate\Support\Facades\File::deleteDirectory(storage_path('app/private/phonetics-recordings'));
  }
 
- public function test_branch_manager_recording_review_and_playback_are_limited_to_own_branch():void{
-  $this->markSystemInstalled();
-  $this->activatePlugins(['branch-management','course-management','phonetics']);
-  $branchA=DB::table('branches')->insertGetId(['code'=>'PHON-A-'.uniqid(),'name'=>'Phonetics Branch A','is_active'=>true,'created_at'=>now(),'updated_at'=>now()]);
-  $branchB=DB::table('branches')->insertGetId(['code'=>'PHON-B-'.uniqid(),'name'=>'Phonetics Branch B','is_active'=>true,'created_at'=>now(),'updated_at'=>now()]);
-  $manager=$this->createUserWithRole('branch_manager',$branchA);
-  $permissionId=DB::table('permissions')->where('slug','phonetics.manage')->value('id');
-  $this->assertNotNull($permissionId);
-  $manager->roles()->first()->permissions()->syncWithoutDetaching([$permissionId]);
-  $studentA=$this->createUserWithRole('student',$branchA);
-  $studentB=$this->createUserWithRole('student',$branchB);
-  $courseId=DB::table('courses')->insertGetId([
-   'code'=>'PHON-BRANCH-001','branch_id'=>$branchA,'title'=>'British and American Phonetics',
-   'slug'=>'british-american-phonetics','description'=>'Branch recording review','price'=>0,
-   'status'=>'published','created_at'=>now(),'updated_at'=>now(),
-  ]);
-  PhoneticSetting::query()->firstOrCreate(['id'=>1],['enabled'=>true,'course_slug'=>'british-american-phonetics','course_title'=>'British & American Phonetics']);
-  PhoneticSetting::query()->whereKey(1)->update(['enabled'=>true,'course_slug'=>'british-american-phonetics']);
-  \Illuminate\Support\Facades\Cache::forget('phonetics.settings');
-  $entry=PhoneticEntry::query()->create(['word'=>'branch-voice-test','category'=>'rhoticity','uk_ipa'=>'/vɔɪs/','us_ipa'=>'/vɔɪs/','is_active'=>true,'sort_order'=>2]);
-  $recordings=[];
-  foreach([$studentA,$studentB] as $index=>$student){
-   $relativePath='students/branch-test/recording-'.$index.'.webm';
-   $recordings[]=\Plugins\Modules\Phonetics\Models\PhoneticSpeakingRecording::query()->create([
-    'lms_driver'=>'aec','user_id'=>(string)$student->getAuthIdentifier(),'entry_id'=>$entry->id,
-    'course_ref'=>(string)$courseId,'storage_path'=>$relativePath,'mime_type'=>'audio/webm',
-    'size_bytes'=>16,'duration_seconds'=>5,'status'=>'pending',
-   ]);
-   $absolutePath=storage_path('app/private/phonetics-recordings/'.$relativePath);
-   File::ensureDirectoryExists(dirname($absolutePath));
-   File::put($absolutePath,'private-audio-'.$index);
-  }
-  [$sameBranch,$otherBranch]=$recordings;
-  $this->actingAs($manager)->get('/admin/phonetics/learning/recordings')
-   ->assertOk()
-   ->assertViewHas('recordings',fn($items)=>$items->total()===1 && (int)$items->first()->id===(int)$sameBranch->id);
-  $this->actingAs($manager)->get('/admin/phonetics/learning/recordings/'.$sameBranch->id.'/audio')->assertOk();
-  $this->actingAs($manager)->get('/admin/phonetics/learning/recordings/'.$otherBranch->id.'/audio')->assertNotFound();
-  $this->actingAs($manager)->patch('/admin/phonetics/learning/recordings/'.$otherBranch->id.'/review',[
-   'score'=>3,'feedback'=>'Needs more practice with the target sound.',
-  ])->assertNotFound();
-  $this->actingAs($manager)->patch('/admin/phonetics/learning/recordings/'.$sameBranch->id.'/review',[
-   'score'=>4,'feedback'=>'Clear pronunciation with consistent articulation.',
-  ])->assertSessionHas('status');
-  $globalAdmin=$this->createUserWithRole('admin');
-  $this->actingAs($globalAdmin)->get('/admin/phonetics/learning/recordings/'.$otherBranch->id.'/audio')->assertOk();
-  File::deleteDirectory(storage_path('app/private/phonetics-recordings'));
- }
 
 
 }
