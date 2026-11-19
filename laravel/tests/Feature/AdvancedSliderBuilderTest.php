@@ -16,7 +16,7 @@ class AdvancedSliderBuilderTest extends TestCase
     public function test_slider_builder_declares_no_sibling_plugin_dependency(): void
     {
         $manifest = json_decode(
-            file_get_contents(base_path('../plugins/modules/slider-builder/plugin.json')),
+            file_get_contents(base_path('plugins/modules/slider-builder/plugin.json')),
             true,
             512,
             JSON_THROW_ON_ERROR
