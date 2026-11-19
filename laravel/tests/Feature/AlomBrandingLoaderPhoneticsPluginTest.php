@@ -355,7 +355,7 @@ api/*",
   DB::table('enrollments')->insert(['user_id'=>$student->id,'course_id'=>$courseId,'branch_id'=>null,'status'=>'active','created_at'=>now(),'updated_at'=>now()]);
   PhoneticSetting::query()->firstOrCreate(['id'=>1],['enabled'=>true,'course_slug'=>'british-american-phonetics','course_title'=>'British & American Phonetics']);
   PhoneticSetting::query()->whereKey(1)->update(['enabled'=>true,'course_slug'=>'british-american-phonetics']);
-  \\Illuminate\\Support\\Facades\\Cache::forget('phonetics.settings');
+  \Illuminate\Support\Facades\Cache::forget('phonetics.settings');
   $entry=PhoneticEntry::query()->create(['word'=>'voice-test','category'=>'rhoticity','uk_ipa'=>'/vɔɪs/','us_ipa'=>'/vɔɪs/','is_active'=>true,'sort_order'=>1]);
   DB::table('phonetic_learning_assignments')->insert(['lms_driver'=>'aec','course_ref'=>(string)$courseId,'course_category_ref'=>null,'lesson_ref'=>null,'batch_ref'=>null,'word_id'=>$entry->id,'audience'=>'both','sort_order'=>1,'is_required'=>true,'created_at'=>now(),'updated_at'=>now()]);
   $response=$this->actingAs($student)->postJson('/courses/british-american-phonetics/phonetics-learning/recordings',[
@@ -364,7 +364,7 @@ api/*",
    'recording'=>UploadedFile::fake()->create('speech.webm',128,'audio/webm'),
   ])->assertCreated()->assertJson(['saved'=>true,'status'=>'pending']);
   $recordingId=$response->json('recording_id');
-  $recording=\\Plugins\\Modules\\Phonetics\\Models\\PhoneticSpeakingRecording::query()->findOrFail($recordingId);
+  $recording=\Plugins\Modules\Phonetics\Models\PhoneticSpeakingRecording::query()->findOrFail($recordingId);
   $privatePath=storage_path('app/private/phonetics-recordings/'.$recording->storage_path);
   $this->assertFileExists($privatePath);
   $this->assertFileDoesNotExist(public_path($recording->storage_path));
@@ -376,7 +376,7 @@ api/*",
    'score'=>4,'feedback'=>'Good clarity. Practise the final consonant release.',
   ])->assertSessionHas('status');
   $this->assertDatabaseHas('phonetic_speaking_recordings',['id'=>$recordingId,'status'=>'reviewed','score'=>4,'reviewer_user_id'=>(string)$admin->getAuthIdentifier()]);
-  \\Illuminate\\Support\\Facades\\File::deleteDirectory(storage_path('app/private/phonetics-recordings'));
+  \Illuminate\Support\Facades\File::deleteDirectory(storage_path('app/private/phonetics-recordings'));
  }
 
 
