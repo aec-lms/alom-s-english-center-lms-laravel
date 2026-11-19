@@ -111,6 +111,48 @@ final class UnifiedCommerceCartTest extends TestCase
         $this->actingAs($student)->get('/cart')->assertOk()->assertSee('Premium Monthly')->assertSee('Live Speaking Workshop')->assertSee('Stripe (Card)');
     }
 
+    public function test_readding_existing_sellable_refreshes_its_currency_snapshot(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['commerce-cart']);
+        $student = $this->createUserWithRole('student');
+        $sellableId = DB::table('commerce_sellables')->insertGetId([
+            'type' => 'other',
+            'title' => 'Currency Refresh Workshop',
+            'sku' => 'CURRENCY-REFRESH-' . strtoupper(uniqid()),
+            'price' => 250,
+            'currency' => 'BDT',
+            'entitlement' => '{}',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $payload = ['item_type' => 'other', 'item_id' => $sellableId, 'quantity' => 1];
+        $this->actingAs($student)->post('/cart/items', $payload)->assertRedirect('/cart');
+        $this->assertDatabaseHas('commerce_cart_items', [
+            'item_type' => 'other',
+            'item_id' => $sellableId,
+            'currency' => 'BDT',
+        ]);
+
+        DB::table('commerce_sellables')->where('id', $sellableId)->update([
+            'price' => 275,
+            'currency' => 'USD',
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($student)->post('/cart/items', $payload)->assertRedirect('/cart');
+
+        $this->assertDatabaseHas('commerce_cart_items', [
+            'item_type' => 'other',
+            'item_id' => $sellableId,
+            'quantity' => 2,
+            'unit_price' => 275,
+            'currency' => 'USD',
+        ]);
+    }
+
     public function test_inactive_service_cannot_be_added_to_cart(): void
     {
         $this->markSystemInstalled();
