@@ -17,7 +17,8 @@
     "settings_schema": [],
     "optional_dependencies": [
         "fees-management",
-        "referral-income"
+        "referral-income",
+        "student-management"
     ],
     "admin_menu": [
         {
