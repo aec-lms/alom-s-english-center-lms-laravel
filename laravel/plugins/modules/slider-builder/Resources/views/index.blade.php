@@ -74,7 +74,7 @@
             button.textContent = form.elements.button_label.value || 'Explore now';
             preview.style.textAlign = form.elements.text_alignment.value;
             const opacityValue = form.elements.overlay_opacity.value;
-            const opacity = Math.max(0, Math.min(90, Number(opacityValue === '' ? 45 : opacityValue))) / 100;
+            const opacity = Math.max(0, Math.min(90, Number(opacityValue === '' ? 45 : opacityValue))) / 90;
             preview.style.backgroundImage = 'linear-gradient(rgba(2,10,20,' + opacity + '),rgba(2,10,20,' + opacity + '))' + (preview.dataset.image ? ',url("' + preview.dataset.image + '")' : '');
         };
         form.addEventListener('input', sync);
