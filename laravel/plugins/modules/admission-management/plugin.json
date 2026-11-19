@@ -36,6 +36,8 @@
         }
     ],
     "optional_dependencies": [
-        "branch-management"
+        "branch-management",
+        "student-management",
+        "fees-management"
     ]
 }
