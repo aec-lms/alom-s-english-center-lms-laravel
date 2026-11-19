@@ -269,6 +269,12 @@ class CourseCommerceController extends Controller
         return DB::transaction(function () use ($gift, $student): RedirectResponse {
             $locked = DB::table('course_gifts')->where('id', $gift->id)->lockForUpdate()->first();
             abort_unless($locked && $locked->status === 'paid', 409, 'This gift has already been redeemed or is no longer available.');
+            // Re-check authorization and expiry after acquiring the row lock to
+            // prevent a request queued before expiry from redeeming it afterward.
+            abort_if($locked->expires_at && now()->greaterThan($locked->expires_at), 410, 'This gift has expired.');
+            abort_unless(hash_equals(strtolower((string) $locked->recipient_email), strtolower((string) $student->email)),
+                403, 'Sign in with the email address that received this gift.');
+            abort_if((int) $locked->sender_user_id === (int) $student->id, 403, 'The sender cannot redeem their own gift.');
             $this->assertGiftInvoiceFullyPaid($locked->invoice_id ?? null, $locked->payment_transaction_id ?? null, (float) $locked->amount, (string) $locked->currency, $locked->unified_payment_transaction_id ?? null);
             $course = DB::table('courses')->where('id', $locked->course_id)->where('status', 'published')->first();
             abort_unless($course, 409, 'The gifted course is currently unavailable. Please contact support.');
