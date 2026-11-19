@@ -120,8 +120,8 @@ class PluginLifecycleTest extends TestCase
             File::ensureDirectoryExists(dirname($cachePath));
             file_put_contents($cachePath, "<?php return [];");
 
-            $manifest = \\App\\Core\\Plugins\\PluginManifest::fromDirectory($pluginDir);
-            $manager = \\Mockery::mock(PluginManager::class);
+            $manifest = \App\Core\Plugins\PluginManifest::fromDirectory($pluginDir);
+            $manager = \Mockery::mock(PluginManager::class);
             $manager->shouldReceive('discoverManifests')->once()->andReturn([$slug => $manifest]);
             $manager->shouldNotReceive('loadPluginRoutes');
 
