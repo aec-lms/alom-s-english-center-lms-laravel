@@ -19,7 +19,7 @@
         <article class="grid gap-4 border-b p-4 lg:grid-cols-[1fr_1.2fr]">
             <div>
                 <p class="font-bold">{{ $recording->word?->word ?? 'Archived vocabulary' }}</p>
-                <p class="mt-1 text-xs text-slate-500">Private student submission · {{ $recording->reported_duration_seconds }} sec reported · {{ $recording->created_at?->format('d M Y, h:i A') }}</p>
+                <p class="mt-1 text-xs text-slate-500">{{ $recording->student_label ?? 'Student submission' }} · {{ $recording->reported_duration_seconds }} sec reported · {{ $recording->created_at?->format('d M Y, h:i A') }}</p>
                 <span class="mt-2 inline-flex rounded-full px-2 py-1 text-xs {{ $recording->status === 'reviewed' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800' }}">{{ ucfirst($recording->status) }}</span>
                 <audio class="mt-3 w-full" controls preload="none" src="{{ route('plugins.phonetics.admin.learning.recordings.audio',['recording'=>$recording->id]) }}"></audio>
                 @if($recording->status === 'reviewed')
@@ -39,10 +39,10 @@
                     @error('score')<span class="mt-1 block text-xs font-medium text-red-700">{{ $message }}</span>@enderror
                 </label>
                 <label class="block text-sm font-semibold">Teacher feedback
-                    <textarea name="feedback" required minlength="3" maxlength="2000" rows="3" class="mt-1 w-full rounded border bg-white p-2" placeholder="Mention the specific sound, stress or articulation to improve.">{{ old('feedback', $recording->feedback) }}</textarea>
+                    <textarea name="feedback" required minlength="3" maxlength="2000" rows="3" class="mt-1 w-full rounded border bg-white p-2 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-200" placeholder="Mention the specific sound, stress or articulation to improve.">{{ old('feedback', $recording->feedback) }}</textarea>
                     @error('feedback')<span class="mt-1 block text-xs font-medium text-red-700">{{ $message }}</span>@enderror
                 </label>
-                <button class="rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white">Save review</button>
+                <button class="rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">Save review</button>
             </form>
         </article>
         @empty
