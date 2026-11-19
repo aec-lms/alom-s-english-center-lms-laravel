@@ -138,18 +138,19 @@ class PaymentSettlementService
                         $durationDays = isset($entitlementDetails['duration_days'])
                             ? max(1, min(3650, (int) $entitlementDetails['duration_days']))
                             : ($orderItem->item_type === 'subscription' ? 30 : null);
-                        DB::table('commerce_entitlements')->insertOrIgnore([
-                            'user_id' => $order->user_id,
-                            'order_item_id' => $orderItem->id,
-                            'entitlement_type' => $orderItem->item_type,
-                            'resource_id' => $itemDetails['resource_id'] ?? $orderItem->item_id,
-                            'details' => $orderItem->metadata,
-                            'status' => 'active',
-                            'starts_at' => now(),
-                            'expires_at' => $durationDays ? now()->addDays($durationDays) : null,
-                            'created_at' => now(),
-                            'updated_at' => now(),
-                        ]);
+                        DB::table('commerce_entitlements')->updateOrInsert(
+                            ['user_id' => $order->user_id, 'order_item_id' => $orderItem->id],
+                            [
+                                'entitlement_type' => $orderItem->item_type,
+                                'resource_id' => $itemDetails['resource_id'] ?? $orderItem->item_id,
+                                'details' => $orderItem->metadata,
+                                'status' => 'active',
+                                'starts_at' => now(),
+                                'expires_at' => $durationDays ? now()->addDays($durationDays) : null,
+                                'updated_at' => now(),
+                                'created_at' => now(),
+                            ]
+                        );
                         if ($orderItem->item_type === 'mock_test' && $orderItem->item_id
                             && Schema::hasTable('learn_earn_exam_access')) {
                             DB::table('learn_earn_exam_access')->updateOrInsert(
@@ -165,14 +166,15 @@ class PaymentSettlementService
                         }
                         if ($orderItem->item_type === 'ebook' && $orderItem->item_id
                             && Schema::hasTable('storefront_item_access')) {
-                            DB::table('storefront_item_access')->insertOrIgnore([
-                                'storefront_item_id' => $orderItem->item_id,
-                                'user_id' => $order->user_id,
-                                'payment_transaction_id' => $lockedTx->id,
-                                'granted_at' => now(),
-                                'created_at' => now(),
-                                'updated_at' => now(),
-                            ]);
+                            DB::table('storefront_item_access')->updateOrInsert(
+                                ['storefront_item_id' => $orderItem->item_id, 'user_id' => $order->user_id],
+                                [
+                                    'payment_transaction_id' => $lockedTx->id,
+                                    'granted_at' => now(),
+                                    'created_at' => now(),
+                                    'updated_at' => now(),
+                                ]
+                            );
                         }
                     }
                 }
