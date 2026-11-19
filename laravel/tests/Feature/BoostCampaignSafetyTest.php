@@ -6,6 +6,8 @@ namespace Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
 use Plugins\Modules\AdminBoosting\Models\BoostCampaign;
+use Plugins\Modules\CourseManagement\Models\Course;
+use Plugins\Modules\BranchManagement\Models\Branch;
 use Tests\TestCase;
 
 class BoostCampaignSafetyTest extends TestCase
