@@ -25,6 +25,12 @@ abstract class BasePluginServiceProvider extends ServiceProvider implements Plug
             $this->loadViewsFrom($views, $this->slug());
         }
 
+        $translations = $this->pluginPath('lang');
+        if (is_dir($translations)) {
+            $this->loadJsonTranslationsFrom($translations);
+            $this->loadTranslationsFrom($translations, 'plugins.' . $this->slug());
+        }
+
         $migrations = $this->pluginPath('Database/Migrations');
         if (is_dir($migrations)) {
             $this->loadMigrationsFrom($migrations);
