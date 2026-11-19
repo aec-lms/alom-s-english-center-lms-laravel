@@ -96,7 +96,7 @@ class ReferralIncomeController extends Controller
                 )
                 ->latest('reversals.id')
                 ->paginate(30, ['*'], 'recoveries_page')
-            : new \\Illuminate\\Pagination\\LengthAwarePaginator([], 0, 30);
+            : new \Illuminate\Pagination\LengthAwarePaginator([], 0, 30);
         return view('referral-income::admin', compact('commissions', 'payouts', 'rules', 'recoveries'));
     }
 
