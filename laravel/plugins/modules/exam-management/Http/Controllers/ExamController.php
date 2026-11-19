@@ -181,9 +181,7 @@ class ExamController extends Controller
         $actor = $request->user();
         abort_unless($actor && $actor->hasRole('student'), 403, 'Only student accounts can take exams.');
         abort_unless($exam->is_published, 404);
-        if ($exam->branch_id !== null && (int) $actor->branch_id !== (int) $exam->branch_id) {
-            abort(403, 'Exam is outside your assigned branch.');
-        }
+        $this->assertStudentExamBranch($actor, $exam);
         if ($exam->starts_at && now()->lt($exam->starts_at)) {
             abort(403, 'This exam has not started yet.');
         }
@@ -268,9 +266,7 @@ class ExamController extends Controller
     {
         $actor = $request->user();
         abort_unless($actor && $actor->hasRole('student'), 403, 'Only student accounts can view exam history.');
-        if ($exam->branch_id !== null && (int) $actor->branch_id !== (int) $exam->branch_id) {
-            abort(403, 'Exam is outside your assigned branch.');
-        }
+        $this->assertStudentExamBranch($actor, $exam);
 
         $attempts = ExamAttempt::query()
             ->where('exam_id', $exam->id)
@@ -290,9 +286,7 @@ class ExamController extends Controller
         $actor = $request->user();
         abort_unless($actor && $actor->hasRole('student'), 403, 'Only student accounts can save exam answers.');
         abort_unless($exam->is_published, 404);
-        if ($exam->branch_id !== null && (int) $actor->branch_id !== (int) $exam->branch_id) {
-            abort(403, 'Exam is outside your assigned branch.');
-        }
+        $this->assertStudentExamBranch($actor, $exam);
         if ($exam->starts_at && now()->lt($exam->starts_at)) abort(403, 'This exam has not started yet.');
         if ($exam->ends_at && now()->greaterThanOrEqualTo($exam->ends_at)) abort(403, 'The exam submission window has closed.');
         if (Schema::hasColumn('exams', 'learn_earn_type') && $exam->learn_earn_type === 'paid') {
@@ -358,9 +352,7 @@ class ExamController extends Controller
         if (Schema::hasColumn('exams', 'learn_earn_type') && $exam->learn_earn_type === 'paid') {
             abort_unless(Schema::hasTable('learn_earn_exam_access') && DB::table('learn_earn_exam_access')->where('exam_id', $exam->id)->where('user_id', $actor->id)->where('status', 'granted')->exists(), 403, 'Payment is required before attempting this exam.');
         }
-        if ($exam->branch_id !== null && (int) $actor->branch_id !== (int) $exam->branch_id) {
-            abort(403, 'Exam is outside your assigned branch.');
-        }
+        $this->assertStudentExamBranch($actor, $exam);
         if ($exam->starts_at && now()->lt($exam->starts_at)) abort(403, 'This exam has not started yet.');
         if ($exam->ends_at && now()->greaterThanOrEqualTo($exam->ends_at)) abort(403, 'The exam submission window has closed.');
 
@@ -446,9 +438,10 @@ class ExamController extends Controller
         $student = $request->user();
         abort_unless($student && $student->hasRole('student'), 403, 'Student accounts only.');
 
+        $branchId = $this->assignedBranchId($student);
         $exams = Exam::query()
             ->where('is_published', true)
-            ->where(fn ($query) => $query->whereNull('branch_id')->orWhere('branch_id', $student->branch_id))
+            ->where(fn ($query) => $query->whereNull('branch_id')->orWhere('branch_id', $branchId))
             ->orderByDesc('id')
             ->paginate(20);
 
@@ -479,7 +472,7 @@ class ExamController extends Controller
         $actor = $request->user();
         abort_unless($actor && $actor->hasRole('student'), 403, 'Only student accounts can take exams.');
         abort_unless($exam->is_published, 404);
-        abort_if($exam->branch_id !== null && (int) $actor->branch_id !== (int) $exam->branch_id, 403, 'Exam is outside your assigned branch.');
+        $this->assertStudentExamBranch($actor, $exam);
         abort_if($exam->starts_at && now()->lt($exam->starts_at), 403, 'This exam has not started yet.');
         abort_if($exam->ends_at && now()->greaterThanOrEqualTo($exam->ends_at), 403, 'The exam submission window has closed.');
 
@@ -571,7 +564,7 @@ class ExamController extends Controller
         abort_unless($exam->is_published, 403, 'Exam is not published for attempts.');
         $actor = $request->user();
         abort_unless($actor && $actor->hasRole('student'), 403, 'Only student accounts can submit exam attempts.');
-        abort_if($exam->branch_id !== null && (int) $actor->branch_id !== (int) $exam->branch_id, 403, 'Exam is outside your assigned branch.');
+        $this->assertStudentExamBranch($actor, $exam);
         abort_if($exam->starts_at && now()->lt($exam->starts_at), 403, 'This exam has not started yet.');
         abort_if($exam->ends_at && now()->greaterThanOrEqualTo($exam->ends_at), 403, 'The exam submission window has closed.');
 
@@ -672,6 +665,30 @@ class ExamController extends Controller
                 'submitted_at' => $result['attempt']->submitted_at?->toIso8601String(),
             ],
         ]);
+    }
+
+    private function assertStudentExamBranch(object $student, Exam $exam): void
+    {
+        if ($exam->branch_id !== null) {
+            $branchId = $this->assignedBranchId($student);
+            abort_unless($branchId !== null && $branchId === (int) $exam->branch_id, 403, 'Exam is outside your assigned branch.');
+        }
+    }
+
+    private function assignedBranchId(object $student): ?int
+    {
+        if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('student-management')
+            && Schema::hasTable('students')
+            && Schema::hasColumn('students', 'branch_id')) {
+            $profileBranchId = DB::table('students')->where('user_id', $student->id)->value('branch_id');
+            if ($profileBranchId !== null) {
+                return (int) $profileBranchId;
+            }
+        }
+
+        return Schema::hasColumn('users', 'branch_id') && $student->branch_id !== null
+            ? (int) $student->branch_id
+            : null;
     }
 
     private function ensureAssignedBranch($actor): void
