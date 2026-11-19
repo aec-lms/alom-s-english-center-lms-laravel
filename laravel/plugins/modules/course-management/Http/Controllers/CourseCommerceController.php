@@ -325,6 +325,96 @@ class CourseCommerceController extends Controller
         }, 3);
     }
 
+    public function sentGifts(Request $request): View
+    {
+        $sender = $this->student($request);
+        foreach (['course_gifts', 'course_gift_vouchers'] as $table) {
+            abort_unless(Schema::hasTable($table)
+                && Schema::hasColumn($table, 'notification_delivery_status')
+                && Schema::hasColumn($table, 'notification_sent_at'), 503,
+                'Gift delivery tracking is not installed.');
+        }
+
+        $courseGifts = DB::table('course_gifts')
+            ->leftJoin('courses', 'courses.id', '=', 'course_gifts.course_id')
+            ->where('course_gifts.sender_user_id', $sender->id)
+            ->orderByDesc('course_gifts.id')
+            ->limit(100)
+            ->get(['course_gifts.*', 'courses.title as course_title'])
+            ->map(function ($gift): array {
+                $redeemUrl = null;
+                if ($gift->status === 'paid' && (!$gift->expires_at || now()->lessThanOrEqualTo($gift->expires_at))) {
+                    try {
+                        $token = decrypt((string) $gift->redeem_token_encrypted);
+                        if (is_string($token) && preg_match('/^[A-Za-z0-9]{40,80}$/', $token) === 1
+                            && hash_equals((string) $gift->redeem_token_hash, hash('sha256', $token))) {
+                            $redeemUrl = route('course-commerce.gifts.redeem-form', ['token' => $token]);
+                        }
+                    } catch (\\Throwable) {
+                        $redeemUrl = null;
+                    }
+                }
+
+                return [
+                    'id' => (int) $gift->id,
+                    'type' => 'Course gift',
+                    'title' => (string) ($gift->course_title ?? 'Course unavailable'),
+                    'recipient_name' => $gift->recipient_name,
+                    'recipient_email' => $gift->recipient_email,
+                    'amount' => (float) $gift->amount,
+                    'currency' => $gift->currency,
+                    'status' => $gift->status,
+                    'delivery_status' => $gift->notification_delivery_status,
+                    'delivery_error' => $gift->notification_last_error ?? null,
+                    'sent_at' => $gift->notification_sent_at,
+                    'expires_at' => $gift->expires_at,
+                    'redeem_url' => $redeemUrl,
+                    'resend_url' => route('course-commerce.gifts.resend', ['gift' => $gift->id]),
+                ];
+            });
+
+        $vouchers = DB::table('course_gift_vouchers')
+            ->where('sender_user_id', $sender->id)
+            ->orderByDesc('id')
+            ->limit(100)
+            ->get()
+            ->map(function ($gift): array {
+                $redeemUrl = null;
+                if ($gift->status === 'paid' && (!$gift->expires_at || now()->lessThanOrEqualTo($gift->expires_at))) {
+                    try {
+                        $token = decrypt((string) $gift->redeem_token_encrypted);
+                        if (is_string($token) && preg_match('/^[A-Za-z0-9]{40,80}$/', $token) === 1
+                            && hash_equals((string) $gift->redeem_token_hash, hash('sha256', $token))) {
+                            $redeemUrl = route('course-commerce.vouchers.redeem-form', ['token' => $token]);
+                        }
+                    } catch (\\Throwable) {
+                        $redeemUrl = null;
+                    }
+                }
+
+                return [
+                    'id' => (int) $gift->id,
+                    'type' => 'Gift voucher',
+                    'title' => 'Gift voucher',
+                    'recipient_name' => $gift->recipient_name,
+                    'recipient_email' => $gift->recipient_email,
+                    'amount' => (float) $gift->amount,
+                    'currency' => $gift->currency,
+                    'status' => $gift->status,
+                    'delivery_status' => $gift->notification_delivery_status,
+                    'delivery_error' => $gift->notification_last_error ?? null,
+                    'sent_at' => $gift->notification_sent_at,
+                    'expires_at' => $gift->expires_at,
+                    'redeem_url' => $redeemUrl,
+                    'resend_url' => route('course-commerce.vouchers.resend', ['voucher' => $gift->id]),
+                ];
+            });
+
+        $gifts = $courseGifts->concat($vouchers)->sortByDesc('id')->values();
+
+        return view('course-management::commerce.gifts-sent', compact('gifts'));
+    }
+
     public function resendCourseGiftEmail(Request $request, int $giftId): RedirectResponse
     {
         return $this->resendGiftEmail($request, 'gift_course', $giftId);
