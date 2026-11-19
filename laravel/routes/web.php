@@ -37,6 +37,8 @@ Route::prefix('install')->name('installer.')->middleware('not.installed')->group
 
 Route::middleware('installed')->group(function (): void {
     Route::get('/', [PublicHomeController::class, 'index'])->name('home');
+    Route::post('/language/{locale}', [LanguageController::class, 'switch'])
+        ->where('locale', 'en|bn')->middleware('throttle:30,1')->name('language.switch');
     Route::get('/courses', [PublicHomeController::class, 'courses'])->name('public.courses');
     Route::get('/course/{slug}', [PublicHomeController::class, 'courseShow'])->name('public.courses.show');
     Route::post('/courses/coupon-check', [PublicHomeController::class, 'checkCoupon'])->middleware('throttle:public-coupon-check')->name('public.courses.coupon');
