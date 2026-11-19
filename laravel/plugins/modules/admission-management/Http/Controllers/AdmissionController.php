@@ -239,13 +239,11 @@ class AdmissionController extends Controller
         $this->assertApplicationBranchAccess($actor, $application);
         abort_unless(Schema::hasTable('admission_documents'), 503, 'Admission document storage is not installed.');
 
-        abort_if($application->documents()->count() >= 10, 422, 'An application can have at most 10 supporting documents.');
         $validated = $request->validate([
             'document' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
         ]);
 
         $file = $validated['document'];
-        abort_if((int) $application->documents()->sum('size_bytes') + (int) $file->getSize() > 51200 * 1024, 422, 'The application document storage limit is 50 MB.');
         $extension = strtolower((string) $file->extension());
         abort_unless(in_array($extension, ['pdf', 'jpg', 'jpeg', 'png'], true), 422, 'Unsupported document format.');
 
@@ -256,17 +254,29 @@ class AdmissionController extends Controller
         }
 
         try {
-            $document = AdmissionDocument::query()->create([
-                'admission_application_id' => $application->id,
-                'uploaded_by' => $actor?->id,
-                'disk' => 'local',
-                'path' => $storedPath,
-                'original_name' => mb_substr(basename(str_replace('\\', '/', $file->getClientOriginalName())), 0, 255),
-                'mime_type' => (string) $file->getMimeType(),
-                'size_bytes' => (int) $file->getSize(),
-                'sha256' => hash_file('sha256', $file->getRealPath()),
-            ]);
-        } catch (\Throwable $exception) {
+            $document = DB::transaction(function () use ($application, $actor, $file, $storedPath): AdmissionDocument {
+                $lockedApplication = AdmissionApplication::query()->lockForUpdate()->findOrFail($application->id);
+                $this->assertApplicationBranchAccess($actor, $lockedApplication);
+
+                abort_if($lockedApplication->documents()->count() >= 10, 422, 'An application can have at most 10 supporting documents.');
+                abort_if(
+                    (int) $lockedApplication->documents()->sum('size_bytes') + (int) $file->getSize() > 51200 * 1024,
+                    422,
+                    'The application document storage limit is 50 MB.'
+                );
+
+                return AdmissionDocument::query()->create([
+                    'admission_application_id' => $lockedApplication->id,
+                    'uploaded_by' => $actor?->id,
+                    'disk' => 'local',
+                    'path' => $storedPath,
+                    'original_name' => mb_substr(basename(str_replace('\\\\', '/', $file->getClientOriginalName())), 0, 255),
+                    'mime_type' => (string) $file->getMimeType(),
+                    'size_bytes' => (int) $file->getSize(),
+                    'sha256' => hash_file('sha256', $file->getRealPath()),
+                ]);
+            }, 3);
+        } catch (\\Throwable $exception) {
             Storage::disk('local')->delete($storedPath);
             throw $exception;
         }
