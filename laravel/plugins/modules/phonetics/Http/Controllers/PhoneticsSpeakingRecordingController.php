@@ -20,47 +20,70 @@ final class PhoneticsSpeakingRecordingController extends Controller
 
     public function store(Request $request, string $courseSlug)
     {
-        $data = $request->validate([
-            'entry_id' => ['required', 'integer', 'exists:alom_english_center_phonetic_entries,id'],
-            'recording' => ['required', 'file', 'mimes:webm,ogg,wav,mp3,m4a,mp4', 'max:10240'],
-            'duration_seconds' => ['required', 'integer', 'min:1', 'max:120'],
-        ]);
-
         $course = $this->catalog->course($courseSlug);
         $this->catalog->assertCourseAvailable($course);
         $this->catalog->assertDedicatedCourse($course);
         $this->catalog->assertAccess($request->user(), $this->catalog->courseId($course));
         abort_unless(PhoneticSetting::current()->enabled, 404);
 
-        abort_if(
-            PhoneticSpeakingRecording::query()->where('lms_driver', $this->catalog->driver())
-                ->where('user_id', (string) $request->user()->getAuthIdentifier())
-                ->where('created_at', '>=', now()->startOfDay())->count() >= 10,
-            429,
-            'Daily speaking recording limit reached. Please continue tomorrow.'
-        );
+        $data = $request->validate([
+            'entry_id' => ['required', 'integer', 'exists:alom_english_center_phonetic_entries,id'],
+            'recording' => ['required', 'file', 'mimes:webm,ogg,wav,mp3,m4a,mp4', 'max:10240'],
+            'duration_seconds' => ['required', 'integer', 'min:1', 'max:120'],
+        ]);
+
         $entry = $this->assignedEntry($request, $course, (int) $data['entry_id']);
-        $file = $data['recording'];
+        $userId = (string) $request->user()->getAuthIdentifier();
+        $userMap = config('phonetics.users', []);
+        $userTable = $userMap['table'] ?? 'users';
+        $userIdColumn = $userMap['id'] ?? 'id';
+        abort_unless(
+            is_string($userTable) && is_string($userIdColumn)
+                && Schema::hasTable($userTable) && Schema::hasColumn($userTable, $userIdColumn),
+            503,
+            'The connected LMS user lock mapping is unavailable.'
+        );
+
         $disk = $this->privateDisk();
-        $directory = 'students/'.hash('sha256', (string) $request->user()->getAuthIdentifier());
-        $filename = $file->hashName();
-        $path = $disk->putFileAs($directory, $file, $filename);
-        abort_unless(is_string($path) && $path !== '', 500, 'The private recording could not be stored.');
+        $directory = 'students/'.hash('sha256', $userId);
+        $path = null;
 
         try {
-            $recording = DB::transaction(fn () => PhoneticSpeakingRecording::query()->create([
-                'lms_driver' => $this->catalog->driver(),
-                'user_id' => (string) $request->user()->getAuthIdentifier(),
-                'entry_id' => $entry->id,
-                'course_ref' => $this->catalog->courseId($course),
-                'storage_path' => $path,
-                'mime_type' => (string) $file->getMimeType(),
-                'size_bytes' => (int) $file->getSize(),
-                'duration_seconds' => (int) $data['duration_seconds'],
-                'status' => 'pending',
-            ]));
-        } catch (\Throwable $exception) {
-            $disk->delete($path);
+            $recording = DB::transaction(function () use (
+                $request, $course, $data, $entry, $userId, $userTable, $userIdColumn, $disk, $directory, &$path
+            ): PhoneticSpeakingRecording {
+                // Serialize per-student quota checks so parallel uploads cannot
+                // bypass the ten-recordings-per-day limit.
+                $lockedUser = DB::table($userTable)->where($userIdColumn, $userId)->lockForUpdate()->first();
+                abort_unless($lockedUser, 404, 'The student account is no longer available.');
+
+                $todayCount = PhoneticSpeakingRecording::query()
+                    ->where('lms_driver', $this->catalog->driver())
+                    ->where('user_id', $userId)
+                    ->where('created_at', '>=', now()->startOfDay())
+                    ->count();
+                abort_if($todayCount >= 10, 429, 'Daily speaking recording limit reached. Please continue tomorrow.');
+
+                $file = $data['recording'];
+                $path = $disk->putFileAs($directory, $file, $file->hashName());
+                abort_unless(is_string($path) && $path !== '', 500, 'The private recording could not be stored.');
+
+                return PhoneticSpeakingRecording::query()->create([
+                    'lms_driver' => $this->catalog->driver(),
+                    'user_id' => $userId,
+                    'entry_id' => $entry->id,
+                    'course_ref' => $this->catalog->courseId($course),
+                    'storage_path' => $path,
+                    'mime_type' => (string) $file->getMimeType(),
+                    'size_bytes' => (int) $file->getSize(),
+                    'duration_seconds' => (int) $data['duration_seconds'],
+                    'status' => 'pending',
+                ]);
+            });
+        } catch (\\Throwable $exception) {
+            if (is_string($path) && $path !== '') {
+                try { $disk->delete($path); } catch (\\Throwable) {}
+            }
             throw $exception;
         }
 
