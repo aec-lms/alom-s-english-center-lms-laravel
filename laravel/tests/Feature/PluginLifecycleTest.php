@@ -124,13 +124,21 @@ class PluginLifecycleTest extends TestCase
             File::ensureDirectoryExists(dirname($cachePath));
             file_put_contents($cachePath, "<?php return [];");
 
+            $matchingRoutesBefore = collect(app('router')->getRoutes())
+                ->filter(fn ($route): bool => $route->uri() === 'cached-route-probe');
+            $countBefore = $matchingRoutesBefore->count();
+
             $provider = new PluginServiceProvider($this->app);
             $provider->boot(app(PluginManager::class));
 
-            $matchingRoutes = collect(app('router')->getRoutes())
+            $matchingRoutesAfter = collect(app('router')->getRoutes())
                 ->filter(fn ($route): bool => $route->uri() === 'cached-route-probe');
 
-            $this->assertCount(0, $matchingRoutes, 'Cached plugin routes must not be loaded a second time.');
+            $this->assertSame(
+                $countBefore,
+                $matchingRoutesAfter->count(),
+                'Cached plugin routes must not be loaded a second time.'
+            );
         } finally {
             if ($hadCache && $previousCache !== false) {
                 file_put_contents($cachePath, $previousCache);
