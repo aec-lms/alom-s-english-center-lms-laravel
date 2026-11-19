@@ -188,6 +188,12 @@ class AdvancedSliderBuilderTest extends TestCase
             'ends_at' => now()->addHours(12)->toDateTimeString(),
         ])->assertSessionHasErrors('ends_at');
 
+        $this->actingAs($admin)->put('/admin/slider-builder/' . $slide->id, [
+            'key_name' => 'hero',
+            'title' => 'Scheduled Slider',
+            'starts_at' => $end->toDateTimeString(),
+        ])->assertSessionHasErrors('ends_at');
+
         $this->assertTrue($slide->fresh()->starts_at->equalTo($start));
         $this->assertTrue($slide->fresh()->ends_at->equalTo($end));
     }
