@@ -157,7 +157,7 @@
         document.documentElement.setAttribute('aria-busy', 'true');
         if (maxTimer !== null) window.clearTimeout(maxTimer);
         maxTimer = window.setTimeout(forceHide, maxDuration);
-    }, true);
+    });
 })();
 </script>
 @endif
