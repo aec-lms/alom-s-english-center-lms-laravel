@@ -16,6 +16,8 @@ class PluginCategoryRegistryTest extends TestCase
 
         $this->assertCount(60, $slugs);
         $this->assertCount(60, array_unique($slugs));
+        $labels = PluginCategoryRegistry::labels();
+        $this->assertCount(count($labels), array_unique(array_values($labels)), 'Canonical category labels must be unique.');
 
         $manifestSlugs = [];
         foreach (File::directories(base_path('plugins/modules')) as $directory) {
