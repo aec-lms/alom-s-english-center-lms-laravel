@@ -662,6 +662,37 @@ class CommerceCartController extends Controller
                     ->where('status', 'reserved')
                     ->update(['status' => 'released', 'updated_at' => now()]);
             }
+
+            if (!$ambiguous && Schema::hasTable('commerce_order_items')) {
+                // A definitive gateway failure cannot settle this order. Release
+                // gift drafts from its immutable item rows so the student can
+                // retry them in a fresh cart. Keep links intact for ambiguous
+                // provider responses because a late success callback is possible.
+                $failedGiftItems = DB::table('commerce_order_items')
+                    ->where('order_id', $order->id)
+                    ->whereIn('item_type', ['gift_course', 'gift_voucher'])
+                    ->get();
+
+                foreach ($failedGiftItems as $giftItem) {
+                    $giftTable = $giftItem->item_type === 'gift_course'
+                        ? 'course_gifts'
+                        : 'course_gift_vouchers';
+
+                    if (!Schema::hasTable($giftTable)) {
+                        continue;
+                    }
+
+                    DB::table($giftTable)
+                        ->where('id', $giftItem->item_id)
+                        ->where('sender_user_id', $user->id)
+                        ->where('status', 'awaiting_payment')
+                        ->whereNull('invoice_id')
+                        ->whereNull('payment_transaction_id')
+                        ->whereNull('unified_payment_transaction_id')
+                        ->where('commerce_order_item_id', $giftItem->id)
+                        ->update(['commerce_order_item_id' => null, 'updated_at' => now()]);
+                }
+            }
             return redirect()->route('plugins.commerce_cart.index')
                 ->withErrors(['gateway' => $ambiguous
                     ? 'The gateway response was ambiguous. Do not retry yet; contact support with order ' . $order->order_number . ' for reconciliation.'
