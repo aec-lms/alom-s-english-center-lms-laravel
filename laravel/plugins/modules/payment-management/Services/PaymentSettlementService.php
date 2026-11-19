@@ -85,7 +85,7 @@ class PaymentSettlementService
                         }
 
                         $assignedBranchId = null;
-                        if (app(\\App\\Core\\Plugins\\PluginManager::class)->isEnabled('student-management')
+                        if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('student-management')
                             && Schema::hasTable('students')
                             && Schema::hasColumn('students', 'branch_id')) {
                             $profileBranchId = DB::table('students')->where('user_id', $buyer->id)->value('branch_id');
