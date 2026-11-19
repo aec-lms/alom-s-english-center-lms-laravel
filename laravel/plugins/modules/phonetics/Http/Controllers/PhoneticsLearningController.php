@@ -92,6 +92,7 @@ final class PhoneticsLearningController extends Controller
             'course' => $course,
             'setting' => $setting,
             'entries' => $entries,
+            'progress' => $progress,
             'exams' => $exams,
             'challenge' => $challenge,
             'lessonRef' => $request->query('lesson'),
