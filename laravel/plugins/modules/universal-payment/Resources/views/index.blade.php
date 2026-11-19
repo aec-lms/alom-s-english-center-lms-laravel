@@ -113,7 +113,7 @@
                                 @if ($tx->proof_path)
                                     <a href="{{ route('plugins.universal_payment.proof', $tx) }}" class="mr-2 text-blue-700 underline">View receipt</a>
                                 @endif
-                                @if (in_array($tx->gateway, ['bank_cash', 'offline'], true) && $tx->status === 'pending')
+                                @if (in_array($tx->gateway, ['bank_cash', 'offline', 'bkash', 'nagad', 'rocket'], true) && $tx->status === 'pending')
                                     <form method="POST" action="{{ route('plugins.universal_payment.status', $tx) }}" class="inline-flex items-center gap-1.5">
                                         @csrf
                                         <input name="payment_reference" required maxlength="120" value="{{ $tx->external_trx_id }}" aria-label="Verified bank receipt reference" class="w-36 rounded border border-slate-300 px-1.5 py-1 text-[11px] font-mono">
