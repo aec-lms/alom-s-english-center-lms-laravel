@@ -438,6 +438,12 @@ class AdditionalModulesWorkflowTest extends TestCase
             ->assertDontSee('Account Branch B Exam');
         $this->actingAs($student)->get('/learn-and-earn/exams/' . $branchAExam->id)->assertOk();
         $this->actingAs($student)->get('/learn-and-earn/exams/' . $branchBExam->id)->assertForbidden();
+        $this->actingAs($student)->get('/exams/' . $branchBExam->id . '/attempts')->assertForbidden();
+
+        $this->actingAs($student, 'sanctum')->getJson('/api/v1/my/exams')
+            ->assertOk()
+            ->assertJsonFragment(['title' => 'Profile Branch A Exam'])
+            ->assertJsonMissing(['title' => 'Account Branch B Exam']);
 
         $manager = $this->createUserWithRole('branch_manager', (int) $branchA);
         $permission = DB::table('permissions')->where('slug', 'learn_earn.manage')->first();
