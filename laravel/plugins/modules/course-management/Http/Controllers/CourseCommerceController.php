@@ -151,6 +151,17 @@ class CourseCommerceController extends Controller
 
         $couponService = app(CourseCouponService::class);
         $created = DB::transaction(function () use ($student, $course, $validated, $couponService): array {
+            // If the recipient already has an account, do not sell a branch-
+            // restricted gift that the recipient would be unable to redeem.
+            // Settlement repeats this check in case the account's branch changes.
+            $recipient = User::query()
+                ->whereRaw('LOWER(email) = ?', [strtolower(trim($validated['recipient_email']))])
+                ->lockForUpdate()
+                ->first();
+            if ($recipient) {
+                $this->assertCourseBranch($recipient, $course);
+            }
+
             $coupon = filled($validated['coupon_code'] ?? null)
                 ? $couponService->reserve((string) $validated['coupon_code'], (int) $student->id, [(int) $course->id], (float) $course->price, true)
                 : null;
@@ -160,7 +171,7 @@ class CourseCommerceController extends Controller
             $token = Str::random(64);
             $giftId = DB::table('course_gifts')->insertGetId([
                 'sender_user_id' => $student->id,
-                'recipient_user_id' => DB::table('users')->whereRaw('LOWER(email) = ?', [strtolower(trim($validated['recipient_email']))])->value('id'),
+                'recipient_user_id' => $recipient?->id,
                 'recipient_email' => strtolower(trim($validated['recipient_email'])),
                 'recipient_name' => $validated['recipient_name'] ?? null,
                 'message' => $validated['message'] ?? null,
