@@ -188,7 +188,7 @@ class UniversalPaymentController extends Controller
             }
 
             abort_unless($lockedTransaction->status === 'pending'
-                && in_array($lockedTransaction->gateway, ['bank_cash', 'offline'], true),
+                && in_array($lockedTransaction->gateway, ['bank_cash', 'offline', 'bkash', 'nagad', 'rocket'], true),
                 422,
                 'Only pending manual receipts can be reviewed.'
             );
@@ -390,9 +390,9 @@ class UniversalPaymentController extends Controller
                 && hash_equals(strtolower((string) $invoice->payer_email), strtolower((string) auth()->user()->email));
             abort_unless($isInvoiceOwner, 403, 'You can only pay an invoice issued to your account.');
             abort_unless(
-                $validated['gateway'] === 'bank_cash',
+                in_array($validated['gateway'], ['bank_cash', 'bkash', 'nagad', 'rocket'], true),
                 422,
-                'Fee invoices currently accept bank transfer or cash receipts only. Use the dedicated payment gateway checkout for supported online gateways.'
+                'Fee invoices accept manual bank, cash, bKash, Nagad or Rocket receipts here. Use the dedicated payment gateway checkout for automatic online gateways.'
             );
             abort_if(trim((string) ($validated['external_trx_id'] ?? '')) === '', 422, 'Enter the bank transaction ID or cash receipt reference.');
             abort_if(
