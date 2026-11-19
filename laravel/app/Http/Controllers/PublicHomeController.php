@@ -21,6 +21,9 @@ class PublicHomeController extends Controller
     public function index(): View
     {
         $homepage = $this->loadHomepageConfig();
+        $pluginManager = app(PluginManager::class);
+        $sliderAutoplayMs = max(2000, min(15000, (int) $pluginManager->getSetting('slider-builder', 'autoplay_ms', '5000')));
+        $sliderPauseOnHover = $pluginManager->getSetting('slider-builder', 'pause_on_hover', '1') !== '0';
 
         $liveStats = [
             'students' => Schema::hasTable('students') ? DB::table('students')->count() : 0,
@@ -91,6 +94,8 @@ class PublicHomeController extends Controller
             'stats',
             'sliders',
             'bannerSlides',
+            'sliderAutoplayMs',
+            'sliderPauseOnHover',
             'leftReviews',
             'rightReviews',
             'homepage',
