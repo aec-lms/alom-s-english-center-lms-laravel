@@ -265,7 +265,7 @@ class CommerceCartController extends Controller
                 'order_number' => 'AEC-' . strtoupper(Str::random(10)),
                 'user_id' => $user->id,
                 'invoice_id' => $invoice->id,
-                'branch_id' => $user->branch_id ?? null,
+                'branch_id' => $branchId,
                 'currency' => $currencies->first(),
                 'subtotal' => $subtotal,
                 'discount_total' => 0,
