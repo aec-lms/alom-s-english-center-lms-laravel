@@ -26,7 +26,7 @@ class BoostController extends Controller
         $targetCourses = Schema::hasTable('courses')
             ? DB::table('courses')->where('status', 'published')->when(Schema::hasColumn('courses', 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))->orderBy('title')->get(['id', 'title'])
             : collect();
-        $targetBranches = Schema::hasTable('branches')
+        $targetBranches = Schema::hasTable('branches') && app(PluginManager::class)->isEnabled('branch-management')
             ? DB::table('branches')->where('is_active', true)->when(Schema::hasColumn('branches', 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))->orderBy('name')->get(['id', 'name', 'city'])
             : collect();
 
@@ -154,7 +154,7 @@ class BoostController extends Controller
                 }
 
                 $type = (string) $request->input('entity_type');
-                $table = match ($type) { 'course' => 'courses', 'branch' => 'branches', default => null };
+                $table = match ($type) { 'course' => 'courses', 'branch' => (app(PluginManager::class)->isEnabled('branch-management') ? 'branches' : null), default => null };
                 if ($table === null || !Schema::hasTable($table)) {
                     $fail('This target type does not support a record ID.');
                     return;
