@@ -41,7 +41,7 @@
                 </select>
             </label>
             <label class="font-semibold text-slate-700">Target record
-                <select id="boost-create-target-id" data-boost-id name="entity_id" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 bg-white">
+                <input type="search" id="boost-create-target-search" data-boost-search data-target-id="boost-create-target-id" placeholder="Search published courses or branches..." class="mt-1 mb-2 w-full rounded-xl border border-slate-300 px-3 py-2 font-normal"><select id="boost-create-target-id" data-boost-id name="entity_id" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 bg-white">
                     <option value="">No specific record / broad campaign</option>
                     <optgroup label="Published courses">
                         @foreach ($targetCourses as $targetCourse)
@@ -105,7 +105,7 @@
                         @csrf @method('PUT')
                         <label class="font-semibold text-slate-700">Campaign title<input name="campaign_name" required maxlength="180" value="{{ $item->campaign_name }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"></label>
                         <label class="font-semibold text-slate-700">Target type<select id="boost-target-type-{{ $item->id }}" data-boost-type data-target-id="boost-target-id-{{ $item->id }}" name="entity_type" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 bg-white">@foreach (['course' => 'Specific course', 'branch' => 'Specific branch', 'institution' => 'Whole institution', 'offer' => 'General offer'] as $value => $label)<option value="{{ $value }}" @selected($item->entity_type === $value)>{{ $label }}</option>@endforeach</select></label>
-                        <label class="font-semibold text-slate-700">Target record<select id="boost-target-id-{{ $item->id }}" data-boost-id name="entity_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 bg-white"><option value="">No specific record / broad campaign</option><optgroup label="Published courses">@foreach ($targetCourses as $targetCourse)<option data-entity-type="course" value="{{ $targetCourse->id }}" @selected($item->entity_type === 'course' && (int) $item->entity_id === (int) $targetCourse->id)>{{ $targetCourse->title }} (#{{ $targetCourse->id }})</option>@endforeach</optgroup><optgroup label="Active branches">@foreach ($targetBranches as $targetBranch)<option data-entity-type="branch" value="{{ $targetBranch->id }}" @selected($item->entity_type === 'branch' && (int) $item->entity_id === (int) $targetBranch->id)>{{ $targetBranch->name }}{{ $targetBranch->city ? ' — '.$targetBranch->city : '' }} (#{{ $targetBranch->id }})</option>@endforeach</optgroup></select></label>
+                        <label class="font-semibold text-slate-700">Target record<input type="search" id="boost-target-search-{{ $item->id }}" data-boost-search data-target-id="boost-target-id-{{ $item->id }}" placeholder="Search courses or branches..." class="mt-1 mb-2 w-full rounded-lg border border-slate-300 px-3 py-2 font-normal"><select id="boost-target-id-{{ $item->id }}" data-boost-id name="entity_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 bg-white"><option value="">No specific record / broad campaign</option><optgroup label="Published courses">@foreach ($targetCourses as $targetCourse)<option data-entity-type="course" value="{{ $targetCourse->id }}" @selected($item->entity_type === 'course' && (int) $item->entity_id === (int) $targetCourse->id)>{{ $targetCourse->title }} (#{{ $targetCourse->id }})</option>@endforeach</optgroup><optgroup label="Active branches">@foreach ($targetBranches as $targetBranch)<option data-entity-type="branch" value="{{ $targetBranch->id }}" @selected($item->entity_type === 'branch' && (int) $item->entity_id === (int) $targetBranch->id)>{{ $targetBranch->name }}{{ $targetBranch->city ? ' — '.$targetBranch->city : '' }} (#{{ $targetBranch->id }})</option>@endforeach</optgroup></select></label>
                         <label class="font-semibold text-slate-700">Placement<select name="placement" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 bg-white"><option value="homepage_featured" @selected($item->placement === 'homepage_featured')>Homepage featured</option><option value="course_listing" @selected($item->placement === 'course_listing')>Course listing</option><option value="notice_banner" @selected($item->placement === 'notice_banner')>Notice banner</option></select></label>
                         <label class="font-semibold text-slate-700">Badge<input name="badge_text" maxlength="60" value="{{ $item->badge_text }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"></label>
                         <label class="font-semibold text-slate-700">CTA label<input name="cta_text" maxlength="60" value="{{ $item->cta_text }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"></label>
@@ -129,24 +129,29 @@
 document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('[data-boost-type]').forEach(function (typeSelect) {
         const targetSelect = document.getElementById(typeSelect.dataset.targetId);
+        const searchInput = document.querySelector('[data-boost-search][data-target-id="' + typeSelect.dataset.targetId + '"]');
         if (!targetSelect) return;
 
-        const syncTargetOptions = function () {
+        const syncTargetOptions = function (resetInvalid) {
             const selectedType = typeSelect.value;
+            const searchTerm = (searchInput ? searchInput.value : '').trim().toLowerCase();
             targetSelect.querySelectorAll('option[data-entity-type]').forEach(function (option) {
-                const available = option.dataset.entityType === selectedType;
+                const typeMatches = option.dataset.entityType === selectedType;
+                const searchMatches = searchTerm === '' || option.textContent.toLowerCase().includes(searchTerm);
+                const available = typeMatches && searchMatches;
                 option.hidden = !available;
                 option.disabled = !available;
             });
             targetSelect.disabled = !['course', 'branch'].includes(selectedType);
             const selectedOption = targetSelect.selectedOptions[0];
-            if (selectedOption && selectedOption.dataset.entityType && selectedOption.dataset.entityType !== selectedType) {
+            if (resetInvalid && selectedOption && selectedOption.dataset.entityType && selectedOption.dataset.entityType !== selectedType) {
                 targetSelect.value = '';
             }
         };
 
-        typeSelect.addEventListener('change', syncTargetOptions);
-        syncTargetOptions();
+        typeSelect.addEventListener('change', function () { syncTargetOptions(true); });
+        if (searchInput) searchInput.addEventListener('input', function () { syncTargetOptions(false); });
+        syncTargetOptions(false);
     });
 });
 </script>
