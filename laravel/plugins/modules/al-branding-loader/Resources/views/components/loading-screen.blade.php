@@ -1,6 +1,6 @@
 @php($loaderSetting=\Plugins\Modules\AlBrandingLoader\Models\LoaderSetting::current())
 @if($loaderSetting->shouldRenderForPath(request()->path()))
-<div id="al-branding-loader" class="lb-style-{{ $loaderSetting->animation_style }}" role="status" aria-live="polite" aria-label="{{ $loaderSetting->headline }}" data-min="{{ $loaderSetting->min_duration_ms??500 }}" data-fade="{{ $loaderSetting->fade_duration_ms??250 }}" data-max="{{ $loaderSetting->max_timeout_ms??5000 }}" data-trigger="{{ $loaderSetting->trigger_mode??'every-load' }}" style="--lb-bg:{{ $loaderSetting->background_color??'#F01800' }};--lb-accent:{{ $loaderSetting->accent_color??'#38BDF8' }};--lb-text:{{ $loaderSetting->text_color??'#F8FAFC' }};--lb-fade:{{ $loaderSetting->fade_duration_ms??250 }}ms;backdrop-filter:{{ $loaderSetting->backdrop_blur?'blur(8px)':'none' }}">
+<div id="al-branding-loader" class="lb-style-{{ $loaderSetting->animation_style }}" role="status" aria-live="polite" aria-label="{{ $loaderSetting->headline }}" data-min="{{ $loaderSetting->min_duration_ms??500 }}" data-fade="{{ $loaderSetting->fade_duration_ms??250 }}" data-max="{{ $loaderSetting->max_timeout_ms??5000 }}" data-trigger="{{ $loaderSetting->trigger_mode??'every-load' }}" data-excluded-paths="{{ e(json_encode((array)($loaderSetting->excluded_paths??[]))) }}" style="--lb-bg:{{ $loaderSetting->background_color??'#F01800' }};--lb-accent:{{ $loaderSetting->accent_color??'#38BDF8' }};--lb-text:{{ $loaderSetting->text_color??'#F8FAFC' }};--lb-fade:{{ $loaderSetting->fade_duration_ms??250 }}ms;backdrop-filter:{{ $loaderSetting->backdrop_blur?'blur(8px)':'none' }}">
  @if($loaderSetting->logo_url)<img class="lb-logo" src="{{ $loaderSetting->logo_url }}" alt="">@else
   @if($loaderSetting->animation_style==='dual-orbit')<div class="lb-orbits" aria-hidden="true"><i></i><b></b></div>@else<div class="lb-spin" aria-hidden="true"></div>@endif
  @endif
@@ -28,6 +28,27 @@
 
     const mode = overlay.dataset.trigger || 'every-load';
     const storageKey = 'al-loader-seen';
+    let configuredExcludedPaths = [];
+    try { configuredExcludedPaths = JSON.parse(overlay.dataset.excludedPaths || '[]'); } catch (error) {}
+    function matchesConfiguredExclusion(pathname) {
+        let path = String(pathname || '');
+        while (path.startsWith('/')) path = path.slice(1);
+        return configuredExcludedPaths.some(function (rawPattern) {
+            let pattern = String(rawPattern || '');
+            while (pattern.startsWith('/')) pattern = pattern.slice(1);
+            while (pattern.endsWith('/')) pattern = pattern.slice(0, -1);
+            if (!pattern || pattern.includes('..')) return false;
+            const parts = pattern.split('*');
+            let offset = 0;
+            for (let index = 0; index < parts.length; index++) {
+                const part = parts[index];
+                const found = path.indexOf(part, offset);
+                if (found < 0 || (index === 0 && found !== 0)) return false;
+                offset = found + part.length;
+            }
+            return pattern.endsWith('*') || offset === path.length;
+        });
+    }
     const minDuration = Math.max(0, Number(overlay.dataset.min || 0));
     const maxDuration = Math.max(1000, Number(overlay.dataset.max || 5000));
     let startedAt = Date.now();
@@ -111,6 +132,7 @@
 
         if (destination.origin !== window.location.origin ||
             destination.pathname === window.location.pathname ||
+            matchesConfiguredExclusion(destination.pathname) ||
             /^\/(admin|api|payment|payments|checkout|webhook|webhooks|live-class|live-classes)(\/|$)/.test(destination.pathname)) return;
 
         completed = false;
