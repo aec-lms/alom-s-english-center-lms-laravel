@@ -1,13 +1,18 @@
 {
     "slug": "student-tracking",
     "name": "Student Tracking & Analytics",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "author": "Alom's English Center",
     "category": "academic",
     "description": "Independent, privacy-conscious student learning activity timeline, engagement analytics, progress signals and self-service activity history.",
     "core_compatibility": "^2.0",
     "dependencies": [],
-    "optional_dependencies": [],
+    "optional_dependencies": [
+        "branch-management",
+        "student-management",
+        "guardian-management",
+        "course-management"
+    ],
     "provider": "Plugins\\Modules\\StudentTracking\\Providers\\StudentTrackingServiceProvider",
     "permissions": [
         {
