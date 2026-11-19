@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\FlashSale\\Services;
+namespace Plugins\Modules\FlashSale\Services;
 
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Facades\\Schema;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 final class FlashSalePricingService
 {
@@ -20,7 +20,7 @@ final class FlashSalePricingService
         if (!$course) return ['sale' => null, 'subtotal' => 0.0, 'discount' => 0.0, 'total' => 0.0];
 
         $subtotal = round((float) ($course->price ?? 0), 2);
-        if (!app(\\App\\Core\\Plugins\\PluginManager::class)->isEnabled('flash-sale')
+        if (!app(\App\Core\Plugins\PluginManager::class)->isEnabled('flash-sale')
             || !Schema::hasTable('flash_sales')) {
             return ['sale' => null, 'subtotal' => $subtotal, 'discount' => 0.0, 'total' => $subtotal];
         }
