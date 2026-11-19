@@ -24,6 +24,9 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
   $student=$this->createUserWithRole('student');
   $courseId=DB::table('courses')->insertGetId(['code'=>'PHON-SEC-001','title'=>'British and American Phonetics','slug'=>'british-american-phonetics','description'=>'Practice course','price'=>0,'status'=>'published','created_at'=>now(),'updated_at'=>now()]);
   DB::table('enrollments')->insert(['user_id'=>$student->id,'course_id'=>$courseId,'branch_id'=>null,'status'=>'active','created_at'=>now(),'updated_at'=>now()]);
+  PhoneticSetting::query()->firstOrCreate(['id'=>1],['enabled'=>true,'course_slug'=>'british-american-phonetics','course_title'=>'British & American Phonetics']);
+  PhoneticSetting::query()->whereKey(1)->update(['enabled'=>true,'course_slug'=>'british-american-phonetics']);
+  \Illuminate\Support\Facades\Cache::forget('phonetics.settings');
   $entry=PhoneticEntry::query()->create(['word'=>'car','category'=>'rhoticity','uk_ipa'=>'/kɑː/','us_ipa'=>'/kɑːr/','is_active'=>true,'sort_order'=>1]);
   DB::table('phonetic_learning_assignments')->insert(['lms_driver'=>'aec','course_ref'=>(string)$courseId,'course_category_ref'=>null,'lesson_ref'=>null,'batch_ref'=>null,'word_id'=>$entry->id,'audience'=>'both','sort_order'=>1,'is_required'=>true,'created_at'=>now(),'updated_at'=>now()]);
   $this->actingAs($student)->get('/courses/british-american-phonetics/phonetics-learning')->assertOk();
@@ -37,14 +40,39 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
    'target_accent'=>'us',
    'quiz_mode'=>'identify-accent',
   ])->assertOk()->assertJson(['saved'=>true,'correct'=>true]);
-  $this->assertDatabaseHas('alom_english_center_phonetic_attempts',['user_id'=>$student->id,'entry_id'=>$challengeEntry->id,'is_correct'=>true]);
+  $this->assertDatabaseHas('alom_english_center_phonetic_attempts',['user_id'=>$student->id,'course_ref'=>(string)$courseId,'entry_id'=>$challengeEntry->id,'is_correct'=>true]);
+  // Legacy attempts have no course attribution and must not inflate this course's progress.
+  DB::table('alom_english_center_phonetic_attempts')->insert([
+   'user_id'=>$student->id,'course_ref'=>null,'entry_id'=>$challengeEntry->id,'target_accent'=>'uk',
+   'quiz_mode'=>'legacy','selected_answer'=>'/legacy/','is_correct'=>false,'created_at'=>now(),'updated_at'=>now(),
+  ]);
   // A challenge is single-use: replaying the same session token must not create another attempt.
   $this->actingAs($student)->postJson('/courses/british-american-phonetics/phonetics-learning/attempts',[
    'selected_answer'=>$challenge['expected'],
   ])->assertStatus(409);
-  $this->assertSame(1,DB::table('alom_english_center_phonetic_attempts')->where('user_id',$student->id)->count());
+  $this->assertSame(2,DB::table('alom_english_center_phonetic_attempts')->where('user_id',$student->id)->count());
+  $this->assertSame(1,DB::table('alom_english_center_phonetic_attempts')->where('user_id',$student->id)->where('course_ref',(string)$courseId)->count());
+  $this->actingAs($student)->get('/courses/british-american-phonetics/phonetics-learning')->assertOk()->assertSee('Practice progress')->assertSee('Correct answers')->assertSee('100%')->assertSee('Words practiced')->assertDontSee('<p class="mt-1 text-2xl font-extrabold">2</p>', false);
   DB::table('enrollments')->where('user_id',$student->id)->delete();
   $this->actingAs($student)->get('/courses/british-american-phonetics/phonetics-learning')->assertForbidden();
+ }
+
+ public function test_phonetics_is_available_only_to_enrolled_students_of_the_configured_phonetics_course():void{
+  $this->markSystemInstalled();
+  $this->activatePlugins(['course-management','phonetics']);
+  $student=$this->createUserWithRole('student');
+  $phoneticsCourseId=DB::table('courses')->insertGetId(['code'=>'PHON-ONLY-001','title'=>'British and American Phonetics','slug'=>'british-american-phonetics','description'=>'Dedicated phonetics course','price'=>0,'status'=>'published','created_at'=>now(),'updated_at'=>now()]);
+  $otherCourseId=DB::table('courses')->insertGetId(['code'=>'GENERAL-001','title'=>'General English','slug'=>'general-english','description'=>'Unrelated course','price'=>0,'status'=>'published','created_at'=>now(),'updated_at'=>now()]);
+  DB::table('enrollments')->insert([
+   ['user_id'=>$student->id,'course_id'=>$phoneticsCourseId,'branch_id'=>null,'status'=>'active','created_at'=>now(),'updated_at'=>now()],
+   ['user_id'=>$student->id,'course_id'=>$otherCourseId,'branch_id'=>null,'status'=>'active','created_at'=>now(),'updated_at'=>now()],
+  ]);
+  PhoneticSetting::query()->firstOrCreate(['id'=>1],['enabled'=>true,'course_slug'=>'british-american-phonetics','course_title'=>'British & American Phonetics Course','require_course_enrollment'=>false]);
+  PhoneticSetting::query()->whereKey(1)->update(['require_course_enrollment'=>false]);
+  \Illuminate\Support\Facades\Cache::forget('phonetics.settings');
+  $this->actingAs($student)->get('/courses/british-american-phonetics/phonetics-learning')->assertOk();
+  $this->actingAs($student)->get('/courses/general-english/phonetics-learning')->assertNotFound();
+  $this->actingAs($student)->postJson('/courses/general-english/phonetics-learning/attempts',['selected_answer'=>'/ˈtest/'])->assertNotFound();
  }
 
  public function test_phonetics_admin_uploads_safe_media_and_rejects_svg():void{
@@ -101,7 +129,8 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
    'animation_style'=>'shimmer-sweep','background_color'=>'#112233','accent_color'=>'#445566',
    'text_color'=>'#FFFFFF','backdrop_blur'=>1,'show_progress_label'=>1,'respect_reduced_motion'=>1,
    'min_duration_ms'=>500,'fade_duration_ms'=>250,'max_timeout_ms'=>5000,
-   'trigger_mode'=>'every-load','excluded_paths_text'=>"admin/*\napi/*",
+   'trigger_mode'=>'every-load','excluded_paths_text'=>"admin/*
+api/*",
   ])->assertRedirect('/admin/al-branding-loader')->assertSessionHas('status');
   $this->assertDatabaseHas('alom_english_center_loader_settings',['animation_style'=>'shimmer-sweep','background_color'=>'#112233','enabled'=>true]);
   $this->assertDatabaseHas('audit_logs',['action'=>'al_branding_loader.settings.updated','entity_id'=>'al-branding-loader']);
@@ -150,6 +179,9 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
   $exam=DB::table('phonetic_exams')->where('slug','lesson-one-vocabulary-exam')->first();
   $this->assertNotNull($exam);
   $this->assertDatabaseHas('phonetic_exam_questions',['exam_id'=>$exam->id,'word_id'=>$word->id]);
+  PhoneticSetting::query()->firstOrCreate(['id'=>1],['enabled'=>true,'course_slug'=>'vocabulary-starter','course_title'=>'Vocabulary Starter']);
+  PhoneticSetting::query()->whereKey(1)->update(['course_slug'=>'vocabulary-starter']);
+  \Illuminate\Support\Facades\Cache::forget('phonetics.settings');
   $this->actingAs($student)->get('/courses/vocabulary-starter/phonetics-learning?lesson='.$lessonId)->assertOk()->assertSee('aec-vocabulary-test')->assertSee('Lesson One Vocabulary Exam');
   $this->actingAs($student)->get('/courses/vocabulary-starter/phonetics-learning/exams/lesson-one-vocabulary-exam?lesson='.$lessonId)->assertOk();
   $attempt=DB::table('phonetic_exam_attempts')->where('exam_id',$exam->id)->where('user_id',$student->id)->first();

@@ -25,10 +25,9 @@ final class PhoneticsExamController extends Controller
         abort_unless($setting->enabled, 404);
         $course = $this->catalog->course($courseSlug);
         $this->catalog->assertCourseAvailable($course);
+        $this->catalog->assertDedicatedCourse($course);
         $courseRef = $this->catalog->courseId($course);
-        if ($setting->require_course_enrollment) {
-            $this->catalog->assertAccess($request->user(), $courseRef);
-        }
+        $this->catalog->assertAccess($request->user(), $courseRef);
 
         $exam = $this->resolveExam($examSlug, $course, $request->query('lesson'));
         if ($exam->batch_ref) {
@@ -105,10 +104,9 @@ final class PhoneticsExamController extends Controller
         abort_unless($setting->enabled, 404);
         $course = $this->catalog->course($courseSlug);
         $this->catalog->assertCourseAvailable($course);
+        $this->catalog->assertDedicatedCourse($course);
         $courseRef = $this->catalog->courseId($course);
-        if ($setting->require_course_enrollment) {
-            $this->catalog->assertAccess($request->user(), $courseRef);
-        }
+        $this->catalog->assertAccess($request->user(), $courseRef);
         $exam = $this->resolveExam($examSlug, $course, $request->query('lesson'));
         $this->assertAudience($exam, $course);
         if ($exam->batch_ref) {

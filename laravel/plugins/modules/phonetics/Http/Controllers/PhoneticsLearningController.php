@@ -25,15 +25,36 @@ final class PhoneticsLearningController extends Controller
     {
         $course = $this->catalog->course($courseSlug);
         $this->catalog->assertCourseAvailable($course);
+        $this->catalog->assertDedicatedCourse($course);
         $courseRef = $this->catalog->courseId($course);
         $setting = PhoneticSetting::current();
         abort_unless($setting->enabled, 404);
-        if ($setting->require_course_enrollment) {
-            abort_unless($request->user(), 401, 'Sign in to access course vocabulary.');
-            $this->catalog->assertAccess($request->user(), $courseRef);
-        }
+        abort_unless($request->user(), 401, 'Sign in to access course vocabulary.');
+        $this->catalog->assertAccess($request->user(), $courseRef);
 
         $entries = $this->assignedEntries($request, $course, $request->query('lesson'));
+        $progress = [
+            'attempts' => 0,
+            'correct' => 0,
+            'accuracy' => 0,
+            'words_practiced' => 0,
+            'uk_attempts' => 0,
+            'us_attempts' => 0,
+        ];
+        if ($entries->isNotEmpty()) {
+            $progressQuery = PhoneticAttempt::query()
+                ->where('user_id', (string) $request->user()->getAuthIdentifier())
+                ->where('course_ref', $courseRef)
+                ->whereIn('entry_id', $entries->pluck('id'));
+            $progress['attempts'] = (clone $progressQuery)->count();
+            $progress['correct'] = (clone $progressQuery)->where('is_correct', true)->count();
+            $progress['accuracy'] = $progress['attempts'] > 0
+                ? (int) round(($progress['correct'] / $progress['attempts']) * 100)
+                : 0;
+            $progress['words_practiced'] = (clone $progressQuery)->distinct()->count('entry_id');
+            $progress['uk_attempts'] = (clone $progressQuery)->where('target_accent', 'uk')->count();
+            $progress['us_attempts'] = (clone $progressQuery)->where('target_accent', 'us')->count();
+        }
         $isPaid = $this->catalog->isPaid($course);
         $exams = PhoneticExam::query()->where('lms_driver', $this->catalog->driver())->where('status', 'published')
             ->where(fn ($scope) => $scope->whereNull('course_ref')->orWhere('course_ref', $courseRef))
@@ -72,6 +93,7 @@ final class PhoneticsLearningController extends Controller
             'course' => $course,
             'setting' => $setting,
             'entries' => $entries,
+            'progress' => $progress,
             'exams' => $exams,
             'challenge' => $challenge,
             'lessonRef' => $request->query('lesson'),
@@ -83,13 +105,12 @@ final class PhoneticsLearningController extends Controller
         $data = $request->validate(['selected_answer' => ['required', 'string', 'max:120']]);
         $course = $this->catalog->course($courseSlug);
         $this->catalog->assertCourseAvailable($course);
+        $this->catalog->assertDedicatedCourse($course);
         $courseRef = $this->catalog->courseId($course);
         $setting = PhoneticSetting::current();
         abort_unless($setting->enabled, 404);
-        if ($setting->require_course_enrollment) {
-            abort_unless($request->user(), 401);
-            $this->catalog->assertAccess($request->user(), $courseRef);
-        }
+        abort_unless($request->user(), 401, 'Sign in to access course vocabulary.');
+        $this->catalog->assertAccess($request->user(), $courseRef);
         abort_unless($request->user(), 401, 'Sign in to save your practice result.');
 
         $challenge = $request->session()->get('phonetics.learning_challenge');
@@ -109,6 +130,7 @@ final class PhoneticsLearningController extends Controller
         $correct = hash_equals((string) $challenge['expected'], trim($data['selected_answer']));
         $attempt = PhoneticAttempt::query()->create([
             'user_id' => $request->user()->getAuthIdentifier(),
+            'course_ref' => $courseRef,
             'entry_id' => $entry->id,
             'target_accent' => $challenge['accent'],
             'quiz_mode' => 'course-vocabulary',
