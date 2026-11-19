@@ -277,7 +277,7 @@ final class UnifiedCommerceCartTest extends TestCase
         try {
             app(PaymentSettlementService::class)->settleTransaction($transaction, 'BANK-SETTLE-BRANCH-001');
             $this->fail('Settlement must reject a student whose assigned branch changed after checkout.');
-        } catch (\\RuntimeException $exception) {
+        } catch (\RuntimeException $exception) {
             $this->assertSame(
                 'Student branch assignment changed after checkout; manual payment reconciliation is required.',
                 $exception->getMessage()
