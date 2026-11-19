@@ -447,7 +447,11 @@ class PaymentSettlementStateMachineTest extends TestCase
 
         foreach (['gift_course', 'gift_voucher'] as $giftType) {
             $buyer = $this->createUserWithRole('student');
+            $recipient = $this->createUserWithRole('student');
             $recipientEmail = $giftType . '.recipient@example.test';
+            DB::table('users')->where('id', $recipient->id)->update(['email' => $recipientEmail]);
+            $recipient->refresh();
+            $token = bin2hex(random_bytes(32));
             $draftId = null;
             $courseId = null;
 
@@ -463,11 +467,12 @@ class PaymentSettlementStateMachineTest extends TestCase
                 $courseId = (int) $course->id;
                 $draftId = DB::table('course_gifts')->insertGetId([
                     'sender_user_id' => $buyer->id,
-                    'recipient_user_id' => null,
+                    'recipient_user_id' => $recipient->id,
                     'recipient_email' => $recipientEmail,
                     'course_id' => $courseId,
                     'invoice_id' => null,
-                    'redeem_token_hash' => hash('sha256', bin2hex(random_bytes(32))),
+                    'redeem_token_hash' => hash('sha256', $token),
+                    'redeem_token_encrypted' => encrypt($token),
                     'status' => 'awaiting_payment',
                     'currency' => 'BDT',
                     'amount' => 500,
@@ -477,9 +482,9 @@ class PaymentSettlementStateMachineTest extends TestCase
                     'updated_at' => now(),
                 ]);
             } else {
-                $token = bin2hex(random_bytes(32));
                 $draftId = DB::table('course_gift_vouchers')->insertGetId([
                     'sender_user_id' => $buyer->id,
+                    'recipient_user_id' => $recipient->id,
                     'recipient_email' => $recipientEmail,
                     'redeem_token_hash' => hash('sha256', $token),
                     'redeem_token_encrypted' => encrypt($token),
@@ -580,9 +585,34 @@ class PaymentSettlementStateMachineTest extends TestCase
                 'order_item_id' => $orderItemId,
             ]);
 
-            if ($giftType === 'gift_voucher') {
+            if ($giftType === 'gift_course') {
+                $this->actingAs($recipient)->post('/student/course-commerce/gifts/redeem/' . $token)
+                    ->assertRedirect();
+                $this->assertDatabaseHas('enrollments', [
+                    'user_id' => $recipient->id,
+                    'course_id' => $courseId,
+                    'invoice_id' => $invoice->id,
+                    'status' => 'active',
+                ]);
+            } else {
                 $this->assertDatabaseCount('course_gift_wallets', 0);
                 $this->assertDatabaseCount('course_gift_wallet_transactions', 0);
+                $this->actingAs($recipient)->post('/student/course-commerce/vouchers/redeem/' . $token)
+                    ->assertRedirect();
+                $this->assertDatabaseHas('course_gift_vouchers', [
+                    'id' => $draftId,
+                    'recipient_user_id' => $recipient->id,
+                    'remaining_amount' => 0,
+                    'status' => 'redeemed',
+                ]);
+                $this->assertDatabaseHas('course_gift_wallet_transactions', [
+                    'user_id' => $recipient->id,
+                    'voucher_id' => $draftId,
+                    'type' => 'credit',
+                    'amount' => 500,
+                    'status' => 'completed',
+                ]);
+                $this->assertSame(500.0, (float) DB::table('course_gift_wallets')->where('user_id', $recipient->id)->value('balance'));
             }
         }
     }
