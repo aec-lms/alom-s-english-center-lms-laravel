@@ -116,6 +116,83 @@ final class PhoneticsSpeakingRecordingSecurityTest extends TestCase
             'score' => 5,
             'reviewer_user_id' => (string) $managerB->getAuthIdentifier(),
         ]);
+
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            $this->markTestSkipped('Final-write reviewer race checks require MySQL row-lock semantics.');
+        }
+
+        // Simulate an account branch reassignment after the initial controller
+        // authorization but immediately after the recording row is locked.
+        $branchRaceRecording = PhoneticSpeakingRecording::query()->create([
+            'lms_driver' => 'aec',
+            'user_id' => (string) $student->getAuthIdentifier(),
+            'entry_id' => $entry->id,
+            'course_ref' => (string) $courseId,
+            'storage_path' => 'students/test/branch-race-recording.webm',
+            'mime_type' => 'audio/webm',
+            'size_bytes' => 128,
+            'reported_duration_seconds' => 8,
+            'status' => 'pending',
+        ]);
+        $managerC = $this->createUserWithRole('branch_manager', (int) $branchB);
+        $managerC->roles()->first()->permissions()->syncWithoutDetaching([$permissionId]);
+        $branchChanged = false;
+        DB::listen(function ($query) use (&$branchChanged, $managerC, $branchA): void {
+            $sql = strtolower($query->sql);
+            if (!$branchChanged && str_contains($sql, 'phonetic_speaking_recordings') && str_contains($sql, 'for update')) {
+                DB::table('users')->where('id', $managerC->getKey())->update(['branch_id' => $branchA]);
+                $branchChanged = true;
+            }
+        });
+        $this->actingAs($managerC)
+            ->patch('/admin/phonetics/learning/recordings/' . $branchRaceRecording->id . '/review', [
+                'score' => 4,
+                'feedback' => 'This write must fail after reviewer branch reassignment.',
+            ])
+            ->assertNotFound();
+        $this->assertTrue($branchChanged, 'The branch reassignment hook must run after the recording lock.');
+        $this->assertDatabaseHas('phonetic_speaking_recordings', [
+            'id' => $branchRaceRecording->id,
+            'status' => 'pending',
+            'score' => null,
+        ]);
+
+        // Repeat the race for account deactivation. The preflight middleware
+        // sees an active reviewer; the final transactional gate must still
+        // reject the write after the account is deactivated.
+        $inactiveRaceRecording = PhoneticSpeakingRecording::query()->create([
+            'lms_driver' => 'aec',
+            'user_id' => (string) $student->getAuthIdentifier(),
+            'entry_id' => $entry->id,
+            'course_ref' => (string) $courseId,
+            'storage_path' => 'students/test/inactive-reviewer-race.webm',
+            'mime_type' => 'audio/webm',
+            'size_bytes' => 128,
+            'reported_duration_seconds' => 8,
+            'status' => 'pending',
+        ]);
+        $managerD = $this->createUserWithRole('branch_manager', (int) $branchB);
+        $managerD->roles()->first()->permissions()->syncWithoutDetaching([$permissionId]);
+        $reviewerDeactivated = false;
+        DB::listen(function ($query) use (&$reviewerDeactivated, $managerD): void {
+            $sql = strtolower($query->sql);
+            if (!$reviewerDeactivated && str_contains($sql, 'phonetic_speaking_recordings') && str_contains($sql, 'for update')) {
+                DB::table('users')->where('id', $managerD->getKey())->update(['is_active' => false]);
+                $reviewerDeactivated = true;
+            }
+        });
+        $this->actingAs($managerD)
+            ->patch('/admin/phonetics/learning/recordings/' . $inactiveRaceRecording->id . '/review', [
+                'score' => 4,
+                'feedback' => 'This write must fail after reviewer deactivation.',
+            ])
+            ->assertForbidden();
+        $this->assertTrue($reviewerDeactivated, 'The reviewer deactivation hook must run after the recording lock.');
+        $this->assertDatabaseHas('phonetic_speaking_recordings', [
+            'id' => $inactiveRaceRecording->id,
+            'status' => 'pending',
+            'score' => null,
+        ]);
     }
     public function test_branch_review_queue_hides_same_branch_student_recordings_for_other_branch_courses(): void
     {
