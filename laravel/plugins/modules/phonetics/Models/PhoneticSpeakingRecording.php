@@ -15,7 +15,7 @@ final class PhoneticSpeakingRecording extends Model
     {
         return [
             'size_bytes' => 'integer',
-            'duration_seconds' => 'integer',
+            'reported_duration_seconds' => 'integer',
             'score' => 'integer',
             'reviewed_at' => 'datetime',
         ];
