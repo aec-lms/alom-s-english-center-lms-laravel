@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Facades\\Hash;
-use Plugins\\Modules\\StudentManagement\\Models\\Student;
-use Tests\\TestCase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Plugins\Modules\StudentManagement\Models\Student;
+use Tests\TestCase;
 
 final class StudentManagementAuditTrailTest extends TestCase
 {
