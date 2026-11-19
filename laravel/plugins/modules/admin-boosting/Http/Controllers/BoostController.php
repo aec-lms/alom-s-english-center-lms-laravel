@@ -210,10 +210,44 @@ class BoostController extends Controller
     private function isEligible(BoostCampaign $campaign): bool
     {
         $now = now();
+        if ($campaign->status !== 'active'
+            || ($campaign->starts_at && $campaign->starts_at > $now)
+            || ($campaign->ends_at && $campaign->ends_at < $now)) {
+            return false;
+        }
 
-        return $campaign->status === 'active'
-            && (!$campaign->starts_at || $campaign->starts_at <= $now)
-            && (!$campaign->ends_at || $campaign->ends_at >= $now);
+        if (in_array($campaign->entity_type, ['institution', 'offer'], true)) {
+            return $campaign->entity_id === null;
+        }
+
+        if ($campaign->entity_type === 'course') {
+            if (!$campaign->entity_id || !Schema::hasTable('courses')) {
+                return false;
+            }
+
+            return DB::table('courses')
+                ->where('id', $campaign->entity_id)
+                ->where('status', 'published')
+                ->when(Schema::hasColumn('courses', 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))
+                ->exists();
+        }
+
+        if ($campaign->entity_type === 'branch') {
+            if ($campaign->placement !== 'course_listing'
+                || !app(PluginManager::class)->isEnabled('branch-management')
+                || !Schema::hasTable('branches')
+                || !$campaign->entity_id) {
+                return false;
+            }
+
+            return DB::table('branches')
+                ->where('id', $campaign->entity_id)
+                ->where('is_active', true)
+                ->when(Schema::hasColumn('branches', 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))
+                ->exists();
+        }
+
+        return false;
     }
 
     private function visitorHash(Request $request): string
