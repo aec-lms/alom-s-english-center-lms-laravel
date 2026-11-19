@@ -13,6 +13,7 @@ use Plugins\Modules\Phonetics\Models\PhoneticSpeakingRecording;
 use Plugins\Modules\Phonetics\Models\PhoneticSetting;
 use Plugins\Modules\Phonetics\Services\CourseCatalog;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Throwable;
 
 final class PhoneticsSpeakingRecordingController extends Controller
 {
@@ -80,9 +81,9 @@ final class PhoneticsSpeakingRecordingController extends Controller
                     'status' => 'pending',
                 ]);
             });
-        } catch (\\Throwable $exception) {
+        } catch (Throwable $exception) {
             if (is_string($path) && $path !== '') {
-                try { $disk->delete($path); } catch (\\Throwable) {}
+                try { $disk->delete($path); } catch (Throwable) {}
             }
             throw $exception;
         }
