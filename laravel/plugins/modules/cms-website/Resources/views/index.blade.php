@@ -142,6 +142,11 @@
                             <input type="datetime-local" name="publish_at" value="{{ $post->publish_at ? $post->publish_at->format("Y-m-d\\TH:i") : "" }}" class="rounded-lg border border-slate-300 px-3 py-2">
                             <input name="author" value="{{ $post->author }}" class="rounded-lg border border-slate-300 px-3 py-2">
                             <input name="excerpt" value="{{ $post->excerpt }}" class="sm:col-span-2 rounded-lg border border-slate-300 px-3 py-2">
+                            <input name="seo_title" value="{{ $post->seo_title }}" placeholder="SEO Meta Title" class="rounded-lg border border-slate-300 px-3 py-2">
+                            <input name="seo_description" value="{{ $post->seo_description }}" placeholder="SEO Meta Description" class="rounded-lg border border-slate-300 px-3 py-2">
+                            <input name="thumbnail_url" placeholder="Replace thumbnail with HTTPS URL or local path" class="rounded-lg border border-slate-300 px-3 py-2">
+                            <input name="pdf_url" placeholder="Replace PDF with HTTPS URL or local path" class="rounded-lg border border-slate-300 px-3 py-2">
+                            <input name="pdf_thumbnail_url" placeholder="Replace PDF cover with HTTPS URL or local path" class="rounded-lg border border-slate-300 px-3 py-2">
                             <textarea name="content" rows="3" required class="sm:col-span-2 rounded-lg border border-slate-300 px-3 py-2">{{ $post->content }}</textarea>
                             <div class="sm:col-span-2 flex items-center justify-between">
                                 <label class="inline-flex items-center gap-2 font-semibold"><input type="checkbox" name="is_published" value="1" @checked($post->is_published)> Published</label>
