@@ -60,7 +60,7 @@ class CourseCommerceController extends Controller
         abort_unless(Schema::hasTable('course_carts') && Schema::hasTable('course_cart_items'), 503, 'Course cart storage is not installed.');
         $course = DB::table('courses')->where('id', $courseId)->where('status', 'published')->first();
         abort_unless($course, 404, 'This course is not available for purchase.');
-        $this->assertCourseBranch($student, $course);
+        $this->assertCourseBranch($recipient, $course);
         $this->assertNoOpenBatch($courseId);
 
         abort_if(DB::table('enrollments')->where('user_id', $student->id)->where('course_id', $courseId)
@@ -201,7 +201,7 @@ class CourseCommerceController extends Controller
                 'amount' => $payable,
                 'external_trx_id' => null,
                 'user_id' => $student->id,
-                'branch_id' => $course->branch_id ?? $this->assignedBranchId($student),
+                'branch_id' => $course->branch_id ?? $this->assignedBranchId($recipient),
                 'status' => 'pending',
                 'notes' => json_encode(['purpose' => 'course_gift', 'course_gift_id' => $giftId], JSON_THROW_ON_ERROR),
             ]);
@@ -283,6 +283,12 @@ class CourseCommerceController extends Controller
             // concurrently and keeps the recipient email stable during redemption.
             $lockedStudent = DB::table('users')->where('id', $student->id)->lockForUpdate()->first();
             abort_unless($lockedStudent, 404, 'The recipient account is no longer available.');
+            $recipient = \\App\\Models\\User::query()->findOrFail($student->id);
+            // Lock the authoritative student-profile branch assignment as well
+            // as the user row before evaluating course access.
+            if ($this->plugins->isEnabled('student-management') && Schema::hasTable('students')) {
+                DB::table('students')->where('user_id', $recipient->id)->lockForUpdate()->first();
+            }
             $locked = DB::table('course_gifts')->where('id', $gift->id)->lockForUpdate()->first();
             abort_unless($locked && $locked->status === 'paid', 409, 'This gift has already been redeemed or is no longer available.');
             // Re-check authorization and expiry after acquiring the row lock to
@@ -299,7 +305,7 @@ class CourseCommerceController extends Controller
                 ->whereIn('status', ['pending', 'active', 'completed'])->exists(), 409, 'You already have access to this course.');
 
             DB::table('enrollments')->insert([
-                'user_id' => $student->id,
+                'user_id' => $recipient->id,
                 'course_id' => $course->id,
                 'branch_id' => $course->branch_id ?? $this->assignedBranchId($student),
                 'invoice_id' => $locked->invoice_id,
@@ -308,7 +314,7 @@ class CourseCommerceController extends Controller
                 'updated_at' => now(),
             ]);
             DB::table('course_gifts')->where('id', $locked->id)->update([
-                'recipient_user_id' => $student->id,
+                'recipient_user_id' => $recipient->id,
                 'status' => 'redeemed',
                 'redeemed_at' => now(),
                 'updated_at' => now(),
