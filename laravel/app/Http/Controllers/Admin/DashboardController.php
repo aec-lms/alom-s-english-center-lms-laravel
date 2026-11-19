@@ -158,7 +158,7 @@ class DashboardController extends Controller
             && Schema::hasTable('students')
             && Schema::hasColumn('students', 'user_id')
             && Schema::hasColumn('students', 'branch_id')) {
-            $studentUserIds = DB::table('students')->whereNotNull('user_id')->distinct()->pluck('user_id');
+            $studentUserIds = DB::table('students')->whereNotNull('user_id')->whereNotNull('branch_id')->distinct()->pluck('user_id');
             $branchStudentCount = DB::table('students')
                 ->where('branch_id', $branchId)
                 ->whereNotNull('user_id')
