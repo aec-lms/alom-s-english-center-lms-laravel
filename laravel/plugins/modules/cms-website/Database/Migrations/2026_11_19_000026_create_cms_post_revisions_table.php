@@ -32,5 +32,8 @@ return new class extends Migration {
             });
         }
     }
-    public function down(): void { Schema::dropIfExists('cms_post_revisions'); }
+    public function down(): void
+    {
+        // Retain revision history and scheduled publication metadata during rollback.
+    }
 };
