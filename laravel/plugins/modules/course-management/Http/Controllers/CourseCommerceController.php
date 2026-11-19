@@ -134,6 +134,9 @@ class CourseCommerceController extends Controller
             'coupon_code' => ['nullable', 'string', 'max:40'],
             'payer_contact' => ['required', 'string', 'min:7', 'max:40'],
         ]);
+        if (filled($validated['coupon_code'] ?? null)) {
+            $this->assertCouponCheckoutReady();
+        }
         $this->assertCheckoutReady();
         abort_unless(Schema::hasTable('course_gifts') && Schema::hasColumn('course_gifts', 'payment_transaction_id')
             && Schema::hasColumn('course_gifts', 'redeem_token_encrypted'), 503, 'Gift course storage is not ready.');
@@ -472,6 +475,9 @@ class CourseCommerceController extends Controller
             'payer_contact' => ['required', 'string', 'min:7', 'max:40'],
             'coupon_code' => ['nullable', 'string', 'max:40'],
         ]);
+        if (filled($validated['coupon_code'] ?? null)) {
+            $this->assertCouponCheckoutReady();
+        }
         $this->assertCheckoutStorageReady();
 
         $couponService = new CourseCouponService();
@@ -776,6 +782,14 @@ class CourseCommerceController extends Controller
     {
         $this->assertCheckoutStorageReady();
         $this->assertGatewayCheckoutReady();
+    }
+
+    private function assertCouponCheckoutReady(): void
+    {
+        abort_unless($this->plugins->isEnabled('marketing-management')
+            && Schema::hasTable('promo_coupons')
+            && Schema::hasTable('promo_coupon_redemptions'), 503,
+            'Enable Marketing & Promo Campaigns before applying a course coupon.');
     }
 
     private function assertNoUnresolvedOrder(int $userId): void
