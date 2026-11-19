@@ -161,4 +161,40 @@ final class CmsContributorManagementTest extends TestCase
             'assigned_editor_id' => $editor->id,
         ]);
     }
+
+    public function test_co_authors_and_assigned_editors_can_edit_only_their_assigned_unpublished_posts(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+
+        $author = $this->createUserWithRole('student');
+        $coAuthor = $this->createUserWithRole('student');
+        $editor = $this->createUserWithRole('teacher');
+        $this->grantCmsRole($author, 'cms_contributor');
+        $this->grantCmsRole($coAuthor, 'cms_contributor');
+        $this->grantCmsRole($editor, 'cms_editor');
+        $post = $this->createDraft($author, 'Collaborative Draft');
+
+        $this->actingAs($editor)->put('/admin/cms/editorial/posts/' . $post->id . '/assignments', [
+            'author_user_id' => $author->id,
+            'assigned_editor_id' => $editor->id,
+            'co_authors' => [$coAuthor->id],
+        ])->assertSessionHasNoErrors();
+
+        $this->actingAs($coAuthor)->put('/admin/cms/editorial/posts/' . $post->id, [
+            'title' => 'Collaborative Draft Updated',
+            'slug' => $post->slug,
+            'content' => 'Co-author contribution saved.',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('cms_posts', [
+            'id' => $post->id,
+            'title' => 'Collaborative Draft Updated',
+            'content' => 'Co-author contribution saved.',
+            'editorial_status' => 'draft',
+            'is_published' => false,
+        ]);
+    }
+
+
 }
