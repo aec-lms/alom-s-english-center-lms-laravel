@@ -459,6 +459,53 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
         $this->assertDatabaseCount('referral_commission_reversals', 0);
     }
 
+    public function test_refund_currency_must_match_the_commerce_order_currency(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['referral-income', 'student-management', 'payment-management', 'fees-management', 'commerce-cart']);
+
+        $referrer = $this->createUserWithRole('student');
+        $buyer = $this->createUserWithRole('student');
+        $service = app(ReferralIncomeService::class);
+        $service->applyCode($buyer, $service->createOrGetCode($referrer));
+        [$orderId, $invoiceId] = $this->createCommerceOrder($buyer, 1000);
+        $commissionId = $service->recordSettledPurchase($buyer, 'commerce_order', (string) $orderId, 1000, 'BDT');
+
+        DB::table('commerce_orders')->where('id', $orderId)->update(['currency' => 'USD']);
+        $transactionId = DB::table('payment_transactions')->insertGetId([
+            'transaction_ref' => 'REF-CURRENCY-TX-' . strtoupper(bin2hex(random_bytes(4))),
+            'invoice_id' => $invoiceId,
+            'branch_id' => null,
+            'gateway_slug' => 'offline',
+            'amount' => 1000,
+            'currency' => 'BDT',
+            'status' => 'settled',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $refundId = DB::table('payment_refunds')->insertGetId([
+            'payment_transaction_id' => $transactionId,
+            'amount' => 1000,
+            'reason' => 'Currency mismatch regression',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        try {
+            $service->reverseSettledPurchase($buyer, 'commerce_order', (string) $orderId, $refundId, 1000, 'BDT');
+            $this->fail('A refund whose currency differs from its commerce order must not reverse commission.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('currency does not match', $exception->getMessage());
+        }
+
+        $this->assertDatabaseHas('referral_commissions', [
+            'id' => $commissionId,
+            'commission_amount' => 50,
+            'status' => 'pending',
+        ]);
+        $this->assertDatabaseCount('referral_commission_reversals', 0);
+    }
+
     /**
      * Build an authoritative paid order/invoice pair for refund reconciliation tests.
      *
