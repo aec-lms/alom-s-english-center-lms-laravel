@@ -4,7 +4,7 @@
     "version": "2.1.0",
     "author": "Alom's English Center",
     "category": "website",
-    "description": "Blog and article publishing with revision history, scheduled publishing, safe recycle-bin recovery, homepage copy customization, and contact inquiry management (Page Builder, Slider Builder, and Carousel Builder are separate independent plugins).",
+    "description": "Blog and article publishing with editorial approvals, revision history, scheduled publishing, safe recycle-bin recovery, homepage copy customization, and contact inquiry management.",
     "core_compatibility": "^2.0",
     "dependencies": [],
     "provider": "Plugins\\Modules\\CmsWebsite\\Providers\\CmsWebsiteServiceProvider",
