@@ -270,9 +270,10 @@ class AdmissionManagementWorkflowTest extends TestCase
         $application->update(['status' => 'approved']);
 
         $this->actingAs($admin)->post('/admin/admissions/' . $application->id . '/convert-to-student')
+            ->assertStatus(302)
             ->assertSessionHasNoErrors();
 
-        $this->assertSame($student->id, $application->fresh()->converted_student_id);
+        $this->assertSame($student->id, (int) $application->fresh()->converted_student_id);
         $this->assertDatabaseCount('students', 1);
 
         $this->actingAs($admin)->post('/admin/admissions/' . $application->id . '/convert-to-student')
@@ -310,6 +311,7 @@ class AdmissionManagementWorkflowTest extends TestCase
         ]);
 
         $this->actingAs($admin)->post('/admin/admissions/' . $application->id . '/convert-to-student')
+            ->assertStatus(302)
             ->assertSessionHasNoErrors();
 
         $invoice = FeeInvoice::query()->findOrFail($application->fresh()->admission_fee_invoice_id);
@@ -318,6 +320,7 @@ class AdmissionManagementWorkflowTest extends TestCase
         $this->assertSame('unpaid', $invoice->status);
 
         $this->actingAs($admin)->post('/admin/admissions/' . $application->id . '/convert-to-student')
+            ->assertStatus(302)
             ->assertSessionHasNoErrors();
 
         $this->assertDatabaseCount('fee_invoices', 1);
