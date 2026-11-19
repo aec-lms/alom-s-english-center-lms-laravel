@@ -243,6 +243,26 @@ final class CmsContributorManagementTest extends TestCase
 
 
 
+    public function test_manager_access_can_be_removed_only_when_another_active_manager_remains(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+
+        $firstManager = $this->createUserWithRole('student');
+        $secondManager = $this->createUserWithRole('student');
+        $this->grantCmsRole($firstManager, 'cms_author_manager');
+        $this->grantCmsRole($secondManager, 'cms_author_manager');
+
+        $this->actingAs($firstManager)->put('/admin/cms/contributors/' . $firstManager->id, ['roles' => []])
+            ->assertRedirect();
+        $this->assertFalse($firstManager->fresh()->hasRole('cms_author_manager'));
+        $this->assertTrue($secondManager->fresh()->hasRole('cms_author_manager'));
+
+        $this->actingAs($secondManager)->put('/admin/cms/contributors/' . $secondManager->id, ['roles' => []])
+            ->assertStatus(422);
+        $this->assertTrue($secondManager->fresh()->hasRole('cms_author_manager'));
+    }
+
     public function test_last_active_contributor_manager_cannot_remove_their_own_management_access(): void
     {
         $this->markSystemInstalled();
