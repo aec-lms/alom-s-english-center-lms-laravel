@@ -124,7 +124,7 @@ class SliderBuilderController extends Controller
             'title' => ['required', 'string', 'max:180'],
             'subtitle' => ['nullable', 'string', 'max:500'],
             'button_label' => ['nullable', 'string', 'max:60'],
-            'cta_url' => ['nullable', 'string', 'max:255', 'regex:#^(https?://[^\s]+|/(?!/)[^\s]*|#[A-Za-z][A-Za-z0-9_-]*)$#i'],
+            'cta_url' => ['nullable', 'string', 'max:255', 'regex:~^(https?://[^\s]+|/(?!/)[^\s]*|#[A-Za-z][A-Za-z0-9_-]*)$~i'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:65535'],
             'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:6144'],
             'mobile_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:6144'],
