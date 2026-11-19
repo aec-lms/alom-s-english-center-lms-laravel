@@ -423,13 +423,6 @@ class CmsController extends Controller
                 'review_note' => null,
             ])->save();
 
-            if ($user->hasPermission('cms.authors.assign')) {
-                $post->forceFill([
-                    'assigned_editor_id' => $validated['assigned_editor_id'] ?? null,
-                    'assigned_reviewer_id' => $validated['assigned_reviewer_id'] ?? null,
-                ])->save();
-                $this->syncCmsCoAuthors($post, $validated['co_authors'] ?? [], $authorId);
-            }
         });
 
         $this->audit->log('cms.editorial_post_updated', 'cms_post', (string) $post->id, ['updated_by' => $user->id]);
