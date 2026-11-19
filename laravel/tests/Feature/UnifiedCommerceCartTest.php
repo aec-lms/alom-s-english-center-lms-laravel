@@ -9,6 +9,7 @@ use App\Models\Role;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
+use Plugins\Modules\CourseManagement\Jobs\SendGiftRecipientEmailJob;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
@@ -76,6 +77,7 @@ final class UnifiedCommerceCartTest extends TestCase
 
         $this->actingAs($sender)->post('/student/course-commerce/gifts/' . $giftId . '/resend')
             ->assertRedirect();
+        Queue::assertPushed(SendGiftRecipientEmailJob::class);
 
         $this->assertDatabaseHas('course_gifts', [
             'id' => $giftId,
