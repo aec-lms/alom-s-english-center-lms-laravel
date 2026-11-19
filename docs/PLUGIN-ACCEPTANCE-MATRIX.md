@@ -202,3 +202,11 @@ The current candidate adds targeted regression coverage beyond the historical in
 | Commerce Cart + Payment Management | Existing suspended entitlement rows were not reactivated by insert-ignore settlement writes | Settlement now upserts the existing entitlement and refreshes its active state | Covered by refund/repayment regression; exact-head CI pending |
 
 These are focused fixes, not a substitute for the complete per-plugin acceptance gate. All 60 candidate plugin manifests still require feature-by-feature review and exact-candidate validation. No plugin is promoted to fully accepted by this checkpoint.
+
+### Candidate manifest/dependency reconciliation (2026-11-19)
+
+The current PR candidate contains at least 48 known plugin manifests: the 44 slugs in the historical current-main inventory plus assignment-management, push-notifications, commerce-cart and referral-income. This is a candidate-branch observation, not a replacement for a recursive release-tree inventory. The prior 44-plugin count remains a dated main-branch snapshot.
+
+A manifest-by-manifest dependency review found one dangling optional dependency: commerce-cart declared subscription-management, but no subscription-management plugin manifest exists in this candidate. The stale optional dependency has been removed. PluginSiblingDependencyAuditTest now also rejects required or optional manifest dependencies that do not resolve to a plugin manifest, in addition to checking direct sibling namespace references.
+
+The candidate still requires the full dynamic manifest-discovery and lifecycle suite to pass on its exact head. A manifest resolving to another manifest is not evidence that the referenced plugin's workflows are complete.
