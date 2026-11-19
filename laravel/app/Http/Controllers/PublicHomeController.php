@@ -816,7 +816,9 @@ class PublicHomeController extends Controller
     {
         if (!Schema::hasTable('courses')) return collect();
 
-        $query = DB::table('courses')->where('status', 'published')->orderByDesc('id')->get();
+        $query = DB::table('courses')->where('status', 'published')
+            ->when(Schema::hasColumn('courses', 'deleted_at'), fn ($builder) => $builder->whereNull('deleted_at'))
+            ->orderByDesc('id')->get();
         $catMap = Schema::hasTable('course_categories')
             ? DB::table('course_categories')->pluck('name', 'id')
             : collect();
