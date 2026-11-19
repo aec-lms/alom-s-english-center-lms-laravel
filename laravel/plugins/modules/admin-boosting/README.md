@@ -12,7 +12,7 @@ Admin Boosting manages scheduled promotional campaigns for courses, institutions
 
 ## Redirect safety
 
-Campaign destinations accept relative site paths (for example, \`/courses/ielts\`) and absolute URLs only when their host exactly matches \`APP_URL\`. Protocol-relative URLs, credentials in URLs, unsafe schemes, control characters and external hosts are rejected. If external partner destinations are ever required, implement a reviewed host allowlist rather than relaxing this validation.
+Only relative site paths are accepted (for example, \`/courses/ielts\`). Absolute URLs, protocol-relative URLs, backslashes, control characters and unsafe schemes are rejected at both write time and redirect time. This intentionally prevents the LMS domain from becoming an open-redirect service.
 
 ## Analytics endpoints
 
@@ -28,9 +28,9 @@ Campaign CTA links should use the click endpoint:
 route('plugins.boost.click', $campaign)
 \`\`\`
 
-The impression endpoint returns HTTP 204. The click endpoint redirects to the validated destination. Events are deduplicated per campaign, event type and session using an HMAC-SHA256 session fingerprint; raw IP addresses and user-agent strings are not stored. The unique event constraint protects counters from repeated requests and concurrent duplicate inserts.
+The impression endpoint returns HTTP 204. The click endpoint redirects to the validated destination. Events are deduplicated per campaign, event type and session using an HMAC-SHA256 session fingerprint; raw IP addresses and user-agent strings are not stored. A database unique constraint protects counters from repeated requests and concurrent duplicate inserts.
 
-**Integration note:** registering the endpoints and showing aggregate analytics does not automatically instrument every public placement. The storefront component that renders each campaign must call the impression endpoint; the CTA must link through the click endpoint. Until those consumers are connected, the dashboard counters will remain unchanged for uninstrumented placements.
+**Integration note:** registering the endpoints and showing aggregate analytics does not automatically instrument every public placement. The storefront component that renders each campaign must call the impression endpoint; the CTA must link through the click endpoint. Until those consumers are connected, dashboard counters remain unchanged for uninstrumented placements.
 
 ## Target reference note
 
