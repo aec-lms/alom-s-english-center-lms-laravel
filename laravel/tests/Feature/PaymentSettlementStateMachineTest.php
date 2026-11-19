@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Illuminate\Support\Facades\DB;
 use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
+use Plugins\Modules\CourseManagement\Models\Course;
 use Plugins\Modules\PaymentManagement\Services\PaymentSettlementService;
 use RuntimeException;
 use Tests\TestCase;
