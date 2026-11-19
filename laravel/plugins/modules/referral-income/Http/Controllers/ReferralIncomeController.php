@@ -84,7 +84,27 @@ class ReferralIncomeController extends Controller
             return $payout;
         });
         $rules = DB::table('referral_income_rules')->orderBy('referrer_type')->get();
-        return view('referral-income::admin', compact('commissions', 'payouts', 'rules'));
+
+        // Always provide the recovery collection so the admin view remains safe
+        // during mixed-version plugin upgrades where an older compiled view may
+        // still reference it. Keep recovery history read-only until reconciled.
+        $recoveries = collect();
+        if (Schema::hasTable('referral_commission_reversals') && Schema::hasTable('payment_refunds')) {
+            $recoveries = DB::table('referral_commission_reversals as reversals')
+                ->join('referral_commissions as commissions', 'commissions.id', '=', 'reversals.referral_commission_id')
+                ->join('users', 'users.id', '=', 'commissions.referrer_user_id')
+                ->join('payment_refunds as refunds', 'refunds.id', '=', 'reversals.payment_refund_id')
+                ->where('reversals.status', 'recovery_due')
+                ->orderByDesc('reversals.id')
+                ->limit(100)
+                ->get([
+                    'reversals.id', 'reversals.refunded_amount', 'reversals.commission_reversal_amount',
+                    'reversals.currency', 'reversals.created_at', 'commissions.source_type',
+                    'commissions.source_id', 'users.name as referrer_name', 'refunds.reason',
+                ]);
+        }
+
+        return view('referral-income::admin', compact('commissions', 'payouts', 'rules', 'recoveries'));
     }
 
     public function updateRules(Request $request): RedirectResponse
