@@ -49,7 +49,7 @@ class TeacherController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:150'],
             'email' => ['required', 'email', 'max:190', 'unique:users,email'],
-            'password' => ['nullable', 'string', 'min:6'],
+            'password' => ['required', 'string', 'min:12', 'max:128'],
             'branch_id' => array_merge(['nullable', 'integer'], Schema::hasTable('branches') ? [Rule::exists('branches', 'id')] : ['prohibited']),
             'employee_code' => ['required', 'string', 'max:60', 'unique:teachers,employee_code'],
             'specialization' => ['required', 'string', 'max:160'],
@@ -58,7 +58,7 @@ class TeacherController extends Controller
             'youtube_url' => ['nullable', 'url', 'max:255'],
             'facebook_url' => ['nullable', 'url', 'max:255'],
             'photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
-            'photo_url' => ['nullable', 'string', 'max:255'],
+            'photo_url' => ['nullable', 'string', 'max:255', 'regex:/^(https:\/\/[^\s]+|\/(?!\/)[A-Za-z0-9._\/-]+)$/'],
             'is_active' => ['nullable', 'boolean'],
         ]);
 
@@ -79,19 +79,20 @@ class TeacherController extends Controller
             $user = User::query()->create([
                 'name' => $validated['name'],
                 'email' => strtolower($validated['email']),
-                'password' => Hash::make(($validated['password'] ?? '') ?: Str::random(12)),
+                'password' => Hash::make($validated['password']),
                 'branch_id' => $validated['branch_id'] ?? null,
                 'is_active' => $request->boolean('is_active', true),
             ]);
 
             $teacherRole = Role::query()->where('slug', 'teacher')->first();
-            if ($teacherRole) {
-                $user->roles()->syncWithoutDetaching([$teacherRole->id]);
+            if (!$teacherRole) {
+                throw ValidationException::withMessages(['role' => 'The required teacher role is not configured. Run the role/permission setup before creating teacher accounts.']);
             }
+            $user->roles()->syncWithoutDetaching([$teacherRole->id]);
 
             return Teacher::query()->create([
                 'user_id' => $user->id,
-                'branch_id' => $validated['branch_id'] ?? null,
+                'branch_id' => $resolvedBranchId,
                 'employee_code' => strtoupper(trim($validated['employee_code'])),
                 'specialization' => $validated['specialization'],
                 'credentials' => $validated['credentials'] ?? null,
@@ -137,6 +138,8 @@ class TeacherController extends Controller
             }
             $validated['branch_id'] = $actor->branch_id;
         }
+        // A partial/API update must not silently detach an existing teacher from their branch.
+        $resolvedBranchId = array_key_exists('branch_id', $validated) ? $validated['branch_id'] : $teacher->branch_id;
 
         $photoPath = $teacher->photo_path;
         if ($request->hasFile('photo')) {
@@ -145,7 +148,7 @@ class TeacherController extends Controller
             $photoPath = $validated['photo_url'];
         }
 
-        DB::transaction(function () use ($teacher, $validated, $request, $photoPath): void {
+        DB::transaction(function () use ($teacher, $validated, $request, $photoPath, $resolvedBranchId): void {
             $isActive = $request->boolean('is_active');
             $teacher->update([
                 'branch_id' => $validated['branch_id'] ?? null,
@@ -162,7 +165,7 @@ class TeacherController extends Controller
             if ($teacher->user) {
                 $userUpdates = [
                     'name' => $validated['name'],
-                    'branch_id' => $validated['branch_id'] ?? null,
+                    'branch_id' => $resolvedBranchId,
                     'is_active' => $isActive,
                 ];
                 if (array_key_exists('email', $validated) && !empty($validated['email'])) {
