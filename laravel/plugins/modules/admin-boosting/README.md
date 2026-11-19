@@ -30,7 +30,7 @@ Campaign CTA links should use the click endpoint:
 route('plugins.boost.click', $campaign)
 ```
 
-The impression endpoint returns HTTP 204. The click endpoint redirects to the validated destination. Events are deduplicated per campaign, event type and session using an HMAC-SHA256 session fingerprint; raw IP addresses and user-agent strings are not stored. A database unique constraint protects counters from repeated requests and concurrent duplicate inserts.
+The impression endpoint returns HTTP 204. The click endpoint redirects to the validated destination. Events are deduplicated per campaign, event type and session using a random 256-bit token stored in the Laravel session and HMAC-SHA256 keyed by `APP_KEY`; raw session IDs, IP addresses and user-agent strings are not stored. A database unique constraint protects counters from repeated requests and concurrent duplicate inserts.
 
 **Integration note:** the homepage and course catalog are wired. Any future placement must call the impression endpoint only when the campaign is actually visible and must use the click endpoint for its CTA. Campaigns configured for `notice_banner` will not appear until that placement is implemented.
 
