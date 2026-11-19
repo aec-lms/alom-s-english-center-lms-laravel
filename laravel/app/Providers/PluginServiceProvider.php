@@ -56,11 +56,15 @@ class PluginServiceProvider extends ServiceProvider
 
         foreach ($enabledSlugs as $slug) {
             $manifest = $manifests[$slug] ?? null;
-            if (!$manifest || !$manifest->providerClass || !class_exists($manifest->providerClass)) {
+            if (!$manifest) {
                 continue;
             }
-            $provider = $this->app->resolveProvider($manifest->providerClass);
-            $this->app->register($provider);
+
+            if ($manifest->providerClass && class_exists($manifest->providerClass)) {
+                $provider = $this->app->resolveProvider($manifest->providerClass);
+                $this->app->register($provider);
+            }
+
             $manager->loadPluginRoutes($manifest);
         }
     }
