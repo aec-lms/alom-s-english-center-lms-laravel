@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\\Core\\Plugins;
+namespace App\Core\Plugins;
 
 /**
  * Backwards-compatible display taxonomy for plugin packages.
