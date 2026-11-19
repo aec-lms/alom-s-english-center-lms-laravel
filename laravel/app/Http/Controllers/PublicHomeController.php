@@ -51,6 +51,9 @@ class PublicHomeController extends Controller
 
         if (Schema::hasTable('cms_sliders')) {
             $visibleSlides = DB::table('cms_sliders')->where('is_active', true);
+            if (Schema::hasColumn('cms_sliders', 'deleted_at')) {
+                $visibleSlides->whereNull('deleted_at');
+            }
             if (Schema::hasColumn('cms_sliders', 'starts_at')) {
                 $visibleSlides->where(fn ($query) => $query->whereNull('starts_at')->orWhere('starts_at', '<=', now()));
             }
