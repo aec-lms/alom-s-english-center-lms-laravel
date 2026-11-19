@@ -131,6 +131,7 @@ final class CmsContributorManagementTest extends TestCase
         $this->grantCmsRole($editor, 'cms_editor');
         $this->grantCmsRole($reviewer, 'cms_reviewer');
         $this->grantCmsRole($manager, 'cms_author_manager');
+        $this->grantCmsRole($manager, 'cms_reviewer');
         $post = $this->createDraft($author, 'Managed Assignment Draft');
 
         $this->actingAs($manager)->put('/admin/cms/contributors/' . $author->id, ['roles' => ['cms_contributor']])
