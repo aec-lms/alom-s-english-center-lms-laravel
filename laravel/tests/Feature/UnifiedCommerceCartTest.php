@@ -82,7 +82,7 @@ final class UnifiedCommerceCartTest extends TestCase
     public function test_student_can_create_course_gift_and_voucher_drafts_directly_in_unified_cart(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['commerce-cart', 'course-management']);
+        $this->activatePlugins(['commerce-cart', 'course-management', 'fees-management', 'universal-payment', 'payment-management']);
         $student = $this->createUserWithRole('student');
         $course = Course::query()->create([
             'code' => 'UNIFIED-GIFT-DRAFT-01',
@@ -119,6 +119,37 @@ final class UnifiedCommerceCartTest extends TestCase
         $this->assertSame(2500.0, (float) $voucher->amount);
         $this->assertSame('gift_voucher', DB::table('commerce_cart_items')->where('item_id', $voucher->id)->value('item_type'));
         $this->assertDatabaseCount('commerce_cart_items', 2);
+
+        $payments = \\Mockery::mock(UniversalPaymentOrchestrator::class);
+        $payments->shouldReceive('assertGatewayReady')->once()->with('gateway-sslcommerz');
+        $payments->shouldReceive('initiate')->once()->andReturn(['redirect_url' => 'https://gateway.example.test/gift-checkout']);
+        $this->app->instance(UniversalPaymentOrchestrator::class, $payments);
+
+        $this->actingAs($student)->post('/cart/checkout', [
+            'gateway' => 'gateway-sslcommerz',
+            'payer_name' => $student->name,
+            'payer_email' => $student->email,
+            'payer_phone' => '01700000000',
+        ])->assertRedirect('https://gateway.example.test/gift-checkout');
+
+        $order = DB::table('commerce_orders')->where('user_id', $student->id)->first();
+        $this->assertNotNull($order);
+        $courseGiftOrderItem = DB::table('commerce_order_items')->where('order_id', $order->id)->where('item_type', 'gift_course')->first();
+        $voucherOrderItem = DB::table('commerce_order_items')->where('order_id', $order->id)->where('item_type', 'gift_voucher')->first();
+        $this->assertNotNull($courseGiftOrderItem);
+        $this->assertNotNull($voucherOrderItem);
+        $this->assertDatabaseHas('course_gifts', [
+            'id' => $gift->id,
+            'commerce_order_item_id' => $courseGiftOrderItem->id,
+            'status' => 'awaiting_payment',
+            'invoice_id' => $order->invoice_id,
+        ]);
+        $this->assertDatabaseHas('course_gift_vouchers', [
+            'id' => $voucher->id,
+            'commerce_order_item_id' => $voucherOrderItem->id,
+            'status' => 'awaiting_payment',
+            'invoice_id' => $order->invoice_id,
+        ]);
     }
 
     public function test_checkout_rejects_catalogue_price_currency_or_title_changes_after_add_to_cart(): void
