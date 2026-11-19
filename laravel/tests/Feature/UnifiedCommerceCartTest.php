@@ -1034,4 +1034,39 @@ final class UnifiedCommerceCartTest extends TestCase
         $this->assertDatabaseHas('payment_transactions', ['invoice_id' => $order->invoice_id, 'status' => 'settled']);
     }
 
+
+    public function test_unassigned_student_cannot_create_a_gift_for_a_branch_restricted_course(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['commerce-cart', 'course-management', 'branch-management']);
+        $student = $this->createUserWithRole('student');
+        $branch = Branch::query()->create([
+            'code' => 'GIFT-UNASSIGNED-' . $student->id,
+            'name' => 'Restricted Gift Branch',
+            'is_active' => true,
+        ]);
+
+        $course = Course::query()->create([
+            'code' => 'UNASSIGNED-BRANCH-GIFT-' . $student->id,
+            'title' => 'Restricted Branch Gift Course',
+            'slug' => 'restricted-branch-gift-course-' . $student->id,
+            'price' => 1200,
+            'status' => 'published',
+            'branch_id' => $branch->id,
+        ]);
+
+        $this->actingAs($student)->post('/cart/gifts/course', [
+            'course_id' => $course->id,
+            'recipient_email' => 'unassigned.branch.recipient@example.test',
+        ])->assertSessionHasErrors('course_id');
+
+        $this->assertDatabaseMissing('course_gifts', [
+            'sender_user_id' => $student->id,
+            'course_id' => $course->id,
+        ]);
+        $this->assertDatabaseMissing('commerce_cart_items', [
+            'item_type' => 'gift_course',
+        ]);
+    }
+
 }
