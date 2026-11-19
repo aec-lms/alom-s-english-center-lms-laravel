@@ -96,7 +96,7 @@
    data.recordings.forEach(item=>{
     const card=document.createElement('article');card.className='rounded-lg bg-slate-50 p-3';
     const title=document.createElement('p');title.className='font-semibold';title.textContent=item.word?.word||'Vocabulary recording';
-    const meta=document.createElement('p');meta.className='mt-1 text-xs text-slate-500';meta.textContent=(item.status==='reviewed'?'Reviewed · Score '+item.score+'/5':'Awaiting teacher review')+' · '+item.duration_seconds+' sec';
+    const meta=document.createElement('p');meta.className='mt-1 text-xs text-slate-500';meta.textContent=(item.status==='reviewed'?'Reviewed · Score '+item.score+'/5':'Awaiting teacher review')+' · '+item.reported_duration_seconds+' sec';
     card.append(title,meta);
     const audio=document.createElement('audio');audio.className='mt-2 w-full';audio.controls=true;audio.preload='none';audio.src=item.audio_url;card.append(audio);
     if(item.feedback){const feedback=document.createElement('p');feedback.className='mt-2 text-sm';feedback.textContent=item.feedback;card.append(feedback);}
@@ -136,7 +136,7 @@
      const blob=new Blob(chunks,{type:recorder.mimeType||'audio/webm'});
      if(previewUrl)URL.revokeObjectURL(previewUrl);previewUrl=URL.createObjectURL(blob);preview.src=previewUrl;preview.classList.remove('hidden');
      const extension=blob.type.includes('ogg')?'ogg':blob.type.includes('mp4')?'m4a':'webm';
-     const data=new FormData();data.append('_token',csrf);data.append('entry_id',widget.dataset.entryId);data.append('duration_seconds',String(duration));data.append('recording',new File([blob],'phonetics-practice.'+extension,{type:blob.type}));
+     const data=new FormData();data.append('_token',csrf);data.append('entry_id',widget.dataset.entryId);data.append('reported_duration_seconds',String(duration));data.append('recording',new File([blob],'phonetics-practice.'+extension,{type:blob.type}));
      status.textContent='Uploading securely…';
      try{
       const response=await fetch(widget.dataset.uploadUrl,{method:'POST',headers:{Accept:'application/json','X-CSRF-TOKEN':csrf},body:data});
