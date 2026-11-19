@@ -120,6 +120,81 @@ class ReferralIncomeService
         });
     }
 
+    /**
+     * Reverse referral commission proportionally after a verified refund.
+     * The payment_refund_id unique key makes retries safe. Paid commissions
+     * are not silently rewritten: a recovery balance is recorded for admin review.
+     */
+    public function reverseSettledPurchase(
+        User $buyer,
+        string $sourceType,
+        string|int $sourceId,
+        int $paymentRefundId,
+        float $refundAmount,
+        string $currency = 'BDT'
+    ): ?int {
+        if ($refundAmount <= 0 || $paymentRefundId < 1 || !Schema::hasTable('referral_commission_reversals')) {
+            return null;
+        }
+
+        return DB::transaction(function () use ($buyer, $sourceType, $sourceId, $paymentRefundId, $refundAmount, $currency): ?int {
+            $commission = DB::table('referral_commissions')
+                ->where('referred_user_id', $buyer->id)
+                ->where('source_type', $sourceType)
+                ->where('source_id', (string) $sourceId)
+                ->where('currency', strtoupper($currency))
+                ->lockForUpdate()->first();
+            if (!$commission) return null;
+
+            $existing = DB::table('referral_commission_reversals')
+                ->where('payment_refund_id', $paymentRefundId)->first();
+            if ($existing) return (int) $existing->id;
+
+            $alreadyReversed = (float) DB::table('referral_commission_reversals')
+                ->where('commission_id', $commission->id)->sum('refund_amount');
+            $eligibleAmount = (float) $commission->eligible_amount;
+            $remainingEligible = max(0, round($eligibleAmount - $alreadyReversed, 2));
+            $appliedRefund = min(round($refundAmount, 2), $remainingEligible);
+            if ($appliedRefund <= 0 || $eligibleAmount <= 0) return null;
+
+            $reversalAmount = round($appliedRefund * ((float) $commission->commission_percent / 100), 2);
+            $reversalId = DB::table('referral_commission_reversals')->insertGetId([
+                'commission_id' => $commission->id,
+                'payment_refund_id' => $paymentRefundId,
+                'refund_amount' => $appliedRefund,
+                'commission_reversal_amount' => $reversalAmount,
+                'currency' => strtoupper($currency),
+                'status' => $commission->status === 'paid' ? 'recovery_due' : 'applied',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            if ($commission->status !== 'paid') {
+                $newEligible = max(0, round($eligibleAmount - $alreadyReversed - $appliedRefund, 2));
+                $newCommission = max(0, round((float) $commission->commission_amount - $reversalAmount, 2));
+                $fullyReversed = $newEligible <= 0.009;
+                DB::table('referral_commissions')->where('id', $commission->id)->update([
+                    'commission_amount' => $newCommission,
+                    'status' => $fullyReversed ? 'reversed' : $commission->status,
+                    'updated_at' => now(),
+                ]);
+
+                if (in_array($commission->status, ['payout_requested', 'payout_approved'], true) && $commission->payout_request_id) {
+                    $payoutTotal = (float) DB::table('referral_commissions')
+                        ->where('payout_request_id', $commission->payout_request_id)
+                        ->whereIn('status', ['payout_requested', 'payout_approved'])
+                        ->sum('commission_amount');
+                    DB::table('referral_payout_requests')->where('id', $commission->payout_request_id)->update([
+                        'amount' => round($payoutTotal, 2),
+                        'updated_at' => now(),
+                    ]);
+                }
+            }
+
+            return (int) $reversalId;
+        });
+    }
+
     public function requestPayout(User $owner, string $method, string $accountDetails): int
     {
         $type = $this->ownerType($owner);
