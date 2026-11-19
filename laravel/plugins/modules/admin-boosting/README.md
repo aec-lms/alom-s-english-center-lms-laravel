@@ -14,9 +14,11 @@ Admin Boosting manages scheduled promotional campaigns for courses, institutions
 
 Only relative site paths are accepted (for example, `/courses/ielts`). Absolute URLs, protocol-relative URLs, backslashes, control characters and unsafe schemes are rejected at both write time and redirect time. This intentionally prevents the LMS domain from becoming an open-redirect service.
 
-## Analytics endpoints
+## Storefront integration
 
-The campaign renderer must request the impression endpoint when a campaign is actually shown:
+The homepage renderer displays active `homepage_featured` campaigns that target a published course or a global institution/offer campaign. The public course catalog displays `course_listing` campaigns only on their matching course, matching active branch, or all courses for a global institution/offer campaign. Branch targeting is hidden and rejected when the Branch Management plugin is disabled. `notice_banner` is reserved for a future placement integration.
+
+Both integrated placements automatically request the impression endpoint when a campaign is rendered and send CTA clicks through the click endpoint. The endpoints are also available to future placements:
 
 ```php
 route('plugins.boost.impression', $campaign)
@@ -30,11 +32,11 @@ route('plugins.boost.click', $campaign)
 
 The impression endpoint returns HTTP 204. The click endpoint redirects to the validated destination. Events are deduplicated per campaign, event type and session using an HMAC-SHA256 session fingerprint; raw IP addresses and user-agent strings are not stored. A database unique constraint protects counters from repeated requests and concurrent duplicate inserts.
 
-**Integration note:** registering the endpoints and showing aggregate analytics does not automatically instrument every public placement. The storefront component that renders each campaign must call the impression endpoint; the CTA must link through the click endpoint. Until those consumers are connected, dashboard counters remain unchanged for uninstrumented placements.
+**Integration note:** the homepage and course catalog are wired. Any future placement must call the impression endpoint only when the campaign is actually visible and must use the click endpoint for its CTA. Campaigns configured for `notice_banner` will not appear until that placement is implemented.
 
 ## Target reference note
 
-`entity_id` is an optional positive record identifier paired with `entity_type`. The admin UI stores the reference but does not yet provide a searchable entity picker or enforce existence against every domain table. A future integration should use the LMS's canonical course/branch/institution/offer repositories and branch authorization rules rather than assuming table names.
+The admin UI provides searchable course and branch selectors. Course targets must resolve to published, non-recycled courses; branch targets must resolve to active, non-recycled branches while Branch Management is enabled. Institution-wide and offer-wide campaigns are global targets and do not accept a record ID. The current schema does not expose canonical institution/offer entity tables, so those two target types intentionally remain global rather than accepting unverified IDs.
 
 ## Privacy and retention
 
