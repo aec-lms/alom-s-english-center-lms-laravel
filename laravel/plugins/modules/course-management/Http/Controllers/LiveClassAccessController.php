@@ -22,19 +22,19 @@ class LiveClassAccessController extends Controller
         $student = $request->user();
         abort_unless($student && $student->hasRole('student'), 403, 'Only enrolled students can join a live class.');
 
-        $course = $liveClass->course()->firstOrFail();
-        $this->assertEligibleStudent($student, $course->id, $course->branch_id, (int) $liveClass->id);
-
-        abort_unless(in_array($liveClass->status, ['upcoming', 'live'], true), 403, 'This live class is not available.');
-        abort_if(
-            $liveClass->starts_at && now()->lt($liveClass->starts_at->copy()->subMinutes(15)),
-            403,
-            'Live class access opens 15 minutes before the scheduled start.'
-        );
-
         $participant = DB::transaction(function () use ($liveClass, $student): LiveClassParticipant {
+            // Lock order: live class -> course -> user -> student profile ->
+            // enrollment -> paid entitlement -> participant.
             $lockedClass = LiveClass::query()->whereKey($liveClass->id)->lockForUpdate()->firstOrFail();
             abort_unless(in_array($lockedClass->status, ['upcoming', 'live'], true), 403, 'This live class is not available.');
+
+            $course = $lockedClass->course()->lockForUpdate()->firstOrFail();
+            $this->assertEligibleStudent($student, $course->id, $course->branch_id, (int) $lockedClass->id);
+            abort_if(
+                $lockedClass->starts_at && now()->lt($lockedClass->starts_at->copy()->subMinutes(15)),
+                403,
+                'Live class access opens 15 minutes before the scheduled start.'
+            );
 
             $now = now();
             $cutoff = $now->copy()->subMinutes(2);
@@ -101,17 +101,14 @@ class LiveClassAccessController extends Controller
         $student = $request->user();
         abort_unless($student && $student->hasRole('student'), 403);
 
-        $course = $liveClass->course()->firstOrFail();
-        $this->assertEligibleStudent($student, $course->id, $course->branch_id, (int) $liveClass->id);
-
-        abort_unless(in_array($liveClass->status, ['upcoming', 'live'], true), 403, 'This live class is not available.');
-
-        $now = now();
-        $presence = DB::transaction(function () use ($liveClass, $student, $now): array {
-            // Use the same class-row lock as join() so a stale heartbeat cannot
-            // reclaim an expired seat concurrently with another student's join.
+        $presence = DB::transaction(function () use ($liveClass, $student): array {
+            // Use the same lock order and fresh entitlement checks as join().
             $lockedClass = LiveClass::query()->whereKey($liveClass->id)->lockForUpdate()->firstOrFail();
             abort_unless(in_array($lockedClass->status, ['upcoming', 'live'], true), 403, 'This live class is not available.');
+
+            $course = $lockedClass->course()->lockForUpdate()->firstOrFail();
+            $this->assertEligibleStudent($student, $course->id, $course->branch_id, (int) $lockedClass->id);
+            $now = now();
 
             $participant = LiveClassParticipant::query()
                 ->where('live_class_id', $lockedClass->id)
@@ -174,44 +171,74 @@ class LiveClassAccessController extends Controller
 
     private function assertEligibleStudent(object $student, int $courseId, ?int $courseBranchId, ?int $liveClassId = null): void
     {
-        $enrolled = Enrollment::query()
+        abort_unless($student->hasRole('student'), 403, 'Only active student accounts can access a live class.');
+
+        // Student profile updates write the linked user first and profile second;
+        // retain that lock order so branch changes cannot race a seat grant.
+        $userQuery = DB::table('users')->where('id', $student->id);
+        if (Schema::hasColumn('users', 'is_active')) {
+            $userQuery->lockForUpdate();
+        }
+        $user = $userQuery->first();
+        abort_unless($user, 403, 'Student account is unavailable.');
+        if (Schema::hasColumn('users', 'is_active')) {
+            abort_unless((bool) $user->is_active, 403, 'This student account is inactive.');
+        }
+
+        $profile = null;
+        $studentManagementEnabled = app(\App\Core\Plugins\PluginManager::class)->isEnabled('student-management')
+            && Schema::hasTable('students');
+        if ($studentManagementEnabled) {
+            $profileQuery = DB::table('students')->where('user_id', $student->id);
+            if (Schema::hasColumn('students', 'deleted_at')) {
+                $profileQuery->whereNull('deleted_at');
+            }
+            $profileQuery->lockForUpdate();
+            $profile = $profileQuery->first();
+            if ($profile && Schema::hasColumn('students', 'status')) {
+                abort_unless($profile->status === 'active', 403, 'This student profile is inactive.');
+            }
+        }
+
+        $assignedBranchId = $profile && $profile->branch_id !== null
+            ? (int) $profile->branch_id
+            : (Schema::hasColumn('users', 'branch_id') && $user->branch_id !== null
+                ? (int) $user->branch_id
+                : null);
+
+        // Lock the enrollment row even when it is cancelled. Filtering by status
+        // before locking could miss the exact row being changed by an admin.
+        $enrollment = Enrollment::query()
             ->where('user_id', $student->id)
             ->where('course_id', $courseId)
-            ->where('status', 'active')
-            ->exists();
-        $hasPaidPass = $liveClassId !== null
-            && Schema::hasTable('commerce_entitlements')
-            && DB::table('commerce_entitlements')
+            ->lockForUpdate()
+            ->first();
+        $enrolled = $enrollment !== null && $enrollment->status === 'active';
+
+        $hasPaidPass = false;
+        if ($liveClassId !== null && Schema::hasTable('commerce_entitlements')) {
+            $at = now()->toDateTimeString();
+            $entitlements = DB::table('commerce_entitlements')
                 ->where('user_id', $student->id)
                 ->where('entitlement_type', 'live_class')
                 ->where('resource_id', $liveClassId)
-                ->where('status', 'active')
-                ->where(fn ($query) => $query->whereNull('starts_at')->orWhere('starts_at', '<=', now()))
-                ->where(fn ($query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', now()))
-                ->exists();
+                ->lockForUpdate()
+                ->get();
+
+            $hasPaidPass = $entitlements->contains(static fn (object $entitlement): bool =>
+                $entitlement->status === 'active'
+                && ($entitlement->starts_at === null || $entitlement->starts_at <= $at)
+                && ($entitlement->expires_at === null || $entitlement->expires_at > $at)
+            );
+        }
 
         abort_unless($enrolled || $hasPaidPass, 403,
             'An active course enrollment or a valid paid live-class pass is required to access this class.');
 
-        $assignedBranchId = $this->assignedBranchId($student);
         if ($courseBranchId !== null && $assignedBranchId !== $courseBranchId) {
             abort(403, 'This live class is outside your assigned branch.');
         }
     }
 
-    private function assignedBranchId(object $student): ?int
-    {
-        if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('student-management')
-            && Schema::hasTable('students')
-            && Schema::hasColumn('students', 'branch_id')) {
-            $profileBranchId = DB::table('students')->where('user_id', $student->id)->value('branch_id');
-            if ($profileBranchId !== null) {
-                return (int) $profileBranchId;
-            }
-        }
 
-        return Schema::hasColumn('users', 'branch_id') && $student->branch_id !== null
-            ? (int) $student->branch_id
-            : null;
-    }
 }
