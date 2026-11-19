@@ -155,4 +155,49 @@ class AdmissionManagementWorkflowTest extends TestCase
         $this->assertSame('Dhaka, Bangladesh', $application->address);
         $this->assertStringStartsWith('ADM-', $application->application_code);
     }
-}
+
+    public function test_public_applicant_can_track_status_only_with_matching_code_and_email(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['admission-management']);
+        $application = AdmissionApplication::query()->create([
+            'application_code' => 'ADM-TRACK-0001',
+            'applicant_name' => 'Private Applicant',
+            'email' => 'private.applicant@aec.test',
+            'phone' => '01700000006',
+            'desired_course' => 'IELTS Academic',
+            'status' => 'shortlisted',
+        ]);
+
+        $this->post('/admission/track', [
+            'application_code' => 'adm-track-0001',
+            'email' => 'PRIVATE.APPLICANT@AEC.TEST',
+        ])->assertOk()->assertSee('Application found')->assertSee('shortlisted');
+
+        $this->post('/admission/track', [
+            'application_code' => 'ADM-TRACK-0001',
+            'email' => 'someone-else@aec.test',
+        ])->assertOk()->assertSee('could not find an application')->assertDontSee('Private Applicant');
+    }
+
+    public function test_public_intake_respects_administrator_closed_intake_setting(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['admission-management']);
+        PluginSetting::query()->updateOrCreate(
+            ['plugin_slug' => 'admission-management', 'setting_key' => 'intake_status'],
+            ['setting_value' => 'closed', 'is_encrypted' => false],
+        );
+
+        $this->post('/admission/apply', [
+            'applicant_name' => 'Closed Intake Applicant',
+            'email' => 'closed-intake@aec.test',
+            'phone' => '01700000007',
+            'desired_course' => 'IELTS Masterclass',
+        ])->assertStatus(403);
+
+        $this->assertDatabaseMissing('admission_applications', [
+            'email' => 'closed-intake@aec.test',
+        ]);
+    }
+}\n
