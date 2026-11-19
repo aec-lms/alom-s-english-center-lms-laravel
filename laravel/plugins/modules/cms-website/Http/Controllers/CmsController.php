@@ -346,6 +346,8 @@ class CmsController extends Controller
         $category = !empty($validated['category_id']) ? CmsCategory::query()->find($validated['category_id']) : null;
 
         $post = DB::transaction(function () use ($request, $user, $validated, $authorId, $author, $category): CmsPost {
+            $this->lockEditorialAssignmentUsers($user, $validated);
+            $this->validateEditorialAssignments($user, $validated);
             $post = CmsPost::query()->create([
                 'slug' => !empty($validated['slug']) ? strtolower($validated['slug']) : Str::slug($validated['title']) . '-' . Str::lower(Str::random(5)),
                 'title' => $validated['title'],
@@ -437,6 +439,7 @@ class CmsController extends Controller
         DB::transaction(function () use ($post, $validated, $user): void {
             $locked = CmsPost::query()->lockForUpdate()->findOrFail($post->id);
             abort_if($locked->is_published, 422);
+            $this->lockEditorialAssignmentUsers($user, $validated, $locked);
             $this->validateEditorialAssignments($user, $validated, $locked);
             $authorId = (int) ($validated['author_user_id'] ?? $locked->author_user_id);
             if ($authorId) $this->assertCmsAuthor($authorId);
@@ -478,17 +481,6 @@ class CmsController extends Controller
             'roles.*' => ['required', 'string', 'distinct', 'in:cms_contributor,cms_editor,cms_reviewer,cms_author_manager'],
         ]);
         $newRoles = $validated['roles'] ?? [];
-        if (!in_array('cms_contributor', $newRoles, true) && !in_array('cms_editor', $newRoles, true)) {
-            $hasAuthoredPosts = CmsPost::withTrashed()->where(fn ($q) => $q->where('author_user_id', $user->id)->orWhere('created_by', $user->id))->exists()
-                || (Schema::hasTable('cms_post_authors') && DB::table('cms_post_authors')->where('user_id', $user->id)->exists());
-            abort_if($hasAuthoredPosts, 422, "Reassign this user's authored or co-authored posts before removing Contributor/Editor access.");
-        }
-        if (!in_array('cms_editor', $newRoles, true)) {
-            abort_if(CmsPost::withTrashed()->where('assigned_editor_id', $user->id)->exists(), 422, "Reassign this user's editor assignments before removing Editor access.");
-        }
-        if (!in_array('cms_reviewer', $newRoles, true) && !in_array('cms_editor', $newRoles, true)) {
-            abort_if(CmsPost::withTrashed()->where('assigned_reviewer_id', $user->id)->exists(), 422, 'Reassign all posts assigned to this user before removing Reviewer access.');
-        }
         $roleIds = DB::table('roles')->whereIn('slug', $newRoles)->pluck('id')->all();
         $cmsRoleIds = DB::table('roles')->whereIn('slug', ['cms_contributor', 'cms_editor', 'cms_reviewer', 'cms_author_manager'])->pluck('id')->all();
 
@@ -497,6 +489,8 @@ class CmsController extends Controller
             // Checking this outside the transaction lets two managers concurrently
             // remove themselves and leave the CMS without any active manager.
             $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
+            abort_unless($lockedUser->is_active, 422, 'Inactive accounts cannot receive CMS access.');
+            $this->assertContributorAccessRemovalAllowed($lockedUser, $newRoles);
             if (!in_array('cms_author_manager', $newRoles, true) && $lockedUser->hasRole('cms_author_manager')) {
                 $activeManagerIds = User::query()
                     ->where('is_active', true)
@@ -520,6 +514,49 @@ class CmsController extends Controller
 
         $this->audit->log('cms.contributor_access_updated', 'user', (string) $user->id, ['cms_roles' => $validated['roles'] ?? []]);
         return back()->with('status', "CMS access updated for {$user->name}.");
+    }
+
+    /**
+     * Lock every account whose CMS role is being relied upon before validating
+     * and persisting assignments. Contributor-role removal takes the same user
+     * lock, preventing a post from being assigned to an account as it is demoted.
+     */
+    private function lockEditorialAssignmentUsers(User $actor, array $validated, ?CmsPost $post = null): void
+    {
+        $ids = [(int) $actor->id];
+        foreach (['author_user_id', 'assigned_editor_id', 'assigned_reviewer_id'] as $key) {
+            if (!empty($validated[$key])) $ids[] = (int) $validated[$key];
+        }
+        foreach (($validated['co_authors'] ?? []) as $id) {
+            if ((int) $id > 0) $ids[] = (int) $id;
+        }
+        if ($post) {
+            foreach ([$post->author_user_id, $post->assigned_editor_id, $post->assigned_reviewer_id] as $id) {
+                if ((int) $id > 0) $ids[] = (int) $id;
+            }
+            $ids = array_merge($ids, $post->contributors()->pluck('users.id')->map(static fn ($id): int => (int) $id)->all());
+        }
+
+        $ids = array_values(array_unique(array_filter($ids, static fn ($id): bool => $id > 0)));
+        sort($ids);
+        if ($ids !== []) {
+            User::query()->whereIn('id', $ids)->orderBy('id')->lockForUpdate()->get(['id']);
+        }
+    }
+
+    private function assertContributorAccessRemovalAllowed(User $user, array $newRoles): void
+    {
+        if (!in_array('cms_contributor', $newRoles, true) && !in_array('cms_editor', $newRoles, true)) {
+            $hasAuthoredPosts = CmsPost::withTrashed()->where(fn ($q) => $q->where('author_user_id', $user->id)->orWhere('created_by', $user->id))->exists()
+                || (Schema::hasTable('cms_post_authors') && DB::table('cms_post_authors')->where('user_id', $user->id)->exists());
+            abort_if($hasAuthoredPosts, 422, "Reassign this user's authored or co-authored posts before removing Contributor/Editor access.");
+        }
+        if (!in_array('cms_editor', $newRoles, true)) {
+            abort_if(CmsPost::withTrashed()->where('assigned_editor_id', $user->id)->exists(), 422, "Reassign this user's editor assignments before removing Editor access.");
+        }
+        if (!in_array('cms_reviewer', $newRoles, true) && !in_array('cms_editor', $newRoles, true)) {
+            abort_if(CmsPost::withTrashed()->where('assigned_reviewer_id', $user->id)->exists(), 422, 'Reassign all posts assigned to this user before removing Reviewer access.');
+        }
     }
 
     private function validateEditorialAssignments(User $actor, array $validated, ?CmsPost $post = null): void
