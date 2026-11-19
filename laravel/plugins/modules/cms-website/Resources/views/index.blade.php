@@ -63,9 +63,9 @@
                 <input name="excerpt" placeholder="Short Summary / Excerpt" class="sm:col-span-2 rounded-lg border border-slate-300 px-3 py-2">
                 <input name="seo_description" placeholder="SEO Meta Description (optional)" class="sm:col-span-2 rounded-lg border border-slate-300 px-3 py-2">
                 <textarea name="content" rows="4" required placeholder="Full Post Content *" class="sm:col-span-2 rounded-lg border border-slate-300 px-3 py-2"></textarea>
-                <div class="sm:col-span-2 flex items-center justify-between">
-                    <label class="inline-flex items-center gap-2 font-semibold text-slate-700"><input type="checkbox" name="is_published" value="1" checked> Publish immediately</label>
-                    <button type="submit" class="px-5 py-2 rounded-lg bg-[#0284C7] hover:bg-[#0369A1] text-white font-bold">Publish Post</button>
+                <div class="sm:col-span-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <p class="text-slate-500">New posts are saved as drafts. Submit them for editorial review before publication.</p>
+                    <button type="submit" class="px-5 py-2 rounded-lg bg-[#0284C7] hover:bg-[#0369A1] text-white font-bold">Save Draft</button>
                 </div>
             </form>
         </div>
