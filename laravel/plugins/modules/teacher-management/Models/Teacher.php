@@ -8,7 +8,6 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Facades\Schema;
 
 class Teacher extends Model
 {
@@ -29,22 +28,7 @@ class Teacher extends Model
 
     protected function casts(): array
     {
-        return ['is_active' => 'boolean', 'deleted_user_was_active' => 'boolean'];
-    }
-
-    protected static function booted(): void
-    {
-        static::restored(function (Teacher $teacher): void {
-            if (!Schema::hasColumn('teachers', 'deleted_user_was_active') || !$teacher->user) {
-                return;
-            }
-
-            // Restore the login account to the exact active state it had before
-            // the teacher profile was moved to the Recycle Bin.
-            $teacher->user->update([
-                'is_active' => (bool) $teacher->deleted_user_was_active,
-            ]);
-        });
+        return ['is_active' => 'boolean'];
     }
 
     public function user(): BelongsTo
