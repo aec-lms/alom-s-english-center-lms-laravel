@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Plugins\Modules\MobileAppApi\Http\Controllers;
 
 use App\Core\Plugins\PluginManager;
+use App\Core\Security\BranchAccess;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,7 +19,21 @@ class InstructorMobileApiController extends Controller
         $actor = $request->user();
         abort_unless($actor && $actor->hasRole('teacher'), 403);
         abort_unless(app(PluginManager::class)->isEnabled('course-management') && Schema::hasTable('course_teacher_assignments') && Schema::hasTable('courses'), 409, 'Course teacher assignments are not configured.');
-        $ids = DB::table('course_teacher_assignments')->where('teacher_user_id', $actor->id)->pluck('course_id')->map(fn ($id) => (int) $id)->all();
+        $branchId = app(BranchAccess::class)->contextBranchId($actor);
+        $actor->setAttribute('branch_id', $branchId);
+        $ids = DB::table('course_teacher_assignments')
+            ->join('courses', 'courses.id', '=', 'course_teacher_assignments.course_id')
+            ->where('course_teacher_assignments.teacher_user_id', $actor->id)
+            ->where(function ($query) use ($branchId): void {
+                $query->whereNull('courses.branch_id');
+                if ($branchId !== null) {
+                    $query->orWhere('courses.branch_id', $branchId);
+                }
+            })
+            ->pluck('course_teacher_assignments.course_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
         return [$actor, $ids];
     }
 
@@ -43,13 +58,13 @@ class InstructorMobileApiController extends Controller
             ->join('users', 'users.id', '=', 'enrollments.user_id')
             ->where('enrollments.course_id', $course->id)
             ->whereIn('enrollments.status', ['active', 'completed'])
-            ->where('enrollments.branch_id', $course->branch_id)
-            ->when($actor->branch_id !== null, fn ($q) => $q->where('enrollments.branch_id', $actor->branch_id));
+            ->when($course->branch_id !== null, fn ($q) => $q->where('enrollments.branch_id', $course->branch_id))
+            ->when($course->branch_id === null && $actor->branch_id !== null, fn ($q) => $q->where('enrollments.branch_id', $actor->branch_id));
 
         if ($hasStudentDirectory) {
             $studentsQuery->join('students', 'students.user_id', '=', 'users.id')
-                ->where('students.branch_id', $course->branch_id)
-                ->when($actor->branch_id !== null, fn ($q) => $q->where('students.branch_id', $actor->branch_id))
+                ->when($course->branch_id !== null, fn ($q) => $q->where('students.branch_id', $course->branch_id))
+                ->when($course->branch_id === null && $actor->branch_id !== null, fn ($q) => $q->where('students.branch_id', $actor->branch_id))
                 ->when(Schema::hasColumn('students', 'deleted_at'), fn ($q) => $q->whereNull('students.deleted_at'));
         }
 
