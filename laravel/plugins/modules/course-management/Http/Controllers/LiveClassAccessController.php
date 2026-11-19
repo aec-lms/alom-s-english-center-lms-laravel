@@ -186,14 +186,32 @@ class LiveClassAccessController extends Controller
                 ->where('entitlement_type', 'live_class')
                 ->where('resource_id', $liveClassId)
                 ->where('status', 'active')
+                ->where(fn ($query) => $query->whereNull('starts_at')->orWhere('starts_at', '<=', now()))
                 ->where(fn ($query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', now()))
                 ->exists();
 
         abort_unless($enrolled || $hasPaidPass, 403,
             'An active course enrollment or a valid paid live-class pass is required to access this class.');
 
-        if ($courseBranchId !== null && (int) $student->branch_id !== (int) $courseBranchId) {
+        $assignedBranchId = $this->assignedBranchId($student);
+        if ($courseBranchId !== null && $assignedBranchId !== $courseBranchId) {
             abort(403, 'This live class is outside your assigned branch.');
         }
+    }
+
+    private function assignedBranchId(object $student): ?int
+    {
+        if (app(\\App\\Core\\Plugins\\PluginManager::class)->isEnabled('student-management')
+            && Schema::hasTable('students')
+            && Schema::hasColumn('students', 'branch_id')) {
+            $profileBranchId = DB::table('students')->where('user_id', $student->id)->value('branch_id');
+            if ($profileBranchId !== null) {
+                return (int) $profileBranchId;
+            }
+        }
+
+        return Schema::hasColumn('users', 'branch_id') && $student->branch_id !== null
+            ? (int) $student->branch_id
+            : null;
     }
 }
