@@ -117,8 +117,32 @@ class StudentController extends Controller
             $validated['branch_id'] = $actor->branch_id;
         }
 
-        DB::transaction(function () use ($validated, $student): void {
-            if ($student->user) {
+        DB::transaction(function () use ($validated, $student, $actor): void {
+            // Lock the student before re-checking branch ownership. The route
+            // model was resolved before the transaction and may be stale if
+            // another administrator moved the student while this request waited.
+            $lockedStudent = Student::query()
+                ->whereKey($student->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($actor && $actor->hasRole('branch_manager')
+                && (int) $actor->branch_id !== (int) $lockedStudent->branch_id) {
+                abort(403, 'Branch isolation violation.');
+            }
+
+            $user = User::query()
+                ->whereKey($lockedStudent->user_id)
+                ->lockForUpdate()
+                ->first();
+
+            $before = [
+                'student_code' => $lockedStudent->student_code,
+                'branch_id' => $lockedStudent->branch_id === null ? null : (string) $lockedStudent->branch_id,
+                'status' => $lockedStudent->status,
+            ];
+
+            if ($user) {
                 $userPayload = [
                     'name' => $validated['name'],
                     'email' => strtolower($validated['email']),
@@ -129,17 +153,33 @@ class StudentController extends Controller
                 if (!empty($validated['password'])) {
                     $userPayload['password'] = Hash::make($validated['password']);
                 }
-                $student->user->update($userPayload);
+                $user->update($userPayload);
             }
 
-            $student->update([
+            $lockedStudent->update([
                 'student_code' => $validated['student_code'],
                 'branch_id' => $validated['branch_id'] ?? null,
                 'status' => $validated['status'],
             ]);
-        });
 
-        $this->audit->log('student.updated', 'student', (string) $student->id);
+            $after = [
+                'student_code' => $lockedStudent->student_code,
+                'branch_id' => $lockedStudent->branch_id === null ? null : (string) $lockedStudent->branch_id,
+                'status' => $lockedStudent->status,
+            ];
+            $changes = [];
+            foreach (['student_code', 'branch_id', 'status'] as $field) {
+                if ($before[$field] !== $after[$field]) {
+                    $changes[$field] = ['from' => $before[$field], 'to' => $after[$field]];
+                }
+            }
+
+            // Only allowlisted lifecycle fields are logged. Never include
+            // passwords, password hashes, email, phone, tokens, or form payloads.
+            $this->audit->log('student.updated', 'student', (string) $lockedStudent->id, [
+                'changes' => $changes,
+            ]);
+        });
 
         return back()->with('status', "Student '{$validated['name']}' updated.");
     }
