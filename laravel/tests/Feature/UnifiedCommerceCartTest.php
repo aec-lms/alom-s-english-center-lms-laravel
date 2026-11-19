@@ -6,7 +6,9 @@ namespace Tests\Feature;
 
 use App\Models\Permission;
 use App\Models\Role;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use Plugins\Modules\CommerceCart\Services\CommerceCatalog;
