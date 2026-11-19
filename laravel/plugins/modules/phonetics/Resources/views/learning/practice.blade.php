@@ -88,8 +88,9 @@
 (() => {
  const csrf=document.querySelector('meta[name=csrf-token]')?.content||'';
  const history=document.getElementById('phonetics-recording-history');
- if(history){
-  fetch(history.dataset.historyUrl,{headers:{Accept:'application/json'}}).then(response=>response.ok?response.json():Promise.reject()).then(data=>{
+ const loadRecordingHistory=()=>{
+  if(!history)return Promise.resolve();
+  return fetch(history.dataset.historyUrl,{headers:{Accept:'application/json'}}).then(response=>response.ok?response.json():Promise.reject()).then(data=>{
    const list=history.querySelector('.recording-history-items');list.replaceChildren();
    if(!data.recordings?.length){list.textContent='No recordings submitted yet.';return;}
    data.recordings.forEach(item=>{
@@ -97,11 +98,26 @@
     const title=document.createElement('p');title.className='font-semibold';title.textContent=item.word?.word||'Vocabulary recording';
     const meta=document.createElement('p');meta.className='mt-1 text-xs text-slate-500';meta.textContent=(item.status==='reviewed'?'Reviewed · Score '+item.score+'/5':'Awaiting teacher review')+' · '+item.duration_seconds+' sec';
     card.append(title,meta);
+    const audio=document.createElement('audio');audio.className='mt-2 w-full';audio.controls=true;audio.preload='none';audio.src=item.audio_url;card.append(audio);
     if(item.feedback){const feedback=document.createElement('p');feedback.className='mt-2 text-sm';feedback.textContent=item.feedback;card.append(feedback);}
+    if(item.status==='pending'){
+     const remove=document.createElement('button');remove.type='button';remove.className='mt-2 rounded-lg border border-red-300 px-3 py-1.5 text-sm font-semibold text-red-700';remove.textContent='Delete pending recording';
+     remove.addEventListener('click',async()=>{
+      remove.disabled=true;remove.textContent='Deleting…';
+      try{
+       const response=await fetch(item.delete_url,{method:'DELETE',headers:{Accept:'application/json','X-CSRF-TOKEN':csrf}});
+       if(!response.ok){const result=await response.json().catch(()=>({}));throw new Error(result.message||'Unable to delete this recording.');}
+       card.remove();
+       if(!list.children.length)list.textContent='No recordings submitted yet.';
+      }catch(error){remove.disabled=false;remove.textContent='Delete pending recording';meta.textContent=error.message||'Unable to delete this recording.';}
+     });
+     card.append(remove);
+    }
     list.append(card);
    });
   }).catch(()=>{history.querySelector('.recording-history-items').textContent='Your feedback could not be loaded right now.';});
- }
+ };
+ if(history)loadRecordingHistory();
  document.querySelectorAll('.phonetics-recorder').forEach((widget)=>{
   const start=widget.querySelector('.record-start'),stop=widget.querySelector('.record-stop'),status=widget.querySelector('.record-status'),preview=widget.querySelector('.record-preview');
   let recorder=null,stream=null,chunks=[],startedAt=0,previewUrl=null,limitTimer=null;
@@ -126,6 +142,7 @@
       const response=await fetch(widget.dataset.uploadUrl,{method:'POST',headers:{Accept:'application/json','X-CSRF-TOKEN':csrf},body:data});
       const result=await response.json();if(!response.ok)throw new Error(result.message||'Upload failed.');
       status.textContent='Submitted for teacher review. Recording #'+result.recording_id+'.';
+      await loadRecordingHistory();
      }catch(error){status.textContent=error.message||'Unable to upload recording. Please try again.';}
      start.disabled=false;
     },{once:true});
