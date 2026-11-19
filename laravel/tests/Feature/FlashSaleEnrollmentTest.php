@@ -335,4 +335,39 @@ class FlashSaleEnrollmentTest extends TestCase
         $this->assertEquals(850.00, $quote['total']);
     }
 
+    public function test_public_storefront_uses_safe_defaults_and_displays_active_offer(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'course-management', 'flash-sale']);
+
+        $course = Course::query()->create([
+            'code' => 'FLASH-PUBLIC-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'title' => 'Public Flash Sale Course',
+            'slug' => 'public-flash-' . bin2hex(random_bytes(3)),
+            'price' => 2000,
+            'status' => 'published',
+        ]);
+        DB::table('flash_sales')->insert([
+            'course_id' => $course->id,
+            'title' => 'Public Launch Offer',
+            'subtitle' => 'Learn more for less',
+            'badge_text' => '20% OFF',
+            'discount_type' => 'percent',
+            'discount_value' => 20,
+            'starts_at' => now()->subMinute(),
+            'ends_at' => now()->addDay(),
+            'is_published' => true,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->get('/flash-sale')
+            ->assertOk()
+            ->assertSee('Flash Sale')
+            ->assertSee('Public Launch Offer')
+            ->assertSee('Public Flash Sale Course')
+            ->assertSee('1,600.00');
+    }
+
 }
