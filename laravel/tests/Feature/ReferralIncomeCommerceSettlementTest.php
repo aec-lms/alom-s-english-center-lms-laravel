@@ -217,7 +217,7 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
         try {
             $service->requestPayout($referrer, 'bkash', '01700000000');
             $this->fail('A commission with unresolved refund recovery must not be paid out.');
-        } catch (\\Illuminate\\Validation\\ValidationException $exception) {
+        } catch (\Illuminate\Validation\ValidationException $exception) {
             $this->assertArrayHasKey('payout', $exception->errors());
         }
 
