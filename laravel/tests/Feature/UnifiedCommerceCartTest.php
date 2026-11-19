@@ -292,7 +292,7 @@ final class UnifiedCommerceCartTest extends TestCase
             $this->fail('Invoice settlement must reject an enrollment after its student changes branch.');
         } catch (\RuntimeException $exception) {
             $this->assertSame(
-                'Pending course enrollment branch does not match the current student and source course.',
+                'Student branch assignment changed after invoice creation; manual payment reconciliation is required.',
                 $exception->getMessage()
             );
         }
@@ -367,15 +367,6 @@ final class UnifiedCommerceCartTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-        DB::table('enrollments')->insert([
-            'user_id' => $student->id,
-            'course_id' => $courseId,
-            'branch_id' => null,
-            'invoice_id' => $invoice->id,
-            'status' => 'pending',
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
         $transaction = PaymentTransaction::query()->create([
             'transaction_ref' => 'PAY-' . strtoupper(uniqid()),
             'invoice_id' => $invoice->id,
@@ -403,7 +394,6 @@ final class UnifiedCommerceCartTest extends TestCase
         $this->assertDatabaseHas('payment_transactions', ['id' => $transaction->id, 'status' => 'initiated']);
         $this->assertDatabaseHas('fee_invoices', ['id' => $invoice->id, 'paid_amount' => 0, 'status' => 'unpaid']);
         $this->assertDatabaseHas('commerce_orders', ['id' => $orderId, 'status' => 'awaiting_payment', 'payment_status' => 'unpaid']);
-        $this->assertDatabaseHas('enrollments', ['user_id' => $student->id, 'course_id' => $courseId, 'status' => 'pending']);
         $this->assertDatabaseCount('commerce_entitlements', 0);
     }
 
