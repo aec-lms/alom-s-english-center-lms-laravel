@@ -100,6 +100,15 @@ class CourseCommercePaymentSettlementService
             throw new RuntimeException('A purchased course is no longer available; manual reconciliation is required.');
         }
 
+        $orderBranchId = $order->branch_id !== null ? (int) $order->branch_id : null;
+        $transactionBranchId = $transaction->branch_id !== null ? (int) $transaction->branch_id : null;
+        $this->assertSettlementBranchAccess(
+            (int) $transaction->user_id,
+            $orderBranchId,
+            $transactionBranchId,
+            $courses->values()
+        );
+
         $invoice = $this->createPaidInvoice(
             $transaction,
             (int) ($order->branch_id ?? $transaction->branch_id ?? 0) ?: null,
@@ -179,6 +188,9 @@ class CourseCommercePaymentSettlementService
             throw new RuntimeException('Gifted course is no longer available; manual reconciliation is required.');
         }
 
+        $giftBranchId = $transaction->branch_id !== null ? (int) $transaction->branch_id : null;
+        $this->assertSettlementBranchAccess((int) $transaction->user_id, $giftBranchId, $giftBranchId, [$course]);
+
         $subtotal = round((float) ($gift->subtotal_amount ?? $gift->amount), 2);
         $discount = round((float) ($gift->discount_amount ?? 0), 2);
         if (abs(round($subtotal - $discount, 2) - (float) $gift->amount) > 0.01) {
@@ -239,6 +251,56 @@ class CourseCommercePaymentSettlementService
             'paid_at' => now(),
             'updated_at' => now(),
         ]);
+    }
+
+    /**
+     * Re-check branch ownership at callback time. A student or course can be
+     * reassigned after checkout but before the payment provider calls back.
+     * Never activate access or issue an invoice against a stale branch snapshot.
+     *
+     * @param iterable<object> $courses
+     */
+    private function assertSettlementBranchAccess(
+        int $userId,
+        ?int $orderBranchId,
+        ?int $transactionBranchId,
+        iterable $courses
+    ): void {
+        if ($orderBranchId !== $transactionBranchId) {
+            throw new RuntimeException('Course branch or student assignment changed after checkout; manual reconciliation is required.');
+        }
+
+        $user = DB::table('users')->where('id', $userId)->first();
+        if (!$user) {
+            throw new RuntimeException('Course commerce student account no longer exists.');
+        }
+
+        $assignedBranchId = null;
+        if ($this->plugins->isEnabled('student-management')
+            && Schema::hasTable('students')
+            && Schema::hasColumn('students', 'branch_id')) {
+            $profileBranchId = DB::table('students')->where('user_id', $userId)->value('branch_id');
+            if ($profileBranchId !== null) {
+                $assignedBranchId = (int) $profileBranchId;
+            }
+        }
+
+        if ($assignedBranchId === null && Schema::hasColumn('users', 'branch_id') && $user->branch_id !== null) {
+            $assignedBranchId = (int) $user->branch_id;
+        }
+
+        if ($assignedBranchId !== $orderBranchId) {
+            throw new RuntimeException('Course branch or student assignment changed after checkout; manual reconciliation is required.');
+        }
+
+        foreach ($courses as $course) {
+            $courseBranchId = property_exists($course, 'branch_id') && $course->branch_id !== null
+                ? (int) $course->branch_id
+                : null;
+            if ($courseBranchId !== null && $courseBranchId !== $orderBranchId) {
+                throw new RuntimeException('Course branch or student assignment changed after checkout; manual reconciliation is required.');
+            }
+        }
     }
 
     private function createPaidInvoice(
