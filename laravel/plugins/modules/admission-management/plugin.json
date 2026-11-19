@@ -1,10 +1,10 @@
 {
     "slug": "admission-management",
     "name": "Admission Management",
-    "version": "2.0.0",
+    "version": "2.1.0",
     "author": "Alom's English Center",
     "category": "academic",
-    "description": "Online & Campus Student Admission Applications, Document Screening, and Approval Workflow.",
+    "description": "Advanced admission pipeline with applicant intake, branch-aware screening, interview scheduling, reviewer decisions, and application tracking codes.",
     "core_compatibility": "^2.0",
     "dependencies": [],
     "provider": "Plugins\\Modules\\AdmissionManagement\\Providers\\AdmissionManagementServiceProvider",
