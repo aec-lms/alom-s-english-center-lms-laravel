@@ -174,7 +174,6 @@ class ReferralIncomeService
                 $newCommission = max(0, round((float) $commission->commission_amount - $reversalAmount, 2));
                 $fullyReversed = $newEligible <= 0.009;
                 DB::table('referral_commissions')->where('id', $commission->id)->update([
-                    'eligible_amount' => $newEligible,
                     'commission_amount' => $newCommission,
                     'status' => $fullyReversed ? 'reversed' : $commission->status,
                     'updated_at' => now(),
