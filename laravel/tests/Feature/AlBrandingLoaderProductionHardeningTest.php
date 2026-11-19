@@ -29,7 +29,7 @@ final class AlBrandingLoaderProductionHardeningTest extends TestCase
     public function test_first_visit_is_recorded_only_after_a_successful_window_load(): void
     {
         $view = $this->loaderView();
-        $this->assertStringContainsString("window.addEventListener('load', function ()", $view);
+        $this->assertStringContainsString("window.addEventListener('load', onPageLoad", $view);
         $this->assertStringContainsString('hideAfterMinimumDuration(true)', $view);
         $this->assertStringContainsString('if (!markVisit) return;', $view);
         $this->assertStringContainsString("sessionStorage.setItem(storageKey, '1')", $view);
