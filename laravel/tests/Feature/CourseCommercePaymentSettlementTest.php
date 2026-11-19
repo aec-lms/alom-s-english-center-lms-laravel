@@ -185,7 +185,7 @@ class CourseCommercePaymentSettlementTest extends TestCase
                 ['validation_status' => 'VALID']
             );
             $this->fail('A late payment callback must not settle an expired course gift.');
-        } catch (\\RuntimeException $exception) {
+        } catch (\RuntimeException $exception) {
             $this->assertSame('Course gift amount, currency or status does not match the verified payment.', $exception->getMessage());
         }
 
