@@ -176,6 +176,31 @@ class BoostCampaignSafetyTest extends TestCase
         $this->assertSame('offer', $campaign->fresh()->entity_type);
     }
 
+    public function test_branch_campaigns_are_restricted_to_course_listing_placement(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['admin-boosting', 'branch-management']);
+        $admin = $this->createUserWithRole('admin');
+        $branch = Branch::query()->create([
+            'code' => 'BOOST-BR-INVALID',
+            'name' => 'Invalid Placement Branch',
+            'city' => 'Dhaka',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($admin)->post('/plugins/boost', [
+            'campaign_name' => 'Invalid Branch Homepage Campaign',
+            'entity_type' => 'branch',
+            'entity_id' => $branch->id,
+            'placement' => 'homepage_featured',
+            'destination_url' => '/courses',
+        ])->assertSessionHasErrors('entity_id');
+
+        $this->assertDatabaseMissing('boost_campaigns', [
+            'campaign_name' => 'Invalid Branch Homepage Campaign',
+        ]);
+    }
+
     public function test_course_and_branch_campaigns_render_only_for_matching_public_courses(): void
     {
         $this->markSystemInstalled();
