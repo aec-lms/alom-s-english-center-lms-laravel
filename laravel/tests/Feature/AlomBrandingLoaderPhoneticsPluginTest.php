@@ -62,6 +62,7 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
   \Illuminate\Support\Facades\Cache::forget('phonetics.settings');
   $this->actingAs($student)->get('/courses/british-american-phonetics/phonetics-learning')->assertOk();
   $this->actingAs($student)->get('/courses/general-english/phonetics-learning')->assertNotFound();
+  $this->actingAs($student)->postJson('/courses/general-english/phonetics-learning/attempts',['selected_answer'=>'/ˈtest/'])->assertNotFound();
  }
 
  public function test_phonetics_admin_uploads_safe_media_and_rejects_svg():void{
@@ -170,7 +171,6 @@ api/*",
   $this->assertDatabaseHas('phonetic_exam_questions',['exam_id'=>$exam->id,'word_id'=>$word->id]);
   PhoneticSetting::query()->firstOrCreate(['id'=>1],['enabled'=>true,'course_slug'=>'vocabulary-starter','course_title'=>'Vocabulary Starter']);
   PhoneticSetting::query()->whereKey(1)->update(['course_slug'=>'vocabulary-starter']);
-  \Illuminate\Support\Facades\Cache::forget('phonetics.settings');
   \Illuminate\Support\Facades\Cache::forget('phonetics.settings');
   $this->actingAs($student)->get('/courses/vocabulary-starter/phonetics-learning?lesson='.$lessonId)->assertOk()->assertSee('aec-vocabulary-test')->assertSee('Lesson One Vocabulary Exam');
   $this->actingAs($student)->get('/courses/vocabulary-starter/phonetics-learning/exams/lesson-one-vocabulary-exam?lesson='.$lessonId)->assertOk();
