@@ -24,14 +24,12 @@ final class PhoneticsLearningController extends Controller
     public function index(Request $request, string $courseSlug): View
     {
         $course = $this->catalog->course($courseSlug);
-        $this->catalog->assertCourseAvailable($course);
+        $this->catalog->assertCourseAvailable($course);\n        $this->catalog->assertDedicatedCourse($course);
         $courseRef = $this->catalog->courseId($course);
         $setting = PhoneticSetting::current();
         abort_unless($setting->enabled, 404);
-        if ($setting->require_course_enrollment) {
-            abort_unless($request->user(), 401, 'Sign in to access course vocabulary.');
-            $this->catalog->assertAccess($request->user(), $courseRef);
-        }
+        abort_unless($request->user(), 401, 'Sign in to access course vocabulary.');
+        $this->catalog->assertAccess($request->user(), $courseRef);
 
         $entries = $this->assignedEntries($request, $course, $request->query('lesson'));
         $isPaid = $this->catalog->isPaid($course);
@@ -86,10 +84,8 @@ final class PhoneticsLearningController extends Controller
         $courseRef = $this->catalog->courseId($course);
         $setting = PhoneticSetting::current();
         abort_unless($setting->enabled, 404);
-        if ($setting->require_course_enrollment) {
-            abort_unless($request->user(), 401);
-            $this->catalog->assertAccess($request->user(), $courseRef);
-        }
+        abort_unless($request->user(), 401, 'Sign in to access course vocabulary.');
+        $this->catalog->assertAccess($request->user(), $courseRef);
         abort_unless($request->user(), 401, 'Sign in to save your practice result.');
 
         $challenge = $request->session()->get('phonetics.learning_challenge');
