@@ -20,7 +20,7 @@ class SetApplicationLocale
         $locale = is_string($sessionLocale) ? $sessionLocale : $defaultLocale;
 
         if (!in_array($locale, self::SUPPORTED_LOCALES, true)) {
-            $locale = 'en';
+            $locale = in_array($defaultLocale, self::SUPPORTED_LOCALES, true) ? $defaultLocale : 'en';
         }
 
         app()->setLocale($locale);
