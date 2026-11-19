@@ -57,11 +57,17 @@ class FlashSaleController extends Controller
         $this->assertCourseInBranch($request, (int) $values['course_id']);
         $values['branch_id'] = $request->user()?->hasRole('branch_manager') ? (int) $request->user()->branch_id : ($values['branch_id'] ?? null);
 
-        DB::table('flash_sales')->insert($values + [
+        $saleId = DB::table('flash_sales')->insertGetId($values + [
             'is_published' => $request->boolean('is_published'),
             'is_active' => $request->boolean('is_active'),
             'created_at' => now(),
             'updated_at' => now(),
+        ]);
+        app(AuditLogger::class)->log('flash_sale.created', 'flash_sale', (string) $saleId, [
+            'course_id' => (int) $values['course_id'],
+            'branch_id' => $values['branch_id'] ?? null,
+            'discount_type' => $values['discount_type'],
+            'discount_value' => (float) $values['discount_value'],
         ]);
 
         return back()->with('status', 'Campaign created.');
@@ -82,6 +88,11 @@ class FlashSaleController extends Controller
             'is_active' => $request->boolean('is_active'),
             'updated_at' => now(),
         ]);
+        app(AuditLogger::class)->log('flash_sale.updated', 'flash_sale', (string) $sale, [
+            'course_id' => (int) $values['course_id'],
+            'branch_id' => $values['branch_id'] ?? null,
+            'changed_fields' => array_keys($values),
+        ]);
 
         return back()->with('status', 'Campaign updated.');
     }
@@ -98,6 +109,10 @@ class FlashSaleController extends Controller
             'is_active' => !$row->is_active,
             'updated_at' => now(),
         ]);
+        app(AuditLogger::class)->log('flash_sale.toggled', 'flash_sale', (string) $sale, [
+            'was_active' => (bool) $row->is_active,
+            'is_active' => !(bool) $row->is_active,
+        ]);
 
         return back()->with('status', 'Campaign active state changed.');
     }
@@ -107,8 +122,13 @@ class FlashSaleController extends Controller
         $this->ensureAssignedBranch($request);
         $this->ensureCourseIntegration();
         $this->assertSaleInBranch($request, $sale);
-        abort_unless(DB::table('flash_sales')->where('id', $sale)->exists(), 404);
+        $record = DB::table('flash_sales')->where('id', $sale)->first();
+        abort_unless($record, 404);
         DB::table('flash_sales')->where('id', $sale)->delete();
+        app(AuditLogger::class)->log('flash_sale.deleted', 'flash_sale', (string) $sale, [
+            'course_id' => (int) $record->course_id,
+            'title' => (string) $record->title,
+        ]);
 
         return back()->with('status', 'Campaign deleted.');
     }
@@ -125,6 +145,9 @@ class FlashSaleController extends Controller
             ['id' => 1],
             $values + ['created_at' => now(), 'updated_at' => now()]
         );
+        app(AuditLogger::class)->log('flash_sale.storefront_settings_updated', 'flash_sale_settings', '1', [
+            'page_enabled' => (bool) $values['page_enabled'],
+        ]);
 
         return back()->with('status', 'Page settings saved.');
     }
