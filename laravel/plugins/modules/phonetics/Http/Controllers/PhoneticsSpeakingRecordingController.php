@@ -1,0 +1,201 @@
+<?php
+declare(strict_types=1);
+
+namespace Plugins\Modules\Phonetics\Http\Controllers;
+
+use Illuminate\Http\Request;
+use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Plugins\Modules\Phonetics\Models\PhoneticAuditEvent;
+use Plugins\Modules\Phonetics\Models\PhoneticLearningAssignment;
+use Plugins\Modules\Phonetics\Models\PhoneticSpeakingRecording;
+use Plugins\Modules\Phonetics\Models\PhoneticSetting;
+use Plugins\Modules\Phonetics\Services\CourseCatalog;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+
+final class PhoneticsSpeakingRecordingController extends Controller
+{
+    public function __construct(private readonly CourseCatalog $catalog) {}
+
+    public function store(Request $request, string $courseSlug)
+    {
+        $data = $request->validate([
+            'entry_id' => ['required', 'integer', 'exists:alom_english_center_phonetic_entries,id'],
+            'recording' => ['required', 'file', 'mimes:webm,ogg,wav,mp3,m4a,mp4', 'max:10240'],
+            'duration_seconds' => ['required', 'integer', 'min:1', 'max:120'],
+        ]);
+
+        $course = $this->catalog->course($courseSlug);
+        $this->catalog->assertCourseAvailable($course);
+        $this->catalog->assertDedicatedCourse($course);
+        $this->catalog->assertAccess($request->user(), $this->catalog->courseId($course));
+        abort_unless(PhoneticSetting::current()->enabled, 404);
+
+        $entry = $this->assignedEntry($request, $course, (int) $data['entry_id']);
+        $file = $data['recording'];
+        $disk = $this->privateDisk();
+        $path = $file->store('students/'.hash('sha256', (string) $request->user()->getAuthIdentifier()), $disk);
+
+        try {
+            $recording = DB::transaction(fn () => PhoneticSpeakingRecording::query()->create([
+                'lms_driver' => $this->catalog->driver(),
+                'user_id' => (string) $request->user()->getAuthIdentifier(),
+                'entry_id' => $entry->id,
+                'course_ref' => $this->catalog->courseId($course),
+                'storage_path' => $path,
+                'mime_type' => (string) $file->getMimeType(),
+                'size_bytes' => (int) $file->getSize(),
+                'duration_seconds' => (int) $data['duration_seconds'],
+                'status' => 'pending',
+            ]));
+        } catch (\Throwable $exception) {
+            $disk->delete($path);
+            throw $exception;
+        }
+
+        return response()->json([
+            'saved' => true,
+            'recording_id' => $recording->id,
+            'status' => $recording->status,
+            'message' => 'Recording submitted privately for teacher review.',
+        ], 201);
+    }
+
+    public function history(Request $request, string $courseSlug)
+    {
+        $course = $this->catalog->course($courseSlug);
+        $this->catalog->assertCourseAvailable($course);
+        $this->catalog->assertDedicatedCourse($course);
+        $this->catalog->assertAccess($request->user(), $this->catalog->courseId($course));
+
+        $items = PhoneticSpeakingRecording::query()
+            ->with('word:id,word,category')
+            ->where('lms_driver', $this->catalog->driver())
+            ->where('course_ref', $this->catalog->courseId($course))
+            ->where('user_id', (string) $request->user()->getAuthIdentifier())
+            ->latest()
+            ->limit(50)
+            ->get(['id', 'entry_id', 'status', 'score', 'feedback', 'duration_seconds', 'created_at', 'reviewed_at']);
+
+        return response()->json(['recordings' => $items]);
+    }
+
+    public function stream(Request $request, string $courseSlug, PhoneticSpeakingRecording $recording)
+    {
+        $course = $this->catalog->course($courseSlug);
+        $this->catalog->assertCourseAvailable($course);
+        $this->catalog->assertDedicatedCourse($course);
+        $this->catalog->assertAccess($request->user(), $this->catalog->courseId($course));
+        abort_unless(
+            $recording->lms_driver === $this->catalog->driver()
+            && $recording->course_ref === $this->catalog->courseId($course)
+            && hash_equals($recording->user_id, (string) $request->user()->getAuthIdentifier()),
+            404
+        );
+
+        $disk = $this->privateDisk();
+        abort_unless($disk->exists($recording->storage_path), 404);
+        return response()->file($disk->path($recording->storage_path), [
+            'Content-Type' => $recording->mime_type,
+            'Content-Disposition' => 'inline; filename="phonetics-practice.'.strtolower(pathinfo($recording->storage_path, PATHINFO_EXTENSION)).'"',
+            'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'private, no-store, max-age=0',
+        ]);
+    }
+
+    public function destroy(Request $request, string $courseSlug, PhoneticSpeakingRecording $recording)
+    {
+        $course = $this->catalog->course($courseSlug);
+        $this->catalog->assertCourseAvailable($course);
+        $this->catalog->assertDedicatedCourse($course);
+        $this->catalog->assertAccess($request->user(), $this->catalog->courseId($course));
+        abort_unless(
+            $recording->lms_driver === $this->catalog->driver()
+            && $recording->course_ref === $this->catalog->courseId($course)
+            && hash_equals($recording->user_id, (string) $request->user()->getAuthIdentifier()),
+            404
+        );
+        abort_unless($recording->status === 'pending', 409, 'A reviewed recording cannot be deleted by the student.');
+
+        DB::transaction(function () use ($recording): void {
+            $this->privateDisk()->delete($recording->storage_path);
+            $recording->delete();
+        });
+
+        return response()->json(['deleted' => true]);
+    }
+
+    public function reviewQueue()
+    {
+        return view('phonetics::admin.recordings', [
+            'recordings' => PhoneticSpeakingRecording::query()
+                ->with('word:id,word,category')
+                ->where('lms_driver', $this->catalog->driver())
+                ->latest()
+                ->paginate(30),
+        ]);
+    }
+
+    public function review(Request $request, PhoneticSpeakingRecording $recording)
+    {
+        abort_unless($recording->lms_driver === $this->catalog->driver(), 404);
+        $data = $request->validate([
+            'score' => ['required', 'integer', 'min:1', 'max:5'],
+            'feedback' => ['required', 'string', 'min:3', 'max:2000'],
+        ]);
+
+        DB::transaction(function () use ($request, $recording, $data): void {
+            $recording->update([
+                'status' => 'reviewed',
+                'reviewer_user_id' => (string) $request->user()->getAuthIdentifier(),
+                'score' => $data['score'],
+                'feedback' => $data['feedback'],
+                'reviewed_at' => now(),
+            ]);
+            PhoneticAuditEvent::query()->create([
+                'user_id' => $request->user()->getAuthIdentifier(),
+                'action' => 'phonetics.recording.reviewed',
+                'entity_type' => 'speaking_recording',
+                'entity_id' => (string) $recording->id,
+                'ip_address' => $request->ip(),
+                'metadata' => ['student_id' => $recording->user_id, 'score' => $data['score']],
+            ]);
+        });
+
+        return back()->with('status', 'Pronunciation recording reviewed.');
+    }
+
+    private function assignedEntry(Request $request, object $course, int $entryId)
+    {
+        $courseRef = $this->catalog->courseId($course);
+        $categoryRef = $this->catalog->courseCategoryId($course);
+        $isPaid = $this->catalog->isPaid($course);
+        $assignments = PhoneticLearningAssignment::query()
+            ->where('lms_driver', $this->catalog->driver())
+            ->where('word_id', $entryId)
+            ->where(fn ($scope) => $scope->whereNull('course_ref')->orWhere('course_ref', $courseRef))
+            ->where(fn ($scope) => $scope->whereNull('course_category_ref')->orWhere('course_category_ref', $categoryRef ?? '__none__'))
+            ->whereIn('audience', ['both', $isPaid ? 'paid' : 'free'])
+            ->where(fn ($dates) => $dates->whereNull('available_from')->orWhere('available_from', '<=', now()))
+            ->where(fn ($dates) => $dates->whereNull('available_until')->orWhere('available_until', '>=', now()))
+            ->get();
+
+        foreach ($assignments as $assignment) {
+            if ($assignment->batch_ref === null || $this->catalog->isBatchMember($request->user(), (string) $assignment->batch_ref)) {
+                return $assignment->word()->where('is_active', true)->firstOrFail();
+            }
+        }
+
+        throw new AccessDeniedHttpException('This vocabulary word is not assigned to your course or batch.');
+    }
+
+    private function privateDisk()
+    {
+        return Storage::build([
+            'driver' => 'local',
+            'root' => storage_path('app/private/phonetics-recordings'),
+            'throw' => true,
+        ]);
+    }
+}
