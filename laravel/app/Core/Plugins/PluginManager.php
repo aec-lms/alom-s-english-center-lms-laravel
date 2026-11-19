@@ -128,10 +128,13 @@ class PluginManager
 
         $previousRecord = PluginRecord::query()->where('slug', $slug)->first();
         $previousAttributes = $previousRecord?->getAttributes();
+        $wasInstalled = (bool) ($previousRecord?->is_installed);
+        $wasEnabled = (bool) ($previousRecord?->is_enabled);
+        $previousInstalledAt = $previousRecord?->installed_at;
         $migratedRelative = $this->runPluginMigrations($manifest);
 
         try {
-            $record = DB::transaction(function () use ($manifest, $actorId): PluginRecord {
+            $record = DB::transaction(function () use ($manifest, $actorId, $wasInstalled, $wasEnabled, $previousInstalledAt): PluginRecord {
                 $record = PluginRecord::query()->updateOrCreate(
                     ['slug' => $manifest->slug],
                     [
@@ -144,8 +147,10 @@ class PluginManager
                         'dependencies' => $manifest->dependencies,
                         'manifest_snapshot' => $manifest->toArray(),
                         'is_installed' => true,
-                        'is_enabled' => true,
-                        'installed_at' => now(),
+                        // Re-running install must not silently re-enable a plugin
+                        // that an administrator deliberately disabled.
+                        'is_enabled' => $wasInstalled ? $wasEnabled : true,
+                        'installed_at' => $wasInstalled ? ($previousInstalledAt ?? now()) : now(),
                     ]
                 );
 
@@ -154,8 +159,10 @@ class PluginManager
                 $instance = $this->resolvePluginInstance($manifest);
                 if ($instance) {
                     app()->register($instance);
-                    $instance->onInstall();
-                    $instance->onEnable();
+                    if (!$wasInstalled) {
+                        $instance->onInstall();
+                        $instance->onEnable();
+                    }
                 }
 
                 $this->audit->log('plugin.installed', 'plugin', $manifest->slug, ['version' => $manifest->version], $actorId);
@@ -165,7 +172,9 @@ class PluginManager
 
             // Register plugin routes after the database transaction commits so the router
             // sees a stable installed/enabled plugin state in tests and long-lived workers.
-            $this->loadPluginRoutes($manifest);
+            if (!$wasInstalled) {
+                $this->loadPluginRoutes($manifest);
+            }
         } catch (Throwable $e) {
             // Route registration happens after commit. If it fails, compensate the
             // committed catalog state before rolling back the plugin migrations.
@@ -265,6 +274,7 @@ class PluginManager
             throw $e;
         }
 
+        $this->clearCachedPluginRoutes();
         event(new PluginLifecycleEvent('updated', $manifest->slug, $manifest->version, $actorId, ['from_version' => $fromVersion]));
 
         return $updated;
@@ -455,9 +465,35 @@ class PluginManager
         });
 
         $manifest = $this->discoverManifests()[$slug] ?? null;
-        if ($manifest) {
-            $this->loadPluginRoutes($manifest);
+        try {
+            if ($manifest) {
+                $this->loadPluginRoutes($manifest);
+            }
+        } catch (Throwable $exception) {
+            // Route registration is deliberately post-commit so the router only sees
+            // enabled plugins. If registration fails, compensate the catalog state:
+            // never leave a plugin marked enabled while its routes are unavailable.
+            DB::transaction(function () use ($slug, $actorId, $exception): void {
+                $locked = PluginRecord::query()->where('slug', $slug)->lockForUpdate()->first();
+                if ($locked && $locked->is_installed) {
+                    $locked->update(['is_enabled' => false]);
+                    $this->audit->log('plugin.enable_rolled_back', 'plugin', $slug, [
+                        'reason' => $exception->getMessage(),
+                    ], $actorId);
+                }
+            });
+
+            if ($manifest) {
+                try {
+                    $this->resolvePluginInstance($manifest)?->onDisable();
+                } catch (Throwable $compensationError) {
+                    report($compensationError);
+                }
+            }
+
+            throw $exception;
         }
+
         event(new PluginLifecycleEvent('enabled', $slug, $record->version, $actorId));
 
         return $record;
@@ -482,6 +518,7 @@ class PluginManager
             return $record->fresh();
         });
 
+        $this->clearCachedPluginRoutes();
         event(new PluginLifecycleEvent('disabled', $slug, $record->version, $actorId));
 
         return $record;
@@ -516,6 +553,7 @@ class PluginManager
             return $record->fresh();
         });
 
+        $this->clearCachedPluginRoutes();
         event(new PluginLifecycleEvent('uninstalled', $slug, $record->version, $actorId));
 
         return $record;
@@ -1324,8 +1362,25 @@ class PluginManager
      * Route files are required again after runtime installation so newly enabled
      * modules are available without restarting the application.
      */
-    private function loadPluginRoutes(PluginManifest $manifest): void
+    private function clearCachedPluginRoutes(): void
     {
+        $cachePath = app()->getCachedRoutesPath();
+        if (!is_file($cachePath)) {
+            return;
+        }
+
+        Artisan::call('route:clear');
+        if (is_file($cachePath)) {
+            throw new RuntimeException('Compiled plugin routes could not be invalidated after a plugin lifecycle change.');
+        }
+    }
+
+    public function loadPluginRoutes(PluginManifest $manifest): void
+    {
+        // A compiled route cache already contains the deployment's plugin routes.
+        // Runtime requires would bypass that cache and can create duplicate routes.
+        $this->clearCachedPluginRoutes();
+
         foreach (['Routes/web.php', 'Routes/api.php'] as $relative) {
             $routeFile = rtrim($manifest->basePath, DIRECTORY_SEPARATOR)
                 . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relative);

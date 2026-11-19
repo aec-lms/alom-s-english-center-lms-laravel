@@ -17,7 +17,7 @@
 
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-6">
                 @foreach ($lessons as $lesson)
-                    <article class="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-xs hover:shadow-xl transition-all duration-200 flex flex-col sm:flex-row">
+                    <article id="{{ $lesson['slug'] }}" class="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-xs hover:shadow-xl transition-all duration-200 flex flex-col sm:flex-row">
                         <div class="sm:w-52 h-44 sm:h-auto relative bg-[#022D41] shrink-0 overflow-hidden">
                             <img src="{{ $lesson['thumbnail'] }}" alt="{{ $lesson['title'] }}" class="w-full h-full object-cover">
                             <span class="absolute bottom-2.5 right-2.5 px-2 py-0.5 rounded bg-slate-950/80 text-white text-[10px] font-mono font-bold">
@@ -34,8 +34,8 @@
                             </div>
                             <div class="flex items-center justify-between pt-2 border-t border-slate-100">
                                 <span class="text-[11px] font-semibold text-emerald-600">Free Open Access</span>
-                                <a href="{{ route('login') }}" class="px-3.5 py-1.5 rounded-lg bg-[#0284C7] hover:bg-[#0369A1] text-white text-xs font-bold transition-colors">
-                                    Watch in Portal
+                                <a href="{{ route('public.learn.show', $lesson['slug']) }}" class="px-3.5 py-1.5 rounded-lg bg-[#0284C7] hover:bg-[#0369A1] text-white text-xs font-bold transition-colors">
+                                    Read Article
                                 </a>
                             </div>
                         </div>

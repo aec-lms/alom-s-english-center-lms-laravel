@@ -117,50 +117,51 @@
                class="mt-3 flex items-center justify-center gap-2 rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15 transition-colors"
                aria-label="Visit public website (opens in a new tab)">
                 <span aria-hidden="true">↗</span>
-                <span>Visit Public Site</span>
+                <span>{{ __('Visit Public Site') }}</span>
             </a>
         </div>
         <nav class="flex-1 p-3 space-y-1 text-sm overflow-y-auto">
-            <div class="px-3 pt-1 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Protected Core</div>
-            <a href="{{ route('admin.dashboard') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Dashboard</a>
-            <a href="{{ route('admin.plugins.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Plugin Center</a>
+            <div class="px-3 pt-1 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">{{ __('Protected Core') }}</div>
+            <a href="{{ route('admin.dashboard') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">{{ __('Dashboard') }}</a>
+            <a href="{{ route('admin.plugins.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">{{ __('Plugin Center') }}</a>
             @if (auth()->user()?->hasPermission('core.users.manage'))
-                <a href="{{ route('admin.users.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Users & Roles</a>
-                <a href="{{ route('admin.roles.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Roles &amp; Permissions</a>
+                <a href="{{ route('admin.users.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">{{ __('Users & Roles') }}</a>
+                <a href="{{ route('admin.roles.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">{{ __('Roles & Permissions') }}</a>
             @endif
-            <a href="{{ route('admin.updates.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Update Center</a>
+            <a href="{{ route('admin.updates.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">{{ __('Update Center') }}</a>
             <a href="{{ route('admin.backups.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Backup & Restore</a>
-            <a href="{{ route('admin.audit.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Audit Logs</a>
+            <a href="{{ route('admin.audit.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">{{ __('Audit Logs') }}</a>
             @if (auth()->user()?->hasRole('admin') && auth()->user()?->hasPermission('core.audit.view'))
-                <a href="{{ route('admin.security.sessions.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Device Sessions</a>
+                <a href="{{ route('admin.security.sessions.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">{{ __('Device Sessions') }}</a>
             @endif
             @can('core.settings.manage')
-                <a href="{{ route('admin.setup-wizard.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Setup Wizard</a>
+                <a href="{{ route('admin.setup-wizard.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">{{ __('Setup Wizard') }}</a>
             @endcan
-            <a href="{{ route('admin.institution-settings.edit') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Institution &amp; Region</a>
+            <a href="{{ route('admin.institution-settings.edit') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">{{ __('Institution & Region') }}</a>
             @can('core.settings.manage')
-                <a href="{{ route('admin.site-identity.edit') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Site Identity &amp; Branding</a>
+                <a href="{{ route('admin.site-identity.edit') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">{{ __('Site Identity & Branding') }}</a>
             @endcan
-            <a href="{{ route('admin.appearance.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Design &amp; Appearance</a>
+            <a href="{{ route('admin.appearance.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">{{ __('Design & Appearance') }}</a>
             @can('core.settings.manage')
-                <a href="{{ route('admin.menu-editor.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Admin Menu Editor</a>
-                <a href="{{ route('admin.site-navigation.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Website Navigation Builder</a>
-                <a href="{{ route('admin.course-social-proof.edit') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">Course Views &amp; Purchases</a>
+                <a href="{{ route('admin.menu-editor.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">{{ __('Admin Menu Editor') }}</a>
+                <a href="{{ route('admin.site-navigation.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">{{ __('Website Navigation Builder') }}</a>
+                <a href="{{ route('admin.course-social-proof.edit') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">{{ __('Course Views & Purchases') }}</a>
             @endcan
 
             @if (!empty($pluginAdminMenu))
                 @foreach ($pluginAdminMenu as $groupName => $menuItems)
-                    <div class="px-3 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">{{ $groupName }}</div>
+                    <div class="px-3 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">{{ __($groupName) }}</div>
                     @foreach ($menuItems as $menuItem)
-                        <a href="{{ route($menuItem['route']) }}" class="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs"><x-plugin-icon :name="$menuItem['icon'] ?? 'puzzle'" class="h-4 w-4 shrink-0 opacity-80" /><span>{{ $menuItem['label'] }}</span></a>
+                        <a href="{{ route($menuItem['route']) }}" class="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-white/10 text-xs"><x-plugin-icon :name="$menuItem['icon'] ?? 'puzzle'" class="h-4 w-4 shrink-0 opacity-80" /><span>{{ __($menuItem['label']) }}</span></a>
                     @endforeach
                 @endforeach
             @endif
         </nav>
-        <div class="p-3 border-t border-slate-800">
+        <div class="p-3 border-t border-slate-800 space-y-3">
+            @include('public.partials.language-switcher')
             <form method="POST" action="{{ route('logout') }}">
                 @csrf
-                <button class="w-full text-left px-3 py-2 rounded-lg text-rose-300 hover:bg-slate-800 text-sm">Sign Out</button>
+                <button class="w-full text-left px-3 py-2 rounded-lg text-rose-300 hover:bg-slate-800 text-sm">{{ __('Sign Out') }}</button>
             </form>
         </div>
     </aside>

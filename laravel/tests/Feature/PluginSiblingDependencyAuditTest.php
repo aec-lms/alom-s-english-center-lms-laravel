@@ -31,6 +31,14 @@ class PluginSiblingDependencyAuditTest extends TestCase
         }
 
         $violations = [];
+        foreach ($manifests as $slug => $manifest) {
+            foreach (array_merge($manifest['dependencies'] ?? [], $manifest['optional_dependencies'] ?? []) as $dependency) {
+                if (!isset($manifests[$dependency])) {
+                    $violations[] = $slug . ' declares missing plugin dependency ' . $dependency . '.';
+                }
+            }
+        }
+
         foreach ($directories as $directory) {
             $manifestPath = $directory . DIRECTORY_SEPARATOR . 'plugin.json';
             if (!File::exists($manifestPath)) {

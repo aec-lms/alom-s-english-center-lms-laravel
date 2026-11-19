@@ -205,4 +205,46 @@ class CourseAssessmentsPluginTest extends TestCase
 
         $this->assertDatabaseMissing('course_assessment_sets', ['title' => 'Must Not Be Created']);
     }
+    public function test_student_assessment_branch_uses_authoritative_student_profile_for_web_and_api(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'student-management', 'course-assessments']);
+
+        $branchA = DB::table('branches')->insertGetId([
+            'code' => 'ASSESS-PROFILE-A-' . uniqid(), 'name' => 'Assessment Profile Branch A',
+            'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $branchB = DB::table('branches')->insertGetId([
+            'code' => 'ASSESS-PROFILE-B-' . uniqid(), 'name' => 'Assessment Account Branch B',
+            'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $student = $this->createUserWithRole('student', (int) $branchB);
+        DB::table('students')->insert([
+            'user_id' => $student->id, 'branch_id' => $branchA,
+            'student_code' => 'ASSESS-PROFILE-' . strtoupper(uniqid()),
+            'admission_date' => now()->toDateString(), 'status' => 'active',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $profileSet = $this->createSet([
+            'title' => 'Profile Branch Assessment', 'branch_id' => $branchA,
+        ]);
+        $accountSet = $this->createSet([
+            'title' => 'Account Branch Assessment', 'branch_id' => $branchB,
+        ]);
+        $this->createQuestion($profileSet);
+        $this->createQuestion($accountSet);
+
+        $this->actingAs($student)->get(route('plugins.course-assessments.student.index'))
+            ->assertOk()->assertSee('Profile Branch Assessment')->assertDontSee('Account Branch Assessment');
+        $this->actingAs($student, 'sanctum')->getJson('/api/v1/my-learning/assessments')
+            ->assertOk()->assertJsonFragment(['title' => 'Profile Branch Assessment'])
+            ->assertJsonMissing(['title' => 'Account Branch Assessment']);
+
+        $this->actingAs($student)->post(route('plugins.course-assessments.student.start', $profileSet))
+            ->assertRedirect()->assertSessionHasNoErrors();
+        $this->actingAs($student)->post(route('plugins.course-assessments.student.start', $accountSet))
+            ->assertForbidden();
+    }
+
 }

@@ -56,11 +56,20 @@ class PluginServiceProvider extends ServiceProvider
 
         foreach ($enabledSlugs as $slug) {
             $manifest = $manifests[$slug] ?? null;
-            if (!$manifest || !$manifest->providerClass || !class_exists($manifest->providerClass)) {
+            if (!$manifest) {
                 continue;
             }
-            $provider = $this->app->resolveProvider($manifest->providerClass);
-            $this->app->register($provider);
+
+            if ($manifest->providerClass && class_exists($manifest->providerClass)) {
+                $provider = $this->app->resolveProvider($manifest->providerClass);
+                $this->app->register($provider);
+            }
+
+            // The compiled route cache already contains the enabled plugins' routes.
+            // Requiring their route files again would register duplicate URI/name entries.
+            if (!is_file($this->app->getCachedRoutesPath())) {
+                $manager->loadPluginRoutes($manifest);
+            }
         }
     }
 }

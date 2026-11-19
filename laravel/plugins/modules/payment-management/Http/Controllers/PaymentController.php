@@ -118,13 +118,38 @@ class PaymentController extends Controller
                     throw new \RuntimeException('Refund exceeds remaining refundable transaction amount.');
                 }
 
-                PaymentRefund::query()->create([
+                $refund = PaymentRefund::query()->create([
                     'payment_transaction_id' => $lockedTx->id,
                     'amount' => $refundAmount,
                     'reason' => $validated['reason'],
                     'provider_refund_reference' => $validated['provider_refund_reference'] ?? null,
                     'approved_by' => $actor?->id,
                 ]);
+
+                // Financial reversals remain active even if the optional referral
+                // plugin has since been disabled; only its installed ledger tables matter.
+                if ($lockedTx->invoice_id
+                    && Schema::hasTable('commerce_orders')
+                    && Schema::hasTable('referral_commissions')
+                    && Schema::hasTable('referral_commission_reversals')) {
+                    $order = DB::table('commerce_orders')
+                        ->where('invoice_id', $lockedTx->invoice_id)
+                        ->lockForUpdate()->first();
+                    if ($order) {
+                        $buyer = \App\Models\User::query()->find((int) $order->user_id);
+                        if ($buyer) {
+                            app(\Plugins\Modules\ReferralIncome\Services\ReferralIncomeService::class)
+                                ->reverseSettledPurchase(
+                                    $buyer,
+                                    'commerce_order',
+                                    (string) $order->id,
+                                    (int) $refund->id,
+                                    $refundAmount,
+                                    (string) $lockedTx->currency,
+                                );
+                        }
+                    }
+                }
 
                 $totalRefunded = round($alreadyRefunded + $refundAmount, 2);
                 if ($totalRefunded >= (float) $lockedTx->amount) {
@@ -146,6 +171,8 @@ class PaymentController extends Controller
                             ->where('status', 'active')
                             ->update(['status' => 'pending', 'updated_at' => now()]);
                     }
+
+                    $this->suspendCommerceAccessAfterRefund($invoice, $newPaid);
                 }
             });
         } catch (\Throwable $e) {
@@ -156,6 +183,69 @@ class PaymentController extends Controller
 
         return back()->with('status', "Refund recorded for {$transaction->transaction_ref}.");
     }
+    private function suspendCommerceAccessAfterRefund(FeeInvoice $invoice, float $newPaid): void
+    {
+        if ($newPaid + 0.01 >= (float) $invoice->net_amount
+            || !Schema::hasTable('commerce_orders')
+            || !Schema::hasTable('commerce_order_items')) {
+            return;
+        }
+
+        $orders = DB::table('commerce_orders')
+            ->where('invoice_id', $invoice->id)
+            ->lockForUpdate()
+            ->get();
+        if ($orders->isEmpty()) {
+            return;
+        }
+
+        $paymentIds = DB::table('payment_transactions')
+            ->where('invoice_id', $invoice->id)
+            ->pluck('id');
+
+        foreach ($orders as $order) {
+            DB::table('commerce_orders')->where('id', $order->id)->update([
+                'status' => $newPaid <= 0.01 ? 'refunded' : 'partially_refunded',
+                'payment_status' => $newPaid <= 0.01 ? 'refunded' : 'partial',
+                'updated_at' => now(),
+            ]);
+
+            $items = DB::table('commerce_order_items')->where('order_id', $order->id)->get();
+            $itemIds = $items->pluck('id');
+            if (Schema::hasTable('commerce_entitlements') && $itemIds->isNotEmpty()) {
+                DB::table('commerce_entitlements')
+                    ->where('user_id', $order->user_id)
+                    ->whereIn('order_item_id', $itemIds)
+                    ->where('status', 'active')
+                    ->update(['status' => 'suspended', 'updated_at' => now()]);
+            }
+
+            foreach ($items as $item) {
+                if ($item->item_type === 'mock_test' && $item->item_id
+                    && Schema::hasTable('learn_earn_exam_access')
+                    && Schema::hasColumn('learn_earn_exam_access', 'payment_reference')) {
+                    DB::table('learn_earn_exam_access')
+                        ->where('exam_id', $item->item_id)
+                        ->where('user_id', $order->user_id)
+                        ->where('payment_reference', $order->order_number)
+                        ->where('status', 'granted')
+                        ->update(['status' => 'revoked', 'updated_at' => now()]);
+                }
+
+                if ($item->item_type === 'ebook' && $item->item_id
+                    && $paymentIds->isNotEmpty()
+                    && Schema::hasTable('storefront_item_access')
+                    && Schema::hasColumn('storefront_item_access', 'payment_transaction_id')) {
+                    DB::table('storefront_item_access')
+                        ->where('storefront_item_id', $item->item_id)
+                        ->where('user_id', $order->user_id)
+                        ->whereIn('payment_transaction_id', $paymentIds)
+                        ->delete();
+                }
+            }
+        }
+    }
+
     private function ensureAssignedBranch($actor): void
     {
         if (!$actor || !$actor->hasRole('branch_manager')) {

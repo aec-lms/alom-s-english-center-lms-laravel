@@ -9,6 +9,7 @@ use App\Http\Middleware\EnsureInstalled;
 use App\Http\Middleware\EnsureNotInstalled;
 use App\Http\Middleware\EnsurePluginEnabled;
 use App\Http\Middleware\RolePermissionMiddleware;
+use App\Http\Middleware\SetApplicationLocale;
 use App\Console\Commands\OffsiteBackupCommand;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -23,7 +24,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->web(append: [EnsureDeviceSessionActive::class, EnsureBranchContext::class]);
+        $middleware->web(append: [EnsureDeviceSessionActive::class, EnsureBranchContext::class, SetApplicationLocale::class]);
         $middleware->api(append: [EnsureBranchContext::class]);
         $middleware->alias([
             'installed' => EnsureInstalled::class,

@@ -85,7 +85,10 @@ class CmsController extends Controller
     {
         $name = $category->name;
         $id = (string) $category->id;
-        $category->delete();
+        DB::transaction(function () use ($category): void {
+            CmsPost::query()->where('category_id', $category->id)->update(['category_id' => null]);
+            $category->delete();
+        });
         $this->audit->log('cms.category_deleted', 'cms_category', $id, ['name' => $name]);
 
         return back()->with('status', "CMS Category '{$name}' deleted.");
@@ -222,8 +225,8 @@ class CmsController extends Controller
             'thumbnail_path' => $thumbPath,
             'pdf_path' => $pdfPath,
             'pdf_thumbnail' => $pdfThumbPath,
-            'seo_title' => $validated['seo_title'] ?? $validated['title'],
-            'seo_description' => $validated['seo_description'] ?? null,
+            'seo_title' => $validated['seo_title'] ?? ($post->seo_title ?: $validated['title']),
+            'seo_description' => $validated['seo_description'] ?? $post->seo_description,
             'is_published' => $request->boolean('is_published'),
         ]);
 
@@ -238,9 +241,8 @@ class CmsController extends Controller
 
     public function destroyPost(CmsPost $post): RedirectResponse
     {
-        foreach ([$post->thumbnail_path, $post->pdf_path, $post->pdf_thumbnail] as $assetPath) {
-            $this->deleteUnusedUpload($assetPath, (int) $post->id);
-        }
+        // Keep linked files while the post is in the recycle bin. A restored post
+        // must not point to media that was deleted during soft deletion.
         $title = $post->title;
         $id = (string) $post->id;
         $post->delete();

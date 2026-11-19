@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Plugins\Modules\CourseManagement\Http\Controllers;
 
+use App\Core\Plugins\PluginManager;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -231,7 +232,9 @@ class LearningInteractionController extends Controller
             ->where('course_lessons.id', $lesson)->where('courses.status', 'published')
             ->select('course_lessons.id', 'course_lessons.course_id', 'courses.branch_id')->first();
         abort_unless($row, 404);
-        $this->assertActiveEnrollment($request, (int) $row->course_id, $row->branch_id);
+        if (!$this->canModerateCourse($request, (int) $row->course_id)) {
+            $this->assertActiveEnrollment($request, (int) $row->course_id, $row->branch_id);
+        }
         return $row;
     }
 
@@ -263,22 +266,85 @@ class LearningInteractionController extends Controller
 
     private function assertActiveEnrollment(Request $request, int $courseId, ?int $branchId): void
     {
-        abort_unless(DB::table('enrollments')->where('user_id', $request->user()->id)
-            ->where('course_id', $courseId)->where('status', 'active')
-            ->when($branchId !== null, fn ($query) => $query->where('branch_id', $branchId))->exists(),
-            403, 'An active enrollment is required.');
+        $enrollment = DB::table('enrollments')
+            ->where('user_id', $request->user()->id)
+            ->where('course_id', $courseId)
+            ->where('status', 'active')
+            ->first();
+
+        abort_unless($enrollment, 403, 'An active enrollment is required.');
+
+        $studentBranchId = $this->studentBranchId($request);
+        if ($branchId !== null) {
+            abort_unless($studentBranchId !== null && $studentBranchId === (int) $branchId, 403, 'Course is outside your current student branch.');
+        }
+        if ($enrollment->branch_id !== null) {
+            abort_unless($studentBranchId !== null && $studentBranchId === (int) $enrollment->branch_id, 403, 'Enrollment is outside your current student branch.');
+        }
+    }
+
+    private function studentBranchId(Request $request): ?int
+    {
+        $student = $request->user();
+        if (app(PluginManager::class)->isEnabled('student-management')
+            && Schema::hasTable('students')
+            && Schema::hasColumn('students', 'user_id')
+            && Schema::hasColumn('students', 'branch_id')) {
+            $profileBranchId = DB::table('students')->where('user_id', $student->id)->value('branch_id');
+            if ($profileBranchId !== null) {
+                return (int) $profileBranchId;
+            }
+        }
+
+        return $student->branch_id !== null ? (int) $student->branch_id : null;
     }
 
     private function canTeachLiveClass(Request $request, object $class): bool
     {
-        if ($request->user()->hasPermission('courses.manage')) return true;
-        return (string) ($class->instructor_name ?? '') === (string) $request->user()->name;
+        $course = DB::table('courses')->where('id', $class->course_id)->first();
+        return $course !== null && $this->canManageCourse($request, $course, (string) ($class->instructor_name ?? ''));
     }
 
     private function canModerateCourse(Request $request, int $courseId): bool
     {
-        if ($request->user()->hasPermission('courses.manage')) return true;
         $course = DB::table('courses')->where('id', $courseId)->first();
-        return $course && (string) ($course->instructor_name ?? '') === (string) $request->user()->name;
+        return $course !== null && $this->canManageCourse($request, $course, (string) ($course->instructor_name ?? ''));
+    }
+
+    private function canManageCourse(Request $request, object $course, ?string $instructorName = null): bool
+    {
+        $actor = $request->user();
+        if ($actor->hasRole('branch_manager')) {
+            return $actor->hasPermission('courses.manage')
+                && $actor->branch_id !== null
+                && $course->branch_id !== null
+                && (int) $actor->branch_id === (int) $course->branch_id;
+        }
+
+        if ($actor->hasRole('teacher')) {
+            $teacherBranchId = null;
+            if (app(PluginManager::class)->isEnabled('teacher-management')
+                && Schema::hasTable('teachers')
+                && Schema::hasColumn('teachers', 'user_id')
+                && Schema::hasColumn('teachers', 'branch_id')) {
+                $teacherProfile = DB::table('teachers')->where('user_id', $actor->id)->first();
+                if ($teacherProfile) {
+                    $teacherBranchId = $teacherProfile->branch_id !== null ? (int) $teacherProfile->branch_id : null;
+                } else {
+                    $teacherBranchId = $actor->branch_id !== null ? (int) $actor->branch_id : null;
+                }
+            } else {
+                $teacherBranchId = $actor->branch_id !== null ? (int) $actor->branch_id : null;
+            }
+
+            if ($course->branch_id !== null && $teacherBranchId !== null && $teacherBranchId !== (int) $course->branch_id) {
+                return false;
+            }
+
+            return $actor->hasPermission('courses.manage')
+                || ($instructorName ?? (string) ($course->instructor_name ?? '')) === (string) $actor->name;
+        }
+
+        return $actor->hasPermission('courses.manage');
     }
 }

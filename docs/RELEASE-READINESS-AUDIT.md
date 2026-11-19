@@ -155,3 +155,22 @@ These require a disposable staging host/database, anonymized backup data, offici
 ### Release decision
 
 Current main has green automated CI, but it is **not certified production-ready**. Do not merge PR #31 or deploy a production release until the branch history is reconciled, required checks pass on the exact candidate, and the external staging gates are evidenced. No production deployment or production-data change was performed for this checkpoint.
+
+## Full project autopsy checkpoint (2026-11-19 — PR #269 candidate)
+
+This checkpoint records source-level findings added to the current unified-commerce candidate. These fixes are **not yet merged** and must not be described as verified until the exact updated PR head passes CI.
+
+### Findings fixed in the candidate
+
+1. **Plugin route-cache lifecycle:** disabling, uninstalling or updating an installed plugin could leave a stale compiled route cache, keeping routes from a disabled plugin registered on later PHP requests. A shared cache-invalidation method is now called after those lifecycle changes. Regression tests cover disable, uninstall and update. Runtime workers that keep an in-memory router may still require a controlled worker restart after plugin lifecycle changes; the standard cPanel PHP request lifecycle is covered by route-cache invalidation.
+2. **Exam branch isolation:** Learn & Earn and Exam Management student-facing web/API routes used the account branch directly in several places, while the student profile branch is the authoritative assignment when Student Management is enabled. The listing, viewing, taking, history, autosave, submission, API listing and API attempt checks now resolve the student profile branch first. Manual branch-manager exam access also checks the target student's profile branch. Regression coverage deliberately makes the account and profile branch IDs disagree.
+3. **Commerce refund entitlements:** a partial/full offline refund reduced the invoice balance and moved course enrollments back to pending, but paid commerce orders and non-course entitlements could remain active. Refund handling now marks affected orders partially-refunded or refunded, suspends active order entitlements, revokes order-bound Learn & Earn exam access, and removes order-bound eBook access. A later verified settlement reactivates the same commerce entitlement and restores eBook access rather than leaving stale suspended rows. A regression test covers partial refund followed by repayment.
+
+### Validation status
+
+- The original PR #269 Laravel run failed PHP syntax lint because two namespace references in PluginLifecycleTest.php had doubled leading backslashes. The malformed references were corrected in the consolidated PR branch.
+- The original failing run is for an older PR head and is not evidence about the current candidate.
+- The latest candidate contains regression tests for the route-cache, refund-entitlement and exam branch-isolation findings. The exact candidate must pass PHP syntax lint, Blade compilation, SQLite tests, MySQL tests, Browser E2E and Composer Security Audit before merge.
+- External release gates remain unchanged: clean cPanel staging install, provider sandbox callbacks/refunds, production-sized backup/restore, complete per-plugin workflow acceptance and provider-backed live-class capacity testing.
+
+**Do not merge or deploy solely on the basis of these source changes.**

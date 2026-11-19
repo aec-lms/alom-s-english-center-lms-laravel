@@ -8,6 +8,7 @@ use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\StudentManagement\Models\Student;
 use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class UniversalPaymentInvoiceSettlementTest extends TestCase
@@ -156,6 +157,190 @@ class UniversalPaymentInvoiceSettlementTest extends TestCase
             'status' => 'rejected',
         ]);
     }
+
+    public function test_manual_invoice_verification_rejects_student_branch_mismatch_before_granting_enrollment(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['student-management', 'course-management', 'fees-management', 'universal-payment', 'branch-management']);
+
+        $studentUser = $this->createUserWithRole('student');
+        $studentBranchId = DB::table('branches')->insertGetId([
+            'code' => 'UPAY-STUDENT-' . $studentUser->id,
+            'name' => 'Student Branch',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $courseBranchId = DB::table('branches')->insertGetId([
+            'code' => 'UPAY-COURSE-' . $studentUser->id,
+            'name' => 'Course Branch',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('users')->where('id', $studentUser->id)->update(['branch_id' => $studentBranchId]);
+
+        $courseId = DB::table('courses')->insertGetId([
+            'code' => 'UPAY-BRANCH-' . $studentUser->id,
+            'title' => 'Branch Protected Course',
+            'slug' => 'upay-branch-protected-' . $studentUser->id,
+            'price' => 1000,
+            'status' => 'published',
+            'branch_id' => $courseBranchId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $invoice = FeeInvoice::query()->create([
+            'invoice_number' => 'UPAY-BRANCH-INV-' . $studentUser->id,
+            'payer_name' => $studentUser->name,
+            'payer_email' => $studentUser->email,
+            'subtotal_amount' => 1000,
+            'discount_amount' => 0,
+            'net_amount' => 1000,
+            'paid_amount' => 0,
+            'currency' => 'BDT',
+            'status' => 'unpaid',
+            'branch_id' => $courseBranchId,
+        ]);
+        DB::table('enrollments')->insert([
+            'user_id' => $studentUser->id,
+            'course_id' => $courseId,
+            'branch_id' => $courseBranchId,
+            'invoice_id' => $invoice->id,
+            'status' => 'pending',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $transaction = UniversalPaymentTransaction::query()->create([
+            'reference' => 'UPAY-BRANCH-' . $studentUser->id,
+            'payer_name' => $studentUser->name,
+            'payer_contact' => '01712345678',
+            'item_title' => 'Branch protected invoice',
+            'gateway' => 'bank_cash',
+            'currency' => 'BDT',
+            'amount' => 1000,
+            'external_trx_id' => 'BANK-UPAY-BRANCH-' . $studentUser->id,
+            'user_id' => $studentUser->id,
+            'branch_id' => $courseBranchId,
+            'fee_invoice_id' => $invoice->id,
+            'status' => 'pending',
+        ]);
+
+        $admin = $this->createUserWithRole('admin');
+        $this->actingAs($admin)
+            ->post('/plugins/universal-payment/transactions/' . $transaction->id . '/status', [
+                'status' => 'verified',
+                'payment_reference' => 'BANK-UPAY-BRANCH-VERIFY-' . $studentUser->id,
+            ])
+            ->assertStatus(422);
+
+        $this->assertDatabaseHas('fee_invoices', [
+            'id' => $invoice->id,
+            'paid_amount' => 0,
+            'status' => 'unpaid',
+        ]);
+        $this->assertDatabaseHas('enrollments', [
+            'user_id' => $studentUser->id,
+            'course_id' => $courseId,
+            'status' => 'pending',
+        ]);
+        $this->assertDatabaseHas('universal_payment_transactions', [
+            'id' => $transaction->id,
+            'status' => 'pending',
+        ]);
+    }
+
+
+    public function test_manual_invoice_payment_fulfills_commerce_order_without_referral_plugin(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['student-management', 'fees-management', 'universal-payment', 'commerce-cart', 'payment-management']);
+
+        $student = $this->createUserWithRole('student');
+        $invoice = FeeInvoice::query()->create([
+            'invoice_number' => 'UPAY-COMMERCE-' . $student->id,
+            'payer_name' => $student->name,
+            'payer_email' => $student->email,
+            'subtotal_amount' => 650,
+            'discount_amount' => 0,
+            'net_amount' => 650,
+            'paid_amount' => 0,
+            'currency' => 'BDT',
+            'status' => 'unpaid',
+        ]);
+        $orderId = DB::table('commerce_orders')->insertGetId([
+            'order_number' => 'UPAY-COM-' . $student->id,
+            'user_id' => $student->id,
+            'invoice_id' => $invoice->id,
+            'branch_id' => null,
+            'currency' => 'BDT',
+            'subtotal' => 650,
+            'discount_total' => 0,
+            'grand_total' => 650,
+            'status' => 'awaiting_payment',
+            'payment_status' => 'unpaid',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $orderItemId = DB::table('commerce_order_items')->insertGetId([
+            'order_id' => $orderId,
+            'item_type' => 'subscription',
+            'item_id' => 44,
+            'title_snapshot' => 'Manual subscription',
+            'quantity' => 1,
+            'unit_price' => 650,
+            'line_total' => 650,
+            'metadata' => json_encode(['entitlement' => ['duration_days' => 30]]),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $transaction = UniversalPaymentTransaction::query()->create([
+            'reference' => 'UPAY-COMMERCE-TX-' . $student->id,
+            'payer_name' => $student->name,
+            'payer_contact' => '01712345678',
+            'item_title' => 'Commerce invoice',
+            'gateway' => 'bank_cash',
+            'currency' => 'BDT',
+            'amount' => 650,
+            'external_trx_id' => 'BANK-UPAY-COMMERCE-' . $student->id,
+            'user_id' => $student->id,
+            'fee_invoice_id' => $invoice->id,
+            'status' => 'pending',
+        ]);
+
+        $admin = $this->createUserWithRole('admin');
+        $this->actingAs($admin)
+            ->post('/plugins/universal-payment/transactions/' . $transaction->id . '/status', [
+                'status' => 'verified',
+                'payment_reference' => 'BANK-UPAY-COMMERCE-VERIFIED-' . $student->id,
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('commerce_orders', [
+            'id' => $orderId,
+            'status' => 'completed',
+            'payment_status' => 'paid',
+        ]);
+        $this->assertDatabaseHas('fee_invoices', [
+            'id' => $invoice->id,
+            'paid_amount' => 650,
+            'status' => 'paid',
+        ]);
+        $this->assertDatabaseHas('payment_transactions', [
+            'invoice_id' => $invoice->id,
+            'gateway_slug' => 'offline',
+            'amount' => 650,
+            'status' => 'settled',
+        ]);
+        $this->assertDatabaseHas('commerce_entitlements', [
+            'user_id' => $student->id,
+            'order_item_id' => $orderItemId,
+            'entitlement_type' => 'subscription',
+            'status' => 'active',
+        ]);
+    }
+
     public function test_invoice_checkout_fails_closed_when_fee_plugin_storage_is_absent(): void
     {
         $this->markSystemInstalled();

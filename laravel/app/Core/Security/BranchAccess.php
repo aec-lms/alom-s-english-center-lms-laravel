@@ -8,6 +8,7 @@ use App\Core\Plugins\PluginManager;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 final class BranchAccess
@@ -37,6 +38,54 @@ final class BranchAccess
         );
 
         return (int) $actor->branch_id;
+    }
+
+    public function contextBranchId(?object $actor): ?int
+    {
+        if ($actor === null) {
+            return null;
+        }
+
+        if ($this->isBranchManager($actor)) {
+            return $this->assignedBranchId($actor);
+        }
+
+        $plugins = app(PluginManager::class);
+        $profiles = [
+            ['student-management', 'students'],
+            ['teacher-management', 'teachers'],
+            ['guardian-management', 'guardians'],
+            ['hr-staff-management', 'staff_profiles'],
+        ];
+
+        $branchId = null;
+        foreach ($profiles as [$plugin, $table]) {
+            if (!$plugins->isEnabled($plugin)
+                || !Schema::hasTable($table)
+                || !Schema::hasColumn($table, 'user_id')
+                || !Schema::hasColumn($table, 'branch_id')) {
+                continue;
+            }
+
+            $profileBranchId = DB::table($table)->where('user_id', $actor->id)->value('branch_id');
+            if ($profileBranchId !== null) {
+                $branchId = (int) $profileBranchId;
+                break;
+            }
+        }
+
+        if ($branchId === null && isset($actor->branch_id) && $actor->branch_id !== null) {
+            $branchId = (int) $actor->branch_id;
+        }
+
+        if ($branchId !== null
+            && $plugins->isEnabled('branch-management')
+            && Schema::hasTable('branches')
+            && !DB::table('branches')->where('id', $branchId)->where('is_active', true)->exists()) {
+            return null;
+        }
+
+        return $branchId;
     }
 
     public function scope(QueryBuilder|EloquentBuilder $query, ?object $actor, string $column = 'branch_id'): QueryBuilder|EloquentBuilder

@@ -19,7 +19,7 @@ The authenticated `POST /student-tracking/events` endpoint can accept only the e
 - Student's own history: `/student-tracking/mine`
 - Event endpoint: `POST /student-tracking/events`
 
-The admin report is branch-scoped for branch managers. Students can see only their own activity history.
+The admin report is branch-scoped using the Student Profile branch as the authoritative assignment, with the legacy user branch used only when no profile branch exists. Students can see only their own activity history.
 
 ## Integration from another plugin
 
@@ -38,6 +38,6 @@ if (app(\\App\\Core\\Plugins\\PluginManager::class)->isEnabled('student-tracking
 
 ## Privacy and security
 
-Only allow-listed event types and metadata fields are stored. The plugin does not capture keystrokes, screen contents, passwords, payment credentials, precise location, or browser fingerprinting. Event records contain account IDs, event type, optional subject identifiers, duration, allow-listed context and timestamp. The plugin does not create dependencies on student, course, attendance, exam, guardian, or branch tables.
+Only allow-listed event types and metadata fields are stored. The plugin does not capture keystrokes, screen contents, passwords, payment credentials, precise location, or browser fingerprinting. Event records contain account IDs, event type, optional subject identifiers, duration, allow-listed context and timestamp. The plugin has no hard dependency on sibling plugins. When Student Management, Course Management, Guardian Management, or Branch Management is enabled, it uses those tables as optional integrations with schema guards; it remains installable without them.
 
 Uninstalling the plugin preserves activity history. Data removal must be an explicit administrator-controlled purge, not an implicit uninstall side effect.

@@ -206,13 +206,14 @@ class StudentAssessmentController extends Controller
     {
         $courseIntegration = app(PluginManager::class)->isEnabled('course-management')
             && Schema::hasTable('enrollments');
+        $branchId = $this->assignedBranchId($student);
 
         return AssessmentSet::query()
             ->withCount('questions')
             ->where('status', 'published')
             ->where(fn ($q) => $q->whereNull('available_from')->orWhere('available_from', '<=', now()))
             ->where(fn ($q) => $q->whereNull('available_until')->orWhere('available_until', '>', now()))
-            ->where(fn ($q) => $q->whereNull('branch_id')->orWhere('branch_id', $student->branch_id))
+            ->where(fn ($q) => $q->whereNull('branch_id')->orWhere('branch_id', $branchId))
             ->where(function ($q) use ($student, $courseIntegration): void {
                 $q->whereNull('course_id');
                 if ($courseIntegration) {
@@ -237,7 +238,8 @@ class StudentAssessmentController extends Controller
             abort_if($lockedSet->available_until && now()->greaterThanOrEqualTo($lockedSet->available_until), 403, 'Assessment window has closed.');
 
             if ($lockedSet->branch_id !== null) {
-                abort_unless((int) $student->branch_id === (int) $lockedSet->branch_id, 403, 'Assessment belongs to another branch.');
+                $branchId = $this->assignedBranchId($student);
+                abort_unless($branchId !== null && $branchId === (int) $lockedSet->branch_id, 403, 'Assessment belongs to another branch.');
             }
             if ($lockedSet->course_id !== null) {
                 abort_unless(
@@ -355,4 +357,22 @@ class StudentAssessmentController extends Controller
             $locked->update(['auto_score'=>$auto,'manual_score'=>$manual,'final_score'=>$hasManual?null:$auto,'status'=>$hasManual?'pending_review':'submitted','submitted_at'=>now()]);
         });
     }
+
+    private function assignedBranchId(object $student): ?int
+    {
+        if (app(PluginManager::class)->isEnabled('student-management')
+            && Schema::hasTable('students')
+            && Schema::hasColumn('students', 'branch_id')) {
+            $profileBranchId = DB::table('students')->where('user_id', $student->id)->value('branch_id');
+            if ($profileBranchId !== null) {
+                return (int) $profileBranchId;
+            }
+        }
+
+        return Schema::hasColumn('users', 'branch_id') && $student->branch_id !== null
+            ? (int) $student->branch_id
+            : null;
+    }
+
+
 }

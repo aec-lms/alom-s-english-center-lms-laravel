@@ -80,7 +80,7 @@ class AppServiceProvider extends ServiceProvider
             $config = [];
             if (is_string($name) && $name !== '') $config['app.name'] = $name;
             if (is_string($website) && filter_var($website, FILTER_VALIDATE_URL)) $config['app.url'] = $website;
-            if (is_string($locale) && preg_match('/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/', $locale)) $config['app.locale'] = $locale;
+            if (is_string($locale) && preg_match('/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/', $locale)) { $config['app.locale'] = $locale; $config['lms.default_locale'] = $locale; }
             if (is_string($timezone) && (in_array($timezone, \DateTimeZone::listIdentifiers(\DateTimeZone::ALL_WITH_BC), true) || $timezone === 'UTC')) {
                 $config['app.timezone'] = $timezone;
                 date_default_timezone_set($timezone);

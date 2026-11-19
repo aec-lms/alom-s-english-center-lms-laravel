@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Plugins\Modules\StudentTracking\Services;
 
+use App\Core\Plugins\PluginManager;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use InvalidArgumentException;
 use Plugins\Modules\StudentTracking\Models\StudentActivityEvent;
@@ -31,6 +33,23 @@ class StudentActivityTracker
             throw new InvalidArgumentException('Student tracking storage is not installed.');
         }
 
+        $studentId = null;
+        $branchId = null;
+        if (app(PluginManager::class)->isEnabled('student-management')
+            && Schema::hasTable('students')
+            && Schema::hasColumn('students', 'user_id')
+            && Schema::hasColumn('students', 'branch_id')) {
+            $profile = DB::table('students')->where('user_id', $userId)->first(['id', 'branch_id']);
+            if ($profile) {
+                $studentId = (int) $profile->id;
+                $branchId = $profile->branch_id !== null ? (int) $profile->branch_id : null;
+            }
+        }
+        if ($branchId === null && Schema::hasColumn('users', 'branch_id')) {
+            $branchId = DB::table('users')->where('id', $userId)->value('branch_id');
+            $branchId = $branchId !== null ? (int) $branchId : null;
+        }
+
         // Explicitly exclude keystrokes, screen contents, precise location and credentials.
         $safeMetadata = [];
         foreach (['course_title', 'lesson_title', 'batch_name', 'result_percent', 'attendance_status', 'source'] as $key) {
@@ -42,6 +61,8 @@ class StudentActivityTracker
 
         return StudentActivityEvent::query()->create([
             'user_id' => $userId,
+            'student_id' => $studentId,
+            'branch_id' => $branchId,
             'actor_id' => $actorId ?? $userId,
             'event_type' => $eventType,
             'subject_type' => $subjectType ? mb_substr($subjectType, 0, 60) : null,

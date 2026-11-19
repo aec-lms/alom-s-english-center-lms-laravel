@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Plugins\Modules\NotificationCenter\Http\Controllers;
 
 use App\Core\Plugins\PluginManager;
+use App\Core\Security\BranchAccess;
 use App\Core\Security\AuditLogger;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use App\Http\Controllers\Controller;
@@ -33,8 +35,9 @@ class NotificationController extends Controller
         $userQuery = User::query()->select('id', 'name', 'email', 'phone')->orderBy('name');
 
         if ($actor && $actor->hasRole('branch_manager')) {
-            $notificationQuery->where('branch_id', $actor->branch_id);
-            $userQuery->where('branch_id', $actor->branch_id);
+            $branchUserIds = $this->branchUserIds((int) $actor->branch_id);
+            $notificationQuery->whereIn('user_id', $branchUserIds);
+            $userQuery->whereIn('id', $branchUserIds);
         }
 
         $notifications = $notificationQuery->paginate(25);
@@ -56,8 +59,9 @@ class NotificationController extends Controller
         ]);
 
         $recipient = User::query()->findOrFail((int) $validated['user_id']);
+        $recipientBranchId = app(BranchAccess::class)->contextBranchId($recipient);
         if ($actor && $actor->hasRole('branch_manager')) {
-            abort_unless((int) $recipient->branch_id === (int) $actor->branch_id, 404);
+            abort_unless($recipientBranchId !== null && $recipientBranchId === (int) $actor->branch_id, 404);
         }
 
         $status = match ($validated['channel']) {
@@ -70,7 +74,7 @@ class NotificationController extends Controller
 
         $record = LmsNotification::query()->create([
             'user_id' => $recipient->id,
-            'branch_id' => $recipient->branch_id,
+            'branch_id' => $recipientBranchId,
             'channel' => $validated['channel'],
             'title' => $validated['title'],
             'message' => $validated['message'],
@@ -110,6 +114,31 @@ class NotificationController extends Controller
         $notification->update(['read_at' => now()]);
 
         return back()->with('status', 'Notification marked as read.');
+    }
+
+    private function branchUserIds(int $branchId)
+    {
+        $users = User::query()->where('branch_id', $branchId);
+
+        if (app(PluginManager::class)->isEnabled('student-management')
+            && Schema::hasTable('students')
+            && Schema::hasColumn('students', 'user_id')
+            && Schema::hasColumn('students', 'branch_id')) {
+            $studentUserIds = DB::table('students')->whereNotNull('user_id')->whereNotNull('branch_id')->distinct()->pluck('user_id');
+            $branchStudentUserIds = DB::table('students')
+                ->where('branch_id', $branchId)
+                ->whereNotNull('user_id')
+                ->distinct()
+                ->pluck('user_id');
+
+            return $users->whereNotIn('id', $studentUserIds)
+                ->pluck('id')
+                ->merge($branchStudentUserIds)
+                ->unique()
+                ->values();
+        }
+
+        return $users->pluck('id');
     }
 
     private function emailDeliveryConfigured(User $recipient): bool

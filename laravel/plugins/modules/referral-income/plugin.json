@@ -1,7 +1,7 @@
 {
   "slug": "referral-income",
   "name": "Student & Teacher Referral Income",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "Alom's English Center",
   "category": "finance",
   "description": "Referral attribution, role-based commissions, commission ledger and payout requests for students and teachers.",

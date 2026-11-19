@@ -12,6 +12,7 @@ use Plugins\Modules\CertificateManagement\Models\CertificateRecord;
 use Plugins\Modules\LibraryManagement\Models\LibraryBook;
 use Plugins\Modules\LibraryManagement\Models\LibraryLoan;
 use Plugins\Modules\StudentManagement\Models\Student;
+use Plugins\Modules\ExamManagement\Models\Exam;
 use Tests\TestCase;
 
 class AdditionalModulesWorkflowTest extends TestCase
@@ -371,6 +372,95 @@ class AdditionalModulesWorkflowTest extends TestCase
         app(AiAssistantService::class)->queryAssistant($adminOnly, 'Show admin settings.');
     }
 
+
+    public function test_learn_and_earn_uses_student_profile_branch_for_exam_visibility_and_manual_access(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'student-management', 'exam-management', 'learn-and-earn']);
+
+        $branchA = DB::table('branches')->insertGetId([
+            'code' => 'LEARN-A-' . uniqid(),
+            'name' => 'Learn and Earn Branch A',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $branchB = DB::table('branches')->insertGetId([
+            'code' => 'LEARN-B-' . uniqid(),
+            'name' => 'Learn and Earn Branch B',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // The legacy account branch deliberately disagrees with the authoritative
+        // student profile branch. The profile must control all exam access.
+        $student = $this->createUserWithRole('student', (int) $branchB);
+        Student::query()->create([
+            'user_id' => $student->id,
+            'branch_id' => $branchA,
+            'student_code' => 'LEARN-' . strtoupper(uniqid()),
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+        ]);
+
+        $branchAExam = Exam::query()->create([
+            'branch_id' => $branchA,
+            'title' => 'Profile Branch A Exam',
+            'duration_minutes' => 30,
+            'pass_marks' => 10,
+            'learn_earn_type' => 'free',
+            'access_price' => 0,
+            'is_published' => true,
+        ]);
+        $branchBExam = Exam::query()->create([
+            'branch_id' => $branchB,
+            'title' => 'Account Branch B Exam',
+            'duration_minutes' => 30,
+            'pass_marks' => 10,
+            'learn_earn_type' => 'free',
+            'access_price' => 0,
+            'is_published' => true,
+        ]);
+        $paidExam = Exam::query()->create([
+            'branch_id' => $branchA,
+            'title' => 'Profile Branch Paid Exam',
+            'duration_minutes' => 30,
+            'pass_marks' => 10,
+            'learn_earn_type' => 'paid',
+            'access_price' => 250,
+            'is_published' => true,
+        ]);
+
+        $this->actingAs($student)->get('/learn-and-earn/exams')
+            ->assertOk()
+            ->assertSee('Profile Branch A Exam')
+            ->assertDontSee('Account Branch B Exam');
+        $this->actingAs($student)->get('/learn-and-earn/exams/' . $branchAExam->id)->assertOk();
+        $this->actingAs($student)->get('/learn-and-earn/exams/' . $branchBExam->id)->assertForbidden();
+        $this->actingAs($student)->get('/exams/' . $branchBExam->id . '/attempts')->assertForbidden();
+
+        $this->actingAs($student, 'sanctum')->getJson('/api/v1/my/exams')
+            ->assertOk()
+            ->assertJsonFragment(['title' => 'Profile Branch A Exam'])
+            ->assertJsonMissing(['title' => 'Account Branch B Exam']);
+
+        $manager = $this->createUserWithRole('branch_manager', (int) $branchA);
+        $permission = DB::table('permissions')->where('slug', 'learn_earn.manage')->first();
+        $this->assertNotNull($permission);
+        $manager->roles()->first()->permissions()->syncWithoutDetaching([$permission->id]);
+
+        $this->actingAs($manager)->post('/admin/learn-and-earn/exams/' . $paidExam->id . '/grant-access', [
+            'user_id' => $student->id,
+            'payment_reference' => 'BRANCH-A-VERIFIED-RECEIPT',
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('learn_earn_exam_access', [
+            'exam_id' => $paidExam->id,
+            'user_id' => $student->id,
+            'status' => 'granted',
+        ]);
+    }
 
     public function test_public_admission_rejects_inactive_branch_selection(): void
     {

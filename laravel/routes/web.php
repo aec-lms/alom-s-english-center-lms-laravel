@@ -23,6 +23,7 @@ use App\Http\Controllers\Admin\PluginCenterController;
 use App\Http\Controllers\Admin\UpdateCenterController;
 use App\Http\Controllers\Admin\UserRoleController;
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\LanguageController;
 use App\Http\Controllers\InstallerController;
 use App\Http\Controllers\PublicHomeController;
 use App\Http\Controllers\PortalController;
@@ -37,10 +38,13 @@ Route::prefix('install')->name('installer.')->middleware('not.installed')->group
 
 Route::middleware('installed')->group(function (): void {
     Route::get('/', [PublicHomeController::class, 'index'])->name('home');
+    Route::post('/language/{locale}', [LanguageController::class, 'switch'])
+        ->where('locale', 'en|bn')->middleware('throttle:30,1')->name('language.switch');
     Route::get('/courses', [PublicHomeController::class, 'courses'])->name('public.courses');
     Route::get('/course/{slug}', [PublicHomeController::class, 'courseShow'])->name('public.courses.show');
     Route::post('/courses/coupon-check', [PublicHomeController::class, 'checkCoupon'])->middleware('throttle:public-coupon-check')->name('public.courses.coupon');
     Route::get('/learn', [PublicHomeController::class, 'learn'])->name('public.learn');
+    Route::get('/learn/{slug}', [PublicHomeController::class, 'learnShow'])->name('public.learn.show');
     Route::get('/instructors', [PublicHomeController::class, 'instructors'])->name('public.instructors');
     Route::get('/teacher/{id}', [PublicHomeController::class, 'instructorShow'])->name('public.instructors.show');
     Route::get('/exams', [PublicHomeController::class, 'exams'])->name('public.exams');

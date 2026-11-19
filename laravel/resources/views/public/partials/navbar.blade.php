@@ -30,6 +30,22 @@
             'external' => false,
         ];
     }
+    if (auth()->check() && auth()->user()->hasRole('student')
+        && app(\App\Core\Plugins\PluginManager::class)->isEnabled('commerce-cart')
+        && Route::has('plugins.commerce_cart.index')) {
+        $navLinks[] = [
+            'label' => 'Learning Services',
+            'url' => route('plugins.commerce_cart.services'),
+            'active' => request()->routeIs('plugins.commerce_cart.services'),
+            'external' => false,
+        ];
+        $navLinks[] = [
+            'label' => 'Shopping Cart',
+            'url' => route('plugins.commerce_cart.index'),
+            'active' => request()->routeIs('plugins.commerce_cart.*'),
+            'external' => false,
+        ];
+    }
 @endphp
 
 <header data-header-style="{{ $headerLayout['style'] }}" class="w-full bg-white border-b border-slate-200/80 {{ $headerLayout['sticky'] ? 'sticky top-0' : 'relative' }} z-40 shadow-2xs">
@@ -54,7 +70,7 @@
             @endif
             <span class="leading-[1.06]">
                 <span class="block text-[13px] sm:text-sm font-black tracking-tight text-slate-900">{{ config('app.name') }}</span>
-                <span class="block text-[10px] sm:text-[11px] font-extrabold tracking-tight text-slate-800">{{ $siteIdentity['tagline'] ?? '' }}</span>
+                <span class="block text-[10px] sm:text-[11px] font-extrabold tracking-tight text-slate-800">{{ ($siteIdentity['tagline'] ?? null) === 'Learn English with confidence' ? __('Learn English with confidence') : ($siteIdentity['tagline'] ?? '') }}</span>
             </span>
         </a>
         @endif
@@ -66,7 +82,7 @@
                     href="{{ $item['url'] }}" @if (!empty($item['external'])) target="_blank" rel="noopener noreferrer" @endif
                     class="whitespace-nowrap shrink-0 py-1.5 transition-colors {{ $item['active'] ? 'text-[#0284C7] font-semibold' : 'hover:text-slate-900' }}"
                 >
-                    {{ $item['label'] }}
+                    {{ __($item['label']) }}
                 </a>
             @endforeach
         </nav>
@@ -74,20 +90,21 @@
 
         @if ($headerLayout['sections']['actions']['visible'])
         <div style="order:{{ $headerLayout['sections']['actions']['order'] }}" class="flex items-center gap-2.5 shrink-0">
+            @include('public.partials.language-switcher')
             @auth
                 <a href="{{ route('portal.dashboard') }}" class="px-6 py-2 rounded-full bg-[#EEF2FF] hover:bg-[#E0E7FF] border border-[#E0E7FF]/80 text-[#3B82F6] text-xs sm:text-[13px] font-semibold whitespace-nowrap transition-colors">
-                    My Dashboard
+                    {{ __('My Dashboard') }}
                 </a>
             @else
                 <a href="{{ route('login') }}" class="px-6 py-2 rounded-full bg-[#EEF2FF] hover:bg-[#E0E7FF] border border-[#E0E7FF]/80 text-[#3B82F6] text-xs sm:text-[13px] font-semibold whitespace-nowrap transition-colors">
-                    Login
+                    {{ __('Login') }}
                 </a>
             @endauth
 
             <button
                 type="button"
                 id="public-mobile-menu-toggle"
-                aria-label="Toggle navigation menu"
+                aria-label="{{ __('Toggle navigation menu') }}"
                 class="lg:hidden p-2 text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100 transition-colors"
             >
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -108,6 +125,7 @@
                 {{ $item['label'] }}
             </a>
         @endforeach
+        <div class="px-3 pt-3">@include('public.partials.language-switcher')</div>
     </div>
     @endif
 </header>
