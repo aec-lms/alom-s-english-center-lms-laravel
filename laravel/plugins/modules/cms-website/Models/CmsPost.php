@@ -27,6 +27,8 @@ class CmsPost extends Model
         'seo_description',
         'is_published',
         'publish_at',
+        'created_by',
+        'author_user_id',
         'editorial_status',
         'submitted_at',
         'submitted_by',
