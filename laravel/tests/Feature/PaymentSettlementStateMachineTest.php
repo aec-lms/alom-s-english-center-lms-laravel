@@ -348,6 +348,97 @@ class PaymentSettlementStateMachineTest extends TestCase
         $this->assertDatabaseCount('commerce_entitlements', 0);
     }
 
+    public function test_mixed_course_and_gift_orders_fail_closed_before_any_buyer_entitlement(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'commerce-cart']);
+
+        foreach (['gift_course', 'gift_voucher'] as $giftType) {
+            $buyer = $this->createUserWithRole('student');
+            $invoice = FeeInvoice::query()->create([
+                'invoice_number' => 'MIXED-GIFT-' . strtoupper(uniqid()),
+                'payer_name' => $buyer->name,
+                'payer_email' => $buyer->email,
+                'subtotal_amount' => 1000,
+                'discount_amount' => 0,
+                'net_amount' => 1000,
+                'paid_amount' => 0,
+                'currency' => 'BDT',
+                'status' => 'unpaid',
+            ]);
+            $orderId = DB::table('commerce_orders')->insertGetId([
+                'order_number' => 'MIXED-GIFT-ORDER-' . strtoupper(uniqid()),
+                'user_id' => $buyer->id,
+                'invoice_id' => $invoice->id,
+                'branch_id' => null,
+                'currency' => 'BDT',
+                'subtotal' => 1000,
+                'discount_total' => 0,
+                'grand_total' => 1000,
+                'status' => 'awaiting_payment',
+                'payment_status' => 'unpaid',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            foreach (['course', $giftType] as $position => $itemType) {
+                DB::table('commerce_order_items')->insert([
+                    'order_id' => $orderId,
+                    'item_type' => $itemType,
+                    'item_id' => 998000 + $buyer->id + $position,
+                    'title_snapshot' => $itemType === 'course' ? 'Ordinary course' : 'Recipient gift item',
+                    'quantity' => 1,
+                    'unit_price' => 500,
+                    'line_total' => 500,
+                    'metadata' => json_encode(['resource_id' => 998000 + $buyer->id + $position], JSON_THROW_ON_ERROR),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+
+            $transaction = PaymentTransaction::query()->create([
+                'transaction_ref' => 'MIXED-GIFT-TXN-' . strtoupper(uniqid()),
+                'invoice_id' => $invoice->id,
+                'gateway_slug' => 'offline',
+                'amount' => 1000,
+                'currency' => 'BDT',
+                'status' => 'initiated',
+                'metadata' => [],
+            ]);
+
+            try {
+                app(PaymentSettlementService::class)->settleTransaction(
+                    $transaction,
+                    'MIXED-GIFT-PROVIDER-' . $giftType,
+                );
+                $this->fail('A mixed buyer/gift order must not partially settle through generic buyer fulfillment.');
+            } catch (RuntimeException $exception) {
+                $this->assertSame(
+                    'Gift and voucher items require dedicated recipient fulfillment and cannot use buyer entitlements.',
+                    $exception->getMessage(),
+                );
+            }
+
+            $this->assertDatabaseHas('payment_transactions', [
+                'id' => $transaction->id,
+                'status' => 'initiated',
+                'external_reference' => null,
+            ]);
+            $this->assertDatabaseHas('fee_invoices', [
+                'id' => $invoice->id,
+                'paid_amount' => 0,
+                'status' => 'unpaid',
+            ]);
+            $this->assertDatabaseHas('commerce_orders', [
+                'id' => $orderId,
+                'status' => 'awaiting_payment',
+                'payment_status' => 'unpaid',
+            ]);
+        }
+
+        $this->assertDatabaseCount('commerce_entitlements', 0);
+    }
+
     public function test_late_verified_callback_cannot_resettle_a_refunded_transaction(): void
     {
         $this->markSystemInstalled();
