@@ -129,11 +129,25 @@ class FlashSaleController extends Controller
         return back()->with('status', 'Page settings saved.');
     }
 
-    public function publicIndex(): View
+    public function publicIndex(Request $request): View
     {
         $this->ensureCourseIntegration();
         $settings = DB::table('flash_sale_settings')->first();
         abort_unless($settings && $settings->page_enabled, 404);
+
+        $viewerBranchId = null;
+        if ($request->user()) {
+            if (app(PluginManager::class)->isEnabled('student-management')
+                && Schema::hasTable('students') && Schema::hasColumn('students', 'branch_id')) {
+                $profileBranchId = DB::table('students')
+                    ->where('user_id', $request->user()->getAuthIdentifier())
+                    ->value('branch_id');
+                if ($profileBranchId !== null) $viewerBranchId = (int) $profileBranchId;
+            }
+            if ($viewerBranchId === null && $request->user()->branch_id !== null) {
+                $viewerBranchId = (int) $request->user()->branch_id;
+            }
+        }
 
         $sales = DB::table('flash_sales')
             ->join('courses', 'courses.id', '=', 'flash_sales.course_id')
@@ -144,6 +158,10 @@ class FlashSaleController extends Controller
             ->where('courses.status', 'published')
             ->where(function ($scope): void {
                 $scope->whereNull('flash_sales.branch_id')->orWhereColumn('flash_sales.branch_id', 'courses.branch_id');
+            })
+            ->where(function ($scope) use ($viewerBranchId): void {
+                $scope->whereNull('flash_sales.branch_id');
+                if ($viewerBranchId !== null) $scope->orWhere('flash_sales.branch_id', $viewerBranchId);
             })
             ->select(
                 'flash_sales.*',
