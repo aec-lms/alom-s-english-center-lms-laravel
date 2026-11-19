@@ -87,6 +87,11 @@ final class PhoneticsSpeakingRecordingFeatureTest extends TestCase
             $recording = PhoneticSpeakingRecording::query()->findOrFail($recordingId);
             $privatePath = storage_path('app/private/phonetics-recordings/' . $recording->storage_path);
 
+            // Deliberately submit 120 seconds for a tiny fake upload: this
+            // value is explicitly reported metadata, never trusted media
+            // duration and never used by quota, grading or authorization.
+            $this->assertSame(120, $recording->reported_duration_seconds);
+
             $this->assertFileExists($privatePath);
             $this->assertFileDoesNotExist(public_path($recording->storage_path));
 
@@ -103,7 +108,8 @@ final class PhoneticsSpeakingRecordingFeatureTest extends TestCase
                 ->assertJsonPath(
                     'recordings.0.delete_url',
                     url('/courses/british-american-phonetics/phonetics-learning/recordings/' . $recordingId)
-                );
+                )
+                ->assertJsonPath('recordings.0.reported_duration_seconds', 120);
 
             // The second student is enrolled too, so this specifically verifies
             // recording ownership concealment rather than failing course access.
