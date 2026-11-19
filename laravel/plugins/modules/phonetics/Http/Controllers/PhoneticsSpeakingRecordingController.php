@@ -30,7 +30,7 @@ final class PhoneticsSpeakingRecordingController extends Controller
 
         $data = $request->validate([
             'entry_id' => ['required', 'integer', 'exists:alom_english_center_phonetic_entries,id'],
-            'recording' => ['required', 'file', 'mimes:webm,ogg,wav,mp3,m4a,mp4', 'max:10240'],
+            'recording' => ['required', 'file', 'mimetypes:audio/webm,video/webm,audio/ogg,application/ogg,audio/wav,audio/x-wav,audio/mpeg,audio/mp4,video/mp4', 'max:10240'],
             'duration_seconds' => ['required', 'integer', 'min:1', 'max:120'],
         ]);
 
