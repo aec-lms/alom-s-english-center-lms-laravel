@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\File;
 use Plugins\Modules\SliderBuilder\Models\HeroSlider;
 use Tests\TestCase;
 
@@ -245,6 +247,14 @@ class AdvancedSliderBuilderTest extends TestCase
             if (!@symlink($externalDirectory, $sliderDirectory)) {
                 $this->markTestSkipped('The test runner does not permit creating symlinks.');
             }
+
+            $this->actingAs($admin)->post('/admin/slider-builder', [
+                'key_name' => 'hero',
+                'title' => 'Blocked symlink upload',
+                'image' => UploadedFile::fake()->image('outside.jpg'),
+            ])->assertSessionHasErrors('image');
+
+            $this->assertSame(['keep.jpg'], array_values(array_diff(scandir($externalDirectory) ?: [], ['.', '..'])));
 
             $slide = HeroSlider::query()->create([
                 'key_name' => 'hero',
