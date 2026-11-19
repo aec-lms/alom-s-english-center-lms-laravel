@@ -118,6 +118,28 @@ final class CourseCatalog
         return (string) data_get($course, $map['id'] ?? 'id');
     }
 
+    /**
+     * Phonetics is a dedicated course feature, not a site-wide vocabulary area.
+     * Only the course explicitly configured in Phonetics settings may expose it.
+     */
+    public function assertDedicatedCourse(object $course): void
+    {
+        $map = config('phonetics.catalog.courses', []);
+        $slugColumn = $map['slug'] ?? null;
+        if (!is_string($slugColumn) || trim($slugColumn) === '' || !$this->hasColumn($map, $slugColumn)) {
+            throw new ServiceUnavailableHttpException(null, 'The dedicated Phonetics course slug mapping is required.');
+        }
+
+        $configuredSlug = trim((string) PhoneticSetting::current()->course_slug);
+        $courseSlug = trim((string) data_get($course, $slugColumn));
+        abort_unless(
+            $configuredSlug !== '' && $courseSlug !== ''
+                && hash_equals(strtolower($configuredSlug), strtolower($courseSlug)),
+            404,
+            'Phonetics learning is available only inside the designated Phonetics course.'
+        );
+    }
+
     public function courseCategoryId(object $course): ?string
     {
         $map = config('phonetics.catalog.courses', []);
