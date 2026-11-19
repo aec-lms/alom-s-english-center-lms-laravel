@@ -28,11 +28,7 @@ return new class extends Migration {
 
     public function down(): void
     {
-        if (!Schema::hasTable('cms_posts')) return;
-        Schema::table('cms_posts', function (Blueprint $table): void {
-            foreach (['editorial_status', 'created_by', 'author_user_id', 'submitted_at', 'submitted_by', 'reviewed_at', 'reviewed_by', 'review_note'] as $column) {
-                if (Schema::hasColumn('cms_posts', $column)) $table->dropColumn($column);
-            }
-        });
+        // Preserve editorial history and approvals during rollback; a destructive
+        // schema rollback would erase reviewer decisions and authorship metadata.
     }
 };
