@@ -41,6 +41,7 @@ final class AlBrandingLoaderProductionHardeningTest extends TestCase
         $view = $this->loaderView();
 
         $this->assertStringContainsString("document.addEventListener('click'", $view);
+        $this->assertStringNotContainsString('}, true);', $view, 'The click handler must run in the bubble phase so preventDefault() from SPA handlers is respected.');
         $this->assertStringContainsString('if (hideTimer !== null) window.clearTimeout(hideTimer)', $view);
         $this->assertStringContainsString('maxTimer = window.setTimeout(forceHide, maxDuration)', $view);
         $this->assertStringContainsString('destination.origin !== window.location.origin', $view);
