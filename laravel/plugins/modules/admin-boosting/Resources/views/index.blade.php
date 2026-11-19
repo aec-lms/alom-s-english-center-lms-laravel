@@ -34,14 +34,27 @@
                 <input name="campaign_name" required maxlength="180" value="{{ old('campaign_name') }}" placeholder="IELTS Spring Intake" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2">
             </label>
             <label class="font-semibold text-slate-700">Target type *
-                <select name="entity_type" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 bg-white">
-                    @foreach (['course' => 'Course', 'institution' => 'Institution', 'branch' => 'Branch', 'offer' => 'Special offer'] as $value => $label)
+                <select id="boost-create-target-type" data-boost-type data-target-id="boost-create-target-id" name="entity_type" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 bg-white">
+                    @foreach (['course' => 'Specific course', 'branch' => 'Specific branch', 'institution' => 'Whole institution', 'offer' => 'General offer'] as $value => $label)
                         <option value="{{ $value }}" @selected(old('entity_type', 'course') === $value)>{{ $label }}</option>
                     @endforeach
                 </select>
             </label>
-            <label class="font-semibold text-slate-700">Target record ID (optional)
-                <input type="number" min="1" name="entity_id" value="{{ old('entity_id') }}" placeholder="e.g. 42" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2">
+            <label class="font-semibold text-slate-700">Target record
+                <select id="boost-create-target-id" data-boost-id name="entity_id" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 bg-white">
+                    <option value="">No specific record / broad campaign</option>
+                    <optgroup label="Published courses">
+                        @foreach ($targetCourses as $targetCourse)
+                            <option data-entity-type="course" value="{{ $targetCourse->id }}" @selected((string) old('entity_id') === (string) $targetCourse->id)>{{ $targetCourse->title }} (#{{ $targetCourse->id }})</option>
+                        @endforeach
+                    </optgroup>
+                    <optgroup label="Active branches">
+                        @foreach ($targetBranches as $targetBranch)
+                            <option data-entity-type="branch" value="{{ $targetBranch->id }}" @selected((string) old('entity_id') === (string) $targetBranch->id)>{{ $targetBranch->name }}{{ $targetBranch->city ? ' — '.$targetBranch->city : '' }} (#{{ $targetBranch->id }})</option>
+                        @endforeach
+                    </optgroup>
+                </select>
+                <span class="mt-1 block font-normal text-slate-400">Course and branch targets are validated against active public records.</span>
             </label>
             <label class="font-semibold text-slate-700">Placement *
                 <select name="placement" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 bg-white">
@@ -91,8 +104,8 @@
                     <form method="POST" action="{{ route('plugins.boost.update', $item) }}" class="grid md:grid-cols-2 xl:grid-cols-3 gap-3 text-xs">
                         @csrf @method('PUT')
                         <label class="font-semibold text-slate-700">Campaign title<input name="campaign_name" required maxlength="180" value="{{ $item->campaign_name }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"></label>
-                        <label class="font-semibold text-slate-700">Target type<select name="entity_type" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 bg-white">@foreach (['course' => 'Course', 'institution' => 'Institution', 'branch' => 'Branch', 'offer' => 'Special offer'] as $value => $label)<option value="{{ $value }}" @selected($item->entity_type === $value)>{{ $label }}</option>@endforeach</select></label>
-                        <label class="font-semibold text-slate-700">Target record ID<input type="number" min="1" name="entity_id" value="{{ $item->entity_id }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"></label>
+                        <label class="font-semibold text-slate-700">Target type<select id="boost-target-type-{{ $item->id }}" data-boost-type data-target-id="boost-target-id-{{ $item->id }}" name="entity_type" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 bg-white">@foreach (['course' => 'Specific course', 'branch' => 'Specific branch', 'institution' => 'Whole institution', 'offer' => 'General offer'] as $value => $label)<option value="{{ $value }}" @selected($item->entity_type === $value)>{{ $label }}</option>@endforeach</select></label>
+                        <label class="font-semibold text-slate-700">Target record<select id="boost-target-id-{{ $item->id }}" data-boost-id name="entity_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 bg-white"><option value="">No specific record / broad campaign</option><optgroup label="Published courses">@foreach ($targetCourses as $targetCourse)<option data-entity-type="course" value="{{ $targetCourse->id }}" @selected($item->entity_type === 'course' && (int) $item->entity_id === (int) $targetCourse->id)>{{ $targetCourse->title }} (#{{ $targetCourse->id }})</option>@endforeach</optgroup><optgroup label="Active branches">@foreach ($targetBranches as $targetBranch)<option data-entity-type="branch" value="{{ $targetBranch->id }}" @selected($item->entity_type === 'branch' && (int) $item->entity_id === (int) $targetBranch->id)>{{ $targetBranch->name }}{{ $targetBranch->city ? ' — '.$targetBranch->city : '' }} (#{{ $targetBranch->id }})</option>@endforeach</optgroup></select></label>
                         <label class="font-semibold text-slate-700">Placement<select name="placement" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 bg-white"><option value="homepage_featured" @selected($item->placement === 'homepage_featured')>Homepage featured</option><option value="course_listing" @selected($item->placement === 'course_listing')>Course listing</option><option value="notice_banner" @selected($item->placement === 'notice_banner')>Notice banner</option></select></label>
                         <label class="font-semibold text-slate-700">Badge<input name="badge_text" maxlength="60" value="{{ $item->badge_text }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"></label>
                         <label class="font-semibold text-slate-700">CTA label<input name="cta_text" maxlength="60" value="{{ $item->cta_text }}" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"></label>
@@ -111,4 +124,31 @@
         @endforelse
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('[data-boost-type]').forEach(function (typeSelect) {
+        const targetSelect = document.getElementById(typeSelect.dataset.targetId);
+        if (!targetSelect) return;
+
+        const syncTargetOptions = function () {
+            const selectedType = typeSelect.value;
+            targetSelect.querySelectorAll('option[data-entity-type]').forEach(function (option) {
+                const available = option.dataset.entityType === selectedType;
+                option.hidden = !available;
+                option.disabled = !available;
+            });
+            targetSelect.disabled = !['course', 'branch'].includes(selectedType);
+            const selectedOption = targetSelect.selectedOptions[0];
+            if (selectedOption && selectedOption.dataset.entityType && selectedOption.dataset.entityType !== selectedType) {
+                targetSelect.value = '';
+            }
+        };
+
+        typeSelect.addEventListener('change', syncTargetOptions);
+        syncTargetOptions();
+    });
+});
+</script>
+
 @endsection
