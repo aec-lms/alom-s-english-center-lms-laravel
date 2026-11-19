@@ -181,23 +181,26 @@ class PaymentSettlementService
             }
 
 
-            if ($newPaid >= (float) $invoice->net_amount
-                && app(\App\Core\Plugins\PluginManager::class)->isEnabled('referral-income')
-                && Schema::hasTable('commerce_orders')) {
+            // Core order fulfillment must continue when the optional referral
+            // plugin is disabled; only commission recording is plugin-gated.
+            if ($newPaid >= (float) $invoice->net_amount && Schema::hasTable('commerce_orders')) {
                 $order = DB::table('commerce_orders')->where('invoice_id', $invoice->id)->lockForUpdate()->first();
                 if ($order) {
                     $orderUpdates = ['status' => 'completed', 'payment_status' => 'paid', 'updated_at' => now()];
                     if (Schema::hasColumn('commerce_orders', 'paid_at')) $orderUpdates['paid_at'] = now();
                     DB::table('commerce_orders')->where('id', $order->id)->update($orderUpdates);
-                    $buyer = User::query()->find((int) $order->user_id);
-                    if ($buyer) {
-                        app(ReferralIncomeService::class)->recordSettledPurchase(
-                            $buyer,
-                            'commerce_order',
-                            (string) $order->id,
-                            (float) $invoice->net_amount,
-                            (string) $invoice->currency
-                        );
+
+                    if (app(PluginManager::class)->isEnabled('referral-income')) {
+                        $buyer = User::query()->find((int) $order->user_id);
+                        if ($buyer) {
+                            app(ReferralIncomeService::class)->recordSettledPurchase(
+                                $buyer,
+                                'commerce_order',
+                                (string) $order->id,
+                                (float) $invoice->net_amount,
+                                (string) $invoice->currency
+                            );
+                        }
                     }
                 }
             }
