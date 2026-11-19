@@ -644,29 +644,63 @@ class CmsController extends Controller
     public function restoreRevision(Request $request, CmsPost $post, int $revisionId): RedirectResponse
     {
         abort_unless(Schema::hasTable('cms_post_revisions'), 404);
-        $revision = DB::table('cms_post_revisions')->where('id', $revisionId)->where('post_id', $post->id)->first();
-        abort_unless($revision, 404);
-        abort_if($post->is_published, 422, 'A live post cannot be overwritten by revision restore. Create a reviewed draft revision first.');
-        // Preserve the content being replaced before applying the historical snapshot.
-        $this->storePostRevision($post, $request);
-        $currentAssets = [$post->thumbnail_path, $post->pdf_path, $post->pdf_thumbnail];
-        $post->update([
-            'title' => $revision->title, 'slug' => $revision->slug, 'category' => $revision->category,
-            'category_id' => $revision->category_id, 'author' => $revision->author, 'excerpt' => $revision->excerpt,
-            'content' => $revision->content, 'thumbnail_path' => $revision->thumbnail_path, 'pdf_path' => $revision->pdf_path,
-            'pdf_thumbnail' => $revision->pdf_thumbnail, 'seo_title' => $revision->seo_title,
-            'seo_description' => $revision->seo_description, 'is_published' => false,
-            'publish_at' => $revision->publish_at ?? null, 'editorial_status' => 'draft',
-            'submitted_at' => null, 'submitted_by' => null, 'reviewed_at' => null,
-            'reviewed_by' => null, 'review_note' => null,
-        ]);
-        foreach ($currentAssets as $assetPath) {
-            if ($assetPath && !in_array($assetPath, [$revision->thumbnail_path, $revision->pdf_path, $revision->pdf_thumbnail], true)) {
+        $oldAssets = [];
+
+        DB::transaction(function () use ($request, $post, $revisionId, &$oldAssets): void {
+            $locked = CmsPost::query()->lockForUpdate()->findOrFail($post->id);
+            abort_if($locked->is_published, 422, 'Published content cannot be overwritten through revision restore.');
+
+            $revision = DB::table('cms_post_revisions')
+                ->where('id', $revisionId)
+                ->where('post_id', $locked->id)
+                ->lockForUpdate()
+                ->first();
+            abort_unless($revision, 404);
+
+            // Preserve the current version before restoring historical content.
+            $this->storePostRevision($locked, $request);
+            $oldAssets = [$locked->thumbnail_path, $locked->pdf_path, $locked->pdf_thumbnail];
+
+            $attributes = [
+                'title' => $revision->title,
+                'slug' => $revision->slug,
+                'category' => $revision->category,
+                'category_id' => $revision->category_id,
+                'author' => $revision->author,
+                'excerpt' => $revision->excerpt,
+                'content' => $revision->content,
+                'thumbnail_path' => $revision->thumbnail_path,
+                'pdf_path' => $revision->pdf_path,
+                'pdf_thumbnail' => $revision->pdf_thumbnail,
+                'seo_title' => $revision->seo_title,
+                'seo_description' => $revision->seo_description,
+                // A historical published snapshot is restored as an unpublished draft.
+                'is_published' => false,
+                'publish_at' => null,
+            ];
+
+            if (Schema::hasColumn('cms_posts', 'editorial_status')) {
+                $attributes += [
+                    'editorial_status' => 'draft',
+                    'submitted_at' => null,
+                    'submitted_by' => null,
+                    'reviewed_at' => null,
+                    'reviewed_by' => null,
+                    'review_note' => null,
+                ];
+            }
+
+            $locked->forceFill($attributes)->save();
+            $this->audit->log('cms.post_revision_restored', 'cms_post', (string) $locked->id, ['revision_id' => $revisionId]);
+        }, 3);
+
+        foreach ($oldAssets as $assetPath) {
+            if ($assetPath) {
                 $this->deleteUnusedUpload($assetPath, (int) $post->id);
             }
         }
-        $this->audit->log('cms.post_revision_restored', 'cms_post', (string) $post->id, ['revision_id' => $revisionId]);
-        return back()->with('status', "Revision restored for '{$post->title}'.");
+
+        return back()->with('status', "Revision restored for '{$post->fresh()->title}'.");
     }
 
     private function storePostRevision(CmsPost $post, Request $request): void
