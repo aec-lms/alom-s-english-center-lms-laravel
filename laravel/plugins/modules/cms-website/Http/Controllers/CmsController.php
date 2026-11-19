@@ -417,7 +417,7 @@ class CmsController extends Controller
             $this->audit->log('cms.editorial_post_updated', 'cms_post', (string) $locked->id, ['updated_by' => $user->id]);
         }, 3);
 
-        return redirect()->route('plugins.cms.editorial')->with('status', "Draft '{$post->title}' updated.");
+        return redirect()->route('plugins.cms.editorial')->with('status', "Draft '{$validated['title']}' updated.");
     }
 
     public function updatePostAssignments(Request $request, CmsPost $post): RedirectResponse
