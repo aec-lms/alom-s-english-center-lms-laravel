@@ -107,6 +107,7 @@ class AdvancedSliderBuilderTest extends TestCase
         HeroSlider::query()->create([
             'key_name' => 'hero',
             'title' => 'External campaign',
+            'image_path' => '/assets/images/external-campaign.webp',
             'cta_url' => 'https://example.com/campaign',
             'open_new_tab' => true,
             'is_active' => true,
