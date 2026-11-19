@@ -356,7 +356,7 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
         $service = app(ReferralIncomeService::class);
         $service->applyCode($buyer, $service->createOrGetCode($referrer));
 
-        $orderInvoice = \\Plugins\\Modules\\FeesManagement\\Models\\FeeInvoice::query()->create([
+        $orderInvoice = \Plugins\Modules\FeesManagement\Models\FeeInvoice::query()->create([
             'invoice_number' => 'REF-ORDER-' . strtoupper(bin2hex(random_bytes(4))),
             'payer_name' => $buyer->name,
             'payer_email' => $buyer->email,
@@ -369,7 +369,7 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
             'status' => 'paid',
             'due_date' => now()->toDateString(),
         ]);
-        $otherInvoice = \\Plugins\\Modules\\FeesManagement\\Models\\FeeInvoice::query()->create([
+        $otherInvoice = \Plugins\Modules\FeesManagement\Models\FeeInvoice::query()->create([
             'invoice_number' => 'REF-OTHER-' . strtoupper(bin2hex(random_bytes(4))),
             'payer_name' => $buyer->name,
             'payer_email' => $buyer->email,
