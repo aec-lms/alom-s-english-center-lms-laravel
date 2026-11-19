@@ -118,7 +118,8 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
    'animation_style'=>'shimmer-sweep','background_color'=>'#112233','accent_color'=>'#445566',
    'text_color'=>'#FFFFFF','backdrop_blur'=>1,'show_progress_label'=>1,'respect_reduced_motion'=>1,
    'min_duration_ms'=>500,'fade_duration_ms'=>250,'max_timeout_ms'=>5000,
-   'trigger_mode'=>'every-load','excluded_paths_text'=>"admin/*\napi/*",
+   'trigger_mode'=>'every-load','excluded_paths_text'=>"admin/*
+api/*",
   ])->assertRedirect('/admin/al-branding-loader')->assertSessionHas('status');
   $this->assertDatabaseHas('alom_english_center_loader_settings',['animation_style'=>'shimmer-sweep','background_color'=>'#112233','enabled'=>true]);
   $this->assertDatabaseHas('audit_logs',['action'=>'al_branding_loader.settings.updated','entity_id'=>'al-branding-loader']);
@@ -170,7 +171,8 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
   PhoneticSetting::query()->firstOrCreate(['id'=>1],['enabled'=>true,'course_slug'=>'vocabulary-starter','course_title'=>'Vocabulary Starter']);
   PhoneticSetting::query()->whereKey(1)->update(['course_slug'=>'vocabulary-starter']);
   \Illuminate\Support\Facades\Cache::forget('phonetics.settings');
-  \Illuminate\Support\Facades\Cache::forget('phonetics.settings');\n  $this->actingAs($student)->get('/courses/vocabulary-starter/phonetics-learning?lesson='.$lessonId)->assertOk()->assertSee('aec-vocabulary-test')->assertSee('Lesson One Vocabulary Exam');
+  \Illuminate\Support\Facades\Cache::forget('phonetics.settings');
+  $this->actingAs($student)->get('/courses/vocabulary-starter/phonetics-learning?lesson='.$lessonId)->assertOk()->assertSee('aec-vocabulary-test')->assertSee('Lesson One Vocabulary Exam');
   $this->actingAs($student)->get('/courses/vocabulary-starter/phonetics-learning/exams/lesson-one-vocabulary-exam?lesson='.$lessonId)->assertOk();
   $attempt=DB::table('phonetic_exam_attempts')->where('exam_id',$exam->id)->where('user_id',$student->id)->first();
   $question=DB::table('phonetic_exam_questions')->where('exam_id',$exam->id)->first();
