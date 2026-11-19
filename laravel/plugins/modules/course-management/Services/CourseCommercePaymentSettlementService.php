@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Plugins\Modules\CourseManagement\Services;
 
 use App\Core\Plugins\PluginManager;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\MarketingManagement\Services\CourseCouponService;
+use Plugins\Modules\ReferralIncome\Services\ReferralIncomeService;
 use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
 use Plugins\Modules\UniversalPayment\Services\ExternalTransactionReferenceRegistry;
 use RuntimeException;
@@ -167,6 +169,19 @@ class CourseCommercePaymentSettlementService
             'status' => 'completed',
             'updated_at' => now(),
         ]);
+
+        if ($this->plugins->isEnabled('referral-income')) {
+            $buyer = User::query()->find((int) $transaction->user_id);
+            if ($buyer) {
+                app(ReferralIncomeService::class)->recordSettledPurchase(
+                    $buyer,
+                    'course_cart_order',
+                    (string) $orderId,
+                    (float) $order->net_amount,
+                    (string) $order->currency
+                );
+            }
+        }
     }
 
     private function settleGift(UniversalPaymentTransaction $transaction, array $notes): void
