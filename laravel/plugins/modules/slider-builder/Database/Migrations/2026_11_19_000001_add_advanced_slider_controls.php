@@ -36,14 +36,7 @@ return new class extends Migration {
 
     public function down(): void
     {
-        if (!Schema::hasTable('cms_sliders')) return;
-        if (Schema::hasIndex('cms_sliders', 'cms_sliders_group_active_sort_idx')) {
-            Schema::table('cms_sliders', fn (Blueprint $table) => $table->dropIndex('cms_sliders_group_active_sort_idx'));
-        }
-        $drop = array_values(array_filter([
-            'mobile_image_path', 'button_label', 'text_alignment', 'transition',
-            'overlay_opacity', 'duration_ms', 'starts_at', 'ends_at', 'open_new_tab',
-        ], fn (string $column): bool => Schema::hasColumn('cms_sliders', $column)));
-        if ($drop !== []) Schema::table('cms_sliders', fn (Blueprint $table) => $table->dropColumn($drop));
+        // Keep slide configuration when rolling back the plugin migration. Removing
+        // these columns would silently erase mobile artwork and campaign schedules.
     }
 };
