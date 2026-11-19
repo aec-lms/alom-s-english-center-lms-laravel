@@ -6,6 +6,7 @@
         <div>
             <h1 class="text-2xl font-extrabold text-slate-900">Admission Management</h1>
             <p class="text-sm text-slate-500 mt-1">Manage applications from submission through screening, interview, decision and intake.</p>
+            <a href="{{ route('plugins.admissions.track') }}" target="_blank" rel="noopener" class="mt-2 inline-flex text-xs font-semibold text-sky-700 hover:underline">Open applicant tracking page</a>
         </div>
         <div class="flex flex-wrap gap-2 text-xs">
             @foreach (['pending' => 'Pending', 'screening' => 'Screening', 'shortlisted' => 'Shortlisted', 'waitlisted' => 'Waitlisted', 'approved' => 'Approved', 'rejected' => 'Rejected'] as $key => $label)
