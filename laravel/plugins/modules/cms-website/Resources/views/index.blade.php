@@ -42,6 +42,7 @@
                     <input name="category" value="IELTS Preparation" placeholder="Category *" class="w-full rounded-lg border border-slate-300 px-3 py-2">
                 </div>
                 <input name="author" value="Alom's English Center" placeholder="Author Name" class="rounded-lg border border-slate-300 px-3 py-2">
+                <input type="datetime-local" name="publish_at" aria-label="Schedule publication (optional)" class="rounded-lg border border-slate-300 px-3 py-2">
                 <input name="seo_title" placeholder="SEO Meta Title (optional)" class="rounded-lg border border-slate-300 px-3 py-2">
                 <div>
                     <label class="block font-semibold text-slate-600 mb-1">Post Cover Thumbnail</label>
@@ -81,7 +82,7 @@
                             <div>
                                 <div class="font-bold text-sm text-slate-900">{{ $post->title }}</div>
                                 <div class="text-slate-500 font-mono">
-                                    /learn#{{ $post->slug }} &middot; {{ $post->category }} &middot; {{ $post->is_published ? 'Published' : 'Draft' }}
+                                    /learn#{{ $post->slug }} &middot; {{ $post->category }} &middot; {{ $post->is_published ? 'Published' : ($post->publish_at ? 'Scheduled · '.$post->publish_at->format('d M Y H:i') : 'Draft') }}
                                     @if ($post->pdf_path) &middot; <span class="text-emerald-700 font-bold">PDF Attached</span> @endif
                                 </div>
                             </div>
@@ -123,6 +124,7 @@
                             <input type="file" name="thumbnail" accept="image/*" class="rounded-lg border border-slate-300 px-2 py-1.5 bg-slate-50">
                             <input type="file" name="pdf_file" accept="application/pdf,.pdf" class="rounded-lg border border-slate-300 px-2 py-1.5 bg-slate-50">
                             <input type="file" name="pdf_thumbnail" accept="image/*" class="rounded-lg border border-slate-300 px-2 py-1.5 bg-slate-50">
+                            <input type="datetime-local" name="publish_at" value="{{ $post->publish_at ? $post->publish_at->format("Y-m-d\\TH:i") : "" }}" class="rounded-lg border border-slate-300 px-3 py-2">
                             <input name="author" value="{{ $post->author }}" class="rounded-lg border border-slate-300 px-3 py-2">
                             <input name="excerpt" value="{{ $post->excerpt }}" class="sm:col-span-2 rounded-lg border border-slate-300 px-3 py-2">
                             <textarea name="content" rows="3" required class="sm:col-span-2 rounded-lg border border-slate-300 px-3 py-2">{{ $post->content }}</textarea>
