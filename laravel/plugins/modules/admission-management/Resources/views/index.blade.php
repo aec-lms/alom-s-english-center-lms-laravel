@@ -88,7 +88,7 @@
                                 <select name="status" required class="rounded-lg border border-slate-300 px-3 py-2 text-xs">
                                     <option value="">Move to…</option>
                                     @foreach ($statuses as $status)
-                                        @if (in_array($status, ['screening', 'shortlisted', 'approved', 'rejected', 'waitlisted'], true))
+                                        @if (in_array($status, $transitions[$app->status] ?? [], true))
                                             <option value="{{ $status }}">{{ ucfirst($status) }}</option>
                                         @endif
                                     @endforeach
