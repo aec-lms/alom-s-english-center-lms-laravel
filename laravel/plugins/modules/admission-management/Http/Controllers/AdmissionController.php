@@ -264,7 +264,7 @@ class AdmissionController extends Controller
                 'size_bytes' => (int) $file->getSize(),
                 'sha256' => hash_file('sha256', $file->getRealPath()),
             ]);
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             Storage::disk('local')->delete($storedPath);
             throw $exception;
         }
