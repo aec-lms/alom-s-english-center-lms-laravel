@@ -72,6 +72,7 @@ class AdmissionController extends Controller
             'branches' => $this->branchIntegrationAvailable()
                 ? DB::table('branches')->where('is_active', true)->when($actor && $actor->hasRole('branch_manager'), fn ($q) => $q->where('id', $actor->branch_id))->orderBy('name')->get()
                 : collect(),
+            'studentConversionAvailable' => app(PluginManager::class)->isEnabled('student-management') && Schema::hasTable('students'),
             'staff' => \App\Models\User::query()
                 ->where('is_active', true)
                 ->whereHas('roles', fn ($q) => $q->whereIn('slug', ['admin', 'branch_manager', 'teacher']))
