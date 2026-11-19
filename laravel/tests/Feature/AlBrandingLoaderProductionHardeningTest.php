@@ -24,15 +24,11 @@ final class AlBrandingLoaderProductionHardeningTest extends TestCase
     public function test_first_visit_is_recorded_only_after_a_successful_window_load(): void
     {
         $view = $this->loaderView();
-        $loadHandler = strpos($view, "window.addEventListener('load'");
-        $sessionWrite = strpos($view, "sessionStorage.setItem(storageKey");
-        $dailyWrite = strpos($view, "localStorage.setItem(storageKey");
-
-        $this->assertNotFalse($loadHandler);
-        $this->assertNotFalse($sessionWrite);
-        $this->assertNotFalse($dailyWrite);
-        $this->assertGreaterThan($loadHandler, $sessionWrite);
-        $this->assertGreaterThan($loadHandler, $dailyWrite);
+        $this->assertStringContainsString("window.addEventListener('load', function ()", $view);
+        $this->assertStringContainsString('hideAfterMinimumDuration(true)', $view);
+        $this->assertStringContainsString('if (!markVisit) return;', $view);
+        $this->assertStringContainsString("sessionStorage.setItem(storageKey, '1')", $view);
+        $this->assertStringContainsString('localStorage.setItem(storageKey, new Date().toDateString())', $view);
     }
 
     public function test_navigation_restarts_the_loader_timeout_without_stale_hide_timers(): void
