@@ -483,4 +483,4 @@ class CmsWebsiteSafetyTest extends TestCase
         ]);
     }
 
-}\n
+}
