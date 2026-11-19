@@ -170,6 +170,9 @@ class ReferralIncomeService
             if (!$order || empty($order->invoice_id)) {
                 throw new RuntimeException('Referral reversal order does not belong to this buyer or has no invoice.');
             }
+            if (strtoupper(trim((string) $order->currency)) !== strtoupper(trim($currency))) {
+                throw new RuntimeException('Referral reversal currency does not match the commerce order currency.');
+            }
 
             $refundTransaction = DB::table('payment_transactions')
                 ->where('id', (int) $refundRecord->payment_transaction_id)
