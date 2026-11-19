@@ -183,8 +183,16 @@ class SliderBuilderController extends Controller
             return;
         }
         $file = public_path(ltrim($path, '/'));
-        if (is_file($file) && !is_link($file)) {
-            @unlink($file);
+        $root = realpath(public_path('uploads/sliders'));
+        $realFile = realpath($file);
+
+        // The final file may not itself be a symlink while its parent directory
+        // is. Resolve and compare both paths before deleting any managed media.
+        if (!$root || !$realFile || is_link($file) || $realFile !== $file
+            || !str_starts_with($realFile, $root . DIRECTORY_SEPARATOR) || !is_file($file)) {
+            return;
         }
+
+        @unlink($file);
     }
 }
