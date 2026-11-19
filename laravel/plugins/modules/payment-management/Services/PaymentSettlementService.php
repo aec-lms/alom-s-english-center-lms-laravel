@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
+use App\Core\Plugins\PluginManager;
 use App\Models\User;
 use Plugins\Modules\ReferralIncome\Services\ReferralIncomeService;
 use RuntimeException;
@@ -39,6 +40,9 @@ class PaymentSettlementService
             if ($lockedTx->status === 'refunded') {
                 throw new RuntimeException('A refunded transaction cannot be settled again.');
             }
+            if ($lockedTx->status !== 'initiated') {
+                throw new RuntimeException('Only initiated payment transactions can be settled.');
+            }
 
             $invoice = FeeInvoice::query()->where('id', $lockedTx->invoice_id)->lockForUpdate()->firstOrFail();
             $newPaid = round((float) $invoice->paid_amount + (float) $lockedTx->amount, 2);
@@ -60,12 +64,120 @@ class PaymentSettlementService
 
             if ($newPaid >= (float) $invoice->net_amount
                 && Schema::hasTable('enrollments')
+                && Schema::hasColumn('enrollments', 'invoice_id')
+                && Schema::hasColumn('enrollments', 'branch_id')
+                && Schema::hasTable('courses')
+                && Schema::hasColumn('courses', 'branch_id')) {
+                $pendingEnrollments = DB::table('enrollments')->where('invoice_id', $invoice->id)
+                    ->where('status', 'pending')->lockForUpdate()->get();
+                foreach ($pendingEnrollments as $pendingEnrollment) {
+                    $courseBranchId = DB::table('courses')->where('id', $pendingEnrollment->course_id)->value('branch_id');
+                    $enrollmentBranchId = $pendingEnrollment->branch_id !== null ? (int) $pendingEnrollment->branch_id : null;
+                    $buyer = User::query()->find((int) $pendingEnrollment->user_id);
+                    if (!$buyer) {
+                        throw new RuntimeException('Pending course enrollment student account no longer exists.');
+                    }
+                    $assignedBranchId = $this->assignedBranchId($buyer);
+                    $invoiceBranchId = $invoice->branch_id !== null ? (int) $invoice->branch_id : null;
+                    if ($invoiceBranchId !== null && $assignedBranchId !== $invoiceBranchId) {
+                        throw new RuntimeException('Student branch assignment changed after invoice creation; manual payment reconciliation is required.');
+                    }
+                    if ($courseBranchId !== null && ($enrollmentBranchId !== (int) $courseBranchId
+                        || $assignedBranchId !== (int) $courseBranchId)) {
+                        throw new RuntimeException('Pending course enrollment branch does not match the current student and source course.');
+                    }
+                    if ($enrollmentBranchId !== null && $assignedBranchId !== $enrollmentBranchId) {
+                        throw new RuntimeException('Student branch assignment changed after invoice creation; manual payment reconciliation is required.');
+                    }
+                }
+            }
+
+            if ($newPaid >= (float) $invoice->net_amount
+                && Schema::hasTable('enrollments')
                 && Schema::hasColumn('enrollments', 'invoice_id')) {
                 DB::table('enrollments')
                     ->where('invoice_id', $invoice->id)
                     ->where('status', 'pending')
                     ->update(['status' => 'active', 'updated_at' => now()]);
             }
+
+            if ($newPaid >= (float) $invoice->net_amount && Schema::hasTable('commerce_orders')) {
+                // Refuse to grant commerce access if the order, invoice, pending
+                // enrollment, and source course disagree about branch ownership.
+                $preflightOrders = DB::table('commerce_orders')->where('invoice_id', $invoice->id)->lockForUpdate()->get();
+                foreach ($preflightOrders as $preflightOrder) {
+                    if (Schema::hasColumn('commerce_orders', 'branch_id') && Schema::hasColumn('fee_invoices', 'branch_id')) {
+                        $orderBranchId = $preflightOrder->branch_id !== null ? (int) $preflightOrder->branch_id : null;
+                        $invoiceBranchId = $invoice->branch_id !== null ? (int) $invoice->branch_id : null;
+                        if ($orderBranchId !== $invoiceBranchId) {
+                            throw new RuntimeException('Commerce order and invoice branch ownership do not match.');
+                        }
+
+                        $buyer = User::query()->find((int) $preflightOrder->user_id);
+                        if (!$buyer) {
+                            throw new RuntimeException('Commerce order student account no longer exists.');
+                        }
+
+                        $assignedBranchId = $this->assignedBranchId($buyer);
+                        if ($assignedBranchId !== $orderBranchId) {
+                            throw new RuntimeException('Student branch assignment changed after checkout; manual payment reconciliation is required.');
+                        }
+                    }
+                }
+                $orders = DB::table('commerce_orders')->where('invoice_id', $invoice->id)->lockForUpdate()->get();
+                foreach ($orders as $order) {
+                    if ($order->payment_status === 'paid') continue;
+                    DB::table('commerce_orders')->where('id', $order->id)->update([
+                        'status' => 'paid', 'payment_status' => 'paid', 'paid_at' => now(), 'updated_at' => now(),
+                    ]);
+                    if (!Schema::hasTable('commerce_order_items') || !Schema::hasTable('commerce_entitlements')) continue;
+                    $orderItems = DB::table('commerce_order_items')->where('order_id', $order->id)->get();
+                    foreach ($orderItems as $orderItem) {
+                        $itemDetails = json_decode((string) ($orderItem->metadata ?? '{}'), true) ?: [];
+                        $entitlementDetails = $itemDetails['entitlement'] ?? $itemDetails;
+                        $durationDays = isset($entitlementDetails['duration_days'])
+                            ? max(1, min(3650, (int) $entitlementDetails['duration_days']))
+                            : ($orderItem->item_type === 'subscription' ? 30 : null);
+                        DB::table('commerce_entitlements')->insertOrIgnore([
+                            'user_id' => $order->user_id,
+                            'order_item_id' => $orderItem->id,
+                            'entitlement_type' => $orderItem->item_type,
+                            'resource_id' => $itemDetails['resource_id'] ?? $orderItem->item_id,
+                            'details' => $orderItem->metadata,
+                            'status' => 'active',
+                            'starts_at' => now(),
+                            'expires_at' => $durationDays ? now()->addDays($durationDays) : null,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ]);
+                        if ($orderItem->item_type === 'mock_test' && $orderItem->item_id
+                            && Schema::hasTable('learn_earn_exam_access')) {
+                            DB::table('learn_earn_exam_access')->updateOrInsert(
+                                ['exam_id' => $orderItem->item_id, 'user_id' => $order->user_id],
+                                [
+                                    'status' => 'granted',
+                                    'payment_reference' => $order->order_number,
+                                    'granted_at' => now(),
+                                    'created_at' => now(),
+                                    'updated_at' => now(),
+                                ]
+                            );
+                        }
+                        if ($orderItem->item_type === 'ebook' && $orderItem->item_id
+                            && Schema::hasTable('storefront_item_access')) {
+                            DB::table('storefront_item_access')->insertOrIgnore([
+                                'storefront_item_id' => $orderItem->item_id,
+                                'user_id' => $order->user_id,
+                                'payment_transaction_id' => $lockedTx->id,
+                                'granted_at' => now(),
+                                'created_at' => now(),
+                                'updated_at' => now(),
+                            ]);
+                        }
+                    }
+                }
+            }
+
 
             if ($newPaid >= (float) $invoice->net_amount
                 && app(\App\Core\Plugins\PluginManager::class)->isEnabled('referral-income')
@@ -96,5 +208,21 @@ class PaymentSettlementService
 
             return $lockedTx->fresh();
         });
+    }
+
+    private function assignedBranchId(User $user): ?int
+    {
+        if (app(PluginManager::class)->isEnabled('student-management')
+            && Schema::hasTable('students')
+            && Schema::hasColumn('students', 'branch_id')) {
+            $profileBranchId = DB::table('students')->where('user_id', $user->id)->value('branch_id');
+            if ($profileBranchId !== null) {
+                return (int) $profileBranchId;
+            }
+        }
+
+        return Schema::hasColumn('users', 'branch_id') && $user->branch_id !== null
+            ? (int) $user->branch_id
+            : null;
     }
 }

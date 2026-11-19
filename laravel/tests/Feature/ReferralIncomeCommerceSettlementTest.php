@@ -101,12 +101,15 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
 
         $paidOrderCommission = $service->recordSettledPurchase($buyer, 'commerce_order', 'AEC-ORDER-PAID-1002', 1000.00, 'BDT');
         DB::table('referral_commissions')->where('id', $paidOrderCommission)->update(['status' => 'paid', 'paid_at' => now()]);
+        $paidPaymentId = DB::table('payment_transactions')->insertGetId([
+            'transaction_ref' => 'PAID-REFUND-TEST-' . strtoupper(bin2hex(random_bytes(4))),
+            'invoice_id' => null, 'branch_id' => null, 'gateway_slug' => 'offline',
+            'amount' => 1000.00, 'currency' => 'BDT', 'status' => 'settled',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
         $paidRefundId = DB::table('payment_refunds')->insertGetId([
-            'payment_transaction_id' => $paymentId,
-            'amount' => 1000.00,
-            'reason' => 'Refund after referral payout',
-            'created_at' => now(),
-            'updated_at' => now(),
+            'payment_transaction_id' => $paidPaymentId, 'amount' => 1000.00,
+            'reason' => 'Refund after referral payout', 'created_at' => now(), 'updated_at' => now(),
         ]);
         $service->reverseSettledPurchase($buyer, 'commerce_order', 'AEC-ORDER-PAID-1002', $paidRefundId, 1000.00, 'BDT');
         $this->assertDatabaseHas('referral_commissions', [

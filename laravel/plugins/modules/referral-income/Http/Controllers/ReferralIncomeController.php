@@ -83,7 +83,12 @@ class ReferralIncomeController extends Controller
             return $payout;
         });
         $rules = DB::table('referral_income_rules')->orderBy('referrer_type')->get();
-        return view('referral-income::admin', compact('commissions', 'payouts', 'rules'));
+        $recoveries = DB::table('referral_commission_reversals')
+            ->join('referral_commissions', 'referral_commissions.id', '=', 'referral_commission_reversals.commission_id')
+            ->join('users', 'users.id', '=', 'referral_commissions.referrer_user_id')
+            ->select('referral_commission_reversals.*', 'users.name as referrer_name', 'referral_commissions.source_id')
+            ->latest('referral_commission_reversals.id')->paginate(30, ['*'], 'recoveries_page');
+        return view('referral-income::admin', compact('commissions', 'payouts', 'rules', 'recoveries'));
     }
 
     public function updateRules(Request $request): RedirectResponse
@@ -111,6 +116,29 @@ class ReferralIncomeController extends Controller
             'status' => $data['status'], 'reviewed_by' => $request->user()->id, 'reviewed_at' => now(), 'updated_at' => now(),
         ]);
         return back()->with('status', 'Commission review saved.');
+    }
+
+
+    public function reviewRecovery(Request $request, int $reversal): RedirectResponse
+    {
+        $data = $request->validate([
+            'status' => ['required', 'in:recovered,waived'],
+            'admin_note' => ['nullable', 'string', 'max:1000'],
+        ]);
+        DB::transaction(function () use ($request, $reversal, $data): void {
+            $record = DB::table('referral_commission_reversals')->where('id', $reversal)->lockForUpdate()->first();
+            abort_unless($record && $record->status === 'recovery_due', 422, 'Only outstanding recovery entries can be reviewed.');
+            DB::table('referral_commission_reversals')->where('id', $reversal)->update([
+                'status' => $data['status'],
+                'metadata' => json_encode([
+                    'admin_note' => $data['admin_note'] ?? null,
+                    'reviewed_by' => $request->user()->id,
+                    'reviewed_at' => now()->toISOString(),
+                ]),
+                'updated_at' => now(),
+            ]);
+        });
+        return back()->with('status', 'Referral recovery entry reviewed.');
     }
 
     public function reviewPayout(Request $request, int $payout): RedirectResponse

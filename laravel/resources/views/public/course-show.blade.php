@@ -109,25 +109,21 @@
 
                     @auth
                         @if (auth()->user()->hasRole('student') && Route::has('plugins.enrollments.store'))
-                            @if (Route::has('course-commerce.cart.add'))
-                                <form method="POST" action="{{ route('course-commerce.cart.add', $course->id) }}" class="mb-3">
+                            @if ($price > 0 && Route::has('plugins.commerce_cart.add'))
+                                <form method="POST" action="{{ route('plugins.commerce_cart.add') }}">
                                     @csrf
-                                    <button type="submit" class="w-full rounded-xl border border-blue-200 bg-blue-50 px-5 py-3 text-sm font-extrabold text-blue-800 hover:bg-blue-100 transition-colors">
-                                        Add to Course Cart
+                                    <input type="hidden" name="item_type" value="course">
+                                    <input type="hidden" name="item_id" value="{{ $course->id }}">
+                                    <button type="submit" class="w-full py-3.5 px-5 rounded-xl bg-[#0057FF] hover:bg-[#0046CC] text-white text-sm font-bold flex items-center justify-center shadow-sm transition-colors">Add Course to Cart</button>
+                                </form>
+                            @else
+                                <form method="POST" action="{{ route('plugins.enrollments.store', $course) }}">
+                                    @csrf
+                                    <button type="submit" class="w-full py-3.5 px-5 rounded-xl bg-[#0057FF] hover:bg-[#0046CC] text-white text-sm font-bold flex items-center justify-center shadow-sm transition-colors">
+                                        {{ $price > 0 ? 'Request Enrollment & Create Invoice' : 'Enroll in Free Course' }}
                                     </button>
                                 </form>
                             @endif
-                            @if ($price > 0 && Route::has('course-commerce.gifts.form'))
-                                <a href="{{ route('course-commerce.gifts.form', $course->id) }}" class="mb-3 flex w-full items-center justify-center rounded-xl border border-violet-200 bg-violet-50 px-5 py-3 text-sm font-extrabold text-violet-800 hover:bg-violet-100 transition-colors">
-                                    Gift this Course
-                                </a>
-                            @endif
-                            <form method="POST" action="{{ route('plugins.enrollments.store', $course) }}">
-                                @csrf
-                                <button type="submit" class="w-full py-3.5 px-5 rounded-xl bg-[#0057FF] hover:bg-[#0046CC] text-white text-sm font-bold flex items-center justify-center shadow-sm transition-colors">
-                                    {{ $price > 0 ? 'Request Enrollment & Create Invoice' : 'Enroll in Free Course' }}
-                                </button>
-                            </form>
                             @if (session('status'))
                                 <p class="text-xs text-emerald-700 mt-2">{{ session('status') }}</p>
                             @endif

@@ -16,6 +16,8 @@ use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\PaymentManagement\Models\PaymentRefund;
 use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
 use Plugins\Modules\PaymentManagement\Services\PaymentSettlementService;
+use Plugins\Modules\ReferralIncome\Services\ReferralIncomeService;
+use App\Models\User;
 
 class PaymentController extends Controller
 {
@@ -118,7 +120,7 @@ class PaymentController extends Controller
                     throw new \RuntimeException('Refund exceeds remaining refundable transaction amount.');
                 }
 
-                PaymentRefund::query()->create([
+                $refund = PaymentRefund::query()->create([
                     'payment_transaction_id' => $lockedTx->id,
                     'amount' => $refundAmount,
                     'reason' => $validated['reason'],
@@ -145,6 +147,27 @@ class PaymentController extends Controller
                             ->where('invoice_id', $invoice->id)
                             ->where('status', 'active')
                             ->update(['status' => 'pending', 'updated_at' => now()]);
+                    }
+                }
+
+                // Keep referral reversal atomic with the recorded refund.
+                if (app(PluginManager::class)->isEnabled('referral-income')
+                    && Schema::hasTable('commerce_orders')
+                    && Schema::hasTable('referral_commissions')
+                    && Schema::hasTable('referral_commission_reversals')) {
+                    $order = DB::table('commerce_orders')->where('invoice_id', $lockedTx->invoice_id)->lockForUpdate()->first();
+                    if ($order) {
+                        $buyer = User::query()->find((int) $order->user_id);
+                        if ($buyer) {
+                            app(ReferralIncomeService::class)->reverseSettledPurchase(
+                                $buyer,
+                                'commerce_order',
+                                (string) $order->id,
+                                (int) $refund->id,
+                                $refundAmount,
+                                (string) $lockedTx->currency
+                            );
+                        }
                     }
                 }
             });
