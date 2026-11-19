@@ -240,13 +240,12 @@ class AdmissionController extends Controller
         abort_unless(Schema::hasTable('admission_documents'), 503, 'Admission document storage is not installed.');
 
         abort_if($application->documents()->count() >= 10, 422, 'An application can have at most 10 supporting documents.');
-        abort_if((int) $application->documents()->sum('size_bytes') >= 51200 * 1024, 422, 'The application document storage limit has been reached.');
-
         $validated = $request->validate([
             'document' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
         ]);
 
         $file = $validated['document'];
+        abort_if((int) $application->documents()->sum('size_bytes') + (int) $file->getSize() > 51200 * 1024, 422, 'The application document storage limit is 50 MB.');
         $extension = strtolower((string) $file->extension());
         abort_unless(in_array($extension, ['pdf', 'jpg', 'jpeg', 'png'], true), 422, 'Unsupported document format.');
 
