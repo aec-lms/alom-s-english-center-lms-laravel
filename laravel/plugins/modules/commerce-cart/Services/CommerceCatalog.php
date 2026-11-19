@@ -30,6 +30,21 @@ class CommerceCatalog
         };
     }
 
+    /**
+     * Prevent checkout from silently charging a changed catalogue price,
+     * currency, or product title after the student added the item.
+     */
+    public function assertCartSnapshotUnchanged(array $fresh, object $cartItem): void
+    {
+        if ((float) $fresh['price'] !== (float) $cartItem->unit_price
+            || strtoupper((string) $fresh['currency']) !== strtoupper((string) $cartItem->currency)
+            || (string) $fresh['title'] !== (string) $cartItem->title_snapshot) {
+            throw ValidationException::withMessages([
+                'cart' => 'A cart item changed since it was added. Remove it and add it again to review the current price before paying.',
+            ]);
+        }
+    }
+
     private function course(int $id, ?Authenticatable $user): array
     {
         $this->requireTable('courses');
