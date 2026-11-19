@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\FlashSale\\Providers;
+namespace Plugins\Modules\FlashSale\Providers;
 
-use App\\Core\\Plugins\\BasePluginServiceProvider;
-use Plugins\\Modules\\FlashSale\\Services\\FlashSalePricingService;
+use App\Core\Plugins\BasePluginServiceProvider;
+use Plugins\Modules\FlashSale\Services\FlashSalePricingService;
 
 class FlashSaleServiceProvider extends BasePluginServiceProvider
 {
