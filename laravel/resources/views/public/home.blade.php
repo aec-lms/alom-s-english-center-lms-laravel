@@ -481,6 +481,14 @@
 @media (prefers-reduced-motion: reduce) { .homepage-stat-number, .homepage-stat-number.homepage-stat-counted { transition:none; transform:none; filter:none; } }
 </style>
 
+<style>
+.slider-transition-fade { animation: sliderFadeIn .45s ease both; }
+.slider-transition-slide { animation: sliderSlideIn .45s ease both; }
+@keyframes sliderFadeIn { from { opacity:.25; } to { opacity:1; } }
+@keyframes sliderSlideIn { from { opacity:.4; transform:translateX(2.5%); } to { opacity:1; transform:translateX(0); } }
+@media (prefers-reduced-motion: reduce) { .slider-transition-fade, .slider-transition-slide { animation:none; } }
+</style>
+
 <script>
 (() => {
     const track = document.getElementById('digital-carousel-track');
@@ -504,6 +512,9 @@
         const current = slides[idx];
         mainImg.src = current.image;
         mainImg.alt = current.title;
+        mainImg.classList.remove('slider-transition-fade', 'slider-transition-slide');
+        void mainImg.offsetWidth;
+        mainImg.classList.add(current.transition === 'slide' ? 'slider-transition-slide' : 'slider-transition-fade');
         const mobileSource = document.getElementById('hero-main-mobile');
         if (mobileSource) mobileSource.srcset = current.mobile_image || current.image;
         prevImg.src = slides[prev].image;
