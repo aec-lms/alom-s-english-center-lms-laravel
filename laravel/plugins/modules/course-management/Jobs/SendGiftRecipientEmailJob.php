@@ -65,17 +65,20 @@ class SendGiftRecipientEmailJob implements ShouldQueue, ShouldBeUnique
 
         $email = strtolower(trim((string) $gift->recipient_email));
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            throw new RuntimeException('Gift recipient email address is invalid.');
+            $this->markPermanentlyFailed($table, 'Gift recipient email address is invalid.');
+            return;
         }
 
         $token = decrypt((string) $gift->redeem_token_encrypted);
         if (!is_string($token) || preg_match('/^[A-Za-z0-9]{40,80}$/', $token) !== 1
             || !hash_equals((string) $gift->redeem_token_hash, hash('sha256', $token))) {
-            throw new RuntimeException('Gift redemption token failed integrity validation.');
+            $this->markPermanentlyFailed($table, 'Gift redemption token failed integrity validation.');
+            return;
         }
 
         if (!$plugins->isEnabled('email-notifications')) {
-            throw new RuntimeException('Email Notifications integration is disabled.');
+            $this->markPermanentlyFailed($table, 'Email Notifications integration is disabled.');
+            return;
         }
 
         $smtpHost = trim((string) $plugins->getSetting('email-notifications', 'smtp_host', ''));
@@ -91,14 +94,16 @@ class SendGiftRecipientEmailJob implements ShouldQueue, ShouldBeUnique
         if ($smtpHost === '' || $smtpPort < 1 || $smtpPort > 65535
             || !filter_var($fromAddress, FILTER_VALIDATE_EMAIL)
             || (($smtpUsername === '') !== ($smtpPassword === ''))) {
-            throw new RuntimeException('Gift email SMTP settings are incomplete or invalid.');
+            $this->markPermanentlyFailed($table, 'Gift email SMTP settings are incomplete or invalid.');
+            return;
         }
 
         $giftTitle = $this->giftType === 'gift_course'
             ? (string) DB::table('courses')->where('id', $gift->course_id)->value('title')
             : 'Gift voucher';
         if ($giftTitle === '') {
-            throw new RuntimeException('The gifted course is no longer available for notification.');
+            $this->markPermanentlyFailed($table, 'The gifted course is no longer available for notification.');
+            return;
         }
 
         $senderName = (string) DB::table('users')->where('id', $gift->sender_user_id)->value('name');
@@ -166,6 +171,20 @@ class SendGiftRecipientEmailJob implements ShouldQueue, ShouldBeUnique
             Config::set('mail', $originalMailConfig);
             Mail::purge('smtp');
         }
+    }
+
+
+    private function markPermanentlyFailed(string $table, string $reason): void
+    {
+        DB::table($table)->where('id', $this->giftId)
+            ->where('status', 'paid')
+            ->whereNull('notification_sent_at')
+            ->update([
+                'notification_delivery_status' => 'failed',
+                'notification_attempt_count' => DB::raw('notification_attempt_count + 1'),
+                'notification_last_error' => $reason,
+                'updated_at' => now(),
+            ]);
     }
 
     public function failed(?Throwable $exception): void
