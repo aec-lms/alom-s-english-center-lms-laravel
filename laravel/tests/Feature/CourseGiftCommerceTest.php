@@ -302,6 +302,87 @@ class CourseGiftCommerceTest extends TestCase
         $this->assertDatabaseMissing('course_gift_wallets', ['user_id' => $recipient->id]);
     }
 
+    public function test_redemption_rejects_source_invoice_amount_or_currency_mismatch(): void
+    {
+        $sender = $this->createUserWithRole('student');
+        $recipient = $this->createUserWithRole('student');
+        $recipient->update(['email' => 'invoice-mismatch-recipient@example.test']);
+        $course = Course::query()->create([
+            'code' => 'INVOICE-MISMATCH-001',
+            'title' => 'Invoice Mismatch Course',
+            'slug' => 'invoice-mismatch-course',
+            'price' => 1200,
+            'status' => 'published',
+        ]);
+
+        $amountInvoice = FeeInvoice::query()->create([
+            'invoice_number' => 'GIFT-AMOUNT-MISMATCH-' . $recipient->id,
+            'payer_name' => $sender->name,
+            'payer_email' => $sender->email,
+            'subtotal_amount' => 1000,
+            'discount_amount' => 0,
+            'net_amount' => 1000,
+            'paid_amount' => 1000,
+            'currency' => 'BDT',
+            'status' => 'paid',
+        ]);
+        $giftToken = str_repeat('A', 64);
+        $giftId = DB::table('course_gifts')->insertGetId([
+            'sender_user_id' => $sender->id,
+            'recipient_user_id' => null,
+            'recipient_email' => $recipient->email,
+            'course_id' => $course->id,
+            'invoice_id' => $amountInvoice->id,
+            'redeem_token_hash' => hash('sha256', $giftToken),
+            'redeem_token_encrypted' => encrypt($giftToken),
+            'status' => 'paid',
+            'currency' => 'BDT',
+            'amount' => 1200,
+            'paid_at' => now(),
+            'expires_at' => now()->addDays(30),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $currencyInvoice = FeeInvoice::query()->create([
+            'invoice_number' => 'VOUCHER-CURRENCY-MISMATCH-' . $recipient->id,
+            'payer_name' => $sender->name,
+            'payer_email' => $sender->email,
+            'subtotal_amount' => 1500,
+            'discount_amount' => 0,
+            'net_amount' => 1500,
+            'paid_amount' => 1500,
+            'currency' => 'USD',
+            'status' => 'paid',
+        ]);
+        $voucherToken = str_repeat('C', 64);
+        $voucherId = DB::table('course_gift_vouchers')->insertGetId([
+            'sender_user_id' => $sender->id,
+            'recipient_user_id' => null,
+            'recipient_email' => $recipient->email,
+            'recipient_name' => 'Invoice Mismatch Recipient',
+            'invoice_id' => $currencyInvoice->id,
+            'redeem_token_hash' => hash('sha256', $voucherToken),
+            'redeem_token_encrypted' => encrypt($voucherToken),
+            'currency' => 'BDT',
+            'amount' => 1500,
+            'remaining_amount' => 1500,
+            'status' => 'paid',
+            'paid_at' => now(),
+            'expires_at' => now()->addDays(30),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($recipient)->post('/student/course-commerce/gifts/redeem/' . $giftToken)->assertStatus(409);
+        $this->post('/student/course-commerce/vouchers/redeem/' . $voucherToken)->assertStatus(409);
+
+        $this->assertDatabaseHas('course_gifts', ['id' => $giftId, 'status' => 'paid', 'recipient_user_id' => null]);
+        $this->assertDatabaseHas('course_gift_vouchers', ['id' => $voucherId, 'status' => 'paid', 'recipient_user_id' => null]);
+        $this->assertDatabaseMissing('enrollments', ['user_id' => $recipient->id, 'course_id' => $course->id]);
+        $this->assertDatabaseMissing('course_gift_wallets', ['user_id' => $recipient->id]);
+    }
+
     public function test_voucher_sender_cannot_claim_their_own_voucher(): void
     {
         $sender = $this->createUserWithRole('student');
