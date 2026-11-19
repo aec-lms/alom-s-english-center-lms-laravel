@@ -286,7 +286,7 @@ final class PhoneticsSpeakingRecordingController extends Controller
             // Re-check branch authorization under the same transaction and
             // lock the student's host-LMS row to close the branch-move race
             // between the initial request check and the review write.
-            $this->assertReviewerBranchAccess($request, $locked, $course, true, true);
+            $this->assertReviewerBranchAccess($request, $locked, $course, true, true, true);
             $wasReviewed = $locked->status === 'reviewed';
             $previousScore = $locked->score;
 
@@ -345,7 +345,8 @@ final class PhoneticsSpeakingRecordingController extends Controller
         PhoneticSpeakingRecording $recording,
         object $course,
         bool $lockStudent = false,
-        bool $lockCourse = false
+        bool $lockCourse = false,
+        bool $lockReviewer = false
     ): void {
         $reviewer = $request->user();
         abort_unless($reviewer, 401);
@@ -357,13 +358,6 @@ final class PhoneticsSpeakingRecordingController extends Controller
             403,
             'You cannot review your own speaking recording.'
         );
-
-        if ($this->isGlobalPhoneticsAdmin($reviewer)) {
-            return;
-        }
-
-        $reviewerBranchId = data_get($reviewer, 'branch_id');
-        abort_unless($reviewerBranchId !== null, 403, 'A branch assignment is required to review student recordings.');
 
         $userMap = config('phonetics.users', []);
         $userTable = $userMap['table'] ?? 'users';
@@ -377,11 +371,57 @@ final class PhoneticsSpeakingRecordingController extends Controller
             'The connected LMS branch mapping is unavailable for recording review.'
         );
 
+        $lockedUsers = null;
+        $lockedReviewerRow = null;
+        if ($lockReviewer) {
+            abort_unless(Schema::hasColumn($userTable, 'is_active'), 503, 'Reviewer active-state mapping is unavailable.');
+            // Lock both account rows in deterministic order. This closes the
+            // reviewer/student branch reassignment race without acquiring
+            // user-row locks in opposite orders across concurrent reviews.
+            $userIds = array_values(array_unique([
+                (string) $reviewer->getAuthIdentifier(),
+                (string) $recording->user_id,
+            ]));
+            sort($userIds, SORT_STRING);
+            $lockedUsers = DB::table($userTable)
+                ->whereIn($userIdColumn, $userIds)
+                ->orderBy($userIdColumn)
+                ->lockForUpdate()
+                ->get([$userIdColumn, 'branch_id', 'is_active']);
+            $lockedReviewerRow = $lockedUsers->first(
+                fn ($row) => (string) $row->{$userIdColumn} === (string) $reviewer->getAuthIdentifier()
+            );
+            abort_unless($lockedReviewerRow && (bool) $lockedReviewerRow->is_active, 403, 'Reviewer account is inactive.');
+
+            // Re-resolve role/permission state after the account row lock. The
+            // route middleware is an early gate; this is the final-write gate.
+            $reviewer = $reviewer->newQuery()
+                ->whereKey($reviewer->getAuthIdentifier())
+                ->firstOrFail();
+            abort_unless(
+                method_exists($reviewer, 'hasPermission')
+                    && $reviewer->hasPermission('phonetics.manage'),
+                403,
+                'Reviewer no longer has permission to review Phonetics recordings.'
+            );
+        }
+
+        if ($this->isGlobalPhoneticsAdmin($reviewer)) {
+            return;
+        }
+
+        $reviewerBranchId = $lockReviewer
+            ? $lockedReviewerRow->branch_id
+            : data_get($reviewer, 'branch_id');
+        abort_unless($reviewerBranchId !== null, 403, 'A branch assignment is required to review student recordings.');
+
         $studentQuery = DB::table($userTable)->where($userIdColumn, $recording->user_id);
-        if ($lockStudent) {
+        if ($lockStudent && !$lockReviewer) {
             $studentQuery->lockForUpdate();
         }
-        $student = $studentQuery->first(['branch_id']);
+        $student = $lockReviewer
+            ? $lockedUsers->first(fn ($row) => (string) $row->{$userIdColumn} === (string) $recording->user_id)
+            : $studentQuery->first(['branch_id']);
         abort_unless(
             $student && $student->branch_id !== null
                 && (string) $student->branch_id === (string) $reviewerBranchId,
