@@ -138,6 +138,51 @@ class CmsWebsiteSafetyTest extends TestCase
     }
 
 
+    public function test_permanent_delete_does_not_follow_media_symlinks(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+        $admin = $this->createUserWithRole('admin');
+
+        $directory = public_path('uploads/posts');
+        if (!is_dir($directory)) {
+            mkdir($directory, 0755, true);
+        }
+
+        $target = $directory . '/retained-target-' . bin2hex(random_bytes(4)) . '.webp';
+        $aliasName = 'cms-symlink-' . bin2hex(random_bytes(4)) . '.webp';
+        $alias = $directory . '/' . $aliasName;
+        file_put_contents($target, 'shared upload fixture');
+
+        if (!function_exists('symlink') || !@symlink($target, $alias)) {
+            @unlink($target);
+            $this->markTestSkipped('Symlinks are not available in this test environment.');
+        }
+
+        try {
+            $post = CmsPost::query()->create([
+                'slug' => 'symlink-media-cleanup-' . bin2hex(random_bytes(3)),
+                'title' => 'Symlink media cleanup',
+                'category' => 'General',
+                'author' => 'AEC LMS',
+                'content' => 'Content',
+                'thumbnail_path' => '/uploads/posts/' . $aliasName,
+                'is_published' => false,
+            ]);
+            $post->delete();
+
+            $this->actingAs($admin)->delete('/admin/cms/posts/' . $post->id . '/force')
+                ->assertSessionHasNoErrors();
+
+            $this->assertFileExists($target, 'Permanent deletion must not unlink a symlink target.');
+            $this->assertDatabaseMissing('cms_posts', ['id' => $post->id]);
+        } finally {
+            @unlink($alias);
+            @unlink($target);
+        }
+    }
+
+
     public function test_post_update_saves_revision_and_revision_can_be_restored(): void
     {
         $this->markSystemInstalled();
