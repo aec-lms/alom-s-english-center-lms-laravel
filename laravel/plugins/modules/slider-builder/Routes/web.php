@@ -11,6 +11,7 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:slider-builder', 'permiss
     ->group(function (): void {
         Route::get('/', [SliderBuilderController::class, 'index'])->name('index');
         Route::post('/', [SliderBuilderController::class, 'store'])->name('store');
+        Route::patch('/reorder', [SliderBuilderController::class, 'reorder'])->name('reorder');
         Route::put('/{slider}', [SliderBuilderController::class, 'update'])->name('update');
         Route::delete('/{slider}', [SliderBuilderController::class, 'destroy'])->name('destroy');
     });
