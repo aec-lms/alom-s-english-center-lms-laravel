@@ -23,6 +23,65 @@ use Tests\TestCase;
 
 final class UnifiedCommerceCartTest extends TestCase
 {
+    public function test_sender_can_view_secure_gift_link_and_retry_only_their_failed_delivery(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['commerce-cart', 'course-management']);
+        $sender = $this->createUserWithRole('student');
+        $otherStudent = $this->createUserWithRole('student');
+        $course = Course::query()->create([
+            'code' => 'GIFT-DELIVERY-CENTER-' . $sender->id,
+            'title' => 'Gift Delivery Center Course',
+            'slug' => 'gift-delivery-center-course-' . $sender->id,
+            'price' => 1400,
+            'status' => 'published',
+            'branch_id' => null,
+        ]);
+        $token = str_repeat('G', 64);
+        $giftId = DB::table('course_gifts')->insertGetId([
+            'sender_user_id' => $sender->id,
+            'recipient_user_id' => null,
+            'recipient_email' => 'delivery.center.recipient@example.test',
+            'recipient_name' => 'Delivery Recipient',
+            'course_id' => $course->id,
+            'invoice_id' => null,
+            'redeem_token_hash' => hash('sha256', $token),
+            'redeem_token_encrypted' => encrypt($token),
+            'status' => 'paid',
+            'currency' => 'BDT',
+            'amount' => 1400,
+            'paid_at' => now(),
+            'expires_at' => now()->addDays(30),
+            'notification_delivery_status' => 'failed',
+            'notification_attempt_count' => 5,
+            'notification_last_error' => 'SMTP temporarily unavailable.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($sender)->get('/student/course-commerce/gifts/sent')
+            ->assertOk()
+            ->assertSee('delivery.center.recipient@example.test')
+            ->assertSee('/student/course-commerce/gifts/redeem/' . $token)
+            ->assertSee('Retry email delivery');
+
+        $this->actingAs($otherStudent)->get('/student/course-commerce/gifts/sent')
+            ->assertOk()
+            ->assertDontSee($token)
+            ->assertDontSee('delivery.center.recipient@example.test');
+
+        $this->actingAs($sender)->post('/student/course-commerce/gifts/' . $giftId . '/resend')
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('course_gifts', [
+            'id' => $giftId,
+            'sender_user_id' => $sender->id,
+            'status' => 'paid',
+            'notification_delivery_status' => 'pending',
+            'notification_last_error' => null,
+        ]);
+    }
+
     public function test_recipient_specific_gift_drafts_can_be_added_to_the_unified_cart(): void
     {
         $this->markSystemInstalled();
