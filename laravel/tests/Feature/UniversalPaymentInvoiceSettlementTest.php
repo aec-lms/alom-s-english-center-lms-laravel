@@ -250,6 +250,73 @@ class UniversalPaymentInvoiceSettlementTest extends TestCase
         ]);
     }
 
+
+    public function test_manual_invoice_payment_fulfills_commerce_order_without_referral_plugin(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['student-management', 'fees-management', 'universal-payment', 'commerce-cart']);
+
+        $student = $this->createUserWithRole('student');
+        $invoice = FeeInvoice::query()->create([
+            'invoice_number' => 'UPAY-COMMERCE-' . $student->id,
+            'payer_name' => $student->name,
+            'payer_email' => $student->email,
+            'subtotal_amount' => 650,
+            'discount_amount' => 0,
+            'net_amount' => 650,
+            'paid_amount' => 0,
+            'currency' => 'BDT',
+            'status' => 'unpaid',
+        ]);
+        $orderId = DB::table('commerce_orders')->insertGetId([
+            'order_number' => 'UPAY-COM-' . $student->id,
+            'user_id' => $student->id,
+            'invoice_id' => $invoice->id,
+            'branch_id' => null,
+            'currency' => 'BDT',
+            'subtotal' => 650,
+            'discount_total' => 0,
+            'grand_total' => 650,
+            'status' => 'awaiting_payment',
+            'payment_status' => 'unpaid',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $transaction = UniversalPaymentTransaction::query()->create([
+            'reference' => 'UPAY-COMMERCE-TX-' . $student->id,
+            'payer_name' => $student->name,
+            'payer_contact' => '01712345678',
+            'item_title' => 'Commerce invoice',
+            'gateway' => 'bank_cash',
+            'currency' => 'BDT',
+            'amount' => 650,
+            'external_trx_id' => 'BANK-UPAY-COMMERCE-' . $student->id,
+            'user_id' => $student->id,
+            'fee_invoice_id' => $invoice->id,
+            'status' => 'pending',
+        ]);
+
+        $admin = $this->createUserWithRole('admin');
+        $this->actingAs($admin)
+            ->post('/plugins/universal-payment/transactions/' . $transaction->id . '/status', [
+                'status' => 'verified',
+                'payment_reference' => 'BANK-UPAY-COMMERCE-VERIFIED-' . $student->id,
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('commerce_orders', [
+            'id' => $orderId,
+            'status' => 'paid',
+            'payment_status' => 'paid',
+        ]);
+        $this->assertDatabaseHas('fee_invoices', [
+            'id' => $invoice->id,
+            'paid_amount' => 650,
+            'status' => 'paid',
+        ]);
+    }
+
     public function test_invoice_checkout_fails_closed_when_fee_plugin_storage_is_absent(): void
     {
         $this->markSystemInstalled();
