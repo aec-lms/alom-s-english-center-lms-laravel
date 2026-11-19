@@ -467,6 +467,7 @@ class PaymentSettlementStateMachineTest extends TestCase
                 $courseId = (int) $course->id;
                 $draftId = DB::table('course_gifts')->insertGetId([
                     'sender_user_id' => $buyer->id,
+                    'recipient_user_id' => $recipient->id,
                     'recipient_email' => $recipientEmail,
                     'course_id' => $courseId,
                     'invoice_id' => null,
@@ -483,7 +484,6 @@ class PaymentSettlementStateMachineTest extends TestCase
             } else {
                 $draftId = DB::table('course_gift_vouchers')->insertGetId([
                     'sender_user_id' => $buyer->id,
-                    'recipient_user_id' => $recipient->id,
                     'recipient_email' => $recipientEmail,
                     'redeem_token_hash' => hash('sha256', $token),
                     'redeem_token_encrypted' => encrypt($token),
