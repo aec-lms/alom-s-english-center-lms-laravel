@@ -25,6 +25,7 @@
         }
     ],
     "optional_dependencies": [
-        "branch-management"
+        "branch-management",
+        "course-management"
     ]
 }
