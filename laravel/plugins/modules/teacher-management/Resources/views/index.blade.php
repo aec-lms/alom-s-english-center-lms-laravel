@@ -32,7 +32,7 @@
                 <input type="file" name="photo" accept="image/*" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 bg-slate-50">
             </div>
             <input name="photo_url" placeholder="Or Portrait URL (/assets/images/...)" class="rounded-lg border border-slate-300 px-3 py-2 self-end">
-            <input name="password" type="password" placeholder="Login Password (optional)" class="rounded-lg border border-slate-300 px-3 py-2 self-end">
+            <input name="password" type="password" required minlength="12" maxlength="128" autocomplete="new-password" placeholder="Initial Login Password (min. 12 characters) *" class="rounded-lg border border-slate-300 px-3 py-2 self-end">
             <input name="youtube_url" placeholder="YouTube URL (optional)" class="rounded-lg border border-slate-300 px-3 py-2">
             <input name="facebook_url" placeholder="Facebook URL (optional)" class="rounded-lg border border-slate-300 px-3 py-2">
             <div class="flex items-center justify-between gap-2">
