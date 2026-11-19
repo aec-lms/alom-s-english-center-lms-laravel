@@ -8,6 +8,7 @@ use App\Models\PluginSetting;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Plugins\Modules\StudentManagement\Models\Student;
+use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\AdmissionManagement\Models\AdmissionApplication;
 use Tests\TestCase;
 
@@ -279,6 +280,48 @@ class AdmissionManagementWorkflowTest extends TestCase
 
         $this->assertDatabaseCount('students', 1);
         $this->assertSame($student->id, $application->fresh()->converted_student_id);
+    }
+
+
+    public function test_admission_fee_uses_the_existing_fee_invoice_ledger_and_is_not_duplicated(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['admission-management', 'student-management', 'fees-management']);
+
+        $admin = $this->createUserWithRole('admin');
+        $studentUser = $this->createUserWithRole('student');
+        $student = Student::query()->create([
+            'user_id' => $studentUser->id,
+            'student_code' => 'STU-FEE-0001',
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+        ]);
+        PluginSetting::query()->updateOrCreate(
+            ['plugin_slug' => 'admission-management', 'setting_key' => 'admission_fee_bdt'],
+            ['setting_value' => '750.00', 'is_encrypted' => false],
+        );
+        $application = AdmissionApplication::query()->create([
+            'application_code' => 'ADM-FEE-0001',
+            'applicant_name' => $studentUser->name,
+            'email' => $studentUser->email,
+            'phone' => '01700000010',
+            'desired_course' => 'IELTS Academic',
+            'status' => 'approved',
+        ]);
+
+        $this->actingAs($admin)->post('/admin/admissions/' . $application->id . '/convert-to-student')
+            ->assertSessionHasNoErrors();
+
+        $invoice = FeeInvoice::query()->findOrFail($application->fresh()->admission_fee_invoice_id);
+        $this->assertSame($student->id, (int) $invoice->student_id);
+        $this->assertSame('750.00', $invoice->net_amount);
+        $this->assertSame('unpaid', $invoice->status);
+
+        $this->actingAs($admin)->post('/admin/admissions/' . $application->id . '/convert-to-student')
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseCount('fee_invoices', 1);
+        $this->assertSame($invoice->id, $application->fresh()->admission_fee_invoice_id);
     }
 
 }
