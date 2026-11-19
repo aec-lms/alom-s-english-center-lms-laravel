@@ -37,7 +37,6 @@
         "fees-management",
         "universal-payment",
         "payment-management",
-        "student-management",
-        "subscription-management"
+        "student-management"
     ]
 }
