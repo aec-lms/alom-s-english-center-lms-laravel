@@ -1069,4 +1069,56 @@ final class UnifiedCommerceCartTest extends TestCase
         ]);
     }
 
+
+    public function test_definitive_gateway_failure_releases_gift_drafts_for_a_safe_retry(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['commerce-cart', 'course-management', 'fees-management', 'universal-payment', 'payment-management']);
+        $student = $this->createUserWithRole('student');
+        $course = Course::query()->create([
+            'code' => 'UNIFIED-GIFT-RETRY-' . $student->id,
+            'title' => 'Retryable Gift Course',
+            'slug' => 'retryable-gift-course-' . $student->id,
+            'price' => 1600,
+            'status' => 'published',
+            'branch_id' => null,
+        ]);
+
+        $this->actingAs($student)->post('/cart/gifts/course', [
+            'course_id' => $course->id,
+            'recipient_email' => 'retry.recipient@example.test',
+        ])->assertRedirect('/cart');
+
+        $gift = DB::table('course_gifts')->where('sender_user_id', $student->id)->first();
+        $this->assertNotNull($gift);
+
+        $payments = \\Mockery::mock(UniversalPaymentOrchestrator::class);
+        $payments->shouldReceive('assertGatewayReady')->once()->with('gateway-sslcommerz');
+        $payments->shouldReceive('initiate')->once()->andThrow(new \\RuntimeException('Provider definitively rejected checkout.'));
+        $this->app->instance(UniversalPaymentOrchestrator::class, $payments);
+
+        $this->actingAs($student)->post('/cart/checkout', [
+            'gateway' => 'gateway-sslcommerz',
+            'payer_name' => $student->name,
+            'payer_email' => $student->email,
+            'payer_phone' => '01700000000',
+        ])->assertSessionHasErrors('gateway');
+
+        $order = DB::table('commerce_orders')->where('user_id', $student->id)->first();
+        $orderItem = DB::table('commerce_order_items')->where('order_id', $order->id)->where('item_type', 'gift_course')->first();
+
+        $this->assertSame('failed', $order->status);
+        $this->assertNotNull($orderItem);
+        $this->assertDatabaseHas('course_gifts', [
+            'id' => $gift->id,
+            'status' => 'awaiting_payment',
+            'invoice_id' => null,
+            'commerce_order_item_id' => null,
+            'unified_payment_transaction_id' => null,
+        ]);
+
+        $this->assertSame('gift_course', app(CommerceCatalog::class)->resolve('gift_course', (int) $gift->id, $student)['type']);
+    }
+
+
 }
