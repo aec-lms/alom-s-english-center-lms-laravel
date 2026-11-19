@@ -189,3 +189,16 @@ The current tree contains 44 plugin manifests. The parameterized `AllPluginsInde
 - Review PR #31 separately; do not merge its divergent draft branch until its base/history are reconciled and its complete diff is revalidated against current main.
 
 No production deployment or live data migration is authorized by this CI result.
+
+## 2026-11-19 autopsy follow-up — candidate PR #269
+
+The current candidate adds targeted regression coverage beyond the historical inventory above:
+
+| Area / plugins | New source-level finding | Candidate change | Validation |
+|---|---|---|---|
+| Core plugin lifecycle (all modules) | Disable, uninstall and update did not invalidate compiled plugin routes | Centralized compiled-route invalidation on lifecycle transitions | Tests cover disable, uninstall and update; exact-head CI pending |
+| Exam Management + Learn & Earn | Student-facing web/API paths relied on account branch IDs instead of the authoritative Student profile branch | Resolve student profile branch for listing, view/take/history/autosave/submit and API paths; branch-manager manual grant checks target profile branch | Regression test uses deliberately mismatched account/profile branch IDs; exact-head CI pending |
+| Commerce Cart + Payment Management | Offline refunds could leave paid orders and non-course entitlements active | Suspend order entitlements and revoke order-bound exam/eBook access when invoice becomes underpaid; restore entitlements on later verified settlement | Regression test covers partial refund and repayment; exact-head CI pending |
+| Commerce Cart + Payment Management | Existing suspended entitlement rows were not reactivated by insert-ignore settlement writes | Settlement now upserts the existing entitlement and refreshes its active state | Covered by refund/repayment regression; exact-head CI pending |
+
+These are focused fixes, not a substitute for the complete per-plugin acceptance gate. All 44 current plugin manifests still require feature-by-feature review and exact-candidate validation. No plugin is promoted to fully accepted by this checkpoint.
