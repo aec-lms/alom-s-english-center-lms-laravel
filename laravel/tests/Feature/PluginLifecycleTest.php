@@ -140,6 +140,100 @@ class PluginLifecycleTest extends TestCase
         }
     }
 
+    public function test_disabling_and_uninstalling_plugins_invalidate_compiled_route_cache(): void
+    {
+        $this->markSystemInstalled();
+        $cachePath = $this->app->getCachedRoutesPath();
+
+        foreach (['disable', 'uninstall'] as $operation) {
+            $slug = 'route-cache-' . $operation . '-probe';
+            $pluginDir = (string) config('plugins.modules_path') . DIRECTORY_SEPARATOR . $slug;
+            File::ensureDirectoryExists($pluginDir);
+            File::put($pluginDir . DIRECTORY_SEPARATOR . 'plugin.json', json_encode([
+                'slug' => $slug,
+                'name' => 'Route Cache ' . ucfirst($operation) . ' Probe',
+                'version' => '1.0.0',
+                'core_compatibility' => '^2.0',
+                'dependencies' => [],
+            ], JSON_THROW_ON_ERROR));
+            PluginRecord::query()->create([
+                'slug' => $slug,
+                'name' => 'Route Cache ' . ucfirst($operation) . ' Probe',
+                'version' => '1.0.0',
+                'is_installed' => true,
+                'is_enabled' => true,
+            ]);
+
+            $hadCache = is_file($cachePath);
+            $previousCache = $hadCache ? file_get_contents($cachePath) : null;
+            try {
+                File::ensureDirectoryExists(dirname($cachePath));
+                File::put($cachePath, "<?php return [];");
+
+                if ($operation === 'disable') {
+                    app(PluginManager::class)->disable($slug);
+                } else {
+                    app(PluginManager::class)->uninstall($slug, false);
+                }
+
+                $this->assertFileDoesNotExist($cachePath, "The route cache must be cleared after plugin {$operation}.");
+            } finally {
+                if ($hadCache && $previousCache !== false) {
+                    File::put($cachePath, $previousCache);
+                } else {
+                    @unlink($cachePath);
+                }
+                File::deleteDirectory($pluginDir);
+                PluginRecord::query()->where('slug', $slug)->delete();
+            }
+        }
+    }
+
+    public function test_updating_a_plugin_invalidates_compiled_route_cache(): void
+    {
+        $this->markSystemInstalled();
+
+        $slug = 'route-cache-update-probe';
+        $pluginDir = (string) config('plugins.modules_path') . DIRECTORY_SEPARATOR . $slug;
+        File::ensureDirectoryExists($pluginDir);
+        File::put($pluginDir . DIRECTORY_SEPARATOR . 'plugin.json', json_encode([
+            'slug' => $slug,
+            'name' => 'Route Cache Update Probe',
+            'version' => '2.0.0',
+            'core_compatibility' => '^2.0',
+            'dependencies' => [],
+        ], JSON_THROW_ON_ERROR));
+        PluginRecord::query()->create([
+            'slug' => $slug,
+            'name' => 'Route Cache Update Probe',
+            'version' => '1.0.0',
+            'is_installed' => true,
+            'is_enabled' => true,
+        ]);
+
+        $cachePath = $this->app->getCachedRoutesPath();
+        $hadCache = is_file($cachePath);
+        $previousCache = $hadCache ? file_get_contents($cachePath) : null;
+
+        try {
+            File::ensureDirectoryExists(dirname($cachePath));
+            File::put($cachePath, "<?php return [];");
+
+            $updated = app(PluginManager::class)->updatePlugin($slug, null, true);
+
+            $this->assertSame('2.0.0', $updated->fresh()->version);
+            $this->assertFileDoesNotExist($cachePath, 'The route cache must be cleared after a plugin package update.');
+        } finally {
+            if ($hadCache && $previousCache !== false) {
+                File::put($cachePath, $previousCache);
+            } else {
+                @unlink($cachePath);
+            }
+            File::deleteDirectory($pluginDir);
+            PluginRecord::query()->where('slug', $slug)->delete();
+        }
+    }
+
     public function test_reinstall_does_not_reenable_an_administrator_disabled_plugin(): void
     {
         $this->markSystemInstalled();
