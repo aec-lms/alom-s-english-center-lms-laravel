@@ -2,11 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use Illuminate\\Support\\Facades\\DB;
-use Plugins\\Modules\\SliderBuilder\\Models\\HeroSlider;
-use Tests\\TestCase;
+use Plugins\Modules\SliderBuilder\Models\HeroSlider;
+use Tests\TestCase;
 
 class AdvancedSliderBuilderTest extends TestCase
 {
