@@ -120,7 +120,7 @@ final class UnifiedCommerceCartTest extends TestCase
         $this->assertSame('gift_voucher', DB::table('commerce_cart_items')->where('item_id', $voucher->id)->value('item_type'));
         $this->assertDatabaseCount('commerce_cart_items', 2);
 
-        $payments = \\Mockery::mock(UniversalPaymentOrchestrator::class);
+        $payments = \Mockery::mock(UniversalPaymentOrchestrator::class);
         $payments->shouldReceive('assertGatewayReady')->once()->with('gateway-sslcommerz');
         $payments->shouldReceive('initiate')->once()->andReturn(['redirect_url' => 'https://gateway.example.test/gift-checkout']);
         $this->app->instance(UniversalPaymentOrchestrator::class, $payments);
