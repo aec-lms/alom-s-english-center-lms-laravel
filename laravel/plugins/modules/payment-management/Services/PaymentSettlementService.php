@@ -78,6 +78,10 @@ class PaymentSettlementService
                         throw new RuntimeException('Pending course enrollment student account no longer exists.');
                     }
                     $assignedBranchId = $this->assignedBranchId($buyer);
+                    $invoiceBranchId = $invoice->branch_id !== null ? (int) $invoice->branch_id : null;
+                    if ($invoiceBranchId !== null && $assignedBranchId !== $invoiceBranchId) {
+                        throw new RuntimeException('Student branch assignment changed after invoice creation; manual payment reconciliation is required.');
+                    }
                     if ($courseBranchId !== null && ($enrollmentBranchId !== (int) $courseBranchId
                         || $assignedBranchId !== (int) $courseBranchId)) {
                         throw new RuntimeException('Pending course enrollment branch does not match the current student and source course.');
