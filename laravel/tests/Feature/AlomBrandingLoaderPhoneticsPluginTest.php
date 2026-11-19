@@ -59,6 +59,7 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
   ]);
   PhoneticSetting::query()->firstOrCreate(['id'=>1],['enabled'=>true,'course_slug'=>'british-american-phonetics','course_title'=>'British & American Phonetics Course','require_course_enrollment'=>false]);
   PhoneticSetting::query()->whereKey(1)->update(['require_course_enrollment'=>false]);
+  \Illuminate\Support\Facades\Cache::forget('phonetics.settings');
   $this->actingAs($student)->get('/courses/british-american-phonetics/phonetics-learning')->assertOk();
   $this->actingAs($student)->get('/courses/general-english/phonetics-learning')->assertNotFound();
  }
@@ -166,7 +167,10 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
   $exam=DB::table('phonetic_exams')->where('slug','lesson-one-vocabulary-exam')->first();
   $this->assertNotNull($exam);
   $this->assertDatabaseHas('phonetic_exam_questions',['exam_id'=>$exam->id,'word_id'=>$word->id]);
-  PhoneticSetting::query()->firstOrCreate(['id'=>1],['enabled'=>true,'course_slug'=>'vocabulary-starter','course_title'=>'Vocabulary Starter']);\n  PhoneticSetting::query()->whereKey(1)->update(['course_slug'=>'vocabulary-starter']);\n  $this->actingAs($student)->get('/courses/vocabulary-starter/phonetics-learning?lesson='.$lessonId)->assertOk()->assertSee('aec-vocabulary-test')->assertSee('Lesson One Vocabulary Exam');
+  PhoneticSetting::query()->firstOrCreate(['id'=>1],['enabled'=>true,'course_slug'=>'vocabulary-starter','course_title'=>'Vocabulary Starter']);
+  PhoneticSetting::query()->whereKey(1)->update(['course_slug'=>'vocabulary-starter']);
+  \Illuminate\Support\Facades\Cache::forget('phonetics.settings');
+  \Illuminate\Support\Facades\Cache::forget('phonetics.settings');\n  $this->actingAs($student)->get('/courses/vocabulary-starter/phonetics-learning?lesson='.$lessonId)->assertOk()->assertSee('aec-vocabulary-test')->assertSee('Lesson One Vocabulary Exam');
   $this->actingAs($student)->get('/courses/vocabulary-starter/phonetics-learning/exams/lesson-one-vocabulary-exam?lesson='.$lessonId)->assertOk();
   $attempt=DB::table('phonetic_exam_attempts')->where('exam_id',$exam->id)->where('user_id',$student->id)->first();
   $question=DB::table('phonetic_exam_questions')->where('exam_id',$exam->id)->first();
