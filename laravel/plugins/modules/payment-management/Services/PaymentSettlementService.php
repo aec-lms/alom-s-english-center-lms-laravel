@@ -64,15 +64,6 @@ class PaymentSettlementService
 
             if ($newPaid >= (float) $invoice->net_amount
                 && Schema::hasTable('enrollments')
-                && Schema::hasColumn('enrollments', 'invoice_id')) {
-                DB::table('enrollments')
-                    ->where('invoice_id', $invoice->id)
-                    ->where('status', 'pending')
-                    ->update(['status' => 'active', 'updated_at' => now()]);
-            }
-
-            if ($newPaid >= (float) $invoice->net_amount
-                && Schema::hasTable('enrollments')
                 && Schema::hasColumn('enrollments', 'invoice_id')
                 && Schema::hasColumn('enrollments', 'branch_id')
                 && Schema::hasTable('courses')
@@ -95,6 +86,15 @@ class PaymentSettlementService
                         throw new RuntimeException('Student branch assignment changed after invoice creation; manual payment reconciliation is required.');
                     }
                 }
+            }
+
+            if ($newPaid >= (float) $invoice->net_amount
+                && Schema::hasTable('enrollments')
+                && Schema::hasColumn('enrollments', 'invoice_id')) {
+                DB::table('enrollments')
+                    ->where('invoice_id', $invoice->id)
+                    ->where('status', 'pending')
+                    ->update(['status' => 'active', 'updated_at' => now()]);
             }
 
             if ($newPaid >= (float) $invoice->net_amount && Schema::hasTable('commerce_orders')) {
