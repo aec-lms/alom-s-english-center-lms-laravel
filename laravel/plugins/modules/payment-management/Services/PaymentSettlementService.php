@@ -151,6 +151,26 @@ class PaymentSettlementService
                             throw new RuntimeException('An empty commerce order cannot be settled.');
                         }
                         foreach ($settlementItems as $settlementItem) {
+                            // Gift purchases carry a recipient, redemption token and
+                            // independent fulfillment lifecycle. They must never pass
+                            // through the buyer-entitlement path below. Keep the
+                            // generic settlement allow-list explicit until dedicated
+                            // recipient fulfillment is linked to these order items.
+                            $genericFulfillmentTypes = [
+                                'course',
+                                'ebook',
+                                'mock_test',
+                                'exam',
+                                'subscription',
+                                'live_class',
+                                'other',
+                            ];
+                            if (!in_array((string) $settlementItem->item_type, $genericFulfillmentTypes, true)) {
+                                throw new RuntimeException(
+                                    'Gift and voucher items require dedicated recipient fulfillment and cannot use buyer entitlements.'
+                                );
+                            }
+
                             $quantity = (int) $settlementItem->quantity;
                             $unitPrice = round((float) $settlementItem->unit_price, 2);
                             $lineTotal = round((float) $settlementItem->line_total, 2);
