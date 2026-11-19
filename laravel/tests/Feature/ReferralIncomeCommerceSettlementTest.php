@@ -23,7 +23,7 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
     private function assertReferralCommissionForRole(string $referrerRole, float $percent): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['referral-income', 'student-management', 'teacher-management', 'payment-management']);
+        $this->activatePlugins(['referral-income', 'student-management', 'teacher-management', 'payment-management', 'fees-management']);
 
         $referrer = $this->createUserWithRole($referrerRole);
         $buyer = $this->createUserWithRole('student');
@@ -37,8 +37,19 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
 
         $code = $service->createOrGetCode($referrer);
         $service->applyCode($buyer, $code);
+        $invoice = FeeInvoice::query()->create([
+            'invoice_number' => 'REFERRAL-REFUND-' . strtoupper(bin2hex(random_bytes(4))),
+            'payer_name' => $buyer->name,
+            'payer_email' => $buyer->email,
+            'subtotal_amount' => 1000,
+            'discount_amount' => 0,
+            'net_amount' => 1000,
+            'paid_amount' => 1000,
+            'currency' => 'BDT',
+            'status' => 'paid',
+        ]);
 
-        $first = $service->recordSettledPurchase($buyer, 'commerce_order', 'AEC-ORDER-1001', 1000.00, 'BDT');
+        $first = $service->recordSettledPurchase($buyer, 'commerce_order', 'AEC-ORDER-1001', 1000.00, 'BDT', (int) $invoice->id);
         $retry = $service->recordSettledPurchase($buyer, 'commerce_order', 'AEC-ORDER-1001', 1000.00, 'BDT');
 
         $this->assertNotNull($first);
@@ -99,10 +110,32 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
         ]);
         $this->assertDatabaseCount('referral_commission_reversals', 2);
 
-        $paidOrderCommission = $service->recordSettledPurchase($buyer, 'commerce_order', 'AEC-ORDER-PAID-1002', 1000.00, 'BDT');
+        $paidInvoice = FeeInvoice::query()->create([
+            'invoice_number' => 'REFERRAL-PAID-REFUND-' . strtoupper(bin2hex(random_bytes(4))),
+            'payer_name' => $buyer->name,
+            'payer_email' => $buyer->email,
+            'subtotal_amount' => 1000,
+            'discount_amount' => 0,
+            'net_amount' => 1000,
+            'paid_amount' => 1000,
+            'currency' => 'BDT',
+            'status' => 'paid',
+        ]);
+        $paidOrderCommission = $service->recordSettledPurchase($buyer, 'commerce_order', 'AEC-ORDER-PAID-1002', 1000.00, 'BDT', (int) $paidInvoice->id);
         DB::table('referral_commissions')->where('id', $paidOrderCommission)->update(['status' => 'paid', 'paid_at' => now()]);
+        $paidPaymentId = DB::table('payment_transactions')->insertGetId([
+            'transaction_ref' => 'REFUND-PAID-TEST-' . strtoupper(bin2hex(random_bytes(4))),
+            'invoice_id' => $paidInvoice->id,
+            'branch_id' => null,
+            'gateway_slug' => 'offline',
+            'amount' => 1000.00,
+            'currency' => 'BDT',
+            'status' => 'settled',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
         $paidRefundId = DB::table('payment_refunds')->insertGetId([
-            'payment_transaction_id' => $paymentId,
+            'payment_transaction_id' => $paidPaymentId,
             'amount' => 1000.00,
             'reason' => 'Refund after referral payout',
             'created_at' => now(),
