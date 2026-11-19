@@ -346,7 +346,9 @@ class AdmissionController extends Controller
 
             $user->roles()->syncWithoutDetaching([$studentRole->id]);
 
-            $student = Student::query()->where('user_id', $user->id)->first();
+            $existingStudent = Student::withTrashed()->where('user_id', $user->id)->first();
+            abort_if($existingStudent && $existingStudent->trashed(), 409, 'This account has a student profile in the recycle bin. Restore it before linking a new admission.');
+            $student = $existingStudent;
             if (!$student) {
                 $studentCode = 'STU-' . strtoupper(Str::random(10));
                 while (Student::query()->where('student_code', $studentCode)->exists()) {
@@ -362,13 +364,20 @@ class AdmissionController extends Controller
                 ]);
             }
 
-            $admissionFee = round((float) app(PluginManager::class)->getSetting('admission-management', 'admission_fee_bdt', 0), 2);
+            $feeSetting = app(PluginManager::class)->getSetting('admission-management', 'admission_fee_bdt', 0);
+            abort_unless(is_numeric($feeSetting), 422, 'The configured admission fee is invalid.');
+            $admissionFee = round((float) $feeSetting, 2);
             abort_if($admissionFee < 0 || $admissionFee > 10000000, 422, 'The configured admission fee is invalid.');
 
             $feeInvoiceId = $locked->admission_fee_invoice_id;
             if ($admissionFee > 0 && !$feeInvoiceId) {
                 abort_unless(app(PluginManager::class)->isEnabled('fees-management')
-                    && Schema::hasTable('fee_invoices'), 503, 'Enable Fees & Invoicing before issuing an admission fee.');
+                    && Schema::hasTable('fee_invoices')
+                    && Schema::hasColumn('fee_invoices', 'student_id')
+                    && Schema::hasColumn('fee_invoices', 'branch_id')
+                    && Schema::hasColumn('fee_invoices', 'payer_name')
+                    && Schema::hasColumn('fee_invoices', 'payer_email')
+                    && Schema::hasColumn('fee_invoices', 'payer_phone'), 503, 'Enable and migrate Fees & Invoicing before issuing an admission fee.');
 
                 $invoice = FeeInvoice::query()->create([
                     'invoice_number' => 'ADM-' . strtoupper(Str::random(12)),
