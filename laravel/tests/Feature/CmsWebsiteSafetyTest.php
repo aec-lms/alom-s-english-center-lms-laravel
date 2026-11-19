@@ -283,7 +283,6 @@ class CmsWebsiteSafetyTest extends TestCase
             'seo_title' => null,
             'seo_description' => null,
             'is_published' => true,
-            'publish_at' => null,
             'created_at' => now(),
         ]);
 
