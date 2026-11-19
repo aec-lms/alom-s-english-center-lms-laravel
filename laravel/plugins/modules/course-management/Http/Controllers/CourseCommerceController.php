@@ -284,7 +284,7 @@ class CourseCommerceController extends Controller
             // concurrently and keeps the recipient email stable during redemption.
             $lockedStudent = DB::table('users')->where('id', $student->id)->lockForUpdate()->first();
             abort_unless($lockedStudent, 404, 'The recipient account is no longer available.');
-            $recipient = \\App\\Models\\User::query()->findOrFail($student->id);
+            $recipient = \App\Models\User::query()->findOrFail($student->id);
             // Lock the authoritative student-profile branch assignment as well
             // as the user row before evaluating course access.
             if ($this->plugins->isEnabled('student-management') && Schema::hasTable('students')) {
