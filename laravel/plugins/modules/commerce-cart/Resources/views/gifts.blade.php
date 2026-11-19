@@ -7,7 +7,10 @@
             <h1 class="text-2xl font-extrabold text-slate-900">Send a Course Gift or Voucher</h1>
             <p class="mt-1 text-sm text-slate-500">Create a recipient-specific gift draft. It will be paid together with your other cart items.</p>
         </div>
-        <a href="{{ route('plugins.commerce_cart.index') }}" class="rounded-lg border px-4 py-2 text-sm font-bold">View Cart</a>
+        <div class="flex flex-wrap gap-2">
+            <a href="{{ route('course-commerce.gifts.sent') }}" class="rounded-lg border border-indigo-200 px-4 py-2 text-sm font-bold text-indigo-700">Gifts You Sent</a>
+            <a href="{{ route('plugins.commerce_cart.index') }}" class="rounded-lg border px-4 py-2 text-sm font-bold">View Cart</a>
+        </div>
     </div>
 
     @if ($errors->any())
