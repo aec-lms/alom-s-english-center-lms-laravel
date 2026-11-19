@@ -29,7 +29,12 @@
     const mode = overlay.dataset.trigger || 'every-load';
     const storageKey = 'al-loader-seen';
     let configuredExcludedPaths = [];
-    try { configuredExcludedPaths = JSON.parse(overlay.dataset.excludedPaths || '[]'); } catch (error) {}
+    try {
+        const parsedExclusions = JSON.parse(overlay.dataset.excludedPaths || '[]');
+        configuredExcludedPaths = Array.isArray(parsedExclusions) ? parsedExclusions : [];
+    } catch (error) {
+        configuredExcludedPaths = [];
+    }
     function matchesConfiguredExclusion(pathname) {
         let path = String(pathname || '');
         while (path.startsWith('/')) path = path.slice(1);
