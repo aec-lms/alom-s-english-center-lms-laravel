@@ -93,10 +93,6 @@ class ExamController extends Controller
     {
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
-        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $exam->branch_id) {
-            abort(403, 'Branch isolation violation.');
-        }
-
         $validated = $request->validate([
             'course_id' => ['nullable', 'integer'],
             'title' => ['required', 'string', 'max:180'],
@@ -109,28 +105,37 @@ class ExamController extends Controller
         $courseId = array_key_exists('course_id', $validated)
             ? ($validated['course_id'] !== null ? (int) $validated['course_id'] : null)
             : ($exam->course_id !== null ? (int) $exam->course_id : null);
-        $course = null;
-        if ($courseId !== null) {
-            abort_unless(app(\App\Core\Plugins\PluginManager::class)->isEnabled('course-management') && Schema::hasTable('courses'), 503, 'Enable Course Management to attach an exam to a course.');
-            $course = DB::table('courses')->where('id', $courseId)->first();
-            abort_unless($course && (int) ($course->branch_id ?? 0) === (int) ($exam->branch_id ?? 0), 422, 'Exam and course must belong to the same branch.');
-        }
 
-        $exam->update([
-            'course_id' => $courseId,
-            'title' => $validated['title'],
-            'duration_minutes' => (int) $validated['duration_minutes'],
-            'max_attempts' => (int) ($validated['max_attempts'] ?? $exam->max_attempts ?? 1),
-            'pass_marks' => (float) $validated['pass_marks'],
-            'is_published' => $request->boolean('is_published'),
-        ]);
+        $updatedExam = DB::transaction(function () use ($exam, $actor, $validated, $courseId): Exam {
+            $lockedExam = Exam::query()->whereKey($exam->id)->lockForUpdate()->firstOrFail();
+            if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $lockedExam->branch_id) {
+                abort(403, 'Branch isolation violation.');
+            }
 
-        $this->audit->log('exam.updated', 'exam', (string) $exam->id, ['title' => $exam->title]);
+            if ($courseId !== null) {
+                abort_unless(app(\App\Core\Plugins\PluginManager::class)->isEnabled('course-management') && Schema::hasTable('courses'), 503, 'Enable Course Management to attach an exam to a course.');
+                $course = DB::table('courses')->where('id', $courseId)->first();
+                abort_unless($course && (int) ($course->branch_id ?? 0) === (int) ($lockedExam->branch_id ?? 0), 422, 'Exam and course must belong to the same branch.');
+            }
 
-        return back()->with('status', "Exam '{$exam->title}' updated.");
+            $lockedExam->update([
+                'course_id' => $courseId,
+                'title' => $validated['title'],
+                'duration_minutes' => (int) $validated['duration_minutes'],
+                'max_attempts' => (int) ($validated['max_attempts'] ?? $lockedExam->max_attempts ?? 1),
+                'pass_marks' => (float) $validated['pass_marks'],
+                'is_published' => $request->boolean('is_published'),
+            ]);
+
+            return $lockedExam->fresh();
+        });
+
+        $this->audit->log('exam.updated', 'exam', (string) $updatedExam->id, ['title' => $updatedExam->title]);
+
+        return back()->with('status', "Exam '{$updatedExam->title}' updated.");
     }
 
-        public function destroy(Request $request, Exam $exam): RedirectResponse
+    public function destroy(Request $request, Exam $exam): RedirectResponse
     {
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
@@ -150,9 +155,6 @@ class ExamController extends Controller
     {
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
-        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $exam->branch_id) {
-            abort(403, 'Branch isolation violation.');
-        }
         $validated = $request->validate([
             'prompt' => ['required', 'string'],
             'options' => ['required', 'array', 'min:2'],
@@ -165,15 +167,24 @@ class ExamController extends Controller
             return back()->withErrors(['correct_option_index' => 'Correct option index is out of bounds.']);
         }
 
-        ExamQuestion::query()->create([
-            'exam_id' => $exam->id,
-            'prompt' => $validated['prompt'],
-            'options' => array_values($validated['options']),
-            'correct_option_index' => (int) $validated['correct_option_index'],
-            'marks' => (float) $validated['marks'],
-        ]);
+        DB::transaction(function () use ($exam, $actor, $validated): void {
+            // Use the same exam-row lock as attempt snapshot creation so a
+            // question cannot slip into an attempt while its snapshot is read.
+            $lockedExam = Exam::query()->whereKey($exam->id)->lockForUpdate()->firstOrFail();
+            if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $lockedExam->branch_id) {
+                abort(403, 'Branch isolation violation.');
+            }
 
-        return back()->with('status', 'Question added to exam bank.');
+            ExamQuestion::query()->create([
+                'exam_id' => $lockedExam->id,
+                'prompt' => $validated['prompt'],
+                'options' => array_values($validated['options']),
+                'correct_option_index' => (int) $validated['correct_option_index'],
+                'marks' => (float) $validated['marks'],
+            ]);
+        });
+
+        return back()->with('status', 'Question added to exam bank. New attempts will use the updated question set.');
     }
 
     public function take(Request $request, Exam $exam): View
