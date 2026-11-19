@@ -393,7 +393,8 @@ class PaymentSettlementService
             if ($giftSubtotal <= 0 || $giftDiscount < 0 || $giftDiscount > $giftSubtotal
                 || abs(round($giftSubtotal - $giftDiscount, 2) - $amount) > 0.01
                 || !filled($draft->redeem_token_hash)
-                || !filled($draft->redeem_token_encrypted)) {
+                || !filled($draft->redeem_token_encrypted)
+                || ($draft->expires_at && now()->greaterThan($draft->expires_at))) {
                 throw new RuntimeException('Course gift amount, discount, or redemption token does not reconcile.');
             }
             $course = DB::table('courses')->where('id', (int) $draft->course_id)
