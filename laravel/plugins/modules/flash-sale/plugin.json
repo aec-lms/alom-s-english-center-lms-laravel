@@ -1,10 +1,10 @@
 {
     "slug": "flash-sale",
     "name": "Flash Sale Campaigns",
-    "version": "1.0.1",
+    "version": "1.1.0",
     "author": "Alom's English Center",
     "category": "marketing",
-    "description": "Timed course discounts and independently enabled public Flash Sale page.",
+    "description": "Premium, branch-aware timed course campaigns with centralized server-side pricing, priority scheduling and a responsive public offer storefront.",
     "core_compatibility": "^2.0",
     "dependencies": [],
     "provider": "Plugins\\Modules\\FlashSale\\Providers\\FlashSaleServiceProvider",
