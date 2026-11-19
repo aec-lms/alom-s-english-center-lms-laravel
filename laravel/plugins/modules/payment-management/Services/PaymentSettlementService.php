@@ -350,7 +350,8 @@ class PaymentSettlementService
             || $draft->status !== 'awaiting_payment'
             || $draft->invoice_id !== null
             || $draft->payment_transaction_id !== null
-            || $draft->unified_payment_transaction_id !== null) {
+            || $draft->unified_payment_transaction_id !== null
+            || ($draft->expires_at && now()->greaterThan($draft->expires_at))) {
             throw new RuntimeException($unsupported);
         }
 
