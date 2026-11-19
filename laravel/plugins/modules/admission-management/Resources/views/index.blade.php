@@ -93,7 +93,7 @@
                                         @endif
                                     @endforeach
                                 </select>
-                                <input type="datetime-local" name="interview_at" min="{{ now()->format('Y-m-d\TH:i') }}" value="{{ $app->interview_at?->format('Y-m-d\TH:i') }}" aria-label="Interview schedule" class="rounded-lg border border-slate-300 px-3 py-2 text-xs">
+                                <input type="datetime-local" name="interview_at" value="{{ $app->interview_at?->format('Y-m-d\TH:i') }}" aria-label="Interview schedule" class="rounded-lg border border-slate-300 px-3 py-2 text-xs">
                                 <textarea name="reviewer_notes" rows="2" maxlength="2000" placeholder="Reviewer notes (required when rejecting)" class="rounded-lg border border-slate-300 px-3 py-2 text-xs sm:col-span-2 xl:col-span-1"></textarea>
                                 <button type="submit" class="rounded-lg bg-sky-700 px-4 py-2 text-xs font-bold text-white sm:col-span-2 xl:col-span-1">Save Review</button>
                             </form>
