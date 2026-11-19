@@ -208,7 +208,7 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
         ]);
         $paymentId = DB::table('payment_transactions')->insertGetId([
             'transaction_ref' => 'REFUND-RECOVERY-' . strtoupper(bin2hex(random_bytes(4))),
-            'invoice_id' => $recoveryInvoiceId,
+            'invoice_id' => null,
             'branch_id' => null,
             'gateway_slug' => 'offline',
             'amount' => 1000.00,
