@@ -46,6 +46,8 @@ class CmsWebsiteSafetyTest extends TestCase
 
         $post = DB::table('cms_posts')->where('title', 'Safe CMS Article')->first();
         $this->assertNotNull($post);
+        $this->assertFalse((bool) $post->is_published, 'A newly created post must never bypass editorial approval.');
+        $this->assertSame('draft', $post->editorial_status);
         $this->assertSame('/uploads/posts/article.webp', $post->thumbnail_path);
         $this->assertSame('https://cdn.example.test/guide.pdf', $post->pdf_path);
         $this->assertSame('/uploads/posts/pdf-thumbs/guide.webp', $post->pdf_thumbnail);
@@ -157,13 +159,16 @@ class CmsWebsiteSafetyTest extends TestCase
     {
         $this->markSystemInstalled();
         $this->activatePlugins(['cms-website']);
-        $admin = $this->createUserWithRole('admin');
+        $submitter = $this->createUserWithRole('admin');
+        $reviewer = $this->createUserWithRole('admin');
         $post = CmsPost::query()->create(['slug' => 'editorial-review-test', 'title' => 'Editorial Review Test', 'category' => 'General', 'author' => 'Contributor', 'content' => 'Draft content', 'is_published' => false, 'editorial_status' => 'draft']);
-        $this->actingAs($admin)->post('/admin/cms/posts/' . $post->id . '/submit-review')->assertSessionHasNoErrors();
+        $this->actingAs($submitter)->post('/admin/cms/posts/' . $post->id . '/submit-review')->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('cms_posts', ['id' => $post->id, 'editorial_status' => 'in_review', 'is_published' => false, 'submitted_by' => $submitter->id]);
+        $this->actingAs($submitter)->post('/admin/cms/posts/' . $post->id . '/approve')->assertForbidden();
         $this->assertDatabaseHas('cms_posts', ['id' => $post->id, 'editorial_status' => 'in_review', 'is_published' => false]);
-        $this->actingAs($admin)->post('/admin/cms/posts/' . $post->id . '/approve')->assertSessionHasNoErrors();
-        $this->assertDatabaseHas('cms_posts', ['id' => $post->id, 'editorial_status' => 'approved', 'is_published' => false]);
-        $this->actingAs($admin)->post('/admin/cms/posts/' . $post->id . '/publish-approved')->assertSessionHasNoErrors();
+        $this->actingAs($reviewer)->post('/admin/cms/posts/' . $post->id . '/approve')->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('cms_posts', ['id' => $post->id, 'editorial_status' => 'approved', 'is_published' => false, 'reviewed_by' => $reviewer->id]);
+        $this->actingAs($reviewer)->post('/admin/cms/posts/' . $post->id . '/publish-approved')->assertSessionHasNoErrors();
         $this->assertDatabaseHas('cms_posts', ['id' => $post->id, 'editorial_status' => 'published', 'is_published' => true]);
     }
 
