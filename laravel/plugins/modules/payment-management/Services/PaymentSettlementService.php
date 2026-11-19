@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
+use Plugins\Modules\CourseManagement\Jobs\SendGiftRecipientEmailJob;
 use App\Core\Plugins\PluginManager;
 use App\Models\User;
 use Plugins\Modules\ReferralIncome\Services\ReferralIncomeService;
@@ -455,6 +456,8 @@ class PaymentSettlementService
         if ($updated !== 1) {
             throw new RuntimeException('Course gift could not be issued exactly once after verified settlement.');
         }
+
+        SendGiftRecipientEmailJob::dispatch('gift_course', (int) $item->item_id)->afterCommit();
     }
 
     private function fulfillUnifiedGiftVoucher(
@@ -479,6 +482,8 @@ class PaymentSettlementService
         if ($updated !== 1) {
             throw new RuntimeException('Gift voucher could not be issued exactly once after verified settlement.');
         }
+
+        SendGiftRecipientEmailJob::dispatch('gift_voucher', (int) $item->item_id)->afterCommit();
     }
 
     private function assignedBranchId(User $user): ?int
