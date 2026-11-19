@@ -53,6 +53,9 @@ class ExamAttemptSnapshotTest extends TestCase
             'duration_minutes' => 5,
             'pass_marks' => 50,
         ]);
+        DB::table('exam_attempts')->where('id', $attemptId)->update([
+            'started_at' => now()->subMinutes(6),
+        ]);
 
         $this->actingAs($student)->get("/exams/{$examId}/take")
             ->assertOk()
