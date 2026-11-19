@@ -51,7 +51,7 @@
             @if($entry->example_sentence)<p class="mt-3 text-sm italic">{{ $entry->example_sentence }}</p>@endif
             <div class="mt-4 rounded-xl border border-dashed p-4 phonetics-recorder" data-upload-url="{{ route('plugins.phonetics.learning.recordings.store',['courseSlug'=>request()->route('courseSlug')]) }}" data-entry-id="{{ $entry->id }}">
                 <p class="font-semibold">Speaking practice</p>
-                <p class="mt-1 text-xs text-slate-500">Record up to 120 seconds. Your recording stays private and is submitted for teacher review.</p>
+                <p class="mt-1 text-xs text-slate-500">Maximum 120 seconds per take. Recording duration is browser-reported; the upload is size-limited and stored privately for teacher review.</p>
                 <div class="mt-3 flex flex-wrap gap-2">
                     <button type="button" class="record-start rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white">Start recording</button>
                     <button type="button" class="record-stop rounded-lg bg-slate-700 px-4 py-2 text-sm font-bold text-white" disabled>Stop & submit</button>
@@ -63,6 +63,11 @@
         @empty
         <div class="rounded-xl border bg-white p-8 text-center text-slate-500 md:col-span-2">No vocabulary has been assigned to this course, lesson or batch yet.</div>
         @endforelse
+    </section>
+    <section id="phonetics-recording-history" class="rounded-xl border bg-white p-5" data-history-url="{{ route('plugins.phonetics.learning.recordings.history',['courseSlug'=>request()->route('courseSlug')]) }}">
+        <h2 class="text-lg font-extrabold">Your speaking feedback</h2>
+        <p class="mt-1 text-sm text-slate-500">Teacher reviews and scores for your recent recordings.</p>
+        <div class="recording-history-items mt-3 space-y-3"><p class="text-sm text-slate-500">Loading your feedback…</p></div>
     </section>
     @if($exams->isNotEmpty())
     <section class="space-y-3">
@@ -82,10 +87,25 @@
 <script>
 (() => {
  const csrf=document.querySelector('meta[name=csrf-token]')?.content||'';
+ const history=document.getElementById('phonetics-recording-history');
+ if(history){
+  fetch(history.dataset.historyUrl,{headers:{Accept:'application/json'}}).then(response=>response.ok?response.json():Promise.reject()).then(data=>{
+   const list=history.querySelector('.recording-history-items');list.replaceChildren();
+   if(!data.recordings?.length){list.textContent='No recordings submitted yet.';return;}
+   data.recordings.forEach(item=>{
+    const card=document.createElement('article');card.className='rounded-lg bg-slate-50 p-3';
+    const title=document.createElement('p');title.className='font-semibold';title.textContent=item.word?.word||'Vocabulary recording';
+    const meta=document.createElement('p');meta.className='mt-1 text-xs text-slate-500';meta.textContent=(item.status==='reviewed'?'Reviewed · Score '+item.score+'/5':'Awaiting teacher review')+' · '+item.duration_seconds+' sec';
+    card.append(title,meta);
+    if(item.feedback){const feedback=document.createElement('p');feedback.className='mt-2 text-sm';feedback.textContent=item.feedback;card.append(feedback);}
+    list.append(card);
+   });
+  }).catch(()=>{history.querySelector('.recording-history-items').textContent='Your feedback could not be loaded right now.';});
+ }
  document.querySelectorAll('.phonetics-recorder').forEach((widget)=>{
   const start=widget.querySelector('.record-start'),stop=widget.querySelector('.record-stop'),status=widget.querySelector('.record-status'),preview=widget.querySelector('.record-preview');
-  let recorder=null,stream=null,chunks=[],startedAt=0,previewUrl=null;
-  const finishTracks=()=>{if(stream){stream.getTracks().forEach(track=>track.stop());stream=null;}};
+  let recorder=null,stream=null,chunks=[],startedAt=0,previewUrl=null,limitTimer=null;
+  const finishTracks=()=>{if(limitTimer)clearTimeout(limitTimer);if(stream){stream.getTracks().forEach(track=>track.stop());stream=null;}};
   start.addEventListener('click',async()=>{
    if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder){status.textContent='Microphone recording is not supported in this browser. Try a current Chrome, Edge or Firefox browser.';return;}
    start.disabled=true;status.textContent='Waiting for microphone permission…';
@@ -109,7 +129,7 @@
      }catch(error){status.textContent=error.message||'Unable to upload recording. Please try again.';}
      start.disabled=false;
     },{once:true});
-    recorder.start();start.disabled=true;stop.disabled=false;status.textContent='Recording… speak clearly. Maximum 120 seconds.';
+    recorder.start();start.disabled=true;stop.disabled=false;status.textContent='Recording… speak clearly. Maximum 120 seconds.';limitTimer=setTimeout(()=>{if(recorder&&recorder.state!=='inactive'){status.textContent='120-second limit reached. Uploading your recording…';recorder.stop();}},120000);
    }catch(error){finishTracks();start.disabled=false;status.textContent=error.name==='NotAllowedError'?'Microphone permission was denied. Allow microphone access and try again.':'Could not start microphone recording.';}
   });
   stop.addEventListener('click',()=>{if(recorder&&recorder.state!=='inactive'){stop.disabled=true;status.textContent='Finishing recording…';recorder.stop();}});
