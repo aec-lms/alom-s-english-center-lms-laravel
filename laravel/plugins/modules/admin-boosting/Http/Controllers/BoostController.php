@@ -76,6 +76,18 @@ class BoostController extends Controller
     public function update(Request $request, BoostCampaign $campaign): RedirectResponse
     {
         $validated = $request->validate($this->campaignRules($request, false));
+
+        // Validate the effective date range, including values retained from the
+        // existing campaign when an update submits only one boundary.
+        $effectiveStart = array_key_exists('starts_at', $validated) ? $validated['starts_at'] : $campaign->starts_at;
+        $effectiveEnd = array_key_exists('ends_at', $validated) ? $validated['ends_at'] : $campaign->ends_at;
+        if ($effectiveStart && $effectiveEnd
+            && \\Illuminate\\Support\\Carbon::parse($effectiveEnd)->lt(\\Illuminate\\Support\\Carbon::parse($effectiveStart))) {
+            throw \\Illuminate\\Validation\\ValidationException::withMessages([
+                'ends_at' => 'The campaign end date must be on or after its start date.',
+            ]);
+        }
+
         $before = $campaign->only(['status', 'placement', 'entity_type', 'entity_id', 'priority']);
         if (in_array($validated['entity_type'], ['institution', 'offer'], true)) {
             $validated['entity_id'] = null;
