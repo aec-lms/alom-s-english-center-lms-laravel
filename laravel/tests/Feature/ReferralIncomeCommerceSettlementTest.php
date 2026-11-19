@@ -56,6 +56,48 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
             'currency' => 'BDT',
             'status' => 'pending',
         ]);
+
+        $paymentId = DB::table('payment_transactions')->insertGetId([
+            'transaction_ref' => 'REFUND-TEST-' . strtoupper(bin2hex(random_bytes(4))),
+            'invoice_id' => null,
+            'branch_id' => null,
+            'gateway_slug' => 'offline',
+            'amount' => 1000.00,
+            'currency' => 'BDT',
+            'status' => 'settled',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $firstRefundId = DB::table('payment_refunds')->insertGetId([
+            'payment_transaction_id' => $paymentId,
+            'amount' => 500.00,
+            'reason' => 'Partial refund test',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $firstReversal = $service->reverseSettledPurchase($buyer, 'commerce_order', 'AEC-ORDER-1001', $firstRefundId, 500.00, 'BDT');
+        $retryReversal = $service->reverseSettledPurchase($buyer, 'commerce_order', 'AEC-ORDER-1001', $firstRefundId, 500.00, 'BDT');
+        $this->assertSame((int) $firstReversal, (int) $retryReversal);
+        $this->assertDatabaseHas('referral_commissions', [
+            'source_id' => 'AEC-ORDER-1001',
+            'commission_amount' => round(1000.00 * $percent / 200, 2),
+            'status' => 'pending',
+        ]);
+
+        $secondRefundId = DB::table('payment_refunds')->insertGetId([
+            'payment_transaction_id' => $paymentId,
+            'amount' => 500.00,
+            'reason' => 'Final refund test',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $service->reverseSettledPurchase($buyer, 'commerce_order', 'AEC-ORDER-1001', $secondRefundId, 500.00, 'BDT');
+        $this->assertDatabaseHas('referral_commissions', [
+            'source_id' => 'AEC-ORDER-1001',
+            'commission_amount' => 0,
+            'status' => 'reversed',
+        ]);
+        $this->assertDatabaseCount('referral_commission_reversals', 2);
     }
 
     public function test_student_cannot_refer_themselves_or_apply_two_referral_codes(): void
