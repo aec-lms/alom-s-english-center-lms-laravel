@@ -135,7 +135,7 @@ class LiveClassCapacityTest extends TestCase
 
         $this->actingAs($student)->post("/live-classes/{$liveClass->id}/join")->assertOk();
 
-        $enrollment->delete();
+        $enrollment->update(['status' => 'cancelled']);
         $this->actingAs($student)
             ->postJson("/live-classes/{$liveClass->id}/heartbeat")
             ->assertForbidden();
@@ -145,6 +145,50 @@ class LiveClassCapacityTest extends TestCase
             ->postJson("/live-classes/{$liveClass->id}/leave")
             ->assertOk()
             ->assertJsonPath('left', true);
+    }
+
+    public function test_join_rechecks_cancelled_enrollment_and_inactive_user_before_granting_a_seat(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management']);
+
+        $course = Course::query()->create([
+            'code' => 'LIVE-REVOKED-JOIN',
+            'title' => 'Revoked Enrollment Join Test',
+            'slug' => 'revoked-enrollment-join-test',
+            'price' => 0,
+            'status' => 'published',
+        ]);
+        $liveClass = LiveClass::query()->create([
+            'course_id' => $course->id,
+            'title' => 'Revoked Enrollment Session',
+            'platform' => 'zoom',
+            'meeting_url' => 'https://zoom.us/j/123456789',
+            'starts_at' => now()->subMinute(),
+            'status' => 'live',
+            'capacity' => 300,
+        ]);
+
+        $student = $this->createUserWithRole('student');
+        $enrollment = Enrollment::query()->create([
+            'user_id' => $student->id,
+            'course_id' => $course->id,
+            'status' => 'active',
+        ]);
+
+        $enrollment->update(['status' => 'cancelled']);
+        $this->actingAs($student)
+            ->post("/live-classes/{$liveClass->id}/join")
+            ->assertForbidden();
+        $this->assertDatabaseCount('live_class_participants', 0);
+
+        $enrollment->update(['status' => 'active']);
+        app('db')->table('users')->where('id', $student->id)->update(['is_active' => false]);
+
+        $this->actingAs($student)
+            ->post("/live-classes/{$liveClass->id}/join")
+            ->assertForbidden();
+        $this->assertDatabaseCount('live_class_participants', 0);
     }
 
     public function test_non_enrolled_student_and_non_student_role_cannot_join_live_class(): void
