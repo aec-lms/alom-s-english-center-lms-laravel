@@ -71,7 +71,7 @@
         <div class="max-w-[1280px] mx-auto grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
             @foreach ($homepageBoostCampaigns as $boostCampaign)
                 <article class="relative rounded-2xl border border-blue-100 bg-white p-4 shadow-sm hover:shadow-lg transition-shadow">
-                    <img src="{{ route('plugins.boost.impression', $boostCampaign) }}" alt="" width="1" height="1" class="absolute w-px h-px opacity-0 pointer-events-none" loading="lazy">
+                    <img src="{{ route('plugins.boost.impression', $boostCampaign) }}" alt="" width="1" height="1" class="absolute w-px h-px opacity-0 pointer-events-none">
                     <div class="flex items-start justify-between gap-2">
                         <span class="inline-flex rounded-full bg-indigo-50 px-2 py-1 text-[9px] font-extrabold uppercase tracking-wide text-indigo-700">{{ $boostCampaign->badge_text ?: 'FEATURED' }}</span>
                         <span class="text-[9px] font-bold uppercase tracking-wide text-slate-400">Sponsored</span>
