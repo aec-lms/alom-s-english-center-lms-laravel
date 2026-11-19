@@ -176,11 +176,13 @@ class CmsWebsiteSafetyTest extends TestCase
     {
         $this->markSystemInstalled();
         $this->activatePlugins(['cms-website']);
-        $admin = $this->createUserWithRole('admin');
-        $post = CmsPost::query()->create(['slug' => 'editorial-change-request', 'title' => 'Editorial Change Request', 'category' => 'General', 'author' => 'Contributor', 'content' => 'Draft content', 'is_published' => false, 'editorial_status' => 'in_review']);
-        $this->actingAs($admin)->post('/admin/cms/posts/' . $post->id . '/request-changes', ['review_note' => ''])->assertSessionHasErrors('review_note');
+        $submitter = $this->createUserWithRole('admin');
+        $reviewer = $this->createUserWithRole('admin');
+        $post = CmsPost::query()->create(['slug' => 'editorial-change-request', 'title' => 'Editorial Change Request', 'category' => 'General', 'author' => 'Contributor', 'content' => 'Draft content', 'created_by' => $submitter->id, 'submitted_by' => $submitter->id, 'is_published' => false, 'editorial_status' => 'in_review']);
+        $this->actingAs($submitter)->post('/admin/cms/posts/' . $post->id . '/request-changes', ['review_note' => 'Please add references.'])->assertForbidden();
+        $this->actingAs($reviewer)->post('/admin/cms/posts/' . $post->id . '/request-changes', ['review_note' => ''])->assertSessionHasErrors('review_note');
         $this->assertDatabaseHas('cms_posts', ['id' => $post->id, 'editorial_status' => 'in_review']);
-        $this->actingAs($admin)->post('/admin/cms/posts/' . $post->id . '/request-changes', ['review_note' => 'Please add references.'])->assertSessionHasNoErrors();
+        $this->actingAs($reviewer)->post('/admin/cms/posts/' . $post->id . '/request-changes', ['review_note' => 'Please add references.'])->assertSessionHasNoErrors();
         $this->assertDatabaseHas('cms_posts', ['id' => $post->id, 'editorial_status' => 'changes_requested', 'review_note' => 'Please add references.']);
     }
 
