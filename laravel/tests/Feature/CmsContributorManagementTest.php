@@ -187,10 +187,16 @@ final class CmsContributorManagementTest extends TestCase
             'content' => 'Co-author contribution saved.',
         ])->assertSessionHasNoErrors();
 
+        $this->actingAs($editor)->put('/admin/cms/editorial/posts/' . $post->id, [
+            'title' => 'Collaborative Draft Finalized',
+            'slug' => $post->slug,
+            'content' => 'Assigned editor final review saved.',
+        ])->assertSessionHasNoErrors();
+
         $this->assertDatabaseHas('cms_posts', [
             'id' => $post->id,
-            'title' => 'Collaborative Draft Updated',
-            'content' => 'Co-author contribution saved.',
+            'title' => 'Collaborative Draft Finalized',
+            'content' => 'Assigned editor final review saved.',
             'editorial_status' => 'draft',
             'is_published' => false,
         ]);
