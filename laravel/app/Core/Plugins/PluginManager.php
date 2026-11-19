@@ -1337,7 +1337,7 @@ class PluginManager
     {
         // A compiled route cache already contains the deployment's plugin routes.
         // Runtime requires would bypass that cache and can create duplicate routes.
-        if (app()->routesAreCached()) {
+        if (is_file(app()->getCachedRoutesPath())) {
             return;
         }
 
