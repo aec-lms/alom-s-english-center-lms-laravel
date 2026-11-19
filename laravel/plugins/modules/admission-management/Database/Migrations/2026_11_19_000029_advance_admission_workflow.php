@@ -33,13 +33,6 @@ return new class extends Migration {
 
     public function down(): void
     {
-        if (!Schema::hasTable('admission_applications')) return;
-
-        Schema::table('admission_applications', function (Blueprint $table): void {
-            foreach (['date_of_birth', 'address', 'application_source', 'interview_at', 'assigned_to', 'created_by'] as $column) {
-                if (Schema::hasColumn('admission_applications', $column)) $table->dropColumn($column);
-            }
-            try { $table->dropIndex('admission_status_branch_idx'); } catch (\Throwable) {}
-        });
+        // Preserve applicant data and workflow metadata during plugin rollback.
     }
 };
