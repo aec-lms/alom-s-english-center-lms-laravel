@@ -794,7 +794,6 @@ class CourseCommerceController extends Controller
             abort_unless($payment !== null
                 && (string) $payment->status === 'settled'
                 && (int) $payment->invoice_id === (int) $invoiceId
-                && ($expectedAmount === null || abs((float) $payment->amount - $expectedAmount) <= 0.01)
                 && ($expectedCurrency === null || strtoupper((string) $payment->currency) === strtoupper($expectedCurrency)),
                 409,
                 'This gift or voucher unified payment has not been settled or no longer matches its purchase.'
