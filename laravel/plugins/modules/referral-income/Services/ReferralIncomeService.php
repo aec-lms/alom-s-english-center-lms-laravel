@@ -181,9 +181,13 @@ class ReferralIncomeService
                 ->where('referral_commission_id', $commission->id)
                 ->sum('commission_reversal_amount');
             $originalCommission = round($eligible * ((float) $commission->commission_percent / 100), 2);
+            $cumulativeRefunded = round($alreadyReversed + $refund, 2);
+            $cumulativeTarget = $cumulativeRefunded >= $eligible - 0.01
+                ? $originalCommission
+                : round($cumulativeRefunded * ((float) $commission->commission_percent / 100), 2);
             $reversalAmount = min(
                 max(0, round($originalCommission - $alreadyReversedCommission, 2)),
-                round($refund * ((float) $commission->commission_percent / 100), 2),
+                max(0, round($cumulativeTarget - $alreadyReversedCommission, 2)),
             );
             $reversalAmount = round($reversalAmount, 2);
             $requiresRecovery = $commission->status === 'paid'
