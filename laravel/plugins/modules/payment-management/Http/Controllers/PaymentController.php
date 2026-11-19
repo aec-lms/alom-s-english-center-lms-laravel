@@ -128,7 +128,7 @@ class PaymentController extends Controller
                             ->whereIn('order_id', $orderIds)
                             ->whereIn('item_type', ['gift_course', 'gift_voucher'])
                             ->exists()) {
-                        throw new \\RuntimeException(
+                        throw new \RuntimeException(
                             'Refunds for orders containing course gifts or gift vouchers are blocked until recipient access and voucher-wallet reconciliation are supported. No refund was recorded.'
                         );
                     }
