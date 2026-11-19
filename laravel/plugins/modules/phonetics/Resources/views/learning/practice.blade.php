@@ -9,6 +9,21 @@
         <p class="mt-2 text-sm opacity-75">Only words assigned to this course, lesson and your batch are shown.</p>
     </header>
 
+    <section class="rounded-2xl border bg-white p-5 shadow-sm" aria-label="Practice progress">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+            <h2 class="text-lg font-extrabold">Practice progress</h2>
+            <span class="text-sm text-slate-500">Current course / lesson / batch</span>
+        </div>
+        <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            <div class="rounded-lg bg-slate-50 p-3"><p class="text-xs text-slate-500">Attempts</p><p class="mt-1 text-2xl font-extrabold">{{ $progress['attempts'] }}</p></div>
+            <div class="rounded-lg bg-slate-50 p-3"><p class="text-xs text-slate-500">Correct answers</p><p class="mt-1 text-2xl font-extrabold">{{ $progress['correct'] }}</p></div>
+            <div class="rounded-lg bg-slate-50 p-3"><p class="text-xs text-slate-500">Accuracy</p><p class="mt-1 text-2xl font-extrabold">{{ $progress['accuracy'] }}%</p></div>
+            <div class="rounded-lg bg-slate-50 p-3"><p class="text-xs text-slate-500">Words practiced</p><p class="mt-1 text-2xl font-extrabold">{{ $progress['words_practiced'] }}</p></div>
+            <div class="rounded-lg bg-slate-50 p-3"><p class="text-xs text-slate-500">British practice</p><p class="mt-1 text-2xl font-extrabold">{{ $progress['uk_attempts'] }}</p></div>
+            <div class="rounded-lg bg-slate-50 p-3"><p class="text-xs text-slate-500">American practice</p><p class="mt-1 text-2xl font-extrabold">{{ $progress['us_attempts'] }}</p></div>
+        </div>
+    </section>
+
     @if($challenge)
     <section class="rounded-2xl border bg-white p-6 shadow-sm">
         <p class="text-xs font-bold uppercase tracking-wide text-blue-700">Quick practice</p>
