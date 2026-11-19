@@ -39,6 +39,8 @@ final class AlBrandingLoaderProductionHardeningTest extends TestCase
         $this->assertStringContainsString('if (hideTimer !== null) window.clearTimeout(hideTimer)', $view);
         $this->assertStringContainsString('maxTimer = window.setTimeout(forceHide, maxDuration)', $view);
         $this->assertStringContainsString('destination.origin !== window.location.origin', $view);
+        $this->assertStringContainsString('matchesConfiguredExclusion(destination.pathname)', $view);
+        $this->assertStringContainsString('data-excluded-paths=', $view);
     }
 
     public function test_admin_payment_api_and_live_class_routes_are_excluded_from_navigation_loader(): void
