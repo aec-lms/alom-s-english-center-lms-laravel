@@ -239,6 +239,9 @@ class AdmissionController extends Controller
         $this->assertApplicationBranchAccess($actor, $application);
         abort_unless(Schema::hasTable('admission_documents'), 503, 'Admission document storage is not installed.');
 
+        abort_if($application->documents()->count() >= 10, 422, 'An application can have at most 10 supporting documents.');
+        abort_if((int) $application->documents()->sum('size_bytes') >= 51200 * 1024, 422, 'The application document storage limit has been reached.');
+
         $validated = $request->validate([
             'document' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
         ]);
@@ -331,6 +334,10 @@ class AdmissionController extends Controller
             if ($user && !$user->hasRole('student')) {
                 abort(409, 'This email already belongs to a non-student account. Resolve the account ownership before conversion.');
             }
+            if ($user && $locked->branch_id !== null && $user->branch_id !== null
+                && (int) $user->branch_id !== (int) $locked->branch_id) {
+                abort(409, 'The existing student account belongs to another branch. Resolve branch ownership before conversion.');
+            }
 
             if (!$user) {
                 $user = User::query()->create([
@@ -342,6 +349,8 @@ class AdmissionController extends Controller
                     'is_active' => true,
                 ]);
                 $createdAccount = true;
+            } elseif ($user->branch_id === null && $locked->branch_id !== null) {
+                $user->update(['branch_id' => $locked->branch_id]);
             }
 
             $user->roles()->syncWithoutDetaching([$studentRole->id]);
@@ -357,7 +366,7 @@ class AdmissionController extends Controller
 
                 $student = Student::query()->create([
                     'user_id' => $user->id,
-                    'branch_id' => $locked->branch_id,
+                    'branch_id' => $locked->branch_id ?? $user->branch_id,
                     'student_code' => $studentCode,
                     'admission_date' => now()->toDateString(),
                     'status' => 'active',
