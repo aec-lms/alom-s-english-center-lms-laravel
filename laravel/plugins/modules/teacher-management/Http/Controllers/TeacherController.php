@@ -92,7 +92,7 @@ class TeacherController extends Controller
 
             return Teacher::query()->create([
                 'user_id' => $user->id,
-                'branch_id' => $resolvedBranchId,
+                'branch_id' => $validated['branch_id'] ?? null,
                 'employee_code' => strtoupper(trim($validated['employee_code'])),
                 'specialization' => $validated['specialization'],
                 'credentials' => $validated['credentials'] ?? null,
@@ -128,7 +128,7 @@ class TeacherController extends Controller
             'youtube_url' => ['nullable', 'url', 'max:255'],
             'facebook_url' => ['nullable', 'url', 'max:255'],
             'photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
-            'photo_url' => ['nullable', 'string', 'max:255'],
+            'photo_url' => ['nullable', 'string', 'max:255', 'regex:/^(https:\/\/[^\s]+|\/(?!\/)[A-Za-z0-9._\/-]+)$/'],
             'is_active' => ['nullable', 'boolean'],
         ]);
 
@@ -151,7 +151,7 @@ class TeacherController extends Controller
         DB::transaction(function () use ($teacher, $validated, $request, $photoPath, $resolvedBranchId): void {
             $isActive = $request->boolean('is_active');
             $teacher->update([
-                'branch_id' => $validated['branch_id'] ?? null,
+                'branch_id' => $resolvedBranchId,
                 'employee_code' => strtoupper(trim($validated['employee_code'])),
                 'specialization' => $validated['specialization'],
                 'credentials' => $validated['credentials'] ?? null,
