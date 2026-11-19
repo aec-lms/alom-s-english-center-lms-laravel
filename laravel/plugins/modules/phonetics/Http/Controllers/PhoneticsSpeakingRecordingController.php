@@ -113,6 +113,17 @@ final class PhoneticsSpeakingRecordingController extends Controller
             ->limit(50)
             ->get(['id', 'entry_id', 'status', 'score', 'feedback', 'duration_seconds', 'created_at', 'reviewed_at']);
 
+        $items->each(function (PhoneticSpeakingRecording $item) use ($courseSlug): void {
+            $item->setAttribute('audio_url', route('plugins.phonetics.learning.recordings.audio', [
+                'courseSlug' => $courseSlug,
+                'recording' => $item->id,
+            ]));
+            $item->setAttribute('delete_url', route('plugins.phonetics.learning.recordings.destroy', [
+                'courseSlug' => $courseSlug,
+                'recording' => $item->id,
+            ]));
+        });
+
         return response()->json(['recordings' => $items]);
     }
 
@@ -168,10 +179,32 @@ final class PhoneticsSpeakingRecordingController extends Controller
         );
         abort_unless($recording->status === 'pending', 409, 'A reviewed recording cannot be deleted by the student.');
 
-        DB::transaction(function () use ($recording): void {
-            $this->privateDisk()->delete($recording->storage_path);
-            $recording->delete();
+        $storagePath = DB::transaction(function () use ($recording): string {
+            $locked = PhoneticSpeakingRecording::query()->whereKey($recording->id)->lockForUpdate()->firstOrFail();
+            abort_unless(
+                $locked->lms_driver === $this->catalog->driver()
+                && $locked->course_ref === $recording->course_ref
+                && $locked->user_id === $recording->user_id,
+                404
+            );
+            abort_unless($locked->status === 'pending', 409, 'A reviewed recording cannot be deleted by the student.');
+
+            $path = $locked->storage_path;
+            PhoneticAuditEvent::query()->create([
+                'user_id' => request()->user()->getAuthIdentifier(),
+                'action' => 'phonetics.recording.deleted',
+                'entity_type' => 'speaking_recording',
+                'entity_id' => (string) $locked->id,
+                'ip_address' => request()->ip(),
+                'metadata' => ['student_id' => $locked->user_id, 'reason' => 'student_requested_pending_deletion'],
+            ]);
+            $locked->delete();
+
+            return $path;
         });
+
+        // Delete the private file only after the database transaction commits.
+        $this->privateDisk()->delete($storagePath);
 
         return response()->json(['deleted' => true]);
     }
@@ -219,7 +252,17 @@ final class PhoneticsSpeakingRecordingController extends Controller
         ]);
 
         DB::transaction(function () use ($request, $recording, $data): void {
-            $recording->update([
+            // Serialize concurrent teacher reviews and retain an audit trail for
+            // both the first review and any later correction.
+            $locked = PhoneticSpeakingRecording::query()
+                ->whereKey($recording->id)
+                ->where('lms_driver', $this->catalog->driver())
+                ->lockForUpdate()
+                ->firstOrFail();
+            $wasReviewed = $locked->status === 'reviewed';
+            $previousScore = $locked->score;
+
+            $locked->update([
                 'status' => 'reviewed',
                 'reviewer_user_id' => (string) $request->user()->getAuthIdentifier(),
                 'score' => $data['score'],
@@ -228,11 +271,15 @@ final class PhoneticsSpeakingRecordingController extends Controller
             ]);
             PhoneticAuditEvent::query()->create([
                 'user_id' => $request->user()->getAuthIdentifier(),
-                'action' => 'phonetics.recording.reviewed',
+                'action' => $wasReviewed ? 'phonetics.recording.review.updated' : 'phonetics.recording.reviewed',
                 'entity_type' => 'speaking_recording',
-                'entity_id' => (string) $recording->id,
+                'entity_id' => (string) $locked->id,
                 'ip_address' => $request->ip(),
-                'metadata' => ['student_id' => $recording->user_id, 'score' => $data['score']],
+                'metadata' => [
+                    'student_id' => $locked->user_id,
+                    'score' => $data['score'],
+                    'previous_score' => $previousScore,
+                ],
             ]);
         });
 
