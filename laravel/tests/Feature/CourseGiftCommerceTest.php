@@ -8,6 +8,7 @@ use App\Core\Plugins\PluginManager;
 use App\Models\PluginSetting;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Queue;
 use Plugins\Modules\CourseManagement\Jobs\SendGiftRecipientEmailJob;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -990,5 +991,83 @@ class CourseGiftCommerceTest extends TestCase
         $this->assertDatabaseMissing('course_gift_wallet_transactions', ['voucher_id' => $voucherId]);
         $this->assertDatabaseMissing('course_gift_wallets', ['user_id' => $recipient->id, 'currency' => 'BDT']);
     }
+
+
+    public function test_sender_can_view_only_own_paid_gift_links_and_retry_failed_delivery(): void
+    {
+        $sender = $this->createUserWithRole('student');
+        $otherSender = $this->createUserWithRole('student');
+        $course = Course::query()->create([
+            'code' => 'GIFT-SENDER-HISTORY-' . $sender->id,
+            'title' => 'Sender History Course',
+            'slug' => 'sender-history-course-' . $sender->id,
+            'price' => 900,
+            'status' => 'published',
+        ]);
+        $ownToken = str_repeat('S', 64);
+        $otherToken = str_repeat('O', 64);
+
+        $ownGiftId = DB::table('course_gifts')->insertGetId([
+            'sender_user_id' => $sender->id,
+            'recipient_email' => 'own-gift-recipient@example.test',
+            'recipient_name' => 'Own Recipient',
+            'course_id' => $course->id,
+            'redeem_token_hash' => hash('sha256', $ownToken),
+            'redeem_token_encrypted' => encrypt($ownToken),
+            'status' => 'paid',
+            'currency' => 'BDT',
+            'amount' => 900,
+            'paid_at' => now(),
+            'expires_at' => now()->addDays(30),
+            'notification_delivery_status' => 'failed',
+            'notification_attempt_count' => 5,
+            'notification_last_error' => 'SMTP temporarily unavailable.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('course_gifts')->insert([
+            'sender_user_id' => $otherSender->id,
+            'recipient_email' => 'private-other-recipient@example.test',
+            'course_id' => $course->id,
+            'redeem_token_hash' => hash('sha256', $otherToken),
+            'redeem_token_encrypted' => encrypt($otherToken),
+            'status' => 'paid',
+            'currency' => 'BDT',
+            'amount' => 900,
+            'paid_at' => now(),
+            'expires_at' => now()->addDays(30),
+            'notification_delivery_status' => 'sent',
+            'notification_sent_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($sender)->get('/student/course-commerce/gifts/sent')
+            ->assertOk()
+            ->assertSee('own-gift-recipient@example.test')
+            ->assertSee($ownToken)
+            ->assertDontSee('private-other-recipient@example.test')
+            ->assertDontSee($otherToken);
+
+        Queue::fake();
+        $this->actingAs($otherSender)->post('/student/course-commerce/gifts/' . $ownGiftId . '/resend')
+            ->assertNotFound();
+
+        $this->actingAs($sender)->post('/student/course-commerce/gifts/' . $ownGiftId . '/resend')
+            ->assertRedirect()
+            ->assertSessionHas('status');
+
+        $this->assertDatabaseHas('course_gifts', [
+            'id' => $ownGiftId,
+            'notification_delivery_status' => 'pending',
+            'notification_sent_at' => null,
+            'notification_last_error' => null,
+        ]);
+        Queue::assertPushed(SendGiftRecipientEmailJob::class, fn (SendGiftRecipientEmailJob $job): bool =>
+            $job->giftType === 'gift_course' && $job->giftId === $ownGiftId
+        );
+    }
+
 
 }
