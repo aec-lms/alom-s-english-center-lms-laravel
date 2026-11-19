@@ -186,6 +186,42 @@ class CourseGiftCommerceTest extends TestCase
         $this->assertDatabaseMissing('enrollments', ['user_id' => $recipient->id, 'course_id' => $course->id]);
     }
 
+    public function test_paid_course_gift_cannot_be_redeemed_outside_the_recipient_current_branch(): void
+    {
+        $sender = $this->createUserWithRole('student', 11);
+        $recipient = $this->createUserWithRole('student', 22, 'branch-gift-recipient@example.test');
+        $course = Course::query()->create([
+            'code' => 'GIFT-BRANCH-001',
+            'title' => 'Branch Restricted Gift',
+            'slug' => 'branch-restricted-gift',
+            'price' => 1500,
+            'status' => 'published',
+            'branch_id' => 11,
+        ]);
+        $token = str_repeat('R', 64);
+        $giftId = DB::table('course_gifts')->insertGetId([
+            'sender_user_id' => $sender->id,
+            'recipient_user_id' => null,
+            'recipient_email' => $recipient->email,
+            'course_id' => $course->id,
+            'invoice_id' => null,
+            'redeem_token_hash' => hash('sha256', $token),
+            'redeem_token_encrypted' => encrypt($token),
+            'status' => 'paid',
+            'currency' => 'BDT',
+            'amount' => 1500,
+            'paid_at' => now(),
+            'expires_at' => now()->addDays(30),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($recipient)->post('/student/course-commerce/gifts/redeem/' . $token)->assertForbidden();
+
+        $this->assertDatabaseHas('course_gifts', ['id' => $giftId, 'status' => 'paid', 'recipient_user_id' => null]);
+        $this->assertDatabaseMissing('enrollments', ['user_id' => $recipient->id, 'course_id' => $course->id]);
+    }
+
     public function test_paid_course_gift_can_only_be_redeemed_by_recipient_email_and_only_once(): void
     {
         $sender = $this->createUserWithRole('student');
