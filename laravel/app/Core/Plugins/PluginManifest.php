@@ -57,6 +57,20 @@ final class PluginManifest
             throw new InvalidArgumentException("Plugin version must use semantic versioning: {$data['version']}");
         }
 
+        $dependencies = self::validatedDependencies($data, 'dependencies');
+        $optionalDependencies = self::validatedDependencies($data, 'optional_dependencies');
+        if (in_array($data['slug'], $dependencies, true) || in_array($data['slug'], $optionalDependencies, true)) {
+            throw new InvalidArgumentException('A plugin cannot depend on itself.');
+        }
+        if (array_intersect($dependencies, $optionalDependencies) !== []) {
+            throw new InvalidArgumentException('A plugin dependency cannot be both required and optional.');
+        }
+        if (array_key_exists('provider', $data) && $data['provider'] !== null
+            && (!is_string($data['provider']) || preg_match('/^(?:[A-Za-z_][A-Za-z0-9_]*\\\\)*[A-Za-z_][A-Za-z0-9_]*$/', $data['provider']) !== 1)
+        ) {
+            throw new InvalidArgumentException('Plugin provider must be a valid fully-qualified PHP class name.');
+        }
+
         return new self(
             slug: $data['slug'],
             name: $data['name'],
@@ -65,16 +79,42 @@ final class PluginManifest
             category: (string) ($data['category'] ?? 'general'),
             description: (string) ($data['description'] ?? ''),
             coreCompatibility: (string) ($data['core_compatibility'] ?? '^2.0'),
-            dependencies: array_values(array_filter((array) ($data['dependencies'] ?? []), 'is_string')),
+            dependencies: $dependencies,
             providerClass: isset($data['provider']) && is_string($data['provider']) ? $data['provider'] : null,
             permissions: (array) ($data['permissions'] ?? []),
             settingsSchema: (array) ($data['settings_schema'] ?? []),
             basePath: $directory,
-            optionalDependencies: array_values(array_filter((array) ($data['optional_dependencies'] ?? []), 'is_string')),
+            optionalDependencies: $optionalDependencies,
             isCore: (bool) ($data['is_core'] ?? false),
             adminMenu: array_values(array_filter((array) ($data['admin_menu'] ?? []), 'is_array')),
             icon: PluginIconRegistry::resolve($data['slug'], (string) ($data['category'] ?? 'general'), isset($data['icon']) && is_string($data['icon']) ? $data['icon'] : null),
         );
+    }
+
+    /** @return list<string> */
+    private static function validatedDependencies(array $data, string $key): array
+    {
+        if (!array_key_exists($key, $data)) {
+            return [];
+        }
+
+        $dependencies = $data[$key];
+        if (!is_array($dependencies) || !array_is_list($dependencies)) {
+            throw new InvalidArgumentException("Plugin {$key} must be a JSON array of plugin slugs.");
+        }
+
+        $validated = [];
+        foreach ($dependencies as $dependency) {
+            if (!is_string($dependency)
+                || preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/', $dependency) !== 1
+                || in_array($dependency, $validated, true)
+            ) {
+                throw new InvalidArgumentException("Plugin {$key} contains an invalid or duplicate dependency slug.");
+            }
+            $validated[] = $dependency;
+        }
+
+        return $validated;
     }
 
     public function toArray(): array
