@@ -278,6 +278,50 @@ class UniversalPaymentController extends Controller
                                 ->update(['status' => 'active', 'updated_at' => now()]);
                         }
                     }
+                } else {
+                    // A rejected manual receipt must release the unpaid order so
+                    // the student can retry. Detach gift drafts before failing the
+                    // order, otherwise they remain bound to an unpayable order.
+                    if (Schema::hasTable('commerce_orders') && Schema::hasTable('commerce_order_items')) {
+                        $orders = DB::table('commerce_orders')
+                            ->where('invoice_id', $invoice->id)
+                            ->where('status', 'awaiting_payment')
+                            ->lockForUpdate()
+                            ->get();
+                        foreach ($orders as $order) {
+                            $items = DB::table('commerce_order_items')->where('order_id', $order->id)->get();
+                            foreach ($items as $item) {
+                                if ($item->item_type === 'gift_course' && Schema::hasTable('course_gifts')) {
+                                    DB::table('course_gifts')->where('id', $item->item_id)
+                                        ->where('commerce_order_item_id', $item->id)
+                                        ->where('status', 'awaiting_payment')
+                                        ->whereNull('invoice_id')
+                                        ->whereNull('payment_transaction_id')
+                                        ->update(['commerce_order_item_id' => null, 'updated_at' => now()]);
+                                } elseif ($item->item_type === 'gift_voucher' && Schema::hasTable('course_gift_vouchers')) {
+                                    DB::table('course_gift_vouchers')->where('id', $item->item_id)
+                                        ->where('commerce_order_item_id', $item->id)
+                                        ->where('status', 'awaiting_payment')
+                                        ->whereNull('invoice_id')
+                                        ->whereNull('payment_transaction_id')
+                                        ->update(['commerce_order_item_id' => null, 'updated_at' => now()]);
+                                }
+                            }
+
+                            if (Schema::hasTable('promo_coupon_redemptions') && filled($order->coupon_reservation_key ?? null)) {
+                                DB::table('promo_coupon_redemptions')
+                                    ->where('reservation_key', $order->coupon_reservation_key)
+                                    ->where('status', 'reserved')
+                                    ->update(['status' => 'released', 'updated_at' => now()]);
+                            }
+
+                            DB::table('commerce_orders')->where('id', $order->id)->update([
+                                'status' => 'failed',
+                                'payment_status' => 'failed',
+                                'updated_at' => now(),
+                            ]);
+                        }
+                    }
                 }
             }
 
