@@ -128,7 +128,7 @@ class PaymentSettlementService
                 foreach ($orders as $order) {
                     if ($order->payment_status === 'paid') continue;
                     DB::table('commerce_orders')->where('id', $order->id)->update([
-                        'status' => 'paid', 'payment_status' => 'paid', 'paid_at' => now(), 'updated_at' => now(),
+                        'status' => 'completed', 'payment_status' => 'paid', 'paid_at' => now(), 'updated_at' => now(),
                     ]);
                     if (!Schema::hasTable('commerce_order_items') || !Schema::hasTable('commerce_entitlements')) continue;
                     $orderItems = DB::table('commerce_order_items')->where('order_id', $order->id)->get();
@@ -186,10 +186,8 @@ class PaymentSettlementService
             if ($newPaid >= (float) $invoice->net_amount && Schema::hasTable('commerce_orders')) {
                 $order = DB::table('commerce_orders')->where('invoice_id', $invoice->id)->lockForUpdate()->first();
                 if ($order) {
-                    $orderUpdates = ['status' => 'completed', 'payment_status' => 'paid', 'updated_at' => now()];
-                    if (Schema::hasColumn('commerce_orders', 'paid_at')) $orderUpdates['paid_at'] = now();
-                    DB::table('commerce_orders')->where('id', $order->id)->update($orderUpdates);
-
+                    // Core commerce settlement already completed this order. The
+                    // optional referral plugin must not control order lifecycle.
                     if (app(PluginManager::class)->isEnabled('referral-income')) {
                         $buyer = User::query()->find((int) $order->user_id);
                         if ($buyer) {
