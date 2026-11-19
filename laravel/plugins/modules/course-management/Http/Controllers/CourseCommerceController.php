@@ -900,7 +900,7 @@ class CourseCommerceController extends Controller
             ? (int) $course->branch_id
             : $this->assignedBranchId($student);
 
-        return (float) app(\\Plugins\\Modules\\FlashSale\\Services\\FlashSalePricingService::class)
+        return (float) app(\Plugins\Modules\FlashSale\Services\FlashSalePricingService::class)
             ->quote((int) $course->id, $branchId)['total'];
     }
 
