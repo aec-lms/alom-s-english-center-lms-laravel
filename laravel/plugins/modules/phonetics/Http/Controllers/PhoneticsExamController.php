@@ -104,6 +104,7 @@ final class PhoneticsExamController extends Controller
         abort_unless($setting->enabled, 404);
         $course = $this->catalog->course($courseSlug);
         $this->catalog->assertCourseAvailable($course);
+        $this->catalog->assertDedicatedCourse($course);
         $courseRef = $this->catalog->courseId($course);
         $this->catalog->assertAccess($request->user(), $courseRef);
         $exam = $this->resolveExam($examSlug, $course, $request->query('lesson'));
