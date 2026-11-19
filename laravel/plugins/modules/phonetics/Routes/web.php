@@ -3,7 +3,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Route;use Plugins\Modules\Phonetics\Http\Controllers\PhoneticsAdminController;use Plugins\Modules\Phonetics\Http\Controllers\PhoneticsPracticeController;
 use Plugins\Modules\Phonetics\Http\Controllers\PhoneticsLearningAdminController;
 use Plugins\Modules\Phonetics\Http\Controllers\PhoneticsLearningController;
-use Plugins\Modules\Phonetics\Http\Controllers\PhoneticsExamController;
+use Plugins\Modules\Phonetics\Http\Controllers\PhoneticsExamController;use Plugins\Modules\Phonetics\Http\Controllers\PhoneticsSpeakingRecordingController;
 Route::middleware(config('phonetics.middleware.practice', ['web','installed','plugin:phonetics']))->prefix('courses/{courseSlug}/phonetics-practice')->name('plugins.phonetics.practice.')->group(function():void{Route::get('/',[PhoneticsPracticeController::class,'index'])->name('index');Route::post('/attempts',[PhoneticsPracticeController::class,'storeAttempt'])->middleware(array_merge(config('phonetics.middleware.attempt', ['web','auth']), ['throttle:30,1']))->name('attempts.store');});
 
 Route::middleware(config('phonetics.middleware.practice', ['web','installed','plugin:phonetics']))->prefix('courses/{courseSlug}/phonetics-learning')->name('plugins.phonetics.learning.')->group(function():void{
