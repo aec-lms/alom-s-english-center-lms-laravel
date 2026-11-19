@@ -253,16 +253,21 @@ class AdmissionController extends Controller
             abort(500, 'The admission document could not be stored.');
         }
 
-        $document = AdmissionDocument::query()->create([
-            'admission_application_id' => $application->id,
-            'uploaded_by' => $actor?->id,
-            'disk' => 'local',
-            'path' => $storedPath,
-            'original_name' => mb_substr(basename(str_replace('\\', '/', $file->getClientOriginalName())), 0, 255),
-            'mime_type' => (string) $file->getMimeType(),
-            'size_bytes' => (int) $file->getSize(),
-            'sha256' => hash_file('sha256', $file->getRealPath()),
-        ]);
+        try {
+            $document = AdmissionDocument::query()->create([
+                'admission_application_id' => $application->id,
+                'uploaded_by' => $actor?->id,
+                'disk' => 'local',
+                'path' => $storedPath,
+                'original_name' => mb_substr(basename(str_replace('\\', '/', $file->getClientOriginalName())), 0, 255),
+                'mime_type' => (string) $file->getMimeType(),
+                'size_bytes' => (int) $file->getSize(),
+                'sha256' => hash_file('sha256', $file->getRealPath()),
+            ]);
+        } catch (\\Throwable $exception) {
+            Storage::disk('local')->delete($storedPath);
+            throw $exception;
+        }
 
         $this->audit->log('admission.document_uploaded', 'admission_document', (string) $document->id, [
             'application_id' => $application->id,
@@ -280,7 +285,11 @@ class AdmissionController extends Controller
         $this->assertApplicationBranchAccess($actor, $application);
         abort_unless((int) $document->admission_application_id === (int) $application->id, 404);
         abort_unless($document->disk === 'local', 404);
+        abort_unless(Str::startsWith($document->path, 'admission-documents/' . $application->id . '/')
+            && !Str::contains($document->path, ['../', '\\\\']), 404);
         abort_unless(Storage::disk('local')->exists($document->path), 404);
+        $storedFile = Storage::disk('local')->path($document->path);
+        abort_unless(hash_equals((string) $document->sha256, (string) hash_file('sha256', $storedFile)), 410, 'The stored document failed its integrity check.');
 
         $this->audit->log('admission.document_downloaded', 'admission_document', (string) $document->id, [
             'application_id' => $application->id,
