@@ -14,6 +14,7 @@
 
     <div class="flex flex-wrap gap-2 border-b border-slate-200 pb-3" id="cms-admin-tabs">
         <button type="button" data-tab="posts" class="cms-tab-btn px-4 py-2 rounded-lg text-xs font-bold bg-[#0284C7] text-white">Posts &amp; PDFs ({{ $posts->count() }})</button>
+        <button type="button" data-tab="recycle-bin" class="cms-tab-btn px-4 py-2 rounded-lg text-xs font-bold bg-white border border-slate-200 text-slate-700">Recycle Bin ({{ $trashedPosts->count() }})</button>
         <button type="button" data-tab="categories" class="cms-tab-btn px-4 py-2 rounded-lg text-xs font-bold bg-white border border-slate-200 text-slate-700">CMS Categories ({{ $categories->count() }})</button>
         <button type="button" data-tab="homepage" class="cms-tab-btn px-4 py-2 rounded-lg text-xs font-bold bg-white border border-slate-200 text-slate-700">Homepage &amp; Footer A-to-Z</button>
         <button type="button" data-tab="inquiries" class="cms-tab-btn px-4 py-2 rounded-lg text-xs font-bold bg-white border border-slate-200 text-slate-700">Contact Inquiries ({{ $inquiries->count() }})</button>
@@ -41,6 +42,7 @@
                     <input name="category" value="IELTS Preparation" placeholder="Category *" class="w-full rounded-lg border border-slate-300 px-3 py-2">
                 </div>
                 <input name="author" value="Alom's English Center" placeholder="Author Name" class="rounded-lg border border-slate-300 px-3 py-2">
+                <input type="datetime-local" name="publish_at" aria-label="Schedule publication (optional)" class="rounded-lg border border-slate-300 px-3 py-2">
                 <input name="seo_title" placeholder="SEO Meta Title (optional)" class="rounded-lg border border-slate-300 px-3 py-2">
                 <div>
                     <label class="block font-semibold text-slate-600 mb-1">Post Cover Thumbnail</label>
@@ -80,7 +82,7 @@
                             <div>
                                 <div class="font-bold text-sm text-slate-900">{{ $post->title }}</div>
                                 <div class="text-slate-500 font-mono">
-                                    /learn#{{ $post->slug }} &middot; {{ $post->category }} &middot; {{ $post->is_published ? 'Published' : 'Draft' }}
+                                    /learn#{{ $post->slug }} &middot; {{ $post->category }} &middot; {{ $post->is_published ? 'Published' : ($post->publish_at ? 'Scheduled · '.$post->publish_at->format('d M Y H:i') : 'Draft') }}
                                     @if ($post->pdf_path) &middot; <span class="text-emerald-700 font-bold">PDF Attached</span> @endif
                                 </div>
                             </div>
@@ -90,6 +92,22 @@
                             <button type="submit" class="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-700 font-bold hover:bg-rose-50">Delete</button>
                         </form>
                     </div>
+                    @if (($postRevisions[$post->id] ?? collect())->isNotEmpty())
+                        <details class="pt-2 border-t border-slate-100">
+                            <summary class="cursor-pointer font-semibold text-slate-700">Revision History ({{ $postRevisions[$post->id]->count() }})</summary>
+                            <div class="mt-2 space-y-2">
+                                @foreach ($postRevisions[$post->id] as $revision)
+                                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-lg bg-slate-50 p-3">
+                                        <div><strong>{{ $revision->title }}</strong><div class="text-slate-500">{{ \Illuminate\Support\Carbon::parse($revision->created_at)->format('d M Y, h:i A') }} · {{ $revision->is_published ? 'Published' : 'Draft' }}</div></div>
+                                        <form method="POST" action="{{ route('plugins.cms.posts.revisions.restore', [$post, $revision->id]) }}" onsubmit="return confirm('Restore this revision? The current version will first be saved to history.')">
+                                            @csrf
+                                            <button type="submit" class="px-3 py-1.5 rounded-lg border border-slate-300 bg-white font-bold">Restore Version</button>
+                                        </form>
+                                    </div>
+                                @endforeach
+                            </div>
+                        </details>
+                    @endif
                     <details class="pt-2 border-t border-slate-100">
                         <summary class="cursor-pointer font-semibold text-[#0284C7]">Edit Post, PDF &amp; Thumbnails</summary>
                         <form method="POST" action="{{ route('plugins.cms.posts.update', $post) }}" enctype="multipart/form-data" class="mt-3 grid sm:grid-cols-2 gap-3">
@@ -106,6 +124,7 @@
                             <input type="file" name="thumbnail" accept="image/*" class="rounded-lg border border-slate-300 px-2 py-1.5 bg-slate-50">
                             <input type="file" name="pdf_file" accept="application/pdf,.pdf" class="rounded-lg border border-slate-300 px-2 py-1.5 bg-slate-50">
                             <input type="file" name="pdf_thumbnail" accept="image/*" class="rounded-lg border border-slate-300 px-2 py-1.5 bg-slate-50">
+                            <input type="datetime-local" name="publish_at" value="{{ $post->publish_at ? $post->publish_at->format("Y-m-d\\TH:i") : "" }}" class="rounded-lg border border-slate-300 px-3 py-2">
                             <input name="author" value="{{ $post->author }}" class="rounded-lg border border-slate-300 px-3 py-2">
                             <input name="excerpt" value="{{ $post->excerpt }}" class="sm:col-span-2 rounded-lg border border-slate-300 px-3 py-2">
                             <input name="seo_title" value="{{ $post->seo_title }}" placeholder="SEO Meta Title" class="rounded-lg border border-slate-300 px-3 py-2">
@@ -125,6 +144,33 @@
                 <p class="text-xs text-slate-400">No blog posts created yet.</p>
             @endforelse
         </div>
+    </section>
+
+    <section id="tab-recycle-bin" class="cms-tab-panel hidden bg-white rounded-2xl border border-slate-200 p-5 space-y-4 text-xs">
+        <div>
+            <h2 class="text-sm font-bold text-slate-900">Post Recycle Bin</h2>
+            <p class="text-slate-500 mt-1">Deleted posts keep their media files until permanently deleted. Restore a post to return it to the live post list.</p>
+        </div>
+        @forelse ($trashedPosts as $trashedPost)
+            <div class="border border-slate-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                    <div class="font-bold text-sm text-slate-900">{{ $trashedPost->title }}</div>
+                    <div class="text-slate-500">/{{ $trashedPost->slug }} &middot; Deleted {{ optional($trashedPost->deleted_at)->format('d M Y, h:i A') }}</div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <form method="POST" action="{{ route('plugins.cms.posts.restore', $trashedPost->id) }}">
+                        @csrf
+                        <button type="submit" class="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold">Restore</button>
+                    </form>
+                    <form method="POST" action="{{ route('plugins.cms.posts.force-delete', $trashedPost->id) }}" onsubmit="return confirm('Permanently delete this post? This cannot be undone.')">
+                        @csrf @method('DELETE')
+                        <button type="submit" class="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-700 font-bold">Delete Permanently</button>
+                    </form>
+                </div>
+            </div>
+        @empty
+            <p class="text-slate-400">The post Recycle Bin is empty.</p>
+        @endforelse
     </section>
 
     <!-- TAB 2: CMS CATEGORIES CRUD -->

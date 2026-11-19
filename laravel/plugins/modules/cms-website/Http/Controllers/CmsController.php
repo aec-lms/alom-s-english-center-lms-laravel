@@ -25,10 +25,12 @@ class CmsController extends Controller
     {
         $categories = Schema::hasTable('cms_categories') ? CmsCategory::query()->orderBy('name')->get() : collect();
         $posts = Schema::hasTable('cms_posts') ? CmsPost::query()->latest()->get() : collect();
+        $trashedPosts = Schema::hasTable('cms_posts') ? CmsPost::onlyTrashed()->latest('deleted_at')->get() : collect();
+        $postRevisions = Schema::hasTable('cms_post_revisions') ? DB::table('cms_post_revisions')->orderByDesc('created_at')->get()->groupBy('post_id') : collect();
         $inquiries = Schema::hasTable('contact_inquiries') ? DB::table('contact_inquiries')->orderByDesc('id')->limit(50)->get() : collect();
         $homepage = $this->loadHomepageConfig();
 
-        return view('cms-website::index', compact('categories', 'posts', 'inquiries', 'homepage'));
+        return view('cms-website::index', compact('categories', 'posts', 'trashedPosts', 'postRevisions', 'inquiries', 'homepage'));
     }
 
     public function storeCategory(Request $request): RedirectResponse
@@ -85,10 +87,7 @@ class CmsController extends Controller
     {
         $name = $category->name;
         $id = (string) $category->id;
-        DB::transaction(function () use ($category): void {
-            CmsPost::query()->where('category_id', $category->id)->update(['category_id' => null]);
-            $category->delete();
-        });
+        $category->delete();
         $this->audit->log('cms.category_deleted', 'cms_category', $id, ['name' => $name]);
 
         return back()->with('status', "CMS Category '{$name}' deleted.");
@@ -113,6 +112,7 @@ class CmsController extends Controller
             'pdf_thumbnail' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
             'pdf_thumbnail_url' => ['nullable', 'string', 'max:255', function (string $attribute, mixed $value, \Closure $fail): void { if (!$this->isSafeMediaReference($value)) $fail('The PDF thumbnail URL must be a safe HTTPS URL or local path.'); }],
             'is_published' => ['nullable', 'boolean'],
+            'publish_at' => ['nullable', 'date'],
         ]);
 
         $categoryName = trim((string) ($validated['category'] ?? 'General')) ?: 'General';
@@ -151,11 +151,13 @@ class CmsController extends Controller
             'thumbnail_path' => $thumbPath,
             'pdf_path' => $pdfPath,
             'pdf_thumbnail' => $pdfThumbPath,
-            'seo_title' => $validated['seo_title'] ?? $validated['title'],
-            'seo_description' => $validated['seo_description'] ?? null,
-            'is_published' => $request->boolean('is_published', true),
+            'seo_title' => $validated['seo_title'] ?? ($post->seo_title ?: $validated['title']),
+            'seo_description' => $validated['seo_description'] ?? $post->seo_description,
+            'is_published' => empty($validated['publish_at']) ? $request->boolean('is_published', true) : false,
+            'publish_at' => $validated['publish_at'] ?? null,
         ]);
 
+        $this->storePostRevision($post, $request);
         $this->audit->log('cms.post_created', 'cms_post', (string) $post->id, ['slug' => $post->slug]);
 
         return back()->with('status', "Post '{$post->title}' created.");
@@ -191,6 +193,7 @@ class CmsController extends Controller
             }
         }
 
+        $this->storePostRevision($post, $request);
         $oldAssets = [$post->thumbnail_path, $post->pdf_path, $post->pdf_thumbnail];
 
         $thumbPath = $post->thumbnail_path;
@@ -225,9 +228,10 @@ class CmsController extends Controller
             'thumbnail_path' => $thumbPath,
             'pdf_path' => $pdfPath,
             'pdf_thumbnail' => $pdfThumbPath,
-            'seo_title' => $validated['seo_title'] ?? ($post->seo_title ?: $validated['title']),
-            'seo_description' => $validated['seo_description'] ?? $post->seo_description,
-            'is_published' => $request->boolean('is_published'),
+            'seo_title' => $validated['seo_title'] ?? $validated['title'],
+            'seo_description' => $validated['seo_description'] ?? null,
+            'is_published' => empty($validated['publish_at']) ? $request->boolean('is_published') : false,
+            'publish_at' => $validated['publish_at'] ?? null,
         ]);
 
         foreach ([[$oldAssets[0], $thumbPath], [$oldAssets[1], $pdfPath], [$oldAssets[2], $pdfThumbPath]] as [$oldPath, $newPath]) {
@@ -241,14 +245,90 @@ class CmsController extends Controller
 
     public function destroyPost(CmsPost $post): RedirectResponse
     {
-        // Keep linked files while the post is in the recycle bin. A restored post
-        // must not point to media that was deleted during soft deletion.
+        // Soft deletion must retain media so a restored post remains complete.
         $title = $post->title;
         $id = (string) $post->id;
         $post->delete();
-        $this->audit->log('cms.post_deleted', 'cms_post', $id, ['title' => $title]);
+        $this->audit->log('cms.post_trashed', 'cms_post', $id, ['title' => $title]);
 
-        return back()->with('status', "Post '{$title}' deleted.");
+        return back()->with('status', "Post '{$title}' moved to the Recycle Bin.");
+    }
+
+    public function restoreRevision(Request $request, CmsPost $post, int $revisionId): RedirectResponse
+    {
+        abort_unless(Schema::hasTable('cms_post_revisions'), 404);
+        $revision = DB::table('cms_post_revisions')->where('id', $revisionId)->where('post_id', $post->id)->first();
+        abort_unless($revision, 404);
+        $currentAssets = [$post->thumbnail_path, $post->pdf_path, $post->pdf_thumbnail];
+        $post->update([
+            'title' => $revision->title, 'slug' => $revision->slug, 'category' => $revision->category,
+            'category_id' => $revision->category_id, 'author' => $revision->author, 'excerpt' => $revision->excerpt,
+            'content' => $revision->content, 'thumbnail_path' => $revision->thumbnail_path, 'pdf_path' => $revision->pdf_path,
+            'pdf_thumbnail' => $revision->pdf_thumbnail, 'seo_title' => $revision->seo_title,
+            'seo_description' => $revision->seo_description, 'is_published' => (bool) $revision->is_published,
+            'publish_at' => $revision->publish_at ?? null,
+        ]);
+        foreach ($currentAssets as $assetPath) {
+            if ($assetPath && !in_array($assetPath, [$revision->thumbnail_path, $revision->pdf_path, $revision->pdf_thumbnail], true)) {
+                $this->deleteUnusedUpload($assetPath, (int) $post->id);
+            }
+        }
+        $this->storePostRevision($post, $request);
+        $this->audit->log('cms.post_revision_restored', 'cms_post', (string) $post->id, ['revision_id' => $revisionId]);
+        return back()->with('status', "Revision restored for '{$post->title}'.");
+    }
+
+    private function storePostRevision(CmsPost $post, Request $request): void
+    {
+        if (!Schema::hasTable('cms_post_revisions')) return;
+        DB::table('cms_post_revisions')->insert([
+            'post_id' => $post->id, 'user_id' => $request->user()?->getAuthIdentifier(),
+            'title' => $post->title, 'slug' => $post->slug, 'category' => $post->category ?? 'General',
+            'category_id' => $post->category_id, 'author' => $post->author, 'excerpt' => $post->excerpt,
+            'content' => $post->content, 'thumbnail_path' => $post->thumbnail_path, 'pdf_path' => $post->pdf_path,
+            'pdf_thumbnail' => $post->pdf_thumbnail, 'seo_title' => $post->seo_title,
+            'seo_description' => $post->seo_description, 'is_published' => (bool) $post->is_published,
+            'publish_at' => $post->publish_at,
+            'created_at' => now(),
+        ]);
+    }
+
+    public function restorePost(int $postId): RedirectResponse
+    {
+        $post = CmsPost::withTrashed()->findOrFail($postId);
+        abort_unless($post->trashed(), 404);
+
+        $post->restore();
+        $this->audit->log('cms.post_restored', 'cms_post', (string) $post->id, ['slug' => $post->slug]);
+
+        return back()->with('status', "Post '{$post->title}' restored.");
+    }
+
+    public function forceDeletePost(int $postId): RedirectResponse
+    {
+        $post = CmsPost::withTrashed()->findOrFail($postId);
+        abort_unless($post->trashed(), 404);
+
+        $title = $post->title;
+        $id = (string) $post->id;
+        $assets = [$post->thumbnail_path, $post->pdf_path, $post->pdf_thumbnail];
+        if (Schema::hasTable('cms_post_revisions')) {
+            $revisionAssets = DB::table('cms_post_revisions')->where('post_id', $post->id)->get(['thumbnail_path', 'pdf_path', 'pdf_thumbnail']);
+            foreach ($revisionAssets as $revisionAsset) {
+                array_push($assets, $revisionAsset->thumbnail_path, $revisionAsset->pdf_path, $revisionAsset->pdf_thumbnail);
+            }
+            DB::table('cms_post_revisions')->where('post_id', $post->id)->delete();
+        }
+
+        // Remove the row and its revision history, then clean only truly unreferenced files.
+        $post->forceDelete();
+        foreach ($assets as $assetPath) {
+            $this->deleteUnusedUpload($assetPath);
+        }
+
+        $this->audit->log('cms.post_permanently_deleted', 'cms_post', $id, ['title' => $title]);
+
+        return back()->with('status', "Post '{$title}' permanently deleted.");
     }
 
     public function saveHomepage(Request $request): RedirectResponse
@@ -408,6 +488,7 @@ class CmsController extends Controller
         if (!$path || !str_starts_with($path, '/uploads/')) return;
         $references = [
             'cms_posts' => ['thumbnail_path', 'pdf_thumbnail', 'pdf_path'],
+            'cms_post_revisions' => ['thumbnail_path', 'pdf_thumbnail', 'pdf_path'],
             'courses' => ['thumbnail', 'pdf_thumbnail', 'pdf_path'],
             'storefront_items' => ['thumbnail_path', 'pdf_thumbnail_path', 'download_url'],
         ];
