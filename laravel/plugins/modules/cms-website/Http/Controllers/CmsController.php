@@ -479,15 +479,15 @@ class CmsController extends Controller
         ]);
         $newRoles = $validated['roles'] ?? [];
         if (!in_array('cms_contributor', $newRoles, true) && !in_array('cms_editor', $newRoles, true)) {
-            $hasAuthoredPosts = CmsPost::query()->where(fn ($q) => $q->where('author_user_id', $user->id)->orWhere('created_by', $user->id))->exists()
+            $hasAuthoredPosts = CmsPost::withTrashed()->where(fn ($q) => $q->where('author_user_id', $user->id)->orWhere('created_by', $user->id))->exists()
                 || (Schema::hasTable('cms_post_authors') && DB::table('cms_post_authors')->where('user_id', $user->id)->exists());
             abort_if($hasAuthoredPosts, 422, 'Reassign this user's authored or co-authored posts before removing Contributor/Editor access.');
         }
         if (!in_array('cms_editor', $newRoles, true)) {
-            abort_if(CmsPost::query()->where('assigned_editor_id', $user->id)->exists(), 422, 'Reassign this user's editor assignments before removing Editor access.');
+            abort_if(CmsPost::withTrashed()->where('assigned_editor_id', $user->id)->exists(), 422, 'Reassign this user's editor assignments before removing Editor access.');
         }
         if (!in_array('cms_reviewer', $newRoles, true) && !in_array('cms_editor', $newRoles, true)) {
-            abort_if(CmsPost::query()->where('assigned_reviewer_id', $user->id)->exists(), 422, 'Reassign all posts assigned to this user before removing Reviewer access.');
+            abort_if(CmsPost::withTrashed()->where('assigned_reviewer_id', $user->id)->exists(), 422, 'Reassign all posts assigned to this user before removing Reviewer access.');
         }
         if (!in_array('cms_author_manager', $newRoles, true) && $user->hasRole('cms_author_manager')) {
             $otherManagers = User::query()->where('is_active', true)->where('id', '!=', $user->id)
