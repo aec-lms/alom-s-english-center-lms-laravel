@@ -18,7 +18,7 @@ class BoostCampaignSafetyTest extends TestCase
 
         $this->actingAs($admin)->post('/plugins/boost', [
             'campaign_name' => 'Unsafe Campaign',
-            'entity_type' => 'course',
+            'entity_type' => 'institution',
             'placement' => 'homepage_featured',
             'destination_url' => 'javascript:alert(1)',
             'starts_at' => '2026-11-20 10:00:00',
@@ -36,7 +36,7 @@ class BoostCampaignSafetyTest extends TestCase
 
         $this->actingAs($admin)->post('/plugins/boost', [
             'campaign_name' => 'External Redirect',
-            'entity_type' => 'course',
+            'entity_type' => 'institution',
             'placement' => 'homepage_featured',
             'destination_url' => 'https://attacker.example/phishing',
         ])->assertSessionHasErrors('destination_url');
@@ -50,10 +50,19 @@ class BoostCampaignSafetyTest extends TestCase
         $this->activatePlugins(['admin-boosting']);
         $admin = $this->createUserWithRole('admin');
 
+        $targetCourse = Course::query()->create([
+            'code' => 'BOOST-TARGET-01',
+            'title' => 'Boost Target IELTS',
+            'slug' => 'boost-target-ielts',
+            'price' => 0,
+            'status' => 'published',
+            'branch_id' => null,
+        ]);
+
         $this->actingAs($admin)->post('/plugins/boost', [
             'campaign_name' => 'Active Campaign',
             'entity_type' => 'course',
-            'entity_id' => 12,
+            'entity_id' => $targetCourse->id,
             'placement' => 'homepage_featured',
             'destination_url' => '/courses/ielts',
             'starts_at' => now()->subMinute()->toDateTimeString(),
@@ -61,7 +70,7 @@ class BoostCampaignSafetyTest extends TestCase
         ])->assertRedirect()
             ->assertSessionHas('status', "Boost campaign 'Active Campaign' launched.");
 
-        $this->assertDatabaseHas('boost_campaigns', ['campaign_name' => 'Active Campaign', 'entity_id' => 12]);
+        $this->assertDatabaseHas('boost_campaigns', ['campaign_name' => 'Active Campaign', 'entity_id' => $targetCourse->id]);
         $campaign = BoostCampaign::query()->firstOrFail();
         $this->actingAs($admin)->put('/plugins/boost/' . $campaign->id, [
             'campaign_name' => 'Active Campaign',
