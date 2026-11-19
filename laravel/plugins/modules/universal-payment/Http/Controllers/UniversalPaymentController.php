@@ -222,13 +222,21 @@ class UniversalPaymentController extends Controller
                     abort_if($remaining <= 0 || $amount > $remaining + 0.01, 422, 'This receipt exceeds the remaining invoice balance.');
 
                     $newPaid = round((float) $invoice->paid_amount + $amount, 2);
+                    $invoiceFullyPaid = $newPaid + 0.01 >= (float) $invoice->net_amount;
+
+                    // Validate every pending enrollment against the current student,
+                    // invoice and source-course branch before changing the ledger or access.
+                    if ($invoiceFullyPaid) {
+                        $this->assertInvoiceEnrollmentBranchAccess($invoice);
+                    }
+
                     DB::table('fee_invoices')->where('id', $invoice->id)->update([
                         'paid_amount' => $newPaid,
-                        'status' => $newPaid + 0.01 >= (float) $invoice->net_amount ? 'paid' : 'partial',
+                        'status' => $invoiceFullyPaid ? 'paid' : 'partial',
                         'updated_at' => now(),
                     ]);
 
-                    if ($newPaid + 0.01 >= (float) $invoice->net_amount
+                    if ($invoiceFullyPaid
                         && Schema::hasTable('enrollments')
                         && Schema::hasColumn('enrollments', 'invoice_id')) {
                         DB::table('enrollments')
@@ -237,23 +245,26 @@ class UniversalPaymentController extends Controller
                             ->update(['status' => 'active', 'updated_at' => now()]);
                     }
 
-                    if ($newPaid + 0.01 >= (float) $invoice->net_amount
-                        && $this->plugins->isEnabled('referral-income')
-                        && Schema::hasTable('commerce_orders')) {
+                    // Order fulfillment is core payment work; it must not depend on
+                    // the optional referral plugin being enabled.
+                    if ($invoiceFullyPaid && Schema::hasTable('commerce_orders')) {
                         $order = DB::table('commerce_orders')->where('invoice_id', $invoice->id)->lockForUpdate()->first();
                         if ($order) {
                             $orderUpdates = ['status' => 'completed', 'payment_status' => 'paid', 'updated_at' => now()];
                             if (Schema::hasColumn('commerce_orders', 'paid_at')) $orderUpdates['paid_at'] = now();
                             DB::table('commerce_orders')->where('id', $order->id)->update($orderUpdates);
-                            $buyer = User::query()->find((int) $order->user_id);
-                            if ($buyer) {
-                                app(ReferralIncomeService::class)->recordSettledPurchase(
-                                    $buyer,
-                                    'commerce_order',
-                                    (string) $order->id,
-                                    (float) $invoice->net_amount,
-                                    (string) $invoice->currency
-                                );
+
+                            if ($this->plugins->isEnabled('referral-income')) {
+                                $buyer = User::query()->find((int) $order->user_id);
+                                if ($buyer) {
+                                    app(ReferralIncomeService::class)->recordSettledPurchase(
+                                        $buyer,
+                                        'commerce_order',
+                                        (string) $order->id,
+                                        (float) $invoice->net_amount,
+                                        (string) $invoice->currency
+                                    );
+                                }
                             }
                         }
                     }
@@ -624,6 +635,69 @@ class UniversalPaymentController extends Controller
         }
         $slug = DB::table('storefront_items')->where('id', $transaction->storefront_item_id)->value('slug');
         return redirect('/ebooks/' . rawurlencode((string) $slug))->with('status', 'Payment was cancelled.');
+    }
+
+    private function assertInvoiceEnrollmentBranchAccess(object $invoice): void
+    {
+        if (!Schema::hasTable('enrollments')
+            || !Schema::hasColumn('enrollments', 'invoice_id')
+            || !Schema::hasColumn('enrollments', 'course_id')
+            || !Schema::hasColumn('enrollments', 'user_id')
+            || !Schema::hasTable('courses')
+            || !Schema::hasColumn('courses', 'branch_id')) {
+            return;
+        }
+
+        $pending = DB::table('enrollments')
+            ->where('invoice_id', $invoice->id)
+            ->where('status', 'pending')
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($pending as $enrollment) {
+            $buyer = User::query()->find((int) $enrollment->user_id);
+            abort_unless($buyer !== null, 422, 'The enrolled student account no longer exists.');
+
+            $courseBranchId = DB::table('courses')->where('id', $enrollment->course_id)->value('branch_id');
+            $invoiceBranchId = Schema::hasColumn('fee_invoices', 'branch_id') && $invoice->branch_id !== null
+                ? (int) $invoice->branch_id
+                : null;
+            $enrollmentBranchId = Schema::hasColumn('enrollments', 'branch_id') && $enrollment->branch_id !== null
+                ? (int) $enrollment->branch_id
+                : null;
+
+            $assignedBranchId = null;
+            if ($this->plugins->isEnabled('student-management')
+                && Schema::hasTable('students')
+                && Schema::hasColumn('students', 'branch_id')) {
+                $profileBranchId = DB::table('students')->where('user_id', $buyer->id)->value('branch_id');
+                if ($profileBranchId !== null) {
+                    $assignedBranchId = (int) $profileBranchId;
+                }
+            }
+            if ($assignedBranchId === null
+                && Schema::hasColumn('users', 'branch_id')
+                && $buyer->branch_id !== null) {
+                $assignedBranchId = (int) $buyer->branch_id;
+            }
+
+            abort_if(
+                $invoiceBranchId !== null && $assignedBranchId !== $invoiceBranchId,
+                422,
+                'Student branch assignment changed after invoice creation; manual payment reconciliation is required.'
+            );
+            abort_if(
+                $enrollmentBranchId !== null && $assignedBranchId !== $enrollmentBranchId,
+                422,
+                'Pending enrollment branch does not match the current student branch.'
+            );
+            abort_if(
+                $courseBranchId !== null
+                    && ($enrollmentBranchId !== (int) $courseBranchId || $assignedBranchId !== (int) $courseBranchId),
+                422,
+                'Pending enrollment branch does not match the source course and current student branch.'
+            );
+        }
     }
 
     private function assertGatewayEnabled(string $gateway): void
