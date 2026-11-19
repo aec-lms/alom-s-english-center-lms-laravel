@@ -129,4 +129,34 @@ class CmsWebsiteSafetyTest extends TestCase
         }
     }
 
+    public function test_updating_a_post_without_seo_fields_preserves_existing_seo_metadata(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+        $admin = $this->createUserWithRole('admin');
+        $post = CmsPost::query()->create([
+            'slug' => 'seo-preservation-' . uniqid(),
+            'title' => 'SEO Preservation Article',
+            'category' => 'General',
+            'author' => 'AEC LMS',
+            'content' => 'Original article body.',
+            'seo_title' => 'Original Search Title',
+            'seo_description' => 'Original search description remains intact.',
+            'is_published' => true,
+        ]);
+
+        $this->actingAs($admin)->put('/admin/cms/posts/' . $post->id, [
+            'title' => 'Updated SEO Preservation Article',
+            'slug' => 'seo-preservation-updated-' . uniqid(),
+            'content' => 'Updated article body.',
+            'is_published' => '1',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('cms_posts', [
+            'id' => $post->id,
+            'seo_title' => 'Original Search Title',
+            'seo_description' => 'Original search description remains intact.',
+        ]);
+    }
+
 }
