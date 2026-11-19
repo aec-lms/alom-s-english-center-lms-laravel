@@ -251,7 +251,7 @@ final class PhoneticsSpeakingRecordingController extends Controller
             'feedback' => ['required', 'string', 'min:3', 'max:2000'],
         ]);
 
-        DB::transaction(function () use ($request, $recording, $data): void {
+        DB::transaction(function () use ($request, $recording, $data, $course): void {
             // Serialize concurrent teacher reviews and retain an audit trail for
             // both the first review and any later correction.
             $locked = PhoneticSpeakingRecording::query()
@@ -259,6 +259,11 @@ final class PhoneticsSpeakingRecordingController extends Controller
                 ->where('lms_driver', $this->catalog->driver())
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            // Re-check branch authorization under the same transaction and
+            // lock the student's host-LMS row to close the branch-move race
+            // between the initial request check and the review write.
+            $this->assertReviewerBranchAccess($request, $locked, $course, true);
             $wasReviewed = $locked->status === 'reviewed';
             $previousScore = $locked->score;
 
@@ -315,7 +320,8 @@ final class PhoneticsSpeakingRecordingController extends Controller
     private function assertReviewerBranchAccess(
         Request $request,
         PhoneticSpeakingRecording $recording,
-        object $course
+        object $course,
+        bool $lockStudent = false
     ): void {
         $reviewer = $request->user();
         abort_unless($reviewer, 401);
@@ -339,9 +345,11 @@ final class PhoneticsSpeakingRecordingController extends Controller
             'The connected LMS branch mapping is unavailable for recording review.'
         );
 
-        $student = DB::table($userTable)
-            ->where($userIdColumn, $recording->user_id)
-            ->first(['branch_id']);
+        $studentQuery = DB::table($userTable)->where($userIdColumn, $recording->user_id);
+        if ($lockStudent) {
+            $studentQuery->lockForUpdate();
+        }
+        $student = $studentQuery->first(['branch_id']);
         abort_unless(
             $student && $student->branch_id !== null
                 && (string) $student->branch_id === (string) $reviewerBranchId,
