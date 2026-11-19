@@ -177,6 +177,72 @@ class CourseCommercePaymentSettlementTest extends TestCase
         $this->assertDatabaseHas('fee_invoices', ['id' => $voucher->invoice_id, 'status' => 'paid']);
     }
 
+    public function test_late_callback_cannot_resettle_a_refunded_course_cart_transaction(): void
+    {
+        $student = $this->createUserWithRole('student');
+        $courseId = DB::table('courses')->insertGetId([
+            'code' => 'SETTLE-REFUND-001',
+            'title' => 'Refund Guard Test Course',
+            'slug' => 'refund-guard-test-course',
+            'price' => 1250,
+            'status' => 'published',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $cartId = DB::table('course_carts')->insertGetId([
+            'user_id' => $student->id,
+            'status' => 'checkout_pending',
+            'currency' => 'BDT',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $orderId = DB::table('course_cart_orders')->insertGetId([
+            'cart_id' => $cartId,
+            'user_id' => $student->id,
+            'branch_id' => null,
+            'subtotal_amount' => 1250,
+            'discount_amount' => 0,
+            'net_amount' => 1250,
+            'wallet_credit_amount' => 0,
+            'currency' => 'BDT',
+            'status' => 'awaiting_payment',
+            'expires_at' => now()->addMinutes(30),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('course_cart_order_items')->insert([
+            'order_id' => $orderId,
+            'course_id' => $courseId,
+            'course_title' => 'Refund Guard Test Course',
+            'unit_price' => 1250,
+            'position' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $transaction = $this->transaction($student->id, 1250, [
+            'purpose' => 'course_cart',
+            'course_cart_order_id' => $orderId,
+        ]);
+        $transaction->update(['status' => 'refunded']);
+        DB::table('course_cart_orders')->where('id', $orderId)->update(['payment_transaction_id' => $transaction->id]);
+
+        try {
+            app(CourseCommercePaymentSettlementService::class)->settle(
+                $transaction->fresh(),
+                'BANK-LATE-REFUND-001',
+                ['validation_status' => 'VALID']
+            );
+            $this->fail('A refunded course-commerce transaction must never be settled again.');
+        } catch (\\RuntimeException $exception) {
+            $this->assertSame('A refunded course-commerce transaction cannot be settled again.', $exception->getMessage());
+        }
+
+        $this->assertDatabaseHas('universal_payment_transactions', ['id' => $transaction->id, 'status' => 'refunded']);
+        $this->assertDatabaseHas('course_cart_orders', ['id' => $orderId, 'status' => 'awaiting_payment']);
+        $this->assertSame(0, DB::table('enrollments')->where('user_id', $student->id)->where('course_id', $courseId)->count());
+        $this->assertSame(0, DB::table('fee_invoices')->where('payer_email', $student->email)->count());
+    }
+
     public function test_course_cart_settlement_rejects_branch_changes_after_checkout(): void
     {
         $student = $this->createUserWithRole('student');
