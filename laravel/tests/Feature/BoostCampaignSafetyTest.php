@@ -367,4 +367,40 @@ class BoostCampaignSafetyTest extends TestCase
         $this->assertDatabaseCount('boost_campaign_events', 0);
     }
 
+
+    public function test_stale_branch_campaign_cannot_record_clicks_or_impressions(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['admin-boosting', 'branch-management']);
+        $branch = Branch::query()->create([
+            'code' => 'BOOST-STALE-BRANCH-01',
+            'name' => 'Formerly Active Branch',
+            'city' => 'Dhaka',
+            'is_active' => true,
+        ]);
+        $campaign = BoostCampaign::query()->create([
+            'campaign_name' => 'Stale Branch Promotion',
+            'entity_type' => 'branch',
+            'entity_id' => $branch->id,
+            'placement' => 'course_listing',
+            'destination_url' => '/courses',
+            'status' => 'active',
+            'starts_at' => now()->subMinute(),
+            'ends_at' => now()->addDay(),
+        ]);
+
+        $branch->update(['is_active' => false]);
+        $visitorId = str_repeat('e', 64);
+
+        $this->withSession(['boost_visitor_id' => $visitorId])
+            ->get('/boost/impression/' . $campaign->id)
+            ->assertNoContent();
+        $this->withSession(['boost_visitor_id' => $visitorId])
+            ->get('/boost/click/' . $campaign->id)
+            ->assertRedirect('/courses');
+
+        $this->assertSame(0, $campaign->fresh()->impressions);
+        $this->assertSame(0, $campaign->fresh()->clicks);
+        $this->assertDatabaseCount('boost_campaign_events', 0);
+    }
 }
