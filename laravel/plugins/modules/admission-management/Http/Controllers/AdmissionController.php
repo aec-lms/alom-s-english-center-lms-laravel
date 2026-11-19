@@ -62,6 +62,7 @@ class AdmissionController extends Controller
             'applications' => $applications,
             'statusCounts' => $statusCounts,
             'statuses' => self::REVIEW_STATUSES,
+            'transitions' => self::TRANSITIONS,
             'branches' => $this->branchIntegrationAvailable()
                 ? DB::table('branches')->where('is_active', true)->when($actor && $actor->hasRole('branch_manager'), fn ($q) => $q->where('id', $actor->branch_id))->orderBy('name')->get()
                 : collect(),
@@ -83,6 +84,7 @@ class AdmissionController extends Controller
             'branch_id' => $this->branchRule(),
         ]);
 
+        $validated['email'] = strtolower(trim($validated['email']));
         if (!$this->branchIntegrationAvailable()) $validated['branch_id'] = null;
 
         $app = DB::transaction(function () use ($validated): AdmissionApplication {
@@ -113,6 +115,7 @@ class AdmissionController extends Controller
             'branch_id' => $this->branchRule(),
         ]);
 
+        $validated['email'] = strtolower(trim($validated['email']));
         if ($actor && $actor->hasRole('branch_manager')) {
             $validated['branch_id'] = $actor->branch_id;
         } elseif (!$this->branchIntegrationAvailable()) {
@@ -143,7 +146,7 @@ class AdmissionController extends Controller
         $validated = $request->validate([
             'status' => ['required', 'in:' . implode(',', self::REVIEW_STATUSES)],
             'reviewer_notes' => [$request->input('status') === 'rejected' ? 'required' : 'nullable', 'string', 'min:5', 'max:2000'],
-            'interview_at' => ['nullable', 'date', 'after_or_equal:now'],
+            'interview_at' => ['nullable', 'date'],
             'assigned_to' => ['nullable', 'integer', 'exists:users,id'],
         ]);
 
