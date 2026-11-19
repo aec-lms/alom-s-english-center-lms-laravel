@@ -555,7 +555,7 @@ class CmsWebsiteSafetyTest extends TestCase
             'is_published' => false,
         ]);
 
-        if (\\Illuminate\\Support\\Facades\\Schema::hasColumn('cms_posts', 'editorial_status')) {
+        if (Schema::hasColumn('cms_posts', 'editorial_status')) {
             $this->assertDatabaseHas('cms_posts', [
                 'id' => $post->id,
                 'editorial_status' => 'draft',
