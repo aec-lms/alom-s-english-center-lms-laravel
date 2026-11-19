@@ -140,9 +140,19 @@ final class CmsContributorManagementTest extends TestCase
         $this->actingAs($manager)->put('/admin/cms/editorial/posts/' . $post->id . '/assignments', [
             'author_user_id' => $author->id,
             'assigned_editor_id' => $editor->id,
+            'assigned_reviewer_id' => $manager->id,
+            'co_authors' => [],
+        ])->assertStatus(422);
+
+        $this->actingAs($manager)->put('/admin/cms/editorial/posts/' . $post->id . '/assignments', [
+            'author_user_id' => $author->id,
+            'assigned_editor_id' => $editor->id,
             'assigned_reviewer_id' => $reviewer->id,
             'co_authors' => [],
         ])->assertSessionHasNoErrors();
+
+        $this->actingAs($manager)->put('/admin/cms/contributors/' . $reviewer->id, ['roles' => []])
+            ->assertStatus(422);
 
         $this->assertDatabaseHas('cms_posts', [
             'id' => $post->id,
@@ -228,6 +238,21 @@ final class CmsContributorManagementTest extends TestCase
             'reviewed_by' => null,
             'is_published' => false,
         ]);
+    }
+
+
+
+    public function test_last_active_contributor_manager_cannot_remove_their_own_management_access(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+        $manager = $this->createUserWithRole('student');
+        $this->grantCmsRole($manager, 'cms_author_manager');
+
+        $this->actingAs($manager)->put('/admin/cms/contributors/' . $manager->id, ['roles' => []])
+            ->assertStatus(422);
+
+        $this->assertTrue($manager->fresh()->hasRole('cms_author_manager'));
     }
 
 
