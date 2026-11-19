@@ -6,6 +6,7 @@ namespace Plugins\Modules\Phonetics\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Plugins\Modules\Phonetics\Models\PhoneticAuditEvent;
 use Plugins\Modules\Phonetics\Models\PhoneticLearningAssignment;
