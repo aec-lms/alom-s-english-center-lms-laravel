@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use App\\Models\\Role;
-use Tests\\TestCase;
+use App\Models\Role;
+use Tests\TestCase;
 
 class StudentManagementProvisioningSecurityTest extends TestCase
 {
