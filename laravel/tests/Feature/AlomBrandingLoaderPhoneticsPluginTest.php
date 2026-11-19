@@ -40,13 +40,19 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
    'target_accent'=>'us',
    'quiz_mode'=>'identify-accent',
   ])->assertOk()->assertJson(['saved'=>true,'correct'=>true]);
-  $this->assertDatabaseHas('alom_english_center_phonetic_attempts',['user_id'=>$student->id,'entry_id'=>$challengeEntry->id,'is_correct'=>true]);
+  $this->assertDatabaseHas('alom_english_center_phonetic_attempts',['user_id'=>$student->id,'course_ref'=>(string)$courseId,'entry_id'=>$challengeEntry->id,'is_correct'=>true]);
+  // Legacy attempts have no course attribution and must not inflate this course's progress.
+  DB::table('alom_english_center_phonetic_attempts')->insert([
+   'user_id'=>$student->id,'course_ref'=>null,'entry_id'=>$challengeEntry->id,'target_accent'=>'uk',
+   'quiz_mode'=>'legacy','selected_answer'=>'/legacy/','is_correct'=>false,'created_at'=>now(),'updated_at'=>now(),
+  ]);
   // A challenge is single-use: replaying the same session token must not create another attempt.
   $this->actingAs($student)->postJson('/courses/british-american-phonetics/phonetics-learning/attempts',[
    'selected_answer'=>$challenge['expected'],
   ])->assertStatus(409);
-  $this->assertSame(1,DB::table('alom_english_center_phonetic_attempts')->where('user_id',$student->id)->count());
-  $this->actingAs($student)->get('/courses/british-american-phonetics/phonetics-learning')->assertOk()->assertSee('Practice progress')->assertSee('Correct answers')->assertSee('100%')->assertSee('Words practiced');
+  $this->assertSame(2,DB::table('alom_english_center_phonetic_attempts')->where('user_id',$student->id)->count());
+  $this->assertSame(1,DB::table('alom_english_center_phonetic_attempts')->where('user_id',$student->id)->where('course_ref',(string)$courseId)->count());
+  $this->actingAs($student)->get('/courses/british-american-phonetics/phonetics-learning')->assertOk()->assertSee('Practice progress')->assertSee('Correct answers')->assertSee('100%')->assertSee('Words practiced')->assertDontSee('<p class="mt-1 text-2xl font-extrabold">2</p>', false);
   DB::table('enrollments')->where('user_id',$student->id)->delete();
   $this->actingAs($student)->get('/courses/british-american-phonetics/phonetics-learning')->assertForbidden();
  }
@@ -345,7 +351,5 @@ api/*",
    Schema::dropIfExists('phonetics_incomplete_users');
   }
  }
-
-
 
 }
