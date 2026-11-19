@@ -70,6 +70,21 @@ class ExamAttemptSnapshotTest extends TestCase
         $this->assertSame(['Original option A', 'Original option B'], $attempt->exam_snapshot['questions'][0]['options']);
         $this->assertSame(1, $attempt->exam_snapshot['questions'][0]['correct_option_index']);
         $this->assertSame(1.0, (float) $attempt->exam_snapshot['questions'][0]['negative_marks']);
+
+        $futureAttemptPage = $this->actingAs($student)->get("/exams/{$exam->id}/take")
+            ->assertOk()
+            ->assertSee('Changed question text')
+            ->assertSee('Question added after attempt start')
+            ->assertSee('5 minutes')
+            ->assertSee('Pass marks: 100');
+        preg_match('/name="attempt_id" value="([0-9]+)"/', $futureAttemptPage->getContent(), $futureMatch);
+        $futureAttemptId = (int) ($futureMatch[1] ?? 0);
+        $this->assertGreaterThan(0, $futureAttemptId);
+        $futureSnapshot = ExamAttempt::query()->findOrFail($futureAttemptId)->exam_snapshot;
+        $this->assertCount(2, $futureSnapshot['questions']);
+        $this->assertSame('Changed question text', $futureSnapshot['questions'][0]['prompt']);
+        $this->assertSame(5, $futureSnapshot['duration_minutes']);
+        $this->assertSame(100.0, (float) $futureSnapshot['pass_marks']);
         $this->assertSame(30, $attempt->exam_snapshot['duration_minutes']);
         $this->assertSame(5.0, (float) $attempt->exam_snapshot['pass_marks']);
     }
