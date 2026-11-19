@@ -151,8 +151,8 @@ class CmsController extends Controller
             'thumbnail_path' => $thumbPath,
             'pdf_path' => $pdfPath,
             'pdf_thumbnail' => $pdfThumbPath,
-            'seo_title' => $validated['seo_title'] ?? ($post->seo_title ?: $validated['title']),
-            'seo_description' => $validated['seo_description'] ?? $post->seo_description,
+            'seo_title' => $validated['seo_title'] ?? $validated['title'],
+            'seo_description' => $validated['seo_description'] ?? null,
             'is_published' => empty($validated['publish_at']) ? $request->boolean('is_published', true) : false,
             'publish_at' => $validated['publish_at'] ?? null,
         ]);
@@ -182,6 +182,7 @@ class CmsController extends Controller
             'pdf_thumbnail' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
             'pdf_thumbnail_url' => ['nullable', 'string', 'max:255', function (string $attribute, mixed $value, \Closure $fail): void { if (!$this->isSafeMediaReference($value)) $fail('The PDF thumbnail URL must be a safe HTTPS URL or local path.'); }],
             'is_published' => ['nullable', 'boolean'],
+            'publish_at' => ['nullable', 'date'],
         ]);
 
         $categoryName = trim((string) ($validated['category'] ?? $post->category ?? 'General')) ?: 'General';
@@ -228,8 +229,8 @@ class CmsController extends Controller
             'thumbnail_path' => $thumbPath,
             'pdf_path' => $pdfPath,
             'pdf_thumbnail' => $pdfThumbPath,
-            'seo_title' => $validated['seo_title'] ?? $validated['title'],
-            'seo_description' => $validated['seo_description'] ?? null,
+            'seo_title' => $validated['seo_title'] ?? ($post->seo_title ?: $validated['title']),
+            'seo_description' => $validated['seo_description'] ?? $post->seo_description,
             'is_published' => empty($validated['publish_at']) ? $request->boolean('is_published') : false,
             'publish_at' => $validated['publish_at'] ?? null,
         ]);
