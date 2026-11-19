@@ -33,6 +33,7 @@ class AdmissionApplication extends Model
         'created_by',
         'converted_student_id',
         'converted_at',
+        'admission_fee_invoice_id',
     ];
 
     public function documents(): HasMany
