@@ -4,15 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Plugins\Modules\ExamManagement\Models\Exam;
 use Tests\TestCase;
 
 class MobileApiBranchIsolationTest extends TestCase
 {
-    use RefreshDatabase;
-
     public function test_mobile_catalog_and_exam_endpoints_use_student_profile_branch(): void
     {
         $this->markSystemInstalled();
