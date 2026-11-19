@@ -148,12 +148,6 @@ class ReferralIncomeService
         }
 
         return DB::transaction(function () use ($buyer, $sourceType, $sourceId, $paymentRefundId, $refundAmount, $currency): int {
-            $existing = DB::table('referral_commission_reversals')
-                ->where('payment_refund_id', $paymentRefundId)->first();
-            if ($existing) {
-                return (int) $existing->id;
-            }
-
             if (!Schema::hasTable('payment_refunds') || !Schema::hasTable('payment_transactions')) {
                 throw ValidationException::withMessages(['refund' => 'Verified payment refund records are unavailable.']);
             }
@@ -180,6 +174,17 @@ class ReferralIncomeService
                 || empty($commission->payment_invoice_id)
                 || (int) $commission->payment_invoice_id !== (int) $payment->invoice_id) {
                 throw ValidationException::withMessages(['refund' => 'The refund does not belong to the invoice that generated this referral commission.']);
+            }
+
+            // Re-check after acquiring payment and commission row locks so concurrent webhook retries
+            // return the first ledger entry instead of racing into the unique constraint.
+            $existing = DB::table('referral_commission_reversals')
+                ->where('payment_refund_id', $paymentRefundId)->lockForUpdate()->first();
+            if ($existing) {
+                if ((int) $existing->referral_commission_id !== (int) $commission->id) {
+                    throw ValidationException::withMessages(['refund' => 'This refund has already been applied to another referral commission.']);
+                }
+                return (int) $existing->id;
             }
 
             $transactionRefunded = round((float) DB::table('payment_refunds')
