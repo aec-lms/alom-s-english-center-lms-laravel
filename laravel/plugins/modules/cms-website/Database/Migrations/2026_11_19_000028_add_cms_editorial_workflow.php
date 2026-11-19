@@ -14,6 +14,7 @@ return new class extends Migration {
         Schema::table('cms_posts', function (Blueprint $table): void {
             if (!Schema::hasColumn('cms_posts', 'editorial_status')) $table->string('editorial_status', 24)->default('draft')->index();
             if (!Schema::hasColumn('cms_posts', 'submitted_at')) $table->timestamp('submitted_at')->nullable();
+            if (!Schema::hasColumn('cms_posts', 'submitted_by')) $table->unsignedBigInteger('submitted_by')->nullable()->index();
             if (!Schema::hasColumn('cms_posts', 'reviewed_at')) $table->timestamp('reviewed_at')->nullable();
             if (!Schema::hasColumn('cms_posts', 'reviewed_by')) $table->unsignedBigInteger('reviewed_by')->nullable()->index();
             if (!Schema::hasColumn('cms_posts', 'review_note')) $table->text('review_note')->nullable();
@@ -27,7 +28,7 @@ return new class extends Migration {
     {
         if (!Schema::hasTable('cms_posts')) return;
         Schema::table('cms_posts', function (Blueprint $table): void {
-            foreach (['editorial_status', 'submitted_at', 'reviewed_at', 'reviewed_by', 'review_note'] as $column) {
+            foreach (['editorial_status', 'submitted_at', 'submitted_by', 'reviewed_at', 'reviewed_by', 'review_note'] as $column) {
                 if (Schema::hasColumn('cms_posts', $column)) $table->dropColumn($column);
             }
         });
