@@ -82,7 +82,8 @@ class PaymentSettlementService
                             'commerce_order',
                             (string) $order->id,
                             (float) $invoice->net_amount,
-                            (string) $invoice->currency
+                            (string) $invoice->currency,
+                            (int) $invoice->id
                         );
                     }
                 }

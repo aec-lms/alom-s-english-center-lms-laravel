@@ -78,13 +78,13 @@ class ReferralIncomeService
      * Call only after a payment/order has been authoritatively verified as settled.
      * The unique source key makes webhook retries idempotent.
      */
-    public function recordSettledPurchase(User $buyer, string $sourceType, string|int $sourceId, float $eligibleAmount, string $currency = 'BDT'): ?int
+    public function recordSettledPurchase(User $buyer, string $sourceType, string|int $sourceId, float $eligibleAmount, string $currency = 'BDT', ?int $paymentInvoiceId = null): ?int
     {
         if ($eligibleAmount <= 0 || strlen((string) $sourceId) > 80 || !preg_match('/^[a-z0-9_-]{2,40}$/i', $sourceType)) {
             return null;
         }
 
-        return DB::transaction(function () use ($buyer, $sourceType, $sourceId, $eligibleAmount, $currency): ?int {
+        return DB::transaction(function () use ($buyer, $sourceType, $sourceId, $eligibleAmount, $currency, $paymentInvoiceId): ?int {
             $attribution = DB::table('referral_attributions')
                 ->where('referred_user_id', $buyer->id)->where('status', 'active')->lockForUpdate()->first();
             if (!$attribution) return null;
@@ -102,6 +102,7 @@ class ReferralIncomeService
                 'referred_user_id' => $buyer->id,
                 'source_type' => $sourceType,
                 'source_id' => (string) $sourceId,
+                'payment_invoice_id' => $paymentInvoiceId,
                 'eligible_amount' => round($eligibleAmount, 2),
                 'commission_percent' => $rule->commission_percent,
                 'commission_amount' => $commission,
@@ -118,6 +119,115 @@ class ReferralIncomeService
 
             return (int) DB::getPdo()->lastInsertId();
         });
+    }
+
+
+    /**
+     * Apply a commission reversal only from a persisted refund that belongs to
+     * the exact payment invoice used to create the commission.
+     *
+     * Refund IDs are idempotency keys. Unpaid commissions are reduced in place;
+     * paid or payout-locked commissions create a recovery obligation without
+     * mutating an already-issued payout.
+     */
+    public function reverseSettledPurchase(
+        User $buyer,
+        string $sourceType,
+        string|int $sourceId,
+        int $paymentRefundId,
+        float $refundAmount,
+        string $currency = 'BDT'
+    ): int {
+        $sourceId = (string) $sourceId;
+        $currency = strtoupper(trim($currency));
+
+        if ($paymentRefundId <= 0 || $refundAmount <= 0 || strlen($sourceId) > 80
+            || !preg_match('/^[a-z0-9_-]{2,40}$/i', $sourceType)
+            || !preg_match('/^[A-Z]{3,8}$/', $currency)) {
+            throw ValidationException::withMessages(['refund' => 'Refund details are invalid.']);
+        }
+
+        return DB::transaction(function () use ($buyer, $sourceType, $sourceId, $paymentRefundId, $refundAmount, $currency): int {
+            if (!Schema::hasTable('payment_refunds') || !Schema::hasTable('payment_transactions')) {
+                throw ValidationException::withMessages(['refund' => 'Verified payment refund records are unavailable.']);
+            }
+
+            $refund = DB::table('payment_refunds')->where('id', $paymentRefundId)->lockForUpdate()->first();
+            if (!$refund || round((float) $refund->amount, 2) !== round($refundAmount, 2)) {
+                throw ValidationException::withMessages(['refund' => 'The refund amount does not match the authoritative refund record.']);
+            }
+
+            $payment = DB::table('payment_transactions')->where('id', $refund->payment_transaction_id)->lockForUpdate()->first();
+            if (!$payment || !in_array(strtolower((string) $payment->status), ['settled', 'refunded'], true)
+                || strtoupper((string) $payment->currency) !== $currency
+                || round((float) $payment->amount, 2) < $refundAmount) {
+                throw ValidationException::withMessages(['refund' => 'The refund is not linked to a settled payment in the requested currency.']);
+            }
+
+            $commission = DB::table('referral_commissions')
+                ->where('referred_user_id', $buyer->id)
+                ->where('source_type', $sourceType)
+                ->where('source_id', $sourceId)
+                ->lockForUpdate()->first();
+
+            if (!$commission || strtoupper((string) $commission->currency) !== $currency
+                || empty($commission->payment_invoice_id)
+                || (int) $commission->payment_invoice_id !== (int) $payment->invoice_id) {
+                throw ValidationException::withMessages(['refund' => 'The refund does not belong to the invoice that generated this referral commission.']);
+            }
+
+            // Re-check after acquiring payment and commission row locks so concurrent webhook retries
+            // return the first ledger entry instead of racing into the unique constraint.
+            $existing = DB::table('referral_commission_reversals')
+                ->where('payment_refund_id', $paymentRefundId)->lockForUpdate()->first();
+            if ($existing) {
+                if ((int) $existing->referral_commission_id !== (int) $commission->id) {
+                    throw ValidationException::withMessages(['refund' => 'This refund has already been applied to another referral commission.']);
+                }
+                return (int) $existing->id;
+            }
+
+            $transactionRefunded = round((float) DB::table('payment_refunds')
+                ->where('payment_transaction_id', $payment->id)->sum('amount'), 2);
+            if ($transactionRefunded > round((float) $payment->amount, 2) + 0.01) {
+                throw ValidationException::withMessages(['refund' => 'Cumulative refunds exceed the original settled payment.']);
+            }
+
+            $priorRefunded = (float) DB::table('referral_commission_reversals')
+                ->where('referral_commission_id', $commission->id)
+                ->whereIn('status', ['applied', 'recovery_due'])
+                ->sum('eligible_refund_amount');
+            $remainingEligible = max(0, round((float) $commission->eligible_amount - $priorRefunded, 2));
+            if ($refundAmount > $remainingEligible) {
+                throw ValidationException::withMessages(['refund' => 'Cumulative refunds cannot exceed the eligible purchase amount.']);
+            }
+
+            $commissionReversal = round($refundAmount * ((float) $commission->commission_percent / 100), 2);
+            $isPaidOrLocked = in_array((string) $commission->status, ['paid', 'payout_requested'], true);
+            $reversalId = DB::table('referral_commission_reversals')->insertGetId([
+                'referral_commission_id' => $commission->id,
+                'payment_refund_id' => $paymentRefundId,
+                'eligible_refund_amount' => round($refundAmount, 2),
+                'commission_reversal_amount' => $commissionReversal,
+                'currency' => $currency,
+                'status' => $isPaidOrLocked ? 'recovery_due' : 'applied',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            if (!$isPaidOrLocked) {
+                $newEligibleAmount = max(0, round((float) $commission->eligible_amount - $refundAmount, 2));
+                $newCommissionAmount = max(0, round((float) $commission->commission_amount - $commissionReversal, 2));
+                DB::table('referral_commissions')->where('id', $commission->id)->update([
+                    'eligible_amount' => $newEligibleAmount,
+                    'commission_amount' => $newCommissionAmount,
+                    'status' => $newCommissionAmount <= 0 ? 'reversed' : $commission->status,
+                    'updated_at' => now(),
+                ]);
+            }
+
+            return (int) $reversalId;
+        }, 3);
     }
 
     public function requestPayout(User $owner, string $method, string $accountDetails): int
