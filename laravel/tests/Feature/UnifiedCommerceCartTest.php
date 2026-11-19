@@ -28,7 +28,7 @@ final class UnifiedCommerceCartTest extends TestCase
     public function test_sender_can_view_secure_gift_link_and_retry_only_their_failed_delivery(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['commerce-cart', 'course-management']);
+        $this->activatePlugins(['commerce-cart', 'course-management', 'email-notifications']);
         $sender = $this->createUserWithRole('student');
         $otherStudent = $this->createUserWithRole('student');
         $course = Course::query()->create([
