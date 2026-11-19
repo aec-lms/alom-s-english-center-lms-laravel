@@ -133,9 +133,9 @@ class PaymentController extends Controller
                         ->where('invoice_id', $lockedTx->invoice_id)
                         ->lockForUpdate()->first();
                     if ($order) {
-                        $buyer = \\App\\Models\\User::query()->find((int) $order->user_id);
+                        $buyer = \App\Models\User::query()->find((int) $order->user_id);
                         if ($buyer) {
-                            app(\\Plugins\\Modules\\ReferralIncome\\Services\\ReferralIncomeService::class)
+                            app(\Plugins\Modules\ReferralIncome\Services\ReferralIncomeService::class)
                                 ->reverseSettledPurchase(
                                     $buyer,
                                     'commerce_order',
