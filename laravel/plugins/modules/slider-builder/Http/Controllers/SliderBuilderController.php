@@ -165,8 +165,21 @@ class SliderBuilderController extends Controller
 
     private function storeImage(UploadedFile $file): string
     {
+        $uploadsRoot = public_path('uploads');
         $dir = public_path('uploads/sliders');
+        File::ensureDirectoryExists($uploadsRoot);
+
+        if (is_link($dir)) {
+            throw ValidationException::withMessages(['image' => 'The slider upload directory must not be a symbolic link.']);
+        }
+
         File::ensureDirectoryExists($dir);
+        $realUploadsRoot = realpath($uploadsRoot);
+        $realDirectory = realpath($dir);
+        if (!$realUploadsRoot || !$realDirectory || dirname($realDirectory) !== $realUploadsRoot) {
+            throw ValidationException::withMessages(['image' => 'The slider upload directory is not a safe managed location.']);
+        }
+
         $extension = strtolower((string) $file->extension());
         $filename = Str::uuid()->toString() . '.' . $extension;
         $file->move($dir, $filename);
