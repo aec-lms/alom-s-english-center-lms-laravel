@@ -84,7 +84,7 @@ class WebsiteBuildersTest extends TestCase
     public function test_homepage_ignores_unsafe_legacy_slider_urls(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['slider-builder']);
+        $this->activatePlugins(['cms-website', 'slider-builder']);
 
         DB::table('cms_sliders')->insert([
             'key_name' => 'hero',
@@ -108,7 +108,7 @@ class WebsiteBuildersTest extends TestCase
     public function test_slider_and_carousel_reject_external_media_paths_and_unsafe_ctas(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['slider-builder', 'carousel-builder']);
+        $this->activatePlugins(['cms-website', 'slider-builder', 'carousel-builder']);
         $admin = $this->createUserWithRole('admin');
 
         $this->actingAs($admin)->post('/admin/slider-builder', [
