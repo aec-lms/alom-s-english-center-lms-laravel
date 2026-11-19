@@ -382,8 +382,18 @@ class PaymentSettlementService
         if ($itemType === 'gift_course') {
             if (!Schema::hasTable('courses') || !Schema::hasColumn('course_gifts', 'course_id')
                 || !Schema::hasColumn('course_gifts', 'redeem_token_hash')
-                || !Schema::hasColumn('course_gifts', 'redeem_token_encrypted')) {
+                || !Schema::hasColumn('course_gifts', 'redeem_token_encrypted')
+                || !Schema::hasColumn('course_gifts', 'subtotal_amount')
+                || !Schema::hasColumn('course_gifts', 'discount_amount')) {
                 throw new RuntimeException($unsupported);
+            }
+            $giftSubtotal = round((float) $draft->subtotal_amount, 2);
+            $giftDiscount = round((float) $draft->discount_amount, 2);
+            if ($giftSubtotal <= 0 || $giftDiscount < 0 || $giftDiscount > $giftSubtotal
+                || abs(round($giftSubtotal - $giftDiscount, 2) - $amount) > 0.01
+                || !filled($draft->redeem_token_hash)
+                || !filled($draft->redeem_token_encrypted)) {
+                throw new RuntimeException('Course gift amount, discount, or redemption token does not reconcile.');
             }
             $course = DB::table('courses')->where('id', (int) $draft->course_id)
                 ->where('status', 'published')->first();
@@ -403,7 +413,8 @@ class PaymentSettlementService
                     throw new RuntimeException('Gift voucher wallet and redemption storage is not installed.');
                 }
             }
-            if (abs(round((float) $draft->remaining_amount, 2) - $amount) > 0.01
+            if (!filled($draft->redeem_token_hash) || !filled($draft->redeem_token_encrypted)
+                || abs(round((float) $draft->remaining_amount, 2) - $amount) > 0.01
                 || ($draft->expires_at && now()->greaterThan($draft->expires_at))) {
                 throw new RuntimeException('Gift voucher balance or expiry does not match the payable draft.');
             }
