@@ -69,7 +69,7 @@ class AllPluginsIndependentAcceptanceTest extends TestCase
     }
 
     #[DataProvider('pluginSlugs')]
-    public function test_each_plugin_installs_with_only_its_declared_required_siblings(string $slug): void
+    public function test_each_plugin_installs_and_runs_its_lifecycle_without_sibling_plugins(string $slug): void
     {
         $this->markSystemInstalled();
 
@@ -82,13 +82,7 @@ class AllPluginsIndependentAcceptanceTest extends TestCase
 
         $manifest = PluginManifest::fromDirectory($directory);
         $this->assertSame($slug, $manifest->slug);
-        foreach ($manifest->dependencies as $dependencySlug) {
-            $dependency = $manager->discoverManifests()[$dependencySlug] ?? null;
-            $this->assertNotNull($dependency, "{$slug} declares missing required dependency {$dependencySlug}");
-            if (!PluginRecord::query()->where('slug', $dependencySlug)->where('is_enabled', true)->exists()) {
-                $manager->install($dependencySlug);
-            }
-        }
+        $this->assertSame([], $manifest->dependencies, "{$slug} must not require a sibling plugin");
 
         $providerClass = $manifest->providerClass;
         $this->assertNotNull($providerClass, "{$slug} must declare a service provider");
