@@ -631,7 +631,7 @@ final class UnifiedCommerceCartTest extends TestCase
         ]);
         $this->assertDatabaseHas('commerce_entitlements', [
             'order_item_id' => $orderItemId,
-            'status' => 'revoked',
+            'status' => 'suspended',
         ]);
         $this->assertDatabaseHas('fee_invoices', [
             'id' => $invoice->id,
