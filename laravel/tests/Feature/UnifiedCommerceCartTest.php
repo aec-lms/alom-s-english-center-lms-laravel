@@ -545,6 +545,101 @@ final class UnifiedCommerceCartTest extends TestCase
         ]);
     }
 
+    public function test_full_invoice_refund_revokes_order_entitlements_and_marks_commerce_order_refunded(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'commerce-cart']);
+
+        $student = $this->createUserWithRole('student');
+        $admin = $this->createUserWithRole('admin');
+        $invoice = FeeInvoice::query()->create([
+            'invoice_number' => 'COMMERCE-REFUND-' . strtoupper(uniqid()),
+            'student_id' => null,
+            'payer_name' => $student->name,
+            'payer_email' => $student->email,
+            'payer_phone' => '01700000000',
+            'branch_id' => null,
+            'subtotal_amount' => 500,
+            'discount_amount' => 0,
+            'net_amount' => 500,
+            'paid_amount' => 500,
+            'currency' => 'BDT',
+            'status' => 'paid',
+            'due_date' => now()->toDateString(),
+        ]);
+        $orderId = DB::table('commerce_orders')->insertGetId([
+            'order_number' => 'AEC-REFUND-' . strtoupper(uniqid()),
+            'user_id' => $student->id,
+            'invoice_id' => $invoice->id,
+            'branch_id' => null,
+            'currency' => 'BDT',
+            'subtotal' => 500,
+            'discount_total' => 0,
+            'grand_total' => 500,
+            'status' => 'completed',
+            'payment_status' => 'paid',
+            'billing_snapshot' => json_encode(['name' => $student->name, 'email' => $student->email]),
+            'paid_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $orderItemId = DB::table('commerce_order_items')->insertGetId([
+            'order_id' => $orderId,
+            'item_type' => 'subscription',
+            'item_id' => 71,
+            'title_snapshot' => 'Premium Subscription',
+            'quantity' => 1,
+            'unit_price' => 500,
+            'line_total' => 500,
+            'metadata' => json_encode(['entitlement' => ['duration_days' => 30]]),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('commerce_entitlements')->insert([
+            'user_id' => $student->id,
+            'order_item_id' => $orderItemId,
+            'entitlement_type' => 'subscription',
+            'resource_id' => 71,
+            'details' => json_encode(['duration_days' => 30]),
+            'status' => 'active',
+            'starts_at' => now(),
+            'expires_at' => now()->addDays(30),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $transaction = PaymentTransaction::query()->create([
+            'transaction_ref' => 'COMMERCE-REFUND-TX-' . strtoupper(uniqid()),
+            'invoice_id' => $invoice->id,
+            'branch_id' => null,
+            'gateway_slug' => 'offline',
+            'amount' => 500,
+            'currency' => 'BDT',
+            'status' => 'settled',
+            'metadata' => [],
+            'settled_at' => now(),
+        ]);
+
+        $this->actingAs($admin)->post('/admin/payments/' . $transaction->id . '/refund', [
+            'amount' => 500,
+            'reason' => 'Full commerce order refund',
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('commerce_orders', [
+            'id' => $orderId,
+            'status' => 'refunded',
+            'payment_status' => 'refunded',
+        ]);
+        $this->assertDatabaseHas('commerce_entitlements', [
+            'order_item_id' => $orderItemId,
+            'status' => 'revoked',
+        ]);
+        $this->assertDatabaseHas('fee_invoices', [
+            'id' => $invoice->id,
+            'paid_amount' => 0,
+            'status' => 'unpaid',
+        ]);
+    }
+
     public function test_branch_manager_cannot_access_global_commerce_order_administration(): void
     {
         $this->markSystemInstalled();
