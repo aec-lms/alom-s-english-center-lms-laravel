@@ -14,32 +14,41 @@
     $androidAppAvailable = filter_var($androidAppUrl, FILTER_VALIDATE_URL)
         && parse_url($androidAppUrl, PHP_URL_HOST) === 'play.google.com';
 
+    $safeSliderPath = static fn ($path) => is_string($path) && str_starts_with($path, '/') && !str_starts_with($path, '//') && !str_contains($path, '..') && !str_contains($path, chr(92)) && preg_match('~^[A-Za-z0-9_./-]+$~', ltrim($path, '/')) ? $path : null;
+    $safeSliderUrl = static function ($url) {
+        if (!is_string($url) || trim($url) === '') return '#learning-paths';
+        if (str_starts_with($url, '/') && !str_starts_with($url, '//') && !str_contains($url, '..') && !str_contains($url, chr(92))) return $url;
+        if (str_starts_with($url, '#') && preg_match('/^#[A-Za-z][A-Za-z0-9_-]*$/', $url)) return $url;
+        if (filter_var($url, FILTER_VALIDATE_URL) && in_array(strtolower((string) parse_url($url, PHP_URL_SCHEME)), ['http', 'https'], true)) return $url;
+        return '#learning-paths';
+    };
     $heroSlides = $sliders->isNotEmpty() ? $sliders->map(fn ($s) => [
         'title' => $s->title,
         'subtitle' => $s->subtitle ?? '',
-        'image' => is_string($s->image_path) && preg_match('~^/(?!/)(?!.*\\.\\.)[A-Za-z0-9/_\\-.]+$~', $s->image_path) ? $s->image_path : asset('assets/images/hero_educator_studio_1794552233836.jpg'),
-        'cta_url' => is_string($s->cta_url) && preg_match('~^(https?://\\S+|/(?!/)\\S*|#[A-Za-z][A-Za-z0-9_-]*)$~i', $s->cta_url) ? $s->cta_url : '#learning-paths',
+        'image' => $safeSliderPath($s->image_path) ?? asset('assets/images/hero_educator_studio_1794552233836.jpg'),
+        'mobile_image' => $safeSliderPath($s->mobile_image_path ?? null) ?? $safeSliderPath($s->image_path) ?? asset('assets/images/hero_educator_studio_1794552233836.jpg'),
+        'cta_url' => $safeSliderUrl($s->cta_url ?? null),
+        'button_label' => trim((string) ($s->button_label ?? '')) ?: 'Explore now',
+        'text_alignment' => in_array($s->text_alignment ?? 'center', ['left', 'center', 'right'], true) ? $s->text_alignment : 'center',
+        'overlay_opacity' => max(0, min(90, (int) ($s->overlay_opacity ?? 45))),
+        'duration_ms' => max(2000, min(15000, (int) ($s->duration_ms ?? $sliderAutoplayMs ?? 5000))),
+        'transition' => in_array($s->transition ?? 'fade', ['fade', 'slide'], true) ? $s->transition : 'fade',
+        'open_new_tab' => (bool) ($s->open_new_tab ?? false),
     ])->values()->all() : [
-        [
-            'title' => 'IELTS & English All in One',
-            'subtitle' => 'Basic to Pro · Structured Live & Recorded Batches',
-            'image' => asset('assets/images/hero_educator_studio_1794552233836.jpg'),
-            'cta_url' => '#learning-paths',
-        ],
-        [
-            'title' => 'IELTS Academic & GT Masterclass',
-            'subtitle' => 'Target Band 8.0+ · Weekly Mock Tests & Writing Review',
-            'image' => asset('assets/images/course_ielts_masterclass_1794552235026.jpg'),
-            'cta_url' => '#learning-paths',
-        ],
-        [
-            'title' => 'Spoken English & Fluency Bootcamp',
-            'subtitle' => 'Phonetics, Pronunciation & Daily Speaking Practice',
-            'image' => asset('assets/images/course_spoken_fluency_1794552235255.jpg'),
-            'cta_url' => '#learning-paths',
-        ],
+        ['title' => 'IELTS & English All in One', 'subtitle' => 'Basic to Pro · Structured Live & Recorded Batches', 'image' => asset('assets/images/hero_educator_studio_1794552233836.jpg'), 'mobile_image' => asset('assets/images/hero_educator_studio_1794552233836.jpg'), 'cta_url' => '#learning-paths', 'button_label' => 'Explore courses', 'text_alignment' => 'center', 'overlay_opacity' => 45, 'duration_ms' => $sliderAutoplayMs ?? 5000, 'transition' => 'fade', 'open_new_tab' => false],
+        ['title' => 'IELTS Academic & GT Masterclass', 'subtitle' => 'Target Band 8.0+ · Weekly Mock Tests & Writing Review', 'image' => asset('assets/images/course_ielts_masterclass_1794552235026.jpg'), 'mobile_image' => asset('assets/images/course_ielts_masterclass_1794552235026.jpg'), 'cta_url' => '#learning-paths', 'button_label' => 'Explore courses', 'text_alignment' => 'center', 'overlay_opacity' => 45, 'duration_ms' => 5000, 'transition' => 'fade', 'open_new_tab' => false],
+        ['title' => 'Spoken English & Fluency Bootcamp', 'subtitle' => 'Phonetics, Pronunciation & Daily Speaking Practice', 'image' => asset('assets/images/course_spoken_fluency_1794552235255.jpg'), 'mobile_image' => asset('assets/images/course_spoken_fluency_1794552235255.jpg'), 'cta_url' => '#learning-paths', 'button_label' => 'Explore courses', 'text_alignment' => 'center', 'overlay_opacity' => 45, 'duration_ms' => 5000, 'transition' => 'fade', 'open_new_tab' => false],
     ];
-
+    $bannerSlides = ($bannerSlides ?? collect())->map(fn ($s) => [
+        'title' => $s->title,
+        'subtitle' => $s->subtitle ?? '',
+        'image' => $safeSliderPath($s->image_path) ?? '',
+        'mobile_image' => $safeSliderPath($s->mobile_image_path ?? null) ?? $safeSliderPath($s->image_path) ?? '',
+        'cta_url' => $safeSliderUrl($s->cta_url ?? null),
+        'button_label' => trim((string) ($s->button_label ?? '')) ?: 'Learn more',
+        'open_new_tab' => (bool) ($s->open_new_tab ?? false),
+    ])->values();
+    
     $learningPaths = $homepage['learning_paths'] ?? [
         ['title' => 'Academic Courses', 'desc' => 'Comprehensive academic preparation for all levels', 'bg' => '#D6E9FF', 'border' => '#BBD8FF', 'accent' => '#1D63FF', 'abbr' => 'AC', 'url' => route('public.courses'), 'enabled' => true],
         ['title' => 'Admission Courses', 'desc' => 'Specialized courses for university & IELTS admissions', 'bg' => '#CEFCE0', 'border' => '#B2F5CD', 'accent' => '#00A647', 'abbr' => 'AD', 'url' => route('public.courses'), 'enabled' => true],
@@ -112,16 +121,17 @@
             </button>
 
             <div class="w-full lg:w-[66%] max-w-[820px] relative rounded-2xl overflow-hidden border border-white/15 bg-[#021C2B] shadow-2xl">
-                <a id="hero-main-link" href="{{ $heroSlides[0]['cta_url'] }}" class="block relative aspect-[16/9] sm:h-[380px] lg:h-[400px] w-full">
-                    <img id="hero-main-img" src="{{ $heroSlides[0]['image'] }}" alt="{{ $heroSlides[0]['title'] }}" class="w-full h-full object-cover">
-                    <div class="absolute inset-0 bg-gradient-to-t from-[#021824]/90 via-[#021824]/30 to-transparent"></div>
-                    <div class="absolute inset-x-0 bottom-12 px-6 sm:px-10 text-center space-y-1.5">
+                <a id="hero-main-link" href="{{ $heroSlides[0]['cta_url'] }}" @if($heroSlides[0]['open_new_tab']) target="_blank" rel="noopener noreferrer" @endif class="block relative aspect-[16/9] sm:h-[380px] lg:h-[400px] w-full">
+                    <picture><source id="hero-main-mobile" media="(max-width: 639px)" srcset="{{ $heroSlides[0]['mobile_image'] }}"><img id="hero-main-img" src="{{ $heroSlides[0]['image'] }}" alt="{{ $heroSlides[0]['title'] }}" class="w-full h-full object-cover"></picture>
+                    <div id="hero-main-overlay" class="absolute inset-0 bg-gradient-to-t from-[#021824]/90 via-[#021824]/30 to-transparent" style="opacity: {{ $heroSlides[0]['overlay_opacity'] / 90 }}"></div>
+                    <div id="hero-main-copy" @class(['absolute inset-x-0 bottom-12 px-6 sm:px-10 space-y-1.5', 'text-left' => $heroSlides[0]['text_alignment'] === 'left', 'text-center' => $heroSlides[0]['text_alignment'] === 'center', 'text-right' => $heroSlides[0]['text_alignment'] === 'right'])>
                         <h1 id="hero-main-title" class="text-2xl sm:text-4xl font-extrabold tracking-tight text-white drop-shadow">
                             {{ $heroSlides[0]['title'] }}
                         </h1>
                         <p id="hero-main-subtitle" class="text-xs sm:text-sm font-semibold text-amber-300">
                             {{ $heroSlides[0]['subtitle'] }}
                         </p>
+                        <span id="hero-main-button" class="inline-flex mt-3 rounded-full bg-sky-500 px-4 py-2 text-xs font-extrabold text-white shadow-lg">{{ $heroSlides[0]['button_label'] }}</span>
                     </div>
                 </a>
 
@@ -133,7 +143,7 @@
                 </button>
                 <div id="hero-dots" class="absolute bottom-5 left-1/2 -translate-x-1/2 flex items-center gap-1.5">
                     @foreach ($heroSlides as $i => $s)
-                        <span data-dot="{{ $i }}" class="h-1.5 rounded-full transition-all {{ $i === 0 ? 'w-5 bg-white' : 'w-1.5 bg-white/40' }}"></span>
+                        <button type="button" data-dot="{{ $i }}" aria-label="Go to slide {{ $i + 1 }}" class="h-1.5 rounded-full transition-all {{ $i === 0 ? 'w-5 bg-white' : 'w-1.5 bg-white/40' }}"></button>
                     @endforeach
                 </div>
             </div>
@@ -232,6 +242,25 @@
 
     </div>
 </section>
+
+@if ($bannerSlides->isNotEmpty())
+<section aria-label="Promotions and announcements" class="bg-slate-50 px-4 py-7 sm:px-6">
+    <div class="mx-auto grid max-w-[1100px] gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        @foreach ($bannerSlides as $banner)
+            <article class="relative min-h-36 overflow-hidden rounded-2xl border border-slate-200 bg-slate-900 text-white shadow-lg">
+                @if ($banner['image'])<picture class="absolute inset-0 h-full w-full"><source media="(max-width: 639px)" srcset="{{ $banner['mobile_image'] }}"><img src="{{ $banner['image'] }}" alt="" class="h-full w-full object-cover" loading="lazy"></picture>@endif
+                <div class="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-slate-950/65 to-slate-950/15"></div>
+                <div class="relative flex min-h-36 flex-col items-start justify-center gap-2 p-5">
+                    <h2 class="text-lg font-extrabold">{{ $banner['title'] }}</h2>
+                    @if ($banner['subtitle'])<p class="text-xs text-slate-100">{{ $banner['subtitle'] }}</p>@endif
+                    <a href="{{ $banner['cta_url'] }}" @if($banner['open_new_tab']) target="_blank" rel="noopener noreferrer" @endif class="mt-1 inline-flex rounded-full bg-sky-500 px-4 py-2 text-xs font-bold text-white">{{ $banner['button_label'] }}</a>
+                </div>
+            </article>
+        @endforeach
+    </div>
+</section>
+@endif
+
 
 <!-- 3. CHOOSE YOUR LEARNING PATH (ADMIN-CONTROLLED 6 PASTEL CARDS) -->
 @if ($homepage['show_learning_paths'] ?? true)
@@ -492,6 +521,14 @@
 @media (prefers-reduced-motion: reduce) { .homepage-stat-number, .homepage-stat-number.homepage-stat-counted { transition:none; transform:none; filter:none; } }
 </style>
 
+<style>
+.slider-transition-fade { animation: sliderFadeIn .45s ease both; }
+.slider-transition-slide { animation: sliderSlideIn .45s ease both; }
+@keyframes sliderFadeIn { from { opacity:.25; } to { opacity:1; } }
+@keyframes sliderSlideIn { from { opacity:.4; transform:translateX(2.5%); } to { opacity:1; transform:translateX(0); } }
+@media (prefers-reduced-motion: reduce) { .slider-transition-fade, .slider-transition-slide { animation:none; } }
+</style>
+
 <script>
 (() => {
     const track = document.getElementById('digital-carousel-track');
@@ -512,23 +549,59 @@
     const render = () => {
         const prev = (idx - 1 + slides.length) % slides.length;
         const next = (idx + 1) % slides.length;
-        mainImg.src = slides[idx].image;
-        mainImg.alt = slides[idx].title;
+        const current = slides[idx];
+        mainImg.src = current.image;
+        mainImg.alt = current.title;
+        mainImg.classList.remove('slider-transition-fade', 'slider-transition-slide');
+        void mainImg.offsetWidth;
+        mainImg.classList.add(current.transition === 'slide' ? 'slider-transition-slide' : 'slider-transition-fade');
+        const mobileSource = document.getElementById('hero-main-mobile');
+        if (mobileSource) mobileSource.srcset = current.mobile_image || current.image;
         prevImg.src = slides[prev].image;
         nextImg.src = slides[next].image;
-        mainTitle.textContent = slides[idx].title;
-        mainSub.textContent = slides[idx].subtitle;
-        if (mainLink) mainLink.href = slides[idx].cta_url || '#learning-paths';
+        mainTitle.textContent = current.title;
+        mainSub.textContent = current.subtitle;
+        const button = document.getElementById('hero-main-button');
+        if (button) button.textContent = current.button_label || 'Explore now';
+        const overlay = document.getElementById('hero-main-overlay');
+        if (overlay) overlay.style.opacity = String(Math.max(0, Math.min(90, current.overlay_opacity ?? 45)) / 90);
+        const copy = document.getElementById('hero-main-copy');
+        if (copy) copy.className = 'absolute inset-x-0 bottom-12 px-6 sm:px-10 text-' + (['left','center','right'].includes(current.text_alignment) ? current.text_alignment : 'center') + ' space-y-1.5';
+        if (mainLink) {
+            mainLink.href = current.cta_url || '#learning-paths';
+            mainLink.target = current.open_new_tab ? '_blank' : '_self';
+            mainLink.rel = current.open_new_tab ? 'noopener noreferrer' : '';
+        }
         dots.forEach((d, i) => {
             d.className = 'h-1.5 rounded-full transition-all ' + (i === idx ? 'w-5 bg-white' : 'w-1.5 bg-white/40');
         });
     };
 
-    const step = (delta) => { idx = (idx + delta + slides.length) % slides.length; render(); };
+    let autoplayTimer = null;
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const pauseOnHover = @json($sliderPauseOnHover);
+    const stopAutoplay = () => { if (autoplayTimer) window.clearTimeout(autoplayTimer); autoplayTimer = null; };
+    const scheduleAutoplay = () => {
+        stopAutoplay();
+        if (reducedMotion || document.hidden || slides.length < 2) return;
+        const delay = Math.max(2000, Math.min(15000, Number(slides[idx].duration_ms) || 5000));
+        autoplayTimer = window.setTimeout(() => { step(1); }, delay);
+    };
+    const step = (delta) => { idx = (idx + delta + slides.length) % slides.length; render(); scheduleAutoplay(); };
+    dots.forEach((dot, i) => dot.addEventListener('click', () => { idx = i; render(); scheduleAutoplay(); }));
     document.getElementById('hero-prev-btn')?.addEventListener('click', () => step(-1));
     document.getElementById('hero-next-btn')?.addEventListener('click', () => step(1));
     document.getElementById('hero-prev-peek')?.addEventListener('click', () => step(-1));
     document.getElementById('hero-next-peek')?.addEventListener('click', () => step(1));
+    const hero = document.getElementById('hero-main-link');
+    if (pauseOnHover && hero) {
+        hero.addEventListener('mouseenter', stopAutoplay);
+        hero.addEventListener('mouseleave', scheduleAutoplay);
+        hero.addEventListener('focusin', stopAutoplay);
+        hero.addEventListener('focusout', scheduleAutoplay);
+    }
+    document.addEventListener('visibilitychange', () => document.hidden ? stopAutoplay() : scheduleAutoplay());
+    scheduleAutoplay();
 })();
 </script>
 @endsection
