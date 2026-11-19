@@ -48,6 +48,12 @@ class PluginManager
             $dir = $modulesPath . DIRECTORY_SEPARATOR . $entry;
             if (is_dir($dir) && is_file($dir . DIRECTORY_SEPARATOR . 'plugin.json')) {
                 $manifest = PluginManifest::fromDirectory($dir);
+                if ($manifest->slug !== $entry) {
+                    throw new RuntimeException("Plugin folder '{$entry}' does not match manifest slug '{$manifest->slug}'.");
+                }
+                if (isset($manifests[$manifest->slug])) {
+                    throw new RuntimeException("Duplicate plugin manifest slug '{$manifest->slug}' was discovered.");
+                }
                 $this->registerPluginAutoload($manifest);
                 $manifests[$manifest->slug] = $manifest;
             }
