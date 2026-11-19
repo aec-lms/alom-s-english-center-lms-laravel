@@ -30,6 +30,7 @@ All contributors and automated work sessions operate from one shared workflow qu
 5. **Handoffs are explicit:** if an owner is unavailable or work must transfer, record the current state, commits, remaining tasks, and receiving owner before another contributor continues. No silent takeover or parallel fork.
 6. **Conflict response:** stop overlapping changes, do not merge competing PRs, compare implementation and tests, choose one canonical path with the owner/maintainer, then close or narrow redundant work only after coordination.
 7. **Quality gates apply to the group:** no merge or production deployment while required CI, independent review, security/regression checks, or acceptance criteria are incomplete.
+8. **Finish, hand off, then help another owner:** when a contributor completes their assigned task, they should proactively support the highest-priority open task (especially a failed check, blocker, review, regression test, documentation, or bounded integration). First record their own completion and handoff; then coordinate with the next task's primary owner before helping. Do not silently take over or edit canonical shared files without explicit agreement. Record the helper, bounded scope, and resulting commit/check evidence in the register or linked PR. After that support task is complete, move to the next highest-priority unblocked task.
 
 ## Status definitions
 
