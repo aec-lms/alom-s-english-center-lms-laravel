@@ -232,14 +232,7 @@ class CommerceCartController extends Controller
                 if ($fresh['type'] !== 'other' && (int) $cartItem->quantity !== 1) {
                     abort(422, 'Access-based products must have quantity one. Remove the duplicate quantity and try again.');
                 }
-                if ((float) $fresh['price'] !== (float) $cartItem->unit_price) {
-                    DB::table('commerce_cart_items')->where('id', $cartItem->id)->update([
-                        'unit_price' => $fresh['price'],
-                        'title_snapshot' => $fresh['title'],
-                        'metadata' => json_encode($fresh['metadata']),
-                        'updated_at' => now(),
-                    ]);
-                }
+                $this->catalog->assertCartSnapshotUnchanged($fresh, $cartItem);
                 $resolved[] = [$cartItem, $fresh];
             }
 
