@@ -40,4 +40,14 @@ class LanguageSwitchTest extends TestCase
 
         $this->assertSessionHas('locale', 'bn');
     }
+    public function test_session_locale_does_not_mutate_institution_default_locale(): void
+    {
+        $this->markSystemInstalled();
+        config(['app.locale' => 'bn-BD', 'lms.default_locale' => 'bn-BD']);
+
+        $this->post('/language/en')->assertRedirect('/');
+        $this->get('/login')->assertOk()->assertSee('Welcome Back!');
+        $this->assertSame('bn-BD', config('lms.default_locale'));
+    }
+
 }
