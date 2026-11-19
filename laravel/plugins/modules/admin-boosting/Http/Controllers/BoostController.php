@@ -23,6 +23,13 @@ class BoostController extends Controller
             ? BoostCampaign::query()->orderByDesc('priority')->latest()->get()
             : collect();
 
+        $targetCourses = Schema::hasTable('courses')
+            ? DB::table('courses')->where('status', 'published')->when(Schema::hasColumn('courses', 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))->orderBy('title')->get(['id', 'title'])
+            : collect();
+        $targetBranches = Schema::hasTable('branches')
+            ? DB::table('branches')->where('is_active', true)->when(Schema::hasColumn('branches', 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))->orderBy('name')->get(['id', 'name', 'city'])
+            : collect();
+
         $totals = [
             'campaigns' => $campaigns->count(),
             'active' => $campaigns->filter(fn (BoostCampaign $campaign): bool => $this->isEligible($campaign))->count(),
@@ -33,12 +40,12 @@ class BoostController extends Controller
             ? round(($totals['clicks'] / $totals['impressions']) * 100, 2)
             : 0.0;
 
-        return view('admin-boosting::index', compact('campaigns', 'totals'));
+        return view('admin-boosting::index', compact('campaigns', 'totals', 'targetCourses', 'targetBranches'));
     }
 
     public function store(Request $request): RedirectResponse
     {
-        $validated = $request->validate($this->campaignRules(true));
+        $validated = $request->validate($this->campaignRules($request, true));
         $campaign = BoostCampaign::query()->create([
             'campaign_name' => $validated['campaign_name'],
             'entity_type' => $validated['entity_type'],
@@ -64,7 +71,7 @@ class BoostController extends Controller
 
     public function update(Request $request, BoostCampaign $campaign): RedirectResponse
     {
-        $validated = $request->validate($this->campaignRules(false));
+        $validated = $request->validate($this->campaignRules($request, false));
         $before = $campaign->only(['status', 'placement', 'entity_type', 'entity_id', 'priority']);
         $campaign->update($validated);
 
@@ -133,12 +140,36 @@ class BoostController extends Controller
         return redirect()->to($destination);
     }
 
-    private function campaignRules(bool $creating): array
+    private function campaignRules(Request $request, bool $creating): array
     {
         return [
             'campaign_name' => ['required', 'string', 'max:180'],
             'entity_type' => ['required', 'in:course,institution,branch,offer'],
-            'entity_id' => ['nullable', 'integer', 'min:1'],
+            'entity_id' => ['nullable', 'integer', 'min:1', function (string $attribute, mixed $value, Closure $fail) use ($request): void {
+                if ($value === null || $value === '') {
+                    return;
+                }
+
+                $type = (string) $request->input('entity_type');
+                $table = match ($type) { 'course' => 'courses', 'branch' => 'branches', default => null };
+                if ($table === null || !Schema::hasTable($table)) {
+                    $fail('This target type does not support a record ID.');
+                    return;
+                }
+
+                $query = DB::table($table)->where('id', (int) $value);
+                if ($type === 'course') {
+                    $query->where('status', 'published');
+                } else {
+                    $query->where('is_active', true);
+                }
+                if (Schema::hasColumn($table, 'deleted_at')) {
+                    $query->whereNull('deleted_at');
+                }
+                if (!$query->exists()) {
+                    $fail('The selected target record does not exist or is not publicly available.');
+                }
+            }],
             'placement' => ['required', 'in:homepage_featured,course_listing,notice_banner'],
             'badge_text' => ['nullable', 'string', 'max:60'],
             'cta_text' => ['nullable', 'string', 'max:60'],
