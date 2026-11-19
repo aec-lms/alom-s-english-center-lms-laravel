@@ -1185,7 +1185,17 @@ final class UnifiedCommerceCartTest extends TestCase
             'unified_payment_transaction_id' => null,
         ]);
 
-        $this->assertSame('gift_course', app(CommerceCatalog::class)->resolve('gift_course', (int) $gift->id, $student)['type']);
+        $this->actingAs($student)->post('/cart/gifts/course', [
+            'course_id' => $course->id,
+            'recipient_email' => 'retry-again.recipient@example.test',
+        ])->assertRedirect('/cart');
+
+        $this->assertDatabaseHas('course_gifts', [
+            'sender_user_id' => $student->id,
+            'recipient_email' => 'retry-again.recipient@example.test',
+            'status' => 'awaiting_payment',
+            'commerce_order_item_id' => null,
+        ]);
     }
 
 
