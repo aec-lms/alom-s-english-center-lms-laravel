@@ -304,7 +304,7 @@ class CourseCommercePaymentSettlementTest extends TestCase
                 ['validation_status' => 'VALID']
             );
             $this->fail('Settlement must reject a course whose branch changed after checkout.');
-        } catch (\\RuntimeException $exception) {
+        } catch (\RuntimeException $exception) {
             $this->assertSame(
                 'Course branch or student assignment changed after checkout; manual reconciliation is required.',
                 $exception->getMessage()
