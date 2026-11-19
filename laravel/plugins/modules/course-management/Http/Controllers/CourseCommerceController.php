@@ -412,7 +412,9 @@ class CourseCommerceController extends Controller
 
         $gifts = $courseGifts->concat($vouchers)->sortByDesc('id')->values();
 
-        return view('course-management::commerce.gifts-sent', compact('gifts'));
+        $emailDeliveryEnabled = $this->plugins->isEnabled('email-notifications');
+
+        return view('course-management::commerce.gifts-sent', compact('gifts', 'emailDeliveryEnabled'));
     }
 
     public function resendCourseGiftEmail(Request $request, int $giftId): RedirectResponse
@@ -428,6 +430,8 @@ class CourseCommerceController extends Controller
     private function resendGiftEmail(Request $request, string $giftType, int $giftId): RedirectResponse
     {
         $sender = $this->student($request);
+        abort_unless($this->plugins->isEnabled('email-notifications'), 503,
+            'Enable the Email Notifications plugin before retrying gift delivery.');
         $table = $giftType === 'gift_course' ? 'course_gifts' : 'course_gift_vouchers';
         abort_unless(Schema::hasTable($table)
             && Schema::hasColumn($table, 'notification_delivery_status')
