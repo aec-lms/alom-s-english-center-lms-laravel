@@ -102,11 +102,12 @@ class ExamController extends Controller
             'is_published' => ['nullable', 'boolean'],
         ]);
 
+        $isPublished = $request->boolean('is_published');
         $courseId = array_key_exists('course_id', $validated)
             ? ($validated['course_id'] !== null ? (int) $validated['course_id'] : null)
             : ($exam->course_id !== null ? (int) $exam->course_id : null);
 
-        $updatedExam = DB::transaction(function () use ($exam, $actor, $validated, $courseId): Exam {
+        $updatedExam = DB::transaction(function () use ($exam, $actor, $validated, $courseId, $isPublished): Exam {
             $lockedExam = Exam::query()->whereKey($exam->id)->lockForUpdate()->firstOrFail();
             if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $lockedExam->branch_id) {
                 abort(403, 'Branch isolation violation.');
@@ -124,7 +125,7 @@ class ExamController extends Controller
                 'duration_minutes' => (int) $validated['duration_minutes'],
                 'max_attempts' => (int) ($validated['max_attempts'] ?? $lockedExam->max_attempts ?? 1),
                 'pass_marks' => (float) $validated['pass_marks'],
-                'is_published' => $request->boolean('is_published'),
+                'is_published' => $isPublished,
             ]);
 
             return $lockedExam->fresh();
