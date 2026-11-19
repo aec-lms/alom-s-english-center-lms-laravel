@@ -200,8 +200,11 @@ class LiveClassAccessController extends Controller
             }
         }
 
-        $assignedBranchId = $profile && $profile->branch_id !== null
-            ? (int) $profile->branch_id
+        $profileBranchId = $profile && Schema::hasColumn('students', 'branch_id')
+            ? $profile->branch_id
+            : null;
+        $assignedBranchId = $profileBranchId !== null
+            ? (int) $profileBranchId
             : (Schema::hasColumn('users', 'branch_id') && $user->branch_id !== null
                 ? (int) $user->branch_id
                 : null);
