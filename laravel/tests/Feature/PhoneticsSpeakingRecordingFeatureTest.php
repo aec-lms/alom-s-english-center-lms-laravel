@@ -141,6 +141,9 @@ final class PhoneticsSpeakingRecordingFeatureTest extends TestCase
             // must not be able to review its own recording.
             $adminRole = $admin->roles()->where('slug', 'admin')->firstOrFail();
             $student->roles()->attach($adminRole->getKey());
+            $this->actingAs($student)
+                ->get('/admin/phonetics/learning/recordings/' . $recordingId . '/audio')
+                ->assertForbidden();
             $this->actingAs($student)->patch('/admin/phonetics/learning/recordings/' . $recordingId . '/review', [
                 'score' => 5,
                 'feedback' => 'Self-review must be denied.',
