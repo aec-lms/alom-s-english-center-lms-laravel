@@ -145,3 +145,19 @@ This standard applies to every current and future PR, issue, plugin, admin panel
 - **#295** current register head is `36da65c641f3d1cd6813c83772b28e8e257e6625`; Browser E2E and Composer Security Audit passed; Laravel job remains in progress. No independent review recorded.
 
 All statuses above are point-in-time observations and must be refreshed against the exact head before merge.
+
+
+### 2026-11-19 — merge authorization and owner notification rule
+
+The project owner has directed: **when a task is genuinely complete, notify the project owner and recommend merge only after every repository rule and acceptance gate is satisfied.** This is not permission to merge early or bypass review.
+
+Before recommending merge, the primary owner must verify and record all of the following against the exact current PR head:
+
+1. Scope and ownership are clean: no unresolved duplicate implementation, shared-file conflict, unapproved handoff, or overlapping PR; dependent work is integrated by the canonical owner.
+2. Functionality and regression coverage are complete, including edge cases, authorization/branch isolation, data integrity, migration rollback and upgrade safety where applicable.
+3. Premium product-quality review is complete for user-facing work: polished design, complete interactions, responsive desktop/tablet/mobile behavior, accessibility and visual evidence/screenshots where practical.
+4. All required CI checks are green on the exact current head (Laravel SQLite, MySQL 8, Browser E2E, Composer Security Audit, lint/build/package checks where applicable). Cancelled, skipped, pending, stale-head or unrelated-run results are not passes.
+5. Independent review by a different maintainer is recorded and all blocking review comments are resolved. Author self-review or a COMMENTED review is not an approval.
+6. PR body, tests, docs and this register accurately reflect the final scope, owner, dependencies and verification evidence.
+
+**Notification flow:** when all gates pass, the primary owner posts a concise completion note on the PR with exact head SHA, CI links/results, independent reviewer, screenshots/evidence and any accepted non-blocking follow-ups; then notifies the project owner that the PR is ready to merge. The project owner/authorized maintainer performs or explicitly authorizes the merge using repository policy (required approvals, branch protection and merge queue if enabled). If any gate is unmet, keep the PR Draft/open and report the specific blocker—never claim complete or recommend merge.
