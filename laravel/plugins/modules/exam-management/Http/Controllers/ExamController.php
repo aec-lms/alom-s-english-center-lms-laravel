@@ -564,7 +564,7 @@ class ExamController extends Controller
                 'deadline' => $deadline->toIso8601String(),
             ],
             // Never return correct_option_index or any server-side answer key.
-            'questions' => $questions->map(fn (ExamQuestion $question): array => [
+            'questions' => $questions->map(fn (object $question): array => [
                 'id' => $question->id,
                 'prompt' => $question->prompt,
                 'options' => $question->options,
