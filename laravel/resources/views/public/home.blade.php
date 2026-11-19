@@ -50,7 +50,7 @@
     ];
 
     $leftCards = $leftReviews->isNotEmpty() ? $leftReviews : collect([
-        (object) ['title' => 'Mahmud Hasan', 'subtitle' => 'Weekly mock interviews and line-by-line Writing feedback helped me progress from Band 6.0 to 8.0.', 'meta' => '{{ __('Verified Student') }}'],
+        (object) ['title' => 'Mahmud Hasan', 'subtitle' => 'Weekly mock interviews and line-by-line Writing feedback helped me progress from Band 6.0 to 8.0.', 'meta' => 'Verified Student'],
         (object) ['title' => 'Afrina Jahan', 'subtitle' => 'Every grammar concept from tense logic to free-hand composition is explained with crystal clarity.', 'meta' => 'Verified Student'],
         (object) ['title' => 'Borhan Uddin', 'subtitle' => 'Structured lessons and daily practice drills built my spoken fluency inside two months.', 'meta' => 'Verified Student'],
         (object) ['title' => 'Sadia Afrin', 'subtitle' => 'Clear guidance, responsive instructors, and reliable exam evaluation at every step.', 'meta' => 'Verified Student'],
@@ -189,7 +189,7 @@
 
                 <div>
                     <a href="{{ route('public.courses') }}" class="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-[#38BDF8] hover:opacity-85">
-                        <span>See All Courses</span><span>&rarr;</span>
+                        <span>{{ __('See All Courses') }}</span><span>&rarr;</span>
                     </a>
                 </div>
             </div>
@@ -319,7 +319,7 @@
                                 </div>
                                 <div class="min-w-0">
                                     <div class="text-xs font-bold text-white truncate">{{ $card->title }}</div>
-                                    <div class="text-[11px] text-slate-400">Verified Student</div>
+                                    <div class="text-[11px] text-slate-400">{{ __('Verified Student') }}</div>
                                 </div>
                             </div>
                         </article>
@@ -346,7 +346,7 @@
                                 </div>
                                 <div class="min-w-0">
                                     <div class="text-xs font-bold text-white truncate">{{ $card->title }}</div>
-                                    <div class="text-[11px] text-slate-400">Verified Student</div>
+                                    <div class="text-[11px] text-slate-400">{{ __('Verified Student') }}</div>
                                 </div>
                             </div>
                         </article>
