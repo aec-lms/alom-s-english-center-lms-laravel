@@ -182,7 +182,8 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
         $commissionId = $service->recordSettledPurchase($buyer, 'commerce_order', 'RECOVERY-ORDER-1', 1000.00, 'BDT');
 
         DB::table('referral_commissions')->where('id', $commissionId)->update([
-            'status' => 'approved',
+            'status' => 'paid',
+            'paid_at' => now(),
             'updated_at' => now(),
         ]);
         $paymentId = DB::table('payment_transactions')->insertGetId([
@@ -218,7 +219,7 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
             $service->requestPayout($referrer, 'bkash', '01700000000');
             $this->fail('A commission with unresolved refund recovery must not be paid out.');
         } catch (\Illuminate\Validation\ValidationException $exception) {
-            $this->assertArrayHasKey('payout', $exception->errors());
+            $this->assertStringContainsString('recovery reconciliation', $exception->errors()['payout'][0] ?? '');
         }
 
         $this->assertDatabaseCount('referral_payout_requests', 0);
