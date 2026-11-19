@@ -227,6 +227,81 @@ final class UnifiedCommerceCartTest extends TestCase
         $this->assertDatabaseHas('fee_invoices', ['id' => $invoice->id, 'paid_amount' => 0, 'status' => 'unpaid']);
     }
 
+    public function test_payment_settlement_rejects_branch_changed_for_invoice_enrollment_without_commerce_order(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'course-management', 'fees-management', 'payment-management']);
+        $branchA = DB::table('branches')->insertGetId([
+            'code' => 'INVOICE-A-' . uniqid(), 'name' => 'Invoice Branch A', 'is_active' => true,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $branchB = DB::table('branches')->insertGetId([
+            'code' => 'INVOICE-B-' . uniqid(), 'name' => 'Invoice Branch B', 'is_active' => true,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $student = $this->createUserWithRole('student', (int) $branchA);
+        $courseId = DB::table('courses')->insertGetId([
+            'code' => 'INVOICE-BRANCH-' . strtoupper(uniqid()),
+            'title' => 'Invoice Branch Course',
+            'slug' => 'invoice-branch-course-' . uniqid(),
+            'price' => 650,
+            'status' => 'published',
+            'branch_id' => $branchA,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $invoice = FeeInvoice::query()->create([
+            'invoice_number' => 'INVOICE-BRANCH-' . strtoupper(uniqid()),
+            'student_id' => null,
+            'payer_name' => $student->name,
+            'payer_email' => $student->email,
+            'payer_phone' => '01700000000',
+            'branch_id' => $branchA,
+            'subtotal_amount' => 650,
+            'discount_amount' => 0,
+            'net_amount' => 650,
+            'paid_amount' => 0,
+            'currency' => 'BDT',
+            'status' => 'unpaid',
+            'due_date' => now()->addDays(7)->toDateString(),
+        ]);
+        DB::table('enrollments')->insert([
+            'user_id' => $student->id,
+            'course_id' => $courseId,
+            'branch_id' => $branchA,
+            'invoice_id' => $invoice->id,
+            'status' => 'pending',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $transaction = PaymentTransaction::query()->create([
+            'transaction_ref' => 'PAY-INVOICE-' . strtoupper(uniqid()),
+            'invoice_id' => $invoice->id,
+            'branch_id' => $branchA,
+            'gateway_slug' => 'gateway-sslcommerz',
+            'amount' => 650,
+            'currency' => 'BDT',
+            'status' => 'initiated',
+            'metadata' => [],
+        ]);
+
+        DB::table('users')->where('id', $student->id)->update(['branch_id' => $branchB]);
+
+        try {
+            app(PaymentSettlementService::class)->settleTransaction($transaction, 'BANK-INVOICE-BRANCH-001');
+            $this->fail('Invoice settlement must reject an enrollment after its student changes branch.');
+        } catch (\\RuntimeException $exception) {
+            $this->assertSame(
+                'Pending course enrollment branch does not match the current student and source course.',
+                $exception->getMessage()
+            );
+        }
+
+        $this->assertDatabaseHas('payment_transactions', ['id' => $transaction->id, 'status' => 'initiated']);
+        $this->assertDatabaseHas('fee_invoices', ['id' => $invoice->id, 'paid_amount' => 0, 'status' => 'unpaid']);
+        $this->assertDatabaseHas('enrollments', ['user_id' => $student->id, 'course_id' => $courseId, 'status' => 'pending']);
+    }
+
     public function test_payment_settlement_rejects_student_branch_change_after_checkout(): void
     {
         $this->markSystemInstalled();
