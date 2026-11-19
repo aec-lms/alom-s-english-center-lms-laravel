@@ -142,7 +142,7 @@ class AdmissionController extends Controller
         $this->ensureAssignedBranch($actor);
         $validated = $request->validate([
             'status' => ['required', 'in:' . implode(',', self::REVIEW_STATUSES)],
-            'reviewer_notes' => ['nullable', 'string', 'max:2000'],
+            'reviewer_notes' => [$request->input('status') === 'rejected' ? 'required' : 'nullable', 'string', 'min:5', 'max:2000'],
             'interview_at' => ['nullable', 'date', 'after_or_equal:now'],
             'assigned_to' => ['nullable', 'integer', 'exists:users,id'],
         ]);
@@ -154,6 +154,17 @@ class AdmissionController extends Controller
             $current = (string) $locked->status;
             $next = (string) $validated['status'];
             abort_unless(in_array($next, self::TRANSITIONS[$current] ?? [], true), 422, "Invalid admission status transition: {$current} → {$next}.");
+
+            if (!empty($validated['assigned_to'])) {
+                $assignee = \\App\\Models\\User::query()
+                    ->whereKey($validated['assigned_to'])
+                    ->where('is_active', true)
+                    ->whereHas('roles', fn ($q) => $q->whereIn('slug', ['admin', 'branch_manager', 'teacher']))
+                    ->firstOrFail();
+                if ($actor && $actor->hasRole('branch_manager')) {
+                    abort_unless((int) $assignee->branch_id === (int) $actor->branch_id, 403, 'Cannot assign an application outside your branch.');
+                }
+            }
 
             $locked->update([
                 'status' => $next,
