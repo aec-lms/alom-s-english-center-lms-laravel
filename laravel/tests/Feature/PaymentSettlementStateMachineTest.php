@@ -89,6 +89,58 @@ class PaymentSettlementStateMachineTest extends TestCase
         ]);
     }
 
+    public function test_settlement_rejects_payment_currency_mismatch_without_mutating_invoice(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management']);
+
+        $invoice = FeeInvoice::query()->create([
+            'invoice_number' => 'CURRENCY-GUARD-' . strtoupper(uniqid()),
+            'payer_name' => 'Currency Guard Student',
+            'payer_email' => 'currency.guard@aec.test',
+            'subtotal_amount' => 1250,
+            'discount_amount' => 0,
+            'net_amount' => 1250,
+            'paid_amount' => 0,
+            'currency' => 'BDT',
+            'status' => 'unpaid',
+        ]);
+
+        $transaction = PaymentTransaction::query()->create([
+            'transaction_ref' => 'CURRENCY-GUARD-TXN-' . strtoupper(uniqid()),
+            'invoice_id' => $invoice->id,
+            'gateway_slug' => 'offline',
+            'amount' => 1250,
+            'currency' => 'USD',
+            'status' => 'initiated',
+            'metadata' => [],
+        ]);
+
+        try {
+            app(PaymentSettlementService::class)->settleTransaction(
+                $transaction,
+                'CURRENCY-MISMATCH-REFERENCE',
+            );
+            $this->fail('A payment in USD must not settle a BDT invoice.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame(
+                'Payment transaction currency does not match the invoice currency.',
+                $exception->getMessage(),
+            );
+        }
+
+        $this->assertDatabaseHas('payment_transactions', [
+            'id' => $transaction->id,
+            'status' => 'initiated',
+            'external_reference' => null,
+        ]);
+        $this->assertDatabaseHas('fee_invoices', [
+            'id' => $invoice->id,
+            'paid_amount' => 0,
+            'status' => 'unpaid',
+        ]);
+    }
+
     public function test_late_verified_callback_cannot_resettle_a_refunded_transaction(): void
     {
         $this->markSystemInstalled();
