@@ -36,20 +36,31 @@ class SliderBuilderController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $validated = $this->validated($request);
-        $validated['image_path'] = $request->hasFile('image')
-            ? $this->storeImage($request->file('image'))
-            : ($validated['image_path'] ?? null);
-        $validated['mobile_image_path'] = $request->hasFile('mobile_image')
-            ? $this->storeImage($request->file('mobile_image'))
-            : ($validated['mobile_image_path'] ?? null);
-        unset($validated['image'], $validated['mobile_image']);
-        $validated['text_alignment'] = $validated['text_alignment'] ?? 'center';
-        $validated['transition'] = $validated['transition'] ?? 'fade';
-        $validated['overlay_opacity'] = (int) ($validated['overlay_opacity'] ?? 45);
-        $validated['duration_ms'] = (int) ($validated['duration_ms'] ?? 5000);
-        $validated['is_active'] = $request->boolean('is_active', true);
+        $newImage = null;
+        $newMobileImage = null;
 
-        $slider = HeroSlider::query()->create($validated);
+        try {
+            $validated['image_path'] = $request->hasFile('image')
+                ? ($newImage = $this->storeImage($request->file('image')))
+                : ($validated['image_path'] ?? null);
+            $validated['mobile_image_path'] = $request->hasFile('mobile_image')
+                ? ($newMobileImage = $this->storeImage($request->file('mobile_image')))
+                : ($validated['mobile_image_path'] ?? null);
+            unset($validated['image'], $validated['mobile_image']);
+            $validated['text_alignment'] = $validated['text_alignment'] ?? 'center';
+            $validated['transition'] = $validated['transition'] ?? 'fade';
+            $validated['overlay_opacity'] = (int) ($validated['overlay_opacity'] ?? 45);
+            $validated['duration_ms'] = (int) ($validated['duration_ms'] ?? 5000);
+            $validated['is_active'] = $request->boolean('is_active', true);
+
+            $slider = HeroSlider::query()->create($validated);
+        } catch (\Throwable $exception) {
+            foreach ([$newImage, $newMobileImage] as $unusedPath) {
+                try { $this->deleteManagedImageIfUnused($unusedPath); } catch (\Throwable) {}
+            }
+            throw $exception;
+        }
+
         $this->audit->log('slider_builder.created', 'hero_slider', (string) $slider->id, [
             'group' => $slider->key_name,
             'scheduled' => $slider->starts_at !== null || $slider->ends_at !== null,
@@ -75,25 +86,34 @@ class SliderBuilderController extends Controller
 
         $oldImage = $slider->image_path;
         $oldMobileImage = $slider->mobile_image_path;
+        $newImage = null;
+        $newMobileImage = null;
 
-        if ($request->hasFile('image')) {
-            $validated['image_path'] = $this->storeImage($request->file('image'));
-        } else {
-            $validated['image_path'] = $validated['image_path'] ?? $slider->image_path;
-        }
-        if ($request->hasFile('mobile_image')) {
-            $validated['mobile_image_path'] = $this->storeImage($request->file('mobile_image'));
-        } else {
-            $validated['mobile_image_path'] = $validated['mobile_image_path'] ?? $slider->mobile_image_path;
-        }
+        try {
+            if ($request->hasFile('image')) {
+                $validated['image_path'] = $newImage = $this->storeImage($request->file('image'));
+            } else {
+                $validated['image_path'] = $validated['image_path'] ?? $slider->image_path;
+            }
+            if ($request->hasFile('mobile_image')) {
+                $validated['mobile_image_path'] = $newMobileImage = $this->storeImage($request->file('mobile_image'));
+            } else {
+                $validated['mobile_image_path'] = $validated['mobile_image_path'] ?? $slider->mobile_image_path;
+            }
 
-        unset($validated['image'], $validated['mobile_image']);
-        $validated['text_alignment'] = $validated['text_alignment'] ?? $slider->text_alignment ?? 'center';
-        $validated['transition'] = $validated['transition'] ?? $slider->transition ?? 'fade';
-        $validated['overlay_opacity'] = (int) ($validated['overlay_opacity'] ?? $slider->overlay_opacity ?? 45);
-        $validated['duration_ms'] = (int) ($validated['duration_ms'] ?? $slider->duration_ms ?? 5000);
-        $validated['is_active'] = $request->boolean('is_active');
-        $slider->update($validated);
+            unset($validated['image'], $validated['mobile_image']);
+            $validated['text_alignment'] = $validated['text_alignment'] ?? $slider->text_alignment ?? 'center';
+            $validated['transition'] = $validated['transition'] ?? $slider->transition ?? 'fade';
+            $validated['overlay_opacity'] = (int) ($validated['overlay_opacity'] ?? $slider->overlay_opacity ?? 45);
+            $validated['duration_ms'] = (int) ($validated['duration_ms'] ?? $slider->duration_ms ?? 5000);
+            $validated['is_active'] = $request->boolean('is_active');
+            $slider->update($validated);
+        } catch (\Throwable $exception) {
+            foreach ([$newImage, $newMobileImage] as $unusedPath) {
+                try { $this->deleteManagedImageIfUnused($unusedPath); } catch (\Throwable) {}
+            }
+            throw $exception;
+        }
 
         $this->deleteManagedImageIfUnused($oldImage);
         $this->deleteManagedImageIfUnused($oldMobileImage);
