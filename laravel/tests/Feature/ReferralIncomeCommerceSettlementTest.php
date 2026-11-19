@@ -345,4 +345,94 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
         ]);
     }
 
+
+    public function test_refund_from_another_invoice_cannot_reverse_a_commerce_order_commission(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['referral-income', 'student-management', 'payment-management', 'commerce-cart']);
+
+        $referrer = $this->createUserWithRole('student');
+        $buyer = $this->createUserWithRole('student');
+        $service = app(ReferralIncomeService::class);
+        $service->applyCode($buyer, $service->createOrGetCode($referrer));
+
+        $orderInvoice = \\Plugins\\Modules\\FeesManagement\\Models\\FeeInvoice::query()->create([
+            'invoice_number' => 'REF-ORDER-' . strtoupper(bin2hex(random_bytes(4))),
+            'payer_name' => $buyer->name,
+            'payer_email' => $buyer->email,
+            'payer_phone' => '01700000000',
+            'subtotal_amount' => 1000,
+            'discount_amount' => 0,
+            'net_amount' => 1000,
+            'paid_amount' => 1000,
+            'currency' => 'BDT',
+            'status' => 'paid',
+            'due_date' => now()->toDateString(),
+        ]);
+        $otherInvoice = \\Plugins\\Modules\\FeesManagement\\Models\\FeeInvoice::query()->create([
+            'invoice_number' => 'REF-OTHER-' . strtoupper(bin2hex(random_bytes(4))),
+            'payer_name' => $buyer->name,
+            'payer_email' => $buyer->email,
+            'payer_phone' => '01700000000',
+            'subtotal_amount' => 1000,
+            'discount_amount' => 0,
+            'net_amount' => 1000,
+            'paid_amount' => 1000,
+            'currency' => 'BDT',
+            'status' => 'paid',
+            'due_date' => now()->toDateString(),
+        ]);
+
+        $orderId = DB::table('commerce_orders')->insertGetId([
+            'order_number' => 'REF-ORDER-' . strtoupper(bin2hex(random_bytes(4))),
+            'user_id' => $buyer->id,
+            'invoice_id' => $orderInvoice->id,
+            'branch_id' => null,
+            'currency' => 'BDT',
+            'subtotal' => 1000,
+            'discount_total' => 0,
+            'grand_total' => 1000,
+            'status' => 'completed',
+            'payment_status' => 'paid',
+            'billing_snapshot' => json_encode(['name' => $buyer->name, 'email' => $buyer->email]),
+            'paid_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $commissionId = $service->recordSettledPurchase($buyer, 'commerce_order', (string) $orderId, 1000, 'BDT');
+
+        $otherTransactionId = DB::table('payment_transactions')->insertGetId([
+            'transaction_ref' => 'REF-OTHER-TX-' . strtoupper(bin2hex(random_bytes(4))),
+            'invoice_id' => $otherInvoice->id,
+            'branch_id' => null,
+            'gateway_slug' => 'offline',
+            'amount' => 1000,
+            'currency' => 'BDT',
+            'status' => 'settled',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $unrelatedRefundId = DB::table('payment_refunds')->insertGetId([
+            'payment_transaction_id' => $otherTransactionId,
+            'amount' => 1000,
+            'reason' => 'Unrelated invoice refund',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        try {
+            $service->reverseSettledPurchase($buyer, 'commerce_order', (string) $orderId, $unrelatedRefundId, 1000, 'BDT');
+            $this->fail('A refund from a different invoice must not reverse this order commission.');
+        } catch (\\RuntimeException $exception) {
+            $this->assertStringContainsString('does not belong', $exception->getMessage());
+        }
+
+        $this->assertDatabaseHas('referral_commissions', [
+            'id' => $commissionId,
+            'commission_amount' => 50,
+            'status' => 'pending',
+        ]);
+        $this->assertDatabaseCount('referral_commission_reversals', 0);
+    }
+
 }
