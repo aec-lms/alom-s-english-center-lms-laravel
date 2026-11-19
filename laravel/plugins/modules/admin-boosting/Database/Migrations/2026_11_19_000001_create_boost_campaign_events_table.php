@@ -12,7 +12,7 @@ return new class extends Migration {
         if (!Schema::hasTable('boost_campaign_events')) {
             Schema::create('boost_campaign_events', function (Blueprint $table): void {
                 $table->id();
-                $table->unsignedBigInteger('campaign_id');
+                $table->foreignId('campaign_id')->constrained('boost_campaigns')->cascadeOnDelete();
                 $table->string('event_type', 12);
                 $table->char('visitor_hash', 64);
                 $table->timestamp('occurred_at');
