@@ -32,7 +32,7 @@ class AdmissionApplication extends Model
         'created_by',
     ];
 
-    protected $casts = [
+    public function documents(): HasMany\n    {\n        return $this->hasMany(AdmissionDocument::class, 'admission_application_id');\n    }\n\n    protected $casts = [
         'date_of_birth' => 'date',
         'interview_at' => 'datetime',
         'reviewed_at' => 'datetime',
