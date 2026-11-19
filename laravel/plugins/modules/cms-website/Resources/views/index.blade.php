@@ -82,7 +82,7 @@
                             <div>
                                 <div class="font-bold text-sm text-slate-900">{{ $post->title }}</div>
                                 <div class="text-slate-500 font-mono">
-                                    /learn#{{ $post->slug }} &middot; {{ $post->category }} &middot; {{ $post->is_published ? 'Published' : ($post->publish_at ? 'Scheduled · '.$post->publish_at->format('d M Y H:i') : 'Draft') }}
+                                    /learn#{{ $post->slug }} &middot; {{ $post->category }} &middot; {{ ucfirst(str_replace('_', ' ', $post->editorial_status ?? ($post->is_published ? 'published' : 'draft'))) }} · {{ $post->is_published ? 'Live' : ($post->publish_at ? 'Scheduled '.$post->publish_at->format('d M Y H:i') : 'Not live') }}
                                     @if ($post->pdf_path) &middot; <span class="text-emerald-700 font-bold">PDF Attached</span> @endif
                                 </div>
                             </div>
@@ -92,6 +92,21 @@
                             <button type="submit" class="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-700 font-bold hover:bg-rose-50">Delete</button>
                         </form>
                     </div>
+                    <div class="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+                        @if (!$post->is_published && in_array($post->editorial_status ?? 'draft', ['draft', 'changes_requested'], true))
+                            <form method="POST" action="{{ route('plugins.cms.posts.submit-review', $post) }}">@csrf<button class="px-3 py-1.5 rounded-lg bg-sky-600 text-white font-bold">Submit for Review</button></form>
+                        @endif
+                        @if (($post->editorial_status ?? '') === 'in_review')
+                            <form method="POST" action="{{ route('plugins.cms.posts.approve', $post) }}">@csrf<button class="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold">Approve</button></form>
+                            <form method="POST" action="{{ route('plugins.cms.posts.request-changes', $post) }}" class="flex flex-wrap gap-2">@csrf<input name="review_note" required minlength="5" maxlength="2000" placeholder="Explain required changes" class="rounded-lg border border-slate-300 px-3 py-1.5"><button class="px-3 py-1.5 rounded-lg border border-amber-300 text-amber-800 font-bold">Request Changes</button></form>
+                        @endif
+                        @if (($post->editorial_status ?? '') === 'approved' && !$post->is_published)
+                            <form method="POST" action="{{ route('plugins.cms.posts.publish-approved', $post) }}">@csrf<button class="px-3 py-1.5 rounded-lg bg-indigo-600 text-white font-bold">Publish Approved Post</button></form>
+                        @endif
+                    </div>
+                    @if (!empty($post->review_note))
+                        <div class="rounded-lg bg-amber-50 border border-amber-200 p-3 text-amber-900"><strong>Reviewer feedback:</strong> {{ $post->review_note }}</div>
+                    @endif
                     @if (($postRevisions[$post->id] ?? collect())->isNotEmpty())
                         <details class="pt-2 border-t border-slate-100">
                             <summary class="cursor-pointer font-semibold text-slate-700">Revision History ({{ $postRevisions[$post->id]->count() }})</summary>
