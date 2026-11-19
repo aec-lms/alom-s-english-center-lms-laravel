@@ -636,4 +636,100 @@ class PaymentSettlementStateMachineTest extends TestCase
             'status' => 'unpaid',
         ]);
     }
+    public function test_refund_is_blocked_for_unified_gift_orders_until_recipient_reconciliation_exists(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'commerce-cart', 'course-management']);
+        $buyer = $this->createUserWithRole('student');
+        $admin = $this->createUserWithRole('admin');
+
+        $course = Course::query()->create([
+            'code' => 'GIFT-REFUND-' . strtoupper(bin2hex(random_bytes(3))),
+            'title' => 'Refund Protected Gift Course',
+            'slug' => 'refund-protected-gift-' . strtolower(bin2hex(random_bytes(3))),
+            'price' => 500,
+            'status' => 'published',
+        ]);
+        $invoice = FeeInvoice::query()->create([
+            'invoice_number' => 'GIFT-REFUND-' . strtoupper(bin2hex(random_bytes(4))),
+            'payer_name' => $buyer->name,
+            'payer_email' => $buyer->email,
+            'payer_phone' => '01700000000',
+            'subtotal_amount' => 500,
+            'discount_amount' => 0,
+            'net_amount' => 500,
+            'paid_amount' => 500,
+            'currency' => 'BDT',
+            'status' => 'paid',
+            'due_date' => now()->addDays(7)->toDateString(),
+        ]);
+        $orderId = DB::table('commerce_orders')->insertGetId([
+            'order_number' => 'GIFT-REFUND-ORDER-' . strtoupper(bin2hex(random_bytes(3))),
+            'user_id' => $buyer->id,
+            'invoice_id' => $invoice->id,
+            'branch_id' => null,
+            'currency' => 'BDT',
+            'subtotal' => 500,
+            'discount_total' => 0,
+            'grand_total' => 500,
+            'status' => 'completed',
+            'payment_status' => 'paid',
+            'billing_snapshot' => json_encode(['name' => $buyer->name, 'email' => $buyer->email]),
+            'paid_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $giftId = DB::table('course_gifts')->insertGetId([
+            'sender_user_id' => $buyer->id,
+            'recipient_user_id' => null,
+            'recipient_email' => 'refund-recipient@example.test',
+            'course_id' => $course->id,
+            'invoice_id' => $invoice->id,
+            'redeem_token_hash' => hash('sha256', bin2hex(random_bytes(32))),
+            'status' => 'paid',
+            'currency' => 'BDT',
+            'amount' => 500,
+            'subtotal_amount' => 500,
+            'discount_amount' => 0,
+            'paid_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $orderItemId = DB::table('commerce_order_items')->insertGetId([
+            'order_id' => $orderId,
+            'item_type' => 'gift_course',
+            'item_id' => $giftId,
+            'title_snapshot' => 'Gift: Refund Protected Gift Course',
+            'quantity' => 1,
+            'unit_price' => 500,
+            'line_total' => 500,
+            'metadata' => json_encode(['course_gift_id' => $giftId, 'course_id' => $course->id]),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('course_gifts')->where('id', $giftId)->update(['commerce_order_item_id' => $orderItemId]);
+
+        $transaction = PaymentTransaction::query()->create([
+            'transaction_ref' => 'GIFT-REFUND-TXN-' . strtoupper(bin2hex(random_bytes(3))),
+            'invoice_id' => $invoice->id,
+            'branch_id' => null,
+            'gateway_slug' => 'offline',
+            'amount' => 500,
+            'currency' => 'BDT',
+            'status' => 'settled',
+            'metadata' => [],
+        ]);
+
+        $this->actingAs($admin)->post('/admin/payments/' . $transaction->id . '/refund', [
+            'amount' => 500,
+            'reason' => 'Gift refund safety check',
+        ])->assertSessionHasErrors('refund');
+
+        $this->assertDatabaseCount('payment_refunds', 0);
+        $this->assertDatabaseHas('payment_transactions', ['id' => $transaction->id, 'status' => 'settled']);
+        $this->assertDatabaseHas('fee_invoices', ['id' => $invoice->id, 'status' => 'paid', 'paid_amount' => 500]);
+        $this->assertDatabaseHas('commerce_orders', ['id' => $orderId, 'status' => 'completed', 'payment_status' => 'paid']);
+        $this->assertDatabaseHas('course_gifts', ['id' => $giftId, 'status' => 'paid', 'invoice_id' => $invoice->id]);
+    }
+
 }
