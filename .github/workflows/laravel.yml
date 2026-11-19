@@ -4,7 +4,7 @@ on:
   push:
     branches: ["main", "fix/laravel-ci-php83", "feature/**"]
   pull_request:
-    branches: ["main", "feat/cms-post-management-hardening"]
+    branches: ["main", "feat/cms-post-management-hardening", "feat/cms-editorial-workflow"]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
