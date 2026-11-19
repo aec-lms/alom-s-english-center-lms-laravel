@@ -254,7 +254,7 @@ class UniversalPaymentInvoiceSettlementTest extends TestCase
     public function test_manual_invoice_payment_fulfills_commerce_order_without_referral_plugin(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['student-management', 'fees-management', 'universal-payment', 'commerce-cart']);
+        $this->activatePlugins(['student-management', 'fees-management', 'universal-payment', 'commerce-cart', 'payment-management']);
 
         $student = $this->createUserWithRole('student');
         $invoice = FeeInvoice::query()->create([
@@ -279,6 +279,18 @@ class UniversalPaymentInvoiceSettlementTest extends TestCase
             'grand_total' => 650,
             'status' => 'awaiting_payment',
             'payment_status' => 'unpaid',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $orderItemId = DB::table('commerce_order_items')->insertGetId([
+            'order_id' => $orderId,
+            'item_type' => 'subscription',
+            'item_id' => 44,
+            'title_snapshot' => 'Manual subscription',
+            'quantity' => 1,
+            'unit_price' => 650,
+            'line_total' => 650,
+            'metadata' => json_encode(['entitlement' => ['duration_days' => 30]]),
             'created_at' => now(),
             'updated_at' => now(),
         ]);
@@ -314,6 +326,18 @@ class UniversalPaymentInvoiceSettlementTest extends TestCase
             'id' => $invoice->id,
             'paid_amount' => 650,
             'status' => 'paid',
+        ]);
+        $this->assertDatabaseHas('payment_transactions', [
+            'invoice_id' => $invoice->id,
+            'gateway_slug' => 'offline',
+            'amount' => 650,
+            'status' => 'settled',
+        ]);
+        $this->assertDatabaseHas('commerce_entitlements', [
+            'user_id' => $student->id,
+            'order_item_id' => $orderItemId,
+            'entitlement_type' => 'subscription',
+            'status' => 'active',
         ]);
     }
 
