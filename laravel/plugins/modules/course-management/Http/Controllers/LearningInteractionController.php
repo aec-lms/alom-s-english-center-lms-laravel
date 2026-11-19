@@ -302,16 +302,16 @@ class LearningInteractionController extends Controller
     private function canTeachLiveClass(Request $request, object $class): bool
     {
         $course = DB::table('courses')->where('id', $class->course_id)->first();
-        return $course !== null && $this->canManageCourse($request, $course);
+        return $course !== null && $this->canManageCourse($request, $course, (string) ($class->instructor_name ?? ''));
     }
 
     private function canModerateCourse(Request $request, int $courseId): bool
     {
         $course = DB::table('courses')->where('id', $courseId)->first();
-        return $course !== null && $this->canManageCourse($request, $course);
+        return $course !== null && $this->canManageCourse($request, $course, (string) ($course->instructor_name ?? ''));
     }
 
-    private function canManageCourse(Request $request, object $course): bool
+    private function canManageCourse(Request $request, object $course, ?string $instructorName = null): bool
     {
         $actor = $request->user();
         if ($actor->hasRole('branch_manager')) {
@@ -337,12 +337,12 @@ class LearningInteractionController extends Controller
                 $teacherBranchId = $actor->branch_id !== null ? (int) $actor->branch_id : null;
             }
 
-            if ($course->branch_id !== null && $teacherBranchId !== (int) $course->branch_id) {
+            if ($course->branch_id !== null && $teacherBranchId !== null && $teacherBranchId !== (int) $course->branch_id) {
                 return false;
             }
 
             return $actor->hasPermission('courses.manage')
-                || (string) ($course->instructor_name ?? '') === (string) $actor->name;
+                || ($instructorName ?? (string) ($course->instructor_name ?? '')) === (string) $actor->name;
         }
 
         return $actor->hasPermission('courses.manage');
