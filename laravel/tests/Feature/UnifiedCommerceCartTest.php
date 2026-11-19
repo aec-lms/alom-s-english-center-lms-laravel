@@ -186,6 +186,47 @@ final class UnifiedCommerceCartTest extends TestCase
         $this->assertDatabaseCount('commerce_cart_items', 0);
     }
 
+    public function test_late_callback_cannot_settle_a_failed_payment_transaction(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management']);
+        $invoice = FeeInvoice::query()->create([
+            'invoice_number' => 'FAILED-CALLBACK-' . strtoupper(uniqid()),
+            'student_id' => null,
+            'payer_name' => 'Failed Payment Student',
+            'payer_email' => 'failed-callback@example.test',
+            'payer_phone' => '01700000000',
+            'branch_id' => null,
+            'subtotal_amount' => 500,
+            'discount_amount' => 0,
+            'net_amount' => 500,
+            'paid_amount' => 0,
+            'currency' => 'BDT',
+            'status' => 'unpaid',
+            'due_date' => now()->addDays(7)->toDateString(),
+        ]);
+        $transaction = PaymentTransaction::query()->create([
+            'transaction_ref' => 'PAY-FAILED-' . strtoupper(uniqid()),
+            'invoice_id' => $invoice->id,
+            'branch_id' => null,
+            'gateway_slug' => 'gateway-sslcommerz',
+            'amount' => 500,
+            'currency' => 'BDT',
+            'status' => 'failed',
+            'metadata' => [],
+        ]);
+
+        try {
+            app(PaymentSettlementService::class)->settleTransaction($transaction, 'BANK-LATE-FAILED-001');
+            $this->fail('A failed payment transaction must not be resurrected by a late callback.');
+        } catch (\\RuntimeException $exception) {
+            $this->assertSame('Only initiated payment transactions can be settled.', $exception->getMessage());
+        }
+
+        $this->assertDatabaseHas('payment_transactions', ['id' => $transaction->id, 'status' => 'failed']);
+        $this->assertDatabaseHas('fee_invoices', ['id' => $invoice->id, 'paid_amount' => 0, 'status' => 'unpaid']);
+    }
+
     public function test_payment_settlement_rejects_student_branch_change_after_checkout(): void
     {
         $this->markSystemInstalled();
