@@ -838,9 +838,11 @@ class CourseCommerceController extends Controller
         $invoice = DB::table('fee_invoices')->where('id', $invoiceId)->lockForUpdate()->first();
         abort_unless($invoice !== null
             && (string) $invoice->status === 'paid'
-            && (float) $invoice->paid_amount + 0.01 >= (float) $invoice->net_amount,
+            && (float) $invoice->paid_amount + 0.01 >= (float) $invoice->net_amount
+            && ($expectedAmount === null || abs(round((float) $invoice->net_amount, 2) - round($expectedAmount, 2)) <= 0.01)
+            && ($expectedCurrency === null || strtoupper((string) $invoice->currency) === strtoupper($expectedCurrency)),
             409,
-            'This gift or voucher payment has been refunded or adjusted and is no longer redeemable.'
+            'This gift or voucher invoice is not fully paid or no longer matches the original amount and currency.'
         );
     }
 
