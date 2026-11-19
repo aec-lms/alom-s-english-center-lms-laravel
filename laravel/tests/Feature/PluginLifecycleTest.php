@@ -66,6 +66,60 @@ class PluginLifecycleTest extends TestCase
         $this->assertTrue(VersionConstraint::matches('2.1.0', '>=2.0'));
     }
 
+    public function test_plugin_manifest_rejects_invalid_duplicate_and_self_dependencies(): void
+    {
+        $directory = storage_path('framework/testing/plugin-manifest-' . bin2hex(random_bytes(6)));
+        File::ensureDirectoryExists($directory);
+
+        try {
+            foreach ([
+                ['dependencies' => ['valid-plugin', '../escape']],
+                ['dependencies' => ['valid-plugin', 'valid-plugin']],
+                ['dependencies' => ['manifest-probe']],
+                ['dependencies' => ['shared-plugin'], 'optional_dependencies' => ['shared-plugin']],
+                ['dependencies' => ['valid-plugin' => 'unexpected']],
+                ['provider' => 'Invalid Provider Class'],
+            ] as $invalidFields) {
+                $manifest = array_merge([
+                    'slug' => 'manifest-probe',
+                    'name' => 'Manifest Probe',
+                    'version' => '1.0.0',
+                ], $invalidFields);
+                File::put($directory . DIRECTORY_SEPARATOR . 'plugin.json', json_encode($manifest, JSON_THROW_ON_ERROR));
+
+                try {
+                    \\App\\Core\\Plugins\\PluginManifest::fromDirectory($directory);
+                    $this->fail('Malformed plugin manifest metadata must be rejected.');
+                } catch (\\InvalidArgumentException) {
+                    $this->assertTrue(true);
+                }
+            }
+        } finally {
+            File::deleteDirectory($directory);
+        }
+    }
+
+    public function test_plugin_discovery_rejects_manifest_folder_slug_mismatch(): void
+    {
+        $this->markSystemInstalled();
+        $modulesPath = (string) config('plugins.modules_path');
+        $directory = $modulesPath . DIRECTORY_SEPARATOR . 'folder-identity-probe';
+        File::ensureDirectoryExists($directory);
+        File::put($directory . DIRECTORY_SEPARATOR . 'plugin.json', json_encode([
+            'slug' => 'different-plugin-identity',
+            'name' => 'Mismatched Plugin',
+            'version' => '1.0.0',
+        ], JSON_THROW_ON_ERROR));
+
+        try {
+            $this->expectException(RuntimeException::class);
+            $this->expectExceptionMessage('does not match manifest slug');
+            app(PluginManager::class)->discoverManifests();
+        } finally {
+            File::deleteDirectory($directory);
+        }
+    }
+
     public function test_student_management_installs_without_optional_branch_plugin(): void
     {
         $this->markSystemInstalled();
