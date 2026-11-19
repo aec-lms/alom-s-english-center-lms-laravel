@@ -376,4 +376,28 @@ class CmsWebsiteSafetyTest extends TestCase
         ]);
     }
 
-}
+
+    public function test_new_post_cannot_bypass_editorial_review_with_publish_checkbox(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+        $author = $this->createUserWithRole('admin');
+
+        $this->actingAs($author)->post('/admin/cms/posts', [
+            'title' => 'Must Remain a Draft',
+            'slug' => 'must-remain-a-draft',
+            'category' => 'General',
+            'author' => 'Contributor',
+            'content' => 'This content must go through review.',
+            'is_published' => '1',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('cms_posts', [
+            'slug' => 'must-remain-a-draft',
+            'is_published' => false,
+            'editorial_status' => 'draft',
+            'submitted_by' => null,
+            'reviewed_by' => null,
+        ]);
+    }
+}\n
