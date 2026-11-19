@@ -127,6 +127,10 @@ final class PhoneticsSpeakingRecordingFeatureTest extends TestCase
                 ->assertNotFound();
 
             $admin = $this->createUserWithRole('admin');
+            $this->actingAs($otherStudent)->patch('/admin/phonetics/learning/recordings/' . $recordingId . '/review', [
+                'score' => 3,
+                'feedback' => 'A learner without the reviewer capability must be denied.',
+            ])->assertForbidden();
             $this->actingAs($admin)
                 ->get('/admin/phonetics/learning/recordings')
                 ->assertOk()
