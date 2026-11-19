@@ -350,9 +350,11 @@ class PaymentSettlementService
             || $draft->status !== 'awaiting_payment'
             || $draft->invoice_id !== null
             || $draft->payment_transaction_id !== null
-            || $draft->unified_payment_transaction_id !== null
-            || ($draft->expires_at && now()->greaterThan($draft->expires_at))) {
+            || $draft->unified_payment_transaction_id !== null) {
             throw new RuntimeException($unsupported);
+        }
+        if ($draft->expires_at && now()->greaterThan($draft->expires_at)) {
+            throw new RuntimeException('Gift draft expired before payment settlement; manual reconciliation is required.');
         }
 
         $recipientEmail = strtolower(trim((string) $draft->recipient_email));
@@ -393,8 +395,7 @@ class PaymentSettlementService
             if ($giftSubtotal <= 0 || $giftDiscount < 0 || $giftDiscount > $giftSubtotal
                 || abs(round($giftSubtotal - $giftDiscount, 2) - $amount) > 0.01
                 || !filled($draft->redeem_token_hash)
-                || !filled($draft->redeem_token_encrypted)
-                || ($draft->expires_at && now()->greaterThan($draft->expires_at))) {
+                || !filled($draft->redeem_token_encrypted)) {
                 throw new RuntimeException('Course gift amount, discount, or redemption token does not reconcile.');
             }
             $course = DB::table('courses')->where('id', (int) $draft->course_id)
