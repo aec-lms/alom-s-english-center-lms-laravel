@@ -21,6 +21,9 @@ return new class extends Migration {
             $table->decimal('commission_reversal_amount', 12, 2);
             $table->string('currency', 8)->default('BDT');
             $table->string('status', 24)->default('applied');
+            $table->text('admin_note')->nullable();
+            $table->unsignedBigInteger('reviewed_by')->nullable();
+            $table->timestamp('reviewed_at')->nullable();
             $table->timestamps();
             $table->unique('payment_refund_id', 'ref_commission_reversal_refund_unique');
             $table->index(['referral_commission_id', 'status'], 'ref_commission_reversal_status_idx');
