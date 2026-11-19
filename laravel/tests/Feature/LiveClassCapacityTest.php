@@ -191,6 +191,72 @@ class LiveClassCapacityTest extends TestCase
         $this->assertDatabaseCount('live_class_participants', 0);
     }
 
+    public function test_inactive_or_deleted_student_profile_cannot_join_even_with_active_enrollment(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management', 'student-management']);
+
+        $course = Course::query()->create([
+            'code' => 'LIVE-INACTIVE-PROFILE',
+            'title' => 'Inactive Profile Live Access Test',
+            'slug' => 'inactive-profile-live-access-test',
+            'price' => 0,
+            'status' => 'published',
+        ]);
+        $liveClass = LiveClass::query()->create([
+            'course_id' => $course->id,
+            'title' => 'Inactive Profile Session',
+            'platform' => 'zoom',
+            'meeting_url' => 'https://zoom.us/j/123456789',
+            'starts_at' => now()->subMinute(),
+            'status' => 'live',
+            'capacity' => 300,
+        ]);
+
+        $inactiveStudent = $this->createUserWithRole('student');
+        Enrollment::query()->create([
+            'user_id' => $inactiveStudent->id,
+            'course_id' => $course->id,
+            'status' => 'active',
+        ]);
+        app('db')->table('students')->insert([
+            'user_id' => $inactiveStudent->id,
+            'branch_id' => null,
+            'student_code' => 'STU-LIVE-INACTIVE-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'admission_date' => now()->toDateString(),
+            'status' => 'inactive',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($inactiveStudent)
+            ->post("/live-classes/{$liveClass->id}/join")
+            ->assertForbidden();
+
+        $deletedStudent = $this->createUserWithRole('student');
+        Enrollment::query()->create([
+            'user_id' => $deletedStudent->id,
+            'course_id' => $course->id,
+            'status' => 'active',
+        ]);
+        app('db')->table('students')->insert([
+            'user_id' => $deletedStudent->id,
+            'branch_id' => null,
+            'student_code' => 'STU-LIVE-DELETED-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+            'deleted_at' => now(),
+        ]);
+
+        $this->actingAs($deletedStudent)
+            ->post("/live-classes/{$liveClass->id}/join")
+            ->assertForbidden();
+
+        $this->assertDatabaseCount('live_class_participants', 0);
+    }
+
     public function test_non_enrolled_student_and_non_student_role_cannot_join_live_class(): void
     {
         $this->markSystemInstalled();
