@@ -22,7 +22,7 @@ return new class extends Migration
             $table->string('storage_path', 255);
             $table->string('mime_type', 100);
             $table->unsignedInteger('size_bytes');
-            $table->unsignedSmallInteger('duration_seconds');
+            $table->unsignedSmallInteger('reported_duration_seconds');
             $table->string('status', 20)->default('pending')->index();
             $table->string('reviewer_user_id', 128)->nullable()->index();
             $table->unsignedTinyInteger('score')->nullable();
