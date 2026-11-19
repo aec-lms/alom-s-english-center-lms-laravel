@@ -350,6 +350,14 @@ final class PhoneticsSpeakingRecordingController extends Controller
         $reviewer = $request->user();
         abort_unless($reviewer, 401);
 
+        // A learner account must never grade its own submission, even when
+        // that account also has staff permissions or an administrator role.
+        abort_unless(
+            !hash_equals((string) $recording->user_id, (string) $reviewer->getAuthIdentifier()),
+            403,
+            'You cannot review your own speaking recording.'
+        );
+
         if ($this->isGlobalPhoneticsAdmin($reviewer)) {
             return;
         }
