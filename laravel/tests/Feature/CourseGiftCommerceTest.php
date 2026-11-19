@@ -25,6 +25,66 @@ class CourseGiftCommerceTest extends TestCase
         $this->activatePlugins(['course-management', 'fees-management', 'marketing-management', 'universal-payment']);
     }
 
+    public function test_gift_email_job_restores_mail_configuration_for_long_lived_queue_workers(): void
+    {
+        $this->activatePlugins(['email-notifications']);
+        $sender = $this->createUserWithRole('student');
+        $recipient = $this->createUserWithRole('student');
+        $recipient->update(['email' => 'queued-gift-recipient@example.test']);
+        $course = Course::query()->create([
+            'code' => 'GIFT-EMAIL-001',
+            'title' => 'Queued Gift Email Course',
+            'slug' => 'queued-gift-email-course',
+            'price' => 1200,
+            'status' => 'published',
+        ]);
+        $token = str_repeat('Q', 64);
+        $giftId = DB::table('course_gifts')->insertGetId([
+            'sender_user_id' => $sender->id,
+            'recipient_user_id' => null,
+            'recipient_email' => $recipient->email,
+            'course_id' => $course->id,
+            'invoice_id' => null,
+            'redeem_token_hash' => hash('sha256', $token),
+            'redeem_token_encrypted' => encrypt($token),
+            'status' => 'paid',
+            'currency' => 'BDT',
+            'amount' => 1200,
+            'paid_at' => now(),
+            'expires_at' => now()->addDays(30),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        foreach ([
+            'smtp_host' => 'smtp.gift-test.example',
+            'smtp_port' => '587',
+            'smtp_username' => '',
+            'smtp_password' => '',
+            'from_address' => 'gifts@example.test',
+        ] as $key => $value) {
+            PluginSetting::query()->updateOrCreate(
+                ['plugin_slug' => 'email-notifications', 'setting_key' => $key],
+                ['setting_value' => $value, 'is_encrypted' => false]
+            );
+        }
+
+        Config::set('mail.default', 'array');
+        Config::set('mail.mailers.smtp.host', 'before-gift-job.example.test');
+        Mail::fake();
+
+        app(SendGiftRecipientEmailJob::class, ['giftType' => 'gift_course', 'giftId' => $giftId])
+            ->handle(app(PluginManager::class));
+
+        $this->assertSame('array', Config::get('mail.default'));
+        $this->assertSame('before-gift-job.example.test', Config::get('mail.mailers.smtp.host'));
+        $this->assertDatabaseHas('course_gifts', [
+            'id' => $giftId,
+            'notification_delivery_status' => 'sent',
+        ]);
+        $this->assertNotNull(DB::table('course_gifts')->where('id', $giftId)->value('notification_sent_at'));
+    }
+
     public function test_known_recipient_from_another_branch_cannot_add_course_gift_to_unified_cart(): void
     {
         $sender = $this->createUserWithRole('student', 11);
