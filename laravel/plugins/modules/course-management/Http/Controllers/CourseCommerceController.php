@@ -60,7 +60,7 @@ class CourseCommerceController extends Controller
         abort_unless(Schema::hasTable('course_carts') && Schema::hasTable('course_cart_items'), 503, 'Course cart storage is not installed.');
         $course = DB::table('courses')->where('id', $courseId)->where('status', 'published')->first();
         abort_unless($course, 404, 'This course is not available for purchase.');
-        $this->assertCourseBranch($recipient, $course);
+        $this->assertCourseBranch($student, $course);
         $this->assertNoOpenBatch($courseId);
 
         abort_if(DB::table('enrollments')->where('user_id', $student->id)->where('course_id', $courseId)
@@ -201,7 +201,7 @@ class CourseCommerceController extends Controller
                 'amount' => $payable,
                 'external_trx_id' => null,
                 'user_id' => $student->id,
-                'branch_id' => $course->branch_id ?? $this->assignedBranchId($recipient),
+                'branch_id' => $course->branch_id ?? $this->assignedBranchId($student),
                 'status' => 'pending',
                 'notes' => json_encode(['purpose' => 'course_gift', 'course_gift_id' => $giftId], JSON_THROW_ON_ERROR),
             ]);
@@ -300,14 +300,14 @@ class CourseCommerceController extends Controller
             $this->assertGiftInvoiceFullyPaid($locked->invoice_id ?? null, $locked->payment_transaction_id ?? null, (float) $locked->amount, (string) $locked->currency, $locked->unified_payment_transaction_id ?? null);
             $course = DB::table('courses')->where('id', $locked->course_id)->where('status', 'published')->first();
             abort_unless($course, 409, 'The gifted course is currently unavailable. Please contact support.');
-            $this->assertCourseBranch($student, $course);
-            abort_if(DB::table('enrollments')->where('user_id', $student->id)->where('course_id', $course->id)
+            $this->assertCourseBranch($recipient, $course);
+            abort_if(DB::table('enrollments')->where('user_id', $recipient->id)->where('course_id', $course->id)
                 ->whereIn('status', ['pending', 'active', 'completed'])->exists(), 409, 'You already have access to this course.');
 
             DB::table('enrollments')->insert([
                 'user_id' => $recipient->id,
                 'course_id' => $course->id,
-                'branch_id' => $course->branch_id ?? $this->assignedBranchId($student),
+                'branch_id' => $course->branch_id ?? $this->assignedBranchId($recipient),
                 'invoice_id' => $locked->invoice_id,
                 'status' => 'active',
                 'created_at' => now(),
