@@ -784,6 +784,9 @@ class CourseCommerceController extends Controller
         // universal-payment transaction that created them. Keep the nullable
         // transaction fallback only for historical records created before this
         // linkage existed.
+        abort_unless($paymentTransactionId === null || $unifiedPaymentTransactionId === null, 409,
+            'Gift payment linkage is ambiguous and requires manual reconciliation.');
+
         if ($unifiedPaymentTransactionId !== null) {
             abort_unless(Schema::hasTable('payment_transactions'), 503, 'Unified payment transaction storage is unavailable.');
             $payment = DB::table('payment_transactions')
