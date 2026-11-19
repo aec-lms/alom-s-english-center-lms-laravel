@@ -12,6 +12,7 @@ use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
 use App\Core\Plugins\PluginManager;
 use App\Models\User;
 use Plugins\Modules\ReferralIncome\Services\ReferralIncomeService;
+use Plugins\Modules\MarketingManagement\Services\CourseCouponService;
 use RuntimeException;
 
 class PaymentSettlementService
@@ -127,6 +128,26 @@ class PaymentSettlementService
                 $orders = DB::table('commerce_orders')->where('invoice_id', $invoice->id)->lockForUpdate()->get();
                 foreach ($orders as $order) {
                     if ($order->payment_status === 'paid') continue;
+
+                    if (Schema::hasColumn('commerce_orders', 'coupon_reservation_key')
+                        && filled($order->coupon_reservation_key)) {
+                        if (!app(PluginManager::class)->isEnabled('marketing-management')
+                            || !Schema::hasTable('promo_coupon_redemptions')) {
+                            throw new RuntimeException('The marketing coupon module required by this order is unavailable.');
+                        }
+                        $reservation = DB::table('promo_coupon_redemptions')
+                            ->where('reservation_key', $order->coupon_reservation_key)
+                            ->lockForUpdate()
+                            ->first();
+                        if (!$reservation
+                            || (int) $reservation->user_id !== (int) $order->user_id
+                            || (int) $reservation->coupon_id !== (int) ($order->coupon_id ?? 0)
+                            || abs((float) $reservation->discount_amount - (float) $order->discount_total) > 0.01) {
+                            throw new RuntimeException('The course coupon reservation does not match the commerce order.');
+                        }
+                        app(CourseCouponService::class)->redeem((string) $order->coupon_reservation_key);
+                    }
+
                     DB::table('commerce_orders')->where('id', $order->id)->update([
                         'status' => 'completed', 'payment_status' => 'paid', 'paid_at' => now(), 'updated_at' => now(),
                     ]);

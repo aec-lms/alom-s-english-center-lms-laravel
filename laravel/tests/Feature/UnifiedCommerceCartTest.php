@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Plugins\Modules\CommerceCart\Services\CommerceCatalog;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
+use Plugins\Modules\MarketingManagement\Models\PromoCoupon;
+use Plugins\Modules\UniversalPayment\Services\UniversalPaymentOrchestrator;
 use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
 use Plugins\Modules\PaymentManagement\Services\PaymentSettlementService;
 use Tests\TestCase;
@@ -696,6 +698,92 @@ final class UnifiedCommerceCartTest extends TestCase
         $role->permissions()->syncWithoutDetaching([$permission->id]);
 
         $this->actingAs($manager)->get('/admin/commerce/orders')->assertForbidden();
+    }
+
+    public function test_unified_cart_applies_course_coupon_to_eligible_items_and_redeems_it_on_settlement(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins([
+            'commerce-cart', 'course-management', 'marketing-management',
+            'fees-management', 'universal-payment', 'payment-management',
+        ]);
+
+        $student = $this->createUserWithRole('student');
+        $courseId = DB::table('courses')->insertGetId([
+            'code' => 'COUPON-CART-' . strtoupper(uniqid()),
+            'title' => 'Coupon Eligible Course',
+            'slug' => 'coupon-eligible-course-' . uniqid(),
+            'price' => 1000, 'status' => 'published',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $subscriptionId = DB::table('commerce_sellables')->insertGetId([
+            'type' => 'subscription', 'title' => 'Monthly Subscription',
+            'sku' => 'COUPON-SUB-' . strtoupper(uniqid()),
+            'description' => 'A separate non-course cart item', 'price' => 200, 'currency' => 'BDT',
+            'entitlement' => json_encode(['type' => 'subscription', 'duration_days' => 30]),
+            'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->actingAs($student)->post('/cart/items', [
+            'item_type' => 'course', 'item_id' => $courseId, 'quantity' => 1,
+        ])->assertRedirect('/cart');
+        $this->actingAs($student)->post('/cart/items', [
+            'item_type' => 'subscription', 'item_id' => $subscriptionId, 'quantity' => 1,
+        ])->assertRedirect('/cart');
+        $this->actingAs($student)->get('/cart')->assertOk()->assertSee('Course coupon code');
+
+        $coupon = PromoCoupon::query()->create([
+            'code' => 'MIXED' . strtoupper(substr(bin2hex(random_bytes(4)), 0, 6)),
+            'discount_percent' => 20, 'max_uses' => 10, 'used_count' => 0,
+            'expires_at' => now()->addDays(2)->toDateString(), 'is_active' => true,
+            'discount_type' => 'percent', 'discount_amount' => null, 'minimum_subtotal' => 0,
+            'maximum_discount' => null, 'per_user_limit' => null, 'starts_at' => null,
+            'applies_to_course_ids' => [], 'first_purchase_only' => false, 'gift_only' => false,
+        ]);
+
+        $payments = \\Mockery::mock(UniversalPaymentOrchestrator::class);
+        $payments->shouldReceive('assertGatewayReady')->once()->with('gateway-sslcommerz');
+        $payments->shouldReceive('initiate')->once()->andReturn(['redirect_url' => 'https://gateway.example.test/checkout']);
+        $this->app->instance(UniversalPaymentOrchestrator::class, $payments);
+
+        $this->actingAs($student)->post('/cart/checkout', [
+            'gateway' => 'gateway-sslcommerz', 'payer_name' => 'Coupon Cart Student',
+            'payer_email' => 'coupon-cart@example.test', 'payer_phone' => '01700000000',
+            'coupon_code' => $coupon->code,
+        ])->assertRedirect('https://gateway.example.test/checkout');
+
+        $order = DB::table('commerce_orders')->where('user_id', $student->id)->first();
+        $this->assertNotNull($order);
+        $this->assertSame('200.00', number_format((float) $order->discount_total, 2, '.', ''));
+        $this->assertSame('1000.00', number_format((float) $order->grand_total, 2, '.', ''));
+        $this->assertSame($coupon->code, $order->coupon_code);
+        $this->assertNotEmpty($order->coupon_reservation_key);
+
+        $invoice = FeeInvoice::query()->findOrFail($order->invoice_id);
+        $this->assertSame('1200.00', number_format((float) $invoice->subtotal_amount, 2, '.', ''));
+        $this->assertSame('200.00', number_format((float) $invoice->discount_amount, 2, '.', ''));
+        $this->assertSame('1000.00', number_format((float) $invoice->net_amount, 2, '.', ''));
+
+        $this->assertDatabaseHas('promo_coupon_redemptions', [
+            'reservation_key' => $order->coupon_reservation_key, 'user_id' => $student->id,
+            'status' => 'reserved', 'discount_amount' => 200,
+        ]);
+        $transaction = PaymentTransaction::query()->create([
+            'transaction_ref' => 'COUPON-SETTLE-' . strtoupper(uniqid()),
+            'invoice_id' => $invoice->id, 'branch_id' => null, 'gateway_slug' => 'gateway-sslcommerz',
+            'amount' => 1000, 'currency' => 'BDT', 'status' => 'initiated', 'metadata' => [],
+        ]);
+        app(PaymentSettlementService::class)->settleTransaction(
+            $transaction, 'BANK-UNIFIED-COUPON-' . strtoupper(uniqid())
+        );
+
+        $this->assertDatabaseHas('promo_coupon_redemptions', [
+            'reservation_key' => $order->coupon_reservation_key, 'status' => 'redeemed',
+        ]);
+        $this->assertDatabaseHas('promo_coupons', ['id' => $coupon->id, 'used_count' => 1]);
+        $this->assertDatabaseHas('commerce_orders', [
+            'id' => $order->id, 'payment_status' => 'paid', 'discount_total' => 200, 'grand_total' => 1000,
+        ]);
     }
 
 }

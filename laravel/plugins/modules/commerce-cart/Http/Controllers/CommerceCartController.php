@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use Plugins\Modules\CommerceCart\Services\CommerceCatalog;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
+use Plugins\Modules\MarketingManagement\Services\CourseCouponService;
 use Plugins\Modules\UniversalPayment\Services\UniversalPaymentOrchestrator;
 use App\Core\Plugins\PluginManager;
 use Illuminate\Support\Facades\Schema;
@@ -38,7 +39,9 @@ class CommerceCartController extends Controller
         $cart = $this->activeCart((int) $request->user()->id);
         $items = DB::table('commerce_cart_items')->where('cart_id', $cart->id)->orderBy('id')->get();
         $subtotal = (float) $items->sum(fn ($item) => (float) $item->unit_price * (int) $item->quantity);
-        return view('commerce-cart::cart', compact('cart', 'items', 'subtotal'));
+        $couponAvailable = app(PluginManager::class)->isEnabled('marketing-management')
+            && Schema::hasTable('promo_coupons') && Schema::hasTable('promo_coupon_redemptions');
+        return view('commerce-cart::cart', compact('cart', 'items', 'subtotal', 'couponAvailable'));
     }
 
     public function add(Request $request): RedirectResponse
@@ -193,6 +196,7 @@ class CommerceCartController extends Controller
             'payer_email' => ['required', 'email', 'max:180'],
             'payer_phone' => ['required', 'string', 'max:40'],
             'payment_method_id' => ['nullable', 'string', 'max:120'],
+            'coupon_code' => ['nullable', 'string', 'max:40'],
         ]);
         abort_unless(Schema::hasTable('fee_invoices') && app(PluginManager::class)->isEnabled('fees-management'), 503, 'The Fees & Invoicing module must be enabled for checkout.');
         abort_unless(app(PluginManager::class)->isEnabled('universal-payment'), 503, 'Universal Payment must be enabled.');
@@ -242,6 +246,29 @@ class CommerceCartController extends Controller
             $subtotal = round(collect($resolved)->sum(fn ($pair) => $pair[1]['price'] * (int) $pair[0]->quantity), 2);
             abort_if($subtotal <= 0, 422, 'The checkout total must be greater than zero.');
 
+            $coupon = null;
+            if (filled($data['coupon_code'] ?? null)) {
+                abort_unless(app(PluginManager::class)->isEnabled('marketing-management')
+                    && Schema::hasTable('promo_coupons') && Schema::hasTable('promo_coupon_redemptions'),
+                    503, 'Course coupon support is not currently available.');
+
+                $courseItems = collect($resolved)->filter(fn ($pair) => $pair[1]['type'] === 'course');
+                $courseIds = $courseItems->map(fn ($pair) => (int) $pair[1]['id'])->values()->all();
+                $courseSubtotal = round($courseItems->sum(fn ($pair) => $pair[1]['price'] * (int) $pair[0]->quantity), 2);
+                abort_if($courseIds === [] || $courseSubtotal <= 0, 422, 'Course coupons can only be used when your cart contains an eligible paid course.');
+
+                $coupon = app(CourseCouponService::class)->reserve(
+                    (string) $data['coupon_code'],
+                    (int) $user->id,
+                    $courseIds,
+                    $courseSubtotal
+                );
+            }
+
+            $discount = round((float) ($coupon['discount'] ?? 0), 2);
+            $netAmount = round($subtotal - $discount, 2);
+            abort_if($netAmount <= 0, 422, 'A coupon cannot reduce the order total to zero. Please use a different coupon.');
+
             $branchId = $this->assignedBranchId($user);
             $invoice = FeeInvoice::query()->create([
                 'invoice_number' => 'WEB-' . strtoupper(Str::random(10)),
@@ -251,8 +278,8 @@ class CommerceCartController extends Controller
                 'payer_phone' => $data['payer_phone'],
                 'branch_id' => $branchId,
                 'subtotal_amount' => $subtotal,
-                'discount_amount' => 0,
-                'net_amount' => $subtotal,
+                'discount_amount' => $discount,
+                'net_amount' => $netAmount,
                 'paid_amount' => 0,
                 'currency' => $currencies->first(),
                 'status' => 'unpaid',
@@ -265,8 +292,11 @@ class CommerceCartController extends Controller
                 'branch_id' => $branchId,
                 'currency' => $currencies->first(),
                 'subtotal' => $subtotal,
-                'discount_total' => 0,
-                'grand_total' => $subtotal,
+                'discount_total' => $discount,
+                'grand_total' => $netAmount,
+                'coupon_id' => $coupon['coupon_id'] ?? null,
+                'coupon_code' => $coupon['code'] ?? null,
+                'coupon_reservation_key' => $coupon['reservation_key'] ?? null,
                 'status' => 'awaiting_payment',
                 'payment_status' => 'unpaid',
                 'billing_snapshot' => json_encode(['name' => $data['payer_name'], 'email' => $data['payer_email'], 'phone' => $data['payer_phone']]),
@@ -342,6 +372,12 @@ class CommerceCartController extends Controller
                 'payment_status' => $ambiguous ? 'risk_review' : 'failed',
                 'updated_at' => now(),
             ]);
+            if (!$ambiguous && filled($order->coupon_reservation_key ?? null) && Schema::hasTable('promo_coupon_redemptions')) {
+                DB::table('promo_coupon_redemptions')
+                    ->where('reservation_key', $order->coupon_reservation_key)
+                    ->where('status', 'reserved')
+                    ->update(['status' => 'released', 'updated_at' => now()]);
+            }
             return redirect()->route('plugins.commerce_cart.index')
                 ->withErrors(['gateway' => $ambiguous
                     ? 'The gateway response was ambiguous. Do not retry yet; contact support with order ' . $order->order_number . ' for reconciliation.'
