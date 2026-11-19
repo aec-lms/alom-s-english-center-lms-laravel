@@ -129,6 +129,9 @@ class PluginLifecycleTest extends TestCase
             }
             $manager->shouldNotReceive('loadPluginRoutes');
 
+            // Exercise the normal provider boot path; CI's explicit-plugin-boot flag
+            // intentionally bypasses provider discovery for the rest of the test suite.
+            $this->app['env'] = 'production';
             $provider = new PluginServiceProvider($this->app);
             $provider->boot($manager);
 
