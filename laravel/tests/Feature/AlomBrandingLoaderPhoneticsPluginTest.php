@@ -369,6 +369,10 @@ api/*",
   $this->assertFileExists($privatePath);
   $this->assertFileDoesNotExist(public_path($recording->storage_path));
   $this->actingAs($student)->get('/courses/british-american-phonetics/phonetics-learning/recordings/'.$recordingId.'/audio')->assertOk();
+  $this->actingAs($student)->getJson('/courses/british-american-phonetics/phonetics-learning/recordings')
+   ->assertOk()
+   ->assertJsonPath('recordings.0.audio_url',url('/courses/british-american-phonetics/phonetics-learning/recordings/'.$recordingId.'/audio'))
+   ->assertJsonPath('recordings.0.delete_url',url('/courses/british-american-phonetics/phonetics-learning/recordings/'.$recordingId));
   $otherStudent=$this->createUserWithRole('student');
   $this->actingAs($otherStudent)->get('/courses/british-american-phonetics/phonetics-learning/recordings/'.$recordingId.'/audio')->assertNotFound();
   $admin=$this->createUserWithRole('admin');
