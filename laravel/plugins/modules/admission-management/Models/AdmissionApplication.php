@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\AdmissionManagement\\Models;
+namespace Plugins\Modules\AdmissionManagement\Models;
 
-use Illuminate\\Database\\Eloquent\\Model;
-use Illuminate\\Database\\Eloquent\\Relations\\HasMany;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class AdmissionApplication extends Model
 {
