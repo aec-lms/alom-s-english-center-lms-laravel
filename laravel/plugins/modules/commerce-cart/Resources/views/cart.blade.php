@@ -8,7 +8,9 @@
             @if (\Illuminate\Support\Facades\Route::has('course-commerce.gifts.sent'))
                 <a href="{{ route('course-commerce.gifts.sent') }}" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold text-slate-700">Gifts You Sent</a>
             @endif
-            <a href="{{ route('plugins.commerce_cart.gifts') }}" class="rounded-lg border border-indigo-200 px-3 py-2 text-sm font-bold text-indigo-700">Send a Gift</a>
+            @if (app(\\App\\Core\\Plugins\\PluginManager::class)->isEnabled('course-management'))
+                <a href="{{ route('plugins.commerce_cart.gifts') }}" class="rounded-lg border border-indigo-200 px-3 py-2 text-sm font-bold text-indigo-700">Send a Gift</a>
+            @endif
             <span class="rounded-full bg-slate-100 px-3 py-1 text-sm font-bold">{{ $items->count() }} items</span>
         </div>
     </div>
