@@ -66,6 +66,20 @@
 
 @include('public.partials.navbar')
 
+@if (($homepageNoticeCampaigns ?? collect())->isNotEmpty())
+    <section class="bg-[#FFF7E6] border-b border-amber-200 px-4 py-2.5">
+        <div class="max-w-[1280px] mx-auto flex flex-col sm:flex-row sm:items-center gap-2">
+            @foreach ($homepageNoticeCampaigns as $noticeCampaign)
+                <div class="flex flex-1 items-center justify-between gap-3 text-xs">
+                    <img src="{{ route('plugins.boost.impression', $noticeCampaign) }}" alt="" width="1" height="1" class="absolute w-px h-px opacity-0 pointer-events-none">
+                    <div class="min-w-0"><span class="font-extrabold text-amber-800">{{ $noticeCampaign->badge_text ?: 'NOTICE' }}</span><span class="ml-2 font-semibold text-slate-800">{{ $noticeCampaign->campaign_name }}</span></div>
+                    <a href="{{ route('plugins.boost.click', $noticeCampaign) }}" rel="nofollow" class="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-[10px] font-bold text-white hover:bg-amber-700">{{ $noticeCampaign->cta_text ?: 'View details' }}</a>
+                </div>
+            @endforeach
+        </div>
+    </section>
+@endif
+
 @if (($homepageBoostCampaigns ?? collect())->isNotEmpty())
     <section class="bg-gradient-to-r from-[#EAF2FF] via-white to-[#E8F8FF] border-b border-sky-100 px-4 py-5">
         <div class="max-w-[1280px] mx-auto grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
