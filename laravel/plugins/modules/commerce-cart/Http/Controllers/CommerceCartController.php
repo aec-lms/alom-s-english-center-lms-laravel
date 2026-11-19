@@ -187,6 +187,185 @@ class CommerceCartController extends Controller
         return back()->with('status', 'Store catalogue availability updated.');
     }
 
+    public function giftForm(Request $request): View
+    {
+        abort_unless($request->user()?->hasRole('student'), 403);
+        abort_unless(app(PluginManager::class)->isEnabled('course-management')
+            && Schema::hasTable('courses') && Schema::hasTable('course_gifts')
+            && Schema::hasTable('course_gift_vouchers'), 503, 'Course gift storage is not ready.');
+
+        $branchId = $this->assignedBranchId($request->user());
+        $courses = DB::table('courses')->where('status', 'published')
+            ->when(Schema::hasColumn('courses', 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))
+            ->when(Schema::hasColumn('courses', 'branch_id'), fn ($query) => $query->where(fn ($q) => $q->whereNull('branch_id')->orWhere('branch_id', $branchId)))
+            ->where('price', '>', 0)->orderBy('title')->get(['id', 'title', 'price', 'branch_id']);
+        $voucherSettings = $this->giftVoucherSettings();
+
+        return view('commerce-cart::gifts', compact('courses', 'voucherSettings'));
+    }
+
+    public function createCourseGiftDraft(Request $request): RedirectResponse
+    {
+        abort_unless($request->user()?->hasRole('student'), 403);
+        abort_unless(app(PluginManager::class)->isEnabled('course-management')
+            && Schema::hasTable('course_gifts')
+            && Schema::hasColumn('course_gifts', 'redeem_token_encrypted')
+            && Schema::hasColumn('course_gifts', 'commerce_order_item_id')
+            && Schema::hasColumn('course_gifts', 'unified_payment_transaction_id'), 503, 'Unified course gift storage is not ready.');
+        $data = $request->validate([
+            'course_id' => ['required', 'integer', 'min:1', 'exists:courses,id'],
+            'recipient_email' => ['required', 'email:rfc', 'max:190'],
+            'recipient_name' => ['nullable', 'string', 'max:160'],
+            'message' => ['nullable', 'string', 'max:1000'],
+        ]);
+        $user = $request->user();
+        $recipientEmail = strtolower(trim($data['recipient_email']));
+        abort_if($recipientEmail === strtolower(trim((string) $user->email)), 422, 'You cannot gift a course to your own account.');
+
+        $draftId = DB::transaction(function () use ($user, $data, $recipientEmail): int {
+            DB::table('users')->where('id', $user->id)->lockForUpdate()->first();
+            $course = DB::table('courses')->where('id', (int) $data['course_id'])
+                ->where('status', 'published')->lockForUpdate()->first();
+            abort_unless($course, 404, 'This course is no longer available for gifting.');
+            $price = round((float) $course->price, 2);
+            abort_if($price <= 0, 422, 'Free courses do not need a paid gift checkout.');
+            if (Schema::hasTable('batches') && Schema::hasColumn('batches', 'status') && Schema::hasColumn('batches', 'course_id')) {
+                abort_if(DB::table('batches')->where('course_id', $course->id)->where('status', 'open')->exists(),
+                    409, 'This course has an open batch. Contact admissions before gifting it.');
+            }
+
+            $token = Str::random(64);
+            $giftId = DB::table('course_gifts')->insertGetId([
+                'sender_user_id' => $user->id,
+                'recipient_user_id' => DB::table('users')->whereRaw('LOWER(email) = ?', [$recipientEmail])->value('id'),
+                'recipient_email' => $recipientEmail,
+                'recipient_name' => $data['recipient_name'] ?? null,
+                'message' => $data['message'] ?? null,
+                'course_id' => $course->id,
+                'invoice_id' => null,
+                'redeem_token_hash' => hash('sha256', $token),
+                'redeem_token_encrypted' => encrypt($token),
+                'status' => 'awaiting_payment',
+                'currency' => strtoupper((string) config('lms.default_currency', 'BDT')),
+                'amount' => $price,
+                'subtotal_amount' => $price,
+                'discount_amount' => 0,
+                'expires_at' => now()->addDays(90),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            $item = $this->catalog->resolve('gift_course', $giftId, $user);
+            $this->addResolvedDraftToCart($user, $item);
+
+            return $giftId;
+        }, 3);
+
+        return redirect()->route('plugins.commerce_cart.index')
+            ->with('status', 'Course gift draft #' . $draftId . ' was added to your unified cart. Add the recipient details only once and complete secure checkout.');
+    }
+
+    public function createVoucherDraft(Request $request): RedirectResponse
+    {
+        abort_unless($request->user()?->hasRole('student'), 403);
+        abort_unless(app(PluginManager::class)->isEnabled('course-management')
+            && Schema::hasTable('course_gift_vouchers')
+            && Schema::hasColumn('course_gift_vouchers', 'commerce_order_item_id')
+            && Schema::hasColumn('course_gift_vouchers', 'unified_payment_transaction_id')
+            && Schema::hasTable('course_gift_wallets')
+            && Schema::hasTable('course_gift_wallet_transactions')
+            && Schema::hasTable('course_gift_voucher_redemptions'), 503, 'Unified gift voucher storage is not ready.');
+        $settings = $this->giftVoucherSettings();
+        abort_unless($settings['enabled'], 403, 'Gift voucher purchases are temporarily disabled.');
+        $data = $request->validate([
+            'recipient_email' => ['required', 'email:rfc', 'max:190'],
+            'recipient_name' => ['nullable', 'string', 'max:160'],
+            'message' => [$settings['allow_personal_message'] ? 'nullable' : 'prohibited', 'string', 'max:1000'],
+            'amount' => ['required', 'numeric', 'min:' . $settings['minimum_amount'], 'max:' . $settings['maximum_amount']],
+        ]);
+        $user = $request->user();
+        $recipientEmail = strtolower(trim($data['recipient_email']));
+        abort_if($recipientEmail === strtolower(trim((string) $user->email)), 422, 'You cannot send a gift voucher to your own account.');
+
+        $voucherId = DB::transaction(function () use ($user, $data, $recipientEmail, $settings): int {
+            DB::table('users')->where('id', $user->id)->lockForUpdate()->first();
+            $token = Str::random(64);
+            $amount = round((float) $data['amount'], 2);
+            $voucherId = DB::table('course_gift_vouchers')->insertGetId([
+                'sender_user_id' => $user->id,
+                'recipient_email' => $recipientEmail,
+                'recipient_name' => $data['recipient_name'] ?? null,
+                'message' => $data['message'] ?? null,
+                'redeem_token_hash' => hash('sha256', $token),
+                'redeem_token_encrypted' => encrypt($token),
+                'currency' => strtoupper((string) config('lms.default_currency', 'BDT')),
+                'amount' => $amount,
+                'remaining_amount' => $amount,
+                'status' => 'awaiting_payment',
+                'expires_at' => now()->addDays((int) $settings['validity_days']),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            $item = $this->catalog->resolve('gift_voucher', $voucherId, $user);
+            $this->addResolvedDraftToCart($user, $item);
+
+            return $voucherId;
+        }, 3);
+
+        return redirect()->route('plugins.commerce_cart.index')
+            ->with('status', 'Gift voucher draft #' . $voucherId . ' was added to your unified cart. Complete secure checkout to pay.');
+    }
+
+    private function addResolvedDraftToCart($user, array $item): void
+    {
+        $cart = $this->activeCart((int) $user->id);
+        DB::transaction(function () use ($user, $cart, $item): void {
+            $lockedCart = DB::table('commerce_carts')->where('id', $cart->id)
+                ->where('user_id', $user->id)->where('status', 'active')->lockForUpdate()->first();
+            abort_unless($lockedCart, 409, 'Your cart has already been checked out.');
+            abort_unless(strtoupper((string) $lockedCart->currency) === strtoupper((string) $item['currency']),
+                422, 'Your cart currency does not match this gift draft. Start a new cart before adding it.');
+            $existing = DB::table('commerce_cart_items')->where('cart_id', $lockedCart->id)
+                ->where('item_type', $item['type'])->where('item_id', $item['id'])->lockForUpdate()->first();
+            if ($existing) {
+                DB::table('commerce_cart_items')->where('id', $existing->id)->update([
+                    'quantity' => 1,
+                    'unit_price' => $item['price'],
+                    'currency' => $item['currency'],
+                    'title_snapshot' => $item['title'],
+                    'metadata' => json_encode($item['metadata'], JSON_THROW_ON_ERROR),
+                    'updated_at' => now(),
+                ]);
+                return;
+            }
+            DB::table('commerce_cart_items')->insert([
+                'cart_id' => $lockedCart->id,
+                'item_type' => $item['type'],
+                'item_id' => $item['id'],
+                'quantity' => 1,
+                'unit_price' => $item['price'],
+                'currency' => $item['currency'],
+                'title_snapshot' => $item['title'],
+                'metadata' => json_encode($item['metadata'], JSON_THROW_ON_ERROR),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }, 3);
+    }
+
+    private function giftVoucherSettings(): array
+    {
+        $stored = SystemSetting::query()->where('key', 'course_commerce.gift_vouchers')->value('value');
+        $decoded = is_array($stored) ? $stored : (json_decode((string) $stored, true) ?: []);
+
+        return array_merge([
+            'enabled' => true,
+            'minimum_amount' => 100,
+            'maximum_amount' => 100000,
+            'validity_days' => 180,
+            'allow_personal_message' => true,
+        ], $decoded);
+    }
+
     public function checkout(Request $request, UniversalPaymentOrchestrator $payments): RedirectResponse
     {
         abort_unless($request->user()?->hasRole('student'), 403);
