@@ -17,6 +17,8 @@
     "settings_schema": [],
     "optional_dependencies": [
         "course-management",
-        "universal-payment"
+        "universal-payment",
+        "branch-management",
+        "student-management"
     ]
 }
