@@ -379,12 +379,14 @@ class CommerceCartController extends Controller
     {
         abort_unless($request->user()?->hasRole('student'), 403);
         $data = $request->validate([
-            'gateway' => ['required', 'in:gateway-sslcommerz,gateway-stripe,gateway-paypal'],
+            'gateway' => ['required', 'in:gateway-sslcommerz,gateway-stripe,gateway-paypal,bank_cash'],
             'payer_name' => ['required', 'string', 'max:160'],
             'payer_email' => ['required', 'email', 'max:180'],
             'payer_phone' => ['required', 'string', 'max:40'],
             'payment_method_id' => ['nullable', 'string', 'max:120'],
             'coupon_code' => ['nullable', 'string', 'max:40'],
+            'external_trx_id' => ['nullable', 'required_if:gateway,bank_cash', 'string', 'max:120'],
+            'proof_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120', 'prohibited_unless:gateway,bank_cash'],
         ]);
         abort_unless(Schema::hasTable('fee_invoices') && app(PluginManager::class)->isEnabled('fees-management'), 503, 'The Fees & Invoicing module must be enabled for checkout.');
         abort_unless(app(PluginManager::class)->isEnabled('universal-payment'), 503, 'Universal Payment must be enabled.');
@@ -392,18 +394,42 @@ class CommerceCartController extends Controller
             && Schema::hasTable('payment_transactions'), 503,
             'Payment Management must be enabled before unified commerce checkout.');
 
-        try {
-            $payments->assertGatewayReady($data['gateway']);
-        } catch (\Throwable $exception) {
-            return back()->withErrors(['gateway' => $exception->getMessage()])->withInput();
+        $plugins = app(PluginManager::class);
+        if ($data['gateway'] === 'bank_cash') {
+            $enabledMethods = array_filter(array_map('trim', explode(',', (string) $plugins->getSetting('universal-payment', 'enabled_gateways', 'sslcommerz,bkash,nagad,rocket,card,bank_cash'))));
+            abort_unless((string) $plugins->getSetting('universal-payment', 'allow_offline_payments', '1') === '1'
+                && in_array('bank_cash', $enabledMethods, true), 422, 'Bank transfer and cash payments are disabled by the administrator.');
+            abort_unless(Schema::hasTable('universal_payment_transactions')
+                && Schema::hasTable('universal_payment_reference_claims')
+                && Schema::hasColumn('universal_payment_transactions', 'fee_invoice_id'), 503,
+                'Manual payment reconciliation storage is not installed.');
+            if ($request->hasFile('proof_file')) {
+                abort_unless(Schema::hasColumn('universal_payment_transactions', 'proof_path')
+                    && Schema::hasColumn('universal_payment_transactions', 'proof_mime')
+                    && Schema::hasColumn('universal_payment_transactions', 'proof_size'), 503,
+                    'Manual payment receipt storage is not installed.');
+            }
+        } else {
+            try {
+                $payments->assertGatewayReady($data['gateway']);
+            } catch (\Throwable $exception) {
+                return back()->withErrors(['gateway' => $exception->getMessage()])->withInput();
+            }
         }
 
         $user = $request->user();
         $cart = $this->activeCart((int) $user->id);
+        $proofFile = $request->file('proof_file');
+        $proofPath = $proofFile?->store('universal-payment-proofs', 'local');
+        if ($proofFile && !$proofPath) {
+            abort(500, 'The payment receipt could not be stored.');
+        }
+        $manualPaymentId = null;
 
         // Lock and re-read the cart and every item in one transaction. Never
         // create an order from a stale cart snapshot captured before the lock.
-        $order = DB::transaction(function () use ($user, $cart, $data): object {
+        try {
+        $order = DB::transaction(function () use ($user, $cart, $data, $proofFile, $proofPath, &$manualPaymentId): object {
             abort_unless(DB::table('users')->where('id', $user->id)->lockForUpdate()->first(), 404);
             $hasUnresolvedOrder = DB::table('commerce_orders')->where('user_id', $user->id)
                 ->whereIn('status', ['awaiting_payment', 'risk_review'])
@@ -553,9 +579,53 @@ class CommerceCartController extends Controller
                 }
             }
 
+            if ($data['gateway'] === 'bank_cash') {
+                $manualPayment = UniversalPaymentTransaction::query()->create([
+                    'reference' => 'UPAY-' . strtoupper(Str::random(12)),
+                    'payer_name' => $data['payer_name'],
+                    'payer_contact' => $data['payer_phone'],
+                    'item_title' => 'Commerce Order ' . DB::table('commerce_orders')->where('id', $orderId)->value('order_number'),
+                    'gateway' => 'bank_cash',
+                    'currency' => (string) $currencies->first(),
+                    'amount' => $netAmount,
+                    'external_trx_id' => trim((string) $data['external_trx_id']),
+                    'status' => 'pending',
+                    'notes' => json_encode(['source' => 'commerce-cart', 'order_id' => $orderId], JSON_THROW_ON_ERROR),
+                    'verified_by' => null,
+                    'verified_at' => null,
+                    'user_id' => $user->id,
+                    'branch_id' => $branchId,
+                    'fee_invoice_id' => $invoice->id,
+                    'proof_path' => $proofPath,
+                    'proof_mime' => $proofFile?->getMimeType(),
+                    'proof_size' => $proofFile?->getSize(),
+                ]);
+                app(ExternalTransactionReferenceRegistry::class)->claim(
+                    'bank_cash',
+                    (string) $data['external_trx_id'],
+                    (int) $manualPayment->id
+                );
+                $manualPaymentId = (int) $manualPayment->id;
+                DB::table('commerce_orders')->where('id', $orderId)->update([
+                    'payment_status' => 'pending',
+                    'updated_at' => now(),
+                ]);
+            }
+
             DB::table('commerce_carts')->where('id', $lockedCart->id)->update(['status' => 'converted', 'updated_at' => now()]);
             return DB::table('commerce_orders')->where('id', $orderId)->first();
         });
+        } catch (\Throwable $exception) {
+            if ($proofPath !== null) {
+                Storage::disk('local')->delete($proofPath);
+            }
+            throw $exception;
+        }
+
+        if ($manualPaymentId !== null) {
+            return redirect()->route('plugins.commerce_cart.index')
+                ->with('status', 'Manual payment submitted. Reference ' . $data['external_trx_id'] . ' is awaiting verification. Course and service access will be granted only after an authorized payment reviewer confirms it.');
+        }
 
         try {
             $payment = $payments->initiate($data['gateway'], FeeInvoice::query()->findOrFail($order->invoice_id), [
