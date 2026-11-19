@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
+use Plugins\Modules\CourseManagement\Jobs\SendGiftRecipientEmailJob;
 use Plugins\Modules\MarketingManagement\Services\CourseCouponService;
 use Plugins\Modules\ReferralIncome\Services\ReferralIncomeService;
 use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
@@ -322,6 +323,46 @@ class CourseCommerceController extends Controller
 
             return redirect()->route('plugins.enrollments.my')->with('status', 'Gift redeemed. The course is now available in your learning area.');
         }, 3);
+    }
+
+    public function resendCourseGiftEmail(Request $request, int $giftId): RedirectResponse
+    {
+        return $this->resendGiftEmail($request, 'gift_course', $giftId);
+    }
+
+    public function resendGiftVoucherEmail(Request $request, int $voucherId): RedirectResponse
+    {
+        return $this->resendGiftEmail($request, 'gift_voucher', $voucherId);
+    }
+
+    private function resendGiftEmail(Request $request, string $giftType, int $giftId): RedirectResponse
+    {
+        $sender = $this->student($request);
+        $table = $giftType === 'gift_course' ? 'course_gifts' : 'course_gift_vouchers';
+        abort_unless(Schema::hasTable($table)
+            && Schema::hasColumn($table, 'notification_delivery_status')
+            && Schema::hasColumn($table, 'notification_sent_at'), 503,
+            'Gift delivery tracking is not installed.');
+
+        DB::transaction(function () use ($sender, $table, $giftType, $giftId): void {
+            $gift = DB::table($table)->where('id', $giftId)->lockForUpdate()->first();
+            abort_unless($gift && (int) $gift->sender_user_id === (int) $sender->id, 404);
+            abort_unless($gift->status === 'paid', 409, 'Only paid gifts can be delivered.');
+            abort_if($gift->notification_sent_at !== null, 409, 'This gift has already been emailed.');
+            abort_if($gift->expires_at && now()->greaterThan($gift->expires_at), 410, 'This gift has expired.');
+            abort_unless($gift->notification_delivery_status === 'failed', 409,
+                'Only a failed gift email can be manually retried.');
+
+            DB::table($table)->where('id', $giftId)->update([
+                'notification_delivery_status' => 'pending',
+                'notification_last_error' => null,
+                'updated_at' => now(),
+            ]);
+
+            SendGiftRecipientEmailJob::dispatch($giftType, $giftId)->afterCommit();
+        });
+
+        return back()->with('status', 'Gift email retry has been queued. Delivery status will update after the mail server accepts it.');
     }
 
     public function voucherForm(Request $request): View
