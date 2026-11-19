@@ -307,7 +307,7 @@ class UniversalPaymentInvoiceSettlementTest extends TestCase
 
         $this->assertDatabaseHas('commerce_orders', [
             'id' => $orderId,
-            'status' => 'paid',
+            'status' => 'completed',
             'payment_status' => 'paid',
         ]);
         $this->assertDatabaseHas('fee_invoices', [
