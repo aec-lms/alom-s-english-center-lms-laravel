@@ -134,4 +134,22 @@ class CmsWebsiteSafetyTest extends TestCase
         $this->assertDatabaseMissing('cms_posts', ['id' => $post->id]);
     }
 
+
+    public function test_post_update_saves_revision_and_revision_can_be_restored(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+        $admin = $this->createUserWithRole('admin');
+        $post = CmsPost::query()->create(['slug' => 'revision-test-post', 'title' => 'Original Title', 'category' => 'General', 'author' => 'AEC LMS', 'content' => 'Original content', 'is_published' => false]);
+        $this->actingAs($admin)->put('/admin/cms/posts/' . $post->id, [
+            'title' => 'Changed Title', 'slug' => 'changed-title', 'content' => 'Changed content', 'is_published' => '1',
+        ])->assertSessionHasNoErrors();
+        $revision = DB::table('cms_post_revisions')->where('post_id', $post->id)->first();
+        $this->assertNotNull($revision);
+        $this->assertSame('Original Title', $revision->title);
+        $this->actingAs($admin)->post('/admin/cms/posts/' . $post->id . '/revisions/' . $revision->id . '/restore')->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('cms_posts', ['id' => $post->id, 'title' => 'Original Title', 'slug' => 'revision-test-post', 'content' => 'Original content']);
+    }
+
+
 }
