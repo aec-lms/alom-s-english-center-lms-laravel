@@ -34,7 +34,7 @@ class CmsPost extends Model
         'review_note',
     ];
 
-    protected $casts = ['is_published' => 'boolean', 'publish_at' => 'datetime'];
+    protected $casts = ['is_published' => 'boolean', 'publish_at' => 'datetime', 'submitted_at' => 'datetime', 'reviewed_at' => 'datetime'];
 
     public function categoryModel(): BelongsTo
     {
