@@ -85,10 +85,11 @@ class BoostCampaignSafetyTest extends TestCase
         ])->assertSessionHasErrors('destination_url');
 
         $this->assertSame('/courses/ielts', $campaign->fresh()->destination_url);
-        $this->get('/boost/click/' . $campaign->id)->assertRedirect('/courses/ielts');
+        $visitorId = str_repeat('b', 64);
+        $this->withSession(['boost_visitor_id' => $visitorId])->get('/boost/click/' . $campaign->id)->assertRedirect('/courses/ielts');
         $this->assertSame(1, $campaign->fresh()->clicks);
 
-        $this->get('/boost/click/' . $campaign->id)->assertRedirect('/courses/ielts');
+        $this->withSession(['boost_visitor_id' => $visitorId])->get('/boost/click/' . $campaign->id)->assertRedirect('/courses/ielts');
         $this->assertSame(1, $campaign->fresh()->clicks, 'Repeated clicks from the same session must be deduplicated.');
 
         $campaign->update(['status' => 'paused']);
@@ -295,8 +296,9 @@ class BoostCampaignSafetyTest extends TestCase
             'ends_at' => now()->addDay(),
         ]);
 
-        $this->get('/boost/impression/' . $campaign->id)->assertNoContent();
-        $this->get('/boost/impression/' . $campaign->id)->assertNoContent();
+        $visitorId = str_repeat('c', 64);
+        $this->withSession(['boost_visitor_id' => $visitorId])->get('/boost/impression/' . $campaign->id)->assertNoContent();
+        $this->withSession(['boost_visitor_id' => $visitorId])->get('/boost/impression/' . $campaign->id)->assertNoContent();
 
         $this->assertSame(1, $campaign->fresh()->impressions);
         $this->assertSame(1, DB::table('boost_campaign_events')->where('campaign_id', $campaign->id)->where('event_type', 'impression')->count());
