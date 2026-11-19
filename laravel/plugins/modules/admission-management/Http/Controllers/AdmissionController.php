@@ -71,6 +71,8 @@ class AdmissionController extends Controller
 
     public function applyPublic(Request $request): RedirectResponse
     {
+        abort_if(app(PluginManager::class)->getSetting('admission-management', 'intake_status', 'open') === 'closed', 403, 'Admission applications are currently closed.');
+
         $validated = $request->validate([
             'applicant_name' => ['required', 'string', 'max:160'],
             'email' => ['required', 'email:rfc', 'max:160'],
@@ -96,6 +98,30 @@ class AdmissionController extends Controller
         });
 
         return back()->with('status', "Admission application submitted! Tracking ID: {$app->application_code}");
+    }
+
+
+    public function trackForm(): View
+    {
+        return view('admission-management::track', ['application' => null, 'searched' => false]);
+    }
+
+    public function trackPublic(Request $request): View
+    {
+        $validated = $request->validate([
+            'application_code' => ['required', 'string', 'max:40'],
+            'email' => ['required', 'email:rfc', 'max:160'],
+        ]);
+
+        $application = AdmissionApplication::query()
+            ->where('application_code', strtoupper(trim($validated['application_code'])))
+            ->where('email', strtolower(trim($validated['email'])))
+            ->first();
+
+        return view('admission-management::track', [
+            'application' => $application,
+            'searched' => true,
+        ]);
     }
 
     public function store(Request $request): RedirectResponse
