@@ -125,7 +125,7 @@ class SendGiftRecipientEmailJob implements ShouldQueue, ShouldBeUnique
                 'mail.mailers.smtp.scheme' => $smtpPort === 465 ? 'smtps' : 'smtp',
                 'mail.mailers.smtp.timeout' => 20,
                 'mail.from.address' => $fromAddress,
-                'mail.from.name' => config('app.name', 'Alom\\'s English Center'),
+                'mail.from.name' => config('app.name', 'Alom\'s English Center'),
             ]);
             Mail::purge('smtp');
 
