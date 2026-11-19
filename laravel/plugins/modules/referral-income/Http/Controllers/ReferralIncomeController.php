@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
 use Plugins\Modules\ReferralIncome\Services\ReferralIncomeService;
@@ -83,12 +84,7 @@ class ReferralIncomeController extends Controller
             return $payout;
         });
         $rules = DB::table('referral_income_rules')->orderBy('referrer_type')->get();
-        $recoveries = DB::table('referral_commission_reversals')
-            ->join('referral_commissions', 'referral_commissions.id', '=', 'referral_commission_reversals.commission_id')
-            ->join('users', 'users.id', '=', 'referral_commissions.referrer_user_id')
-            ->select('referral_commission_reversals.*', 'users.name as referrer_name', 'referral_commissions.source_id')
-            ->latest('referral_commission_reversals.id')->paginate(30, ['*'], 'recoveries_page');
-        return view('referral-income::admin', compact('commissions', 'payouts', 'rules', 'recoveries'));
+        return view('referral-income::admin', compact('commissions', 'payouts', 'rules'));
     }
 
     public function updateRules(Request $request): RedirectResponse
@@ -118,29 +114,6 @@ class ReferralIncomeController extends Controller
         return back()->with('status', 'Commission review saved.');
     }
 
-
-    public function reviewRecovery(Request $request, int $reversal): RedirectResponse
-    {
-        $data = $request->validate([
-            'status' => ['required', 'in:recovered,waived'],
-            'admin_note' => ['nullable', 'string', 'max:1000'],
-        ]);
-        DB::transaction(function () use ($request, $reversal, $data): void {
-            $record = DB::table('referral_commission_reversals')->where('id', $reversal)->lockForUpdate()->first();
-            abort_unless($record && $record->status === 'recovery_due', 422, 'Only outstanding recovery entries can be reviewed.');
-            DB::table('referral_commission_reversals')->where('id', $reversal)->update([
-                'status' => $data['status'],
-                'metadata' => json_encode([
-                    'admin_note' => $data['admin_note'] ?? null,
-                    'reviewed_by' => $request->user()->id,
-                    'reviewed_at' => now()->toISOString(),
-                ]),
-                'updated_at' => now(),
-            ]);
-        });
-        return back()->with('status', 'Referral recovery entry reviewed.');
-    }
-
     public function reviewPayout(Request $request, int $payout): RedirectResponse
     {
         $data = $request->validate(['status' => ['required', 'in:approved,rejected,paid'], 'admin_note' => ['nullable', 'string', 'max:1000']]);
@@ -148,8 +121,20 @@ class ReferralIncomeController extends Controller
             $record = DB::table('referral_payout_requests')->where('id', $payout)->lockForUpdate()->first();
             $validTransition = $record !== null
                 && (($record->status === 'pending' && in_array($data['status'], ['approved', 'rejected'], true))
-                    || ($record->status === 'approved' && $data['status'] === 'paid'));
+                    || ($record->status === 'approved' && in_array($data['status'], ['paid', 'rejected'], true)));
             abort_unless($validTransition, 422, 'Invalid payout status transition.');
+
+            $commissions = DB::table('referral_commissions')
+                ->where('payout_request_id', $payout)
+                ->lockForUpdate()->get(['id']);
+            if (in_array($data['status'], ['approved', 'paid'], true)
+                && Schema::hasTable('referral_commission_reversals')
+                && DB::table('referral_commission_reversals')
+                    ->whereIn('referral_commission_id', $commissions->pluck('id'))
+                    ->where('status', 'recovery_due')->exists()) {
+                abort(422, 'This payout contains refunded commissions. Reconcile the recovery before approving or paying it.');
+            }
+
             DB::table('referral_payout_requests')->where('id', $payout)->update([
                 'status' => $data['status'], 'admin_note' => $data['admin_note'] ?? null,
                 'reviewed_by' => $request->user()->id, 'reviewed_at' => now(),
@@ -159,7 +144,7 @@ class ReferralIncomeController extends Controller
                 DB::table('referral_commissions')->where('payout_request_id', $payout)->whereIn('status', ['payout_requested', 'payout_approved'])
                     ->update(['status' => 'paid', 'paid_at' => now(), 'updated_at' => now()]);
             } elseif ($data['status'] === 'rejected') {
-                DB::table('referral_commissions')->where('payout_request_id', $payout)->where('status', 'payout_requested')
+                DB::table('referral_commissions')->where('payout_request_id', $payout)->whereIn('status', ['payout_requested', 'payout_approved'])
                     ->update(['status' => 'approved', 'payout_request_id' => null, 'updated_at' => now()]);
             } elseif ($data['status'] === 'approved') {
                 DB::table('referral_commissions')->where('payout_request_id', $payout)->where('status', 'payout_requested')
