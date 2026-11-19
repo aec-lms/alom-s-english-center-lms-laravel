@@ -127,6 +127,11 @@ final class PhoneticsSpeakingRecordingFeatureTest extends TestCase
                 ->assertNotFound();
 
             $admin = $this->createUserWithRole('admin');
+            $this->actingAs($admin)
+                ->get('/admin/phonetics/learning/recordings')
+                ->assertOk()
+                ->assertSee(e($student->name))
+                ->assertDontSee('Student ID:');
 
             // Even a multi-role learner account with global admin privileges
             // must not be able to review its own recording.
