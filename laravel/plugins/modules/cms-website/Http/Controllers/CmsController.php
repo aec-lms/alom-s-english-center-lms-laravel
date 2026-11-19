@@ -320,7 +320,7 @@ class CmsController extends Controller
     public function storeEditorialPost(Request $request): RedirectResponse
     {
         $user = $request->user();
-        abort_unless($user && $user->hasPermission('cms.posts.create'), 403);
+        abort_unless($user && $user->is_active && $user->hasPermission('cms.posts.create'), 403);
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:200'],
             'slug' => ['nullable', 'alpha_dash', 'max:180', 'unique:cms_posts,slug'],
@@ -345,30 +345,34 @@ class CmsController extends Controller
         $author = User::query()->findOrFail($authorId);
         $category = !empty($validated['category_id']) ? CmsCategory::query()->find($validated['category_id']) : null;
 
-        $post = CmsPost::query()->create([
-            'slug' => !empty($validated['slug']) ? strtolower($validated['slug']) : Str::slug($validated['title']) . '-' . Str::lower(Str::random(5)),
-            'title' => $validated['title'],
-            'category_id' => $category?->id,
-            'category' => $category?->name ?? 'General',
-            'author' => $author->name,
-            'author_user_id' => $authorId,
-            'created_by' => $user->id,
-            'updated_by' => $user->id,
-            'assigned_editor_id' => $user->hasPermission('cms.authors.assign') ? ($validated['assigned_editor_id'] ?? null) : null,
-            'assigned_reviewer_id' => $user->hasPermission('cms.authors.assign') ? ($validated['assigned_reviewer_id'] ?? null) : null,
-            'excerpt' => $validated['excerpt'] ?? Str::limit(strip_tags($validated['content']), 160),
-            'content' => $validated['content'],
-            'seo_title' => $validated['seo_title'] ?? $validated['title'],
-            'seo_description' => $validated['seo_description'] ?? null,
-            'is_published' => false,
-            'editorial_status' => 'draft',
-        ]);
+        $post = DB::transaction(function () use ($request, $user, $validated, $authorId, $author, $category): CmsPost {
+            $post = CmsPost::query()->create([
+                'slug' => !empty($validated['slug']) ? strtolower($validated['slug']) : Str::slug($validated['title']) . '-' . Str::lower(Str::random(5)),
+                'title' => $validated['title'],
+                'category_id' => $category?->id,
+                'category' => $category?->name ?? 'General',
+                'author' => $author->name,
+                'author_user_id' => $authorId,
+                'created_by' => $user->id,
+                'updated_by' => $user->id,
+                'assigned_editor_id' => $user->hasPermission('cms.authors.assign') ? ($validated['assigned_editor_id'] ?? null) : null,
+                'assigned_reviewer_id' => $user->hasPermission('cms.authors.assign') ? ($validated['assigned_reviewer_id'] ?? null) : null,
+                'excerpt' => $validated['excerpt'] ?? Str::limit(strip_tags($validated['content']), 160),
+                'content' => $validated['content'],
+                'seo_title' => $validated['seo_title'] ?? $validated['title'],
+                'seo_description' => $validated['seo_description'] ?? null,
+                'is_published' => false,
+                'editorial_status' => 'draft',
+            ]);
 
-        if ($user->hasPermission('cms.authors.assign') && !empty($validated['co_authors'])) {
-            $this->syncCmsCoAuthors($post, $validated['co_authors'], $authorId);
-        }
-        $this->storePostRevision($post, $request);
-        $this->audit->log('cms.editorial_post_created', 'cms_post', (string) $post->id, ['author_user_id' => $authorId]);
+            if ($user->hasPermission('cms.authors.assign') && !empty($validated['co_authors'])) {
+                $this->syncCmsCoAuthors($post, $validated['co_authors'], $authorId);
+            }
+            $this->storePostRevision($post, $request);
+            $this->audit->log('cms.editorial_post_created', 'cms_post', (string) $post->id, ['author_user_id' => $authorId]);
+            return $post;
+        }, 3);
+
         return redirect()->route('plugins.cms.editorial')->with('status', "Draft '{$post->title}' created.");
     }
 
@@ -385,35 +389,23 @@ class CmsController extends Controller
             'content' => ['required', 'string', 'max:1000000'],
             'seo_title' => ['nullable', 'string', 'max:180'],
             'seo_description' => ['nullable', 'string', 'max:320'],
-            'co_authors' => ['nullable', 'array', 'max:10'],
-            'co_authors.*' => ['required', 'integer', 'distinct', 'exists:users,id'],
-            'author_user_id' => ['nullable', 'integer', 'exists:users,id'],
-            'assigned_editor_id' => ['nullable', 'integer', 'exists:users,id'],
-            'assigned_reviewer_id' => ['nullable', 'integer', 'exists:users,id'],
         ]);
-        $this->validateEditorialAssignments($user, $validated, $post);
-
-        $authorId = (int) $post->author_user_id;
-        if ($user->hasPermission('cms.authors.assign') && !empty($validated['author_user_id'])) {
-            $authorId = (int) $validated['author_user_id'];
-            $this->assertCmsAuthor($authorId);
-        }
-        $author = User::query()->find($authorId);
         $category = !empty($validated['category_id']) ? CmsCategory::query()->find($validated['category_id']) : null;
 
-        DB::transaction(function () use ($request, $post, $validated, $user, $authorId, $author, $category): void {
-            $this->storePostRevision($post, $request);
-            $post->forceFill([
+        DB::transaction(function () use ($request, $post, $validated, $user, $category): void {
+            $locked = CmsPost::query()->lockForUpdate()->findOrFail($post->id);
+            $this->assertCanEditPost($locked);
+            abort_if($locked->is_published, 422, 'Published content must be revised through a reviewed editorial draft.');
+            $this->storePostRevision($locked, $request);
+            $locked->forceFill([
                 'title' => $validated['title'],
                 'slug' => strtolower($validated['slug']),
                 'category_id' => $category?->id,
                 'category' => $category?->name ?? 'General',
-                'author_user_id' => $authorId ?: null,
-                'author' => $author?->name ?? $post->author,
                 'excerpt' => $validated['excerpt'] ?? Str::limit(strip_tags($validated['content']), 160),
                 'content' => $validated['content'],
-                'seo_title' => $validated['seo_title'] ?? ($post->seo_title ?: $validated['title']),
-                'seo_description' => $validated['seo_description'] ?? $post->seo_description,
+                'seo_title' => $validated['seo_title'] ?? ($locked->seo_title ?: $validated['title']),
+                'seo_description' => $validated['seo_description'] ?? $locked->seo_description,
                 'updated_by' => $user->id,
                 'editorial_status' => 'draft',
                 'submitted_at' => null,
@@ -422,13 +414,11 @@ class CmsController extends Controller
                 'reviewed_by' => null,
                 'review_note' => null,
             ])->save();
+            $this->audit->log('cms.editorial_post_updated', 'cms_post', (string) $locked->id, ['updated_by' => $user->id]);
+        }, 3);
 
-        });
-
-        $this->audit->log('cms.editorial_post_updated', 'cms_post', (string) $post->id, ['updated_by' => $user->id]);
         return redirect()->route('plugins.cms.editorial')->with('status', "Draft '{$post->title}' updated.");
     }
-
 
     public function updatePostAssignments(Request $request, CmsPost $post): RedirectResponse
     {
