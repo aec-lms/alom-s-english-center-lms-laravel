@@ -36,6 +36,7 @@
         "exam-management",
         "fees-management",
         "universal-payment",
+        "payment-management",
         "subscription-management"
     ]
 }
