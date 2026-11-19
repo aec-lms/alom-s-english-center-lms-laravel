@@ -398,6 +398,7 @@ class MobileApiController extends Controller
     public function notices(Request $request): JsonResponse
     {
         $actor = $this->mobileActor($request);
+        $branchId = app(BranchAccess::class)->contextBranchId($actor);
         $visibleNoticeRoles = $actor ? $actor->roles()->pluck('slug')->all() : [];
         $visibleNoticeRoles[] = 'all';
         $notices = $this->plugins->isEnabled('notice-board') && Schema::hasTable('notices')
