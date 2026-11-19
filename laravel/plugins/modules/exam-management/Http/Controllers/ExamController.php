@@ -725,7 +725,13 @@ class ExamController extends Controller
     private function ensureAttemptSnapshot(ExamAttempt $attempt, Exam $exam): array
     {
         $snapshot = $attempt->question_snapshot;
-        if (is_array($snapshot) && !empty($snapshot['questions'])) {
+        if (
+            is_array($snapshot)
+            && array_key_exists('version', $snapshot)
+            && array_key_exists('questions', $snapshot)
+        ) {
+            // An empty frozen set is still authoritative historical data. Do not
+            // silently replace it with a newer live question set.
             return $snapshot;
         }
 
