@@ -15,7 +15,7 @@ class AdvancedSliderBuilderTest extends TestCase
         $this->activatePlugins(['slider-builder']);
         $admin = $this->createUserWithRole('admin');
 
-        $this->actingAs($admin)->post('/admin/slider-builder', [
+        $response = $this->actingAs($admin)->post('/admin/slider-builder', [
             'key_name' => 'hero',
             'title' => 'Advanced hero slide',
             'subtitle' => 'Responsive campaign content',
@@ -32,7 +32,7 @@ class AdvancedSliderBuilderTest extends TestCase
             'ends_at' => now()->addDay()->format('Y-m-d H:i:s'),
             'is_active' => '1',
             'open_new_tab' => '1',
-        ])->assertSessionHasNoErrors();
+        ])->assertSessionHasNoErrors()->assertSessionHas('status');
 
         $this->assertDatabaseHas('cms_sliders', [
             'title' => 'Advanced hero slide',
