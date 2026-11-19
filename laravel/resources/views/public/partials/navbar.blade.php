@@ -70,7 +70,7 @@
             @endif
             <span class="leading-[1.06]">
                 <span class="block text-[13px] sm:text-sm font-black tracking-tight text-slate-900">{{ config('app.name') }}</span>
-                <span class="block text-[10px] sm:text-[11px] font-extrabold tracking-tight text-slate-800">{{ $siteIdentity['tagline'] ?? '' }}</span>
+                <span class="block text-[10px] sm:text-[11px] font-extrabold tracking-tight text-slate-800">{{ ($siteIdentity['tagline'] ?? null) === 'Learn English with confidence' ? __('Learn English with confidence') : ($siteIdentity['tagline'] ?? '') }}</span>
             </span>
         </a>
         @endif
