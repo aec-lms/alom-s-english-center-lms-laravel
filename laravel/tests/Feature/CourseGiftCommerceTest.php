@@ -61,6 +61,26 @@ class CourseGiftCommerceTest extends TestCase
             'updated_at' => now(),
         ]);
 
+        $voucherToken = str_repeat('V', 64);
+        $voucherId = DB::table('course_gift_vouchers')->insertGetId([
+            'sender_user_id' => $sender->id,
+            'recipient_user_id' => null,
+            'recipient_email' => $recipient->email,
+            'recipient_name' => 'Voucher Recipient',
+            'redeem_token_hash' => hash('sha256', $voucherToken),
+            'redeem_token_encrypted' => encrypt($voucherToken),
+            'status' => 'paid',
+            'currency' => 'BDT',
+            'amount' => 800,
+            'remaining_amount' => 800,
+            'paid_at' => now(),
+            'expires_at' => now()->addDays(30),
+            'notification_delivery_status' => 'pending',
+            'notification_attempt_count' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
         foreach ([
             'smtp_host' => 'smtp.gift-test.example',
             'smtp_port' => '587',
@@ -77,11 +97,12 @@ class CourseGiftCommerceTest extends TestCase
         Config::set('mail.default', 'array');
         Config::set('mail.mailers.smtp.host', 'before-gift-job.example.test');
         $mailer = \Mockery::mock();
-        $mailer->shouldReceive('html')->once();
-        Mail::shouldReceive('purge')->with('smtp')->twice();
-        Mail::shouldReceive('mailer')->with('smtp')->once()->andReturn($mailer);
+        $mailer->shouldReceive('html')->twice();
+        Mail::shouldReceive('purge')->with('smtp')->times(4);
+        Mail::shouldReceive('mailer')->with('smtp')->twice()->andReturn($mailer);
 
         (new SendGiftRecipientEmailJob('gift_course', $giftId))->handle(app(PluginManager::class));
+        (new SendGiftRecipientEmailJob('gift_voucher', $voucherId))->handle(app(PluginManager::class));
 
         $this->assertSame('array', Config::get('mail.default'));
         $this->assertSame('before-gift-job.example.test', Config::get('mail.mailers.smtp.host'));
@@ -90,6 +111,11 @@ class CourseGiftCommerceTest extends TestCase
             'notification_delivery_status' => 'sent',
         ]);
         $this->assertNotNull(DB::table('course_gifts')->where('id', $giftId)->value('notification_sent_at'));
+        $this->assertDatabaseHas('course_gift_vouchers', [
+            'id' => $voucherId,
+            'notification_delivery_status' => 'sent',
+        ]);
+        $this->assertNotNull(DB::table('course_gift_vouchers')->where('id', $voucherId)->value('notification_sent_at'));
     }
 
     public function test_known_recipient_from_another_branch_cannot_add_course_gift_to_unified_cart(): void
