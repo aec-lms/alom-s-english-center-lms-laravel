@@ -144,7 +144,7 @@ class FlashSaleController extends Controller
                     ->value('branch_id');
                 if ($profileBranchId !== null) $viewerBranchId = (int) $profileBranchId;
             }
-            if ($viewerBranchId === null && $request->user()->branch_id !== null) {
+            if ($viewerBranchId === null && Schema::hasColumn('users', 'branch_id') && $request->user()->branch_id !== null) {
                 $viewerBranchId = (int) $request->user()->branch_id;
             }
         }
@@ -244,7 +244,7 @@ class FlashSaleController extends Controller
             'cta_label' => ['nullable', 'string', 'max:40'],
             'terms' => ['nullable', 'string', 'max:5000'],
             'priority' => ['nullable', 'integer', 'min:0', 'max:10000'],
-            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
+            'branch_id' => ['nullable', 'integer', 'min:1'],
             'discount_type' => ['required', 'in:percent,fixed'],
             'discount_value' => ['required', 'numeric', 'gt:0', 'max:1000000'],
             'starts_at' => ['required', 'date'],
@@ -253,6 +253,10 @@ class FlashSaleController extends Controller
         $values['cta_label'] = $values['cta_label'] ?? 'Explore offer';
         $values['priority'] = (int) ($values['priority'] ?? 0);
         if (!empty($values['branch_id'])) {
+            abort_unless(Schema::hasTable('branches')
+                && DB::table('branches')->where('id', (int) $values['branch_id'])->exists(),
+                422,
+                'Branch targeting requires an existing branch-management record.');
             $courseBranch = DB::table('courses')->where('id', $values['course_id'])->value('branch_id');
             abort_unless($courseBranch === null || (int) $courseBranch === (int) $values['branch_id'], 422,
                 'A branch-specific campaign must target a course available to that branch.');
