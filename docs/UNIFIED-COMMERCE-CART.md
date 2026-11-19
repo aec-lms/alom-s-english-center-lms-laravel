@@ -22,7 +22,9 @@ Access-based items are single-quantity. The optional `other` item type can use q
 - `/cart` shows a student's private cart and one checkout form.
 - Checkout creates one Fee Invoice and one Commerce Order with immutable title/price snapshots.
 - SSLCOMMERZ hosted checkout (including provider-supported bKash/Nagad/card/banking methods) and PayPal use the existing Universal Payment orchestrator.
-- Access is not granted from the browser return URL. Existing signed/validated provider settlement updates the invoice and then fulfills the Commerce Order.
+- When `bank_cash` is enabled in Universal Payment settings, students can submit a bank-transfer/cash receipt reference and optionally upload a PDF/JPG/PNG proof file (maximum 5 MB). Proof files are stored on the private local disk and can be downloaded only by authorized payment reviewers.
+- Manual receipts remain pending until an authorized reviewer verifies them from the Universal Payment dashboard. Verification creates the canonical Payment Transaction and runs the same Commerce settlement pipeline as online payments; rejection fails the unpaid order, releases reserved coupons and detaches unpaid gift drafts so the student can retry.
+- Access is not granted from the browser return URL. Existing signed/validated provider settlement or authorized manual verification updates the invoice and then fulfills the Commerce Order.
 
 ## Admin configuration
 
