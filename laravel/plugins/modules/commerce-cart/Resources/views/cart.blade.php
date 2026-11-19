@@ -5,7 +5,7 @@
     <div class="flex items-center justify-between gap-3">
         <div><h1 class="text-2xl font-extrabold text-slate-900">Your Shopping Cart</h1><p class="text-sm text-slate-500">Courses, eBooks, mock tests, gift courses, vouchers and learning services in one place.</p></div>
         <div class="flex items-center gap-2">
-            @if (\\Illuminate\\Support\\Facades\\Route::has('course-commerce.gifts.sent'))
+            @if (\Illuminate\Support\Facades\Route::has('course-commerce.gifts.sent'))
                 <a href="{{ route('course-commerce.gifts.sent') }}" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold text-slate-700">Gifts You Sent</a>
             @endif
             <a href="{{ route('plugins.commerce_cart.gifts') }}" class="rounded-lg border border-indigo-200 px-3 py-2 text-sm font-bold text-indigo-700">Send a Gift</a>
