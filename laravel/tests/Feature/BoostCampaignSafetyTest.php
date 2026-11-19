@@ -49,7 +49,7 @@ class BoostCampaignSafetyTest extends TestCase
     public function test_campaign_click_only_redirects_to_safe_destination_when_active_and_in_window(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['admin-boosting']);
+        $this->activatePlugins(['admin-boosting', 'course-management']);
         $admin = $this->createUserWithRole('admin');
 
         $targetCourse = Course::query()->create([
@@ -94,6 +94,57 @@ class BoostCampaignSafetyTest extends TestCase
         $campaign->update(['status' => 'paused']);
         $this->get('/boost/click/' . $campaign->id)->assertRedirect('/courses');
         $this->assertSame(1, $campaign->fresh()->clicks);
+    }
+
+    public function test_campaign_target_ids_must_resolve_and_global_target_switch_clears_old_id(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['admin-boosting', 'course-management']);
+        $admin = $this->createUserWithRole('admin');
+        $targetCourse = Course::query()->create([
+            'code' => 'BOOST-UPDATE-01',
+            'title' => 'Targeted Course',
+            'slug' => 'targeted-course',
+            'price' => 0,
+            'status' => 'published',
+        ]);
+
+        $this->actingAs($admin)->post('/plugins/boost', [
+            'campaign_name' => 'Invalid Course Target',
+            'entity_type' => 'course',
+            'entity_id' => 999999,
+            'placement' => 'course_listing',
+            'destination_url' => '/courses',
+        ])->assertSessionHasErrors('entity_id');
+
+        $this->actingAs($admin)->post('/plugins/boost', [
+            'campaign_name' => 'Invalid Global Target',
+            'entity_type' => 'offer',
+            'entity_id' => 1,
+            'placement' => 'course_listing',
+            'destination_url' => '/courses',
+        ])->assertSessionHasErrors('entity_id');
+
+        $campaign = BoostCampaign::query()->create([
+            'campaign_name' => 'Target Switch',
+            'entity_type' => 'course',
+            'entity_id' => $targetCourse->id,
+            'placement' => 'course_listing',
+            'destination_url' => '/courses',
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($admin)->put('/plugins/boost/' . $campaign->id, [
+            'campaign_name' => 'Target Switch',
+            'entity_type' => 'offer',
+            'placement' => 'course_listing',
+            'destination_url' => '/courses',
+            'priority' => 5,
+            'status' => 'active',
+        ])->assertRedirect();
+
+        $this->assertNull($campaign->fresh()->entity_id);
+        $this->assertSame('offer', $campaign->fresh()->entity_type);
     }
 
     public function test_course_and_branch_campaigns_render_only_for_matching_public_courses(): void
