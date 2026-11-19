@@ -20,15 +20,101 @@
 @media(prefers-reduced-motion:reduce){#al-branding-loader.lb-respect-motion .lb-spin,#al-branding-loader.lb-respect-motion .lb-orbits i,#al-branding-loader.lb-respect-motion .lb-orbits b,#al-branding-loader.lb-respect-motion .lb-track i,#al-branding-loader.lb-respect-motion.lb-style-shimmer-sweep:before{animation:none}}
 </style>
 <script>
-(function(){
- const o=document.getElementById('al-branding-loader');if(!o)return;
- if(@json((bool)$loaderSetting->respect_reduced_motion))o.classList.add('lb-respect-motion');
- const mode=o.dataset.trigger,key='al-loader-seen';
- try{if(mode==='first-visit-session'&&sessionStorage.getItem(key)){o.remove();return}if(mode==='first-visit-daily'&&localStorage.getItem(key)===new Date().toDateString()){o.remove();return}}catch(e){}
- const start=Date.now(),hide=()=>{const delay=Math.max(0,Number(o.dataset.min||0)-(Date.now()-start));setTimeout(()=>o.classList.add('lb-hidden'),delay)};
- addEventListener('load',hide,{once:true});setTimeout(hide,Math.max(1000,Number(o.dataset.max||5000)));
- try{if(mode==='first-visit-session')sessionStorage.setItem(key,'1');if(mode==='first-visit-daily')localStorage.setItem(key,new Date().toDateString())}catch(e){}
- document.addEventListener('click',e=>{if(mode!=='every-load')return;const a=e.target.closest('a[href]');if(!a||e.defaultPrevented||e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey||a.target||a.hasAttribute('download'))return;const u=new URL(a.href,location.href);if(u.origin!==location.origin||u.pathname===location.pathname||/^\/(admin|api|payment|payments|checkout|webhook|webhooks|live-class|live-classes)(\/|$)/.test(u.pathname))return;o.classList.remove('lb-hidden')},true);
+(function () {
+    'use strict';
+
+    const overlay = document.getElementById('al-branding-loader');
+    if (!overlay) return;
+
+    const mode = overlay.dataset.trigger || 'every-load';
+    const storageKey = 'al-loader-seen';
+    const minDuration = Math.max(0, Number(overlay.dataset.min || 0));
+    const maxDuration = Math.max(1000, Number(overlay.dataset.max || 5000));
+    let startedAt = Date.now();
+    let completed = false;
+    let maxTimer = null;
+
+    if (@json((bool) $loaderSetting->respect_reduced_motion)) {
+        overlay.classList.add('lb-respect-motion');
+    }
+
+    try {
+        if (mode === 'first-visit-session' && sessionStorage.getItem(storageKey)) {
+            overlay.remove();
+            return;
+        }
+        if (mode === 'first-visit-daily' && localStorage.getItem(storageKey) === new Date().toDateString()) {
+            overlay.remove();
+            return;
+        }
+    } catch (error) {
+        // Storage may be unavailable in private browsing; keep the loader functional.
+    }
+
+    function hideAfterMinimumDuration(markVisit) {
+        if (completed) return;
+        completed = true;
+        const remaining = Math.max(0, minDuration - (Date.now() - startedAt));
+
+        window.setTimeout(function () {
+            overlay.classList.add('lb-hidden');
+            overlay.setAttribute('aria-hidden', 'true');
+            document.documentElement.removeAttribute('aria-busy');
+
+            if (!markVisit) return;
+            try {
+                if (mode === 'first-visit-session') sessionStorage.setItem(storageKey, '1');
+                if (mode === 'first-visit-daily') localStorage.setItem(storageKey, new Date().toDateString());
+            } catch (error) {
+                // A storage failure must never prevent the page from becoming usable.
+            }
+        }, remaining);
+    }
+
+    function forceHide() {
+        if (completed) return;
+        completed = true;
+        overlay.classList.add('lb-hidden');
+        overlay.setAttribute('aria-hidden', 'true');
+        document.documentElement.removeAttribute('aria-busy');
+    }
+
+    document.documentElement.setAttribute('aria-busy', 'true');
+    window.addEventListener('load', function () {
+        if (maxTimer !== null) window.clearTimeout(maxTimer);
+        hideAfterMinimumDuration(true);
+    }, { once: true });
+
+    // A broken asset or stalled request must not leave the whole LMS covered forever.
+    maxTimer = window.setTimeout(forceHide, maxDuration);
+
+    document.addEventListener('click', function (event) {
+        if (mode !== 'every-load' || event.defaultPrevented || event.button !== 0 ||
+            event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+        const link = event.target.closest('a[href]');
+        if (!link || link.target || link.hasAttribute('download') ||
+            link.getAttribute('rel')?.split(/\\s+/).includes('external')) return;
+
+        let destination;
+        try {
+            destination = new URL(link.href, window.location.href);
+        } catch (error) {
+            return;
+        }
+
+        if (destination.origin !== window.location.origin ||
+            destination.pathname === window.location.pathname ||
+            /^\\/(admin|api|payment|payments|checkout|webhook|webhooks|live-class|live-classes)(\\/|$)/.test(destination.pathname)) return;
+
+        completed = false;
+        startedAt = Date.now();
+        overlay.classList.remove('lb-hidden');
+        overlay.removeAttribute('aria-hidden');
+        document.documentElement.setAttribute('aria-busy', 'true');
+        if (maxTimer !== null) window.clearTimeout(maxTimer);
+        maxTimer = window.setTimeout(forceHide, maxDuration);
+    }, true);
 })();
 </script>
 @endif
