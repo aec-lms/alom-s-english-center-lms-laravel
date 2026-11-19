@@ -174,11 +174,14 @@ class LearningInteractionTest extends TestCase
 
         $this->actingAs($student)->get('/my-learning/courses/' . $courseId . '/lessons')->assertOk();
         $this->actingAs($student)->getJson(route('plugins.learning-interactions.lesson.comments.index', $lessonId))->assertOk();
+        DB::table('course_lessons')->where('id', $lessonId)->update(['protection_enabled' => true]);
+        $this->actingAs($student)->getJson(route('plugins.lesson-media.access', $lessonId))->assertOk();
 
         // Reassignment must revoke access to the previous branch's enrollment.
         DB::table('students')->where('user_id', $student->id)->update(['branch_id' => $branchB, 'updated_at' => now()]);
         $this->actingAs($student)->get('/my-learning/courses/' . $courseId . '/lessons')->assertForbidden();
         $this->actingAs($student)->getJson(route('plugins.learning-interactions.lesson.comments.index', $lessonId))->assertForbidden();
+        $this->actingAs($student)->getJson(route('plugins.lesson-media.access', $lessonId))->assertForbidden();
     }
 
     public function test_branch_manager_cannot_moderate_live_questions_outside_assigned_branch(): void
