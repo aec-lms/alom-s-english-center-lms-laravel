@@ -26,10 +26,11 @@ class CmsController extends Controller
         $categories = Schema::hasTable('cms_categories') ? CmsCategory::query()->orderBy('name')->get() : collect();
         $posts = Schema::hasTable('cms_posts') ? CmsPost::query()->latest()->get() : collect();
         $trashedPosts = Schema::hasTable('cms_posts') ? CmsPost::onlyTrashed()->latest('deleted_at')->get() : collect();
+        $postRevisions = Schema::hasTable('cms_post_revisions') ? DB::table('cms_post_revisions')->orderByDesc('created_at')->get()->groupBy('post_id') : collect();
         $inquiries = Schema::hasTable('contact_inquiries') ? DB::table('contact_inquiries')->orderByDesc('id')->limit(50)->get() : collect();
         $homepage = $this->loadHomepageConfig();
 
-        return view('cms-website::index', compact('categories', 'posts', 'trashedPosts', 'inquiries', 'homepage'));
+        return view('cms-website::index', compact('categories', 'posts', 'trashedPosts', 'postRevisions', 'inquiries', 'homepage'));
     }
 
     public function storeCategory(Request $request): RedirectResponse
@@ -154,6 +155,7 @@ class CmsController extends Controller
             'is_published' => $request->boolean('is_published', true),
         ]);
 
+        $this->storePostRevision($post, $request);
         $this->audit->log('cms.post_created', 'cms_post', (string) $post->id, ['slug' => $post->slug]);
 
         return back()->with('status', "Post '{$post->title}' created.");
@@ -189,6 +191,7 @@ class CmsController extends Controller
             }
         }
 
+        $this->storePostRevision($post, $request);
         $oldAssets = [$post->thumbnail_path, $post->pdf_path, $post->pdf_thumbnail];
 
         $thumbPath = $post->thumbnail_path;
@@ -246,6 +249,43 @@ class CmsController extends Controller
         $this->audit->log('cms.post_trashed', 'cms_post', $id, ['title' => $title]);
 
         return back()->with('status', "Post '{$title}' moved to the Recycle Bin.");
+    }
+
+    public function restoreRevision(Request $request, CmsPost $post, int $revisionId): RedirectResponse
+    {
+        abort_unless(Schema::hasTable('cms_post_revisions'), 404);
+        $revision = DB::table('cms_post_revisions')->where('id', $revisionId)->where('post_id', $post->id)->first();
+        abort_unless($revision, 404);
+        $currentAssets = [$post->thumbnail_path, $post->pdf_path, $post->pdf_thumbnail];
+        $post->update([
+            'title' => $revision->title, 'slug' => $revision->slug, 'category' => $revision->category,
+            'category_id' => $revision->category_id, 'author' => $revision->author, 'excerpt' => $revision->excerpt,
+            'content' => $revision->content, 'thumbnail_path' => $revision->thumbnail_path, 'pdf_path' => $revision->pdf_path,
+            'pdf_thumbnail' => $revision->pdf_thumbnail, 'seo_title' => $revision->seo_title,
+            'seo_description' => $revision->seo_description, 'is_published' => (bool) $revision->is_published,
+        ]);
+        foreach ($currentAssets as $assetPath) {
+            if ($assetPath && !in_array($assetPath, [$revision->thumbnail_path, $revision->pdf_path, $revision->pdf_thumbnail], true)) {
+                $this->deleteUnusedUpload($assetPath, (int) $post->id);
+            }
+        }
+        $this->storePostRevision($post, $request);
+        $this->audit->log('cms.post_revision_restored', 'cms_post', (string) $post->id, ['revision_id' => $revisionId]);
+        return back()->with('status', "Revision restored for '{$post->title}'.");
+    }
+
+    private function storePostRevision(CmsPost $post, Request $request): void
+    {
+        if (!Schema::hasTable('cms_post_revisions')) return;
+        DB::table('cms_post_revisions')->insert([
+            'post_id' => $post->id, 'user_id' => $request->user()?->getAuthIdentifier(),
+            'title' => $post->title, 'slug' => $post->slug, 'category' => $post->category ?? 'General',
+            'category_id' => $post->category_id, 'author' => $post->author, 'excerpt' => $post->excerpt,
+            'content' => $post->content, 'thumbnail_path' => $post->thumbnail_path, 'pdf_path' => $post->pdf_path,
+            'pdf_thumbnail' => $post->pdf_thumbnail, 'seo_title' => $post->seo_title,
+            'seo_description' => $post->seo_description, 'is_published' => (bool) $post->is_published,
+            'created_at' => now(),
+        ]);
     }
 
     public function restorePost(int $postId): RedirectResponse
