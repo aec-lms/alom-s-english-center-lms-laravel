@@ -249,7 +249,7 @@ class PublicHomeController extends Controller
         if ($filteredCourses->isNotEmpty() && Schema::hasTable('boost_campaigns') && app(PluginManager::class)->isEnabled('admin-boosting')) {
             $courseIds = $filteredCourses->pluck('id')->map(fn ($id): int => (int) $id)->all();
             $branchIds = $filteredCourses->pluck('branch_id')->filter()->unique()->map(fn ($id): int => (int) $id)->all();
-            $activeBranchIds = Schema::hasTable('branches') && $branchIds !== []
+            $activeBranchIds = Schema::hasTable('branches') && app(PluginManager::class)->isEnabled('branch-management') && $branchIds !== []
                 ? DB::table('branches')->whereIn('id', $branchIds)->where('is_active', true)
                     ->when(Schema::hasColumn('branches', 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))
                     ->pluck('id')->map(fn ($id): int => (int) $id)->all()
