@@ -311,4 +311,37 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
             $this->assertDatabaseCount('referral_attributions', 1);
         }
     }
+    public function test_admin_can_review_paid_commission_recovery_and_admin_page_loads(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['referral-income', 'student-management', 'payment-management']);
+        $referrer = $this->createUserWithRole('student');
+        $buyer = $this->createUserWithRole('student');
+        $admin = $this->createUserWithRole('admin');
+        $service = app(ReferralIncomeService::class);
+        $service->applyCode($buyer, $service->createOrGetCode($referrer));
+        $commissionId = $service->recordSettledPurchase($buyer, 'commerce_order', 'ADMIN-RECOVERY-ORDER', 1000.00, 'BDT');
+        DB::table('referral_commissions')->where('id', $commissionId)->update(['status' => 'paid', 'paid_at' => now(), 'updated_at' => now()]);
+        $paymentId = DB::table('payment_transactions')->insertGetId([
+            'transaction_ref' => 'ADMIN-RECOVERY-' . strtoupper(bin2hex(random_bytes(4))),
+            'invoice_id' => null, 'branch_id' => null, 'gateway_slug' => 'offline',
+            'amount' => 1000.00, 'currency' => 'BDT', 'status' => 'settled',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $refundId = DB::table('payment_refunds')->insertGetId([
+            'payment_transaction_id' => $paymentId, 'amount' => 1000.00,
+            'reason' => 'Paid referral commission recovery', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $service->reverseSettledPurchase($buyer, 'commerce_order', 'ADMIN-RECOVERY-ORDER', $refundId, 1000.00, 'BDT');
+        $reversalId = (int) DB::table('referral_commission_reversals')->where('payment_refund_id', $refundId)->value('id');
+        $this->actingAs($admin)->get('/admin/referral-income')->assertOk()->assertSee('Paid commission recovery ledger');
+        $this->actingAs($admin)->post('/admin/referral-income/recoveries/' . $reversalId . '/review', [
+            'status' => 'recovered', 'admin_note' => 'Recovery received and reconciled',
+        ])->assertRedirect();
+        $this->assertDatabaseHas('referral_commission_reversals', [
+            'id' => $reversalId, 'status' => 'recovered', 'reviewed_by' => $admin->id,
+            'admin_note' => 'Recovery received and reconciled',
+        ]);
+    }
+
 }
