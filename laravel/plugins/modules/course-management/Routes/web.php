@@ -110,6 +110,8 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:course-management'])
         Route::post('/vouchers/buy', [\Plugins\Modules\CourseManagement\Http\Controllers\CourseCommerceController::class, 'purchaseVoucher'])->middleware('throttle:5,1')->name('vouchers.purchase');
         Route::get('/vouchers/redeem/{token}', [\Plugins\Modules\CourseManagement\Http\Controllers\CourseCommerceController::class, 'voucherRedeemForm'])->where('token', '[A-Za-z0-9]{40,80}')->name('vouchers.redeem-form');
         Route::post('/vouchers/redeem/{token}', [\Plugins\Modules\CourseManagement\Http\Controllers\CourseCommerceController::class, 'redeemVoucher'])->where('token', '[A-Za-z0-9]{40,80}')->middleware('throttle:5,1')->name('vouchers.redeem');
+        Route::post('/gifts/{gift}/resend', [\\Plugins\\Modules\\CourseManagement\\Http\\Controllers\\CourseCommerceController::class, 'resendCourseGiftEmail'])->whereNumber('gift')->middleware('throttle:2,10')->name('gifts.resend');
+        Route::post('/vouchers/{voucher}/resend', [\\Plugins\\Modules\\CourseManagement\\Http\\Controllers\\CourseCommerceController::class, 'resendGiftVoucherEmail'])->whereNumber('voucher')->middleware('throttle:2,10')->name('vouchers.resend');
         Route::get('/gifts/{course}/send', [\Plugins\Modules\CourseManagement\Http\Controllers\CourseCommerceController::class, 'giftForm'])->whereNumber('course')->name('gifts.form');
         Route::post('/gifts/{course}', [\Plugins\Modules\CourseManagement\Http\Controllers\CourseCommerceController::class, 'gift'])->whereNumber('course')->middleware('throttle:5,1')->name('gifts.create');
     });
