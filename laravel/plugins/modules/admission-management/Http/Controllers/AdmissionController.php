@@ -270,13 +270,13 @@ class AdmissionController extends Controller
                     'uploaded_by' => $actor?->id,
                     'disk' => 'local',
                     'path' => $storedPath,
-                    'original_name' => mb_substr(basename(str_replace('\\\\', '/', $file->getClientOriginalName())), 0, 255),
+                    'original_name' => mb_substr(basename(str_replace('\\', '/', $file->getClientOriginalName())), 0, 255),
                     'mime_type' => (string) $file->getMimeType(),
                     'size_bytes' => (int) $file->getSize(),
                     'sha256' => hash_file('sha256', $file->getRealPath()),
                 ]);
             }, 3);
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             Storage::disk('local')->delete($storedPath);
             throw $exception;
         }
