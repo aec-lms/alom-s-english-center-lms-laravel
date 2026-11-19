@@ -118,13 +118,35 @@ class PaymentController extends Controller
                     throw new \RuntimeException('Refund exceeds remaining refundable transaction amount.');
                 }
 
-                PaymentRefund::query()->create([
+                $refund = PaymentRefund::query()->create([
                     'payment_transaction_id' => $lockedTx->id,
                     'amount' => $refundAmount,
                     'reason' => $validated['reason'],
                     'provider_refund_reference' => $validated['provider_refund_reference'] ?? null,
                     'approved_by' => $actor?->id,
                 ]);
+
+                if (app(PluginManager::class)->isEnabled('referral-income')
+                    && $lockedTx->invoice_id
+                    && Schema::hasTable('commerce_orders')) {
+                    $order = DB::table('commerce_orders')
+                        ->where('invoice_id', $lockedTx->invoice_id)
+                        ->lockForUpdate()->first();
+                    if ($order) {
+                        $buyer = \\App\\Models\\User::query()->find((int) $order->user_id);
+                        if ($buyer) {
+                            app(\\Plugins\\Modules\\ReferralIncome\\Services\\ReferralIncomeService::class)
+                                ->reverseSettledPurchase(
+                                    $buyer,
+                                    'commerce_order',
+                                    (string) $order->id,
+                                    (int) $refund->id,
+                                    $refundAmount,
+                                    (string) $lockedTx->currency,
+                                );
+                        }
+                    }
+                }
 
                 $totalRefunded = round($alreadyRefunded + $refundAmount, 2);
                 if ($totalRefunded >= (float) $lockedTx->amount) {
