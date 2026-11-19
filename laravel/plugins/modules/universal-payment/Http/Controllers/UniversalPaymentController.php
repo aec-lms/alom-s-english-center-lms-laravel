@@ -7,6 +7,7 @@ namespace Plugins\Modules\UniversalPayment\Http\Controllers;
 use App\Core\Plugins\PluginManager;
 use App\Core\Security\AuditLogger;
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
