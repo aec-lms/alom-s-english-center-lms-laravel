@@ -30,6 +30,7 @@
             <input name="payer_phone" required maxlength="40" placeholder="Mobile number" value="{{ old('payer_phone', auth()->user()->phone) }}" class="w-full rounded-lg border px-3 py-2 text-sm">
             <select name="gateway" required class="w-full rounded-lg border bg-white px-3 py-2 text-sm">
                 <option value="gateway-sslcommerz">SSLCOMMERZ (bKash, Nagad, Cards &amp; Internet Banking)</option>
+                <option value="gateway-stripe">Stripe (Card)</option>
                 <option value="gateway-paypal">PayPal</option>
             </select>
             <button type="submit" class="w-full rounded-lg bg-slate-900 px-5 py-3 text-sm font-extrabold text-white">Place Order &amp; Pay ৳{{ number_format($subtotal, 2) }}</button>
