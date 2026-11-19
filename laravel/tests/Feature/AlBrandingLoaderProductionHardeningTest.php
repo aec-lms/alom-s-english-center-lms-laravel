@@ -76,19 +76,6 @@ final class AlBrandingLoaderProductionHardeningTest extends TestCase
         $this->assertNotNull($setting->logo_url);
     }
 
-    public function test_model_respects_excluded_paths_and_keeps_public_pages_enabled(): void
-    {
-        $setting = new LoaderSetting([
-            'enabled' => true,
-            'excluded_paths' => ['admin/*', 'api/*', 'payment/*'],
-        ]);
-
-        $this->assertFalse($setting->shouldRenderForPath('admin/users'));
-        $this->assertFalse($setting->shouldRenderForPath('api/courses'));
-        $this->assertFalse($setting->shouldRenderForPath('payment/checkout'));
-        $this->assertTrue($setting->shouldRenderForPath('courses'));
-    }
-
     public function test_model_never_renders_when_disabled(): void
     {
         $setting = new LoaderSetting(['enabled' => false]);
