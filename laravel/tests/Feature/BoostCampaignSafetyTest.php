@@ -230,11 +230,27 @@ class BoostCampaignSafetyTest extends TestCase
             'ends_at' => now()->addDay(),
         ]);
 
+        $noticeCampaign = BoostCampaign::query()->create([
+            'campaign_name' => 'AEC Important Notice',
+            'entity_type' => 'institution',
+            'entity_id' => null,
+            'placement' => 'notice_banner',
+            'badge_text' => 'IMPORTANT',
+            'cta_text' => 'Read Notice',
+            'destination_url' => '/courses',
+            'status' => 'active',
+            'starts_at' => now()->subMinute(),
+            'ends_at' => now()->addDay(),
+        ]);
+
         $this->get('/')
             ->assertOk()
             ->assertSee('AEC Global Admission Offer')
+            ->assertSee('AEC Important Notice')
             ->assertSee(route('plugins.boost.impression', $campaign), false)
-            ->assertSee(route('plugins.boost.click', $campaign), false);
+            ->assertSee(route('plugins.boost.click', $campaign), false)
+            ->assertSee(route('plugins.boost.impression', $noticeCampaign), false)
+            ->assertSee(route('plugins.boost.click', $noticeCampaign), false);
     }
 
     public function test_impressions_are_recorded_once_per_session_and_campaign(): void
