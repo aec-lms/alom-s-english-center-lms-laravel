@@ -128,7 +128,7 @@ class PluginLifecycleTest extends TestCase
             $provider = new PluginServiceProvider($this->app);
             $provider->boot($manager);
 
-            $this->assertTrue($this->app->routesAreCached());
+            $this->assertFileExists($cachePath, 'The compiled route cache must remain active during application boot.');
         } finally {
             if ($hadCache && $previousCache !== false) {
                 file_put_contents($cachePath, $previousCache);
