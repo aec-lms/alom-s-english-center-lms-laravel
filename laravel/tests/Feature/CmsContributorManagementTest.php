@@ -133,6 +133,10 @@ final class CmsContributorManagementTest extends TestCase
         $this->grantCmsRole($manager, 'cms_author_manager');
         $post = $this->createDraft($author, 'Managed Assignment Draft');
 
+        $this->actingAs($manager)->put('/admin/cms/contributors/' . $author->id, ['roles' => ['cms_contributor']])
+            ->assertRedirect();
+        $this->assertTrue($author->fresh()->hasRole('student'), 'CMS role updates must preserve the existing LMS role.');
+
         $this->actingAs($manager)->put('/admin/cms/editorial/posts/' . $post->id . '/assignments', [
             'author_user_id' => $author->id,
             'assigned_editor_id' => $editor->id,
