@@ -79,7 +79,7 @@ final class PhoneticsSpeakingRecordingSecurityTest extends TestCase
             'storage_path' => 'students/test/private-recording.webm',
             'mime_type' => 'audio/webm',
             'size_bytes' => 128,
-            'duration_seconds' => 8,
+            'reported_duration_seconds' => 8,
             'status' => 'pending',
         ]);
 
@@ -177,7 +177,7 @@ final class PhoneticsSpeakingRecordingSecurityTest extends TestCase
             'storage_path' => 'students/test/other-branch-course.webm',
             'mime_type' => 'audio/webm',
             'size_bytes' => 128,
-            'duration_seconds' => 8,
+            'reported_duration_seconds' => 8,
             'status' => 'pending',
         ]);
 
