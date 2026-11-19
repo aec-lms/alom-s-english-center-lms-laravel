@@ -91,6 +91,22 @@
                             <button type="submit" class="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-700 font-bold hover:bg-rose-50">Delete</button>
                         </form>
                     </div>
+                    @if (($postRevisions[$post->id] ?? collect())->isNotEmpty())
+                        <details class="pt-2 border-t border-slate-100">
+                            <summary class="cursor-pointer font-semibold text-slate-700">Revision History ({{ $postRevisions[$post->id]->count() }})</summary>
+                            <div class="mt-2 space-y-2">
+                                @foreach ($postRevisions[$post->id] as $revision)
+                                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-lg bg-slate-50 p-3">
+                                        <div><strong>{{ $revision->title }}</strong><div class="text-slate-500">{{ \Illuminate\Support\Carbon::parse($revision->created_at)->format('d M Y, h:i A') }} · {{ $revision->is_published ? 'Published' : 'Draft' }}</div></div>
+                                        <form method="POST" action="{{ route('plugins.cms.posts.revisions.restore', [$post, $revision->id]) }}" onsubmit="return confirm('Restore this revision? The current version will first be saved to history.')">
+                                            @csrf
+                                            <button type="submit" class="px-3 py-1.5 rounded-lg border border-slate-300 bg-white font-bold">Restore Version</button>
+                                        </form>
+                                    </div>
+                                @endforeach
+                            </div>
+                        </details>
+                    @endif
                     <details class="pt-2 border-t border-slate-100">
                         <summary class="cursor-pointer font-semibold text-[#0284C7]">Edit Post, PDF &amp; Thumbnails</summary>
                         <form method="POST" action="{{ route('plugins.cms.posts.update', $post) }}" enctype="multipart/form-data" class="mt-3 grid sm:grid-cols-2 gap-3">
