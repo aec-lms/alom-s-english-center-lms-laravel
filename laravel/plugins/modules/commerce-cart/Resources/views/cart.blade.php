@@ -3,8 +3,11 @@
 @section('content')
 <div class="mx-auto max-w-5xl px-4 py-10 space-y-6">
     <div class="flex items-center justify-between gap-3">
-        <div><h1 class="text-2xl font-extrabold text-slate-900">Your Shopping Cart</h1><p class="text-sm text-slate-500">Courses, eBooks, mock tests and other learning services in one place.</p></div>
-        <span class="rounded-full bg-slate-100 px-3 py-1 text-sm font-bold">{{ $items->count() }} items</span>
+        <div><h1 class="text-2xl font-extrabold text-slate-900">Your Shopping Cart</h1><p class="text-sm text-slate-500">Courses, eBooks, mock tests, gift courses, vouchers and learning services in one place.</p></div>
+        <div class="flex items-center gap-2">
+            <a href="{{ route('plugins.commerce_cart.gifts') }}" class="rounded-lg border border-indigo-200 px-3 py-2 text-sm font-bold text-indigo-700">Send a Gift</a>
+            <span class="rounded-full bg-slate-100 px-3 py-1 text-sm font-bold">{{ $items->count() }} items</span>
+        </div>
     </div>
     @if (session('status')) <div class="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{{ session('status') }}</div> @endif
     @if ($errors->any()) <div class="rounded-lg bg-rose-50 p-3 text-sm text-rose-800">{{ $errors->first() }}</div> @endif
