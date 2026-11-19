@@ -213,9 +213,9 @@ class ExamController extends Controller
 
             $expiredPending = false;
             if ($pending) {
-                $deadline = $pending->started_at?->copy()->addMinutes((int) $lockedExam->duration_minutes);
+                $snapshot = $this->ensureAttemptSnapshot($pending, $lockedExam);
+                $deadline = $pending->started_at?->copy()->addMinutes((int) $snapshot['exam']['duration_minutes']);
                 if ($deadline && now()->greaterThanOrEqualTo($deadline)) {
-                    $snapshot = $this->ensureAttemptSnapshot($pending, $lockedExam);
                     $pending->update([
                         'submitted_answers' => [],
                         'score_obtained' => 0,
@@ -225,7 +225,6 @@ class ExamController extends Controller
                     ]);
                     $expiredPending = true;
                 } else {
-                    $this->ensureAttemptSnapshot($pending, $lockedExam);
                     return $pending->fresh();
                 }
             }
@@ -317,12 +316,12 @@ class ExamController extends Controller
                 ->firstOrFail();
 
             abort_if($attempt->submitted_at !== null, 409, 'This exam attempt is already submitted.');
-            $deadline = $attempt->started_at?->copy()->addMinutes((int) $lockedExam->duration_minutes);
+            $snapshot = $attempt->question_snapshot ?? $this->ensureAttemptSnapshot($attempt, $lockedExam);
+            $deadline = $attempt->started_at?->copy()->addMinutes((int) $snapshot['exam']['duration_minutes']);
             if (!$deadline || now()->greaterThanOrEqualTo($deadline)) {
                 abort(409, 'The exam time has expired.');
             }
 
-            $snapshot = $attempt->question_snapshot ?? $this->ensureAttemptSnapshot($attempt, $lockedExam);
             $questions = $snapshot['questions'];
             abort_if(empty($questions), 422, 'This exam has no questions.');
             $allowedIds = array_map(static fn (array $question): string => (string) $question['id'], $questions);
@@ -509,9 +508,9 @@ class ExamController extends Controller
 
             $expiredPending = false;
             if ($pending) {
-                $deadline = $pending->started_at?->copy()->addMinutes((int) $lockedExam->duration_minutes);
+                $snapshot = $this->ensureAttemptSnapshot($pending, $lockedExam);
+                $deadline = $pending->started_at?->copy()->addMinutes((int) $snapshot['exam']['duration_minutes']);
                 if ($deadline && now()->greaterThanOrEqualTo($deadline)) {
-                    $snapshot = $this->ensureAttemptSnapshot($pending, $lockedExam);
                     $pending->update([
                         'submitted_answers' => [],
                         'score_obtained' => 0,
@@ -521,7 +520,6 @@ class ExamController extends Controller
                     ]);
                     $expiredPending = true;
                 } else {
-                    $this->ensureAttemptSnapshot($pending, $lockedExam);
                     return $pending->fresh();
                 }
             }
