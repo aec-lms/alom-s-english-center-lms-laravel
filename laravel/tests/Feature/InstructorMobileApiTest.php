@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
+use Plugins\Modules\TeacherManagement\Models\Teacher;
 use Tests\TestCase;
 
 class InstructorMobileApiTest extends TestCase
@@ -194,6 +195,51 @@ class InstructorMobileApiTest extends TestCase
         ])->assertOk()->assertJsonPath('live_class.status', 'completed');
 
         $this->assertDatabaseHas('live_classes', ['id' => $liveId, 'status' => 'completed', 'recording_url' => 'https://youtu.be/abcdefghijk']);
+    }
+
+    public function test_instructor_api_uses_teacher_profile_branch_when_account_branch_is_stale(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'teacher-management', 'course-management', 'mobile-app-api']);
+
+        $branchA = DB::table('branches')->insertGetId([
+            'code' => 'INSTRUCTOR-A-' . strtoupper(uniqid()),
+            'name' => 'Instructor Branch A',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $branchB = DB::table('branches')->insertGetId([
+            'code' => 'INSTRUCTOR-B-' . strtoupper(uniqid()),
+            'name' => 'Instructor Branch B',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $teacher = $this->createUserWithRole('teacher', (int) $branchB);
+        Teacher::query()->create([
+            'user_id' => $teacher->id,
+            'branch_id' => $branchA,
+            'employee_code' => 'TEACHER-' . strtoupper(uniqid()),
+            'specialization' => 'English',
+            'is_active' => true,
+        ]);
+
+        $branchACourse = $this->course((int) $branchA, 'profile-branch-a');
+        $branchBCourse = $this->course((int) $branchB, 'profile-branch-b');
+        $this->assignCourse($branchACourse, $teacher->id);
+        $this->assignCourse($branchBCourse, $teacher->id);
+
+        $token = $teacher->createToken('teacher-profile-branch-test')->plainTextToken;
+        $this->withToken($token)->getJson('/api/v1/instructor/courses')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonFragment(['title' => 'Mobile Instructor Course profile-branch-a'])
+            ->assertJsonMissing(['title' => 'Mobile Instructor Course profile-branch-b']);
+
+        $this->withToken($token)->getJson('/api/v1/instructor/courses/mobile-instructor-course-profile-branch-b/students')
+            ->assertNotFound();
     }
 
 }

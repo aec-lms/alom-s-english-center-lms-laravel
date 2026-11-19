@@ -40,7 +40,9 @@ class DashboardController extends Controller
         }
 
         $metrics = [
-            'users' => User::query()->when($isBranchManager, fn ($query) => $query->where('branch_id', $actor->branch_id))->count(),
+            'users' => $isBranchManager
+                ? $this->branchUserCount((int) $actor->branch_id)
+                : User::query()->count(),
             'plugins_total' => $isBranchManager ? 0 : PluginRecord::query()->count(),
             'plugins_enabled' => $isBranchManager ? 0 : PluginRecord::query()->where('is_enabled', true)->count(),
             'backups' => $isBranchManager ? 0 : BackupRecord::query()->count(),
@@ -146,6 +148,27 @@ class DashboardController extends Controller
         }
 
         return array_replace(self::MOTION_DEFAULTS, array_intersect_key($stored, self::MOTION_DEFAULTS));
+    }
+
+    private function branchUserCount(int $branchId): int
+    {
+        $users = User::query()->where('branch_id', $branchId);
+
+        if (app(PluginManager::class)->isEnabled('student-management')
+            && Schema::hasTable('students')
+            && Schema::hasColumn('students', 'user_id')
+            && Schema::hasColumn('students', 'branch_id')) {
+            $studentUserIds = DB::table('students')->whereNotNull('user_id')->whereNotNull('branch_id')->distinct()->pluck('user_id');
+            $branchStudentCount = DB::table('students')
+                ->where('branch_id', $branchId)
+                ->whereNotNull('user_id')
+                ->distinct('user_id')
+                ->count('user_id');
+
+            return $users->whereNotIn('id', $studentUserIds)->count() + $branchStudentCount;
+        }
+
+        return $users->count();
     }
 
     private function ensureAssignedBranch($actor): void

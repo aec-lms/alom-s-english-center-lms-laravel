@@ -126,7 +126,7 @@ The current-main CI checks for this exact commit have now all completed successf
 - Browser E2E smoke workflow: passed.
 - Composer lockfile/security audit: passed.
 
-The current tree contains 44 plugin manifests. The parameterized `AllPluginsIndependentAcceptanceTest` discovers plugin slugs from the module directories at runtime, so its lifecycle scenarios include all 44 manifests on this candidate rather than a hard-coded historical list. Its common lifecycle assertions cover provider autoload, independent install/enable, ZIP update, disable/re-enable, uninstall/reinstall, settings reset, Recycle Bin restore, and permanent-delete recovery handling. This is lifecycle acceptance only, not proof that every plugin's complete business feature set is correct.
+The current main tree contains 59 plugin manifests; the PR #269 candidate contains 60, including the new commerce-cart module. The parameterized `AllPluginsIndependentAcceptanceTest` discovers plugin slugs from the module directories at runtime, so its lifecycle scenarios include all 44 manifests on this candidate rather than a hard-coded historical list. Its common lifecycle assertions cover provider autoload, independent install/enable, ZIP update, disable/re-enable, uninstall/reinstall, settings reset, Recycle Bin restore, and permanent-delete recovery handling. This is lifecycle acceptance only, not proof that every plugin's complete business feature set is correct.
 
 ### Current 44-plugin inventory and focused test references
 
@@ -189,3 +189,41 @@ The current tree contains 44 plugin manifests. The parameterized `AllPluginsInde
 - Review PR #31 separately; do not merge its divergent draft branch until its base/history are reconciled and its complete diff is revalidated against current main.
 
 No production deployment or live data migration is authorized by this CI result.
+
+## 2026-11-19 autopsy follow-up — candidate PR #269
+
+The current candidate adds targeted regression coverage beyond the historical inventory above:
+
+| Area / plugins | New source-level finding | Candidate change | Validation |
+|---|---|---|---|
+| Core plugin lifecycle (all modules) | Disable, uninstall and update did not invalidate compiled plugin routes | Centralized compiled-route invalidation on lifecycle transitions | Tests cover disable, uninstall and update; exact-head CI pending |
+| Exam Management + Learn & Earn | Student-facing web/API paths relied on account branch IDs instead of the authoritative Student profile branch | Resolve student profile branch for listing, view/take/history/autosave/submit and API paths; branch-manager manual grant checks target profile branch | Regression test uses deliberately mismatched account/profile branch IDs; exact-head CI pending |
+| Commerce Cart + Payment Management | Offline refunds could leave paid orders and non-course entitlements active | Suspend order entitlements and revoke order-bound exam/eBook access when invoice becomes underpaid; restore entitlements on later verified settlement | Regression test covers partial refund and repayment; exact-head CI pending |
+| Commerce Cart + Payment Management | Existing suspended entitlement rows were not reactivated by insert-ignore settlement writes | Settlement now upserts the existing entitlement and refreshes its active state | Covered by refund/repayment regression; exact-head CI pending |
+
+These are focused fixes, not a substitute for the complete per-plugin acceptance gate. All 60 candidate plugin manifests still require feature-by-feature review and exact-candidate validation. No plugin is promoted to fully accepted by this checkpoint.
+
+### Candidate manifest/dependency reconciliation (2026-11-19)
+
+A recursive Git tree scan of the exact PR #269 head `bf028e241a09579d30212135b74ded64602737cd` found **60 plugin manifests**. This supersedes the earlier partial estimate of 48. The exact 60 slugs are listed below; the 44-plugin count above remains a dated main-branch snapshot and the original 39-plugin matrix remains historical. Manifest presence is inventory only, not feature acceptance.
+
+| Current PR #269 plugin slug (60) |
+|---|
+| `admin-boosting`, `admission-management`, `al-branding-loader`, `assignment-management`, `attendance-management` |
+| `batch-management`, `board-question-solver`, `branch-management`, `carousel-builder`, `certificate-management` |
+| `class-management`, `cms-website`, `commerce-cart`, `course-assessments`, `course-bundles` |
+| `course-content-studio`, `course-management`, `course-wishlist`, `email-notifications`, `exam-management` |
+| `expense-management`, `fees-management`, `flash-sale`, `gateway-card`, `gateway-paypal` |
+| `gateway-sslcommerz`, `gateway-stripe`, `gmail-marketing`, `google-console`, `guardian-management` |
+| `guardian-portal`, `hr-staff-management`, `learn-and-earn`, `library-management`, `marketing-management` |
+| `media-library`, `meta-pixel`, `mobile-app-api`, `notice-board`, `notification-center` |
+| `page-builder`, `payment-management`, `phonetics`, `push-notifications`, `question-bank` |
+| `quiz-contest`, `referral-income`, `reports-analytics`, `role-ai-assistant`, `seo-manager` |
+| `slider-builder`, `sms-gateway`, `storefront-catalog`, `student-management`, `student-tracing` |
+| `student-tracking`, `support-center`, `teacher-management`, `universal-payment`, `visitor-popup-ads` |
+
+`phonetics` and `al-branding-loader` remain separate plugin manifests; neither is merged into another module. The count and slug list must be regenerated whenever the candidate head changes.
+
+A manifest-by-manifest dependency review found one dangling optional dependency: commerce-cart declared subscription-management, but no subscription-management plugin manifest exists in this candidate. The stale optional dependency has been removed. PluginSiblingDependencyAuditTest now also rejects required or optional manifest dependencies that do not resolve to a plugin manifest, in addition to checking direct sibling namespace references.
+
+The candidate still requires the full dynamic manifest-discovery and lifecycle suite to pass on its exact head. A manifest resolving to another manifest is not evidence that the referenced plugin's workflows are complete.

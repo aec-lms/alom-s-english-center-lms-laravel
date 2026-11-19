@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 use Plugins\Modules\CourseManagement\Models\Enrollment;
 use Plugins\Modules\CourseManagement\Models\LiveClass;
@@ -22,7 +23,7 @@ class LiveClassAccessController extends Controller
         abort_unless($student && $student->hasRole('student'), 403, 'Only enrolled students can join a live class.');
 
         $course = $liveClass->course()->firstOrFail();
-        $this->assertEligibleStudent($student, $course->id, $course->branch_id);
+        $this->assertEligibleStudent($student, $course->id, $course->branch_id, (int) $liveClass->id);
 
         abort_unless(in_array($liveClass->status, ['upcoming', 'live'], true), 403, 'This live class is not available.');
         abort_if(
@@ -101,7 +102,7 @@ class LiveClassAccessController extends Controller
         abort_unless($student && $student->hasRole('student'), 403);
 
         $course = $liveClass->course()->firstOrFail();
-        $this->assertEligibleStudent($student, $course->id, $course->branch_id);
+        $this->assertEligibleStudent($student, $course->id, $course->branch_id, (int) $liveClass->id);
 
         abort_unless(in_array($liveClass->status, ['upcoming', 'live'], true), 403, 'This live class is not available.');
 
@@ -171,20 +172,46 @@ class LiveClassAccessController extends Controller
         return response()->json(['left' => true]);
     }
 
-    private function assertEligibleStudent(object $student, int $courseId, ?int $courseBranchId): void
+    private function assertEligibleStudent(object $student, int $courseId, ?int $courseBranchId, ?int $liveClassId = null): void
     {
-        abort_unless(
-            Enrollment::query()
+        $enrolled = Enrollment::query()
+            ->where('user_id', $student->id)
+            ->where('course_id', $courseId)
+            ->where('status', 'active')
+            ->exists();
+        $hasPaidPass = $liveClassId !== null
+            && Schema::hasTable('commerce_entitlements')
+            && DB::table('commerce_entitlements')
                 ->where('user_id', $student->id)
-                ->where('course_id', $courseId)
+                ->where('entitlement_type', 'live_class')
+                ->where('resource_id', $liveClassId)
                 ->where('status', 'active')
-                ->exists(),
-            403,
-            'An active course enrollment is required to access this live class.'
-        );
+                ->where(fn ($query) => $query->whereNull('starts_at')->orWhere('starts_at', '<=', now()))
+                ->where(fn ($query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+                ->exists();
 
-        if ($courseBranchId !== null && (int) $student->branch_id !== (int) $courseBranchId) {
+        abort_unless($enrolled || $hasPaidPass, 403,
+            'An active course enrollment or a valid paid live-class pass is required to access this class.');
+
+        $assignedBranchId = $this->assignedBranchId($student);
+        if ($courseBranchId !== null && $assignedBranchId !== $courseBranchId) {
             abort(403, 'This live class is outside your assigned branch.');
         }
+    }
+
+    private function assignedBranchId(object $student): ?int
+    {
+        if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('student-management')
+            && Schema::hasTable('students')
+            && Schema::hasColumn('students', 'branch_id')) {
+            $profileBranchId = DB::table('students')->where('user_id', $student->id)->value('branch_id');
+            if ($profileBranchId !== null) {
+                return (int) $profileBranchId;
+            }
+        }
+
+        return Schema::hasColumn('users', 'branch_id') && $student->branch_id !== null
+            ? (int) $student->branch_id
+            : null;
     }
 }

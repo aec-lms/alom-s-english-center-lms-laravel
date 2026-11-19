@@ -25,7 +25,7 @@ class StudentTrackingController extends Controller
             ->when($request->filled('student_id'), fn ($query) => $query->where('user_id', (int) $request->integer('student_id')))
             ->when($request->filled('event_type'), fn ($query) => $query->where('event_type', $request->string('event_type')->toString()))
             ->when($actor->hasRole('branch_manager'), function ($query) use ($actor): void {
-                $query->whereIn('user_id', fn ($subquery) => $subquery->select('id')->from('users')->where('branch_id', $actor->branch_id));
+                $query->whereIn('user_id', $this->branchStudentUserIds((int) $actor->branch_id));
             })
             ->latest('occurred_at')
             ->paginate(40)
@@ -33,7 +33,7 @@ class StudentTrackingController extends Controller
 
         $summaryQuery = StudentActivityEvent::query()
             ->when($actor->hasRole('branch_manager'), function ($query) use ($actor): void {
-                $query->whereIn('user_id', fn ($subquery) => $subquery->select('id')->from('users')->where('branch_id', $actor->branch_id));
+                $query->whereIn('user_id', $this->branchStudentUserIds((int) $actor->branch_id));
             });
 
         $summary = [
@@ -186,4 +186,29 @@ class StudentTrackingController extends Controller
             abort(403, 'Branch manager must be assigned to an active branch.');
         }
     }
+
+    /**
+     * Resolve student branch from the student profile first, then the legacy user field.
+     * This keeps tracking visibility aligned with enrollment and commerce branch rules.
+     */
+    private function branchStudentUserIds(int $branchId)
+    {
+        $query = DB::table('users as u')->select('u.id');
+        if (app(PluginManager::class)->isEnabled('student-management')
+            && Schema::hasTable('students')
+            && Schema::hasColumn('students', 'user_id')
+            && Schema::hasColumn('students', 'branch_id')) {
+            return $query->leftJoin('students as s', 's.user_id', '=', 'u.id')
+                ->where(function ($scope) use ($branchId): void {
+                    $scope->where('s.branch_id', $branchId)
+                        ->orWhere(function ($fallback) use ($branchId): void {
+                            $fallback->whereNull('s.branch_id')->where('u.branch_id', $branchId);
+                        });
+                });
+        }
+
+        return $query->where('u.branch_id', $branchId);
+    }
+
+
 }

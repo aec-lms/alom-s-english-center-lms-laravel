@@ -30,8 +30,8 @@
         @else
             <div class="max-w-[1160px] w-full mx-auto space-y-8">
                 <div class="text-center space-y-2">
-                    <h1 class="text-3xl font-extrabold text-[#1E3A8A] tracking-tight">Available Mock Tests &amp; Assessments</h1>
-                    <p class="text-xs sm:text-sm text-slate-600">Select an online exam below or launch from your LMS portal dashboard.</p>
+                    <h1 class="text-3xl font-extrabold text-[#1E3A8A] tracking-tight">{{ __('Available Mock Tests & Assessments') }}</h1>
+                    <p class="text-xs sm:text-sm text-slate-600">{{ __('Select an online exam below or launch from your LMS portal dashboard.') }}</p>
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -46,9 +46,14 @@
                                     Duration: {{ $exam->duration_minutes ?? 30 }} mins &middot; Total Marks: {{ $exam->total_marks ?? 50 }}
                                 </div>
                             </div>
-                            <a href="{{ route('admin.dashboard') }}" class="w-full py-2.5 rounded-lg bg-[#0077CC] hover:bg-[#0060A8] text-white text-xs font-bold text-center transition-colors">
-                                Open in Portal
-                            </a>
+                            @if (($exam->learn_earn_type ?? '') === 'paid' && (float) ($exam->access_price ?? 0) > 0 && Route::has('plugins.commerce_cart.add'))
+                                <form method="POST" action="{{ route('plugins.commerce_cart.add') }}">@csrf
+                                    <input type="hidden" name="item_type" value="mock_test"><input type="hidden" name="item_id" value="{{ $exam->id }}">
+                                    <button class="w-full py-2.5 rounded-lg bg-[#0077CC] hover:bg-[#0060A8] text-white text-xs font-bold">{{ __('Add Mock Test to Cart') }} · ৳{{ number_format((float) $exam->access_price, 2) }}</button>
+                                </form>
+                            @else
+                                <a href="{{ route('admin.dashboard') }}" class="w-full py-2.5 rounded-lg bg-[#0077CC] hover:bg-[#0060A8] text-white text-xs font-bold text-center transition-colors">{{ __('Open in Portal') }}</a>
+                            @endif
                         </article>
                     @endforeach
                 </div>

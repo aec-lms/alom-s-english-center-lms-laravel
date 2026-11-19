@@ -1,16 +1,33 @@
 {
-  "slug": "student-tracking",
-  "name": "Student Tracking & Analytics",
-  "version": "1.0.0",
-  "author": "Alom's English Center",
-  "category": "academic",
-  "description": "Independent, privacy-conscious student learning activity timeline, engagement analytics, progress signals and self-service activity history.",
-  "core_compatibility": "^2.0",
-  "dependencies": [],
-  "optional_dependencies": [],
-  "provider": "Plugins\\Modules\\StudentTracking\\Providers\\StudentTrackingServiceProvider",
-  "permissions": [
-    {"slug": "student-tracking.view", "name": "View Student Tracking Reports"}
-  ],
-  "settings_schema": []
+    "slug": "student-tracking",
+    "name": "Student Tracking & Analytics",
+    "version": "1.0.2",
+    "author": "Alom's English Center",
+    "category": "academic",
+    "description": "Independent, privacy-conscious student learning activity timeline, engagement analytics, progress signals and self-service activity history.",
+    "core_compatibility": "^2.0",
+    "dependencies": [],
+    "optional_dependencies": [
+        "branch-management",
+        "student-management",
+        "guardian-management",
+        "course-management"
+    ],
+    "provider": "Plugins\\Modules\\StudentTracking\\Providers\\StudentTrackingServiceProvider",
+    "permissions": [
+        {
+            "slug": "student-tracking.view",
+            "name": "View Student Tracking Reports"
+        }
+    ],
+    "settings_schema": [],
+    "admin_menu": [
+        {
+            "group": "Academic & Operations",
+            "label": "Student Learning Activity",
+            "route": "plugins.student-tracking.admin.index",
+            "order": 92,
+            "permission": "student-tracking.view"
+        }
+    ]
 }

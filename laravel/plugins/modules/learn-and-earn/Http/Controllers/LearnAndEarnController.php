@@ -225,10 +225,11 @@ class LearnAndEarnController extends Controller
         abort_unless($request->user() && $request->user()->hasRole('student'), 403, 'Student account required.');
         $this->ensureExamIntegration();
 
+        $branchId = $this->assignedBranchId($request->user());
         $exams = Exam::query()
             ->where('is_published', true)
-            ->where(function ($query) use ($request): void {
-                $query->whereNull('branch_id')->orWhere('branch_id', $request->user()->branch_id);
+            ->where(function ($query) use ($branchId): void {
+                $query->whereNull('branch_id')->orWhere('branch_id', $branchId);
             })
             ->latest()
             ->paginate(20);
@@ -381,13 +382,14 @@ class LearnAndEarnController extends Controller
         $reference = trim($values['payment_reference']);
         abort_if($reference === '', 422, 'A verified payment or bank/cash receipt reference is required.');
 
-        $target = DB::table('users')->where('id', $values['user_id'])->first();
+        $target = DB::table('users')->where('id', $values['user_id'])->firstOrFail();
+        $targetBranchId = $this->assignedBranchId($target);
         $actor = $request->user();
         if ($actor?->hasRole('branch_manager')) {
             $branchId = (int) ($actor->branch_id ?? 0);
             abort_unless($branchId > 0
                 && (int) ($exam->branch_id ?? 0) === $branchId
-                && (int) ($target->branch_id ?? 0) === $branchId,
+                && $targetBranchId === $branchId,
                 403,
                 'Access can only be granted inside your assigned branch.'
             );
@@ -438,8 +440,25 @@ class LearnAndEarnController extends Controller
     private function assertStudentExamBranch(Request $request, Exam $exam): void
     {
         if ($exam->branch_id !== null) {
-            abort_unless((int) $request->user()->branch_id === (int) $exam->branch_id, 403, 'Exam is outside your assigned branch.');
+            $branchId = $this->assignedBranchId($request->user());
+            abort_unless($branchId !== null && $branchId === (int) $exam->branch_id, 403, 'Exam is outside your assigned branch.');
         }
+    }
+
+    private function assignedBranchId(object $user): ?int
+    {
+        if (app(PluginManager::class)->isEnabled('student-management')
+            && Schema::hasTable('students')
+            && Schema::hasColumn('students', 'branch_id')) {
+            $profileBranchId = DB::table('students')->where('user_id', $user->id)->value('branch_id');
+            if ($profileBranchId !== null) {
+                return (int) $profileBranchId;
+            }
+        }
+
+        return Schema::hasColumn('users', 'branch_id') && $user->branch_id !== null
+            ? (int) $user->branch_id
+            : null;
     }
     private function ensureGlobalContentAccess($actor): void
     {

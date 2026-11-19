@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
+use Plugins\Modules\CmsWebsite\Models\CmsPost;
 
 class PublicHomeController extends Controller
 {
@@ -391,9 +392,11 @@ class PublicHomeController extends Controller
     {
         $lessons = [];
         if (Schema::hasTable('cms_posts')) {
-            $posts = DB::table('cms_posts')->where('is_published', true)->orderByDesc('id')->get();
+            // Use the SoftDeletes model scope so recycled posts never appear publicly.
+            $posts = CmsPost::query()->where('is_published', true)->orderByDesc('id')->get();
             foreach ($posts as $post) {
                 $lessons[] = [
+                    'slug' => $post->slug,
                     'title' => $post->title,
                     'category' => $post->category ?: 'Article',
                     'duration' => !empty($post->pdf_path) ? 'PDF + Guide' : 'Article',
@@ -406,6 +409,17 @@ class PublicHomeController extends Controller
         }
 
         return view('public.learn', compact('lessons'));
+    }
+
+    public function learnShow(string $slug): View
+    {
+        abort_unless(Schema::hasTable('cms_posts'), 404);
+        $post = CmsPost::query()
+            ->where('slug', $slug)
+            ->where('is_published', true)
+            ->firstOrFail();
+
+        return view('public.learn-show', compact('post'));
     }
 
     public function instructors(): View

@@ -13,7 +13,7 @@ class BranchManagerStudentTrackingIsolationTest extends TestCase
     public function test_branch_manager_cannot_view_or_filter_another_branch_student_activity(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['branch-management', 'student-tracking']);
+        $this->activatePlugins(['branch-management', 'student-management', 'student-tracking']);
 
         $branchA = DB::table('branches')->insertGetId([
             'code' => 'ST-ISO-A',
@@ -35,8 +35,19 @@ class BranchManagerStudentTrackingIsolationTest extends TestCase
         $this->assertNotNull($permissionId);
         $manager->roles()->first()->permissions()->syncWithoutDetaching([$permissionId]);
 
-        $studentA = $this->createUserWithRole('student', (int) $branchA);
-        $studentB = $this->createUserWithRole('student', (int) $branchB);
+        // Profile branch is authoritative even when the legacy account branch disagrees.
+        $studentA = $this->createUserWithRole('student', (int) $branchB);
+        $studentB = $this->createUserWithRole('student', (int) $branchA);
+        $profileA = DB::table('students')->insertGetId([
+            'user_id' => $studentA->id, 'branch_id' => $branchA,
+            'student_code' => 'TRACK-A-' . strtoupper(uniqid()), 'admission_date' => now()->toDateString(),
+            'status' => 'active', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('students')->insert([
+            'user_id' => $studentB->id, 'branch_id' => $branchB,
+            'student_code' => 'TRACK-B-' . strtoupper(uniqid()), 'admission_date' => now()->toDateString(),
+            'status' => 'active', 'created_at' => now(), 'updated_at' => now(),
+        ]);
         app(StudentActivityTracker::class)->record((int) $studentA->id, 'lesson_completed', 'lesson', 'branch-a-lesson', 120, [
             'course_title' => 'Branch A Activity Visible',
         ]);
@@ -44,9 +55,11 @@ class BranchManagerStudentTrackingIsolationTest extends TestCase
             'course_title' => 'Branch B Activity Private',
         ]);
 
+        $this->assertDatabaseHas('student_activity_events', ['user_id' => $studentA->id, 'student_id' => $profileA, 'branch_id' => $branchA]);
+
         $this->actingAs($manager)->get('/admin/student-tracking')
             ->assertOk()
-            ->assertSee('Branch A Activity Visible')
+            ->assertSee('Student Learning Activity')->assertSee('Branch A Activity Visible')
             ->assertDontSee('Branch B Activity Private');
 
         $this->actingAs($manager)->get('/admin/student-tracking?student_id=' . $studentB->id)

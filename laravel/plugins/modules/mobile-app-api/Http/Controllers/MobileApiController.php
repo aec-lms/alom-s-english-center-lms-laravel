@@ -61,11 +61,12 @@ class MobileApiController extends Controller
     public function home(Request $request): JsonResponse
     {
         $actor = $this->mobileActor($request);
-        $branchId = app(BranchAccess::class)->assignedBranchId($actor);
+        $branchId = app(BranchAccess::class)->contextBranchId($actor);
         $cfg = $this->loadMobileConfig();
 
         $sliders = $this->plugins->isEnabled('slider-builder') && Schema::hasTable('cms_sliders')
-            ? DB::table('cms_sliders')->where('is_active', true)->orderBy('sort_order')->get(['id', 'title', 'subtitle', 'image_path', 'cta_url'])
+            ? $this->scopeVisibleBranch(DB::table('cms_sliders')->where('is_active', true), 'cms_sliders', $branchId)
+                ->orderBy('sort_order')->get(['id', 'title', 'subtitle', 'image_path', 'cta_url'])
             : collect();
 
         $courses = $this->plugins->isEnabled('course-management') && Schema::hasTable('courses')
@@ -92,10 +93,10 @@ class MobileApiController extends Controller
         $visibleNoticeRoles[] = 'all';
         $notices = $this->plugins->isEnabled('notice-board') && Schema::hasTable('notices')
             ? DB::table('notices')
-                ->where(function ($query) use ($actor): void {
+                ->where(function ($query) use ($branchId): void {
                     $query->whereNull('branch_id');
-                    if ($actor && $actor->branch_id !== null) {
-                        $query->orWhere('branch_id', $actor->branch_id);
+                    if ($branchId !== null) {
+                        $query->orWhere('branch_id', $branchId);
                     }
                 })
                 ->where(function ($query) use ($visibleNoticeRoles): void {
@@ -170,7 +171,7 @@ class MobileApiController extends Controller
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
-                'branch_id' => $user->branch_id,
+                'branch_id' => app(BranchAccess::class)->contextBranchId($user),
             ],
         ], 201);
     }
@@ -203,7 +204,7 @@ class MobileApiController extends Controller
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
-                'branch_id' => $user->branch_id,
+                'branch_id' => app(BranchAccess::class)->contextBranchId($user),
             ],
         ]);
     }
@@ -279,7 +280,7 @@ class MobileApiController extends Controller
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
-                'branch_id' => $user->branch_id,
+                'branch_id' => app(BranchAccess::class)->contextBranchId($user),
             ],
             'enrollments' => $enrollments,
         ]);
@@ -289,7 +290,7 @@ class MobileApiController extends Controller
     {
         abort_unless($this->plugins->isEnabled('course-management') && Schema::hasTable('courses'), 409, 'Course Management is disabled.');
         return response()->json([
-            'data' => $this->scopeVisibleBranch(Course::query()->where('status', 'published'), 'courses', app(BranchAccess::class)->assignedBranchId($this->mobileActor($request)))
+            'data' => $this->scopeVisibleBranch(Course::query()->where('status', 'published'), 'courses', app(BranchAccess::class)->contextBranchId($this->mobileActor($request)))
                 ->select(['id', 'code', 'title', 'slug', 'price', 'description', 'thumbnail', 'instructor_name'])
                 ->latest()
                 ->paginate(20),
@@ -301,7 +302,7 @@ class MobileApiController extends Controller
         abort_unless($this->plugins->isEnabled('course-management') && Schema::hasTable('courses'), 404, 'Course Management is disabled.');
         // Course currently has no Eloquent category/lessons relationships.
         // Return the persisted course record instead of eager-loading undefined relations.
-        $course = $this->scopeVisibleBranch(Course::query(), 'courses', app(BranchAccess::class)->assignedBranchId($this->mobileActor($request)))
+        $course = $this->scopeVisibleBranch(Course::query(), 'courses', app(BranchAccess::class)->contextBranchId($this->mobileActor($request)))
             ->select(['id', 'code', 'title', 'slug', 'description', 'price', 'thumbnail', 'instructor_name', 'status'])
             ->where('slug', $slug)
             ->where('status', 'published')
@@ -327,18 +328,24 @@ class MobileApiController extends Controller
             'Course content access is unavailable until Course Management is installed.'
         );
 
-        $course = $this->scopeVisibleBranch(Course::query(), 'courses', app(BranchAccess::class)->assignedBranchId($actor))
+        $branchId = app(BranchAccess::class)->contextBranchId($actor);
+        $course = $this->scopeVisibleBranch(Course::query(), 'courses', $branchId)
             ->where('slug', $slug)
             ->where('status', 'published')
             ->firstOrFail();
 
-        $hasAccess = Enrollment::query()
+        $enrollment = Enrollment::query()
             ->where('user_id', $actor->id)
             ->where('course_id', $course->id)
-            ->where('branch_id', $course->branch_id)
             ->whereIn('status', ['active', 'completed'])
-            ->exists();
-        abort_unless($hasAccess, 403, 'An active course enrollment is required to view lessons.');
+            ->first();
+        abort_unless($enrollment, 403, 'An active course enrollment is required to view lessons.');
+        if ($course->branch_id !== null) {
+            abort_unless($branchId !== null && $branchId === (int) $course->branch_id, 403, 'Course is outside your current branch.');
+        }
+        if ($enrollment->branch_id !== null) {
+            abort_unless($branchId !== null && $branchId === (int) $enrollment->branch_id, 403, 'Enrollment is outside your current branch.');
+        }
 
         $lessons = DB::table('course_lessons')
             ->where('course_id', $course->id)
@@ -352,7 +359,7 @@ class MobileApiController extends Controller
     public function ebooks(Request $request): JsonResponse
     {
         $items = $this->plugins->isEnabled('storefront-catalog') && Schema::hasTable('storefront_items')
-            ? $this->scopeVisibleBranch(DB::table('storefront_items')->where('type', 'ebook')->where('is_active', true), 'storefront_items', app(BranchAccess::class)->assignedBranchId($this->mobileActor($request)))->orderByDesc('id')->get(['id', 'type', 'slug', 'title', 'category', 'badge', 'price', 'original_price', 'is_free', 'pages', 'summary', 'thumbnail_path', 'pdf_thumbnail_path'])
+            ? $this->scopeVisibleBranch(DB::table('storefront_items')->where('type', 'ebook')->where('is_active', true), 'storefront_items', app(BranchAccess::class)->contextBranchId($this->mobileActor($request)))->orderByDesc('id')->get(['id', 'type', 'slug', 'title', 'category', 'badge', 'price', 'original_price', 'is_free', 'pages', 'summary', 'thumbnail_path', 'pdf_thumbnail_path'])
             : collect();
 
         return response()->json(['data' => $items]);
@@ -361,7 +368,7 @@ class MobileApiController extends Controller
     public function products(Request $request): JsonResponse
     {
         $items = $this->plugins->isEnabled('storefront-catalog') && Schema::hasTable('storefront_items')
-            ? $this->scopeVisibleBranch(DB::table('storefront_items')->where('type', 'product')->where('is_active', true), 'storefront_items', app(BranchAccess::class)->assignedBranchId($this->mobileActor($request)))->orderByDesc('id')->get(['id', 'type', 'slug', 'title', 'category', 'badge', 'price', 'original_price', 'summary', 'thumbnail_path'])
+            ? $this->scopeVisibleBranch(DB::table('storefront_items')->where('type', 'product')->where('is_active', true), 'storefront_items', app(BranchAccess::class)->contextBranchId($this->mobileActor($request)))->orderByDesc('id')->get(['id', 'type', 'slug', 'title', 'category', 'badge', 'price', 'original_price', 'summary', 'thumbnail_path'])
             : collect();
 
         return response()->json(['data' => $items]);
@@ -369,17 +376,21 @@ class MobileApiController extends Controller
 
     public function exams(Request $request): JsonResponse
     {
-        $branchId = app(BranchAccess::class)->assignedBranchId($this->mobileActor($request));
-        $examsQuery = DB::table('exams')->where('is_published', true);
-        if ($branchId !== null && Schema::hasTable('exams') && Schema::hasColumn('exams', 'branch_id')) {
-            $examsQuery = $this->scopeVisibleBranch($examsQuery, 'exams', $branchId);
-        } elseif ($branchId !== null && Schema::hasTable('exams') && Schema::hasColumn('exams', 'course_id') && Schema::hasTable('courses')) {
-            $visibleCourseIds = $this->scopeVisibleBranch(DB::table('courses'), 'courses', $branchId)->pluck('id');
-            $examsQuery->whereIn('course_id', $visibleCourseIds);
+        if (!$this->plugins->isEnabled('exam-management') || !Schema::hasTable('exams')) {
+            return response()->json(['data' => []]);
         }
-        $exams = $this->plugins->isEnabled('exam-management') && Schema::hasTable('exams')
-            ? $examsQuery->orderByDesc('id')->limit(30)->get()
-            : collect();
+
+        $branchId = app(BranchAccess::class)->contextBranchId($this->mobileActor($request));
+        $examsQuery = DB::table('exams')->where('is_published', true);
+        if (Schema::hasColumn('exams', 'branch_id')) {
+            $examsQuery = $this->scopeVisibleBranch($examsQuery, 'exams', $branchId);
+        } elseif (Schema::hasColumn('exams', 'course_id') && Schema::hasTable('courses')) {
+            $visibleCourseIds = $this->scopeVisibleBranch(DB::table('courses'), 'courses', $branchId)->pluck('id');
+            $examsQuery->where(function ($query) use ($visibleCourseIds): void {
+                $query->whereNull('course_id')->orWhereIn('course_id', $visibleCourseIds);
+            });
+        }
+        $exams = $examsQuery->orderByDesc('id')->limit(30)->get();
 
         return response()->json(['data' => $exams]);
     }
@@ -387,14 +398,15 @@ class MobileApiController extends Controller
     public function notices(Request $request): JsonResponse
     {
         $actor = $this->mobileActor($request);
+        $branchId = app(BranchAccess::class)->contextBranchId($actor);
         $visibleNoticeRoles = $actor ? $actor->roles()->pluck('slug')->all() : [];
         $visibleNoticeRoles[] = 'all';
         $notices = $this->plugins->isEnabled('notice-board') && Schema::hasTable('notices')
             ? DB::table('notices')
-                ->where(function ($query) use ($actor): void {
+                ->where(function ($query) use ($branchId): void {
                     $query->whereNull('branch_id');
-                    if ($actor && $actor->branch_id !== null) {
-                        $query->orWhere('branch_id', $actor->branch_id);
+                    if ($branchId !== null) {
+                        $query->orWhere('branch_id', $branchId);
                     }
                 })
                 ->where(function ($query) use ($visibleNoticeRoles): void {
@@ -428,11 +440,15 @@ class MobileApiController extends Controller
 
     private function scopeVisibleBranch($query, string $table, ?int $branchId)
     {
-        if ($branchId !== null && Schema::hasTable($table) && Schema::hasColumn($table, 'branch_id')) {
+        if (Schema::hasTable($table) && Schema::hasColumn($table, 'branch_id')) {
             $query->where(function ($branch) use ($table, $branchId): void {
-                $branch->whereNull($table . '.branch_id')->orWhere($table . '.branch_id', $branchId);
+                $branch->whereNull($table . '.branch_id');
+                if ($branchId !== null) {
+                    $branch->orWhere($table . '.branch_id', $branchId);
+                }
             });
         }
+
         return $query;
     }
 

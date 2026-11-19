@@ -114,6 +114,118 @@ class LearningInteractionTest extends TestCase
         ]);
     }
 
+    public function test_course_access_uses_current_student_profile_branch_for_global_courses(): void
+    {
+        $this->activatePlugins(['branch-management', 'student-management', 'course-management']);
+
+        $branchA = DB::table('branches')->insertGetId([
+            'code' => 'LEARN-CONTENT-A-' . strtoupper(uniqid()),
+            'name' => 'Content Branch A',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $branchB = DB::table('branches')->insertGetId([
+            'code' => 'LEARN-CONTENT-B-' . strtoupper(uniqid()),
+            'name' => 'Content Branch B',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $student = $this->createUserWithRole('student', (int) $branchB);
+        DB::table('students')->insert([
+            'user_id' => $student->id,
+            'branch_id' => $branchA,
+            'student_code' => 'CONTENT-' . strtoupper(uniqid()),
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $courseId = DB::table('courses')->insertGetId([
+            'code' => 'GLOBAL-' . strtoupper(substr(uniqid(), -8)),
+            'title' => 'Global Course With Branch Enrollment',
+            'slug' => 'global-course-branch-enrollment-' . uniqid(),
+            'description' => 'A global course with a branch-scoped enrollment.',
+            'price' => 0,
+            'status' => 'published',
+            'branch_id' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $lessonId = DB::table('course_lessons')->insertGetId([
+            'course_id' => $courseId,
+            'title' => 'Branch Protected Lesson',
+            'content' => 'Lesson content',
+            'media_path' => 'private/branch-protected-lesson.mp4',
+            'sort_order' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('enrollments')->insert([
+            'user_id' => $student->id,
+            'course_id' => $courseId,
+            'branch_id' => $branchA,
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($student)->get('/my-learning/courses/' . $courseId . '/lessons')->assertOk();
+        $this->actingAs($student)->getJson(route('plugins.learning-interactions.lesson.comments.index', $lessonId))->assertOk();
+        DB::table('course_lessons')->where('id', $lessonId)->update(['protection_enabled' => true]);
+        $this->actingAs($student)->getJson(route('plugins.lesson-media.access', $lessonId))->assertOk();
+
+        // Reassignment must revoke access to the previous branch's enrollment.
+        DB::table('students')->where('user_id', $student->id)->update(['branch_id' => $branchB, 'updated_at' => now()]);
+        $this->actingAs($student)->get('/my-learning/courses/' . $courseId . '/lessons')->assertForbidden();
+        $this->actingAs($student)->getJson(route('plugins.learning-interactions.lesson.comments.index', $lessonId))->assertForbidden();
+        $this->actingAs($student)->getJson(route('plugins.lesson-media.access', $lessonId))->assertForbidden();
+    }
+
+    public function test_branch_manager_cannot_moderate_live_questions_outside_assigned_branch(): void
+    {
+        $this->activatePlugins(['branch-management', 'course-management']);
+
+        $branchA = DB::table('branches')->insertGetId([
+            'code' => 'LIVE-MOD-A-' . strtoupper(uniqid()),
+            'name' => 'Live Moderator Branch A',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $branchB = DB::table('branches')->insertGetId([
+            'code' => 'LIVE-MOD-B-' . strtoupper(uniqid()),
+            'name' => 'Live Moderator Branch B',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $courseId = DB::table('courses')->insertGetId([
+            'code' => 'LIVE-MOD-' . strtoupper(substr(uniqid(), -8)),
+            'title' => 'Branch A Live Course',
+            'slug' => 'branch-a-live-course-' . uniqid(),
+            'description' => 'Branch-scoped live class.',
+            'price' => 0,
+            'status' => 'published',
+            'branch_id' => $branchA,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $liveClassId = $this->createLiveClass($courseId, 'Assigned Instructor');
+
+        $manager = $this->createUserWithRole('branch_manager', (int) $branchB);
+        $permissionId = DB::table('permissions')->where('slug', 'courses.manage')->value('id');
+        $this->assertNotNull($permissionId);
+        $manager->roles()->first()->permissions()->syncWithoutDetaching([$permissionId]);
+
+        $this->actingAs($manager)
+            ->getJson(route('plugins.learning-interactions.live.questions.index', $liveClassId))
+            ->assertForbidden();
+    }
+
     private function createCourseLesson(string $enrollmentStatus): array
     {
         $student = $this->createUserWithRole('student');

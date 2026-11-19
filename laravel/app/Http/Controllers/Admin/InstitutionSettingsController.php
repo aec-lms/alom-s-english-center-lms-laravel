@@ -59,6 +59,7 @@ class InstitutionSettingsController extends Controller
             'app.name' => $validated['name'],
             'app.url' => $validated['website'] ?: config('app.url'),
             'app.locale' => $validated['locale'],
+            'lms.default_locale' => $validated['locale'],
             'app.timezone' => $validated['timezone'],
             'lms.default_currency' => $validated['currency'],
         ]);

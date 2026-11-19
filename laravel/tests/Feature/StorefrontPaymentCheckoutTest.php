@@ -15,7 +15,7 @@ final class StorefrontPaymentCheckoutTest extends TestCase
     public function test_paid_ebook_checkout_creates_only_one_pending_session_for_a_buyer(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['storefront-catalog', 'universal-payment', 'gateway-sslcommerz']);
+        $this->activatePlugins(['storefront-catalog', 'universal-payment', 'gateway-sslcommerz', 'commerce-cart']);
 
         $buyer = $this->createUserWithRole('student');
         app(PluginManager::class)->saveSettings('gateway-sslcommerz', [
@@ -44,10 +44,9 @@ final class StorefrontPaymentCheckoutTest extends TestCase
         $this->actingAs($buyer)
             ->get('/ebooks/atomic-checkout-guide')
             ->assertOk()
-            ->assertSee('PREMIUM CHECKOUT')
-            ->assertSee('Continue to your details')
-            ->assertSee('SSLCOMMERZ Secure Checkout')
-            ->assertSee('Ready for secure payment');
+            ->assertSee('Unified Secure Checkout')
+            ->assertSee('Add this eBook to your cart')
+            ->assertSee('Add to Cart');
 
         Http::fake([
             'https://sandbox.sslcommerz.com/gwprocess/v4/api.php' => Http::response([

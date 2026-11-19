@@ -19,7 +19,7 @@
                         href="{{ route('public.courses', ['category' => 'all']) }}"
                         class="px-4 py-1.5 rounded-full text-xs font-bold inline-flex items-center gap-2 transition-all {{ $activeCategory === 'all' ? 'bg-gradient-to-r from-[#2563EB] to-[#4F46E5] text-white shadow-md' : 'bg-white text-slate-700 border border-slate-200 hover:border-blue-300' }}"
                     >
-                        <span>All Courses</span>
+                        <span>{{ __('All Courses') }}</span>
                         <span class="px-1.5 py-0.5 rounded-full text-[10px] font-mono {{ $activeCategory === 'all' ? 'bg-white/25 text-white' : 'bg-slate-100 text-slate-600' }}">{{ $courses->count() }}</span>
                     </a>
 
@@ -38,9 +38,9 @@
 
             @if ($filteredCourses->isEmpty())
                 <div class="rounded-2xl border border-slate-200 bg-white p-10 text-center md:col-span-2 lg:col-span-3">
-                    <h2 class="text-lg font-extrabold text-slate-900">No courses found in this learning path yet</h2>
-                    <p class="mt-2 text-sm text-slate-500">Choose another category or browse all available courses.</p>
-                    <a href="{{ route('public.courses', ['category' => 'all']) }}" class="mt-4 inline-flex rounded-lg bg-[#0284C7] px-4 py-2 text-xs font-bold text-white">Browse All Courses</a>
+                    <h2 class="text-lg font-extrabold text-slate-900">{{ __('No courses found in this learning path yet') }}</h2>
+                    <p class="mt-2 text-sm text-slate-500">{{ __('Choose another category or browse all available courses.') }}</p>
+                    <a href="{{ route('public.courses', ['category' => 'all']) }}" class="mt-4 inline-flex rounded-lg bg-[#0284C7] px-4 py-2 text-xs font-bold text-white">{{ __('Browse All Courses') }}</a>
                 </div>
             @endif
 

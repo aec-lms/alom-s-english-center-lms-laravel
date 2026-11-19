@@ -152,7 +152,7 @@
 
                 <div>
                     <a href="{{ route('public.courses') }}" class="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-[#2DD4BF] hover:text-[#5EEAD4]">
-                        <span>See All Courses</span><span>&rarr;</span>
+                        <span>{{ __('See All Courses') }}</span><span>&rarr;</span>
                     </a>
                 </div>
             </div>
@@ -171,35 +171,35 @@
                         <div class="w-10 h-10 rounded-lg bg-[#0EA5E9] text-white flex items-center justify-center shrink-0 font-extrabold text-xs">ST</div>
                         <div class="min-w-0">
                             <div class="homepage-stat-number text-base sm:text-lg font-extrabold tabular-nums text-white leading-tight" data-count-up="{{ (int) $stats['students'] }}" data-count-label="Students" aria-label="{{ number_format((int) $stats['students']) }} Students">0</div>
-                            <div class="text-[11px] text-slate-300">Students</div>
+                            <div class="text-[11px] text-slate-300">{{ __('Students') }}</div>
                         </div>
                     </div>
                     <div class="bg-[#0C2B47]/90 border border-white/10 rounded-xl p-3.5 flex items-center gap-3">
                         <div class="w-10 h-10 rounded-lg bg-[#0EA5E9] text-white flex items-center justify-center shrink-0 font-extrabold text-xs">CR</div>
                         <div class="min-w-0">
                             <div class="homepage-stat-number text-base sm:text-lg font-extrabold tabular-nums text-white leading-tight" data-count-up="{{ (int) $stats['courses'] }}" data-count-label="Courses" aria-label="{{ number_format((int) $stats['courses']) }} Courses">0</div>
-                            <div class="text-[11px] text-slate-300">Courses</div>
+                            <div class="text-[11px] text-slate-300">{{ __('Courses') }}</div>
                         </div>
                     </div>
                     <div class="bg-[#0C2B47]/90 border border-white/10 rounded-xl p-3.5 flex items-center gap-3">
                         <div class="w-10 h-10 rounded-lg bg-[#0EA5E9] text-white flex items-center justify-center shrink-0 font-extrabold text-xs">TR</div>
                         <div class="min-w-0">
                             <div class="homepage-stat-number text-base sm:text-lg font-extrabold tabular-nums text-white leading-tight" data-count-up="{{ (int) $stats['teachers'] }}" data-count-label="Teachers" aria-label="{{ number_format((int) $stats['teachers']) }} Teachers">0</div>
-                            <div class="text-[11px] text-slate-300">Teachers</div>
+                            <div class="text-[11px] text-slate-300">{{ __('Teachers') }}</div>
                         </div>
                     </div>
                     <div class="bg-[#0C2B47]/90 border border-white/10 rounded-xl p-3.5 flex items-center gap-3">
                         <div class="w-10 h-10 rounded-lg bg-[#0EA5E9] text-white flex items-center justify-center shrink-0 font-extrabold text-xs">VD</div>
                         <div class="min-w-0">
                             <div class="homepage-stat-number text-base sm:text-lg font-extrabold tabular-nums text-white leading-tight" data-count-up="{{ (int) $stats['videos'] }}" data-count-label="Videos" aria-label="{{ number_format((int) $stats['videos']) }} Videos">0</div>
-                            <div class="text-[11px] text-slate-300">Videos</div>
+                            <div class="text-[11px] text-slate-300">{{ __('Videos') }}</div>
                         </div>
                     </div>
                 </div>
 
                 <div>
                     <a href="{{ route('public.courses') }}" class="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-[#38BDF8] hover:opacity-85">
-                        <span>See All Courses</span><span>&rarr;</span>
+                        <span>{{ __('See All Courses') }}</span><span>&rarr;</span>
                     </a>
                 </div>
             </div>
@@ -253,7 +253,7 @@
                         </div>
                     </div>
                     <div class="flex justify-end items-center gap-1 text-xs font-bold" style="color: {{ $lp['accent'] ?? '#1D63FF' }}">
-                        <span>Explore</span><span>&rsaquo;</span>
+                        <span>{{ __('Explore') }}</span><span>&rsaquo;</span>
                     </div>
                 </a>
                 @endif
@@ -269,7 +269,7 @@
     <div class="max-w-[1200px] mx-auto space-y-8">
         <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div class="space-y-2 max-w-2xl">
-                <span class="inline-block px-3 py-1 rounded-full bg-sky-50 text-[#0284C7] text-[11px] font-bold uppercase tracking-wider">Storefront &amp; Digital PDFs</span>
+                <span class="inline-block px-3 py-1 rounded-full bg-sky-50 text-[#0284C7] text-[11px] font-bold uppercase tracking-wider">{{ __('Storefront & Digital PDFs') }}</span>
                 <h2 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{{ $homepage['carousel_title'] ?? 'Digital Products & Study Guides' }}</h2>
                 <p class="text-xs sm:text-sm text-slate-500">{{ $homepage['carousel_subtitle'] ?? "Explore ShortNote 2.0 E-Books, printed handbooks, and IELTS practice kits crafted by Alom's English Center." }}</p>
             </div>
@@ -311,7 +311,7 @@
 @if ($homepage['show_reviews'] ?? true)
 <section id="reviews" class="py-16 sm:py-20 text-white overflow-hidden" style="background: linear-gradient(180deg, #131D2D 0%, #0B1220 100%)">
     <div class="max-w-[1200px] mx-auto px-4 sm:px-6 mb-10 text-center space-y-3">
-        <div class="text-xs font-semibold tracking-wide text-[#38BDF8]">Student Reviews</div>
+        <div class="text-xs font-semibold tracking-wide text-[#38BDF8]">{{ __('Student Reviews') }}</div>
         <h2 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">{{ $homepage['reviews_title'] ?? 'What Our Students Say' }}</h2>
         <p class="text-xs sm:text-sm text-slate-300 max-w-xl mx-auto">
             {{ $homepage['reviews_subtitle'] ?? "Feedbacks from students who have transformed their learning journey with Alom's English Center." }}
@@ -347,7 +347,7 @@
                                 </div>
                                 <div class="min-w-0">
                                     <div class="text-xs font-bold text-white truncate">{{ $card->title }}</div>
-                                    <div class="text-[11px] text-slate-400">Verified Student</div>
+                                    <div class="text-[11px] text-slate-400">{{ __('Verified Student') }}</div>
                                 </div>
                             </div>
                         </article>
@@ -374,7 +374,7 @@
                                 </div>
                                 <div class="min-w-0">
                                     <div class="text-xs font-bold text-white truncate">{{ $card->title }}</div>
-                                    <div class="text-[11px] text-slate-400">Verified Student</div>
+                                    <div class="text-[11px] text-slate-400">{{ __('Verified Student') }}</div>
                                 </div>
                             </div>
                         </article>
@@ -435,14 +435,14 @@
 <section aria-label="Secure payment methods" class="border-t border-slate-200 bg-white py-6 px-4 sm:px-6">
     <div class="max-w-[1100px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
         <div class="text-center sm:text-left">
-            <p class="text-sm font-extrabold text-slate-900">Pay securely with SSLCOMMERZ</p>
-            <p class="text-xs text-slate-500 mt-1">Secure checkout for card, mobile banking and internet banking payments.</p>
+            <p class="text-sm font-extrabold text-slate-900">{{ __('Pay securely with SSLCOMMERZ') }}</p>
+            <p class="text-xs text-slate-500 mt-1">{{ __('Secure checkout for card, mobile banking and internet banking payments.') }}</p>
         </div>
         <div class="flex flex-wrap justify-center items-center gap-2" aria-label="Supported payment channels">
             <span class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-extrabold tracking-wide text-slate-700">VISA</span>
             <span class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-extrabold text-slate-700">Mastercard</span>
-            <span class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-bold text-slate-700">Mobile Banking</span>
-            <span class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-bold text-slate-700">Internet Banking</span>
+            <span class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-bold text-slate-700">{{ __('Mobile Banking') }}</span>
+            <span class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-bold text-slate-700">{{ __('Internet Banking') }}</span>
             <span class="rounded-lg bg-[#0B6B55] px-4 py-2 text-xs font-extrabold text-white">SSLCOMMERZ</span>
         </div>
     </div>

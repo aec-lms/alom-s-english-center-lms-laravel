@@ -1,0 +1,43 @@
+{
+  "slug": "commerce-cart",
+  "name": "Unified Commerce Cart & Checkout",
+  "version": "1.0.1",
+  "author": "AEC Core Team",
+  "category": "commerce",
+  "description": "Unified shopping cart, order snapshots and checkout orchestration for courses, e-books, exams, subscriptions, live classes and future paid services.",
+  "core_compatibility": "^2.0",
+  "dependencies": [],
+  "provider": "Plugins\\Modules\\CommerceCart\\Providers\\CommerceCartServiceProvider",
+  "permissions": [
+    {
+      "slug": "commerce.orders.manage",
+      "name": "Manage Commerce Orders"
+    }
+  ],
+  "admin_menu": [
+    {
+      "group": "Commerce",
+      "label": "Orders",
+      "route": "plugins.commerce_cart.admin.orders",
+      "order": 78,
+      "permission": "commerce.orders.manage"
+    },
+    {
+      "group": "Commerce",
+      "label": "Paid Services Catalogue",
+      "route": "plugins.commerce_cart.admin.sellables",
+      "order": 80,
+      "permission": "commerce.orders.manage"
+    }
+  ],
+  "optional_dependencies": [
+    "course-management",
+    "storefront-catalog",
+    "exam-management",
+    "fees-management",
+    "universal-payment",
+    "payment-management",
+    "student-management",
+    "marketing-management"
+  ]
+}

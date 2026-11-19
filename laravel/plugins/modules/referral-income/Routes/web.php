@@ -21,5 +21,6 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:referral-income', 'centra
         Route::get('/', [ReferralIncomeController::class, 'adminIndex'])->name('index');
         Route::put('/rules', [ReferralIncomeController::class, 'updateRules'])->name('rules.update');
         Route::post('/commissions/{commission}/review', [ReferralIncomeController::class, 'reviewCommission'])->whereNumber('commission')->name('commissions.review');
+        Route::post('/recoveries/{reversal}/review', [ReferralIncomeController::class, 'reviewRecovery'])->whereNumber('reversal')->name('recoveries.review');
         Route::post('/payouts/{payout}/review', [ReferralIncomeController::class, 'reviewPayout'])->whereNumber('payout')->name('payouts.review');
     });

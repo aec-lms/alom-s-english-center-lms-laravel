@@ -52,16 +52,16 @@
                 </a>
                 <p class="text-xs leading-relaxed text-slate-500">{{ $footerDesc }}</p>
                 <div class="flex items-center gap-2.5 pt-1">
-                    <a href="{{ $footerYoutube }}" target="_blank" rel="noopener" aria-label="YouTube Lessons" class="w-9 h-9 rounded-full bg-[#E9ECEF] hover:bg-[#0284C7] text-slate-700 hover:text-white flex items-center justify-center transition-colors">
+                    <a href="{{ $footerYoutube }}" target="_blank" rel="noopener" aria-label="{{ __('YouTube Lessons') }}" class="w-9 h-9 rounded-full bg-[#E9ECEF] hover:bg-[#0284C7] text-slate-700 hover:text-white flex items-center justify-center transition-colors">
                         <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.6 7.2a2.7 2.7 0 0 0-1.9-1.9C18 4.8 12 4.8 12 4.8s-6 0-7.7.5a2.7 2.7 0 0 0-1.9 1.9C2 8.9 2 12 2 12s0 3.1.4 4.8a2.7 2.7 0 0 0 1.9 1.9c1.7.5 7.7.5 7.7.5s6 0 7.7-.5a2.7 2.7 0 0 0 1.9-1.9c.4-1.7.4-4.8.4-4.8s0-3.1-.4-4.8zM10 15.2V8.8L15.4 12 10 15.2z"/></svg>
                     </a>
-                    <a href="{{ route('public.learn') }}" aria-label="Free Video Hub" class="w-9 h-9 rounded-full bg-[#E9ECEF] hover:bg-[#0284C7] text-slate-700 hover:text-white flex items-center justify-center transition-colors">
+                    <a href="{{ route('public.learn') }}" aria-label="{{ __('Free Video Hub') }}" class="w-9 h-9 rounded-full bg-[#E9ECEF] hover:bg-[#0284C7] text-slate-700 hover:text-white flex items-center justify-center transition-colors">
                         <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
                     </a>
-                    <a href="{{ $footerFacebook }}" target="_blank" rel="noopener" aria-label="Facebook Community" class="w-9 h-9 rounded-full bg-[#E9ECEF] hover:bg-[#0284C7] text-slate-700 hover:text-white flex items-center justify-center transition-colors">
+                    <a href="{{ $footerFacebook }}" target="_blank" rel="noopener" aria-label="{{ __('Facebook Community') }}" class="w-9 h-9 rounded-full bg-[#E9ECEF] hover:bg-[#0284C7] text-slate-700 hover:text-white flex items-center justify-center transition-colors">
                         <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 9H16V6h-2.5C11.6 6 10 7.6 10 9.5V11H8v3h2v7h3v-7h2.3l.7-3H13V9.5c0-.3.2-.5.5-.5z"/></svg>
                     </a>
-                    <a href="{{ route('public.contact') }}" aria-label="Contact Us" class="w-9 h-9 rounded-full bg-[#E9ECEF] hover:bg-[#0284C7] text-slate-700 hover:text-white flex items-center justify-center transition-colors font-bold text-xs">
+                    <a href="{{ route('public.contact') }}" aria-label="{{ __('Contact Us') }}" class="w-9 h-9 rounded-full bg-[#E9ECEF] hover:bg-[#0284C7] text-slate-700 hover:text-white flex items-center justify-center transition-colors font-bold text-xs">
                         <span>@</span>
                     </a>
                 </div>
@@ -69,7 +69,7 @@
 
             <!-- Column 2: Links -->
             <div style="order:{{ $siteFooterLayout['sections']['links']['order'] }};flex:1 1 calc(100% / {{ $siteFooterLayout['columns'] }} - 40px);min-width:220px;display:{{ $siteFooterLayout['sections']['links']['visible'] ? 'block' : 'none' }}">
-                <h4 class="text-sm font-bold text-slate-900 mb-4">Links</h4>
+                <h4 class="text-sm font-bold text-slate-900 mb-4">{{ __('Links') }}</h4>
                 <ul class="space-y-2.5 text-xs text-slate-600">
                     @foreach (app(\App\Core\Appearance\SiteNavigationManager::class)->items('footer') as $item)
                         <li>
@@ -83,11 +83,11 @@
 
             <!-- Column 3: Company Details -->
             <div style="order:{{ $siteFooterLayout['sections']['company']['order'] }};flex:1 1 calc(100% / {{ $siteFooterLayout['columns'] }} - 40px);min-width:220px;display:{{ $siteFooterLayout['sections']['company']['visible'] ? 'block' : 'none' }}">
-                <h4 class="text-sm font-bold text-slate-900 mb-4">Company Details</h4>
+                <h4 class="text-sm font-bold text-slate-900 mb-4">{{ __('Company Details') }}</h4>
                 <div class="space-y-3 text-xs text-slate-600">
                     <div class="flex items-start gap-2.5">
                         <svg class="w-4 h-4 text-[#0284C7] shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                        <span>License No: <strong class="font-mono text-slate-800">{{ $footerLicense }}</strong></span>
+                        <span>{{ __('License No:') }} <strong class="font-mono text-slate-800">{{ $footerLicense }}</strong></span>
                     </div>
                     <div class="flex items-start gap-2.5">
                         <svg class="w-4 h-4 text-[#0284C7] shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
@@ -98,7 +98,7 @@
 
             <!-- Column 4: Contact -->
             <div style="order:{{ $siteFooterLayout['sections']['contact']['order'] }};flex:1 1 calc(100% / {{ $siteFooterLayout['columns'] }} - 40px);min-width:220px;display:{{ $siteFooterLayout['sections']['contact']['visible'] ? 'block' : 'none' }}">
-                <h4 class="text-sm font-bold text-slate-900 mb-4">Contact</h4>
+                <h4 class="text-sm font-bold text-slate-900 mb-4">{{ __('Contact') }}</h4>
                 <div class="space-y-3 text-xs text-slate-600">
                     <div class="flex items-center gap-2.5">
                         <svg class="w-4 h-4 text-[#0284C7] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
@@ -115,7 +115,7 @@
         @if ($showPayStrip)
         <div class="max-w-4xl mx-auto my-4 bg-white border border-slate-200/80 rounded-xl px-5 py-3.5 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3">
             <div class="flex flex-wrap items-center justify-center gap-1.5">
-                <span class="text-xs font-bold text-[#0284C7] mr-2 whitespace-nowrap">Pay With</span>
+                <span class="text-xs font-bold text-[#0284C7] mr-2 whitespace-nowrap">{{ __('Pay With') }}</span>
                 @foreach ([
                     ['VISA', 'text-[#1A1F71] border-indigo-200 bg-indigo-50/70'],
                     ['Mastercard', 'text-[#EB001B] border-red-200 bg-red-50/70'],
@@ -145,9 +145,9 @@
         <div class="mt-8 pt-5 border-t border-slate-300/70 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
             <div>{{ $siteIdentity['footer_text'] ?: ('© ' . date('Y') . ' ' . config('app.name') . '. All Rights Reserved.') }}</div>
             <div class="flex items-center gap-5">
-                <a href="{{ route('public.terms') }}" class="hover:text-slate-900">Terms &amp; Conditions</a>
-                <a href="{{ route('public.privacy') }}" class="hover:text-slate-900">Privacy Policy</a>
-                <a href="{{ route('public.refund') }}" class="hover:text-slate-900">Refund Policy</a>
+                <a href="{{ route('public.terms') }}" class="hover:text-slate-900">{{ __('Terms & Conditions') }}</a>
+                <a href="{{ route('public.privacy') }}" class="hover:text-slate-900">{{ __('Privacy Policy') }}</a>
+                <a href="{{ route('public.refund') }}" class="hover:text-slate-900">{{ __('Refund Policy') }}</a>
             </div>
         </div>
     </div>

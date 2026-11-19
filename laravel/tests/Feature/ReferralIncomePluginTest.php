@@ -86,7 +86,7 @@ class ReferralIncomePluginTest extends TestCase
     public function test_verified_manual_invoice_payment_completes_order_and_records_teacher_commission(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['referral-income', 'universal-payment', 'fees-management']);
+        $this->activatePlugins(['referral-income', 'universal-payment', 'fees-management', 'payment-management']);
 
         $teacher = $this->createUserWithRole('teacher');
         $buyer = $this->createUserWithRole('student');

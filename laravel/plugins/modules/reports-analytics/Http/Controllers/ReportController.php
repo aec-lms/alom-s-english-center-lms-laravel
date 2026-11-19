@@ -23,12 +23,10 @@ class ReportController extends Controller
         $this->ensureAssignedBranch($actor);
         $isBranchManager = $actor && $actor->hasRole('branch_manager');
         $branchId = $isBranchManager ? (int) $actor->branch_id : null;
-        $branchUserIds = $isBranchManager
-            ? User::query()->where('branch_id', $branchId)->pluck('id')
-            : collect();
+        $branchUserIds = $isBranchManager ? $this->branchUserIds($branchId) : collect();
 
         $metrics = [
-            'users_count' => User::query()->when($isBranchManager, fn ($q) => $q->where('branch_id', $branchId))->count(),
+            'users_count' => $isBranchManager ? $branchUserIds->count() : User::query()->count(),
             'enabled_plugins' => $isBranchManager ? 'Restricted' : PluginRecord::query()->where('is_enabled', true)->count(),
             'audit_events' => AuditLog::query()->when($isBranchManager, fn ($q) => $q->whereIn('user_id', $branchUserIds))->count(),
             'branches_count' => $isBranchManager ? 1 : (Schema::hasTable('branches') ? DB::table('branches')->count() : 0),
@@ -54,9 +52,7 @@ class ReportController extends Controller
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
         $isBranchManager = $actor && $actor->hasRole('branch_manager');
-        $branchUserIds = $isBranchManager
-            ? User::query()->where('branch_id', (int) $actor->branch_id)->pluck('id')
-            : collect();
+        $branchUserIds = $isBranchManager ? $this->branchUserIds((int) $actor->branch_id) : collect();
         $logs = AuditLog::query()
             ->when($isBranchManager, fn ($q) => $q->whereIn('user_id', $branchUserIds))
             ->latest('id')
@@ -79,6 +75,31 @@ class ReportController extends Controller
             }
             fclose($handle);
         }, 'aec-lms-audit-export.csv', ['Content-Type' => 'text/csv']);
+    }
+
+    private function branchUserIds(int $branchId)
+    {
+        $users = User::query()->where('branch_id', $branchId);
+
+        if (app(PluginManager::class)->isEnabled('student-management')
+            && Schema::hasTable('students')
+            && Schema::hasColumn('students', 'user_id')
+            && Schema::hasColumn('students', 'branch_id')) {
+            $studentUserIds = DB::table('students')->whereNotNull('user_id')->whereNotNull('branch_id')->distinct()->pluck('user_id');
+            $branchStudentUserIds = DB::table('students')
+                ->where('branch_id', $branchId)
+                ->whereNotNull('user_id')
+                ->distinct()
+                ->pluck('user_id');
+
+            return $users->whereNotIn('id', $studentUserIds)
+                ->pluck('id')
+                ->merge($branchStudentUserIds)
+                ->unique()
+                ->values();
+        }
+
+        return $users->pluck('id');
     }
 
     private function ensureAssignedBranch($actor): void
