@@ -14,13 +14,13 @@
                 @endif
                 <span class="text-left leading-[1.05]">
                     <span class="block text-base font-black tracking-tight text-slate-900">{{ config('app.name') }}</span>
-                    <span class="block text-xs font-extrabold tracking-tight text-slate-800">{{ $siteIdentity['tagline'] ?? '' }}</span>
+                    <span class="block text-xs font-extrabold tracking-tight text-slate-800">{{ ($siteIdentity['tagline'] ?? null) === 'Learn English with confidence' ? __('Learn English with confidence') : ($siteIdentity['tagline'] ?? '') }}</span>
                 </span>
             </a>
 
             <div class="text-center mb-6">
-                <h1 class="text-xl sm:text-[22px] font-extrabold text-slate-900 tracking-tight">{{ $siteIdentity['login_title'] ?? __('Welcome Back!') }}</h1>
-                <p class="mt-1 text-xs text-slate-500">{{ $siteIdentity['login_message'] ?? __('Please sign in to continue') }}</p>
+                <h1 class="text-xl sm:text-[22px] font-extrabold text-slate-900 tracking-tight">{{ ($siteIdentity['login_title'] ?? null) === 'Welcome Back!' ? __('Welcome Back!') : ($siteIdentity['login_title'] ?? __('Welcome Back!')) }}</h1>
+                <p class="mt-1 text-xs text-slate-500">{{ ($siteIdentity['login_message'] ?? null) === 'Please sign in to continue' ? __('Please sign in to continue') : ($siteIdentity['login_message'] ?? __('Please sign in to continue')) }}</p>
             </div>
 
             @if (session('status'))
