@@ -103,8 +103,6 @@ class MobileApiBranchIsolationTest extends TestCase
             'title' => 'Mobile Branch A Exam',
             'duration_minutes' => 30,
             'pass_marks' => 10,
-            'learn_earn_type' => 'free',
-            'access_price' => 0,
             'is_published' => true,
         ]);
         Exam::query()->create([
@@ -112,8 +110,6 @@ class MobileApiBranchIsolationTest extends TestCase
             'title' => 'Mobile Branch B Exam',
             'duration_minutes' => 30,
             'pass_marks' => 10,
-            'learn_earn_type' => 'free',
-            'access_price' => 0,
             'is_published' => true,
         ]);
         Exam::query()->create([
@@ -121,8 +117,6 @@ class MobileApiBranchIsolationTest extends TestCase
             'title' => 'Global Mobile Exam',
             'duration_minutes' => 30,
             'pass_marks' => 10,
-            'learn_earn_type' => 'free',
-            'access_price' => 0,
             'is_published' => true,
         ]);
 
