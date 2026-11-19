@@ -321,7 +321,7 @@ final class UnifiedCommerceCartTest extends TestCase
             'slug' => 'settlement-branch-course-' . uniqid(),
             'price' => 900,
             'status' => 'published',
-            'branch_id' => $branchA,
+            'branch_id' => null,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
@@ -370,7 +370,7 @@ final class UnifiedCommerceCartTest extends TestCase
         DB::table('enrollments')->insert([
             'user_id' => $student->id,
             'course_id' => $courseId,
-            'branch_id' => $branchA,
+            'branch_id' => null,
             'invoice_id' => $invoice->id,
             'status' => 'pending',
             'created_at' => now(),
