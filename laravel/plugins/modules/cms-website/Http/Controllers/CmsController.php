@@ -582,8 +582,10 @@ class CmsController extends Controller
         if (!empty($validated['assigned_reviewer_id'])) {
             abort_unless(User::query()->whereKey($validated['assigned_reviewer_id'])->where('is_active', true)->whereHas('roles', fn ($q) => $q->whereIn('slug', ['cms_reviewer', 'cms_editor']))->exists(), 422, 'The selected reviewer is not an active CMS Reviewer.');
         }
-        if (!empty($validated['assigned_reviewer_id'])) {
-            $reviewerId = (int) $validated['assigned_reviewer_id'];
+        $reviewerId = (int) (array_key_exists('assigned_reviewer_id', $validated)
+            ? ($validated['assigned_reviewer_id'] ?? 0)
+            : ($post?->assigned_reviewer_id ?? 0));
+        if ($reviewerId > 0) {
             $primaryAuthorId = (int) (array_key_exists('author_user_id', $validated)
                 ? ($validated['author_user_id'] ?? 0)
                 : ($post?->author_user_id ?? $actor->id));
