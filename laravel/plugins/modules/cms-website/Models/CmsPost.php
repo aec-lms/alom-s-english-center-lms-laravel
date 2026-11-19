@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Plugins\Modules\CmsWebsite\Models;
 
+use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class CmsPost extends Model
 {
@@ -28,7 +30,10 @@ class CmsPost extends Model
         'is_published',
         'publish_at',
         'created_by',
-        'author_user_id',\n        'updated_by',\n        'assigned_editor_id',\n        'assigned_reviewer_id',
+        'author_user_id',
+        'updated_by',
+        'assigned_editor_id',
+        'assigned_reviewer_id',
         'editorial_status',
         'submitted_at',
         'submitted_by',
