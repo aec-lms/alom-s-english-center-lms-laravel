@@ -617,6 +617,100 @@ class PaymentSettlementStateMachineTest extends TestCase
         }
     }
 
+    public function test_unified_course_gift_draft_cannot_settle_after_expiry(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'commerce-cart', 'course-management']);
+
+        $buyer = $this->createUserWithRole('student');
+        $course = Course::query()->create([
+            'code' => 'EXPIRED-GIFT-' . strtoupper(bin2hex(random_bytes(3))),
+            'title' => 'Expired Gift Course',
+            'slug' => 'expired-gift-' . strtolower(bin2hex(random_bytes(3))),
+            'price' => 500,
+            'status' => 'published',
+            'branch_id' => null,
+        ]);
+        $giftId = DB::table('course_gifts')->insertGetId([
+            'sender_user_id' => $buyer->id,
+            'recipient_email' => 'expired.gift.recipient@example.test',
+            'course_id' => $course->id,
+            'invoice_id' => null,
+            'redeem_token_hash' => hash('sha256', 'expired-course-gift-token'),
+            'redeem_token_encrypted' => encrypt('expired-course-gift-token'),
+            'status' => 'awaiting_payment',
+            'currency' => 'BDT',
+            'amount' => 500,
+            'subtotal_amount' => 500,
+            'discount_amount' => 0,
+            'expires_at' => now()->subMinute(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $invoice = FeeInvoice::query()->create([
+            'invoice_number' => 'EXPIRED-GIFT-' . strtoupper(bin2hex(random_bytes(4))),
+            'payer_name' => $buyer->name,
+            'payer_email' => $buyer->email,
+            'subtotal_amount' => 500,
+            'discount_amount' => 0,
+            'net_amount' => 500,
+            'paid_amount' => 0,
+            'currency' => 'BDT',
+            'status' => 'unpaid',
+        ]);
+        $orderId = DB::table('commerce_orders')->insertGetId([
+            'order_number' => 'EXPIRED-GIFT-ORDER-' . strtoupper(bin2hex(random_bytes(4))),
+            'user_id' => $buyer->id,
+            'invoice_id' => $invoice->id,
+            'branch_id' => null,
+            'currency' => 'BDT',
+            'subtotal' => 500,
+            'discount_total' => 0,
+            'grand_total' => 500,
+            'status' => 'awaiting_payment',
+            'payment_status' => 'unpaid',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $orderItemId = DB::table('commerce_order_items')->insertGetId([
+            'order_id' => $orderId,
+            'item_type' => 'gift_course',
+            'item_id' => $giftId,
+            'title_snapshot' => 'Gift: Expired Gift Course',
+            'quantity' => 1,
+            'unit_price' => 500,
+            'line_total' => 500,
+            'metadata' => json_encode(['course_gift_id' => $giftId, 'course_id' => $course->id], JSON_THROW_ON_ERROR),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('course_gifts')->where('id', $giftId)->update(['commerce_order_item_id' => $orderItemId]);
+
+        $transaction = PaymentTransaction::query()->create([
+            'transaction_ref' => 'EXPIRED-GIFT-TXN-' . strtoupper(bin2hex(random_bytes(4))),
+            'invoice_id' => $invoice->id,
+            'gateway_slug' => 'offline',
+            'amount' => 500,
+            'currency' => 'BDT',
+            'status' => 'initiated',
+            'metadata' => [],
+        ]);
+
+        try {
+            app(PaymentSettlementService::class)->settleTransaction($transaction, 'EXPIRED-GIFT-PROVIDER');
+            $this->fail('An expired course gift must never be fulfilled by a late payment callback.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('Gift and voucher items require dedicated recipient fulfillment and cannot use buyer entitlements.', $exception->getMessage());
+        }
+
+        $this->assertDatabaseHas('course_gifts', ['id' => $giftId, 'status' => 'awaiting_payment', 'invoice_id' => null]);
+        $this->assertDatabaseHas('payment_transactions', ['id' => $transaction->id, 'status' => 'initiated']);
+        $this->assertDatabaseHas('fee_invoices', ['id' => $invoice->id, 'status' => 'unpaid', 'paid_amount' => 0]);
+        $this->assertDatabaseHas('commerce_orders', ['id' => $orderId, 'status' => 'awaiting_payment', 'payment_status' => 'unpaid']);
+        $this->assertDatabaseMissing('commerce_entitlements', ['user_id' => $buyer->id, 'order_item_id' => $orderItemId]);
+    }
+
     public function test_late_verified_callback_cannot_resettle_a_refunded_transaction(): void
     {
         $this->markSystemInstalled();
