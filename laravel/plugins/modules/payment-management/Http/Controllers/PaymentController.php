@@ -126,9 +126,12 @@ class PaymentController extends Controller
                     'approved_by' => $actor?->id,
                 ]);
 
-                if (app(PluginManager::class)->isEnabled('referral-income')
-                    && $lockedTx->invoice_id
-                    && Schema::hasTable('commerce_orders')) {
+                // Financial reversals remain active even if the optional referral
+                // plugin has since been disabled; only its installed ledger tables matter.
+                if ($lockedTx->invoice_id
+                    && Schema::hasTable('commerce_orders')
+                    && Schema::hasTable('referral_commissions')
+                    && Schema::hasTable('referral_commission_reversals')) {
                     $order = DB::table('commerce_orders')
                         ->where('invoice_id', $lockedTx->invoice_id)
                         ->lockForUpdate()->first();
