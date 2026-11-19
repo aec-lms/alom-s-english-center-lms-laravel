@@ -121,6 +121,55 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
         ]);
     }
 
+    public function test_multiple_partial_refunds_fully_reverse_commission_without_rounding_residue(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['referral-income', 'student-management', 'payment-management']);
+
+        $referrer = $this->createUserWithRole('student');
+        $buyer = $this->createUserWithRole('student');
+        $service = app(ReferralIncomeService::class);
+        DB::table('referral_income_rules')->where('referrer_type', 'student')->update([
+            'commission_percent' => 10.01,
+            'is_active' => true,
+            'updated_at' => now(),
+        ]);
+        $service->applyCode($buyer, $service->createOrGetCode($referrer));
+        $commissionId = $service->recordSettledPurchase($buyer, 'commerce_order', 'ROUNDING-ORDER-1', 1000.00, 'BDT');
+
+        $paymentId = DB::table('payment_transactions')->insertGetId([
+            'transaction_ref' => 'REFUND-ROUNDING-' . strtoupper(bin2hex(random_bytes(4))),
+            'invoice_id' => null,
+            'branch_id' => null,
+            'gateway_slug' => 'offline',
+            'amount' => 1000.00,
+            'currency' => 'BDT',
+            'status' => 'settled',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        foreach ([333.33, 333.33, 333.34] as $index => $amount) {
+            $refundId = DB::table('payment_refunds')->insertGetId([
+                'payment_transaction_id' => $paymentId,
+                'amount' => $amount,
+                'reason' => 'Rounding-safe partial refund ' . ($index + 1),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            $service->reverseSettledPurchase($buyer, 'commerce_order', 'ROUNDING-ORDER-1', $refundId, $amount, 'BDT');
+        }
+
+        $this->assertDatabaseHas('referral_commissions', [
+            'id' => $commissionId,
+            'commission_amount' => 0,
+            'status' => 'reversed',
+        ]);
+        $this->assertSame(100.10, round((float) DB::table('referral_commission_reversals')
+            ->where('referral_commission_id', $commissionId)
+            ->sum('commission_reversal_amount'), 2));
+    }
+
     public function test_student_cannot_refer_themselves_or_apply_two_referral_codes(): void
     {
         $this->markSystemInstalled();
