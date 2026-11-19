@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use Plugins\Modules\CmsWebsite\Models\CmsPost;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class CmsWebsiteSafetyTest extends TestCase
