@@ -183,6 +183,7 @@ class CmsController extends Controller
             'pdf_thumbnail' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
             'pdf_thumbnail_url' => ['nullable', 'string', 'max:255', function (string $attribute, mixed $value, \Closure $fail): void { if (!$this->isSafeMediaReference($value)) $fail('The PDF thumbnail URL must be a safe HTTPS URL or local path.'); }],
             'is_published' => ['nullable', 'boolean'],
+            'publish_at' => ['nullable', 'date'],
         ]);
 
         $categoryName = trim((string) ($validated['category'] ?? $post->category ?? 'General')) ?: 'General';
@@ -233,6 +234,7 @@ class CmsController extends Controller
             'seo_description' => $validated['seo_description'] ?? null,
             'is_published' => empty($validated['publish_at']) ? $request->boolean('is_published') : false,
             'publish_at' => $validated['publish_at'] ?? null,
+            'editorial_status' => !empty($validated['publish_at']) ? 'draft' : ($request->boolean('is_published') ? (($post->editorial_status ?? 'published') === 'draft' ? 'published' : $post->editorial_status) : (in_array($post->editorial_status ?? 'draft', ['in_review', 'approved', 'changes_requested'], true) ? $post->editorial_status : 'draft')),
         ]);
 
         foreach ([[$oldAssets[0], $thumbPath], [$oldAssets[1], $pdfPath], [$oldAssets[2], $pdfThumbPath]] as [$oldPath, $newPath]) {
