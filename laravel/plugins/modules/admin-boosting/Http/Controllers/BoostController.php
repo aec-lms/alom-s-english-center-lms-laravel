@@ -218,6 +218,12 @@ class BoostController extends Controller
 
     private function visitorHash(Request $request): string
     {
-        return hash_hmac('sha256', (string) $request->session()->getId(), (string) config('app.key'));
+        $visitorId = $request->session()->get('boost_visitor_id');
+        if (!is_string($visitorId) || preg_match('/^[a-f0-9]{64}$/D', $visitorId) !== 1) {
+            $visitorId = bin2hex(random_bytes(32));
+            $request->session()->put('boost_visitor_id', $visitorId);
+        }
+
+        return hash_hmac('sha256', $visitorId, (string) config('app.key'));
     }
 }
