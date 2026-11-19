@@ -164,7 +164,7 @@ class FlashSaleEnrollmentTest extends TestCase
             ]);
         }
 
-        $quote = app(\\Plugins\\Modules\\FlashSale\\Services\\FlashSalePricingService::class)
+        $quote = app(\Plugins\Modules\FlashSale\Services\FlashSalePricingService::class)
             ->quote((int) $course->id);
 
         $this->assertSame('Premium priority', $quote['sale']->title);
@@ -200,7 +200,7 @@ class FlashSaleEnrollmentTest extends TestCase
             ]);
         }
 
-        $quote = app(\\Plugins\\Modules\\FlashSale\\Services\\FlashSalePricingService::class)
+        $quote = app(\Plugins\Modules\FlashSale\Services\FlashSalePricingService::class)
             ->quote((int) $course->id);
 
         $this->assertNull($quote['sale']);
@@ -234,7 +234,7 @@ class FlashSaleEnrollmentTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $quote = app(\\Plugins\\Modules\\CommerceCart\\Services\\CommerceCatalog::class)
+        $quote = app(\Plugins\Modules\CommerceCart\Services\CommerceCatalog::class)
             ->resolve('course', (int) $course->id);
 
         $this->assertEquals(1020.00, $quote['price']);
