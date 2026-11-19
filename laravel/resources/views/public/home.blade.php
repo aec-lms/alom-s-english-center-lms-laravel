@@ -530,7 +530,7 @@
         const button = document.getElementById('hero-main-button');
         if (button) button.textContent = current.button_label || 'Explore now';
         const overlay = document.getElementById('hero-main-overlay');
-        if (overlay) overlay.style.opacity = String(Math.max(0, Math.min(90, current.overlay_opacity || 45)) / 90);
+        if (overlay) overlay.style.opacity = String(Math.max(0, Math.min(90, current.overlay_opacity ?? 45)) / 90);
         const copy = document.getElementById('hero-main-copy');
         if (copy) copy.className = 'absolute inset-x-0 bottom-12 px-6 sm:px-10 text-' + (['left','center','right'].includes(current.text_alignment) ? current.text_alignment : 'center') + ' space-y-1.5';
         if (mainLink) {
