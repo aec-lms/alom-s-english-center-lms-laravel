@@ -126,7 +126,7 @@ final class CmsContributorManagementTest extends TestCase
         $author = $this->createUserWithRole('student');
         $editor = $this->createUserWithRole('teacher');
         $reviewer = $this->createUserWithRole('teacher');
-        $manager = $this->createUserWithRole('admin');
+        $manager = $this->createUserWithRole('student');
         $this->grantCmsRole($author, 'cms_contributor');
         $this->grantCmsRole($editor, 'cms_editor');
         $this->grantCmsRole($reviewer, 'cms_reviewer');
