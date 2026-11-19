@@ -26,7 +26,7 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
   DB::table('enrollments')->insert(['user_id'=>$student->id,'course_id'=>$courseId,'branch_id'=>null,'status'=>'active','created_at'=>now(),'updated_at'=>now()]);
   PhoneticSetting::query()->firstOrCreate(['id'=>1],['enabled'=>true,'course_slug'=>'british-american-phonetics','course_title'=>'British & American Phonetics']);
   PhoneticSetting::query()->whereKey(1)->update(['enabled'=>true,'course_slug'=>'british-american-phonetics']);
-  \\Illuminate\\Support\\Facades\\Cache::forget('phonetics.settings');
+  \Illuminate\Support\Facades\Cache::forget('phonetics.settings');
   $entry=PhoneticEntry::query()->create(['word'=>'car','category'=>'rhoticity','uk_ipa'=>'/kɑː/','us_ipa'=>'/kɑːr/','is_active'=>true,'sort_order'=>1]);
   DB::table('phonetic_learning_assignments')->insert(['lms_driver'=>'aec','course_ref'=>(string)$courseId,'course_category_ref'=>null,'lesson_ref'=>null,'batch_ref'=>null,'word_id'=>$entry->id,'audience'=>'both','sort_order'=>1,'is_required'=>true,'created_at'=>now(),'updated_at'=>now()]);
   $this->actingAs($student)->get('/courses/british-american-phonetics/phonetics-learning')->assertOk();
