@@ -70,7 +70,7 @@ class PluginLifecycleTest extends TestCase
             'version' => '1.0.0',
             'core_compatibility' => '^2.0',
             'dependencies' => [],
-            'provider' => 'Plugins\\\\Modules\\\\RouteOnceProbe\\\\Providers\\\\RouteOnceProbeServiceProvider',
+            'provider' => 'Plugins\\Modules\\RouteOnceProbe\\Providers\\RouteOnceProbeServiceProvider',
         ], JSON_THROW_ON_ERROR));
         file_put_contents(
             $pluginDir . DIRECTORY_SEPARATOR . 'Routes' . DIRECTORY_SEPARATOR . 'web.php',
@@ -78,11 +78,19 @@ class PluginLifecycleTest extends TestCase
         );
         file_put_contents(
             $pluginDir . DIRECTORY_SEPARATOR . 'Providers' . DIRECTORY_SEPARATOR . 'RouteOnceProbeServiceProvider.php',
-            "<?php\nnamespace Plugins\\\\Modules\\\\RouteOnceProbe\\\\Providers;\n"
-                . "class RouteOnceProbeServiceProvider extends \\\\App\\\\Core\\\\Plugins\\\\BasePluginServiceProvider {\n"
-                . "public function slug(): string { return 'route-once-probe'; }\n"
-                . "protected function pluginPath(string \\$relative = ''): string { return dirname(__DIR__) . ($relative === '' ? '' : DIRECTORY_SEPARATOR . $relative); }\n"
-                . "}\n"
+            <<<'PHP'
+<?php
+namespace Plugins\Modules\RouteOnceProbe\Providers;
+
+class RouteOnceProbeServiceProvider extends \App\Core\Plugins\BasePluginServiceProvider
+{
+    public function slug(): string { return 'route-once-probe'; }
+    protected function pluginPath(string $relative = ''): string
+    {
+        return dirname(__DIR__) . ($relative === '' ? '' : DIRECTORY_SEPARATOR . $relative);
+    }
+}
+PHP
         );
 
         try {
