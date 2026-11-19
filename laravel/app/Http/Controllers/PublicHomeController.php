@@ -23,7 +23,8 @@ class PublicHomeController extends Controller
     public function index(): View
     {
         $homepage = $this->loadHomepageConfig();
-        $homepageBoostCampaigns = $this->homepageBoostCampaigns();
+        $homepageBoostCampaigns = $this->homepageBoostCampaigns('homepage_featured');
+        $homepageNoticeCampaigns = $this->homepageBoostCampaigns('notice_banner');
 
         $liveStats = [
             'students' => Schema::hasTable('students') ? DB::table('students')->count() : 0,
@@ -91,7 +92,8 @@ class PublicHomeController extends Controller
             'rightReviews',
             'homepage',
             'digitalCarouselItems',
-            'homepageBoostCampaigns'
+            'homepageBoostCampaigns',
+            'homepageNoticeCampaigns'
         ));
     }
 
@@ -789,9 +791,9 @@ class PublicHomeController extends Controller
             ->get();
     }
 
-    private function homepageBoostCampaigns(): Collection
+    private function homepageBoostCampaigns(string $placement): Collection
     {
-        return $this->activeBoostCampaigns('homepage_featured')
+        return $this->activeBoostCampaigns($placement)
             ->filter(function (BoostCampaign $campaign): bool {
                 if (in_array($campaign->entity_type, ['institution', 'offer'], true)) {
                     return $campaign->entity_id === null;
