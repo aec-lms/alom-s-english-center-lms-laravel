@@ -206,6 +206,7 @@ class StudentAssessmentController extends Controller
     {
         $courseIntegration = app(PluginManager::class)->isEnabled('course-management')
             && Schema::hasTable('enrollments');
+        $branchId = $this->assignedBranchId($student);
 
         return AssessmentSet::query()
             ->withCount('questions')

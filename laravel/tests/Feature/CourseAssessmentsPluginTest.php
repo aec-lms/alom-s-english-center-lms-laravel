@@ -237,7 +237,7 @@ class CourseAssessmentsPluginTest extends TestCase
 
         $this->actingAs($student)->get(route('plugins.course-assessments.student.index'))
             ->assertOk()->assertSee('Profile Branch Assessment')->assertDontSee('Account Branch Assessment');
-        $this->actingAs($student)->getJson('/api/v1/course-assessments')
+        $this->actingAs($student)->getJson('/api/v1/my-learning/assessments')
             ->assertOk()->assertJsonFragment(['title' => 'Profile Branch Assessment'])
             ->assertJsonMissing(['title' => 'Account Branch Assessment']);
 
