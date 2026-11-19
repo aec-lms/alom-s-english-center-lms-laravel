@@ -289,7 +289,7 @@ class AdmissionController extends Controller
         abort_unless((int) $document->admission_application_id === (int) $application->id, 404);
         abort_unless($document->disk === 'local', 404);
         abort_unless(Str::startsWith($document->path, 'admission-documents/' . $application->id . '/')
-            && !Str::contains($document->path, ['../', '\\\\']), 404);
+            && !str_contains($document->path, '..') && !str_contains($document->path, chr(92)), 404);
         abort_unless(Storage::disk('local')->exists($document->path), 404);
         $storedFile = Storage::disk('local')->path($document->path);
         abort_unless(hash_equals((string) $document->sha256, (string) hash_file('sha256', $storedFile)), 410, 'The stored document failed its integrity check.');
