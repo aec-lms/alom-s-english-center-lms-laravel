@@ -454,7 +454,7 @@ class UniversalPaymentController extends Controller
                     'payer_name' => $validated['payer_name'],
                     'payer_contact' => $validated['payer_contact'],
                     'item_title' => 'Invoice ' . $lockedInvoice->invoice_number,
-                    'gateway' => 'bank_cash',
+                    'gateway' => $validated['gateway'],
                     'currency' => (string) ($lockedInvoice->currency ?: 'BDT'),
                     'amount' => $balance,
                     'external_trx_id' => trim((string) $validated['external_trx_id']),
@@ -465,7 +465,7 @@ class UniversalPaymentController extends Controller
                 ]);
 
                 app(\Plugins\Modules\UniversalPayment\Services\ExternalTransactionReferenceRegistry::class)
-                    ->claim('bank_cash', (string) $transaction->external_trx_id, (int) $transaction->id);
+                    ->claim((string) $transaction->gateway, (string) $transaction->external_trx_id, (int) $transaction->id);
 
                 return $transaction;
             });
