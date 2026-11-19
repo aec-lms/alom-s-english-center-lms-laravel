@@ -31,11 +31,11 @@
         'button_label' => trim((string) ($s->button_label ?? '')) ?: 'Explore now',
         'text_alignment' => in_array($s->text_alignment ?? 'center', ['left', 'center', 'right'], true) ? $s->text_alignment : 'center',
         'overlay_opacity' => max(0, min(90, (int) ($s->overlay_opacity ?? 45))),
-        'duration_ms' => max(2000, min(15000, (int) ($s->duration_ms ?? 5000))),
+        'duration_ms' => max(2000, min(15000, (int) ($s->duration_ms ?? $sliderAutoplayMs ?? 5000))),
         'transition' => in_array($s->transition ?? 'fade', ['fade', 'slide'], true) ? $s->transition : 'fade',
         'open_new_tab' => (bool) ($s->open_new_tab ?? false),
     ])->values()->all() : [
-        ['title' => 'IELTS & English All in One', 'subtitle' => 'Basic to Pro · Structured Live & Recorded Batches', 'image' => asset('assets/images/hero_educator_studio_1794552233836.jpg'), 'mobile_image' => asset('assets/images/hero_educator_studio_1794552233836.jpg'), 'cta_url' => '#learning-paths', 'button_label' => 'Explore courses', 'text_alignment' => 'center', 'overlay_opacity' => 45, 'duration_ms' => 5000, 'transition' => 'fade', 'open_new_tab' => false],
+        ['title' => 'IELTS & English All in One', 'subtitle' => 'Basic to Pro · Structured Live & Recorded Batches', 'image' => asset('assets/images/hero_educator_studio_1794552233836.jpg'), 'mobile_image' => asset('assets/images/hero_educator_studio_1794552233836.jpg'), 'cta_url' => '#learning-paths', 'button_label' => 'Explore courses', 'text_alignment' => 'center', 'overlay_opacity' => 45, 'duration_ms' => $sliderAutoplayMs ?? 5000, 'transition' => 'fade', 'open_new_tab' => false],
         ['title' => 'IELTS Academic & GT Masterclass', 'subtitle' => 'Target Band 8.0+ · Weekly Mock Tests & Writing Review', 'image' => asset('assets/images/course_ielts_masterclass_1794552235026.jpg'), 'mobile_image' => asset('assets/images/course_ielts_masterclass_1794552235026.jpg'), 'cta_url' => '#learning-paths', 'button_label' => 'Explore courses', 'text_alignment' => 'center', 'overlay_opacity' => 45, 'duration_ms' => 5000, 'transition' => 'fade', 'open_new_tab' => false],
         ['title' => 'Spoken English & Fluency Bootcamp', 'subtitle' => 'Phonetics, Pronunciation & Daily Speaking Practice', 'image' => asset('assets/images/course_spoken_fluency_1794552235255.jpg'), 'mobile_image' => asset('assets/images/course_spoken_fluency_1794552235255.jpg'), 'cta_url' => '#learning-paths', 'button_label' => 'Explore courses', 'text_alignment' => 'center', 'overlay_opacity' => 45, 'duration_ms' => 5000, 'transition' => 'fade', 'open_new_tab' => false],
     ];
@@ -215,7 +215,7 @@
     <div class="mx-auto grid max-w-[1100px] gap-4 sm:grid-cols-2 lg:grid-cols-3">
         @foreach ($bannerSlides as $banner)
             <article class="relative min-h-36 overflow-hidden rounded-2xl border border-slate-200 bg-slate-900 text-white shadow-lg">
-                @if ($banner['image'])<img src="{{ $banner['image'] }}" alt="" class="absolute inset-0 h-full w-full object-cover" loading="lazy">@endif
+                @if ($banner['image'])<picture class="absolute inset-0 h-full w-full"><source media="(max-width: 639px)" srcset="{{ $banner['mobile_image'] }}"><img src="{{ $banner['image'] }}" alt="" class="h-full w-full object-cover" loading="lazy"></picture>@endif
                 <div class="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-slate-950/65 to-slate-950/15"></div>
                 <div class="relative flex min-h-36 flex-col items-start justify-center gap-2 p-5">
                     <h2 class="text-lg font-extrabold">{{ $banner['title'] }}</h2>
@@ -545,7 +545,7 @@
 
     let autoplayTimer = null;
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const pauseOnHover = true;
+    const pauseOnHover = @json($sliderPauseOnHover);
     const stopAutoplay = () => { if (autoplayTimer) window.clearTimeout(autoplayTimer); autoplayTimer = null; };
     const scheduleAutoplay = () => {
         stopAutoplay();
