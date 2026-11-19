@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Models\PluginSetting;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
+use Plugins\Modules\StudentManagement\Models\Student;
 use Plugins\Modules\AdmissionManagement\Models\AdmissionApplication;
 use Tests\TestCase;
 
