@@ -86,6 +86,9 @@ final class UnifiedCommerceCartTest extends TestCase
             'notification_delivery_status' => 'pending',
             'notification_last_error' => null,
         ]);
+        Queue::assertPushed(SendGiftRecipientEmailJob::class, fn (SendGiftRecipientEmailJob $job): bool =>
+            $job->giftType === 'gift_course' && $job->giftId === $giftId
+        );
     }
 
     public function test_recipient_specific_gift_drafts_can_be_added_to_the_unified_cart(): void
