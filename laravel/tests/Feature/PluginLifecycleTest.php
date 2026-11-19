@@ -142,6 +142,20 @@ class PluginLifecycleTest extends TestCase
         }
     }
 
+    public function test_reinstall_does_not_reenable_an_administrator_disabled_plugin(): void
+    {
+        $this->markSystemInstalled();
+        $manager = app(PluginManager::class);
+
+        $manager->install('student-management');
+        $manager->disable('student-management');
+
+        $record = $manager->install('student-management');
+
+        $this->assertTrue($record->fresh()->is_installed);
+        $this->assertFalse($record->fresh()->is_enabled);
+    }
+
     public function test_plugin_core_compatibility_checks_minimum_semantic_versions(): void
     {
         $this->assertTrue(VersionConstraint::matches('2.0.0', '^2.0'));
