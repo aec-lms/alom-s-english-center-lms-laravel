@@ -4,7 +4,7 @@ on:
   push:
     branches: ["main", "chore/release-audit-and-plugin-matrix"]
   pull_request:
-    branches: ["main"]
+    branches: ["main", "feat/cms-post-management-hardening", "feat/cms-editorial-workflow"]
   workflow_dispatch:
 
 concurrency:

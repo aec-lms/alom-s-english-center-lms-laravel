@@ -151,6 +151,39 @@ class ReferralIncomeService
                 throw new RuntimeException('Referral reversal must match an existing recorded payment refund.');
             }
 
+            // A refund row is not sufficient proof that it belongs to the
+            // purchase whose commission is being reversed. Bind the refund's
+            // payment transaction to the exact commerce order invoice and buyer.
+            // This service currently records purchase commissions for commerce
+            // orders only; other source adapters must add their own ownership map.
+            if ($sourceType !== 'commerce_order'
+                || !Schema::hasTable('commerce_orders')
+                || !Schema::hasTable('payment_transactions')) {
+                throw new RuntimeException('Referral reversal source cannot be reconciled to an authoritative commerce order.');
+            }
+
+            $order = DB::table('commerce_orders')
+                ->where('id', (int) $sourceId)
+                ->where('user_id', $buyer->id)
+                ->lockForUpdate()
+                ->first();
+            if (!$order || empty($order->invoice_id)) {
+                throw new RuntimeException('Referral reversal order does not belong to this buyer or has no invoice.');
+            }
+            if (strtoupper(trim((string) $order->currency)) !== strtoupper(trim($currency))) {
+                throw new RuntimeException('Referral reversal currency does not match the commerce order currency.');
+            }
+
+            $refundTransaction = DB::table('payment_transactions')
+                ->where('id', (int) $refundRecord->payment_transaction_id)
+                ->lockForUpdate()
+                ->first();
+            if (!$refundTransaction
+                || (int) $refundTransaction->invoice_id !== (int) $order->invoice_id
+                || strtoupper(trim((string) $refundTransaction->currency)) !== strtoupper(trim($currency))) {
+                throw new RuntimeException('Recorded payment refund does not belong to the commission order invoice and currency.');
+            }
+
             $existing = DB::table('referral_commission_reversals')
                 ->where('payment_refund_id', $paymentRefundId)->lockForUpdate()->first();
             if ($existing) {
