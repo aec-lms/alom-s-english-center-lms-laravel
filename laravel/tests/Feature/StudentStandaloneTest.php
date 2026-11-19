@@ -130,4 +130,80 @@ class StudentStandaloneTest extends TestCase
         $this->assertFalse(Hash::check('InitialPassword123!', $student->user->password));
     }
 
+
+    public function test_branch_manager_cannot_cross_branch_edit_delete_or_create_student_records(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'student-management']);
+        $admin = $this->createUserWithRole('admin');
+
+        $branchA = DB::table('branches')->insertGetId([
+            'code' => 'STU-SEC-A-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'name' => 'Student Security Branch A',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $branchB = DB::table('branches')->insertGetId([
+            'code' => 'STU-SEC-B-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'name' => 'Student Security Branch B',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($admin)->post('/admin/students', [
+            'name' => 'Private Branch Learner',
+            'email' => 'private.branch@aec.test',
+            'password' => 'InitialPassword123!',
+            'student_code' => 'PRIVATE-BRANCH-001',
+            'branch_id' => $branchB,
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $otherBranchStudent = Student::query()->where('student_code', 'PRIVATE-BRANCH-001')->firstOrFail();
+
+        $manager = $this->createUserWithRole('branch_manager', (int) $branchA);
+        $permissionId = DB::table('permissions')->where('slug', 'students.manage')->value('id');
+        $this->assertNotNull($permissionId);
+        $manager->roles()->first()->permissions()->syncWithoutDetaching([$permissionId]);
+
+        $this->actingAs($manager)->put('/admin/students/' . $otherBranchStudent->id, [
+            'name' => 'Attempted Cross Branch Edit',
+            'email' => 'private.branch@aec.test',
+            'student_code' => 'PRIVATE-BRANCH-001',
+            'branch_id' => $branchA,
+            'status' => 'active',
+        ])->assertForbidden();
+
+        $this->actingAs($manager)->delete('/admin/students/' . $otherBranchStudent->id)->assertForbidden();
+
+        $this->actingAs($manager)->post('/admin/students', [
+            'name' => 'Forged Branch Learner',
+            'email' => 'forged.branch@aec.test',
+            'password' => 'InitialPassword123!',
+            'student_code' => 'FORGED-BRANCH-001',
+            'branch_id' => $branchB,
+        ])->assertForbidden();
+
+        $this->actingAs($manager)->post('/admin/students', [
+            'name' => 'Assigned Branch Learner',
+            'email' => 'assigned.branch@aec.test',
+            'password' => 'InitialPassword123!',
+            'student_code' => 'ASSIGNED-BRANCH-001',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('students', [
+            'student_code' => 'ASSIGNED-BRANCH-001',
+            'branch_id' => $branchA,
+        ]);
+        $this->assertDatabaseHas('users', [
+            'email' => 'assigned.branch@aec.test',
+            'branch_id' => $branchA,
+        ]);
+        $this->assertDatabaseHas('students', [
+            'id' => $otherBranchStudent->id,
+            'branch_id' => $branchB,
+            'student_code' => 'PRIVATE-BRANCH-001',
+        ]);
+    }
+
 }
