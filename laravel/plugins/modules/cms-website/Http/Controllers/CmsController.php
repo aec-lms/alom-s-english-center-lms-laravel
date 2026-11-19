@@ -281,12 +281,14 @@ class CmsController extends Controller
 
     public function requestPostChanges(Request $request, CmsPost $post): RedirectResponse
     {
-        abort_if($post->trashed(), 404);
-        abort_unless(($post->editorial_status ?? 'draft') === 'in_review', 422);
-        abort_if((int) $post->submitted_by === (int) auth()->id() || (int) $post->created_by === (int) auth()->id() || (int) $post->author_user_id === (int) auth()->id(), 403, 'The submitter or author cannot review their own post.');
         $data = $request->validate(['review_note' => ['required', 'string', 'min:5', 'max:2000']]);
-        $post->forceFill(['editorial_status' => 'changes_requested', 'reviewed_at' => now(), 'reviewed_by' => auth()->id(), 'review_note' => $data['review_note']])->save();
-        $this->audit->log('cms.post_changes_requested', 'cms_post', (string) $post->id, ['note_length' => strlen($data['review_note'])]);
+        DB::transaction(function () use ($post, $data): void {
+            $locked = CmsPost::query()->lockForUpdate()->findOrFail($post->id);
+            abort_unless(($locked->editorial_status ?? 'draft') === 'in_review' && !$locked->is_published, 422);
+            abort_if((int) $locked->submitted_by === (int) auth()->id() || (int) $locked->created_by === (int) auth()->id() || (int) $locked->author_user_id === (int) auth()->id(), 403, 'The submitter or author cannot review their own post.');
+            $locked->forceFill(['editorial_status' => 'changes_requested', 'reviewed_at' => now(), 'reviewed_by' => auth()->id(), 'review_note' => $data['review_note']])->save();
+            $this->audit->log('cms.post_changes_requested', 'cms_post', (string) $locked->id, ['note_length' => strlen($data['review_note'])]);
+        }, 3);
         return back()->with('status', 'Editorial changes requested.');
     }
 
