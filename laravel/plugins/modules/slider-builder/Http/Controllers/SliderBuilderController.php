@@ -59,6 +59,18 @@ class SliderBuilderController extends Controller
     public function update(Request $request, HeroSlider $slider): RedirectResponse
     {
         $validated = $this->validated($request, $slider);
+
+        // Compare both effective boundaries so a partial update cannot create
+        // an invalid window by retaining the omitted value from the database.
+        $effectiveStart = array_key_exists('starts_at', $validated) ? $validated['starts_at'] : $slider->starts_at;
+        $effectiveEnd = array_key_exists('ends_at', $validated) ? $validated['ends_at'] : $slider->ends_at;
+        if ($effectiveStart && $effectiveEnd
+            && Carbon::parse($effectiveEnd)->lt(Carbon::parse($effectiveStart))) {
+            throw ValidationException::withMessages([
+                'ends_at' => 'The slide end date must be on or after its start date.',
+            ]);
+        }
+
         $oldImage = $slider->image_path;
         $oldMobileImage = $slider->mobile_image_path;
 
