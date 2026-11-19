@@ -50,4 +50,15 @@ class LanguageSwitchTest extends TestCase
         $this->assertSame('bn-BD', config('lms.default_locale'));
     }
 
+    public function test_invalid_session_locale_falls_back_to_institution_default(): void
+    {
+        $this->markSystemInstalled();
+        config(['lms.default_locale' => 'bn-BD', 'app.locale' => 'bn-BD']);
+
+        $this->withSession(['locale' => 'fr'])
+            ->get('/login')
+            ->assertOk()
+            ->assertSee('স্বাগতম!');
+    }
+
 }
