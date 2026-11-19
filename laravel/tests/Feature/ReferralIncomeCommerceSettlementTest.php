@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use Illuminate\\Support\\Facades\\DB;
-use Plugins\\Modules\\ReferralIncome\\Services\\ReferralIncomeService;
-use Tests\\TestCase;
+use Illuminate\Support\Facades\DB;
+use Plugins\Modules\ReferralIncome\Services\ReferralIncomeService;
+use Tests\TestCase;
 
 final class ReferralIncomeCommerceSettlementTest extends TestCase
 {
@@ -73,7 +73,7 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
         try {
             $service->applyCode($owner, $ownCode);
             $this->fail('Self-referral must be rejected.');
-        } catch (\\Illuminate\\Validation\\ValidationException) {
+        } catch (\Illuminate\Validation\ValidationException) {
             $this->assertDatabaseCount('referral_attributions', 0);
         }
 
@@ -81,7 +81,7 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
         try {
             $service->applyCode($buyer, $otherCode);
             $this->fail('A buyer must not be assigned more than one referrer.');
-        } catch (\\Illuminate\\Validation\\ValidationException) {
+        } catch (\Illuminate\Validation\ValidationException) {
             $this->assertDatabaseCount('referral_attributions', 1);
         }
     }
