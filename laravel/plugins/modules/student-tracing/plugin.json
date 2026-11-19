@@ -1,7 +1,7 @@
 {
     "slug": "student-tracing",
     "name": "Student Activity & Progress Trace",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "author": "Alom's English Center",
     "category": "academic",
     "description": "Privacy-conscious, branch-scoped student activity timeline with searchable lifecycle events and CSV export.",
@@ -23,7 +23,8 @@
         "student-management",
         "attendance-management",
         "course-management",
-        "exam-management"
+        "exam-management",
+        "branch-management"
     ],
     "admin_menu": [
         {
