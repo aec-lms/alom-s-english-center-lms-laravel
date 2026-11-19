@@ -60,10 +60,10 @@ class CommerceCatalog
         $basePrice = round((float) ($course->price ?? 0), 2);
         $price = $basePrice;
         $metadata = ['course_id' => $id];
-        if (app(\\App\\Core\\Plugins\\PluginManager::class)->isEnabled('flash-sale')
+        if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('flash-sale')
             && Schema::hasTable('flash_sales')) {
             $branchId = $courseBranchId !== null ? (int) $courseBranchId : $this->userBranchId($user);
-            $quote = app(\\Plugins\\Modules\\FlashSale\\Services\\FlashSalePricingService::class)
+            $quote = app(\Plugins\Modules\FlashSale\Services\FlashSalePricingService::class)
                 ->quote($id, $branchId);
             $price = (float) $quote['total'];
             if ($quote['sale']) {
@@ -174,7 +174,7 @@ class CommerceCatalog
     {
         if (!$user || !method_exists($user, 'getAuthIdentifier')) return null;
 
-        if (app(\\App\\Core\\Plugins\\PluginManager::class)->isEnabled('student-management')
+        if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('student-management')
             && Schema::hasTable('students') && Schema::hasColumn('students', 'branch_id')) {
             $profileBranchId = DB::table('students')
                 ->where('user_id', $user->getAuthIdentifier())
