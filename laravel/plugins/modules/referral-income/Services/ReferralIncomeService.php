@@ -166,8 +166,12 @@ class ReferralIncomeService
                 throw new RuntimeException('Referral commission reversal exceeds the remaining eligible purchase amount.');
             }
 
+            $alreadyReversedCommission = (float) DB::table('referral_commission_reversals')
+                ->where('referral_commission_id', $commission->id)
+                ->sum('commission_reversal_amount');
+            $originalCommission = round($eligible * ((float) $commission->commission_percent / 100), 2);
             $reversalAmount = min(
-                (float) $commission->commission_amount,
+                max(0, round($originalCommission - $alreadyReversedCommission, 2)),
                 round($refund * ((float) $commission->commission_percent / 100), 2),
             );
             $reversalAmount = round($reversalAmount, 2);
