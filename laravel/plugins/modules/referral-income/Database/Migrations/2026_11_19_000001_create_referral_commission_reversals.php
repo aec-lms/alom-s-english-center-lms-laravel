@@ -9,25 +9,26 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
-        if (!Schema::hasTable('referral_commission_reversals')) {
-            Schema::create('referral_commission_reversals', function (Blueprint $table): void {
-                $table->id();
-                $table->foreignId('commission_id')->constrained('referral_commissions')->restrictOnDelete();
-                $table->unsignedBigInteger('payment_refund_id');
-                $table->decimal('refund_amount', 12, 2);
-                $table->decimal('commission_reversal_amount', 12, 2);
-                $table->string('currency', 8)->default('BDT');
-                $table->string('status', 24)->default('applied'); // applied, recovery_due, recovered, waived
-                $table->json('metadata')->nullable();
-                $table->timestamps();
-                $table->unique('payment_refund_id', 'ref_commission_refund_unique');
-                $table->index(['commission_id', 'status']);
-            });
+        if (Schema::hasTable('referral_commission_reversals')) {
+            return;
         }
+
+        Schema::create('referral_commission_reversals', function (Blueprint $table): void {
+            $table->id();
+            $table->foreignId('referral_commission_id')->constrained('referral_commissions')->restrictOnDelete();
+            $table->unsignedBigInteger('payment_refund_id');
+            $table->decimal('refunded_amount', 12, 2);
+            $table->decimal('commission_reversal_amount', 12, 2);
+            $table->string('currency', 8)->default('BDT');
+            $table->string('status', 24)->default('applied');
+            $table->timestamps();
+            $table->unique('payment_refund_id', 'ref_commission_reversal_refund_unique');
+            $table->index(['referral_commission_id', 'status'], 'ref_commission_reversal_status_idx');
+        });
     }
 
     public function down(): void
     {
-        // Financial audit records are intentionally preserved on plugin uninstall.
+        // Financial reversal history is retained when the optional plugin is updated or removed.
     }
 };
