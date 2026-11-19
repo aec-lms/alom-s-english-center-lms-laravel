@@ -269,7 +269,7 @@ class CourseCommerceController extends Controller
         return DB::transaction(function () use ($gift, $student): RedirectResponse {
             $locked = DB::table('course_gifts')->where('id', $gift->id)->lockForUpdate()->first();
             abort_unless($locked && $locked->status === 'paid', 409, 'This gift has already been redeemed or is no longer available.');
-            $this->assertGiftInvoiceFullyPaid($locked->invoice_id ?? null);
+            $this->assertGiftInvoiceFullyPaid($locked->invoice_id ?? null, $locked->payment_transaction_id ?? null, (float) $locked->amount, (string) $locked->currency);
             $course = DB::table('courses')->where('id', $locked->course_id)->where('status', 'published')->first();
             abort_unless($course, 409, 'The gifted course is currently unavailable. Please contact support.');
             $this->assertCourseBranch($student, $course);
@@ -415,7 +415,7 @@ class CourseCommerceController extends Controller
             $voucher = DB::table('course_gift_vouchers')->where('redeem_token_hash', hash('sha256', $token))
                 ->lockForUpdate()->first();
             abort_unless($voucher && $voucher->status === 'paid', 409, 'This gift voucher has already been claimed or is unavailable.');
-            $this->assertGiftInvoiceFullyPaid($voucher->invoice_id ?? null);
+            $this->assertGiftInvoiceFullyPaid($voucher->invoice_id ?? null, $voucher->payment_transaction_id ?? null, (float) $voucher->amount, (string) $voucher->currency);
             abort_if($voucher->expires_at && now()->greaterThan($voucher->expires_at), 410, 'This gift voucher has expired.');
             abort_unless(hash_equals(strtolower((string) $voucher->recipient_email), strtolower((string) $student->email)),
                 403, 'Sign in with the email address that received this voucher.');
@@ -767,8 +767,30 @@ class CourseCommerceController extends Controller
      * intentionally checked under the caller's redemption transaction lock.
      * Legacy records without an invoice remain supported for backward compatibility.
      */
-    private function assertGiftInvoiceFullyPaid($invoiceId): void
+    private function assertGiftInvoiceFullyPaid($invoiceId, $paymentTransactionId = null, ?float $expectedAmount = null, ?string $expectedCurrency = null): void
     {
+        // New gift/voucher purchases must be backed by the exact verified
+        // universal-payment transaction that created them. Keep the nullable
+        // transaction fallback only for historical records created before this
+        // linkage existed.
+        if ($paymentTransactionId !== null) {
+            abort_unless(Schema::hasTable('universal_payment_transactions'), 503, 'Gift payment transaction storage is unavailable.');
+            $payment = DB::table('universal_payment_transactions')
+                ->where('id', $paymentTransactionId)
+                ->lockForUpdate()
+                ->first();
+
+            abort_unless($payment !== null
+                && (string) $payment->status === 'verified'
+                && ($expectedAmount === null || abs((float) $payment->amount - $expectedAmount) <= 0.01)
+                && ($expectedCurrency === null || strtoupper((string) $payment->currency) === strtoupper($expectedCurrency)),
+                409,
+                'This gift or voucher payment has not been verified or no longer matches its purchase.'
+            );
+
+            abort_unless($invoiceId !== null, 409, 'This gift or voucher has no verified payment invoice and cannot be redeemed.');
+        }
+
         if ($invoiceId === null) {
             return;
         }
