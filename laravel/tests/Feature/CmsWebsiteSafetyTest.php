@@ -80,4 +80,53 @@ class CmsWebsiteSafetyTest extends TestCase
         ]);
     }
 
+    public function test_trashed_post_keeps_its_media_and_is_hidden_from_public_hub_until_restored(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+        $admin = $this->createUserWithRole('admin');
+
+        $relativePath = '/uploads/posts/recycle-bin-preserved-' . uniqid() . '.webp';
+        $absolutePath = public_path(ltrim($relativePath, '/'));
+        if (!is_dir(dirname($absolutePath))) {
+            mkdir(dirname($absolutePath), 0755, true);
+        }
+        file_put_contents($absolutePath, 'fake image bytes');
+
+        try {
+            $post = CmsPost::query()->create([
+                'slug' => 'recycle-bin-post-' . uniqid(),
+                'title' => 'Recycle Bin Preserved Article',
+                'category' => 'General',
+                'author' => 'AEC LMS',
+                'content' => 'This article must survive restore.',
+                'thumbnail_path' => $relativePath,
+                'is_published' => true,
+            ]);
+
+            $this->get('/learn')->assertOk()->assertSee('Recycle Bin Preserved Article');
+            $this->get('/learn/' . $post->slug)->assertOk()->assertSee('This article must survive restore.');
+
+            $this->actingAs($admin)->delete('/admin/cms/posts/' . $post->id)
+                ->assertRedirect()->assertSessionHasNoErrors();
+
+            $this->assertSoftDeleted('cms_posts', ['id' => $post->id]);
+            $this->assertFileExists($absolutePath);
+            $this->get('/learn')->assertOk()->assertDontSee('Recycle Bin Preserved Article');
+            $this->get('/learn/' . $post->slug)->assertNotFound();
+
+            $this->actingAs($admin)->post('/admin/recycle-bin/cms-posts/' . $post->id . '/restore')
+                ->assertRedirect()->assertSessionHasNoErrors();
+
+            $this->assertDatabaseHas('cms_posts', ['id' => $post->id, 'deleted_at' => null]);
+            $this->assertFileExists($absolutePath);
+            $this->get('/learn')->assertOk()->assertSee('Recycle Bin Preserved Article');
+            $this->get('/learn/' . $post->slug)->assertOk()->assertSee('This article must survive restore.');
+        } finally {
+            if (is_file($absolutePath)) {
+                @unlink($absolutePath);
+            }
+        }
+    }
+
 }

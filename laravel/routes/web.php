@@ -44,6 +44,7 @@ Route::middleware('installed')->group(function (): void {
     Route::get('/course/{slug}', [PublicHomeController::class, 'courseShow'])->name('public.courses.show');
     Route::post('/courses/coupon-check', [PublicHomeController::class, 'checkCoupon'])->middleware('throttle:public-coupon-check')->name('public.courses.coupon');
     Route::get('/learn', [PublicHomeController::class, 'learn'])->name('public.learn');
+    Route::get('/learn/{slug}', [PublicHomeController::class, 'learnShow'])->name('public.learn.show');
     Route::get('/instructors', [PublicHomeController::class, 'instructors'])->name('public.instructors');
     Route::get('/teacher/{id}', [PublicHomeController::class, 'instructorShow'])->name('public.instructors.show');
     Route::get('/exams', [PublicHomeController::class, 'exams'])->name('public.exams');
