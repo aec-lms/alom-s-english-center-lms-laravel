@@ -55,6 +55,7 @@ class FlashSaleController extends Controller
         $this->ensureCourseIntegration();
         $values = $this->validated($request);
         $this->assertCourseInBranch($request, (int) $values['course_id']);
+        $values['branch_id'] = $request->user()?->hasRole('branch_manager') ? (int) $request->user()->branch_id : ($values['branch_id'] ?? null);
 
         DB::table('flash_sales')->insert($values + [
             'is_published' => $request->boolean('is_published'),
@@ -73,6 +74,7 @@ class FlashSaleController extends Controller
         $values = $this->validated($request);
         $this->assertSaleInBranch($request, $sale);
         $this->assertCourseInBranch($request, (int) $values['course_id']);
+        $values['branch_id'] = $request->user()?->hasRole('branch_manager') ? (int) $request->user()->branch_id : ($values['branch_id'] ?? null);
 
         abort_unless(DB::table('flash_sales')->where('id', $sale)->exists(), 404);
         DB::table('flash_sales')->where('id', $sale)->update($values + [
@@ -140,12 +142,16 @@ class FlashSaleController extends Controller
             ->where('flash_sales.starts_at', '<=', now())
             ->where('flash_sales.ends_at', '>', now())
             ->where('courses.status', 'published')
+            ->where(function ($scope): void {
+                $scope->whereNull('flash_sales.branch_id')->orWhereColumn('flash_sales.branch_id', 'courses.branch_id');
+            })
             ->select(
                 'flash_sales.*',
                 'courses.title as course_title',
                 'courses.slug as course_slug',
                 'courses.price as course_price'
             )
+            ->orderByDesc('flash_sales.priority')
             ->orderBy('flash_sales.ends_at')
             ->get()
             ->map(function (object $sale): object {
@@ -153,7 +159,9 @@ class FlashSaleController extends Controller
                 $discount = $sale->discount_type === 'percent'
                     ? $price * (float) $sale->discount_value / 100
                     : (float) $sale->discount_value;
-                $sale->sale_price = max(0, $price - min($price, $discount));
+                $sale->sale_price = round(max(0, $price - min($price, $discount)), 2);
+                $sale->discount_amount = round(min($price, max(0, $discount)), 2);
+                $sale->discount_percent = $price > 0 ? round(($sale->discount_amount / $price) * 100, 1) : 0.0;
 
                 return $sale;
             });
@@ -207,11 +215,26 @@ class FlashSaleController extends Controller
         $values = $request->validate([
             'course_id' => ['required', 'integer', 'exists:courses,id'],
             'title' => ['required', 'string', 'max:160'],
+            'subtitle' => ['nullable', 'string', 'max:220'],
+            'description' => ['nullable', 'string', 'max:5000'],
+            'badge_text' => ['nullable', 'string', 'max:40'],
+            'banner_image_url' => ['nullable', 'url:https', 'max:2048'],
+            'cta_label' => ['nullable', 'string', 'max:40'],
+            'terms' => ['nullable', 'string', 'max:5000'],
+            'priority' => ['nullable', 'integer', 'min:0', 'max:10000'],
+            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
             'discount_type' => ['required', 'in:percent,fixed'],
             'discount_value' => ['required', 'numeric', 'gt:0', 'max:1000000'],
             'starts_at' => ['required', 'date'],
             'ends_at' => ['required', 'date', 'after:starts_at'],
         ]);
+        $values['cta_label'] = $values['cta_label'] ?? 'Explore offer';
+        $values['priority'] = (int) ($values['priority'] ?? 0);
+        if (!empty($values['branch_id'])) {
+            $courseBranch = DB::table('courses')->where('id', $values['course_id'])->value('branch_id');
+            abort_unless($courseBranch === null || (int) $courseBranch === (int) $values['branch_id'], 422,
+                'A branch-specific campaign must target a course available to that branch.');
+        }
 
         if ($values['discount_type'] === 'percent' && (float) $values['discount_value'] > 100) {
             abort(422, 'Percent discount cannot exceed 100.');
