@@ -9,6 +9,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
@@ -212,7 +213,7 @@ class ExamController extends Controller
 
         $attempt = $this->startOrResumeAttempt($exam, $actor);
         abort_if($attempt->submitted_at !== null, 403, 'Your exam time has expired or all attempts have been used.');
-        $snapshot = $this->validatedAttemptSnapshot($attempt);
+        $snapshot = $this->validatedAttemptSnapshot($attempt, $request);
         $questions = collect($snapshot['questions'])->map(static fn (array $question): object => (object) [
             'id' => $question['id'],
             'prompt' => $question['prompt'],
@@ -267,7 +268,7 @@ class ExamController extends Controller
             'answers.*' => ['nullable', 'integer', 'min:0'],
         ]);
 
-        $savedAt = DB::transaction(function () use ($exam, $actor, $validated): string {
+        $savedAt = DB::transaction(function () use ($exam, $actor, $validated, $request): string {
             $lockedExam = Exam::query()->whereKey($exam->id)->lockForUpdate()->firstOrFail();
             $attempt = ExamAttempt::query()
                 ->whereKey((int) $validated['attempt_id'])
@@ -277,7 +278,7 @@ class ExamController extends Controller
                 ->firstOrFail();
 
             abort_if($attempt->submitted_at !== null, 409, 'This exam attempt is already submitted.');
-            $snapshot = $this->validatedAttemptSnapshot($attempt);
+            $snapshot = $this->validatedAttemptSnapshot($attempt, $request);
             $deadline = $attempt->started_at?->copy()->addMinutes((int) $snapshot['duration_minutes']);
             if (!$deadline || now()->greaterThanOrEqualTo($deadline)) {
                 abort(409, 'The exam time has expired.');
@@ -330,7 +331,7 @@ class ExamController extends Controller
             'answers.*' => ['nullable', 'integer', 'min:0'],
         ]);
 
-        $result = DB::transaction(function () use ($exam, $actor, $validated): array {
+        $result = DB::transaction(function () use ($exam, $actor, $validated, $request): array {
             $lockedExam = Exam::query()->whereKey($exam->id)->lockForUpdate()->firstOrFail();
             $attempt = ExamAttempt::query()
                 ->whereKey((int) $validated['attempt_id'])
@@ -340,7 +341,7 @@ class ExamController extends Controller
                 ->firstOrFail();
             abort_if($attempt->submitted_at !== null, 409, 'This exam attempt has already been submitted.');
 
-            $snapshot = $this->validatedAttemptSnapshot($attempt);
+            $snapshot = $this->validatedAttemptSnapshot($attempt, $request);
             $questions = collect($snapshot['questions']);
             $deadline = $attempt->started_at?->copy()->addMinutes((int) $snapshot['duration_minutes']);
             $total = (float) $questions->sum('marks');
@@ -456,7 +457,7 @@ class ExamController extends Controller
 
         $attempt = $this->startOrResumeAttempt($exam, $actor);
         abort_if($attempt->submitted_at !== null, 403, 'Your exam time has expired or all attempts have been used.');
-        $snapshot = $this->validatedAttemptSnapshot($attempt);
+        $snapshot = $this->validatedAttemptSnapshot($attempt, $request);
         $deadline = $attempt->started_at->copy()->addMinutes((int) $snapshot['duration_minutes']);
 
         return response()->json([
@@ -499,7 +500,7 @@ class ExamController extends Controller
             'answers.*' => ['nullable', 'integer', 'min:0'],
         ]);
 
-        $result = DB::transaction(function () use ($exam, $actor, $attempt, $validated): array {
+        $result = DB::transaction(function () use ($exam, $actor, $attempt, $validated, $request): array {
             $lockedExam = Exam::query()->whereKey($exam->id)->lockForUpdate()->firstOrFail();
             $record = ExamAttempt::query()
                 ->whereKey($attempt)
@@ -509,7 +510,7 @@ class ExamController extends Controller
                 ->firstOrFail();
             abort_if($record->submitted_at !== null, 409, 'This exam attempt has already been submitted.');
 
-            $snapshot = $this->validatedAttemptSnapshot($record);
+            $snapshot = $this->validatedAttemptSnapshot($record, $request);
             $questions = collect($snapshot['questions']);
             $deadline = $record->started_at?->copy()->addMinutes((int) $snapshot['duration_minutes']);
             $total = (float) $questions->sum('marks');
@@ -674,18 +675,33 @@ class ExamController extends Controller
      *
      * @return array<string, mixed>
      */
-    private function validatedAttemptSnapshot(ExamAttempt $attempt): array
+    private function validatedAttemptSnapshot(ExamAttempt $attempt, Request $request): array
     {
         $snapshot = $attempt->exam_snapshot;
-        abort_unless(
-            is_array($snapshot)
-                && (int) ($snapshot['version'] ?? 0) === 1
-                && (int) ($snapshot['duration_minutes'] ?? 0) > 0
-                && is_array($snapshot['questions'] ?? null)
-                && count($snapshot['questions']) > 0,
-            409,
-            'This legacy exam attempt has no immutable question snapshot and cannot be safely resumed or graded. Please contact an administrator.'
-        );
+        $isValid = is_array($snapshot)
+            && (int) ($snapshot['version'] ?? 0) === 1
+            && (int) ($snapshot['duration_minutes'] ?? 0) > 0
+            && is_array($snapshot['questions'] ?? null)
+            && count($snapshot['questions']) > 0;
+
+        if (!$isValid) {
+            $message = 'This existing exam attempt cannot be resumed safely because its original question set is unavailable. Your attempt has not been submitted and your score has not changed. Please contact your instructor or school administrator for help.';
+
+            if ($request->is('api/*') || $request->expectsJson()) {
+                throw new HttpResponseException(response()->json([
+                    'error' => [
+                        'code' => 'legacy_attempt_snapshot_unavailable',
+                        'message' => $message,
+                    ],
+                ], 409));
+            }
+
+            throw new HttpResponseException(response()->view(
+                'exam-management::legacy-attempt-unavailable',
+                ['exam' => $attempt->exam, 'message' => $message],
+                409
+            ));
+        }
 
         return $snapshot;
     }
