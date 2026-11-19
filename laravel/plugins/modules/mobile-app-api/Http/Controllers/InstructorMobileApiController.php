@@ -41,7 +41,9 @@ class InstructorMobileApiController extends Controller
     {
         [$actor, $ids] = $this->teacher($request);
         $courses = DB::table('courses')->whereIn('id', $ids)->whereNull('deleted_at')
-            ->when($actor->branch_id, fn ($q) => $q->where('branch_id', $actor->branch_id))
+            ->when($actor->branch_id !== null, fn ($q) => $q->where(function ($branch) use ($actor): void {
+                $branch->whereNull('branch_id')->orWhere('branch_id', $actor->branch_id);
+            }))
             ->orderBy('title')->paginate(30);
         return response()->json(['data' => $courses->getCollection()->map(fn ($c) => ['id'=>$c->id,'title'=>$c->title,'slug'=>$c->slug,'branch_id'=>$c->branch_id,'status'=>$c->status,'students_count'=>DB::table('enrollments')->where('course_id',$c->id)->whereIn('status',['active','completed'])->count()])->values(), 'meta'=>['current_page'=>$courses->currentPage(),'last_page'=>$courses->lastPage(),'total'=>$courses->total()]]);
     }
