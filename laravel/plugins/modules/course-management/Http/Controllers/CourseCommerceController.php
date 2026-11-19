@@ -465,7 +465,7 @@ class CourseCommerceController extends Controller
                 'user_id' => $student->id,
                 'course_id' => null,
                 'invoice_id' => null,
-                'amount' => $voucher->remaining_amount,
+                'amount' => $remainingAmount,
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
