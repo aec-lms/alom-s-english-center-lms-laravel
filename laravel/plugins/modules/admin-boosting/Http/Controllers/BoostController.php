@@ -82,8 +82,8 @@ class BoostController extends Controller
         $effectiveStart = array_key_exists('starts_at', $validated) ? $validated['starts_at'] : $campaign->starts_at;
         $effectiveEnd = array_key_exists('ends_at', $validated) ? $validated['ends_at'] : $campaign->ends_at;
         if ($effectiveStart && $effectiveEnd
-            && \Illuminate\\Support\\Carbon::parse($effectiveEnd)->lt(\Illuminate\\Support\\Carbon::parse($effectiveStart))) {
-            throw \Illuminate\\Validation\\ValidationException::withMessages([
+            && \Illuminate\Support\Carbon::parse($effectiveEnd)->lt(\Illuminate\Support\Carbon::parse($effectiveStart))) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
                 'ends_at' => 'The campaign end date must be on or after its start date.',
             ]);
         }
