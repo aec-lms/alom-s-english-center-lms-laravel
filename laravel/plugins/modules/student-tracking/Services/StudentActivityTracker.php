@@ -37,7 +37,8 @@ class StudentActivityTracker
         $branchId = null;
         if (app(PluginManager::class)->isEnabled('student-management')
             && Schema::hasTable('students')
-            && Schema::hasColumn('students', 'user_id')) {
+            && Schema::hasColumn('students', 'user_id')
+            && Schema::hasColumn('students', 'branch_id')) {
             $profile = DB::table('students')->where('user_id', $userId)->first(['id', 'branch_id']);
             if ($profile) {
                 $studentId = (int) $profile->id;
