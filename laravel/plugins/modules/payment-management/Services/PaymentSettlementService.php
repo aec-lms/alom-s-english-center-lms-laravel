@@ -137,19 +137,23 @@ class PaymentSettlementService
                         || abs(round($orderSubtotal - $orderDiscount, 2) - $orderGrandTotal) > 0.01) {
                         throw new RuntimeException('Commerce order subtotal, discount, and total do not reconcile.');
                     }
-                    if (!Schema::hasTable('commerce_order_items')) {
-                        throw new RuntimeException('Commerce order items are unavailable for settlement verification.');
-                    }
-                    $settlementItems = DB::table('commerce_order_items')
-                        ->where('order_id', $preflightOrder->id)
-                        ->lockForUpdate()
-                        ->get();
-                    if ($settlementItems->isEmpty()) {
-                        throw new RuntimeException('An empty commerce order cannot be settled.');
-                    }
-                    $itemsSubtotal = round($settlementItems->sum(fn ($item) => (float) $item->line_total), 2);
-                    if (abs($itemsSubtotal - $orderSubtotal) > 0.01) {
-                        throw new RuntimeException('Commerce order items do not reconcile with the order subtotal.');
+                    // Older installations can have invoice-linked commerce
+                    // orders created before the unified order-items table existed.
+                    // Preserve that legacy settlement path, but whenever the
+                    // unified schema is installed require a non-empty, reconciled
+                    // item snapshot before any entitlement can be granted.
+                    if (Schema::hasTable('commerce_order_items')) {
+                        $settlementItems = DB::table('commerce_order_items')
+                            ->where('order_id', $preflightOrder->id)
+                            ->lockForUpdate()
+                            ->get();
+                        if ($settlementItems->isEmpty()) {
+                            throw new RuntimeException('An empty commerce order cannot be settled.');
+                        }
+                        $itemsSubtotal = round($settlementItems->sum(fn ($item) => (float) $item->line_total), 2);
+                        if (abs($itemsSubtotal - $orderSubtotal) > 0.01) {
+                            throw new RuntimeException('Commerce order items do not reconcile with the order subtotal.');
+                        }
                     }
 
                     if (Schema::hasColumn('commerce_orders', 'branch_id') && Schema::hasColumn('fee_invoices', 'branch_id')) {
