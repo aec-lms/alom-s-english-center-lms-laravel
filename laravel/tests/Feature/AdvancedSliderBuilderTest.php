@@ -123,4 +123,23 @@ class AdvancedSliderBuilderTest extends TestCase
 
         $this->assertSame([$visible->id], HeroSlider::query()->visibleNow()->pluck('id')->all());
     }
+
+    public function test_recycled_slides_are_never_rendered_on_the_public_homepage(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['slider-builder']);
+
+        $slide = HeroSlider::query()->create([
+            'key_name' => 'hero',
+            'title' => 'Private Recycled Slider Campaign',
+            'is_active' => true,
+            'sort_order' => 1,
+        ]);
+        $slide->delete();
+
+        $this->get('/')
+            ->assertOk()
+            ->assertDontSee('Private Recycled Slider Campaign');
+    }
+
 }
