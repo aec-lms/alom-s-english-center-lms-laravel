@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\AdminBoosting\\Http\\Controllers;
+namespace Plugins\Modules\AdminBoosting\Http\Controllers;
 
-use App\\Core\\Security\\AuditLogger;
-use App\\Http\\Controllers\\Controller;
-use Illuminate\\Http\\RedirectResponse;
-use Illuminate\\Http\\Request;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Facades\\Schema;
-use Illuminate\\View\\View;
-use Plugins\\Modules\\AdminBoosting\\Models\\BoostCampaign;
+use App\Core\Security\AuditLogger;
+use App\Http\Controllers\Controller;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\View\View;
+use Plugins\Modules\AdminBoosting\Models\BoostCampaign;
 
 class BoostController extends Controller
 {
@@ -143,7 +143,7 @@ class BoostController extends Controller
             'placement' => ['required', 'in:homepage_featured,course_listing,notice_banner'],
             'badge_text' => ['nullable', 'string', 'max:60'],
             'cta_text' => ['nullable', 'string', 'max:60'],
-            'destination_url' => ['nullable', 'string', 'max:255', function (string $attribute, mixed $value, \\Closure $fail): void {
+            'destination_url' => ['nullable', 'string', 'max:255', function (string $attribute, mixed $value, \Closure $fail): void {
                 if ($value !== null && $value !== '' && !$this->isSafeDestination((string) $value)) {
                     $fail('The destination must be a relative site path or a same-origin HTTP(S) URL.');
                 }
@@ -157,13 +157,13 @@ class BoostController extends Controller
 
     private function isSafeDestination(string $destination): bool
     {
-        if ($destination === '' || preg_match('/[\\\\\\x00-\\x1F\\x7F]/', $destination)) {
+        if ($destination === '' || preg_match('/[\x00-\x1F\x7F]/', $destination)) {
             return false;
         }
 
         $relative = str_starts_with($destination, '/') && !str_starts_with($destination, '//');
         if ($relative) {
-            return !str_contains($destination, '\\\\');
+            return !str_contains($destination, '\\');
         }
 
         $scheme = parse_url($destination, PHP_URL_SCHEME);
@@ -191,8 +191,6 @@ class BoostController extends Controller
 
     private function visitorHash(Request $request): string
     {
-        $key = (string) config('app.key');
-
-        return hash_hmac('sha256', (string) $request->session()->getId(), $key);
+        return hash_hmac('sha256', (string) $request->session()->getId(), (string) config('app.key'));
     }
 }
