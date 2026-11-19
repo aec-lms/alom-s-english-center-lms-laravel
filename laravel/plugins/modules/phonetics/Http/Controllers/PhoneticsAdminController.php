@@ -56,7 +56,7 @@ final class PhoneticsAdminController extends Controller
                 'enabled' => $request->boolean('enabled'),
                 'course_slug' => Str::slug($data['course_slug']),
                 'course_title' => $data['course_title'],
-                'require_course_enrollment' => $request->boolean('require_course_enrollment'),
+                'require_course_enrollment' => true,\n                'course_scoped_only' => true,
                 'show_articulatory_notes' => $request->boolean('show_articulatory_notes'),
                 'allow_slow_playback' => $request->boolean('allow_slow_playback'),
                 'theme_profile_id' => $data['theme_profile_id'],
