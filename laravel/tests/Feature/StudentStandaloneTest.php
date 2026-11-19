@@ -73,4 +73,59 @@ class StudentStandaloneTest extends TestCase
         $this->assertDatabaseHas('users', ['id' => $student->user_id, 'is_active' => true]);
     }
 
+
+    public function test_admin_can_change_student_branch_and_reset_password_from_edit_form(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'student-management']);
+        $admin = $this->createUserWithRole('admin');
+
+        $branchA = DB::table('branches')->insertGetId([
+            'code' => 'STU-EDIT-A-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'name' => 'Student Edit Branch A',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $branchB = DB::table('branches')->insertGetId([
+            'code' => 'STU-EDIT-B-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'name' => 'Student Edit Branch B',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($admin)->post('/admin/students', [
+            'name' => 'Branch Move Learner',
+            'email' => 'branch.move@aec.test',
+            'password' => 'InitialPassword123!',
+            'student_code' => 'BRANCH-MOVE-001',
+            'branch_id' => $branchA,
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $student = Student::query()->where('student_code', 'BRANCH-MOVE-001')->firstOrFail();
+        $this->actingAs($admin)->get('/admin/students')
+            ->assertOk()
+            ->assertSee('name="branch_id"', false)
+            ->assertSee('name="password"', false)
+            ->assertSee('Student Edit Branch B');
+
+        $this->actingAs($admin)->put('/admin/students/' . $student->id, [
+            'name' => 'Branch Move Learner',
+            'email' => 'branch.move@aec.test',
+            'phone' => '01700000000',
+            'student_code' => 'BRANCH-MOVE-001',
+            'branch_id' => $branchB,
+            'status' => 'active',
+            'password' => 'ReplacementPassword456!',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $student->refresh();
+        $student->load('user');
+        $this->assertSame((int) $branchB, (int) $student->branch_id);
+        $this->assertSame((int) $branchB, (int) $student->user->branch_id);
+        $this->assertTrue(Hash::check('ReplacementPassword456!', $student->user->password));
+        $this->assertFalse(Hash::check('InitialPassword123!', $student->user->password));
+    }
+
 }
