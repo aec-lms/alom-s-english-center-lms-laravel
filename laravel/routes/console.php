@@ -25,4 +25,4 @@ Schedule::call(function (): void {
         ->whereNotNull('publish_at')
         ->where('publish_at', '<=', now())
         ->update(['is_published' => true, 'publish_at' => null, 'updated_at' => now()]);
-})->everyMinute()->withoutOverlapping();
+})->name('cms-publish-scheduled-posts')->everyMinute()->withoutOverlapping();
