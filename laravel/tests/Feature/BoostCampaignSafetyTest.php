@@ -313,7 +313,8 @@ class BoostCampaignSafetyTest extends TestCase
         $this->activatePlugins(['admin-boosting']);
         $campaign = BoostCampaign::query()->create([
             'campaign_name' => 'Impression Test',
-            'entity_type' => 'course',
+            'entity_type' => 'institution',
+            'entity_id' => null,
             'placement' => 'homepage_featured',
             'destination_url' => '/courses',
             'status' => 'active',
@@ -328,4 +329,42 @@ class BoostCampaignSafetyTest extends TestCase
         $this->assertSame(1, $campaign->fresh()->impressions);
         $this->assertSame(1, DB::table('boost_campaign_events')->where('campaign_id', $campaign->id)->where('event_type', 'impression')->count());
     }
+    
+    public function test_stale_course_campaign_cannot_record_clicks_or_impressions(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['admin-boosting', 'course-management']);
+        $course = Course::query()->create([
+            'code' => 'BOOST-STALE-01',
+            'title' => 'Formerly Published Course',
+            'slug' => 'formerly-published-course',
+            'price' => 0,
+            'status' => 'published',
+        ]);
+        $campaign = BoostCampaign::query()->create([
+            'campaign_name' => 'Stale Course Promotion',
+            'entity_type' => 'course',
+            'entity_id' => $course->id,
+            'placement' => 'homepage_featured',
+            'destination_url' => '/courses',
+            'status' => 'active',
+            'starts_at' => now()->subMinute(),
+            'ends_at' => now()->addDay(),
+        ]);
+
+        $course->update(['status' => 'draft']);
+        $visitorId = str_repeat('d', 64);
+
+        $this->withSession(['boost_visitor_id' => $visitorId])
+            ->get('/boost/impression/' . $campaign->id)
+            ->assertNoContent();
+        $this->withSession(['boost_visitor_id' => $visitorId])
+            ->get('/boost/click/' . $campaign->id)
+            ->assertRedirect('/courses');
+
+        $this->assertSame(0, $campaign->fresh()->impressions);
+        $this->assertSame(0, $campaign->fresh()->clicks);
+        $this->assertDatabaseCount('boost_campaign_events', 0);
+    }
+
 }
