@@ -28,7 +28,7 @@ class ExamAttemptSnapshotTest extends TestCase
         $snapshot = json_decode((string) DB::table('exam_attempts')->where('id', $attemptId)->value('question_snapshot'), true);
         $this->assertSame('Original question prompt', $snapshot['questions'][0]['prompt']);
         $this->assertSame(0, $snapshot['questions'][0]['correct_option_index']);
-        $this->assertSame(2.0, $snapshot['questions'][0]['marks']);
+        $this->assertEquals(2.0, $snapshot['questions'][0]['marks']);
 
         // Simulate an administrator editing the live question and exam settings
         // after the student has started. The in-progress attempt must not change.
