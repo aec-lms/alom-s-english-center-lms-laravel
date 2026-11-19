@@ -108,3 +108,28 @@ A fresh GitHub changed-file audit found **15 identical changed paths between #27
 #292 is based on `main` but still has inherited #288 practice-view/test paths in its changed-file list. Rebase/clean against latest `main`; #288 remains canonical owner of the shared practice baseline, #292 owns recording-specific backend/admin files and tests. Current latest PR metadata must be refreshed before claiming CI completion.
 
 #293's earlier PHP syntax error has been corrected; latest reported Laravel job failed at Chromium dependency installation (Ubuntu package mirror HTTP 503), while MySQL was incomplete. Do not report the old syntax failure as current. #297 and #283 have no submitted independent APPROVED review in the current review list; passing CI alone does not make either merge-ready. #295's own SQLite passed, MySQL remained in progress at last recorded check. #298 is separately registered above and must not overlap #297's UI scope.
+
+
+---
+
+## Mandatory premium product-quality standard — applies to every workstream
+
+The project owner has explicitly directed that **a bug fix or technically functioning feature alone is not acceptable**. Every user-facing feature and screen must be delivered at a premium, polished, attractive and cohesive product standard.
+
+1. **Visual design:** strong hierarchy, refined typography, spacing, alignment, color contrast, consistent components, polished responsive layouts and purposeful visual states. No placeholder-looking, generic, unfinished or inconsistent screens.
+2. **Interaction design:** intuitive navigation and primary actions; complete loading, empty, success, error and validation states; no dead buttons or misleading status; accessible keyboard/focus behavior and touch-friendly controls.
+3. **Responsive acceptance:** inspect and verify desktop, tablet and mobile layouts, including realistic content lengths and edge cases.
+4. **Accessibility and usability:** semantic controls, labels, readable contrast, focus visibility, keyboard operation, reduced-motion support where animation is used, and clear feedback.
+5. **Design-system consistency:** reuse the LMS's established design language and shared components. Obtain the canonical owner's agreement before editing shared UI/components.
+6. **Evidence:** PR description must state the user journeys tested, visual checks performed at desktop/tablet/mobile, accessibility checks, and attach screenshots or browser evidence where practical.
+7. **Technical quality remains mandatory:** security, authorization, data integrity, performance, migrations/rollback safety, automated tests and exact-head CI are required. Green CI does not replace visual review; attractive UI does not replace correctness.
+8. **Backend-only tasks:** where no user-facing surface exists, apply the premium standard to API contracts, operational clarity, documentation, observability and developer experience.
+9. **Completion gate:** include a checklist for functionality, visual polish (where applicable), responsive behavior, accessibility, edge cases, security and exact-head CI. Keep the PR Draft until all applicable checks and independent review pass.
+
+This standard applies to every current and future PR, issue, plugin, admin panel, student/teacher/guardian workflow, CMS, commerce flow, builder, public page and API. One primary owner per task remains mandatory; helpers must agree and record a bounded handoff before contributing.
+
+### 2026-11-19 addendum — new Exam Management workstreams
+
+- [#310](../pull/310) — immutable Exam Management attempt snapshots; primary owner `mdlalchandakand-cell`. Treat this as the canonical implementation candidate only after comparing the overlapping #311 diff; resolve ownership before parallel changes.
+- [#311](../pull/311) — immutable Exam Management attempt snapshots; primary owner `Alomsenglishcenter`. This materially overlaps #310 in the same module/outcome. Both owners must pause overlapping edits and agree one canonical implementation with a recorded bounded handoff; do not merge both implementations.
+- Both #310 and #311 must satisfy the premium product-quality standard above, including polished student exam-taking and admin configuration experiences where those surfaces are in scope, responsive and accessible states, and evidence of visual review. Assessment integrity, immutable scoring correctness and migration safety remain non-negotiable.
