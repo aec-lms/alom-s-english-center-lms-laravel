@@ -31,6 +31,7 @@ return new class extends Migration
             $table->timestamps();
             $table->index(['lms_driver', 'course_ref', 'status', 'created_at'], 'phonetic_recordings_review_queue');
             $table->index(['user_id', 'entry_id', 'created_at'], 'phonetic_recordings_student_history');
+            $table->index(['lms_driver', 'user_id', 'created_at'], 'phonetic_recordings_student_daily_quota');
         });
     }
 
