@@ -489,18 +489,34 @@ class CmsController extends Controller
         if (!in_array('cms_reviewer', $newRoles, true) && !in_array('cms_editor', $newRoles, true)) {
             abort_if(CmsPost::withTrashed()->where('assigned_reviewer_id', $user->id)->exists(), 422, 'Reassign all posts assigned to this user before removing Reviewer access.');
         }
-        if (!in_array('cms_author_manager', $newRoles, true) && $user->hasRole('cms_author_manager')) {
-            $otherManagers = User::query()->where('is_active', true)->where('id', '!=', $user->id)
-                ->whereHas('roles', fn ($roles) => $roles->where('slug', 'cms_author_manager'))->exists();
-            abort_unless($otherManagers, 422, 'At least one other active CMS Contributor Manager must remain before removing this access.');
-        }
-
         $roleIds = DB::table('roles')->whereIn('slug', $newRoles)->pluck('id')->all();
         $cmsRoleIds = DB::table('roles')->whereIn('slug', ['cms_contributor', 'cms_editor', 'cms_reviewer', 'cms_author_manager'])->pluck('id')->all();
-        DB::transaction(function () use ($user, $roleIds, $cmsRoleIds): void {
-            $user->roles()->detach($cmsRoleIds);
-            if ($roleIds !== []) $user->roles()->syncWithoutDetaching($roleIds);
-        });
+
+        DB::transaction(function () use ($user, $roleIds, $cmsRoleIds, $newRoles): void {
+            // Serialize manager removals against the complete active-manager set.
+            // Checking this outside the transaction lets two managers concurrently
+            // remove themselves and leave the CMS without any active manager.
+            $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
+            if (!in_array('cms_author_manager', $newRoles, true) && $lockedUser->hasRole('cms_author_manager')) {
+                $activeManagerIds = User::query()
+                    ->where('is_active', true)
+                    ->whereHas('roles', fn ($roles) => $roles->where('slug', 'cms_author_manager'))
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->pluck('id')
+                    ->map(static fn ($id): int => (int) $id)
+                    ->all();
+
+                abort_unless(
+                    count(array_diff($activeManagerIds, [(int) $lockedUser->id])) > 0,
+                    422,
+                    'At least one other active CMS Contributor Manager must remain before removing this access.'
+                );
+            }
+
+            $lockedUser->roles()->detach($cmsRoleIds);
+            if ($roleIds !== []) $lockedUser->roles()->syncWithoutDetaching($roleIds);
+        }, 3);
 
         $this->audit->log('cms.contributor_access_updated', 'user', (string) $user->id, ['cms_roles' => $validated['roles'] ?? []]);
         return back()->with('status', "CMS access updated for {$user->name}.");
