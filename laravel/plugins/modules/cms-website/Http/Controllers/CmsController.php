@@ -151,8 +151,8 @@ class CmsController extends Controller
             'thumbnail_path' => $thumbPath,
             'pdf_path' => $pdfPath,
             'pdf_thumbnail' => $pdfThumbPath,
-            'seo_title' => $validated['seo_title'] ?? $validated['title'],
-            'seo_description' => $validated['seo_description'] ?? null,
+            'seo_title' => $validated['seo_title'] ?? ($post->seo_title ?: $validated['title']),
+            'seo_description' => $validated['seo_description'] ?? $post->seo_description,
             'is_published' => empty($validated['publish_at']) ? $request->boolean('is_published', true) : false,
             'publish_at' => $validated['publish_at'] ?? null,
         ]);
