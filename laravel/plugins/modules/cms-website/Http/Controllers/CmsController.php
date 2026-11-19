@@ -393,38 +393,50 @@ class CmsController extends Controller
 
     public function restorePost(int $postId): RedirectResponse
     {
-        $post = CmsPost::withTrashed()->findOrFail($postId);
-        abort_unless($post->trashed(), 404);
+        $title = null;
+        DB::transaction(function () use ($postId, &$title): void {
+            $post = CmsPost::withTrashed()->lockForUpdate()->findOrFail($postId);
+            abort_unless($post->trashed(), 404);
 
-        $post->restore();
-        $this->audit->log('cms.post_restored', 'cms_post', (string) $post->id, ['slug' => $post->slug]);
+            $post->restore();
+            $title = $post->title;
+            $this->audit->log('cms.post_restored', 'cms_post', (string) $post->id, ['slug' => $post->slug]);
+        }, 3);
 
-        return back()->with('status', "Post '{$post->title}' restored.");
+        return back()->with('status', "Post '{$title}' restored.");
     }
 
     public function forceDeletePost(int $postId): RedirectResponse
     {
-        $post = CmsPost::withTrashed()->findOrFail($postId);
-        abort_unless($post->trashed(), 404);
+        $assets = [];
+        $title = null;
+        DB::transaction(function () use ($postId, &$assets, &$title): void {
+            $post = CmsPost::withTrashed()->lockForUpdate()->findOrFail($postId);
+            abort_unless($post->trashed(), 404);
 
-        $title = $post->title;
-        $id = (string) $post->id;
-        $assets = [$post->thumbnail_path, $post->pdf_path, $post->pdf_thumbnail];
-        if (Schema::hasTable('cms_post_revisions')) {
-            $revisionAssets = DB::table('cms_post_revisions')->where('post_id', $post->id)->get(['thumbnail_path', 'pdf_path', 'pdf_thumbnail']);
-            foreach ($revisionAssets as $revisionAsset) {
-                array_push($assets, $revisionAsset->thumbnail_path, $revisionAsset->pdf_path, $revisionAsset->pdf_thumbnail);
+            $title = $post->title;
+            $id = (string) $post->id;
+            $assets = [$post->thumbnail_path, $post->pdf_path, $post->pdf_thumbnail];
+
+            if (Schema::hasTable('cms_post_revisions')) {
+                $revisionAssets = DB::table('cms_post_revisions')
+                    ->where('post_id', $post->id)
+                    ->lockForUpdate()
+                    ->get(['thumbnail_path', 'pdf_path', 'pdf_thumbnail']);
+                foreach ($revisionAssets as $revisionAsset) {
+                    array_push($assets, $revisionAsset->thumbnail_path, $revisionAsset->pdf_path, $revisionAsset->pdf_thumbnail);
+                }
+                DB::table('cms_post_revisions')->where('post_id', $post->id)->delete();
             }
-            DB::table('cms_post_revisions')->where('post_id', $post->id)->delete();
-        }
 
-        // Remove the row and its revision history, then clean only truly unreferenced files.
-        $post->forceDelete();
+            $post->forceDelete();
+            $this->audit->log('cms.post_permanently_deleted', 'cms_post', $id, ['title' => $title]);
+        }, 3);
+
+        // Clean files only after the database transaction commits; shared files remain protected.
         foreach ($assets as $assetPath) {
             $this->deleteUnusedUpload($assetPath);
         }
-
-        $this->audit->log('cms.post_permanently_deleted', 'cms_post', $id, ['title' => $title]);
 
         return back()->with('status', "Post '{$title}' permanently deleted.");
     }
