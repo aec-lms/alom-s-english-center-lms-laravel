@@ -211,7 +211,7 @@ class ExamController extends Controller
             );
         }
 
-        $attempt = $this->startOrResumeAttempt($exam, $actor);
+        $attempt = $this->startOrResumeAttempt($exam, $actor, $request);
         abort_if($attempt->submitted_at !== null, 403, 'Your exam time has expired or all attempts have been used.');
         $snapshot = $this->validatedAttemptSnapshot($attempt, $request);
         $questions = collect($snapshot['questions'])->map(static fn (array $question): object => (object) [
@@ -455,7 +455,7 @@ class ExamController extends Controller
             );
         }
 
-        $attempt = $this->startOrResumeAttempt($exam, $actor);
+        $attempt = $this->startOrResumeAttempt($exam, $actor, $request);
         abort_if($attempt->submitted_at !== null, 403, 'Your exam time has expired or all attempts have been used.');
         $snapshot = $this->validatedAttemptSnapshot($attempt, $request);
         $deadline = $attempt->started_at->copy()->addMinutes((int) $snapshot['duration_minutes']);
@@ -583,9 +583,9 @@ class ExamController extends Controller
         ]);
     }
 
-    private function startOrResumeAttempt(Exam $exam, object $actor): ExamAttempt
+    private function startOrResumeAttempt(Exam $exam, object $actor, Request $request): ExamAttempt
     {
-        return DB::transaction(function () use ($exam, $actor): ExamAttempt {
+        return DB::transaction(function () use ($exam, $actor, $request): ExamAttempt {
             $lockedExam = Exam::query()->whereKey($exam->id)->lockForUpdate()->firstOrFail();
             $pending = ExamAttempt::query()
                 ->where('exam_id', $lockedExam->id)
@@ -599,7 +599,7 @@ class ExamController extends Controller
             if ($pending) {
                 // A legacy in-progress attempt has no provable start-time question set.
                 // Never silently grade it against today's mutable exam content.
-                $snapshot = $this->validatedAttemptSnapshot($pending);
+                $snapshot = $this->validatedAttemptSnapshot($pending, $request);
                 $deadline = $pending->started_at?->copy()->addMinutes((int) $snapshot['duration_minutes']);
                 if (!$deadline || now()->greaterThanOrEqualTo($deadline)) {
                     $total = (float) collect($snapshot['questions'])->sum('marks');
