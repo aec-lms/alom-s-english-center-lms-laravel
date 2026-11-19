@@ -141,6 +141,119 @@ class PaymentSettlementStateMachineTest extends TestCase
         ]);
     }
 
+    public function test_partial_payments_and_duplicate_callbacks_are_idempotent(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management']);
+
+        $invoice = FeeInvoice::query()->create([
+            'invoice_number' => 'PARTIAL-SETTLE-' . strtoupper(uniqid()),
+            'payer_name' => 'Partial Payment Student',
+            'payer_email' => 'partial.payment@aec.test',
+            'subtotal_amount' => 1000,
+            'discount_amount' => 0,
+            'net_amount' => 1000,
+            'paid_amount' => 0,
+            'currency' => 'BDT',
+            'status' => 'unpaid',
+        ]);
+
+        $first = PaymentTransaction::query()->create([
+            'transaction_ref' => 'PARTIAL-TXN-A-' . strtoupper(uniqid()),
+            'invoice_id' => $invoice->id,
+            'gateway_slug' => 'offline',
+            'amount' => 400,
+            'currency' => 'BDT',
+            'status' => 'initiated',
+            'metadata' => [],
+        ]);
+
+        $settlement = app(PaymentSettlementService::class);
+        $settlement->settleTransaction($first, 'PARTIAL-PROVIDER-A');
+
+        $this->assertDatabaseHas('fee_invoices', [
+            'id' => $invoice->id,
+            'paid_amount' => 400,
+            'status' => 'partial',
+        ]);
+
+        // A repeated callback for an already settled transaction must not
+        // credit the invoice again or overwrite the original provider ref.
+        $settlement->settleTransaction($first->fresh(), 'DIFFERENT-DUPLICATE-REFERENCE');
+        $this->assertDatabaseHas('payment_transactions', [
+            'id' => $first->id,
+            'status' => 'settled',
+            'external_reference' => 'PARTIAL-PROVIDER-A',
+        ]);
+        $this->assertDatabaseHas('fee_invoices', [
+            'id' => $invoice->id,
+            'paid_amount' => 400,
+            'status' => 'partial',
+        ]);
+
+        $second = PaymentTransaction::query()->create([
+            'transaction_ref' => 'PARTIAL-TXN-B-' . strtoupper(uniqid()),
+            'invoice_id' => $invoice->id,
+            'gateway_slug' => 'offline',
+            'amount' => 600,
+            'currency' => 'BDT',
+            'status' => 'initiated',
+            'metadata' => [],
+        ]);
+        $settlement->settleTransaction($second, 'PARTIAL-PROVIDER-B');
+
+        $this->assertDatabaseHas('fee_invoices', [
+            'id' => $invoice->id,
+            'paid_amount' => 1000,
+            'status' => 'paid',
+        ]);
+    }
+
+    public function test_settlement_rejects_overpayment_without_mutating_transaction_or_invoice(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management']);
+
+        $invoice = FeeInvoice::query()->create([
+            'invoice_number' => 'OVERPAY-GUARD-' . strtoupper(uniqid()),
+            'payer_name' => 'Overpayment Guard Student',
+            'payer_email' => 'overpayment.guard@aec.test',
+            'subtotal_amount' => 500,
+            'discount_amount' => 0,
+            'net_amount' => 500,
+            'paid_amount' => 0,
+            'currency' => 'BDT',
+            'status' => 'unpaid',
+        ]);
+        $transaction = PaymentTransaction::query()->create([
+            'transaction_ref' => 'OVERPAY-TXN-' . strtoupper(uniqid()),
+            'invoice_id' => $invoice->id,
+            'gateway_slug' => 'offline',
+            'amount' => 500.02,
+            'currency' => 'BDT',
+            'status' => 'initiated',
+            'metadata' => [],
+        ]);
+
+        try {
+            app(PaymentSettlementService::class)->settleTransaction($transaction, 'OVERPAY-PROVIDER-REF');
+            $this->fail('Settlement must reject a transaction above the invoice balance.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('Settlement exceeds remaining invoice balance.', $exception->getMessage());
+        }
+
+        $this->assertDatabaseHas('payment_transactions', [
+            'id' => $transaction->id,
+            'status' => 'initiated',
+            'external_reference' => null,
+        ]);
+        $this->assertDatabaseHas('fee_invoices', [
+            'id' => $invoice->id,
+            'paid_amount' => 0,
+            'status' => 'unpaid',
+        ]);
+    }
+
     public function test_late_verified_callback_cannot_resettle_a_refunded_transaction(): void
     {
         $this->markSystemInstalled();
