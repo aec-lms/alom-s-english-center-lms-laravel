@@ -150,6 +150,15 @@ class PaymentSettlementService
                         if ($settlementItems->isEmpty()) {
                             throw new RuntimeException('An empty commerce order cannot be settled.');
                         }
+                        foreach ($settlementItems as $settlementItem) {
+                            $quantity = (int) $settlementItem->quantity;
+                            $unitPrice = round((float) $settlementItem->unit_price, 2);
+                            $lineTotal = round((float) $settlementItem->line_total, 2);
+                            if ($quantity < 1 || $unitPrice < 0 || $lineTotal < 0
+                                || abs(round($unitPrice * $quantity, 2) - $lineTotal) > 0.01) {
+                                throw new RuntimeException('A commerce order item quantity, unit price, and line total do not reconcile.');
+                            }
+                        }
                         $itemsSubtotal = round($settlementItems->sum(fn ($item) => (float) $item->line_total), 2);
                         if (abs($itemsSubtotal - $orderSubtotal) > 0.01) {
                             throw new RuntimeException('Commerce order items do not reconcile with the order subtotal.');
