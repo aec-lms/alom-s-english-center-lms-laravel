@@ -741,7 +741,7 @@ final class UnifiedCommerceCartTest extends TestCase
             'applies_to_course_ids' => [], 'first_purchase_only' => false, 'gift_only' => false,
         ]);
 
-        $payments = \\Mockery::mock(UniversalPaymentOrchestrator::class);
+        $payments = \Mockery::mock(UniversalPaymentOrchestrator::class);
         $payments->shouldReceive('assertGatewayReady')->once()->with('gateway-sslcommerz');
         $payments->shouldReceive('initiate')->once()->andReturn(['redirect_url' => 'https://gateway.example.test/checkout']);
         $this->app->instance(UniversalPaymentOrchestrator::class, $payments);
