@@ -31,9 +31,9 @@
                 @csrf @method('PATCH')
                 <label class="block text-sm font-semibold">Pronunciation rubric score
                     <select name="score" required class="mt-1 w-full rounded border bg-white p-2 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-200">
-                        <option value="" disabled @selected($recording->score === null)>Choose a score</option>
+                        <option value="" disabled @selected(old('score', $recording->score) === null)>Choose a score</option>
                         @foreach([5=>'5 — Clear and accurate',4=>'4 — Minor errors',3=>'3 — Understandable, needs practice',2=>'2 — Frequent pronunciation errors',1=>'1 — Needs guided support'] as $score=>$label)
-                            <option value="{{ $score }}" @selected((int)$recording->score === $score)>{{ $label }}</option>
+                            <option value="{{ $score }}" @selected((int)old('score', $recording->score) === $score)>{{ $label }}</option>
                         @endforeach
                     </select>
                     @error('score')<span class="mt-1 block text-xs font-medium text-red-700">{{ $message }}</span>@enderror
