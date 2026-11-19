@@ -9,6 +9,14 @@ Route::middleware(['web', 'installed', 'plugin:admission-management', 'throttle:
     ->post('/admission/apply', [AdmissionController::class, 'applyPublic'])
     ->name('plugins.admissions.public_apply');
 
+Route::middleware(['web', 'installed', 'plugin:admission-management'])
+    ->get('/admission/track', [AdmissionController::class, 'trackForm'])
+    ->name('plugins.admissions.track');
+
+Route::middleware(['web', 'installed', 'plugin:admission-management', 'throttle:10,1'])
+    ->post('/admission/track', [AdmissionController::class, 'trackPublic'])
+    ->name('plugins.admissions.track_submit');
+
 Route::middleware(['web', 'installed', 'auth', 'plugin:admission-management', 'permission:admissions.manage'])
     ->prefix('admin/admissions')
     ->name('plugins.admissions.')
