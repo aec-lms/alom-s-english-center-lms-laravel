@@ -36,6 +36,40 @@ class CmsPost extends Model
 
     protected $casts = ['is_published' => 'boolean', 'publish_at' => 'datetime', 'submitted_at' => 'datetime', 'reviewed_at' => 'datetime'];
 
+
+    public function primaryAuthor(): BelongsTo
+    {
+        return $this->belongsTo(\\App\\Models\\User::class, 'author_user_id');
+    }
+
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(\\App\\Models\\User::class, 'created_by');
+    }
+
+    public function updater(): BelongsTo
+    {
+        return $this->belongsTo(\\App\\Models\\User::class, 'updated_by');
+    }
+
+    public function assignedEditor(): BelongsTo
+    {
+        return $this->belongsTo(\\App\\Models\\User::class, 'assigned_editor_id');
+    }
+
+    public function assignedReviewer(): BelongsTo
+    {
+        return $this->belongsTo(\\App\\Models\\User::class, 'assigned_reviewer_id');
+    }
+
+    public function contributors(): BelongsToMany
+    {
+        return $this->belongsToMany(\\App\\Models\\User::class, 'cms_post_authors', 'post_id', 'user_id')
+            ->withPivot(['contributor_type', 'sort_order'])
+            ->withTimestamps()
+            ->orderByPivot('sort_order');
+    }
+
     public function categoryModel(): BelongsTo
     {
         return $this->belongsTo(CmsCategory::class, 'category_id');
