@@ -23,6 +23,90 @@ class CourseGiftCommerceTest extends TestCase
         $this->activatePlugins(['course-management', 'fees-management', 'marketing-management', 'universal-payment']);
     }
 
+    public function test_gift_and_voucher_with_unverified_linked_payment_cannot_be_redeemed(): void
+    {
+        $sender = $this->createUserWithRole('student');
+        $recipient = $this->createUserWithRole('student');
+        $recipient->update(['email' => 'unverified-gift-recipient@example.test']);
+
+        $giftPayment = UniversalPaymentTransaction::query()->create([
+            'reference' => 'UNVERIFIED-GIFT-' . $sender->id,
+            'payer_name' => $sender->name,
+            'payer_contact' => '01700000000',
+            'item_title' => 'Gift Course',
+            'gateway' => 'sslcommerz',
+            'currency' => 'BDT',
+            'amount' => 1500,
+            'user_id' => $sender->id,
+            'status' => 'pending',
+            'notes' => json_encode(['purpose' => 'course_gift'], JSON_THROW_ON_ERROR),
+        ]);
+        $voucherPayment = UniversalPaymentTransaction::query()->create([
+            'reference' => 'UNVERIFIED-VOUCHER-' . $sender->id,
+            'payer_name' => $sender->name,
+            'payer_contact' => '01700000000',
+            'item_title' => 'Gift Voucher',
+            'gateway' => 'sslcommerz',
+            'currency' => 'BDT',
+            'amount' => 1200,
+            'user_id' => $sender->id,
+            'status' => 'pending',
+            'notes' => json_encode(['purpose' => 'course_gift_voucher'], JSON_THROW_ON_ERROR),
+        ]);
+
+        $course = Course::query()->create([
+            'code' => 'UNVERIFIED-GIFT-001',
+            'title' => 'Unverified Gift Course',
+            'slug' => 'unverified-gift-course',
+            'price' => 1500,
+            'status' => 'published',
+        ]);
+        $giftToken = str_repeat('U', 64);
+        $giftId = DB::table('course_gifts')->insertGetId([
+            'sender_user_id' => $sender->id,
+            'recipient_user_id' => null,
+            'recipient_email' => $recipient->email,
+            'course_id' => $course->id,
+            'invoice_id' => null,
+            'payment_transaction_id' => $giftPayment->id,
+            'redeem_token_hash' => hash('sha256', $giftToken),
+            'redeem_token_encrypted' => encrypt($giftToken),
+            'status' => 'paid',
+            'currency' => 'BDT',
+            'amount' => 1500,
+            'paid_at' => now(),
+            'expires_at' => now()->addDays(30),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $voucherToken = str_repeat('W', 64);
+        $voucherId = DB::table('course_gift_vouchers')->insertGetId([
+            'sender_user_id' => $sender->id,
+            'recipient_email' => $recipient->email,
+            'recipient_name' => 'Recipient',
+            'redeem_token_hash' => hash('sha256', $voucherToken),
+            'redeem_token_encrypted' => encrypt($voucherToken),
+            'payment_transaction_id' => $voucherPayment->id,
+            'currency' => 'BDT',
+            'amount' => 1200,
+            'remaining_amount' => 1200,
+            'status' => 'paid',
+            'paid_at' => now(),
+            'expires_at' => now()->addDays(30),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($recipient)->post('/student/course-commerce/gifts/redeem/' . $giftToken)->assertStatus(409);
+        $this->actingAs($recipient)->post('/student/course-commerce/vouchers/redeem/' . $voucherToken)->assertStatus(409);
+
+        $this->assertDatabaseHas('course_gifts', ['id' => $giftId, 'status' => 'paid', 'recipient_user_id' => null]);
+        $this->assertDatabaseHas('course_gift_vouchers', ['id' => $voucherId, 'status' => 'paid', 'remaining_amount' => 1200]);
+        $this->assertDatabaseCount('enrollments', 0);
+        $this->assertDatabaseCount('course_gift_wallet_transactions', 0);
+    }
+
     public function test_paid_course_gift_can_only_be_redeemed_by_recipient_email_and_only_once(): void
     {
         $sender = $this->createUserWithRole('student');
