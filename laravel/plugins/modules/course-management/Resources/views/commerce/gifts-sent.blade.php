@@ -60,7 +60,7 @@
                             <span class="text-xs text-slate-500">The secure link is unavailable. Contact support before sharing anything.</span>
                         @endif
 
-                        @if ($gift['status'] === 'paid' && $gift['delivery_status'] === 'failed' && !$gift['sent_at'])
+                        @if ($emailDeliveryEnabled && $gift['status'] === 'paid' && $gift['delivery_status'] === 'failed' && !$gift['sent_at'])
                             <form method="POST" action="{{ $gift['resend_url'] }}" class="ml-auto">
                                 @csrf
                                 <button type="submit" class="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white hover:bg-slate-700">Retry email delivery</button>
