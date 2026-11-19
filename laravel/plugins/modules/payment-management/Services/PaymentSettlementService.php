@@ -135,9 +135,10 @@ class PaymentSettlementService
                             || !Schema::hasTable('promo_coupon_redemptions')) {
                             throw new RuntimeException('The marketing coupon module required by this order is unavailable.');
                         }
+                        // CourseCouponService::redeem owns the coupon-first lock order.
+                        // Do not lock the redemption row here before it locks the coupon.
                         $reservation = DB::table('promo_coupon_redemptions')
                             ->where('reservation_key', $order->coupon_reservation_key)
-                            ->lockForUpdate()
                             ->first();
                         if (!$reservation
                             || (int) $reservation->user_id !== (int) $order->user_id
