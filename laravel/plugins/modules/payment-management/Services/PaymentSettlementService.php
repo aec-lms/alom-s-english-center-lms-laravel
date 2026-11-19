@@ -46,6 +46,18 @@ class PaymentSettlementService
             }
 
             $invoice = FeeInvoice::query()->where('id', $lockedTx->invoice_id)->lockForUpdate()->firstOrFail();
+
+            // A provider callback cannot settle an invoice in a different
+            // currency, even when the numeric amount happens to fit.
+            $transactionCurrency = strtoupper(trim((string) $lockedTx->currency));
+            $invoiceCurrency = strtoupper(trim((string) $invoice->currency));
+            if ($transactionCurrency === '' || $invoiceCurrency === '' || $transactionCurrency !== $invoiceCurrency) {
+                throw new RuntimeException('Payment transaction currency does not match the invoice currency.');
+            }
+            if ((float) $lockedTx->amount <= 0) {
+                throw new RuntimeException('Payment transaction amount must be greater than zero.');
+            }
+
             $newPaid = round((float) $invoice->paid_amount + (float) $lockedTx->amount, 2);
             if ($newPaid > (float) $invoice->net_amount + 0.01) {
                 throw new RuntimeException('Settlement exceeds remaining invoice balance.');
