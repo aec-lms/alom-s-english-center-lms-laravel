@@ -153,6 +153,8 @@ class CmsController extends Controller
             'pdf_thumbnail' => $pdfThumbPath,
             'seo_title' => $validated['seo_title'] ?? $validated['title'],
             'seo_description' => $validated['seo_description'] ?? null,
+            'created_by' => $request->user()->getAuthIdentifier(),
+            'author_user_id' => $request->user()->getAuthIdentifier(),
             'is_published' => false,
             'publish_at' => $validated['publish_at'] ?? null,
             'editorial_status' => 'draft',
