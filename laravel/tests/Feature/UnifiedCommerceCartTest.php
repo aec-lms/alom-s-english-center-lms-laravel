@@ -426,6 +426,125 @@ final class UnifiedCommerceCartTest extends TestCase
         $this->assertDatabaseCount('commerce_entitlements', 0);
     }
 
+    public function test_partial_refund_suspends_commerce_entitlements_and_repayment_reactivates_them(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'commerce-cart']);
+
+        $student = $this->createUserWithRole('student');
+        $admin = $this->createUserWithRole('admin');
+        $invoice = FeeInvoice::query()->create([
+            'invoice_number' => 'REFUND-COMMERCE-' . strtoupper(uniqid()),
+            'student_id' => null,
+            'payer_name' => $student->name,
+            'payer_email' => $student->email,
+            'payer_phone' => '01700000000',
+            'branch_id' => null,
+            'subtotal_amount' => 1000,
+            'discount_amount' => 0,
+            'net_amount' => 1000,
+            'paid_amount' => 1000,
+            'currency' => 'BDT',
+            'status' => 'paid',
+            'due_date' => now()->addDays(7)->toDateString(),
+        ]);
+        $orderId = DB::table('commerce_orders')->insertGetId([
+            'order_number' => 'AEC-REFUND-' . strtoupper(uniqid()),
+            'user_id' => $student->id,
+            'invoice_id' => $invoice->id,
+            'branch_id' => null,
+            'currency' => 'BDT',
+            'subtotal' => 1000,
+            'discount_total' => 0,
+            'grand_total' => 1000,
+            'status' => 'paid',
+            'payment_status' => 'paid',
+            'paid_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $orderItemId = DB::table('commerce_order_items')->insertGetId([
+            'order_id' => $orderId,
+            'item_type' => 'subscription',
+            'item_id' => 42,
+            'title_snapshot' => 'Premium Subscription',
+            'quantity' => 1,
+            'unit_price' => 1000,
+            'line_total' => 1000,
+            'metadata' => json_encode(['entitlement' => ['duration_days' => 30]]),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('commerce_entitlements')->insert([
+            'user_id' => $student->id,
+            'order_item_id' => $orderItemId,
+            'entitlement_type' => 'subscription',
+            'resource_id' => null,
+            'details' => json_encode(['duration_days' => 30]),
+            'status' => 'active',
+            'starts_at' => now(),
+            'expires_at' => now()->addDays(30),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $transaction = PaymentTransaction::query()->create([
+            'transaction_ref' => 'REFUND-TXN-' . strtoupper(uniqid()),
+            'invoice_id' => $invoice->id,
+            'branch_id' => null,
+            'gateway_slug' => 'offline',
+            'amount' => 1000,
+            'currency' => 'BDT',
+            'status' => 'settled',
+            'settled_at' => now(),
+            'metadata' => [],
+        ]);
+
+        $this->actingAs($admin)->post('/admin/payments/' . $transaction->id . '/refund', [
+            'amount' => 250,
+            'reason' => 'Partial commerce refund',
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('fee_invoices', [
+            'id' => $invoice->id,
+            'paid_amount' => 750,
+            'status' => 'partial',
+        ]);
+        $this->assertDatabaseHas('commerce_orders', [
+            'id' => $orderId,
+            'status' => 'partially_refunded',
+            'payment_status' => 'partial',
+        ]);
+        $this->assertDatabaseHas('commerce_entitlements', [
+            'user_id' => $student->id,
+            'order_item_id' => $orderItemId,
+            'status' => 'suspended',
+        ]);
+
+        // A later verified payment of the outstanding balance must restore the
+        // same entitlement instead of leaving a stale suspended row.
+        $this->actingAs($admin)->post('/admin/payments/offline', [
+            'invoice_id' => $invoice->id,
+            'amount' => 250,
+            'receipt_note' => 'Remaining balance after refund',
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('fee_invoices', [
+            'id' => $invoice->id,
+            'paid_amount' => 1000,
+            'status' => 'paid',
+        ]);
+        $this->assertDatabaseHas('commerce_orders', [
+            'id' => $orderId,
+            'status' => 'paid',
+            'payment_status' => 'paid',
+        ]);
+        $this->assertDatabaseHas('commerce_entitlements', [
+            'user_id' => $student->id,
+            'order_item_id' => $orderItemId,
+            'status' => 'active',
+        ]);
+    }
+
     public function test_branch_manager_cannot_access_global_commerce_order_administration(): void
     {
         $this->markSystemInstalled();
