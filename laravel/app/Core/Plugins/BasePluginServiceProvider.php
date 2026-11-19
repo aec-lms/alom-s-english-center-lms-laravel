@@ -20,16 +20,6 @@ abstract class BasePluginServiceProvider extends ServiceProvider implements Plug
 
     public function boot(): void
     {
-        $routes = $this->pluginPath('Routes/web.php');
-        if (is_file($routes)) {
-            $this->loadRoutesFrom($routes);
-        }
-
-        $apiRoutes = $this->pluginPath('Routes/api.php');
-        if (is_file($apiRoutes)) {
-            $this->loadRoutesFrom($apiRoutes);
-        }
-
         $views = $this->pluginPath('Resources/views');
         if (is_dir($views)) {
             $this->loadViewsFrom($views, $this->slug());
