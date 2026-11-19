@@ -89,13 +89,13 @@ class PluginLifecycleTest extends TestCase
         }
     }
 
-    public function test_plugin_service_provider_does_not_re_register_routes_when_route_cache_is_active(): void
+    public function test_plugin_service_provider_skips_dynamic_route_loading_when_route_cache_is_active(): void
     {
         $this->markSystemInstalled();
 
         $slug = 'cached-route-probe';
         $pluginDir = (string) config('plugins.modules_path') . DIRECTORY_SEPARATOR . $slug;
-        File::ensureDirectoryExists($pluginDir . DIRECTORY_SEPARATOR . 'Routes');
+        File::ensureDirectoryExists($pluginDir);
         file_put_contents($pluginDir . DIRECTORY_SEPARATOR . 'plugin.json', json_encode([
             'slug' => $slug,
             'name' => 'Cached Route Probe',
@@ -103,10 +103,6 @@ class PluginLifecycleTest extends TestCase
             'core_compatibility' => '^2.0',
             'dependencies' => [],
         ], JSON_THROW_ON_ERROR));
-        file_put_contents(
-            $pluginDir . DIRECTORY_SEPARATOR . 'Routes' . DIRECTORY_SEPARATOR . 'web.php',
-            "<?php \\Illuminate\\Support\\Facades\\Route::get('/cached-route-probe', fn () => 'ok')->name('plugins.cached-route-probe.index');"
-        );
 
         PluginRecord::query()->create([
             'slug' => $slug,
@@ -124,13 +120,15 @@ class PluginLifecycleTest extends TestCase
             File::ensureDirectoryExists(dirname($cachePath));
             file_put_contents($cachePath, "<?php return [];");
 
+            $manifest = \\App\\Core\\Plugins\\PluginManifest::fromDirectory($pluginDir);
+            $manager = \\Mockery::mock(PluginManager::class);
+            $manager->shouldReceive('discoverManifests')->once()->andReturn([$slug => $manifest]);
+            $manager->shouldNotReceive('loadPluginRoutes');
+
             $provider = new PluginServiceProvider($this->app);
-            $provider->boot(app(PluginManager::class));
+            $provider->boot($manager);
 
-            $matchingRoutes = collect(app('router')->getRoutes())
-                ->filter(fn ($route): bool => $route->uri() === 'cached-route-probe');
-
-            $this->assertCount(0, $matchingRoutes, 'Cached plugin routes must not be loaded a second time.');
+            $this->assertTrue($this->app->routesAreCached());
         } finally {
             if ($hadCache && $previousCache !== false) {
                 file_put_contents($cachePath, $previousCache);
@@ -687,6 +685,44 @@ PHP;
 
         $this->assertNotContains('Student Activity Trace', $labelsAfterDisable);
         $this->assertContains('Courses', $labelsAfterDisable);
+    }
+
+    public function test_runtime_plugin_route_registration_clears_stale_route_cache_and_loads_new_routes(): void
+    {
+        $this->markSystemInstalled();
+        $slug = 'runtime-cache-route-probe';
+        $pluginDir = (string) config('plugins.modules_path') . DIRECTORY_SEPARATOR . $slug;
+        File::ensureDirectoryExists($pluginDir . DIRECTORY_SEPARATOR . 'Routes');
+        file_put_contents($pluginDir . DIRECTORY_SEPARATOR . 'plugin.json', json_encode([
+            'slug' => $slug, 'name' => 'Runtime Cache Route Probe', 'version' => '1.0.0',
+            'core_compatibility' => '^2.0', 'dependencies' => [],
+        ], JSON_THROW_ON_ERROR));
+        file_put_contents(
+            $pluginDir . DIRECTORY_SEPARATOR . 'Routes' . DIRECTORY_SEPARATOR . 'web.php',
+            "<?php \\Illuminate\\Support\\Facades\\Route::get('/runtime-cache-route-probe', fn () => 'ok')->name('plugins.runtime-cache-route-probe.index');"
+        );
+        $cachePath = $this->app->getCachedRoutesPath();
+        $hadCache = is_file($cachePath);
+        $previousCache = $hadCache ? file_get_contents($cachePath) : null;
+        try {
+            File::ensureDirectoryExists(dirname($cachePath));
+            file_put_contents($cachePath, "<?php return [];");
+            $manifest = app(PluginManager::class)->discoverManifests()[$slug] ?? null;
+            $this->assertNotNull($manifest);
+            app(PluginManager::class)->loadPluginRoutes($manifest);
+            $this->assertFileDoesNotExist($cachePath);
+            $matchingRoutes = collect(app('router')->getRoutes())
+                ->filter(fn ($route): bool => $route->uri() === 'runtime-cache-route-probe');
+            $this->assertCount(1, $matchingRoutes);
+            $this->assertSame('plugins.runtime-cache-route-probe.index', $matchingRoutes->first()->getName());
+        } finally {
+            if ($hadCache && $previousCache !== false) {
+                file_put_contents($cachePath, $previousCache);
+            } else {
+                @unlink($cachePath);
+            }
+            File::deleteDirectory($pluginDir);
+        }
     }
 
 }
