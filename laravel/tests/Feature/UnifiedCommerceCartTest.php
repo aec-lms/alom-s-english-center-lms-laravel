@@ -18,6 +18,23 @@ use Tests\TestCase;
 
 final class UnifiedCommerceCartTest extends TestCase
 {
+    public function test_gift_and_voucher_are_not_accepted_as_generic_catalogue_items(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['commerce-cart']);
+        $student = $this->createUserWithRole('student');
+
+        foreach (['gift_course', 'gift_voucher'] as $type) {
+            $this->actingAs($student)->post('/cart/items', [
+                'item_type' => $type,
+                'item_id' => 1,
+                'quantity' => 1,
+            ])->assertSessionHasErrors('item_type');
+        }
+
+        $this->assertDatabaseCount('commerce_cart_items', 0);
+    }
+
     public function test_checkout_rejects_catalogue_price_currency_or_title_changes_after_add_to_cart(): void
     {
         $catalog = app(CommerceCatalog::class);
