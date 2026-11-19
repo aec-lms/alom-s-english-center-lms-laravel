@@ -35,8 +35,9 @@ class NotificationController extends Controller
         $userQuery = User::query()->select('id', 'name', 'email', 'phone')->orderBy('name');
 
         if ($actor && $actor->hasRole('branch_manager')) {
-            $notificationQuery->where('branch_id', $actor->branch_id);
-            $userQuery->whereIn('id', $this->branchUserIds((int) $actor->branch_id));
+            $branchUserIds = $this->branchUserIds((int) $actor->branch_id);
+            $notificationQuery->whereIn('user_id', $branchUserIds);
+            $userQuery->whereIn('id', $branchUserIds);
         }
 
         $notifications = $notificationQuery->paginate(25);
