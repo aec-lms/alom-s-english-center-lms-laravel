@@ -120,8 +120,20 @@ class ReferralIncomeController extends Controller
             $record = DB::table('referral_payout_requests')->where('id', $payout)->lockForUpdate()->first();
             $validTransition = $record !== null
                 && (($record->status === 'pending' && in_array($data['status'], ['approved', 'rejected'], true))
-                    || ($record->status === 'approved' && $data['status'] === 'paid'));
+                    || ($record->status === 'approved' && in_array($data['status'], ['paid', 'rejected'], true)));
             abort_unless($validTransition, 422, 'Invalid payout status transition.');
+
+            $commissions = DB::table('referral_commissions')
+                ->where('payout_request_id', $payout)
+                ->lockForUpdate()->get(['id']);
+            if (in_array($data['status'], ['approved', 'paid'], true)
+                && Schema::hasTable('referral_commission_reversals')
+                && DB::table('referral_commission_reversals')
+                    ->whereIn('referral_commission_id', $commissions->pluck('id'))
+                    ->where('status', 'recovery_due')->exists()) {
+                abort(422, 'This payout contains refunded commissions. Reconcile the recovery before approving or paying it.');
+            }
+
             DB::table('referral_payout_requests')->where('id', $payout)->update([
                 'status' => $data['status'], 'admin_note' => $data['admin_note'] ?? null,
                 'reviewed_by' => $request->user()->id, 'reviewed_at' => now(),
@@ -131,7 +143,7 @@ class ReferralIncomeController extends Controller
                 DB::table('referral_commissions')->where('payout_request_id', $payout)->whereIn('status', ['payout_requested', 'payout_approved'])
                     ->update(['status' => 'paid', 'paid_at' => now(), 'updated_at' => now()]);
             } elseif ($data['status'] === 'rejected') {
-                DB::table('referral_commissions')->where('payout_request_id', $payout)->where('status', 'payout_requested')
+                DB::table('referral_commissions')->where('payout_request_id', $payout)->whereIn('status', ['payout_requested', 'payout_approved'])
                     ->update(['status' => 'approved', 'payout_request_id' => null, 'updated_at' => now()]);
             } elseif ($data['status'] === 'approved') {
                 DB::table('referral_commissions')->where('payout_request_id', $payout)->where('status', 'payout_requested')
