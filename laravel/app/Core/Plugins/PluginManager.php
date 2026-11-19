@@ -465,9 +465,35 @@ class PluginManager
         });
 
         $manifest = $this->discoverManifests()[$slug] ?? null;
-        if ($manifest) {
-            $this->loadPluginRoutes($manifest);
+        try {
+            if ($manifest) {
+                $this->loadPluginRoutes($manifest);
+            }
+        } catch (Throwable $exception) {
+            // Route registration is deliberately post-commit so the router only sees
+            // enabled plugins. If registration fails, compensate the catalog state:
+            // never leave a plugin marked enabled while its routes are unavailable.
+            DB::transaction(function () use ($slug, $actorId, $exception): void {
+                $locked = PluginRecord::query()->where('slug', $slug)->lockForUpdate()->first();
+                if ($locked && $locked->is_installed) {
+                    $locked->update(['is_enabled' => false]);
+                    $this->audit->log('plugin.enable_rolled_back', 'plugin', $slug, [
+                        'reason' => $exception->getMessage(),
+                    ], $actorId);
+                }
+            });
+
+            if ($manifest) {
+                try {
+                    $this->resolvePluginInstance($manifest)?->onDisable();
+                } catch (Throwable $compensationError) {
+                    report($compensationError);
+                }
+            }
+
+            throw $exception;
         }
+
         event(new PluginLifecycleEvent('enabled', $slug, $record->version, $actorId));
 
         return $record;

@@ -819,4 +819,45 @@ PHP;
         }
     }
 
+    public function test_plugin_enable_rolls_back_catalog_state_when_route_registration_fails(): void
+    {
+        $this->markSystemInstalled();
+        $slug = 'enable-route-failure-probe';
+        $pluginDir = (string) config('plugins.modules_path') . DIRECTORY_SEPARATOR . $slug;
+        File::ensureDirectoryExists($pluginDir . DIRECTORY_SEPARATOR . 'Routes');
+        File::put($pluginDir . DIRECTORY_SEPARATOR . 'plugin.json', json_encode([
+            'slug' => $slug,
+            'name' => 'Enable Route Failure Probe',
+            'version' => '1.0.0',
+            'core_compatibility' => '^2.0',
+            'dependencies' => [],
+        ], JSON_THROW_ON_ERROR));
+        File::put($pluginDir . DIRECTORY_SEPARATOR . 'Routes' . DIRECTORY_SEPARATOR . 'web.php', "<?php this is not valid PHP;");
+        PluginRecord::query()->create([
+            'slug' => $slug,
+            'name' => 'Enable Route Failure Probe',
+            'version' => '1.0.0',
+            'is_installed' => true,
+            'is_enabled' => false,
+        ]);
+
+        try {
+            try {
+                app(PluginManager::class)->enable($slug);
+                $this->fail('A plugin with an invalid route file must not remain enabled.');
+            } catch (\\ParseError $exception) {
+                $this->assertStringContainsString('unexpected', strtolower($exception->getMessage()));
+            }
+
+            $this->assertDatabaseHas('plugins', [
+                'slug' => $slug,
+                'is_installed' => true,
+                'is_enabled' => false,
+            ]);
+        } finally {
+            File::deleteDirectory($pluginDir);
+            PluginRecord::query()->where('slug', $slug)->delete();
+        }
+    }
+
 }
