@@ -74,7 +74,7 @@ class PaymentSettlementStateMachineTest extends TestCase
         $this->assertSame('settled', $settled->fresh()->status);
         $this->assertDatabaseHas('commerce_orders', [
             'id' => $orderId,
-            'status' => 'paid',
+            'status' => 'completed',
             'payment_status' => 'paid',
         ]);
         $this->assertDatabaseHas('commerce_entitlements', [
