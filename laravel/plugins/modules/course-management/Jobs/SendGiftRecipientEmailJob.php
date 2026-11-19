@@ -2,19 +2,19 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\CourseManagement\\Jobs;
+namespace Plugins\Modules\CourseManagement\Jobs;
 
-use App\\Core\\Plugins\\PluginManager;
-use Illuminate\\Bus\\Queueable;
-use Illuminate\\Contracts\\Queue\\ShouldBeUnique;
-use Illuminate\\Contracts\\Queue\\ShouldQueue;
-use Illuminate\\Foundation\\Bus\\Dispatchable;
-use Illuminate\\Queue\\InteractsWithQueue;
-use Illuminate\\Queue\\SerializesModels;
-use Illuminate\\Support\\Facades\\Config;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Facades\\Mail;
-use Illuminate\\Support\\Facades\\Schema;
+use App\Core\Plugins\PluginManager;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 use Throwable;
 
