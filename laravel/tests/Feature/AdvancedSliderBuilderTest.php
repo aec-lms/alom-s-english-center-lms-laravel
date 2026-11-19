@@ -192,4 +192,23 @@ class AdvancedSliderBuilderTest extends TestCase
         $this->assertTrue($slide->fresh()->ends_at->equalTo($end));
     }
 
+    public function test_zero_overlay_opacity_is_preserved_on_initial_render_and_slider_changes(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['slider-builder']);
+        HeroSlider::query()->create([
+            'key_name' => 'hero',
+            'title' => 'Zero overlay opacity',
+            'image_path' => '/assets/images/hero.webp',
+            'overlay_opacity' => 0,
+            'is_active' => true,
+            'sort_order' => 0,
+        ]);
+
+        $this->get('/')
+            ->assertOk()
+            ->assertSee('style="opacity: 0"', false)
+            ->assertSee('current.overlay_opacity ?? 45', false);
+    }
+
 }
