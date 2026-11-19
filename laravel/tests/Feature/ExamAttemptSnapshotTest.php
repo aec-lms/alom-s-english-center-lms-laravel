@@ -67,6 +67,9 @@ class ExamAttemptSnapshotTest extends TestCase
         $this->assertSame(5.0, (float) $attempt->total_marks);
         $this->assertTrue($attempt->passed);
         $this->assertSame('Original question text', $attempt->exam_snapshot['questions'][0]['prompt']);
+        $this->assertSame(['Original option A', 'Original option B'], $attempt->exam_snapshot['questions'][0]['options']);
+        $this->assertSame(1, $attempt->exam_snapshot['questions'][0]['correct_option_index']);
+        $this->assertSame(1.0, (float) $attempt->exam_snapshot['questions'][0]['negative_marks']);
         $this->assertSame(30, $attempt->exam_snapshot['duration_minutes']);
         $this->assertSame(5.0, (float) $attempt->exam_snapshot['pass_marks']);
     }
