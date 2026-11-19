@@ -181,7 +181,9 @@ class FlashSaleController extends Controller
             ->where('flash_sales.ends_at', '>', now())
             ->where('courses.status', 'published')
             ->where(function ($scope): void {
-                $scope->whereNull('flash_sales.branch_id')->orWhereColumn('flash_sales.branch_id', 'courses.branch_id');
+                $scope->whereNull('flash_sales.branch_id')
+                    ->orWhereNull('courses.branch_id')
+                    ->orWhereColumn('flash_sales.branch_id', 'courses.branch_id');
             })
             ->where(function ($scope) use ($viewerBranchId): void {
                 $scope->whereNull('flash_sales.branch_id');
