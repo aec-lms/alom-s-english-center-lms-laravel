@@ -259,7 +259,7 @@ class PaymentSettlementStateMachineTest extends TestCase
         $this->markSystemInstalled();
         $this->activatePlugins(['fees-management', 'payment-management', 'commerce-cart']);
 
-        foreach (['currency', 'total', 'item_math'] as $case) {
+        foreach (['currency', 'total', 'item_math', 'gift_course', 'gift_voucher'] as $case) {
             $buyer = $this->createUserWithRole('student');
             $invoice = FeeInvoice::query()->create([
                 'invoice_number' => 'ORDER-RECONCILE-' . strtoupper(uniqid()),
@@ -288,7 +288,11 @@ class PaymentSettlementStateMachineTest extends TestCase
             ]);
             DB::table('commerce_order_items')->insert([
                 'order_id' => $orderId,
-                'item_type' => 'course',
+                'item_type' => match ($case) {
+                    'gift_course' => 'gift_course',
+                    'gift_voucher' => 'gift_voucher',
+                    default => 'course',
+                },
                 'item_id' => 987650 + $buyer->id,
                 'title_snapshot' => 'Order reconciliation course',
                 'quantity' => 1,
@@ -318,7 +322,8 @@ class PaymentSettlementStateMachineTest extends TestCase
                 $expected = match ($case) {
                     'currency' => 'Commerce order currency does not match the invoice currency.',
                     'total' => 'Commerce order total does not match the invoice amount.',
-                    default => 'A commerce order item quantity, unit price, and line total do not reconcile.',
+                     'item_math' => 'A commerce order item quantity, unit price, and line total do not reconcile.',
+                    default => 'Gift and voucher items require dedicated recipient fulfillment and cannot use buyer entitlements.',
                 };
                 $this->assertSame($expected, $exception->getMessage());
             }
