@@ -94,7 +94,7 @@
 
         const link = event.target.closest('a[href]');
         if (!link || link.target || link.hasAttribute('download') ||
-            link.getAttribute('rel')?.split(/\\s+/).includes('external')) return;
+            link.getAttribute('rel')?.split(/\s+/).includes('external')) return;
 
         let destination;
         try {
@@ -105,7 +105,7 @@
 
         if (destination.origin !== window.location.origin ||
             destination.pathname === window.location.pathname ||
-            /^\\/(admin|api|payment|payments|checkout|webhook|webhooks|live-class|live-classes)(\\/|$)/.test(destination.pathname)) return;
+            /^\/(admin|api|payment|payments|checkout|webhook|webhooks|live-class|live-classes)(\/|$)/.test(destination.pathname)) return;
 
         completed = false;
         startedAt = Date.now();
