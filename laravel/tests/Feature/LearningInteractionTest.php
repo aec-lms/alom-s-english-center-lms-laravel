@@ -159,6 +159,7 @@ class LearningInteractionTest extends TestCase
             'course_id' => $courseId,
             'title' => 'Branch Protected Lesson',
             'content' => 'Lesson content',
+            'media_path' => 'private/branch-protected-lesson.mp4',
             'sort_order' => 1,
             'created_at' => now(),
             'updated_at' => now(),
