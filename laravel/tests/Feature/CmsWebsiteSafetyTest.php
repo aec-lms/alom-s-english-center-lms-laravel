@@ -184,4 +184,119 @@ class CmsWebsiteSafetyTest extends TestCase
         $this->assertDatabaseHas('cms_posts', ['id' => $post->id, 'editorial_status' => 'changes_requested', 'review_note' => 'Please add references.']);
     }
 
+
+    public function test_editing_an_approved_post_invalidates_approval_and_requires_resubmission(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+        $admin = $this->createUserWithRole('admin');
+        $post = CmsPost::query()->create([
+            'slug' => 'approved-content-edit',
+            'title' => 'Approved Content',
+            'category' => 'General',
+            'author' => 'AEC',
+            'content' => 'Approved body',
+            'is_published' => false,
+            'editorial_status' => 'approved',
+            'submitted_at' => now(),
+            'submitted_by' => 12345,
+            'reviewed_at' => now(),
+            'reviewed_by' => 67890,
+        ]);
+
+        $this->actingAs($admin)->put('/admin/cms/posts/' . $post->id, [
+            'title' => 'Changed After Approval',
+            'slug' => 'approved-content-edit',
+            'content' => 'Changed body must be reviewed again',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('cms_posts', [
+            'id' => $post->id,
+            'title' => 'Changed After Approval',
+            'is_published' => false,
+            'editorial_status' => 'draft',
+            'submitted_at' => null,
+            'submitted_by' => null,
+            'reviewed_at' => null,
+            'reviewed_by' => null,
+            'review_note' => null,
+        ]);
+    }
+
+    public function test_published_post_cannot_be_modified_through_the_draft_update_endpoint(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+        $admin = $this->createUserWithRole('admin');
+        $post = CmsPost::query()->create([
+            'slug' => 'live-post-protected',
+            'title' => 'Live Post',
+            'category' => 'General',
+            'author' => 'AEC',
+            'content' => 'Live approved body',
+            'is_published' => true,
+            'editorial_status' => 'published',
+        ]);
+
+        $this->actingAs($admin)->put('/admin/cms/posts/' . $post->id, [
+            'title' => 'Unreviewed Live Edit',
+            'slug' => 'live-post-protected',
+            'content' => 'Unreviewed changes',
+        ])->assertStatus(422);
+
+        $this->assertDatabaseHas('cms_posts', [
+            'id' => $post->id,
+            'title' => 'Live Post',
+            'content' => 'Live approved body',
+            'is_published' => true,
+            'editorial_status' => 'published',
+        ]);
+    }
+
+    public function test_revision_restore_never_restores_a_published_state_without_approval(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+        $admin = $this->createUserWithRole('admin');
+        $post = CmsPost::query()->create([
+            'slug' => 'draft-revision-restore',
+            'title' => 'Current Draft',
+            'category' => 'General',
+            'author' => 'AEC',
+            'content' => 'Current draft body',
+            'is_published' => false,
+            'editorial_status' => 'draft',
+        ]);
+        $revisionId = DB::table('cms_post_revisions')->insertGetId([
+            'post_id' => $post->id,
+            'user_id' => $admin->id,
+            'title' => 'Old Live Snapshot',
+            'slug' => 'draft-revision-restore',
+            'category' => 'General',
+            'category_id' => null,
+            'author' => 'AEC',
+            'excerpt' => null,
+            'content' => 'Old snapshot body',
+            'thumbnail_path' => null,
+            'pdf_path' => null,
+            'pdf_thumbnail' => null,
+            'seo_title' => null,
+            'seo_description' => null,
+            'is_published' => true,
+            'publish_at' => null,
+            'created_at' => now(),
+        ]);
+
+        $this->actingAs($admin)->post('/admin/cms/posts/' . $post->id . '/revisions/' . $revisionId . '/restore')
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('cms_posts', [
+            'id' => $post->id,
+            'title' => 'Old Live Snapshot',
+            'content' => 'Old snapshot body',
+            'is_published' => false,
+            'editorial_status' => 'draft',
+        ]);
+    }
+
 }
