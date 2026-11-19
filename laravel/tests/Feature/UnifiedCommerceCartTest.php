@@ -290,7 +290,7 @@ final class UnifiedCommerceCartTest extends TestCase
         try {
             app(PaymentSettlementService::class)->settleTransaction($transaction, 'BANK-INVOICE-BRANCH-001');
             $this->fail('Invoice settlement must reject an enrollment after its student changes branch.');
-        } catch (\\RuntimeException $exception) {
+        } catch (\RuntimeException $exception) {
             $this->assertSame(
                 'Pending course enrollment branch does not match the current student and source course.',
                 $exception->getMessage()
