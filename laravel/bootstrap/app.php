@@ -23,7 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->web(append: [EnsureDeviceSessionActive::class, EnsureBranchContext::class]);
+        $middleware->web(append: [EnsureDeviceSessionActive::class, EnsureBranchContext::class, SetApplicationLocale::class]);
         $middleware->api(append: [EnsureBranchContext::class]);
         $middleware->alias([
             'installed' => EnsureInstalled::class,
