@@ -13,7 +13,7 @@ return new class extends Migration {
             Schema::create('referral_commission_reversals', function (Blueprint $table): void {
                 $table->id();
                 $table->foreignId('commission_id')->constrained('referral_commissions')->restrictOnDelete();
-                $table->foreignId('payment_refund_id')->constrained('payment_refunds')->restrictOnDelete();
+                $table->unsignedBigInteger('payment_refund_id');
                 $table->decimal('refund_amount', 12, 2);
                 $table->decimal('commission_reversal_amount', 12, 2);
                 $table->string('currency', 8)->default('BDT');
