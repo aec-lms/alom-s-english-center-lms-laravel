@@ -75,8 +75,12 @@ final class AlBrandingLoaderProductionHardeningTest extends TestCase
         $this->assertNull($setting->logo_url);
 
         $setting->logo_path = 'uploads/alom-english-center/loader/valid-logo.png';
-
         $this->assertNotNull($setting->logo_url);
+
+        foreach (['.', '..', 'uploads/alom-english-center/loader/../logo.png', 'uploads/alom-english-center/loader/unsafe.svg'] as $unsafePath) {
+            $setting->logo_path = $unsafePath;
+            $this->assertNull($setting->logo_url);
+        }
     }
 
     public function test_model_never_renders_when_disabled(): void
