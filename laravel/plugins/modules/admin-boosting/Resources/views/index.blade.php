@@ -28,7 +28,7 @@
 
     <form method="POST" action="{{ route('plugins.boost.store') }}" class="bg-white rounded-2xl border border-slate-200 p-6 space-y-4 text-xs">
         @csrf
-        <div><h2 class="text-sm font-bold text-slate-900">Create campaign</h2><p class="text-slate-500 mt-1">Choose a target, placement and campaign window. A target ID is optional for broad promotions.</p></div>
+        <div><h2 class="text-sm font-bold text-slate-900">Create campaign</h2><p class="text-slate-500 mt-1">Choose a specific course or branch, or select institution/offer for a broad promotion. Course and branch targets require a record.</p></div>
         <div class="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
             <label class="font-semibold text-slate-700">Campaign title *
                 <input name="campaign_name" required maxlength="180" value="{{ old('campaign_name') }}" placeholder="IELTS Spring Intake" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2">
