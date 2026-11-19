@@ -138,6 +138,9 @@ class UniversalPaymentInvoiceSettlementTest extends TestCase
                 ->where('fee_invoice_id', $invoice->id)
                 ->firstOrFail();
             $this->assertSame($gateway, $transaction->gateway);
+            $this->actingAs($admin)->get('/plugins/universal-payment')->assertOk()
+                ->assertSee('name="payment_reference"', false)
+                ->assertSee($externalReference);
 
             $this->actingAs($admin)->post('/plugins/universal-payment/transactions/' . $transaction->id . '/status', [
                 'status' => 'verified',
