@@ -22,7 +22,9 @@ Access-based items are single-quantity. The optional `other` item type can use q
 - `/cart` shows a student's private cart and one checkout form.
 - Checkout creates one Fee Invoice and one Commerce Order with immutable title/price snapshots.
 - SSLCOMMERZ hosted checkout (including provider-supported bKash/Nagad/card/banking methods) and PayPal use the existing Universal Payment orchestrator.
-- Access is not granted from the browser return URL. Existing signed/validated provider settlement updates the invoice and then fulfills the Commerce Order.
+- When `bank_cash` is enabled in Universal Payment settings, students can submit a bank-transfer/cash receipt reference and optionally upload a PDF/JPG/PNG proof file (maximum 5 MB). Proof files are stored on the private local disk and can be downloaded only by authorized payment reviewers.
+- Manual receipts remain pending until an authorized reviewer verifies them from the Universal Payment dashboard. Verification creates the canonical Payment Transaction and runs the same Commerce settlement pipeline as online payments; rejection fails the unpaid order, releases reserved coupons and detaches unpaid gift drafts so the student can retry.
+- Access is not granted from the browser return URL. Existing signed/validated provider settlement or authorized manual verification updates the invoice and then fulfills the Commerce Order.
 
 ## Admin configuration
 
@@ -42,3 +44,18 @@ The `commerce_entitlements` table is the shared entitlement ledger. Other plugin
 6. Run the full Browser E2E suite, Composer audit and cPanel package build.
 
 Do not enable production checkout until provider sandbox acceptance is complete. The pull request does not configure merchant credentials or deploy the plugin to the live cPanel host.
+
+## Gift courses and gift vouchers — unified-cart integration
+
+Gift-course and gift-voucher drafts can now be created from **/cart/gifts** and added to the same unified cart as ordinary learning products. The student checkout still creates one invoice and one commerce order. Drafts are server-created; the browser supplies only the course/recipient or voucher amount/recipient fields. The catalog resolves price, currency, sender ownership, recipient identity, status, expiry and branch/course availability again when the item is added and at checkout.
+
+Each gift order item is linked to exactly one gift draft through `commerce_order_item_id`. Settlement validates that linkage, sender, recipient email, course/voucher state, item total, currency, invoice, order and branch snapshot before it updates the gift draft. The unified payment transaction ID and paid invoice are stored on the gift draft. A gift item never creates a buyer-owned `commerce_entitlements` record.
+
+- **Course gift:** the gift becomes paid only after the entire invoice is verified as paid. The recipient claims it through the existing student course-commerce gift redemption flow using the token and matching recipient email; enrollment is created for the recipient, not the sender.
+- **Gift voucher:** the voucher becomes paid after full invoice settlement. The recipient claims it through the existing voucher redemption flow; only then is a wallet credit and voucher redemption ledger row created. Payment settlement itself does not credit the sender's wallet.
+- **Duplicate settlement:** the payment transaction lock/state machine and draft row locks make issuance idempotent. A second transaction cannot attach itself to an already-linked/paid draft.
+- **Branch safety:** sender assignment and course branch are revalidated during settlement. A stale or reassigned draft fails the whole invoice/order transaction before gift issuance.
+- **Refund safety:** refunds for orders containing gift-course or gift-voucher items are currently blocked before any refund or invoice mutation. Recipient course access and pooled voucher-wallet spending do not yet have a complete item-level reversal ledger, so the system routes these refunds to manual reconciliation rather than risking unrecoverable wallet value or leaving a redeemed gift active.
+
+The legacy dedicated gift checkout remains available during migration. New unified gift checkout must not be considered production accepted until payment-provider sandbox tests and a complete recipient-aware refund/reconciliation workflow are finished. Production merchant credentials are not configured by this PR.
+

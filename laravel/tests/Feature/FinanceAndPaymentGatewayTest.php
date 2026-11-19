@@ -198,6 +198,77 @@ class FinanceAndPaymentGatewayTest extends TestCase
         $this->assertSame('unpaid', $invoice->fresh()->status);
     }
 
+    public function test_refund_is_blocked_for_unified_gift_orders_before_financial_mutation(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'commerce-cart']);
+        $buyer = $this->createUserWithRole('student');
+        $admin = $this->createUserWithRole('admin');
+        $invoice = FeeInvoice::query()->create([
+            'invoice_number' => 'GIFT-REFUND-GUARD-' . strtoupper(bin2hex(random_bytes(3))),
+            'payer_name' => $buyer->name,
+            'payer_email' => $buyer->email,
+            'subtotal_amount' => 1000,
+            'discount_amount' => 0,
+            'net_amount' => 1000,
+            'paid_amount' => 1000,
+            'currency' => 'BDT',
+            'status' => 'paid',
+        ]);
+        $orderId = DB::table('commerce_orders')->insertGetId([
+            'order_number' => 'GIFT-REFUND-ORDER-' . strtoupper(bin2hex(random_bytes(3))),
+            'user_id' => $buyer->id,
+            'invoice_id' => $invoice->id,
+            'branch_id' => null,
+            'currency' => 'BDT',
+            'subtotal' => 1000,
+            'discount_total' => 0,
+            'grand_total' => 1000,
+            'status' => 'completed',
+            'payment_status' => 'paid',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('commerce_order_items')->insert([
+            'order_id' => $orderId,
+            'item_type' => 'gift_voucher',
+            'item_id' => 987654,
+            'title_snapshot' => 'Gift Voucher',
+            'quantity' => 1,
+            'unit_price' => 1000,
+            'line_total' => 1000,
+            'metadata' => json_encode(['course_gift_voucher_id' => 987654], JSON_THROW_ON_ERROR),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $transaction = PaymentTransaction::query()->create([
+            'transaction_ref' => 'GIFT-REFUND-TXN-' . strtoupper(bin2hex(random_bytes(3))),
+            'invoice_id' => $invoice->id,
+            'gateway_slug' => 'offline',
+            'amount' => 1000,
+            'currency' => 'BDT',
+            'status' => 'settled',
+            'metadata' => [],
+            'settled_at' => now(),
+        ]);
+
+        $this->actingAs($admin)->post('/admin/payments/' . $transaction->id . '/refund', [
+            'amount' => 1000,
+            'reason' => 'Gift refund safety regression',
+        ])->assertSessionHasErrors('refund');
+
+        $this->assertDatabaseCount('payment_refunds', 0);
+        $this->assertDatabaseHas('payment_transactions', [
+            'id' => $transaction->id,
+            'status' => 'settled',
+        ]);
+        $this->assertDatabaseHas('fee_invoices', [
+            'id' => $invoice->id,
+            'status' => 'paid',
+            'paid_amount' => 1000,
+        ]);
+    }
+
     public function test_stripe_and_paypal_gateways_and_atomic_refund_workflow(): void
     {
         $this->markSystemInstalled();

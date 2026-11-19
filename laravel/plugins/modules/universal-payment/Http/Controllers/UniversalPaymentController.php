@@ -188,7 +188,7 @@ class UniversalPaymentController extends Controller
             }
 
             abort_unless($lockedTransaction->status === 'pending'
-                && in_array($lockedTransaction->gateway, ['bank_cash', 'offline'], true),
+                && in_array($lockedTransaction->gateway, ['bank_cash', 'offline', 'bkash', 'nagad', 'rocket'], true),
                 422,
                 'Only pending manual receipts can be reviewed.'
             );
@@ -278,6 +278,50 @@ class UniversalPaymentController extends Controller
                                 ->update(['status' => 'active', 'updated_at' => now()]);
                         }
                     }
+                } else {
+                    // A rejected manual receipt must release the unpaid order so
+                    // the student can retry. Detach gift drafts before failing the
+                    // order, otherwise they remain bound to an unpayable order.
+                    if (Schema::hasTable('commerce_orders') && Schema::hasTable('commerce_order_items')) {
+                        $orders = DB::table('commerce_orders')
+                            ->where('invoice_id', $invoice->id)
+                            ->where('status', 'awaiting_payment')
+                            ->lockForUpdate()
+                            ->get();
+                        foreach ($orders as $order) {
+                            $items = DB::table('commerce_order_items')->where('order_id', $order->id)->get();
+                            foreach ($items as $item) {
+                                if ($item->item_type === 'gift_course' && Schema::hasTable('course_gifts')) {
+                                    DB::table('course_gifts')->where('id', $item->item_id)
+                                        ->where('commerce_order_item_id', $item->id)
+                                        ->where('status', 'awaiting_payment')
+                                        ->whereNull('invoice_id')
+                                        ->whereNull('payment_transaction_id')
+                                        ->update(['commerce_order_item_id' => null, 'updated_at' => now()]);
+                                } elseif ($item->item_type === 'gift_voucher' && Schema::hasTable('course_gift_vouchers')) {
+                                    DB::table('course_gift_vouchers')->where('id', $item->item_id)
+                                        ->where('commerce_order_item_id', $item->id)
+                                        ->where('status', 'awaiting_payment')
+                                        ->whereNull('invoice_id')
+                                        ->whereNull('payment_transaction_id')
+                                        ->update(['commerce_order_item_id' => null, 'updated_at' => now()]);
+                                }
+                            }
+
+                            if (Schema::hasTable('promo_coupon_redemptions') && filled($order->coupon_reservation_key ?? null)) {
+                                DB::table('promo_coupon_redemptions')
+                                    ->where('reservation_key', $order->coupon_reservation_key)
+                                    ->where('status', 'reserved')
+                                    ->update(['status' => 'released', 'updated_at' => now()]);
+                            }
+
+                            DB::table('commerce_orders')->where('id', $order->id)->update([
+                                'status' => 'failed',
+                                'payment_status' => 'failed',
+                                'updated_at' => now(),
+                            ]);
+                        }
+                    }
                 }
             }
 
@@ -346,9 +390,9 @@ class UniversalPaymentController extends Controller
                 && hash_equals(strtolower((string) $invoice->payer_email), strtolower((string) auth()->user()->email));
             abort_unless($isInvoiceOwner, 403, 'You can only pay an invoice issued to your account.');
             abort_unless(
-                $validated['gateway'] === 'bank_cash',
+                in_array($validated['gateway'], ['bank_cash', 'bkash', 'nagad', 'rocket'], true),
                 422,
-                'Fee invoices currently accept bank transfer or cash receipts only. Use the dedicated payment gateway checkout for supported online gateways.'
+                'Fee invoices accept manual bank, cash, bKash, Nagad or Rocket receipts here. Use the dedicated payment gateway checkout for automatic online gateways.'
             );
             abort_if(trim((string) ($validated['external_trx_id'] ?? '')) === '', 422, 'Enter the bank transaction ID or cash receipt reference.');
             abort_if(
@@ -410,7 +454,7 @@ class UniversalPaymentController extends Controller
                     'payer_name' => $validated['payer_name'],
                     'payer_contact' => $validated['payer_contact'],
                     'item_title' => 'Invoice ' . $lockedInvoice->invoice_number,
-                    'gateway' => 'bank_cash',
+                    'gateway' => $validated['gateway'],
                     'currency' => (string) ($lockedInvoice->currency ?: 'BDT'),
                     'amount' => $balance,
                     'external_trx_id' => trim((string) $validated['external_trx_id']),
@@ -421,7 +465,7 @@ class UniversalPaymentController extends Controller
                 ]);
 
                 app(\Plugins\Modules\UniversalPayment\Services\ExternalTransactionReferenceRegistry::class)
-                    ->claim('bank_cash', (string) $transaction->external_trx_id, (int) $transaction->id);
+                    ->claim((string) $transaction->gateway, (string) $transaction->external_trx_id, (int) $transaction->id);
 
                 return $transaction;
             });

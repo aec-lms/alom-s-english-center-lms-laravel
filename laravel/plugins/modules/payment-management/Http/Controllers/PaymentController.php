@@ -112,6 +112,28 @@ class PaymentController extends Controller
                     throw new \RuntimeException('Only settled transactions can be refunded.');
                 }
 
+                // Gift/voucher fulfillment is recipient-specific. Until provider
+                // refunds and voucher-wallet reversals can revoke unused and
+                // already-redeemed gifts safely, fail closed before any ledger
+                // or invoice mutation.
+                if ($lockedTx->invoice_id
+                    && Schema::hasTable('commerce_orders')
+                    && Schema::hasTable('commerce_order_items')) {
+                    $orderIds = DB::table('commerce_orders')
+                        ->where('invoice_id', $lockedTx->invoice_id)
+                        ->lockForUpdate()
+                        ->pluck('id');
+                    if ($orderIds->isNotEmpty()
+                        && DB::table('commerce_order_items')
+                            ->whereIn('order_id', $orderIds)
+                            ->whereIn('item_type', ['gift_course', 'gift_voucher'])
+                            ->exists()) {
+                        throw new \RuntimeException(
+                            'Refunds for orders containing course gifts or gift vouchers are blocked until recipient access and voucher-wallet reconciliation are supported. No refund was recorded.'
+                        );
+                    }
+                }
+
                 $alreadyRefunded = (float) $lockedTx->refunds()->sum('amount');
                 $refundAmount = round((float) $validated['amount'], 2);
                 if ($refundAmount + $alreadyRefunded > (float) $lockedTx->amount + 0.01) {

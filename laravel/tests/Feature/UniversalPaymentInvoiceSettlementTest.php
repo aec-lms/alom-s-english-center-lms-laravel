@@ -103,6 +103,63 @@ class UniversalPaymentInvoiceSettlementTest extends TestCase
         ]);
     }
 
+    public function test_configured_bkash_and_nagad_manual_invoice_receipts_can_be_verified(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['student-management', 'fees-management', 'universal-payment']);
+        $studentUser = $this->createUserWithRole('student');
+        $admin = $this->createUserWithRole('admin');
+
+        foreach (['bkash', 'nagad'] as $gateway) {
+            $invoice = FeeInvoice::query()->create([
+                'invoice_number' => 'UPAY-' . strtoupper($gateway) . '-' . $studentUser->id,
+                'payer_name' => $studentUser->name,
+                'payer_email' => $studentUser->email,
+                'payer_phone' => '01712345678',
+                'subtotal_amount' => 750,
+                'discount_amount' => 0,
+                'net_amount' => 750,
+                'paid_amount' => 0,
+                'currency' => 'BDT',
+                'status' => 'unpaid',
+            ]);
+            $externalReference = strtoupper($gateway) . '-MANUAL-' . $studentUser->id;
+
+            $this->actingAs($studentUser)->post('/universal-checkout', [
+                'payer_name' => $studentUser->name,
+                'payer_contact' => '01712345678',
+                'item_title' => 'Manual ' . strtoupper($gateway) . ' invoice',
+                'gateway' => $gateway,
+                'external_trx_id' => $externalReference,
+                'fee_invoice_id' => $invoice->id,
+            ])->assertRedirect()->assertSessionHasNoErrors();
+
+            $transaction = UniversalPaymentTransaction::query()
+                ->where('fee_invoice_id', $invoice->id)
+                ->firstOrFail();
+            $this->assertSame($gateway, $transaction->gateway);
+            $this->actingAs($admin)->get('/plugins/universal-payment')->assertOk()
+                ->assertSee('name="payment_reference"', false)
+                ->assertSee($externalReference);
+
+            $this->actingAs($admin)->post('/plugins/universal-payment/transactions/' . $transaction->id . '/status', [
+                'status' => 'verified',
+                'payment_reference' => $externalReference,
+            ])->assertRedirect()->assertSessionHasNoErrors();
+
+            $this->assertDatabaseHas('fee_invoices', [
+                'id' => $invoice->id,
+                'paid_amount' => 750,
+                'status' => 'paid',
+            ]);
+            $this->assertDatabaseHas('universal_payment_transactions', [
+                'id' => $transaction->id,
+                'gateway' => $gateway,
+                'status' => 'verified',
+            ]);
+        }
+    }
+
     public function test_rejected_universal_invoice_receipt_does_not_change_invoice_balance(): void
     {
         $this->markSystemInstalled();

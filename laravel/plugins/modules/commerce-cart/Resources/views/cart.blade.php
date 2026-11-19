@@ -3,8 +3,11 @@
 @section('content')
 <div class="mx-auto max-w-5xl px-4 py-10 space-y-6">
     <div class="flex items-center justify-between gap-3">
-        <div><h1 class="text-2xl font-extrabold text-slate-900">Your Shopping Cart</h1><p class="text-sm text-slate-500">Courses, eBooks, mock tests and other learning services in one place.</p></div>
-        <span class="rounded-full bg-slate-100 px-3 py-1 text-sm font-bold">{{ $items->count() }} items</span>
+        <div><h1 class="text-2xl font-extrabold text-slate-900">Your Shopping Cart</h1><p class="text-sm text-slate-500">Courses, eBooks, mock tests, gift courses, vouchers and learning services in one place.</p></div>
+        <div class="flex items-center gap-2">
+            <a href="{{ route('plugins.commerce_cart.gifts') }}" class="rounded-lg border border-indigo-200 px-3 py-2 text-sm font-bold text-indigo-700">Send a Gift</a>
+            <span class="rounded-full bg-slate-100 px-3 py-1 text-sm font-bold">{{ $items->count() }} items</span>
+        </div>
     </div>
     @if (session('status')) <div class="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{{ session('status') }}</div> @endif
     @if ($errors->any()) <div class="rounded-lg bg-rose-50 p-3 text-sm text-rose-800">{{ $errors->first() }}</div> @endif
@@ -22,7 +25,7 @@
     @endforelse
     @if ($items->isNotEmpty())
         <div class="ml-auto max-w-sm rounded-2xl border border-slate-200 bg-white p-5"><div class="flex justify-between text-sm text-slate-500"><span>Subtotal</span><span>৳{{ number_format($subtotal, 2) }}</span></div><div class="mt-2 flex justify-between text-lg font-extrabold"><span>Total</span><span>৳{{ number_format($subtotal, 2) }}</span></div><p class="mt-3 text-xs text-slate-500">Final price and availability will be revalidated at checkout.</p></div>
-        <form method="POST" action="{{ route('plugins.commerce_cart.checkout') }}" class="ml-auto max-w-sm space-y-3 rounded-2xl border border-slate-200 bg-white p-5">
+        <form method="POST" action="{{ route('plugins.commerce_cart.checkout') }}" enctype="multipart/form-data" class="ml-auto max-w-sm space-y-3 rounded-2xl border border-slate-200 bg-white p-5">
             @csrf
             <h2 class="font-bold text-slate-900">Secure Checkout</h2>
             @if ($couponAvailable ?? false)
@@ -35,7 +38,17 @@
                 <option value="gateway-sslcommerz">SSLCOMMERZ (bKash, Nagad, Cards &amp; Internet Banking)</option>
                 <option value="gateway-stripe">Stripe (Card)</option>
                 <option value="gateway-paypal">PayPal</option>
+                @if ($manualPaymentAvailable ?? false)
+                    <option value="bank_cash" {{ old('gateway') === 'bank_cash' ? 'selected' : '' }}>Bank Transfer / Cash (Manual Verification)</option>
+                @endif
             </select>
+            @if ($manualPaymentAvailable ?? false)
+                <div class="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                    <p class="text-xs text-amber-900">For manual bank or cash payment only: enter your bank transaction ID / cash receipt reference and optionally attach a receipt image or PDF. Access is granted after staff verification.</p>
+                    <input name="external_trx_id" maxlength="120" value="{{ old('external_trx_id') }}" placeholder="Bank transaction ID / receipt reference" class="w-full rounded-lg border px-3 py-2 text-sm">
+                    <input name="proof_file" type="file" accept=".pdf,.jpg,.jpeg,.png" class="w-full text-xs">
+                </div>
+            @endif
             <button type="submit" class="w-full rounded-lg bg-slate-900 px-5 py-3 text-sm font-extrabold text-white">Continue to Secure Payment</button>
             <p class="text-xs text-slate-500">Prices and availability are checked again before payment. Access is granted only after verified settlement.</p>
         </form>

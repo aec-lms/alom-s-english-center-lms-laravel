@@ -198,6 +198,9 @@ class CourseCommercePaymentSettlementService
         if ($gift->status === 'paid') {
             throw new RuntimeException('Course gift is already settled by another payment.');
         }
+        if ($gift->expires_at && now()->greaterThan($gift->expires_at)) {
+            throw new RuntimeException('Course gift draft expired before payment settlement; manual reconciliation is required.');
+        }
         if ($gift->status !== 'awaiting_payment'
             || strtoupper((string) $gift->currency) !== strtoupper((string) $transaction->currency)
             || abs((float) $gift->amount - (float) $transaction->amount) > 0.01) {
@@ -247,6 +250,9 @@ class CourseCommercePaymentSettlementService
             || (int) ($voucher->payment_transaction_id ?? 0) !== (int) $transaction->id) {
             throw new RuntimeException('Gift voucher does not match the payment transaction.');
         }
+        $voucherBranchId = $transaction->branch_id !== null ? (int) $transaction->branch_id : null;
+        $this->assertSettlementBranchAccess((int) $transaction->user_id, $voucherBranchId, $voucherBranchId, []);
+
         if ($voucher->status === 'paid') {
             throw new RuntimeException('Gift voucher is already settled by another payment.');
         }
