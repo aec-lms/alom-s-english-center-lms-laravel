@@ -121,7 +121,7 @@ class BoostCampaignSafetyTest extends TestCase
 
         $campaign = BoostCampaign::query()->where('campaign_name', 'Future Campaign')->firstOrFail();
         $this->assertTrue($campaign->ends_at->greaterThan($campaign->starts_at));
-        $this->assertSame(30, $campaign->starts_at->diffInDays($campaign->ends_at));
+        $this->assertEquals(30, $campaign->starts_at->diffInDays($campaign->ends_at));
     }
 
     public function test_campaign_target_ids_must_resolve_and_global_target_switch_clears_old_id(): void
