@@ -171,16 +171,21 @@ class LiveClassAccessController extends Controller
 
     private function assertEligibleStudent(object $student, int $courseId, ?int $courseBranchId, ?int $liveClassId = null): void
     {
-        abort_unless($student->hasRole('student'), 403, 'Only active student accounts can access a live class.');
-
         // Student profile updates write the linked user first and profile second;
-        // retain that lock order so branch changes cannot race a seat grant.
-        $userQuery = DB::table('users')->where('id', $student->id);
-        if (Schema::hasColumn('users', 'is_active')) {
-            $userQuery->lockForUpdate();
-        }
-        $user = $userQuery->first();
+        // retain that lock order so account and branch changes cannot race a seat grant.
+        $user = DB::table('users')
+            ->where('id', $student->id)
+            ->lockForUpdate()
+            ->first();
         abort_unless($user, 403, 'Student account is unavailable.');
+
+        // Recheck and lock the current role pivot instead of trusting a role
+        // relation that may have been loaded before this transaction began.
+        $studentRole = $student->roles()
+            ->where('slug', 'student')
+            ->lockForUpdate()
+            ->first();
+        abort_unless($studentRole, 403, 'Only active student accounts can access a live class.');
         if (Schema::hasColumn('users', 'is_active')) {
             abort_unless((bool) $user->is_active, 403, 'This student account is inactive.');
         }
