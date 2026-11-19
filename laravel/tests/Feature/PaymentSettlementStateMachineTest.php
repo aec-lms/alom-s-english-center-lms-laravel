@@ -471,6 +471,8 @@ class PaymentSettlementStateMachineTest extends TestCase
                     'status' => 'awaiting_payment',
                     'currency' => 'BDT',
                     'amount' => 500,
+                    'subtotal_amount' => 500,
+                    'discount_amount' => 0,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
