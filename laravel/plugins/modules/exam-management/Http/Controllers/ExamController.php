@@ -165,13 +165,16 @@ class ExamController extends Controller
             return back()->withErrors(['correct_option_index' => 'Correct option index is out of bounds.']);
         }
 
-        ExamQuestion::query()->create([
-            'exam_id' => $exam->id,
-            'prompt' => $validated['prompt'],
-            'options' => array_values($validated['options']),
-            'correct_option_index' => (int) $validated['correct_option_index'],
-            'marks' => (float) $validated['marks'],
-        ]);
+        DB::transaction(function () use ($exam, $validated): void {
+            $lockedExam = Exam::query()->whereKey($exam->id)->lockForUpdate()->firstOrFail();
+            ExamQuestion::query()->create([
+                'exam_id' => $lockedExam->id,
+                'prompt' => $validated['prompt'],
+                'options' => array_values($validated['options']),
+                'correct_option_index' => (int) $validated['correct_option_index'],
+                'marks' => (float) $validated['marks'],
+            ]);
+        });
 
         return back()->with('status', 'Question added to exam bank.');
     }
