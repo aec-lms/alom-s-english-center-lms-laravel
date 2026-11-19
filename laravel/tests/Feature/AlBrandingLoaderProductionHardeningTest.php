@@ -21,6 +21,8 @@ final class AlBrandingLoaderProductionHardeningTest extends TestCase
         $this->assertStringContainsString('Math.max(0, maxDuration - elapsed)', $view);
         $this->assertStringContainsString('window.setTimeout(forceHide, maxDuration)', $view);
         $this->assertStringContainsString('event.target instanceof Element', $view);
+        $this->assertStringContainsString("document.readyState === 'complete'", $view);
+        $this->assertStringContainsString('const onPageLoad = function ()', $view);
         $this->assertStringContainsString('transition:none!important', $view);
     }
 
