@@ -335,4 +335,36 @@ final class CmsContributorManagementTest extends TestCase
     }
 
 
+
+    public function test_partial_assignment_update_preserves_omitted_editor_and_coauthors(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+
+        $author = $this->createUserWithRole('student');
+        $coAuthor = $this->createUserWithRole('teacher');
+        $editor = $this->createUserWithRole('teacher');
+        $reviewer = $this->createUserWithRole('teacher');
+        $manager = $this->createUserWithRole('student');
+        $this->grantCmsRole($author, 'cms_contributor');
+        $this->grantCmsRole($coAuthor, 'cms_contributor');
+        $this->grantCmsRole($editor, 'cms_editor');
+        $this->grantCmsRole($reviewer, 'cms_reviewer');
+        $this->grantCmsRole($manager, 'cms_author_manager');
+        $post = $this->createDraft($author, 'Partial Assignment Preservation');
+
+        $post->forceFill(['assigned_editor_id' => $editor->id])->save();
+        $post->contributors()->sync([$coAuthor->id => ['contributor_type' => 'co_author', 'sort_order' => 1]]);
+
+        $this->actingAs($manager)->put('/admin/cms/editorial/posts/' . $post->id . '/assignments', [
+            'assigned_reviewer_id' => $reviewer->id,
+        ])->assertRedirect();
+
+        $post->refresh();
+        $this->assertSame((int) $editor->id, (int) $post->assigned_editor_id);
+        $this->assertSame((int) $reviewer->id, (int) $post->assigned_reviewer_id);
+        $this->assertSame([$coAuthor->id], $post->contributors()->pluck('users.id')->map(static fn ($id): int => (int) $id)->all());
+    }
+
+
 }
