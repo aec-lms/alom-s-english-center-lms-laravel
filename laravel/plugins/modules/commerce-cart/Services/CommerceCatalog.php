@@ -154,7 +154,9 @@ class CommerceCatalog
             || ($gift->invoice_id ?? null) !== null
             || ($gift->payment_transaction_id ?? null) !== null
             || (Schema::hasColumn('course_gifts', 'commerce_order_item_id') && $gift->commerce_order_item_id !== null)
-            || (Schema::hasColumn('course_gifts', 'unified_payment_transaction_id') && $gift->unified_payment_transaction_id !== null)) {
+            || (Schema::hasColumn('course_gifts', 'unified_payment_transaction_id') && $gift->unified_payment_transaction_id !== null)
+            || ($gift->expires_at && now()->greaterThan($gift->expires_at))
+            || filled($gift->coupon_reservation_key ?? null)) {
             throw ValidationException::withMessages(['item' => 'This course gift draft is no longer available to add to your cart.']);
         }
         $recipientEmail = strtolower(trim((string) $gift->recipient_email));
@@ -176,8 +178,13 @@ class CommerceCatalog
         }
 
         $price = round((float) $gift->amount, 2);
-        if ($price <= 0 || strtoupper((string) $gift->currency) !== strtoupper((string) config('lms.default_currency', 'BDT'))) {
-            throw ValidationException::withMessages(['item' => 'The course gift amount or currency is invalid for this store.']);
+        $subtotal = round((float) ($gift->subtotal_amount ?? $gift->amount), 2);
+        $discount = round((float) ($gift->discount_amount ?? 0), 2);
+        if ($price <= 0 || $subtotal <= 0 || $discount < 0 || $discount > $subtotal
+            || abs(round($subtotal - $discount, 2) - $price) > 0.01
+            || !filled($gift->redeem_token_hash) || !filled($gift->redeem_token_encrypted)
+            || strtoupper((string) $gift->currency) !== strtoupper((string) config('lms.default_currency', 'BDT'))) {
+            throw ValidationException::withMessages(['item' => 'The course gift amount, discount, token or currency is invalid for this store.']);
         }
 
         return $this->snapshot('gift_course', $id, 'Gift: ' . (string) $course->title, $price, [
