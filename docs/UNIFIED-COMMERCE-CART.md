@@ -47,7 +47,7 @@ Do not enable production checkout until provider sandbox acceptance is complete.
 
 Gift-course and gift-voucher purchases are **not yet supported** as unified-cart line items. Their existing legacy checkout remains separate while the recipient-specific settlement adapter is implemented.
 
-Do not add `gift_course` or `gift_voucher` to the generic buyer-entitlement flow. A generic entitlement is owned by the order buyer; a gift must instead fulfill a server-owned draft for its verified recipient. Payment settlement currently fails closed for unrecognized/special order-item types so a future gift item cannot accidentally grant access to the sender.
+Do not add `gift_course` or `gift_voucher` to the generic buyer-entitlement flow. A generic entitlement is owned by the order buyer; a gift must instead fulfill a server-owned draft for its verified recipient. Payment settlement currently fails closed for unrecognized/special order-item types so a future gift item cannot accidentally grant access to the sender. Regression coverage includes both gift-only and mixed course-plus-gift orders: settlement must roll back atomically, leaving the invoice unpaid, order awaiting payment, transaction initiated, and buyer entitlement ledger empty.
 
 The required adapter must bind each order item to exactly one server-created gift/voucher draft, reconcile the immutable amount/currency and branch snapshot against the settled invoice, and fulfill the recipient gift or voucher wallet only after full verified settlement. Duplicate callbacks must be idempotent across invoice creation, gift status, voucher token, wallet credit and ledger rows.
 
