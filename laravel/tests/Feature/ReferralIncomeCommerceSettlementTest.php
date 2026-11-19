@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\ReferralIncome\Services\ReferralIncomeService;
@@ -25,7 +26,7 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
     private function assertReferralCommissionForRole(string $referrerRole, float $percent): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['referral-income', 'student-management', 'teacher-management', 'payment-management']);
+        $this->activatePlugins(['referral-income', 'student-management', 'teacher-management', 'payment-management', 'fees-management', 'commerce-cart']);
 
         $referrer = $this->createUserWithRole($referrerRole);
         $buyer = $this->createUserWithRole('student');
@@ -40,8 +41,10 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
         $code = $service->createOrGetCode($referrer);
         $service->applyCode($buyer, $code);
 
-        $first = $service->recordSettledPurchase($buyer, 'commerce_order', 'AEC-ORDER-1001', 1000.00, 'BDT');
-        $retry = $service->recordSettledPurchase($buyer, 'commerce_order', 'AEC-ORDER-1001', 1000.00, 'BDT');
+        [$firstOrderId, $firstInvoiceId] = $this->createCommerceOrder($buyer, 1000.00);
+        $firstSourceId = (string) $firstOrderId;
+        $first = $service->recordSettledPurchase($buyer, 'commerce_order', $firstSourceId, 1000.00, 'BDT');
+        $retry = $service->recordSettledPurchase($buyer, 'commerce_order', $firstSourceId, 1000.00, 'BDT');
 
         $this->assertNotNull($first);
         $this->assertSame((int) $first, (int) $retry);
@@ -51,7 +54,7 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
             'referrer_user_id' => $referrer->id,
             'referred_user_id' => $buyer->id,
             'source_type' => 'commerce_order',
-            'source_id' => 'AEC-ORDER-1001',
+            'source_id' => $firstSourceId,
             'eligible_amount' => 1000.00,
             'commission_percent' => $percent,
             'commission_amount' => round(1000.00 * $percent / 100, 2),
@@ -61,7 +64,7 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
 
         $paymentId = DB::table('payment_transactions')->insertGetId([
             'transaction_ref' => 'REFUND-TEST-' . strtoupper(bin2hex(random_bytes(4))),
-            'invoice_id' => null,
+            'invoice_id' => $firstInvoiceId,
             'branch_id' => null,
             'gateway_slug' => 'offline',
             'amount' => 1000.00,
@@ -77,11 +80,11 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-        $firstReversal = $service->reverseSettledPurchase($buyer, 'commerce_order', 'AEC-ORDER-1001', $firstRefundId, 500.00, 'BDT');
-        $retryReversal = $service->reverseSettledPurchase($buyer, 'commerce_order', 'AEC-ORDER-1001', $firstRefundId, 500.00, 'BDT');
+        $firstReversal = $service->reverseSettledPurchase($buyer, 'commerce_order', $firstSourceId, $firstRefundId, 500.00, 'BDT');
+        $retryReversal = $service->reverseSettledPurchase($buyer, 'commerce_order', $firstSourceId, $firstRefundId, 500.00, 'BDT');
         $this->assertSame((int) $firstReversal, (int) $retryReversal);
         $this->assertDatabaseHas('referral_commissions', [
-            'source_id' => 'AEC-ORDER-1001',
+            'source_id' => $firstSourceId,
             'commission_amount' => round(1000.00 * $percent / 200, 2),
             'status' => 'pending',
         ]);
@@ -93,7 +96,7 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-        $service->reverseSettledPurchase($buyer, 'commerce_order', 'AEC-ORDER-1001', $secondRefundId, 500.00, 'BDT');
+        $service->reverseSettledPurchase($buyer, 'commerce_order', $firstSourceId, $secondRefundId, 500.00, 'BDT');
         $this->assertDatabaseHas('referral_commissions', [
             'source_id' => 'AEC-ORDER-1001',
             'commission_amount' => 0,
@@ -101,16 +104,29 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
         ]);
         $this->assertDatabaseCount('referral_commission_reversals', 2);
 
-        $paidOrderCommission = $service->recordSettledPurchase($buyer, 'commerce_order', 'AEC-ORDER-PAID-1002', 1000.00, 'BDT');
+        [$paidOrderId, $paidInvoiceId] = $this->createCommerceOrder($buyer, 1000.00);
+        $paidSourceId = (string) $paidOrderId;
+        $paidOrderCommission = $service->recordSettledPurchase($buyer, 'commerce_order', $paidSourceId, 1000.00, 'BDT');
         DB::table('referral_commissions')->where('id', $paidOrderCommission)->update(['status' => 'paid', 'paid_at' => now()]);
+        $paidPaymentId = DB::table('payment_transactions')->insertGetId([
+            'transaction_ref' => 'REFUND-PAID-' . strtoupper(bin2hex(random_bytes(4))),
+            'invoice_id' => $paidInvoiceId,
+            'branch_id' => null,
+            'gateway_slug' => 'offline',
+            'amount' => 1000.00,
+            'currency' => 'BDT',
+            'status' => 'settled',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
         $paidRefundId = DB::table('payment_refunds')->insertGetId([
-            'payment_transaction_id' => $paymentId,
+            'payment_transaction_id' => $paidPaymentId,
             'amount' => 1000.00,
             'reason' => 'Refund after referral payout',
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-        $service->reverseSettledPurchase($buyer, 'commerce_order', 'AEC-ORDER-PAID-1002', $paidRefundId, 1000.00, 'BDT');
+        $service->reverseSettledPurchase($buyer, 'commerce_order', $paidSourceId, $paidRefundId, 1000.00, 'BDT');
         $this->assertDatabaseHas('referral_commissions', [
             'id' => $paidOrderCommission,
             'commission_amount' => round(1000.00 * $percent / 100, 2),
@@ -126,7 +142,7 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
     public function test_multiple_partial_refunds_fully_reverse_commission_without_rounding_residue(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['referral-income', 'student-management', 'payment-management']);
+        $this->activatePlugins(['referral-income', 'student-management', 'payment-management', 'fees-management', 'commerce-cart']);
 
         $referrer = $this->createUserWithRole('student');
         $buyer = $this->createUserWithRole('student');
@@ -137,11 +153,13 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
             'updated_at' => now(),
         ]);
         $service->applyCode($buyer, $service->createOrGetCode($referrer));
-        $commissionId = $service->recordSettledPurchase($buyer, 'commerce_order', 'ROUNDING-ORDER-1', 1000.00, 'BDT');
+        [$roundingOrderId, $roundingInvoiceId] = $this->createCommerceOrder($buyer, 1000.00);
+        $roundingSourceId = (string) $roundingOrderId;
+        $commissionId = $service->recordSettledPurchase($buyer, 'commerce_order', $roundingSourceId, 1000.00, 'BDT');
 
         $paymentId = DB::table('payment_transactions')->insertGetId([
             'transaction_ref' => 'REFUND-ROUNDING-' . strtoupper(bin2hex(random_bytes(4))),
-            'invoice_id' => null,
+            'invoice_id' => $roundingInvoiceId,
             'branch_id' => null,
             'gateway_slug' => 'offline',
             'amount' => 1000.00,
@@ -159,7 +177,7 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
-            $service->reverseSettledPurchase($buyer, 'commerce_order', 'ROUNDING-ORDER-1', $refundId, $amount, 'BDT');
+            $service->reverseSettledPurchase($buyer, 'commerce_order', $roundingSourceId, $refundId, $amount, 'BDT');
         }
 
         $this->assertDatabaseHas('referral_commissions', [
@@ -190,7 +208,7 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
         ]);
         $paymentId = DB::table('payment_transactions')->insertGetId([
             'transaction_ref' => 'REFUND-RECOVERY-' . strtoupper(bin2hex(random_bytes(4))),
-            'invoice_id' => null,
+            'invoice_id' => $recoveryInvoiceId,
             'branch_id' => null,
             'gateway_slug' => 'offline',
             'amount' => 1000.00,
@@ -230,13 +248,15 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
     public function test_admin_can_reconcile_paid_commission_recovery_once_with_audit_note(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['referral-income', 'student-management', 'payment-management']);
+        $this->activatePlugins(['referral-income', 'student-management', 'payment-management', 'fees-management', 'commerce-cart']);
 
         $referrer = $this->createUserWithRole('student');
         $buyer = $this->createUserWithRole('student');
         $service = app(ReferralIncomeService::class);
         $service->applyCode($buyer, $service->createOrGetCode($referrer));
-        $commissionId = $service->recordSettledPurchase($buyer, 'commerce_order', 'RECOVERY-ADMIN-ORDER', 1000.00, 'BDT');
+        [$recoveryOrderId, $recoveryInvoiceId] = $this->createCommerceOrder($buyer, 1000.00);
+        $recoverySourceId = (string) $recoveryOrderId;
+        $commissionId = $service->recordSettledPurchase($buyer, 'commerce_order', $recoverySourceId, 1000.00, 'BDT');
 
         DB::table('referral_commissions')->where('id', $commissionId)->update([
             'status' => 'paid',
@@ -261,7 +281,7 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-        $reversalId = $service->reverseSettledPurchase($buyer, 'commerce_order', 'RECOVERY-ADMIN-ORDER', $refundId, 1000.00, 'BDT');
+        $reversalId = $service->reverseSettledPurchase($buyer, 'commerce_order', $recoverySourceId, $refundId, 1000.00, 'BDT');
 
         $admin = $this->createUserWithRole('admin');
         $this->actingAs($admin)
@@ -317,17 +337,19 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
     public function test_admin_can_review_paid_commission_recovery_and_admin_page_loads(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['referral-income', 'student-management', 'payment-management']);
+        $this->activatePlugins(['referral-income', 'student-management', 'payment-management', 'fees-management', 'commerce-cart']);
         $referrer = $this->createUserWithRole('student');
         $buyer = $this->createUserWithRole('student');
         $admin = $this->createUserWithRole('admin');
         $service = app(ReferralIncomeService::class);
         $service->applyCode($buyer, $service->createOrGetCode($referrer));
-        $commissionId = $service->recordSettledPurchase($buyer, 'commerce_order', 'ADMIN-RECOVERY-ORDER', 1000.00, 'BDT');
+        [$adminOrderId, $adminInvoiceId] = $this->createCommerceOrder($buyer, 1000.00);
+        $adminSourceId = (string) $adminOrderId;
+        $commissionId = $service->recordSettledPurchase($buyer, 'commerce_order', $adminSourceId, 1000.00, 'BDT');
         DB::table('referral_commissions')->where('id', $commissionId)->update(['status' => 'paid', 'paid_at' => now(), 'updated_at' => now()]);
         $paymentId = DB::table('payment_transactions')->insertGetId([
             'transaction_ref' => 'ADMIN-RECOVERY-' . strtoupper(bin2hex(random_bytes(4))),
-            'invoice_id' => null, 'branch_id' => null, 'gateway_slug' => 'offline',
+            'invoice_id' => $adminInvoiceId, 'branch_id' => null, 'gateway_slug' => 'offline',
             'amount' => 1000.00, 'currency' => 'BDT', 'status' => 'settled',
             'created_at' => now(), 'updated_at' => now(),
         ]);
@@ -335,7 +357,7 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
             'payment_transaction_id' => $paymentId, 'amount' => 1000.00,
             'reason' => 'Paid referral commission recovery', 'created_at' => now(), 'updated_at' => now(),
         ]);
-        $service->reverseSettledPurchase($buyer, 'commerce_order', 'ADMIN-RECOVERY-ORDER', $refundId, 1000.00, 'BDT');
+        $service->reverseSettledPurchase($buyer, 'commerce_order', $adminSourceId, $refundId, 1000.00, 'BDT');
         $reversalId = (int) DB::table('referral_commission_reversals')->where('payment_refund_id', $refundId)->value('id');
         $this->actingAs($admin)->get('/admin/referral-income')->assertOk()->assertSee('Paid commission recovery ledger');
         $this->actingAs($admin)->post('/admin/referral-income/recoveries/' . $reversalId . '/review', [
@@ -351,7 +373,7 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
     public function test_refund_from_another_invoice_cannot_reverse_a_commerce_order_commission(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['referral-income', 'student-management', 'payment-management', 'commerce-cart']);
+        $this->activatePlugins(['referral-income', 'student-management', 'payment-management', 'fees-management', 'commerce-cart']);
 
         $referrer = $this->createUserWithRole('student');
         $buyer = $this->createUserWithRole('student');
@@ -436,5 +458,47 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
         ]);
         $this->assertDatabaseCount('referral_commission_reversals', 0);
     }
+
+    /**
+     * Build an authoritative paid order/invoice pair for refund reconciliation tests.
+     *
+     * @return array{0: int, 1: int} [order id, invoice id]
+     */
+    private function createCommerceOrder(User $buyer, float $amount): array
+    {
+        $invoice = FeeInvoice::query()->create([
+            'invoice_number' => 'REF-TEST-' . strtoupper(bin2hex(random_bytes(5))),
+            'payer_name' => $buyer->name,
+            'payer_email' => $buyer->email,
+            'payer_phone' => '01700000000',
+            'subtotal_amount' => $amount,
+            'discount_amount' => 0,
+            'net_amount' => $amount,
+            'paid_amount' => $amount,
+            'currency' => 'BDT',
+            'status' => 'paid',
+            'due_date' => now()->toDateString(),
+        ]);
+
+        $orderId = DB::table('commerce_orders')->insertGetId([
+            'order_number' => 'REF-ORDER-' . strtoupper(bin2hex(random_bytes(5))),
+            'user_id' => $buyer->id,
+            'invoice_id' => $invoice->id,
+            'branch_id' => null,
+            'currency' => 'BDT',
+            'subtotal' => $amount,
+            'discount_total' => 0,
+            'grand_total' => $amount,
+            'status' => 'completed',
+            'payment_status' => 'paid',
+            'billing_snapshot' => json_encode(['name' => $buyer->name, 'email' => $buyer->email]),
+            'paid_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return [(int) $orderId, (int) $invoice->id];
+    }
+
 
 }
