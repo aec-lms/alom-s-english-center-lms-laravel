@@ -467,6 +467,18 @@ class CourseGiftCommerceTest extends TestCase
             'status' => 'refunded',
         ]);
 
+        $partialInvoice = FeeInvoice::query()->create([
+            'invoice_number' => 'PARTIAL-GIFT-INV-' . $sender->id,
+            'payer_name' => $sender->name,
+            'payer_email' => $sender->email,
+            'subtotal_amount' => 1200,
+            'discount_amount' => 0,
+            'net_amount' => 1200,
+            'paid_amount' => 600,
+            'currency' => 'BDT',
+            'status' => 'partial',
+        ]);
+
         $giftToken = str_repeat('R', 64);
         $giftId = DB::table('course_gifts')->insertGetId([
             'sender_user_id' => $sender->id,
@@ -493,7 +505,7 @@ class CourseGiftCommerceTest extends TestCase
             'message' => null,
             'redeem_token_hash' => hash('sha256', $voucherToken),
             'redeem_token_encrypted' => encrypt($voucherToken),
-            'invoice_id' => $invoice->id,
+            'invoice_id' => $partialInvoice->id,
             'currency' => 'BDT',
             'amount' => 1200,
             'remaining_amount' => 1200,
