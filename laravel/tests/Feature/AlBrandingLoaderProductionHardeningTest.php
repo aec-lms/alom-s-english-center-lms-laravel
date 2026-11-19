@@ -1,0 +1,54 @@
+<?php
+declare(strict_types=1);
+
+namespace Tests\Feature;
+
+use Tests\TestCase;
+
+final class AlBrandingLoaderProductionHardeningTest extends TestCase
+{
+    private function loaderView(): string
+    {
+        return file_get_contents(base_path('plugins/modules/al-branding-loader/Resources/views/components/loading-screen.blade.php'));
+    }
+
+    public function test_loader_has_a_hard_timeout_even_when_minimum_duration_is_longer(): void
+    {
+        $view = $this->loaderView();
+
+        $this->assertStringContainsString('Math.min(', $view);
+        $this->assertStringContainsString('Math.max(0, maxDuration - elapsed)', $view);
+        $this->assertStringContainsString('window.setTimeout(forceHide, maxDuration)', $view);
+    }
+
+    public function test_first_visit_is_recorded_only_after_a_successful_window_load(): void
+    {
+        $view = $this->loaderView();
+        $loadHandler = strpos($view, "window.addEventListener('load'");
+        $sessionWrite = strpos($view, "sessionStorage.setItem(storageKey");
+        $dailyWrite = strpos($view, "localStorage.setItem(storageKey");
+
+        $this->assertNotFalse($loadHandler);
+        $this->assertNotFalse($sessionWrite);
+        $this->assertNotFalse($dailyWrite);
+        $this->assertGreaterThan($loadHandler, $sessionWrite);
+        $this->assertGreaterThan($loadHandler, $dailyWrite);
+    }
+
+    public function test_navigation_restarts_the_loader_timeout_without_stale_hide_timers(): void
+    {
+        $view = $this->loaderView();
+
+        $this->assertStringContainsString("document.addEventListener('click'", $view);
+        $this->assertStringContainsString('if (hideTimer !== null) window.clearTimeout(hideTimer)', $view);
+        $this->assertStringContainsString('maxTimer = window.setTimeout(forceHide, maxDuration)', $view);
+        $this->assertStringContainsString('destination.origin !== window.location.origin', $view);
+    }
+
+    public function test_admin_payment_api_and_live_class_routes_are_excluded_from_navigation_loader(): void
+    {
+        $view = $this->loaderView();
+
+        $this->assertStringContainsString('/(admin|api|payment|payments|checkout|webhook|webhooks|live-class|live-classes)', $view);
+    }
+}
