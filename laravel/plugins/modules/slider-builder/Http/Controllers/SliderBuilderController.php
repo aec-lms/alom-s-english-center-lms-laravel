@@ -187,6 +187,10 @@ class SliderBuilderController extends Controller
     {
         $uploadsRoot = public_path('uploads');
         $dir = public_path('uploads/sliders');
+        if (is_link($uploadsRoot)) {
+            throw ValidationException::withMessages(['image' => 'The public uploads root must not be a symbolic link.']);
+        }
+
         File::ensureDirectoryExists($uploadsRoot);
 
         if (is_link($dir)) {
@@ -215,8 +219,13 @@ class SliderBuilderController extends Controller
         if (HeroSlider::withTrashed()->where('image_path', $path)->orWhere('mobile_image_path', $path)->exists()) {
             return;
         }
+        $uploadsRoot = public_path('uploads');
+        $sliderDirectory = public_path('uploads/sliders');
+        if (is_link($uploadsRoot) || is_link($sliderDirectory)) {
+            return;
+        }
         $file = public_path(ltrim($path, '/'));
-        $root = realpath(public_path('uploads/sliders'));
+        $root = realpath($sliderDirectory);
         $realFile = realpath($file);
 
         // The final file may not itself be a symlink while its parent directory
