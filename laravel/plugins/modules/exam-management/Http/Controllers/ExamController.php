@@ -198,62 +198,18 @@ class ExamController extends Controller
             );
         }
 
-        $questions = $exam->questions()->get(['id', 'exam_id', 'prompt', 'options', 'marks']);
-        abort_if($questions->isEmpty(), 404, 'This exam has no questions yet.');
-
-        $attempt = DB::transaction(function () use ($exam, $actor): ExamAttempt {
-            $lockedExam = Exam::query()->whereKey($exam->id)->lockForUpdate()->firstOrFail();
-            $pending = ExamAttempt::query()
-                ->where('exam_id', $lockedExam->id)
-                ->where('user_id', $actor->id)
-                ->whereNull('submitted_at')
-                ->latest('id')
-                ->lockForUpdate()
-                ->first();
-
-            $expiredPending = false;
-            if ($pending) {
-                $deadline = $pending->started_at?->copy()->addMinutes((int) $lockedExam->duration_minutes);
-                if ($deadline && now()->greaterThanOrEqualTo($deadline)) {
-                    $pending->update([
-                        'submitted_answers' => [],
-                        'score_obtained' => 0,
-                        'total_marks' => (float) ExamQuestion::query()->where('exam_id', $lockedExam->id)->sum('marks'),
-                        'passed' => false,
-                        'submitted_at' => now(),
-                    ]);
-                    $expiredPending = true;
-                } else {
-                    return $pending;
-                }
-            }
-
-            $completedAttempts = ExamAttempt::query()
-                ->where('exam_id', $lockedExam->id)
-                ->where('user_id', $actor->id)
-                ->whereNotNull('submitted_at')
-                ->count();
-            if ($completedAttempts >= max(1, (int) $lockedExam->max_attempts)) {
-                if ($expiredPending) {
-                    return $pending->fresh();
-                }
-                abort(403, 'You have used all allowed attempts for this exam.');
-            }
-
-            return ExamAttempt::query()->create([
-                'exam_id' => $lockedExam->id,
-                'user_id' => $actor->id,
-                'started_at' => now(),
-                'submitted_answers' => null,
-                'score_obtained' => 0,
-                'total_marks' => 0,
-                'passed' => false,
-                'submitted_at' => null,
-            ]);
-        });
-
+        $attempt = $this->startOrResumeAttempt($exam, $actor);
         abort_if($attempt->submitted_at !== null, 403, 'Your exam time has expired or all attempts have been used.');
-        $deadline = $attempt->started_at->copy()->addMinutes((int) $exam->duration_minutes);
+        $snapshot = $this->validatedAttemptSnapshot($attempt);
+        $questions = collect($snapshot['questions'])->map(static fn (array $question): object => (object) [
+            'id' => $question['id'],
+            'prompt' => $question['prompt'],
+            'options' => $question['options'],
+            'marks' => $question['marks'],
+        ]);
+        $exam->setAttribute('duration_minutes', $snapshot['duration_minutes']);
+        $exam->setAttribute('pass_marks', $snapshot['pass_marks']);
+        $deadline = $attempt->started_at->copy()->addMinutes((int) $snapshot['duration_minutes']);
 
         return view('exam-management::take', compact('exam', 'questions', 'attempt', 'deadline'));
     }
@@ -309,25 +265,25 @@ class ExamController extends Controller
                 ->firstOrFail();
 
             abort_if($attempt->submitted_at !== null, 409, 'This exam attempt is already submitted.');
-            $deadline = $attempt->started_at?->copy()->addMinutes((int) $lockedExam->duration_minutes);
+            $snapshot = $this->validatedAttemptSnapshot($attempt);
+            $deadline = $attempt->started_at?->copy()->addMinutes((int) $snapshot['duration_minutes']);
             if (!$deadline || now()->greaterThanOrEqualTo($deadline)) {
                 abort(409, 'The exam time has expired.');
             }
 
-            $questions = $lockedExam->questions()->get(['id', 'options']);
-            abort_if($questions->isEmpty(), 422, 'This exam has no questions.');
+            $questions = collect($snapshot['questions']);
             $allowedIds = $questions->pluck('id')->map(static fn ($id): string => (string) $id)->all();
             $submittedIds = array_map('strval', array_keys($validated['answers']));
-            abort_if(array_diff($submittedIds, $allowedIds) !== [], 422, 'An answer references a question outside this exam.');
+            abort_if(array_diff($submittedIds, $allowedIds) !== [], 422, 'An answer references a question outside this exam snapshot.');
 
             $answers = (array) ($attempt->submitted_answers ?? []);
             foreach ($questions as $question) {
-                $key = (string) $question->id;
+                $key = (string) $question['id'];
                 if (!array_key_exists($key, $validated['answers'])) {
                     continue;
                 }
                 $selected = $validated['answers'][$key];
-                if ($selected !== null && (int) $selected >= count((array) $question->options)) {
+                if ($selected !== null && (int) $selected >= count((array) $question['options'])) {
                     abort(422, 'An answer option is outside the allowed range.');
                 }
                 $answers[$key] = $selected !== null ? (int) $selected : null;
@@ -363,17 +319,18 @@ class ExamController extends Controller
         ]);
 
         $result = DB::transaction(function () use ($exam, $actor, $validated): array {
+            $lockedExam = Exam::query()->whereKey($exam->id)->lockForUpdate()->firstOrFail();
             $attempt = ExamAttempt::query()
                 ->whereKey((int) $validated['attempt_id'])
-                ->where('exam_id', $exam->id)
+                ->where('exam_id', $lockedExam->id)
                 ->where('user_id', $actor->id)
                 ->lockForUpdate()
                 ->firstOrFail();
             abort_if($attempt->submitted_at !== null, 409, 'This exam attempt has already been submitted.');
 
-            $questions = $exam->questions()->get();
-            abort_if($questions->isEmpty(), 422, 'This exam has no questions.');
-            $deadline = $attempt->started_at?->copy()->addMinutes((int) $exam->duration_minutes);
+            $snapshot = $this->validatedAttemptSnapshot($attempt);
+            $questions = collect($snapshot['questions']);
+            $deadline = $attempt->started_at?->copy()->addMinutes((int) $snapshot['duration_minutes']);
             $total = (float) $questions->sum('marks');
 
             if (!$deadline || now()->greaterThanOrEqualTo($deadline)) {
@@ -390,29 +347,28 @@ class ExamController extends Controller
 
             $allowedIds = $questions->pluck('id')->map(static fn ($id): string => (string) $id)->all();
             $submittedIds = array_map('strval', array_keys($validated['answers']));
-            abort_if(array_diff($submittedIds, $allowedIds) !== [], 422, 'An answer references a question outside this exam.');
+            abort_if(array_diff($submittedIds, $allowedIds) !== [], 422, 'An answer references a question outside this exam snapshot.');
 
             $score = 0.0;
             $sanitizedAnswers = [];
             foreach ($questions as $question) {
-                $selected = $validated['answers'][(string) $question->id] ?? null;
-                $options = (array) $question->options;
-                if ($selected !== null && (int) $selected >= count($options)) {
+                $selected = $validated['answers'][(string) $question['id']] ?? null;
+                if ($selected !== null && (int) $selected >= count((array) $question['options'])) {
                     abort(422, 'An answer option is outside the allowed range.');
                 }
-                if ($selected !== null && (int) $selected === (int) $question->correct_option_index) {
-                    $score += (float) $question->marks;
+                if ($selected !== null && (int) $selected === (int) $question['correct_option_index']) {
+                    $score += (float) $question['marks'];
                 } elseif ($selected !== null) {
-                    $score -= (float) ($question->negative_marks ?? 0);
+                    $score -= (float) ($question['negative_marks'] ?? 0);
                 }
-                $sanitizedAnswers[(string) $question->id] = $selected !== null ? (int) $selected : null;
+                $sanitizedAnswers[(string) $question['id']] = $selected !== null ? (int) $selected : null;
             }
 
             $attempt->update([
                 'submitted_answers' => $sanitizedAnswers,
                 'score_obtained' => $score,
                 'total_marks' => $total,
-                'passed' => $score >= (float) $exam->pass_marks,
+                'passed' => $score >= (float) $snapshot['pass_marks'],
                 'submitted_at' => now(),
             ]);
 
@@ -420,7 +376,7 @@ class ExamController extends Controller
         });
 
         if ($result['expired']) {
-            $this->audit->log('exam.attempt_expired', 'exam_attempt', (string) $result['attempt']->id, ['exam_id' => $exam->id]);
+            $this->audit->log('exam.attempt_expired', 'exam_attempt', (string) $result['attempt']->id, ['exam_id' => $exam->id], $actor->id);
             return redirect()->route('portal.dashboard')->withErrors(['exam' => 'Your exam time expired. The attempt was submitted with zero marks.']);
         }
 
@@ -428,7 +384,7 @@ class ExamController extends Controller
             'exam_id' => $exam->id,
             'score' => $result['score'],
             'total' => $result['total'],
-        ]);
+        ], $actor->id);
 
         return redirect()->route('portal.dashboard')->with('status', "Exam graded server-side: {$result['score']}/{$result['total']} marks.");
     }
@@ -486,62 +442,10 @@ class ExamController extends Controller
             );
         }
 
-        $questions = $exam->questions()->get(['id', 'exam_id', 'prompt', 'options', 'marks']);
-        abort_if($questions->isEmpty(), 404, 'This exam has no questions yet.');
-
-        $attempt = DB::transaction(function () use ($exam, $actor): ExamAttempt {
-            $lockedExam = Exam::query()->whereKey($exam->id)->lockForUpdate()->firstOrFail();
-            $pending = ExamAttempt::query()
-                ->where('exam_id', $lockedExam->id)
-                ->where('user_id', $actor->id)
-                ->whereNull('submitted_at')
-                ->latest('id')
-                ->lockForUpdate()
-                ->first();
-
-            $expiredPending = false;
-            if ($pending) {
-                $deadline = $pending->started_at?->copy()->addMinutes((int) $lockedExam->duration_minutes);
-                if ($deadline && now()->greaterThanOrEqualTo($deadline)) {
-                    $pending->update([
-                        'submitted_answers' => [],
-                        'score_obtained' => 0,
-                        'total_marks' => (float) ExamQuestion::query()->where('exam_id', $lockedExam->id)->sum('marks'),
-                        'passed' => false,
-                        'submitted_at' => now(),
-                    ]);
-                    $expiredPending = true;
-                } else {
-                    return $pending;
-                }
-            }
-
-            $completedAttempts = ExamAttempt::query()
-                ->where('exam_id', $lockedExam->id)
-                ->where('user_id', $actor->id)
-                ->whereNotNull('submitted_at')
-                ->count();
-            if ($completedAttempts >= max(1, (int) $lockedExam->max_attempts)) {
-                if ($expiredPending) {
-                    return $pending->fresh();
-                }
-                abort(403, 'You have used all allowed attempts for this exam.');
-            }
-
-            return ExamAttempt::query()->create([
-                'exam_id' => $lockedExam->id,
-                'user_id' => $actor->id,
-                'started_at' => now(),
-                'submitted_answers' => null,
-                'score_obtained' => 0,
-                'total_marks' => 0,
-                'passed' => false,
-                'submitted_at' => null,
-            ]);
-        });
-
+        $attempt = $this->startOrResumeAttempt($exam, $actor);
         abort_if($attempt->submitted_at !== null, 403, 'Your exam time has expired or all attempts have been used.');
-        $deadline = $attempt->started_at->copy()->addMinutes((int) $exam->duration_minutes);
+        $snapshot = $this->validatedAttemptSnapshot($attempt);
+        $deadline = $attempt->started_at->copy()->addMinutes((int) $snapshot['duration_minutes']);
 
         return response()->json([
             'attempt' => [
@@ -549,12 +453,12 @@ class ExamController extends Controller
                 'started_at' => $attempt->started_at?->toIso8601String(),
                 'deadline' => $deadline->toIso8601String(),
             ],
-            // Never return correct_option_index or any server-side answer key.
-            'questions' => $questions->map(fn (ExamQuestion $question): array => [
-                'id' => $question->id,
-                'prompt' => $question->prompt,
-                'options' => $question->options,
-                'marks' => $question->marks,
+            // Correct answers are retained only in the private attempt snapshot.
+            'questions' => collect($snapshot['questions'])->map(static fn (array $question): array => [
+                'id' => $question['id'],
+                'prompt' => $question['prompt'],
+                'options' => $question['options'],
+                'marks' => $question['marks'],
             ])->values(),
         ]);
     }
@@ -593,9 +497,9 @@ class ExamController extends Controller
                 ->firstOrFail();
             abort_if($record->submitted_at !== null, 409, 'This exam attempt has already been submitted.');
 
-            $questions = $lockedExam->questions()->get();
-            abort_if($questions->isEmpty(), 422, 'This exam has no questions.');
-            $deadline = $record->started_at?->copy()->addMinutes((int) $lockedExam->duration_minutes);
+            $snapshot = $this->validatedAttemptSnapshot($record);
+            $questions = collect($snapshot['questions']);
+            $deadline = $record->started_at?->copy()->addMinutes((int) $snapshot['duration_minutes']);
             $total = (float) $questions->sum('marks');
 
             if (!$deadline || now()->greaterThanOrEqualTo($deadline)) {
@@ -612,29 +516,28 @@ class ExamController extends Controller
 
             $allowedIds = $questions->pluck('id')->map(static fn ($id): string => (string) $id)->all();
             $submittedIds = array_map('strval', array_keys($validated['answers']));
-            abort_if(array_diff($submittedIds, $allowedIds) !== [], 422, 'An answer references a question outside this exam.');
+            abort_if(array_diff($submittedIds, $allowedIds) !== [], 422, 'An answer references a question outside this exam snapshot.');
 
             $score = 0.0;
             $sanitizedAnswers = [];
             foreach ($questions as $question) {
-                $selected = $validated['answers'][(string) $question->id] ?? null;
-                $options = (array) $question->options;
-                if ($selected !== null && (int) $selected >= count($options)) {
+                $selected = $validated['answers'][(string) $question['id']] ?? null;
+                if ($selected !== null && (int) $selected >= count((array) $question['options'])) {
                     abort(422, 'An answer option is outside the allowed range.');
                 }
-                if ($selected !== null && (int) $selected === (int) $question->correct_option_index) {
-                    $score += (float) $question->marks;
+                if ($selected !== null && (int) $selected === (int) $question['correct_option_index']) {
+                    $score += (float) $question['marks'];
                 } elseif ($selected !== null) {
-                    $score -= (float) ($question->negative_marks ?? 0);
+                    $score -= (float) ($question['negative_marks'] ?? 0);
                 }
-                $sanitizedAnswers[(string) $question->id] = $selected !== null ? (int) $selected : null;
+                $sanitizedAnswers[(string) $question['id']] = $selected !== null ? (int) $selected : null;
             }
 
             $record->update([
                 'submitted_answers' => $sanitizedAnswers,
                 'score_obtained' => $score,
                 'total_marks' => $total,
-                'passed' => $score >= (float) $lockedExam->pass_marks,
+                'passed' => $score >= (float) $snapshot['pass_marks'],
                 'submitted_at' => now(),
             ]);
 
@@ -665,6 +568,114 @@ class ExamController extends Controller
                 'submitted_at' => $result['attempt']->submitted_at?->toIso8601String(),
             ],
         ]);
+    }
+
+    private function startOrResumeAttempt(Exam $exam, object $actor): ExamAttempt
+    {
+        return DB::transaction(function () use ($exam, $actor): ExamAttempt {
+            $lockedExam = Exam::query()->whereKey($exam->id)->lockForUpdate()->firstOrFail();
+            $pending = ExamAttempt::query()
+                ->where('exam_id', $lockedExam->id)
+                ->where('user_id', $actor->id)
+                ->whereNull('submitted_at')
+                ->latest('id')
+                ->lockForUpdate()
+                ->first();
+
+            $expiredPending = false;
+            if ($pending) {
+                // A legacy in-progress attempt has no provable start-time question set.
+                // Never silently grade it against today's mutable exam content.
+                $snapshot = $this->validatedAttemptSnapshot($pending);
+                $deadline = $pending->started_at?->copy()->addMinutes((int) $snapshot['duration_minutes']);
+                if (!$deadline || now()->greaterThanOrEqualTo($deadline)) {
+                    $total = (float) collect($snapshot['questions'])->sum('marks');
+                    $pending->update([
+                        'submitted_answers' => [],
+                        'score_obtained' => 0,
+                        'total_marks' => $total,
+                        'passed' => false,
+                        'submitted_at' => now(),
+                    ]);
+                    $expiredPending = true;
+                } else {
+                    return $pending;
+                }
+            }
+
+            $completedAttempts = ExamAttempt::query()
+                ->where('exam_id', $lockedExam->id)
+                ->where('user_id', $actor->id)
+                ->whereNotNull('submitted_at')
+                ->count();
+            if ($completedAttempts >= max(1, (int) $lockedExam->max_attempts)) {
+                if ($expiredPending) {
+                    return $pending->fresh();
+                }
+                abort(403, 'You have used all allowed attempts for this exam.');
+            }
+
+            $snapshot = $this->buildExamSnapshot($lockedExam);
+            return ExamAttempt::query()->create([
+                'exam_id' => $lockedExam->id,
+                'user_id' => $actor->id,
+                'started_at' => now(),
+                'submitted_answers' => null,
+                'exam_snapshot' => $snapshot,
+                'score_obtained' => 0,
+                'total_marks' => 0,
+                'passed' => false,
+                'submitted_at' => null,
+            ]);
+        });
+    }
+
+    /**
+     * Capture every mutable input that affects delivery, timing or grading.
+     * The exam row is locked by the caller before question rows are read.
+     *
+     * @return array<string, mixed>
+     */
+    private function buildExamSnapshot(Exam $exam): array
+    {
+        $questions = $exam->questions()->orderBy('id')->lockForUpdate()->get();
+        abort_if($questions->isEmpty(), 404, 'This exam has no questions yet.');
+
+        return [
+            'version' => 1,
+            'duration_minutes' => (int) $exam->duration_minutes,
+            'pass_marks' => (float) $exam->pass_marks,
+            'questions' => $questions->map(static fn (ExamQuestion $question): array => [
+                'id' => (int) $question->id,
+                'prompt' => (string) $question->prompt,
+                'options' => array_values((array) $question->options),
+                'correct_option_index' => (int) $question->correct_option_index,
+                'marks' => (float) $question->marks,
+                'negative_marks' => (float) ($question->negative_marks ?? 0),
+            ])->values()->all(),
+        ];
+    }
+
+    /**
+     * Historical attempts remain untouched. Legacy pending attempts without a
+     * start-time snapshot are blocked rather than being silently regraded.
+     *
+     * @return array<string, mixed>
+     */
+    private function validatedAttemptSnapshot(ExamAttempt $attempt): array
+    {
+        $snapshot = $attempt->exam_snapshot;
+        abort_unless(
+            is_array($snapshot)
+                && (int) ($snapshot['version'] ?? 0) === 1
+                && (int) ($snapshot['duration_minutes'] ?? 0) > 0
+                && is_array($snapshot['questions'] ?? null)
+                && count($snapshot['questions']) > 0,
+            409,
+            'This legacy exam attempt has no immutable question snapshot and cannot be safely resumed or graded. Please contact an administrator.'
+        );
+
+        return $snapshot;
     }
 
     private function assertStudentExamBranch(object $student, Exam $exam): void
