@@ -9,6 +9,7 @@ use App\Http\Middleware\EnsureInstalled;
 use App\Http\Middleware\EnsureNotInstalled;
 use App\Http\Middleware\EnsurePluginEnabled;
 use App\Http\Middleware\RolePermissionMiddleware;
+use App\Http\Middleware\SetApplicationLocale;
 use App\Console\Commands\OffsiteBackupCommand;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
