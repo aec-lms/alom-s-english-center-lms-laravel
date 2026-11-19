@@ -55,6 +55,39 @@ class PluginLifecycleTest extends TestCase
         $this->assertSame('manifest-secret', $manager->getSetting('sms-gateway', 'api_token'));
     }
 
+    public function test_plugin_install_registers_its_route_file_once_after_catalog_commit(): void
+    {
+        $this->markSystemInstalled();
+
+        $slug = 'route-once-probe';
+        $pluginDir = (string) config('plugins.modules_path') . DIRECTORY_SEPARATOR . $slug;
+        File::ensureDirectoryExists($pluginDir . DIRECTORY_SEPARATOR . 'Routes');
+        file_put_contents($pluginDir . DIRECTORY_SEPARATOR . 'plugin.json', json_encode([
+            'slug' => $slug,
+            'name' => 'Route Once Probe',
+            'version' => '1.0.0',
+            'core_compatibility' => '^2.0',
+            'dependencies' => [],
+        ], JSON_THROW_ON_ERROR));
+        file_put_contents(
+            $pluginDir . DIRECTORY_SEPARATOR . 'Routes' . DIRECTORY_SEPARATOR . 'web.php',
+            "<?php \\Illuminate\\Support\\Facades\\Route::get('/route-once-probe', fn () => 'ok')->name('plugins.route-once-probe.index');"
+        );
+
+        try {
+            $record = app(PluginManager::class)->install($slug);
+            $this->assertTrue($record->fresh()->is_installed);
+
+            $matchingRoutes = collect(app('router')->getRoutes())
+                ->filter(fn ($route): bool => $route->uri() === 'route-once-probe');
+
+            $this->assertCount(1, $matchingRoutes);
+            $this->assertSame('plugins.route-once-probe.index', $matchingRoutes->first()->getName());
+        } finally {
+            File::deleteDirectory($pluginDir);
+        }
+    }
+
     public function test_plugin_core_compatibility_checks_minimum_semantic_versions(): void
     {
         $this->assertTrue(VersionConstraint::matches('2.0.0', '^2.0'));
