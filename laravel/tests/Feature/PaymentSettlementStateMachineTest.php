@@ -439,6 +439,151 @@ class PaymentSettlementStateMachineTest extends TestCase
         $this->assertDatabaseCount('commerce_entitlements', 0);
     }
 
+    public function test_unified_commerce_fulfills_course_gifts_and_vouchers_without_buyer_entitlements(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'commerce-cart', 'course-management']);
+
+        foreach (['gift_course', 'gift_voucher'] as $giftType) {
+            $buyer = $this->createUserWithRole('student');
+            $recipientEmail = $giftType . '.recipient@example.test';
+            $draftId = null;
+            $courseId = null;
+
+            if ($giftType === 'gift_course') {
+                $course = Course::query()->create([
+                    'code' => 'GIFT-SETTLE-' . strtoupper(bin2hex(random_bytes(3))),
+                    'title' => 'Unified Gift Course',
+                    'slug' => 'unified-gift-' . strtolower(bin2hex(random_bytes(3))),
+                    'price' => 500,
+                    'status' => 'published',
+                    'branch_id' => null,
+                ]);
+                $courseId = (int) $course->id;
+                $draftId = DB::table('course_gifts')->insertGetId([
+                    'sender_user_id' => $buyer->id,
+                    'recipient_user_id' => null,
+                    'recipient_email' => $recipientEmail,
+                    'course_id' => $courseId,
+                    'invoice_id' => null,
+                    'redeem_token_hash' => hash('sha256', bin2hex(random_bytes(32))),
+                    'status' => 'awaiting_payment',
+                    'currency' => 'BDT',
+                    'amount' => 500,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            } else {
+                $token = bin2hex(random_bytes(32));
+                $draftId = DB::table('course_gift_vouchers')->insertGetId([
+                    'sender_user_id' => $buyer->id,
+                    'recipient_email' => $recipientEmail,
+                    'redeem_token_hash' => hash('sha256', $token),
+                    'redeem_token_encrypted' => encrypt($token),
+                    'currency' => 'BDT',
+                    'amount' => 500,
+                    'remaining_amount' => 500,
+                    'status' => 'awaiting_payment',
+                    'expires_at' => now()->addDays(30),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+
+            $invoice = FeeInvoice::query()->create([
+                'invoice_number' => 'UNIFIED-GIFT-' . strtoupper(bin2hex(random_bytes(4))),
+                'payer_name' => $buyer->name,
+                'payer_email' => $buyer->email,
+                'subtotal_amount' => 500,
+                'discount_amount' => 0,
+                'net_amount' => 500,
+                'paid_amount' => 0,
+                'currency' => 'BDT',
+                'status' => 'unpaid',
+            ]);
+            $orderId = DB::table('commerce_orders')->insertGetId([
+                'order_number' => 'UNIFIED-GIFT-ORDER-' . strtoupper(bin2hex(random_bytes(4))),
+                'user_id' => $buyer->id,
+                'invoice_id' => $invoice->id,
+                'branch_id' => null,
+                'currency' => 'BDT',
+                'subtotal' => 500,
+                'discount_total' => 0,
+                'grand_total' => 500,
+                'status' => 'awaiting_payment',
+                'payment_status' => 'unpaid',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            $orderItemId = DB::table('commerce_order_items')->insertGetId([
+                'order_id' => $orderId,
+                'item_type' => $giftType,
+                'item_id' => $draftId,
+                'title_snapshot' => $giftType === 'gift_course' ? 'Gift: Unified Gift Course' : 'Gift Voucher',
+                'quantity' => 1,
+                'unit_price' => 500,
+                'line_total' => 500,
+                'metadata' => json_encode($giftType === 'gift_course'
+                    ? ['course_gift_id' => $draftId, 'course_id' => $courseId, 'recipient_email' => $recipientEmail]
+                    : ['course_gift_voucher_id' => $draftId, 'recipient_email' => $recipientEmail], JSON_THROW_ON_ERROR),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $draftTable = $giftType === 'gift_course' ? 'course_gifts' : 'course_gift_vouchers';
+            DB::table($draftTable)->where('id', $draftId)->update([
+                'commerce_order_item_id' => $orderItemId,
+                'updated_at' => now(),
+            ]);
+
+            $transaction = PaymentTransaction::query()->create([
+                'transaction_ref' => 'UNIFIED-GIFT-TXN-' . strtoupper(bin2hex(random_bytes(4))),
+                'invoice_id' => $invoice->id,
+                'gateway_slug' => 'offline',
+                'amount' => 500,
+                'currency' => 'BDT',
+                'status' => 'initiated',
+                'metadata' => [],
+            ]);
+
+            app(PaymentSettlementService::class)->settleTransaction(
+                $transaction,
+                'UNIFIED-GIFT-PROVIDER-' . strtoupper($giftType),
+            );
+
+            $this->assertDatabaseHas($draftTable, [
+                'id' => $draftId,
+                'commerce_order_item_id' => $orderItemId,
+                'invoice_id' => $invoice->id,
+                'unified_payment_transaction_id' => $transaction->id,
+                'status' => 'paid',
+            ]);
+            $this->assertDatabaseHas('payment_transactions', [
+                'id' => $transaction->id,
+                'status' => 'settled',
+            ]);
+            $this->assertDatabaseHas('fee_invoices', [
+                'id' => $invoice->id,
+                'status' => 'paid',
+                'paid_amount' => 500,
+            ]);
+            $this->assertDatabaseHas('commerce_orders', [
+                'id' => $orderId,
+                'status' => 'completed',
+                'payment_status' => 'paid',
+            ]);
+            $this->assertDatabaseMissing('commerce_entitlements', [
+                'user_id' => $buyer->id,
+                'order_item_id' => $orderItemId,
+            ]);
+
+            if ($giftType === 'gift_voucher') {
+                $this->assertDatabaseCount('course_gift_wallets', 0);
+                $this->assertDatabaseCount('course_gift_wallet_transactions', 0);
+            }
+        }
+    }
+
     public function test_late_verified_callback_cannot_resettle_a_refunded_transaction(): void
     {
         $this->markSystemInstalled();
