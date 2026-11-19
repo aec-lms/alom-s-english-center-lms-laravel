@@ -10,6 +10,9 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
+use Plugins\Modules\UniversalPayment\Services\ExternalTransactionReferenceRegistry;
 use Illuminate\View\View;
 use Plugins\Modules\CommerceCart\Services\CommerceCatalog;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
@@ -40,9 +43,14 @@ class CommerceCartController extends Controller
         $cart = $this->activeCart((int) $request->user()->id);
         $items = DB::table('commerce_cart_items')->where('cart_id', $cart->id)->orderBy('id')->get();
         $subtotal = (float) $items->sum(fn ($item) => (float) $item->unit_price * (int) $item->quantity);
-        $couponAvailable = app(PluginManager::class)->isEnabled('marketing-management')
+        $plugins = app(PluginManager::class);
+        $couponAvailable = $plugins->isEnabled('marketing-management')
             && Schema::hasTable('promo_coupons') && Schema::hasTable('promo_coupon_redemptions');
-        return view('commerce-cart::cart', compact('cart', 'items', 'subtotal', 'couponAvailable'));
+        $enabledPaymentMethods = array_filter(array_map('trim', explode(',', (string) $plugins->getSetting('universal-payment', 'enabled_gateways', 'sslcommerz,bkash,nagad,rocket,card,bank_cash'))));
+        $manualPaymentAvailable = $plugins->isEnabled('universal-payment')
+            && (string) $plugins->getSetting('universal-payment', 'allow_offline_payments', '1') === '1'
+            && in_array('bank_cash', $enabledPaymentMethods, true);
+        return view('commerce-cart::cart', compact('cart', 'items', 'subtotal', 'couponAvailable', 'manualPaymentAvailable'));
     }
 
     public function add(Request $request): RedirectResponse
