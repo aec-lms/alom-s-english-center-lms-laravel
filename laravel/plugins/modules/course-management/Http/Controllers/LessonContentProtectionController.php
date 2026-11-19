@@ -48,7 +48,8 @@ class LessonContentProtectionController extends Controller
         abort_unless($resolvedDirectory && str_starts_with($resolvedDirectory, rtrim($root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR), 503, 'Lesson media directory must remain inside private storage.');
         $directory = $resolvedDirectory;
 
-        $extension = strtolower($file->getClientOriginalExtension() ?: 'bin');
+        $extension = strtolower((string) $file->guessExtension());
+        abort_unless(in_array($extension, ['mp4', 'webm', 'mp3', 'm4a', 'pdf'], true), 422, 'Unsupported protected lesson media extension.');
         $filename = Str::uuid()->toString() . '.' . $extension;
         $file->move($directory, $filename);
         $storedPath = $directory . DIRECTORY_SEPARATOR . $filename;

@@ -391,7 +391,11 @@ class CmsController extends Controller
             mkdir($dir, 0755, true);
         }
 
-        $filename = Str::uuid()->toString() . '.' . $file->getClientOriginalExtension();
+        $extension = strtolower((string) $file->guessExtension());
+        abort_unless(in_array($extension, ['jpg', 'jpeg', 'png', 'webp', 'pdf'], true), 422, 'Unsupported CMS upload file type.');
+
+        // Public uploads must use a server-detected extension, never the client filename.
+        $filename = Str::uuid()->toString() . '.' . $extension;
         $file->move($dir, $filename);
 
         return '/uploads/' . $folder . '/' . $filename;

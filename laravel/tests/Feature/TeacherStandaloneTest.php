@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Core\Plugins\PluginManager;
+use Illuminate\Http\UploadedFile;
 use Plugins\Modules\TeacherManagement\Models\Teacher;
 use Tests\TestCase;
 
@@ -66,6 +67,35 @@ class TeacherStandaloneTest extends TestCase
         $this->assertFalse(Teacher::query()->findOrFail($teacher->id)->trashed());
         $this->assertDatabaseHas('teachers', ['id' => $teacher->id, 'employee_code' => 'SAFE-TEACH-001']);
         $this->assertDatabaseHas('users', ['id' => $teacher->user_id, 'is_active' => true]);
+    }
+
+    public function test_teacher_photo_upload_uses_server_detected_extension(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['teacher-management']);
+        $admin = $this->createUserWithRole('admin');
+        $image = UploadedFile::fake()->image('teacher-photo.jpg');
+
+        $this->actingAs($admin)->post('/admin/teachers', [
+            'name' => 'Safe Upload Teacher',
+            'email' => 'safe.upload@aec.test',
+            'employee_code' => 'SAFE-UPLOAD-001',
+            'specialization' => 'English Grammar',
+            'is_active' => '1',
+            'photo' => $image,
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $teacher = Teacher::query()->where('employee_code', 'SAFE-UPLOAD-001')->firstOrFail();
+        $this->assertMatchesRegularExpression('/\\.(?:jpe?g|png|webp)$/i', (string) $teacher->photo_path);
+        $this->assertStringNotContainsString('.php', strtolower((string) $teacher->photo_path));
+        $controllerSource = file_get_contents(base_path('plugins/modules/teacher-management/Http/Controllers/TeacherController.php'));
+        $this->assertIsString($controllerSource);
+        $this->assertStringNotContainsString('getClientOriginalExtension()', $controllerSource);
+        $this->assertStringContainsString('guessExtension()', $controllerSource);
+        $storedPath = public_path(ltrim((string) $teacher->photo_path, '/'));
+        $this->assertFileExists($storedPath);
+
+        @unlink($storedPath);
     }
 
 }
