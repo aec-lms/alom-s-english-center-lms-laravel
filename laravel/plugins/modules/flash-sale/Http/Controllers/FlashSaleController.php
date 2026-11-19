@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Plugins\Modules\FlashSale\Http\Controllers;
 
 use App\Core\Plugins\PluginManager;
+use App\Core\Security\AuditLogger;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
