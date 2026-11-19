@@ -793,20 +793,32 @@ class PublicHomeController extends Controller
 
     private function homepageBoostCampaigns(string $placement): Collection
     {
-        return $this->activeBoostCampaigns($placement)
-            ->filter(function (BoostCampaign $campaign): bool {
+        $campaigns = $this->activeBoostCampaigns($placement);
+        $courseIds = $campaigns->where('entity_type', 'course')
+            ->pluck('entity_id')->filter()->unique()->values();
+
+        // Resolve all course targets in one query rather than issuing one
+        // existence query per campaign on every homepage request.
+        $publishedCourseIds = collect();
+        if ($courseIds->isNotEmpty() && Schema::hasTable('courses')) {
+            $publishedCourseIds = DB::table('courses')
+                ->whereIn('id', $courseIds)
+                ->where('status', 'published')
+                ->when(Schema::hasColumn('courses', 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->flip();
+        }
+
+        return $campaigns
+            ->filter(function (BoostCampaign $campaign) use ($publishedCourseIds): bool {
                 if (in_array($campaign->entity_type, ['institution', 'offer'], true)) {
                     return $campaign->entity_id === null;
                 }
 
-                if ($campaign->entity_type === 'course' && $campaign->entity_id !== null && Schema::hasTable('courses')) {
-                    return DB::table('courses')->where('id', $campaign->entity_id)
-                        ->where('status', 'published')
-                        ->when(Schema::hasColumn('courses', 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))
-                        ->exists();
-                }
-
-                return false;
+                return $campaign->entity_type === 'course'
+                    && $campaign->entity_id !== null
+                    && $publishedCourseIds->has((int) $campaign->entity_id);
             })
             ->take(4)
             ->values();
