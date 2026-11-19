@@ -78,7 +78,7 @@ final class PhoneticsSpeakingRecordingFeatureTest extends TestCase
                 '/courses/british-american-phonetics/phonetics-learning/recordings',
                 [
                     'entry_id' => $entry->id,
-                    'duration_seconds' => 8,
+                    'reported_duration_seconds' => 120,
                     'recording' => UploadedFile::fake()->create('speech.webm', 128, 'audio/webm'),
                 ]
             )->assertCreated()->assertJson(['saved' => true, 'status' => 'pending']);
