@@ -242,6 +242,66 @@ class CourseGiftCommerceTest extends TestCase
         $this->actingAs($recipient)->post('/student/course-commerce/vouchers/redeem/' . $token)->assertStatus(409);
         $this->assertSame(1, DB::table('course_gift_wallet_transactions')->where('reference', 'gift-voucher-credit:' . $voucherId)->count());
     }
+    public function test_gift_and_voucher_redemption_recheck_the_recipient_email_under_lock(): void
+    {
+        $sender = $this->createUserWithRole('student');
+        $recipient = $this->createUserWithRole('student');
+        $originalEmail = 'locked-recipient@example.test';
+        $recipient->update(['email' => $originalEmail]);
+        $course = Course::query()->create([
+            'code' => 'LOCKED-GIFT-001',
+            'title' => 'Locked Gift Course',
+            'slug' => 'locked-gift-course',
+            'price' => 1000,
+            'status' => 'published',
+        ]);
+        $giftToken = str_repeat('L', 64);
+        $giftId = DB::table('course_gifts')->insertGetId([
+            'sender_user_id' => $sender->id,
+            'recipient_user_id' => null,
+            'recipient_email' => $originalEmail,
+            'course_id' => $course->id,
+            'invoice_id' => null,
+            'redeem_token_hash' => hash('sha256', $giftToken),
+            'redeem_token_encrypted' => encrypt($giftToken),
+            'status' => 'paid',
+            'currency' => 'BDT',
+            'amount' => 1000,
+            'paid_at' => now(),
+            'expires_at' => now()->addDays(30),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $voucherToken = str_repeat('M', 64);
+        $voucherId = DB::table('course_gift_vouchers')->insertGetId([
+            'sender_user_id' => $sender->id,
+            'recipient_user_id' => null,
+            'recipient_email' => $originalEmail,
+            'recipient_name' => 'Locked Recipient',
+            'redeem_token_hash' => hash('sha256', $voucherToken),
+            'redeem_token_encrypted' => encrypt($voucherToken),
+            'currency' => 'BDT',
+            'amount' => 1000,
+            'remaining_amount' => 1000,
+            'status' => 'paid',
+            'paid_at' => now(),
+            'expires_at' => now()->addDays(30),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($recipient);
+        DB::table('users')->where('id', $recipient->id)->update(['email' => 'changed-recipient@example.test']);
+
+        $this->post('/student/course-commerce/gifts/redeem/' . $giftToken)->assertForbidden();
+        $this->post('/student/course-commerce/vouchers/redeem/' . $voucherToken)->assertForbidden();
+
+        $this->assertDatabaseHas('course_gifts', ['id' => $giftId, 'status' => 'paid', 'recipient_user_id' => null]);
+        $this->assertDatabaseHas('course_gift_vouchers', ['id' => $voucherId, 'status' => 'paid', 'recipient_user_id' => null]);
+        $this->assertDatabaseMissing('enrollments', ['user_id' => $recipient->id, 'course_id' => $course->id]);
+        $this->assertDatabaseMissing('course_gift_wallets', ['user_id' => $recipient->id]);
+    }
+
     public function test_voucher_sender_cannot_claim_their_own_voucher(): void
     {
         $sender = $this->createUserWithRole('student');
