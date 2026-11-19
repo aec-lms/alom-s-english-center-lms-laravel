@@ -166,6 +166,7 @@ class CmsController extends Controller
 
     public function updatePost(Request $request, CmsPost $post): RedirectResponse
     {
+        abort_if($post->is_published, 422, 'Published content is protected. Create a new draft revision and submit it for approval before replacing live content.');
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:200'],
             'slug' => ['required', 'alpha_dash', 'max:180', 'unique:cms_posts,slug,' . $post->id],
@@ -234,7 +235,13 @@ class CmsController extends Controller
             'seo_description' => $validated['seo_description'] ?? null,
             'is_published' => (bool) $post->is_published,
             'publish_at' => $validated['publish_at'] ?? null,
-            'editorial_status' => $post->editorial_status ?? ($post->is_published ? 'published' : 'draft'),
+            // Any content edit invalidates a previous approval. It must be reviewed again.
+            'editorial_status' => 'draft',
+            'submitted_at' => null,
+            'submitted_by' => null,
+            'reviewed_at' => null,
+            'reviewed_by' => null,
+            'review_note' => null,
         ]);
 
         foreach ([[$oldAssets[0], $thumbPath], [$oldAssets[1], $pdfPath], [$oldAssets[2], $pdfThumbPath]] as [$oldPath, $newPath]) {
@@ -302,14 +309,17 @@ class CmsController extends Controller
         abort_unless(Schema::hasTable('cms_post_revisions'), 404);
         $revision = DB::table('cms_post_revisions')->where('id', $revisionId)->where('post_id', $post->id)->first();
         abort_unless($revision, 404);
+        abort_if($post->is_published, 422, 'A live post cannot be overwritten by revision restore. Create a reviewed draft revision first.');
         $currentAssets = [$post->thumbnail_path, $post->pdf_path, $post->pdf_thumbnail];
         $post->update([
             'title' => $revision->title, 'slug' => $revision->slug, 'category' => $revision->category,
             'category_id' => $revision->category_id, 'author' => $revision->author, 'excerpt' => $revision->excerpt,
             'content' => $revision->content, 'thumbnail_path' => $revision->thumbnail_path, 'pdf_path' => $revision->pdf_path,
             'pdf_thumbnail' => $revision->pdf_thumbnail, 'seo_title' => $revision->seo_title,
-            'seo_description' => $revision->seo_description, 'is_published' => (bool) $revision->is_published,
-            'publish_at' => $revision->publish_at ?? null,
+            'seo_description' => $revision->seo_description, 'is_published' => false,
+            'publish_at' => $revision->publish_at ?? null, 'editorial_status' => 'draft',
+            'submitted_at' => null, 'submitted_by' => null, 'reviewed_at' => null,
+            'reviewed_by' => null, 'review_note' => null,
         ]);
         foreach ($currentAssets as $assetPath) {
             if ($assetPath && !in_array($assetPath, [$revision->thumbnail_path, $revision->pdf_path, $revision->pdf_thumbnail], true)) {
