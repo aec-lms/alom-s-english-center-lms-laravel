@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', "All E-Books — Alom's English Center")
+@section('title', "{{ __('All E-Books') }} — Alom's English Center")
 @section('content')
 <div class="min-h-screen flex flex-col">
     @include('public.partials.navbar')
@@ -58,7 +58,7 @@
                     </div>
 
                     <a href="{{ route('login') }}" class="px-4 py-1.5 rounded-lg text-[11px] font-bold border bg-white text-[#0284C7] border-sky-200 hover:border-[#0284C7] transition-all inline-flex items-center gap-1.5 shadow-2xs">
-                        <span>My E-Books</span>
+                        <span>{{ __('My E-Books') }}</span>
                     </a>
                 </div>
             </div>
@@ -119,7 +119,7 @@
                         <div class="px-2 pt-3 pb-1.5 mt-2 border-t border-slate-100 flex items-center justify-between gap-2">
                             <div>
                                 @if ($eb['is_free'])
-                                    <span class="text-sm font-extrabold text-[#16A34A]">Free</span>
+                                    <span class="text-sm font-extrabold text-[#16A34A]">{{ __('Free') }}</span>
                                 @else
                                     <div class="flex flex-col leading-none">
                                         <span class="text-sm font-extrabold font-mono text-[#0284C7]">৳{{ $eb['price'] }}</span>
