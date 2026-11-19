@@ -20,6 +20,7 @@ use Illuminate\View\View;
 use Plugins\Modules\AdmissionManagement\Models\AdmissionApplication;
 use Plugins\Modules\AdmissionManagement\Models\AdmissionDocument;
 use Plugins\Modules\StudentManagement\Models\Student;
+use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 
 class AdmissionController extends Controller
 {
@@ -352,9 +353,36 @@ class AdmissionController extends Controller
                 ]);
             }
 
+            $admissionFee = round((float) app(PluginManager::class)->getSetting('admission-management', 'admission_fee_bdt', 0), 2);
+            abort_if($admissionFee < 0 || $admissionFee > 10000000, 422, 'The configured admission fee is invalid.');
+
+            $feeInvoiceId = $locked->admission_fee_invoice_id;
+            if ($admissionFee > 0 && !$feeInvoiceId) {
+                abort_unless(app(PluginManager::class)->isEnabled('fees-management')
+                    && Schema::hasTable('fee_invoices'), 503, 'Enable Fees & Invoicing before issuing an admission fee.');
+
+                $invoice = FeeInvoice::query()->create([
+                    'invoice_number' => 'ADM-' . strtoupper(Str::random(12)),
+                    'student_id' => $student->id,
+                    'payer_name' => $user->name,
+                    'payer_email' => $user->email,
+                    'payer_phone' => $user->phone,
+                    'branch_id' => $locked->branch_id,
+                    'subtotal_amount' => $admissionFee,
+                    'discount_amount' => 0,
+                    'net_amount' => $admissionFee,
+                    'paid_amount' => 0,
+                    'currency' => strtoupper((string) config('lms.default_currency', 'BDT')),
+                    'status' => 'unpaid',
+                    'due_date' => now()->addDays(7)->toDateString(),
+                ]);
+                $feeInvoiceId = $invoice->id;
+            }
+
             $locked->update([
                 'converted_student_id' => $student->id,
                 'converted_at' => now(),
+                'admission_fee_invoice_id' => $feeInvoiceId,
             ]);
 
             return $student;
