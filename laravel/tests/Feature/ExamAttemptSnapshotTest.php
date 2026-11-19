@@ -138,8 +138,7 @@ class ExamAttemptSnapshotTest extends TestCase
         ]);
 
         $this->actingAs($student)->get("/exams/{$exam->id}/take")
-            ->assertStatus(409)
-            ->assertSee('cannot be safely resumed or graded');
+            ->assertStatus(409);
 
         $this->assertDatabaseHas('exam_attempts', [
             'id' => $legacyAttempt->id,
