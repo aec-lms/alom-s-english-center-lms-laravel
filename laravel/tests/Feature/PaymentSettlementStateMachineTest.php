@@ -467,7 +467,6 @@ class PaymentSettlementStateMachineTest extends TestCase
                 $courseId = (int) $course->id;
                 $draftId = DB::table('course_gifts')->insertGetId([
                     'sender_user_id' => $buyer->id,
-                    'recipient_user_id' => $recipient->id,
                     'recipient_email' => $recipientEmail,
                     'course_id' => $courseId,
                     'invoice_id' => null,
@@ -601,7 +600,6 @@ class PaymentSettlementStateMachineTest extends TestCase
                     ->assertRedirect();
                 $this->assertDatabaseHas('course_gift_vouchers', [
                     'id' => $draftId,
-                    'recipient_user_id' => $recipient->id,
                     'remaining_amount' => 0,
                     'status' => 'redeemed',
                 ]);
