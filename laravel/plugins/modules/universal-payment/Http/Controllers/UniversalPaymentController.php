@@ -250,7 +250,7 @@ class UniversalPaymentController extends Controller
                     if ($invoiceFullyPaid && Schema::hasTable('commerce_orders')) {
                         $order = DB::table('commerce_orders')->where('invoice_id', $invoice->id)->lockForUpdate()->first();
                         if ($order) {
-                            $orderUpdates = ['status' => 'completed', 'payment_status' => 'paid', 'updated_at' => now()];
+                            $orderUpdates = ['status' => 'paid', 'payment_status' => 'paid', 'updated_at' => now()];
                             if (Schema::hasColumn('commerce_orders', 'paid_at')) $orderUpdates['paid_at'] = now();
                             DB::table('commerce_orders')->where('id', $order->id)->update($orderUpdates);
 
