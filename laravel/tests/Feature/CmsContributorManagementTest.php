@@ -256,4 +256,27 @@ final class CmsContributorManagementTest extends TestCase
     }
 
 
+
+    public function test_reviewer_access_cannot_be_revoked_while_a_trashed_post_retains_the_assignment(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+        $author = $this->createUserWithRole('student');
+        $reviewer = $this->createUserWithRole('teacher');
+        $manager = $this->createUserWithRole('student');
+        $this->grantCmsRole($author, 'cms_contributor');
+        $this->grantCmsRole($reviewer, 'cms_reviewer');
+        $this->grantCmsRole($manager, 'cms_author_manager');
+        $post = $this->createDraft($author, 'Trashed Assigned Review');
+        $post->forceFill(['assigned_reviewer_id' => $reviewer->id])->save();
+        $post->delete();
+
+        $this->actingAs($manager)->put('/admin/cms/contributors/' . $reviewer->id, ['roles' => []])
+            ->assertStatus(422);
+
+        $this->assertTrue($reviewer->fresh()->hasRole('cms_reviewer'));
+        $this->assertSoftDeleted('cms_posts', ['id' => $post->id]);
+    }
+
+
 }
