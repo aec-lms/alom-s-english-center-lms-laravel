@@ -401,14 +401,11 @@ class CommerceCartController extends Controller
                 && in_array('bank_cash', $enabledMethods, true), 422, 'Bank transfer and cash payments are disabled by the administrator.');
             abort_unless(Schema::hasTable('universal_payment_transactions')
                 && Schema::hasTable('universal_payment_reference_claims')
-                && Schema::hasColumn('universal_payment_transactions', 'fee_invoice_id'), 503,
-                'Manual payment reconciliation storage is not installed.');
-            if ($request->hasFile('proof_file')) {
-                abort_unless(Schema::hasColumn('universal_payment_transactions', 'proof_path')
-                    && Schema::hasColumn('universal_payment_transactions', 'proof_mime')
-                    && Schema::hasColumn('universal_payment_transactions', 'proof_size'), 503,
-                    'Manual payment receipt storage is not installed.');
-            }
+                && Schema::hasColumn('universal_payment_transactions', 'fee_invoice_id')
+                && Schema::hasColumn('universal_payment_transactions', 'proof_path')
+                && Schema::hasColumn('universal_payment_transactions', 'proof_mime')
+                && Schema::hasColumn('universal_payment_transactions', 'proof_size'), 503,
+                'Manual payment reconciliation and receipt storage is not installed.');
         } else {
             try {
                 $payments->assertGatewayReady($data['gateway']);
