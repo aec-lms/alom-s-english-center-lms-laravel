@@ -2,10 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Tests\Feature;
+namespace Tests\\Feature;
 
-use Plugins\Modules\AdminBoosting\Models\BoostCampaign;
-use Tests\TestCase;
+use Plugins\\Modules\\AdminBoosting\\Models\\BoostCampaign;
+use Illuminate\\Support\\Facades\\DB;
+use Tests\\TestCase;
 
 class BoostCampaignSafetyTest extends TestCase
 {
@@ -27,6 +28,22 @@ class BoostCampaignSafetyTest extends TestCase
         $this->assertDatabaseCount('boost_campaigns', 0);
     }
 
+    public function test_campaign_creation_rejects_external_open_redirect_hosts(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['admin-boosting']);
+        $admin = $this->createUserWithRole('admin');
+
+        $this->actingAs($admin)->post('/plugins/boost', [
+            'campaign_name' => 'External Redirect',
+            'entity_type' => 'course',
+            'placement' => 'homepage_featured',
+            'destination_url' => 'https://attacker.example/phishing',
+        ])->assertSessionHasErrors('destination_url');
+
+        $this->assertDatabaseCount('boost_campaigns', 0);
+    }
+
     public function test_campaign_click_only_redirects_to_safe_destination_when_active_and_in_window(): void
     {
         $this->markSystemInstalled();
@@ -36,6 +53,7 @@ class BoostCampaignSafetyTest extends TestCase
         $this->actingAs($admin)->post('/plugins/boost', [
             'campaign_name' => 'Active Campaign',
             'entity_type' => 'course',
+            'entity_id' => 12,
             'placement' => 'homepage_featured',
             'destination_url' => '/courses/ielts',
             'starts_at' => now()->subMinute()->toDateTimeString(),
@@ -43,10 +61,12 @@ class BoostCampaignSafetyTest extends TestCase
         ])->assertRedirect()
             ->assertSessionHas('status', "Boost campaign 'Active Campaign' launched.");
 
-        $this->assertDatabaseHas('boost_campaigns', ['campaign_name' => 'Active Campaign']);
+        $this->assertDatabaseHas('boost_campaigns', ['campaign_name' => 'Active Campaign', 'entity_id' => 12]);
         $campaign = BoostCampaign::query()->firstOrFail();
         $this->actingAs($admin)->put('/plugins/boost/' . $campaign->id, [
             'campaign_name' => 'Active Campaign',
+            'entity_type' => 'branch',
+            'entity_id' => 7,
             'placement' => 'homepage_featured',
             'destination_url' => 'javascript:alert(1)',
             'priority' => 5,
@@ -54,13 +74,35 @@ class BoostCampaignSafetyTest extends TestCase
         ])->assertSessionHasErrors('destination_url');
 
         $this->assertSame('/courses/ielts', $campaign->fresh()->destination_url);
-        $this->get('/boost/click/' . $campaign->id)
-            ->assertRedirect('/courses/ielts');
+        $this->get('/boost/click/' . $campaign->id)->assertRedirect('/courses/ielts');
         $this->assertSame(1, $campaign->fresh()->clicks);
 
+        $this->get('/boost/click/' . $campaign->id)->assertRedirect('/courses/ielts');
+        $this->assertSame(1, $campaign->fresh()->clicks, 'Repeated clicks from the same session must be deduplicated.');
+
         $campaign->update(['status' => 'paused']);
-        $this->get('/boost/click/' . $campaign->id)
-            ->assertRedirect('/courses');
+        $this->get('/boost/click/' . $campaign->id)->assertRedirect('/courses');
         $this->assertSame(1, $campaign->fresh()->clicks);
+    }
+
+    public function test_impressions_are_recorded_once_per_session_and_campaign(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['admin-boosting']);
+        $campaign = BoostCampaign::query()->create([
+            'campaign_name' => 'Impression Test',
+            'entity_type' => 'course',
+            'placement' => 'homepage_featured',
+            'destination_url' => '/courses',
+            'status' => 'active',
+            'starts_at' => now()->subMinute(),
+            'ends_at' => now()->addDay(),
+        ]);
+
+        $this->get('/boost/impression/' . $campaign->id)->assertNoContent();
+        $this->get('/boost/impression/' . $campaign->id)->assertNoContent();
+
+        $this->assertSame(1, $campaign->fresh()->impressions);
+        $this->assertSame(1, DB::table('boost_campaign_events')->where('campaign_id', $campaign->id)->where('event_type', 'impression')->count());
     }
 }
