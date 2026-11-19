@@ -112,6 +112,7 @@ class CmsController extends Controller
             'pdf_thumbnail' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
             'pdf_thumbnail_url' => ['nullable', 'string', 'max:255', function (string $attribute, mixed $value, \Closure $fail): void { if (!$this->isSafeMediaReference($value)) $fail('The PDF thumbnail URL must be a safe HTTPS URL or local path.'); }],
             'is_published' => ['nullable', 'boolean'],
+            'publish_at' => ['nullable', 'date'],
         ]);
 
         $categoryName = trim((string) ($validated['category'] ?? 'General')) ?: 'General';
@@ -152,7 +153,8 @@ class CmsController extends Controller
             'pdf_thumbnail' => $pdfThumbPath,
             'seo_title' => $validated['seo_title'] ?? $validated['title'],
             'seo_description' => $validated['seo_description'] ?? null,
-            'is_published' => $request->boolean('is_published', true),
+            'is_published' => empty($validated['publish_at']) ? $request->boolean('is_published', true) : false,
+            'publish_at' => $validated['publish_at'] ?? null,
         ]);
 
         $this->storePostRevision($post, $request);
@@ -228,7 +230,8 @@ class CmsController extends Controller
             'pdf_thumbnail' => $pdfThumbPath,
             'seo_title' => $validated['seo_title'] ?? $validated['title'],
             'seo_description' => $validated['seo_description'] ?? null,
-            'is_published' => $request->boolean('is_published'),
+            'is_published' => empty($validated['publish_at']) ? $request->boolean('is_published') : false,
+            'publish_at' => $validated['publish_at'] ?? null,
         ]);
 
         foreach ([[$oldAssets[0], $thumbPath], [$oldAssets[1], $pdfPath], [$oldAssets[2], $pdfThumbPath]] as [$oldPath, $newPath]) {
@@ -263,6 +266,7 @@ class CmsController extends Controller
             'content' => $revision->content, 'thumbnail_path' => $revision->thumbnail_path, 'pdf_path' => $revision->pdf_path,
             'pdf_thumbnail' => $revision->pdf_thumbnail, 'seo_title' => $revision->seo_title,
             'seo_description' => $revision->seo_description, 'is_published' => (bool) $revision->is_published,
+            'publish_at' => $revision->publish_at ?? null,
         ]);
         foreach ($currentAssets as $assetPath) {
             if ($assetPath && !in_array($assetPath, [$revision->thumbnail_path, $revision->pdf_path, $revision->pdf_thumbnail], true)) {
@@ -284,6 +288,7 @@ class CmsController extends Controller
             'content' => $post->content, 'thumbnail_path' => $post->thumbnail_path, 'pdf_path' => $post->pdf_path,
             'pdf_thumbnail' => $post->pdf_thumbnail, 'seo_title' => $post->seo_title,
             'seo_description' => $post->seo_description, 'is_published' => (bool) $post->is_published,
+            'publish_at' => $post->publish_at,
             'created_at' => now(),
         ]);
     }
