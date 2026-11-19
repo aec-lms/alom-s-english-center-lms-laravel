@@ -487,7 +487,12 @@ class CmsController extends Controller
             abort_if(CmsPost::query()->where('assigned_editor_id', $user->id)->exists(), 422, 'Reassign this user's editor assignments before removing Editor access.');
         }
         if (!in_array('cms_reviewer', $newRoles, true) && !in_array('cms_editor', $newRoles, true)) {
-            abort_if(CmsPost::query()->where('assigned_reviewer_id', $user->id)->where('editorial_status', 'in_review')->exists(), 422, 'Reassign this user's pending reviews before removing Reviewer access.');
+            abort_if(CmsPost::query()->where('assigned_reviewer_id', $user->id)->exists(), 422, 'Reassign all posts assigned to this user before removing Reviewer access.');
+        }
+        if (!in_array('cms_author_manager', $newRoles, true) && $user->hasRole('cms_author_manager')) {
+            $otherManagers = User::query()->where('is_active', true)->whereKeyNot($user->id)
+                ->whereHas('roles', fn ($roles) => $roles->where('slug', 'cms_author_manager'))->exists();
+            abort_unless($otherManagers, 422, 'At least one other active CMS Contributor Manager must remain before removing this access.');
         }
 
         $roleIds = DB::table('roles')->whereIn('slug', $newRoles)->pluck('id')->all();
@@ -521,9 +526,10 @@ class CmsController extends Controller
             $primaryAuthorId = (int) ($validated['author_user_id'] ?? $post?->author_user_id ?? $actor->id);
             $creatorId = (int) ($post?->created_by ?? $actor->id);
             $coAuthorIds = array_map('intval', $validated['co_authors'] ?? []);
-            abort_if($reviewerId === $primaryAuthorId || $reviewerId === $creatorId || in_array($reviewerId, $coAuthorIds, true)
+            abort_if($reviewerId === $primaryAuthorId || $reviewerId === $creatorId || $reviewerId === (int) $actor->id
+                || in_array($reviewerId, $coAuthorIds, true)
                 || (!empty($validated['assigned_editor_id']) && $reviewerId === (int) $validated['assigned_editor_id']),
-                422, 'The reviewer must be independent from the author, creator, co-authors and assigned editor.');
+                422, 'The reviewer must be independent from the author, creator, co-authors, assigned editor and assigning manager.');
         }
     }
 
