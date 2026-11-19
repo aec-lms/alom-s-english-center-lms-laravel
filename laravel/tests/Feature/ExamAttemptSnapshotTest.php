@@ -152,7 +152,7 @@ class ExamAttemptSnapshotTest extends TestCase
             'submitted_at' => null,
         ]);
 
-        $message = 'Your attempt has not been submitted and your score has not changed.';
+        $message = 'This existing exam attempt cannot be resumed safely because its original question set is unavailable. Your attempt has not been submitted and your score has not changed. Please contact your instructor or school administrator for help.';
 
         $this->actingAs($student)->get("/exams/{$exam->id}/take")
             ->assertStatus(409)
