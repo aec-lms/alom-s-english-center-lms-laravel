@@ -32,6 +32,13 @@ final class PhoneticsSpeakingRecordingController extends Controller
         $this->catalog->assertAccess($request->user(), $this->catalog->courseId($course));
         abort_unless(PhoneticSetting::current()->enabled, 404);
 
+        abort_if(
+            PhoneticSpeakingRecording::query()->where('lms_driver', $this->catalog->driver())
+                ->where('user_id', (string) $request->user()->getAuthIdentifier())
+                ->where('created_at', '>=', now()->startOfDay())->count() >= 10,
+            429,
+            'Daily speaking recording limit reached. Please continue tomorrow.'
+        );
         $entry = $this->assignedEntry($request, $course, (int) $data['entry_id']);
         $file = $data['recording'];
         $disk = $this->privateDisk();
