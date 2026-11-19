@@ -155,6 +155,10 @@ class BoostController extends Controller
                 }
 
                 $type = (string) $request->input('entity_type');
+                if ($type === 'branch' && $request->input('placement') !== 'course_listing') {
+                    $fail('Branch-targeted campaigns must use the course listing placement.');
+                    return;
+                }
                 $table = match ($type) { 'course' => 'courses', 'branch' => (app(PluginManager::class)->isEnabled('branch-management') ? 'branches' : null), default => null };
                 if ($table === null || !Schema::hasTable($table)) {
                     $fail('This target type does not support a record ID.');
