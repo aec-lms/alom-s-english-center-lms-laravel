@@ -168,10 +168,10 @@ class AdmissionController extends Controller
 
             $locked->update([
                 'status' => $next,
-                'reviewer_notes' => $validated['reviewer_notes'] ?? null,
+                'reviewer_notes' => $validated['reviewer_notes'] ?? $locked->reviewer_notes,
                 'reviewed_by' => $actor?->id,
                 'reviewed_at' => now(),
-                'interview_at' => $validated['interview_at'] ?? null,
+                'interview_at' => array_key_exists('interview_at', $validated) ? $validated['interview_at'] : $locked->interview_at,
                 'assigned_to' => $validated['assigned_to'] ?? $locked->assigned_to,
             ]);
 
