@@ -356,6 +356,15 @@ class AdmissionController extends Controller
 
             $existingStudent = Student::withTrashed()->where('user_id', $user->id)->first();
             abort_if($existingStudent && $existingStudent->trashed(), 409, 'This account has a student profile in the recycle bin. Restore it before linking a new admission.');
+            if ($existingStudent && $locked->branch_id !== null && Schema::hasColumn('students', 'branch_id')) {
+                abort_if($existingStudent->branch_id !== null
+                    && (int) $existingStudent->branch_id !== (int) $locked->branch_id,
+                    409,
+                    'The existing student profile belongs to another branch. Resolve branch ownership before conversion.');
+                if ($existingStudent->branch_id === null) {
+                    $existingStudent->update(['branch_id' => $locked->branch_id]);
+                }
+            }
             $student = $existingStudent;
             if (!$student) {
                 $studentCode = 'STU-' . strtoupper(Str::random(10));
