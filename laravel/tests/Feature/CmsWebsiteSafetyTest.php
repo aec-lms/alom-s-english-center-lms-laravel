@@ -152,4 +152,31 @@ class CmsWebsiteSafetyTest extends TestCase
     }
 
 
+
+    public function test_editorial_review_requires_approval_before_workflow_publication(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+        $admin = $this->createUserWithRole('admin');
+        $post = CmsPost::query()->create(['slug' => 'editorial-review-test', 'title' => 'Editorial Review Test', 'category' => 'General', 'author' => 'Contributor', 'content' => 'Draft content', 'is_published' => false, 'editorial_status' => 'draft']);
+        $this->actingAs($admin)->post('/admin/cms/posts/' . $post->id . '/submit-review')->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('cms_posts', ['id' => $post->id, 'editorial_status' => 'in_review', 'is_published' => false]);
+        $this->actingAs($admin)->post('/admin/cms/posts/' . $post->id . '/approve')->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('cms_posts', ['id' => $post->id, 'editorial_status' => 'approved', 'is_published' => false]);
+        $this->actingAs($admin)->post('/admin/cms/posts/' . $post->id . '/publish-approved')->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('cms_posts', ['id' => $post->id, 'editorial_status' => 'published', 'is_published' => true]);
+    }
+
+    public function test_editorial_change_request_requires_and_persists_reviewer_feedback(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+        $admin = $this->createUserWithRole('admin');
+        $post = CmsPost::query()->create(['slug' => 'editorial-change-request', 'title' => 'Editorial Change Request', 'category' => 'General', 'author' => 'Contributor', 'content' => 'Draft content', 'is_published' => false, 'editorial_status' => 'in_review']);
+        $this->actingAs($admin)->post('/admin/cms/posts/' . $post->id . '/request-changes', ['review_note' => ''])->assertSessionHasErrors('review_note');
+        $this->assertDatabaseHas('cms_posts', ['id' => $post->id, 'editorial_status' => 'in_review']);
+        $this->actingAs($admin)->post('/admin/cms/posts/' . $post->id . '/request-changes', ['review_note' => 'Please add references.'])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('cms_posts', ['id' => $post->id, 'editorial_status' => 'changes_requested', 'review_note' => 'Please add references.']);
+    }
+
 }
