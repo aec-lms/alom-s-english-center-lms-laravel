@@ -36,14 +36,14 @@ Do not rename plugin slugs or move plugin directories to match the taxonomy. Tho
 
 Do not bulk-rewrite the existing `category` field in this pass. It is consumed by PluginManifest/PluginRecord and passed to icon resolution; changing category values without an explicit compatibility layer could alter stored catalog values or visual behavior.
 
-Recommended implementation sequence:
+Implemented in this candidate:
 
-1. Add a core `PluginCategoryRegistry` that maps each existing raw category and plugin slug to a canonical key and display label. Unknown categories must remain visible under **Other** rather than making a manifest invalid.
-2. Keep the raw `category` value intact for backward compatibility. If a future manifest adds `category_key`, treat it as optional and fall back to the registry's slug/category mapping.
-3. Use canonical labels only for Plugin Center grouping/filtering. Preserve plugin slug, provider class, route names, permission slugs, setting keys, dependency declarations and archive paths.
-4. Add a registry test covering all 60 known slugs, unknown-category fallback, uniqueness, and the invariant that discovery/install/enable/disable/update/uninstall are unchanged by category resolution.
-5. Add a manifest schema test and a full dynamic plugin lifecycle run on the exact migration candidate before any category values are changed.
-6. Only consider physical folder movement if the plugin runtime gains an explicit stable package-path registry and migration tooling. The current layout is intentionally slug-based; moving folders now is not justified.
+1. Added `PluginCategoryRegistry`, mapping all 60 current slugs and legacy category strings to canonical keys and labels. Unknown future categories fall back to **Other** rather than invalidating a manifest.
+2. Kept every raw manifest `category` value intact; no manifest schema or stored catalog migration is required.
+3. Plugin Center cards are grouped by canonical category label while icons, package paths and runtime operations continue using the original slug/category fields.
+4. Added `PluginCategoryRegistryTest` for the 60-slug count/uniqueness, known-slug coverage, legacy fallbacks and unknown-category behavior.
+5. Exact-head CI and the existing dynamic plugin lifecycle suite must still pass before merging this implementation.
+6. Physical folder movement remains intentionally out of scope: the current layout is slug-based and no stable package-path migration system exists.
 
 ## Dependency and ownership policy
 
@@ -57,7 +57,7 @@ Recommended implementation sequence:
 ## Acceptance status and limitations
 
 - **60/60 manifests inventoried** at the stated main commit.
-- **Taxonomy proposal:** complete in this document; it is not yet implemented in the Plugin Center.
+- **Taxonomy implementation:** canonical categories are now resolved by `PluginCategoryRegistry` and used to group Plugin Center cards; the original manifest `category` values remain unchanged.
 - **Package relocation:** intentionally not performed.
 - **Functional acceptance:** this taxonomy does not certify any plugin's complete business workflows. Use the current functional acceptance matrix and per-plugin tests.
 - **External providers:** live payment, SMTP, SMS, analytics verification and push delivery still require approved provider credentials and sandbox/staging evidence.
