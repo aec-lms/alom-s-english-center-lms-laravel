@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Core\Plugins\PluginManager;
+use App\Models\PluginSetting;
+use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Mail;
+use Plugins\Modules\CourseManagement\Jobs\SendGiftRecipientEmailJob;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\ValidationException;
@@ -73,8 +77,7 @@ class CourseGiftCommerceTest extends TestCase
         Config::set('mail.mailers.smtp.host', 'before-gift-job.example.test');
         Mail::fake();
 
-        app(SendGiftRecipientEmailJob::class, ['giftType' => 'gift_course', 'giftId' => $giftId])
-            ->handle(app(PluginManager::class));
+        (new SendGiftRecipientEmailJob('gift_course', $giftId))->handle(app(PluginManager::class));
 
         $this->assertSame('array', Config::get('mail.default'));
         $this->assertSame('before-gift-job.example.test', Config::get('mail.mailers.smtp.host'));
