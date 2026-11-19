@@ -75,6 +75,34 @@ class SliderBuilderController extends Controller
         return back()->with('status', "Slider '{$slider->title}' updated.");
     }
 
+    public function reorder(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'key_name' => ['required', Rule::in(['hero', 'banner_slider', 'course_promotion', 'announcement'])],
+            'items' => ['required', 'array', 'min:1', 'max:100'],
+            'items.*.id' => ['required', 'integer', 'distinct'],
+        ]);
+
+        $ids = collect($validated['items'])->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $slides = HeroSlider::query()->where('key_name', $validated['key_name'])->whereIn('id', $ids)->get();
+        if ($slides->count() !== count($ids)) {
+            return response()->json(['message' => 'One or more slides are unavailable for this placement.'], 422);
+        }
+
+        DB::transaction(function () use ($ids, $validated): void {
+            foreach ($ids as $position => $id) {
+                HeroSlider::query()
+                    ->whereKey($id)
+                    ->where('key_name', $validated['key_name'])
+                    ->update(['sort_order' => ($position + 1) * 10, 'updated_at' => now()]);
+            }
+        });
+
+        $this->audit->log('slider_builder.reordered', 'hero_slider_group', $validated['key_name'], ['slide_ids' => $ids]);
+
+        return response()->json(['success' => true, 'message' => 'Slide order saved.']);
+    }
+
     public function destroy(HeroSlider $slider): RedirectResponse
     {
         $id = (string) $slider->id;
