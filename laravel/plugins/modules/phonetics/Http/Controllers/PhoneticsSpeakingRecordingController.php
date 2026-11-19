@@ -232,6 +232,29 @@ final class PhoneticsSpeakingRecordingController extends Controller
             $query->whereIn('user_id', DB::table($userTable)
                 ->select($userIdColumn)
                 ->where('branch_id', $branchId));
+
+            // Do not leak submission metadata for a same-branch student who
+            // is enrolled in a course owned by another branch. Both sides of
+            // the relationship must be scoped before pagination.
+            $courseMap = config('phonetics.catalog.courses', []);
+            $courseTable = $courseMap['table'] ?? 'courses';
+            $courseIdColumn = $courseMap['id'] ?? 'id';
+            $courseBranchColumn = $courseMap['branch_id'] ?? 'branch_id';
+            abort_unless(
+                is_string($courseTable) && is_string($courseIdColumn) && is_string($courseBranchColumn)
+                    && Schema::hasTable($courseTable)
+                    && Schema::hasColumn($courseTable, $courseIdColumn)
+                    && Schema::hasColumn($courseTable, $courseBranchColumn),
+                503,
+                'The connected LMS course branch mapping is unavailable for recording review.'
+            );
+
+            $visibleCourseRefs = DB::table($courseTable)
+                ->select($courseIdColumn)
+                ->where(fn ($scope) => $scope
+                    ->whereNull($courseBranchColumn)
+                    ->orWhere($courseBranchColumn, $branchId));
+            $query->whereIn('course_ref', $visibleCourseRefs);
         }
 
         return view('phonetics::admin.recordings', [
@@ -358,17 +381,23 @@ final class PhoneticsSpeakingRecordingController extends Controller
         );
 
         $courseMap = config('phonetics.catalog.courses', []);
+        $courseTable = $courseMap['table'] ?? 'courses';
+        $courseIdColumn = $courseMap['id'] ?? 'id';
         $courseBranchColumn = $courseMap['branch_id'] ?? 'branch_id';
-        if (is_string($courseBranchColumn) && Schema::hasTable($courseMap['table'] ?? '')) {
-            if (Schema::hasColumn($courseMap['table'], $courseBranchColumn)) {
-                $courseBranchId = data_get($course, $courseBranchColumn);
-                abort_unless(
-                    $courseBranchId === null || (string) $courseBranchId === (string) $reviewerBranchId,
-                    404,
-                    'Course is not available to your branch.'
-                );
-            }
-        }
+        abort_unless(
+            is_string($courseTable) && is_string($courseIdColumn) && is_string($courseBranchColumn)
+                && Schema::hasTable($courseTable)
+                && Schema::hasColumn($courseTable, $courseIdColumn)
+                && Schema::hasColumn($courseTable, $courseBranchColumn),
+            503,
+            'The connected LMS course branch mapping is unavailable for recording review.'
+        );
+        $courseBranchId = data_get($course, $courseBranchColumn);
+        abort_unless(
+            $courseBranchId === null || (string) $courseBranchId === (string) $reviewerBranchId,
+            404,
+            'Course is not available to your branch.'
+        );
     }
 
     private function assignedEntry(Request $request, object $course, int $entryId)
