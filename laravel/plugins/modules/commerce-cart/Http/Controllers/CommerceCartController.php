@@ -236,6 +236,19 @@ class CommerceCartController extends Controller
             $course = DB::table('courses')->where('id', (int) $data['course_id'])
                 ->where('status', 'published')->lockForUpdate()->first();
             abort_unless($course, 404, 'This course is no longer available for gifting.');
+
+            // The gift form filters courses by branch, but this endpoint must
+            // enforce the same rule independently against crafted requests.
+            $courseBranchId = Schema::hasColumn('courses', 'branch_id') && $course->branch_id !== null
+                ? (int) $course->branch_id
+                : null;
+            $senderBranchId = $this->assignedBranchId($user);
+            if ($courseBranchId !== null && ($senderBranchId === null || $senderBranchId !== $courseBranchId)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'course_id' => 'This course is not available to your assigned branch.',
+                ]);
+            }
+
             $price = round((float) $course->price, 2);
             abort_if($price <= 0, 422, 'Free courses do not need a paid gift checkout.');
             if (Schema::hasTable('batches') && Schema::hasColumn('batches', 'status') && Schema::hasColumn('batches', 'course_id')) {
