@@ -7,7 +7,9 @@ namespace Tests\Feature;
 use App\Core\Plugins\PluginManager;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Validation\ValidationException;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
+use Plugins\Modules\CommerceCart\Services\CommerceCatalog;
 use Plugins\Modules\CourseManagement\Models\Course;
 use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
 use Plugins\Modules\UniversalPayment\Services\StorefrontPaymentGatewayService;
@@ -21,6 +23,46 @@ class CourseGiftCommerceTest extends TestCase
         parent::setUp();
         $this->markSystemInstalled();
         $this->activatePlugins(['course-management', 'fees-management', 'marketing-management', 'universal-payment']);
+    }
+
+    public function test_known_recipient_from_another_branch_cannot_add_course_gift_to_unified_cart(): void
+    {
+        $sender = $this->createUserWithRole('student', 11);
+        $recipient = $this->createUserWithRole('student', 22, 'other-branch-recipient@example.test');
+        $course = Course::query()->create([
+            'code' => 'CROSS-BRANCH-GIFT-001',
+            'title' => 'Branch Restricted Gift Course',
+            'slug' => 'branch-restricted-gift-course',
+            'price' => 1500,
+            'status' => 'published',
+            'branch_id' => 11,
+        ]);
+        $token = str_repeat('B', 64);
+        $giftId = DB::table('course_gifts')->insertGetId([
+            'sender_user_id' => $sender->id,
+            'recipient_user_id' => $recipient->id,
+            'recipient_email' => $recipient->email,
+            'course_id' => $course->id,
+            'invoice_id' => null,
+            'redeem_token_hash' => hash('sha256', $token),
+            'redeem_token_encrypted' => encrypt($token),
+            'status' => 'awaiting_payment',
+            'currency' => 'BDT',
+            'amount' => 1500,
+            'subtotal_amount' => 1500,
+            'discount_amount' => 0,
+            'coupon_reservation_key' => null,
+            'expires_at' => now()->addDays(30),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        try {
+            app(CommerceCatalog::class)->resolve('gift_course', $giftId, $sender);
+            $this->fail('A branch-restricted gift must not be checked out for a recipient assigned to another branch.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('item', $exception->errors());
+        }
     }
 
     public function test_gift_and_voucher_with_unverified_linked_payment_cannot_be_redeemed(): void
