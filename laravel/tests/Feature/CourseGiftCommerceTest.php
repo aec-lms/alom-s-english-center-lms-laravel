@@ -1050,6 +1050,7 @@ class CourseGiftCommerceTest extends TestCase
             ->assertDontSee('private-other-recipient@example.test')
             ->assertDontSee($otherToken);
 
+        $this->activatePlugins(['email-notifications']);
         Queue::fake();
         $this->actingAs($otherSender)->post('/student/course-commerce/gifts/' . $ownGiftId . '/resend')
             ->assertNotFound();
