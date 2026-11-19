@@ -14,8 +14,14 @@
     $androidAppAvailable = filter_var($androidAppUrl, FILTER_VALIDATE_URL)
         && parse_url($androidAppUrl, PHP_URL_HOST) === 'play.google.com';
 
-    $safeSliderPath = static fn ($path) => is_string($path) && preg_match('~^/(?!/)(?!.*(?:\\\\.\\\\.|%2e|%2f))[A-Za-z0-9/_\\\\-.]+$~i', $path) ? $path : null;
-    $safeSliderUrl = static fn ($url) => is_string($url) && preg_match('~^(https?://\\\\S+|/(?!/)\\\\S*|#[A-Za-z][A-Za-z0-9_-]*)$~i', $url) ? $url : '#learning-paths';
+    $safeSliderPath = static fn ($path) => is_string($path) && str_starts_with($path, '/') && !str_starts_with($path, '//') && !str_contains($path, '..') && !str_contains($path, '\\\\') && preg_match('~^[A-Za-z0-9_./-]+$~', ltrim($path, '/')) ? $path : null;
+    $safeSliderUrl = static function ($url) {
+        if (!is_string($url) || trim($url) === '') return '#learning-paths';
+        if (str_starts_with($url, '/') && !str_starts_with($url, '//') && !str_contains($url, '..') && !str_contains($url, '\\\\')) return $url;
+        if (str_starts_with($url, '#') && preg_match('/^#[A-Za-z][A-Za-z0-9_-]*$/', $url)) return $url;
+        if (filter_var($url, FILTER_VALIDATE_URL) && in_array(strtolower((string) parse_url($url, PHP_URL_SCHEME)), ['http', 'https'], true)) return $url;
+        return '#learning-paths';
+    };
     $heroSlides = $sliders->isNotEmpty() ? $sliders->map(fn ($s) => [
         'title' => $s->title,
         'subtitle' => $s->subtitle ?? '',
