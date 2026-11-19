@@ -156,7 +156,7 @@ class AdmissionController extends Controller
             abort_unless(in_array($next, self::TRANSITIONS[$current] ?? [], true), 422, "Invalid admission status transition: {$current} → {$next}.");
 
             if (!empty($validated['assigned_to'])) {
-                $assignee = \\App\\Models\\User::query()
+                $assignee = \App\Models\User::query()
                     ->whereKey($validated['assigned_to'])
                     ->where('is_active', true)
                     ->whereHas('roles', fn ($q) => $q->whereIn('slug', ['admin', 'branch_manager', 'teacher']))
