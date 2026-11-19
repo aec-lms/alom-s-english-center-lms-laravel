@@ -6,6 +6,7 @@ namespace Plugins\Modules\CourseManagement\Http\Controllers;
 
 use App\Core\Plugins\PluginManager;
 use App\Models\SystemSetting;
+use App\Models\User;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\RedirectResponse;
@@ -16,6 +17,7 @@ use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\MarketingManagement\Services\CourseCouponService;
+use Plugins\Modules\ReferralIncome\Services\ReferralIncomeService;
 use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
 use Plugins\Modules\UniversalPayment\Services\StorefrontPaymentGatewayService;
 use RuntimeException;
@@ -712,6 +714,19 @@ class CourseCommerceController extends Controller
         if (filled($order->wallet_reservation_key)) {
             DB::table('course_gift_wallet_transactions')->where('reference', $order->wallet_reservation_key)
                 ->where('status', 'reserved')->update(['status' => 'completed', 'updated_at' => now()]);
+        }
+
+        if ($this->plugins->isEnabled('referral-income')) {
+            $buyer = User::query()->find((int) $student->id);
+            if ($buyer) {
+                app(ReferralIncomeService::class)->recordSettledPurchase(
+                    $buyer,
+                    'course_cart_order',
+                    (string) $orderId,
+                    (float) $order->net_amount,
+                    (string) $order->currency
+                );
+            }
         }
     }
 
