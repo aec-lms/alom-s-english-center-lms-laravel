@@ -257,8 +257,35 @@ final class PhoneticsSpeakingRecordingController extends Controller
             $query->whereIn('course_ref', $visibleCourseRefs);
         }
 
+        $recordings = $query->latest()->paginate(30);
+        $userMap = config('phonetics.users', []);
+        $userTable = $userMap['table'] ?? 'users';
+        $userIdColumn = $userMap['id'] ?? 'id';
+        $userNameColumn = $userMap['name'] ?? 'name';
+        if (
+            is_string($userTable) && is_string($userIdColumn) && is_string($userNameColumn)
+            && Schema::hasTable($userTable)
+            && Schema::hasColumn($userTable, $userIdColumn)
+            && Schema::hasColumn($userTable, $userNameColumn)
+        ) {
+            $labels = DB::table($userTable)
+                ->whereIn($userIdColumn, $recordings->getCollection()->pluck('user_id')->unique())
+                ->pluck($userNameColumn, $userIdColumn);
+            $recordings->getCollection()->each(function (PhoneticSpeakingRecording $recording) use ($labels): void {
+                $label = $labels->get($recording->user_id);
+                $recording->setAttribute(
+                    'student_label',
+                    is_string($label) && trim($label) !== '' ? trim($label) : 'Student submission'
+                );
+            });
+        } else {
+            $recordings->getCollection()->each(
+                fn (PhoneticSpeakingRecording $recording) => $recording->setAttribute('student_label', 'Student submission')
+            );
+        }
+
         return view('phonetics::admin.recordings', [
-            'recordings' => $query->latest()->paginate(30),
+            'recordings' => $recordings,
         ]);
     }
 
