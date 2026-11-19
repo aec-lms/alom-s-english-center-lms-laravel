@@ -59,7 +59,6 @@ return new class extends Migration {
                 $table->foreignId('referred_user_id')->constrained('users')->cascadeOnDelete();
                 $table->string('source_type', 40);
                 $table->string('source_id', 80);
-                $table->unsignedBigInteger('payment_invoice_id')->nullable()->index();
                 $table->decimal('eligible_amount', 12, 2);
                 $table->decimal('commission_percent', 5, 2);
                 $table->decimal('commission_amount', 12, 2);
