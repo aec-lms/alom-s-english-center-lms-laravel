@@ -171,8 +171,9 @@ class LiveClassAccessController extends Controller
 
     private function assertEligibleStudent(object $student, int $courseId, ?int $courseBranchId, ?int $liveClassId = null): void
     {
-        // Student profile updates write the linked user first and profile second;
-        // retain that lock order so account and branch changes cannot race a seat grant.
+        // Lock the linked user first. Student profile edits serialize on this
+        // user row; read the profile without locking it because recycle-bin
+        // deletion locks the profile before deactivating the linked user.
         $user = DB::table('users')
             ->where('id', $student->id)
             ->lockForUpdate()
@@ -198,7 +199,9 @@ class LiveClassAccessController extends Controller
             if (Schema::hasColumn('students', 'deleted_at')) {
                 $profileQuery->whereNull('deleted_at');
             }
-            $profileQuery->lockForUpdate();
+            // Do not lock this row: StudentController::destroy and Recycle Bin
+            // restore may lock profile -> user, while this flow locks user first.
+            // The user-row lock serializes normal profile updates and avoids a cycle.
             $profile = $profileQuery->first();
             if ($profile && Schema::hasColumn('students', 'status')) {
                 abort_unless($profile->status === 'active', 403, 'This student profile is inactive.');
