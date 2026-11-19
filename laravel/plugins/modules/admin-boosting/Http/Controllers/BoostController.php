@@ -39,7 +39,6 @@ class BoostController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $validated = $request->validate($this->campaignRules(true));
-
         $campaign = BoostCampaign::query()->create([
             'campaign_name' => $validated['campaign_name'],
             'entity_type' => $validated['entity_type'],
@@ -67,8 +66,8 @@ class BoostController extends Controller
     {
         $validated = $request->validate($this->campaignRules(false));
         $before = $campaign->only(['status', 'placement', 'entity_type', 'entity_id', 'priority']);
-
         $campaign->update($validated);
+
         $this->audit->log('boost.updated', 'boost_campaign', (string) $campaign->id, [
             'before' => $before,
             'after' => $campaign->only(['status', 'placement', 'entity_type', 'entity_id', 'priority']),
@@ -145,7 +144,7 @@ class BoostController extends Controller
             'cta_text' => ['nullable', 'string', 'max:60'],
             'destination_url' => ['nullable', 'string', 'max:255', function (string $attribute, mixed $value, \Closure $fail): void {
                 if ($value !== null && $value !== '' && !$this->isSafeDestination((string) $value)) {
-                    $fail('The destination must be a relative site path or a same-origin HTTP(S) URL.');
+                    $fail('The destination must be a relative path on this site, such as /courses/ielts.');
                 }
             }],
             'priority' => [$creating ? 'nullable' : 'required', 'integer', 'min:1', 'max:10'],
@@ -161,23 +160,9 @@ class BoostController extends Controller
             return false;
         }
 
-        $relative = str_starts_with($destination, '/') && !str_starts_with($destination, '//');
-        if ($relative) {
-            return !str_contains($destination, '\\');
-        }
-
-        $scheme = parse_url($destination, PHP_URL_SCHEME);
-        $host = parse_url($destination, PHP_URL_HOST);
-        $configuredHost = parse_url((string) config('app.url'), PHP_URL_HOST);
-
-        return is_string($scheme)
-            && in_array(strtolower($scheme), ['http', 'https'], true)
-            && is_string($host)
-            && is_string($configuredHost)
-            && strcasecmp($host, $configuredHost) === 0
-            && parse_url($destination, PHP_URL_USER) === null
-            && parse_url($destination, PHP_URL_PASS) === null
-            && filter_var($destination, FILTER_VALIDATE_URL) !== false;
+        return str_starts_with($destination, '/')
+            && !str_starts_with($destination, '//')
+            && !str_contains($destination, '\\');
     }
 
     private function isEligible(BoostCampaign $campaign): bool
