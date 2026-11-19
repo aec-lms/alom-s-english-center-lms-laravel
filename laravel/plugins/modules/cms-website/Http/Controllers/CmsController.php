@@ -153,8 +153,11 @@ class CmsController extends Controller
             'pdf_thumbnail' => $pdfThumbPath,
             'seo_title' => $validated['seo_title'] ?? $validated['title'],
             'seo_description' => $validated['seo_description'] ?? null,
-            'is_published' => empty($validated['publish_at']) ? $request->boolean('is_published', true) : false,
+            'created_by' => $request->user()->getAuthIdentifier(),
+            'author_user_id' => $request->user()->getAuthIdentifier(),
+            'is_published' => false,
             'publish_at' => $validated['publish_at'] ?? null,
+            'editorial_status' => 'draft',
         ]);
 
         $this->storePostRevision($post, $request);
@@ -165,6 +168,7 @@ class CmsController extends Controller
 
     public function updatePost(Request $request, CmsPost $post): RedirectResponse
     {
+        abort_if($post->is_published, 422, 'Published content is protected. Create a new draft revision and submit it for approval before replacing live content.');
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:200'],
             'slug' => ['required', 'alpha_dash', 'max:180', 'unique:cms_posts,slug,' . $post->id],
@@ -231,8 +235,15 @@ class CmsController extends Controller
             'pdf_thumbnail' => $pdfThumbPath,
             'seo_title' => $validated['seo_title'] ?? ($post->seo_title ?: $validated['title']),
             'seo_description' => $validated['seo_description'] ?? $post->seo_description,
-            'is_published' => empty($validated['publish_at']) ? $request->boolean('is_published') : false,
+            'is_published' => (bool) $post->is_published,
             'publish_at' => $validated['publish_at'] ?? null,
+            // Any content edit invalidates a previous approval. It must be reviewed again.
+            'editorial_status' => 'draft',
+            'submitted_at' => null,
+            'submitted_by' => null,
+            'reviewed_at' => null,
+            'reviewed_by' => null,
+            'review_note' => null,
         ]);
 
         foreach ([[$oldAssets[0], $thumbPath], [$oldAssets[1], $pdfPath], [$oldAssets[2], $pdfThumbPath]] as [$oldPath, $newPath]) {
@@ -242,6 +253,54 @@ class CmsController extends Controller
         $this->audit->log('cms.post_updated', 'cms_post', (string) $post->id, ['slug' => $post->slug]);
 
         return back()->with('status', "Post '{$post->title}' updated.");
+    }
+
+    public function submitPostForReview(CmsPost $post): RedirectResponse
+    {
+        DB::transaction(function () use ($post): void {
+            $locked = CmsPost::query()->lockForUpdate()->findOrFail($post->id);
+            abort_if($locked->is_published, 422);
+            abort_unless(in_array($locked->editorial_status ?? 'draft', ['draft', 'changes_requested'], true), 422);
+            $locked->forceFill(['editorial_status' => 'in_review', 'submitted_at' => now(), 'submitted_by' => auth()->id(), 'reviewed_at' => null, 'reviewed_by' => null, 'review_note' => null])->save();
+            $this->audit->log('cms.post_submitted_for_review', 'cms_post', (string) $locked->id, []);
+        }, 3);
+        return back()->with('status', 'Post submitted for editorial review.');
+    }
+
+    public function approvePost(CmsPost $post): RedirectResponse
+    {
+        DB::transaction(function () use ($post): void {
+            $locked = CmsPost::query()->lockForUpdate()->findOrFail($post->id);
+            abort_unless(($locked->editorial_status ?? 'draft') === 'in_review' && !$locked->is_published, 422);
+            abort_if((int) $locked->submitted_by === (int) auth()->id() || (int) $locked->created_by === (int) auth()->id() || (int) $locked->author_user_id === (int) auth()->id(), 403, 'The submitter or author cannot approve their own post.');
+            $locked->forceFill(['editorial_status' => 'approved', 'reviewed_at' => now(), 'reviewed_by' => auth()->id(), 'review_note' => null])->save();
+            $this->audit->log('cms.post_approved', 'cms_post', (string) $locked->id, []);
+        }, 3);
+        return back()->with('status', 'Post approved; publish it when ready.');
+    }
+
+    public function requestPostChanges(Request $request, CmsPost $post): RedirectResponse
+    {
+        $data = $request->validate(['review_note' => ['required', 'string', 'min:5', 'max:2000']]);
+        DB::transaction(function () use ($post, $data): void {
+            $locked = CmsPost::query()->lockForUpdate()->findOrFail($post->id);
+            abort_unless(($locked->editorial_status ?? 'draft') === 'in_review' && !$locked->is_published, 422);
+            abort_if((int) $locked->submitted_by === (int) auth()->id() || (int) $locked->created_by === (int) auth()->id() || (int) $locked->author_user_id === (int) auth()->id(), 403, 'The submitter or author cannot review their own post.');
+            $locked->forceFill(['editorial_status' => 'changes_requested', 'reviewed_at' => now(), 'reviewed_by' => auth()->id(), 'review_note' => $data['review_note']])->save();
+            $this->audit->log('cms.post_changes_requested', 'cms_post', (string) $locked->id, ['note_length' => strlen($data['review_note'])]);
+        }, 3);
+        return back()->with('status', 'Editorial changes requested.');
+    }
+
+    public function publishApprovedPost(CmsPost $post): RedirectResponse
+    {
+        DB::transaction(function () use ($post): void {
+            $locked = CmsPost::query()->lockForUpdate()->findOrFail($post->id);
+            abort_unless(($locked->editorial_status ?? 'draft') === 'approved' && !$locked->is_published, 422);
+            $locked->forceFill(['is_published' => true, 'editorial_status' => 'published', 'publish_at' => null])->save();
+            $this->audit->log('cms.post_published_after_approval', 'cms_post', (string) $locked->id, []);
+        }, 3);
+        return back()->with('status', 'Approved post published.');
     }
 
     public function destroyPost(CmsPost $post): RedirectResponse
@@ -556,8 +615,7 @@ class CmsController extends Controller
         $root = realpath(public_path('uploads'));
         $file = realpath($absolute);
 
-        // Do not follow file or parent-directory symlinks when cleaning user-managed media.
-        // realpath must resolve to the exact lexical path under uploads.
+        // Never follow a symlink while deleting user-managed CMS media.
         if (!$root || !$file || is_link($absolute) || $file !== $absolute
             || !str_starts_with($file, $root . DIRECTORY_SEPARATOR) || !is_file($absolute)) {
             return;
