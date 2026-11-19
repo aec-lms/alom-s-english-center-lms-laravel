@@ -350,7 +350,7 @@ class CourseCommerceController extends Controller
                 'amount' => $amount,
                 'external_trx_id' => null,
                 'user_id' => $student->id,
-                'branch_id' => $student->branch_id,
+                'branch_id' => $this->assignedBranchId($student),
                 'status' => 'pending',
                 'notes' => json_encode(['purpose' => 'course_gift_voucher', 'course_gift_voucher_id' => $voucherId], JSON_THROW_ON_ERROR),
             ]);
