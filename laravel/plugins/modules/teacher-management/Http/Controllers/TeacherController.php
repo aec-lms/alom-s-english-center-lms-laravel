@@ -69,7 +69,11 @@ class TeacherController extends Controller
                 ->get()
             : collect();
 
-        return view('teacher-management::index', compact('teachers', 'branches', 'totalTeachers', 'activeTeachers', 'inactiveTeachers', 'search', 'status', 'specialization', 'specializations'));
+        $canManageCourseAssignments = $actor
+            && $actor->hasPermission('courses.manage')
+            && app(PluginManager::class)->isEnabled('course-management');
+
+        return view('teacher-management::index', compact('teachers', 'branches', 'totalTeachers', 'activeTeachers', 'inactiveTeachers', 'search', 'status', 'specialization', 'specializations', 'canManageCourseAssignments'));
     }
 
     public function store(Request $request): RedirectResponse
