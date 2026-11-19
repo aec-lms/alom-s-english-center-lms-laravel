@@ -113,50 +113,58 @@ class SendGiftRecipientEmailJob implements ShouldQueue, ShouldBeUnique
             'updated_at' => now(),
         ]);
 
-        Config::set([
-            'mail.default' => 'smtp',
-            'mail.mailers.smtp.transport' => 'smtp',
-            'mail.mailers.smtp.host' => $smtpHost,
-            'mail.mailers.smtp.port' => $smtpPort,
-            'mail.mailers.smtp.username' => $smtpUsername !== '' ? $smtpUsername : null,
-            'mail.mailers.smtp.password' => $smtpPassword !== '' ? $smtpPassword : null,
-            'mail.mailers.smtp.scheme' => $smtpPort === 465 ? 'smtps' : 'smtp',
-            'mail.mailers.smtp.timeout' => 20,
-            'mail.from.address' => $fromAddress,
-            'mail.from.name' => config('app.name', 'Alom\'s English Center'),
-        ]);
-        Mail::purge('smtp');
-
-        $subject = $this->giftType === 'gift_course'
-            ? 'You received a course gift'
-            : 'You received a gift voucher';
-        $personalMessage = trim((string) ($gift->message ?? ''));
-        $html = '<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:28px;color:#172033">'
-            . '<h1 style="color:#4338ca">A gift of learning</h1>'
-            . '<p>Hello' . ($gift->recipient_name ? ' ' . e($gift->recipient_name) : '') . ',</p>'
-            . '<p>' . e($senderName !== '' ? $senderName : 'Someone special') . ' sent you a gift: <strong>' . e($giftTitle) . '</strong>.</p>'
-            . ($personalMessage !== '' ? '<blockquote style="padding:16px;background:#f4f4f5;border-radius:10px">' . nl2br(e($personalMessage)) . '</blockquote>' : '')
-            . '<p><a href="' . e($redeemUrl) . '" style="display:inline-block;background:#4f46e5;color:#fff;padding:13px 20px;border-radius:8px;text-decoration:none">View and redeem your gift</a></p>'
-            . '<p>Sign in or create an account using this email address to redeem it. The link is personal; do not forward it.</p>'
-            . '<p style="font-size:12px;color:#64748b">If you were not expecting this gift, you can ignore this email.</p>'
-            . '</div>';
-
-        Mail::mailer('smtp')->html($html, function ($message) use ($email, $subject): void {
-            $message->to($email)->subject($subject);
-        });
-
-        $updated = DB::table($table)->where('id', $this->giftId)
-            ->where('status', 'paid')
-            ->whereNull('notification_sent_at')
-            ->update([
-                'notification_delivery_status' => 'sent',
-                'notification_sent_at' => now(),
-                'notification_last_error' => null,
-                'updated_at' => now(),
+        $originalMailConfig = Config::get('mail', []);
+        try {
+            Config::set([
+                'mail.default' => 'smtp',
+                'mail.mailers.smtp.transport' => 'smtp',
+                'mail.mailers.smtp.host' => $smtpHost,
+                'mail.mailers.smtp.port' => $smtpPort,
+                'mail.mailers.smtp.username' => $smtpUsername !== '' ? $smtpUsername : null,
+                'mail.mailers.smtp.password' => $smtpPassword !== '' ? $smtpPassword : null,
+                'mail.mailers.smtp.scheme' => $smtpPort === 465 ? 'smtps' : 'smtp',
+                'mail.mailers.smtp.timeout' => 20,
+                'mail.from.address' => $fromAddress,
+                'mail.from.name' => config('app.name', 'Alom\\'s English Center'),
             ]);
+            Mail::purge('smtp');
 
-        if ($updated !== 1) {
-            throw new RuntimeException('Gift email was sent but its delivery state could not be reconciled; support review is required.');
+            $subject = $this->giftType === 'gift_course'
+                ? 'You received a course gift'
+                : 'You received a gift voucher';
+            $personalMessage = trim((string) ($gift->message ?? ''));
+            $html = '<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:28px;color:#172033">'
+                . '<h1 style="color:#4338ca">A gift of learning</h1>'
+                . '<p>Hello' . ($gift->recipient_name ? ' ' . e($gift->recipient_name) : '') . ',</p>'
+                . '<p>' . e($senderName !== '' ? $senderName : 'Someone special') . ' sent you a gift: <strong>' . e($giftTitle) . '</strong>.</p>'
+                . ($personalMessage !== '' ? '<blockquote style="padding:16px;background:#f4f4f5;border-radius:10px">' . nl2br(e($personalMessage)) . '</blockquote>' : '')
+                . '<p><a href="' . e($redeemUrl) . '" style="display:inline-block;background:#4f46e5;color:#fff;padding:13px 20px;border-radius:8px;text-decoration:none">View and redeem your gift</a></p>'
+                . '<p>Sign in or create an account using this email address to redeem it. The link is personal; do not forward it.</p>'
+                . '<p style="font-size:12px;color:#64748b">If you were not expecting this gift, you can ignore this email.</p>'
+                . '</div>';
+
+            Mail::mailer('smtp')->html($html, function ($message) use ($email, $subject): void {
+                $message->to($email)->subject($subject);
+            });
+
+            $updated = DB::table($table)->where('id', $this->giftId)
+                ->where('status', 'paid')
+                ->whereNull('notification_sent_at')
+                ->update([
+                    'notification_delivery_status' => 'sent',
+                    'notification_sent_at' => now(),
+                    'notification_last_error' => null,
+                    'updated_at' => now(),
+                ]);
+
+            if ($updated !== 1) {
+                throw new RuntimeException('Gift email was sent but its delivery state could not be reconciled; support review is required.');
+            }
+        } finally {
+            // Queue workers are long-lived: never leak one gift's SMTP credentials
+            // or mailer defaults into a later, unrelated job.
+            Config::set('mail', $originalMailConfig);
+            Mail::purge('smtp');
         }
     }
 
