@@ -136,4 +136,77 @@ class FlashSaleEnrollmentTest extends TestCase
         $this->assertDatabaseMissing('flash_sales', ['id' => $saleId]);
     }
 
+    public function test_flash_sale_pricing_service_selects_highest_priority_and_caps_fixed_discount(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'course-management', 'flash-sale']);
+
+        $course = Course::query()->create([
+            'code' => 'FLASH-QUOTE-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'title' => 'Campaign Quote Course',
+            'slug' => 'campaign-quote-' . bin2hex(random_bytes(3)),
+            'price' => 500,
+            'status' => 'published',
+        ]);
+
+        foreach ([
+            ['title' => 'Lower priority', 'discount_type' => 'percent', 'discount_value' => 10, 'priority' => 1],
+            ['title' => 'Premium priority', 'discount_type' => 'fixed', 'discount_value' => 900, 'priority' => 20],
+        ] as $campaign) {
+            DB::table('flash_sales')->insert($campaign + [
+                'course_id' => $course->id,
+                'starts_at' => now()->subMinute(),
+                'ends_at' => now()->addDay(),
+                'is_published' => true,
+                'is_active' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $quote = app(\\Plugins\\Modules\\FlashSale\\Services\\FlashSalePricingService::class)
+            ->quote((int) $course->id);
+
+        $this->assertSame('Premium priority', $quote['sale']->title);
+        $this->assertEquals(500.00, $quote['subtotal']);
+        $this->assertEquals(500.00, $quote['discount']);
+        $this->assertEquals(0.00, $quote['total']);
+    }
+
+    public function test_flash_sale_pricing_service_ignores_unpublished_inactive_and_expired_campaigns(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'course-management', 'flash-sale']);
+
+        $course = Course::query()->create([
+            'code' => 'FLASH-INACTIVE-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'title' => 'Inactive Campaign Course',
+            'slug' => 'inactive-campaign-' . bin2hex(random_bytes(3)),
+            'price' => 800,
+            'status' => 'published',
+        ]);
+
+        foreach ([
+            ['title' => 'Draft', 'is_published' => false, 'is_active' => true, 'starts_at' => now()->subMinute(), 'ends_at' => now()->addDay()],
+            ['title' => 'Paused', 'is_published' => true, 'is_active' => false, 'starts_at' => now()->subMinute(), 'ends_at' => now()->addDay()],
+            ['title' => 'Expired', 'is_published' => true, 'is_active' => true, 'starts_at' => now()->subDays(2), 'ends_at' => now()->subDay()],
+        ] as $campaign) {
+            DB::table('flash_sales')->insert($campaign + [
+                'course_id' => $course->id,
+                'discount_type' => 'percent',
+                'discount_value' => 80,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $quote = app(\\Plugins\\Modules\\FlashSale\\Services\\FlashSalePricingService::class)
+            ->quote((int) $course->id);
+
+        $this->assertNull($quote['sale']);
+        $this->assertEquals(800.00, $quote['subtotal']);
+        $this->assertEquals(0.00, $quote['discount']);
+        $this->assertEquals(800.00, $quote['total']);
+    }
+
 }
