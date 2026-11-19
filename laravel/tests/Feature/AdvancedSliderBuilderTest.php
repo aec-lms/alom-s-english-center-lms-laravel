@@ -27,7 +27,7 @@ class AdvancedSliderBuilderTest extends TestCase
     public function test_failed_slider_creation_removes_newly_uploaded_managed_images(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['slider-builder']);
+        $this->activatePlugins(['cms-website', 'slider-builder']);
         $admin = $this->createUserWithRole('admin');
         $directory = public_path('uploads/sliders');
         File::ensureDirectoryExists($directory);
@@ -62,7 +62,7 @@ class AdvancedSliderBuilderTest extends TestCase
     public function test_admin_can_create_a_responsive_scheduled_slider(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['slider-builder']);
+        $this->activatePlugins(['cms-website', 'slider-builder']);
         $admin = $this->createUserWithRole('admin');
 
         $response = $this->actingAs($admin)->post('/admin/slider-builder', [
@@ -99,7 +99,7 @@ class AdvancedSliderBuilderTest extends TestCase
     public function test_slider_update_rejects_unsafe_cta_and_image_paths(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['slider-builder']);
+        $this->activatePlugins(['cms-website', 'slider-builder']);
         $admin = $this->createUserWithRole('admin');
         $slide = HeroSlider::query()->create([
             'key_name' => 'hero',
@@ -134,7 +134,7 @@ class AdvancedSliderBuilderTest extends TestCase
     public function test_admin_can_reorder_slides_without_mixing_placements(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['slider-builder']);
+        $this->activatePlugins(['cms-website', 'slider-builder']);
         $admin = $this->createUserWithRole('admin');
         $first = HeroSlider::query()->create(['key_name' => 'hero', 'title' => 'First']);
         $second = HeroSlider::query()->create(['key_name' => 'hero', 'title' => 'Second']);
@@ -153,7 +153,7 @@ class AdvancedSliderBuilderTest extends TestCase
     public function test_initial_hero_slide_honors_open_new_tab_before_javascript_initializes(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['slider-builder']);
+        $this->activatePlugins(['cms-website', 'slider-builder']);
         HeroSlider::query()->create([
             'key_name' => 'hero',
             'title' => 'External campaign',
@@ -172,7 +172,7 @@ class AdvancedSliderBuilderTest extends TestCase
     public function test_visible_now_scope_excludes_inactive_and_out_of_window_slides(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['slider-builder']);
+        $this->activatePlugins(['cms-website', 'slider-builder']);
 
         $visible = HeroSlider::query()->create([
             'key_name' => 'hero', 'title' => 'Visible now', 'is_active' => true,
@@ -196,7 +196,7 @@ class AdvancedSliderBuilderTest extends TestCase
     public function test_recycled_slides_are_never_rendered_on_the_public_homepage(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['slider-builder']);
+        $this->activatePlugins(['cms-website', 'slider-builder']);
 
         $slide = HeroSlider::query()->create([
             'key_name' => 'hero',
@@ -214,7 +214,7 @@ class AdvancedSliderBuilderTest extends TestCase
     public function test_slider_updates_validate_schedule_against_omitted_existing_boundaries(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['slider-builder']);
+        $this->activatePlugins(['cms-website', 'slider-builder']);
         $admin = $this->createUserWithRole('admin');
         $start = now()->addDay()->startOfMinute();
         $end = now()->addDays(3)->startOfMinute();
@@ -251,7 +251,7 @@ class AdvancedSliderBuilderTest extends TestCase
     public function test_zero_overlay_opacity_is_preserved_on_initial_render_and_slider_changes(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['slider-builder']);
+        $this->activatePlugins(['cms-website', 'slider-builder']);
         HeroSlider::query()->create([
             'key_name' => 'hero',
             'title' => 'Zero overlay opacity',
@@ -276,7 +276,7 @@ class AdvancedSliderBuilderTest extends TestCase
         }
 
         $this->markSystemInstalled();
-        $this->activatePlugins(['slider-builder']);
+        $this->activatePlugins(['cms-website', 'slider-builder']);
         $admin = $this->createUserWithRole('admin');
 
         $uploads = public_path('uploads');
