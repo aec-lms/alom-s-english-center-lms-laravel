@@ -372,7 +372,7 @@ class AdmissionController extends Controller
                 ]);
             }
 
-            $feeSetting = app(PluginManager::class)->getSetting('admission-management', 'admission_fee_bdt', 0);
+            $feeSetting = app(PluginManager::class)->getSetting('admission-management', 'admission_fee_bdt', '0');
             abort_unless(is_numeric($feeSetting), 422, 'The configured admission fee is invalid.');
             $admissionFee = round((float) $feeSetting, 2);
             abort_if($admissionFee < 0 || $admissionFee > 10000000, 422, 'The configured admission fee is invalid.');
