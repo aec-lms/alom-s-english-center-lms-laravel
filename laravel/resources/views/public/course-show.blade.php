@@ -109,12 +109,21 @@
 
                     @auth
                         @if (auth()->user()->hasRole('student') && Route::has('plugins.enrollments.store'))
-                            <form method="POST" action="{{ route('plugins.enrollments.store', $course) }}">
-                                @csrf
-                                <button type="submit" class="w-full py-3.5 px-5 rounded-xl bg-[#0057FF] hover:bg-[#0046CC] text-white text-sm font-bold flex items-center justify-center shadow-sm transition-colors">
-                                    {{ $price > 0 ? 'Request Enrollment & Create Invoice' : 'Enroll in Free Course' }}
-                                </button>
-                            </form>
+                            @if ($price > 0 && Route::has('plugins.commerce_cart.add'))
+                                <form method="POST" action="{{ route('plugins.commerce_cart.add') }}">
+                                    @csrf
+                                    <input type="hidden" name="item_type" value="course">
+                                    <input type="hidden" name="item_id" value="{{ $course->id }}">
+                                    <button type="submit" class="w-full py-3.5 px-5 rounded-xl bg-[#0057FF] hover:bg-[#0046CC] text-white text-sm font-bold flex items-center justify-center shadow-sm transition-colors">Add Course to Cart</button>
+                                </form>
+                            @else
+                                <form method="POST" action="{{ route('plugins.enrollments.store', $course) }}">
+                                    @csrf
+                                    <button type="submit" class="w-full py-3.5 px-5 rounded-xl bg-[#0057FF] hover:bg-[#0046CC] text-white text-sm font-bold flex items-center justify-center shadow-sm transition-colors">
+                                        {{ $price > 0 ? 'Request Enrollment & Create Invoice' : 'Enroll in Free Course' }}
+                                    </button>
+                                </form>
+                            @endif
                             @if (session('status'))
                                 <p class="text-xs text-emerald-700 mt-2">{{ session('status') }}</p>
                             @endif
