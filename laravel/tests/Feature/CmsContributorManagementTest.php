@@ -367,4 +367,34 @@ final class CmsContributorManagementTest extends TestCase
     }
 
 
+
+    public function test_partial_assignment_update_cannot_make_existing_reviewer_a_coauthor(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+
+        $author = $this->createUserWithRole('student');
+        $editor = $this->createUserWithRole('teacher');
+        $reviewer = $this->createUserWithRole('teacher');
+        $manager = $this->createUserWithRole('student');
+        $this->grantCmsRole($author, 'cms_contributor');
+        $this->grantCmsRole($editor, 'cms_editor');
+        $this->grantCmsRole($reviewer, 'cms_reviewer');
+        $this->grantCmsRole($manager, 'cms_author_manager');
+        $post = $this->createDraft($author, 'Reviewer Must Stay Independent');
+        $post->forceFill([
+            'assigned_editor_id' => $editor->id,
+            'assigned_reviewer_id' => $reviewer->id,
+        ])->save();
+
+        $this->actingAs($manager)->put('/admin/cms/editorial/posts/' . $post->id . '/assignments', [
+            'co_authors' => [$reviewer->id],
+        ])->assertStatus(422);
+
+        $post->refresh();
+        $this->assertSame((int) $reviewer->id, (int) $post->assigned_reviewer_id);
+        $this->assertSame([], $post->contributors()->pluck('users.id')->all());
+    }
+
+
 }
