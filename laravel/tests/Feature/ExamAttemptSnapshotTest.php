@@ -133,12 +133,12 @@ class ExamAttemptSnapshotTest extends TestCase
             ->assertJsonPath('data.passed', true);
     }
 
-    public function test_legacy_pending_attempt_without_snapshot_is_not_silently_regraded(): void
+    public function test_legacy_pending_attempt_without_snapshot_returns_actionable_errors_and_is_not_regraded(): void
     {
         $this->markSystemInstalled();
         $this->activatePlugins(['exam-management']);
         $student = $this->createUserWithRole('student');
-        [$exam] = $this->createSnapshotFixture();
+        [$exam, $question] = $this->createSnapshotFixture();
 
         $legacyAttempt = ExamAttempt::query()->create([
             'exam_id' => $exam->id,
@@ -152,14 +152,48 @@ class ExamAttemptSnapshotTest extends TestCase
             'submitted_at' => null,
         ]);
 
-        $this->actingAs($student)->get("/exams/{$exam->id}/take")
-            ->assertStatus(409);
+        $message = 'Your attempt has not been submitted and your score has not changed.';
 
-        $this->assertDatabaseHas('exam_attempts', [
-            'id' => $legacyAttempt->id,
-            'submitted_at' => null,
-            'score_obtained' => 0,
-        ]);
+        $this->actingAs($student)->get("/exams/{$exam->id}/take")
+            ->assertStatus(409)
+            ->assertSee('We need to verify this attempt')
+            ->assertSee($message)
+            ->assertSee('contact your instructor or school administrator');
+
+        $this->actingAs($student)->postJson("/exams/{$exam->id}/attempt/autosave", [
+            'attempt_id' => $legacyAttempt->id,
+            'answers' => [(string) $question->id => 1],
+        ])->assertStatus(409)
+            ->assertJsonPath('error.code', 'legacy_attempt_snapshot_unavailable')
+            ->assertJsonPath('error.message', $message);
+
+        $this->actingAs($student)->post("/exams/{$exam->id}/attempt", [
+            'attempt_id' => $legacyAttempt->id,
+            'answers' => [(string) $question->id => 1],
+        ])->assertStatus(409)
+            ->assertSee('We need to verify this attempt')
+            ->assertSee($message);
+
+        $token = $student->createToken('legacy-exam-snapshot-mobile')->plainTextToken;
+        $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson("/api/v1/my/exams/{$exam->id}/attempts")
+            ->assertStatus(409)
+            ->assertJsonPath('error.code', 'legacy_attempt_snapshot_unavailable')
+            ->assertJsonPath('error.message', $message);
+
+        $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson("/api/v1/my/exams/{$exam->id}/attempts/{$legacyAttempt->id}/submit", [
+                'answers' => [(string) $question->id => 1],
+            ])->assertStatus(409)
+            ->assertJsonPath('error.code', 'legacy_attempt_snapshot_unavailable')
+            ->assertJsonPath('error.message', $message);
+
+        $unchanged = $legacyAttempt->fresh();
+        $this->assertNull($unchanged->submitted_at);
+        $this->assertNull($unchanged->submitted_answers);
+        $this->assertSame(0.0, (float) $unchanged->score_obtained);
+        $this->assertSame(0.0, (float) $unchanged->total_marks);
+        $this->assertFalse($unchanged->passed);
     }
 
     private function createSnapshotFixture(): array
