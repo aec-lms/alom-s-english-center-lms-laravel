@@ -113,9 +113,9 @@
                     @endif
                 </div>
 
-                @if (!$post->is_published && ($canAssign || (auth()->user()->hasPermission('cms.posts.edit_own') && ((int) $post->created_by === (int) auth()->id() || (int) $post->author_user_id === (int) auth()->id() || $post->contributors->contains('id', auth()->id()) || (int) $post->assigned_editor_id === (int) auth()->id()))))
+                @if (!$post->is_published && ($canEditAll || ($canEditOwn && ((int) $post->created_by === (int) auth()->id() || (int) $post->author_user_id === (int) auth()->id() || $post->contributors->contains('id', auth()->id()) || (int) $post->assigned_editor_id === (int) auth()->id()))))
                     <details class="border-t border-slate-100 pt-3">
-                        <summary class="cursor-pointer text-xs font-bold text-slate-700">Edit Draft &amp; Assign Contributors</summary>
+                        <summary class="cursor-pointer text-xs font-bold text-slate-700">Edit Draft</summary>
                         <form method="POST" action="{{ route('plugins.cms.editorial.posts.update', $post) }}" class="mt-3 grid gap-3 text-sm sm:grid-cols-2">
                             @csrf @method('PUT')
                             <input name="title" required maxlength="200" value="{{ $post->title }}" class="rounded-lg border border-slate-300 px-3 py-2">
@@ -129,32 +129,40 @@
                             <input name="excerpt" maxlength="500" value="{{ $post->excerpt }}" class="rounded-lg border border-slate-300 px-3 py-2">
                             <input name="seo_title" maxlength="180" value="{{ $post->seo_title }}" class="rounded-lg border border-slate-300 px-3 py-2">
                             <input name="seo_description" maxlength="320" value="{{ $post->seo_description }}" class="rounded-lg border border-slate-300 px-3 py-2">
-                            @if ($canAssign)
-                                <select name="author_user_id" class="rounded-lg border border-slate-300 bg-white px-3 py-2">
-                                    @foreach ($availableAuthors as $author)
-                                        <option value="{{ $author->id }}" @selected((int) $post->author_user_id === (int) $author->id)>{{ $author->name }}</option>
-                                    @endforeach
-                                </select>
-                                <select name="assigned_editor_id" class="rounded-lg border border-slate-300 bg-white px-3 py-2">
-                                    <option value="">No editor assigned</option>
-                                    @foreach ($availableEditors as $editor)
-                                        <option value="{{ $editor->id }}" @selected((int) $post->assigned_editor_id === (int) $editor->id)>{{ $editor->name }}</option>
-                                    @endforeach
-                                </select>
-                                <select name="assigned_reviewer_id" class="rounded-lg border border-slate-300 bg-white px-3 py-2">
-                                    <option value="">Reviewer pool (unassigned)</option>
-                                    @foreach ($availableReviewers as $reviewer)
-                                        <option value="{{ $reviewer->id }}" @selected((int) $post->assigned_reviewer_id === (int) $reviewer->id)>{{ $reviewer->name }}</option>
-                                    @endforeach
-                                </select>
-                                <select name="co_authors[]" multiple size="4" class="rounded-lg border border-slate-300 bg-white px-3 py-2">
-                                    @foreach ($availableAuthors as $author)
-                                        <option value="{{ $author->id }}" @selected($post->contributors->contains('id', $author->id))>{{ $author->name }}</option>
-                                    @endforeach
-                                </select>
-                            @endif
                             <textarea name="content" required maxlength="1000000" rows="6" class="rounded-lg border border-slate-300 px-3 py-2 sm:col-span-2">{{ $post->content }}</textarea>
                             <div class="sm:col-span-2"><button class="rounded-lg bg-slate-900 px-4 py-2 text-xs font-bold text-white">Save Draft Changes</button></div>
+                        </form>
+                    </details>
+                @endif
+
+                @if ($canAssign && !$post->is_published)
+                    <details class="border-t border-slate-100 pt-3">
+                        <summary class="cursor-pointer text-xs font-bold text-slate-700">Assign Authors, Editor &amp; Reviewer</summary>
+                        <form method="POST" action="{{ route('plugins.cms.editorial.posts.assignments', $post) }}" class="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+                            @csrf @method('PUT')
+                            <select name="author_user_id" class="rounded-lg border border-slate-300 bg-white px-3 py-2">
+                                @foreach ($availableAuthors as $author)
+                                    <option value="{{ $author->id }}" @selected((int) $post->author_user_id === (int) $author->id)>{{ $author->name }}</option>
+                                @endforeach
+                            </select>
+                            <select name="assigned_editor_id" class="rounded-lg border border-slate-300 bg-white px-3 py-2">
+                                <option value="">No editor assigned</option>
+                                @foreach ($availableEditors as $editor)
+                                    <option value="{{ $editor->id }}" @selected((int) $post->assigned_editor_id === (int) $editor->id)>{{ $editor->name }}</option>
+                                @endforeach
+                            </select>
+                            <select name="assigned_reviewer_id" class="rounded-lg border border-slate-300 bg-white px-3 py-2">
+                                <option value="">Reviewer pool (unassigned)</option>
+                                @foreach ($availableReviewers as $reviewer)
+                                    <option value="{{ $reviewer->id }}" @selected((int) $post->assigned_reviewer_id === (int) $reviewer->id)>{{ $reviewer->name }}</option>
+                                @endforeach
+                            </select>
+                            <select name="co_authors[]" multiple size="4" class="rounded-lg border border-slate-300 bg-white px-3 py-2">
+                                @foreach ($availableAuthors as $author)
+                                    <option value="{{ $author->id }}" @selected($post->contributors->contains('id', $author->id))>{{ $author->name }}</option>
+                                @endforeach
+                            </select>
+                            <div class="sm:col-span-2"><button class="rounded-lg bg-slate-900 px-4 py-2 text-xs font-bold text-white">Save Assignments</button></div>
                         </form>
                     </details>
                 @endif
