@@ -204,11 +204,13 @@ class AdditionalModulesWorkflowTest extends TestCase
             'budget_bdt' => 15000,
         ])->assertSessionHasNoErrors();
 
-        $this->actingAs($admin)->post('/admin/marketing/coupons', [
+        $couponResponse = $this->actingAs($admin)->post('/admin/marketing/coupons', [
             'code' => 'ALOM20',
             'discount_percent' => 20,
             'max_uses' => 50,
-        ])->assertSessionHasNoErrors();
+        ]);
+        $couponResponse->assertStatus(302)->assertSessionHasNoErrors();
+        $couponResponse->assertSessionHas('status', "Promo coupon 'ALOM20' (20% OFF) created.");
         $this->assertSame(1, DB::table('promo_coupons')->where('code', 'ALOM20')->count());
     }
     public function test_branch_manager_cannot_delete_other_branch_classes_or_batches_or_link_foreign_students(): void
