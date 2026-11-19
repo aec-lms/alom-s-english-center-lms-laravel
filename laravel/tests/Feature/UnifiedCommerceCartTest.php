@@ -920,4 +920,64 @@ final class UnifiedCommerceCartTest extends TestCase
         ]);
     }
 
+    public function test_unified_cart_supports_manual_bank_cash_payment_and_staff_verification(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['commerce-cart', 'course-management', 'fees-management', 'universal-payment', 'payment-management']);
+        app(\\App\\Core\\Plugins\\PluginManager::class)->saveSettings('universal-payment', [
+            'enabled_gateways' => 'bank_cash',
+            'allow_offline_payments' => '1',
+            'default_currency' => 'BDT',
+        ]);
+
+        $student = $this->createUserWithRole('student');
+        $course = Course::query()->create([
+            'code' => 'MANUAL-CART-' . strtoupper(bin2hex(random_bytes(3))),
+            'title' => 'Manual Checkout Course',
+            'slug' => 'manual-checkout-' . strtolower(bin2hex(random_bytes(3))),
+            'price' => 900,
+            'status' => 'published',
+            'branch_id' => null,
+        ]);
+
+        $this->actingAs($student)->post('/cart/items', [
+            'item_type' => 'course',
+            'item_id' => $course->id,
+            'quantity' => 1,
+        ])->assertRedirect('/cart');
+
+        $this->actingAs($student)->get('/cart')
+            ->assertOk()
+            ->assertSee('Bank Transfer / Cash (Manual Verification)');
+
+        $this->actingAs($student)->post('/cart/checkout', [
+            'gateway' => 'bank_cash',
+            'payer_name' => $student->name,
+            'payer_email' => $student->email,
+            'payer_phone' => '01700000000',
+            'external_trx_id' => 'AEC-MANUAL-REF-' . strtoupper(bin2hex(random_bytes(3))),
+        ])->assertRedirect('/cart')->assertSessionHas('status');
+
+        $order = DB::table('commerce_orders')->where('user_id', $student->id)->first();
+        $this->assertNotNull($order);
+        $manual = DB::table('universal_payment_transactions')->where('fee_invoice_id', $order->invoice_id)->first();
+        $this->assertNotNull($manual);
+        $this->assertSame('pending', $manual->status);
+        $this->assertSame('bank_cash', $manual->gateway);
+        $this->assertSame('pending', $order->payment_status);
+        $this->assertDatabaseHas('fee_invoices', ['id' => $order->invoice_id, 'status' => 'unpaid', 'paid_amount' => 0]);
+
+        $admin = $this->createUserWithRole('admin');
+        $this->actingAs($admin)->post('/plugins/universal-payment/transactions/' . $manual->id . '/status', [
+            'status' => 'verified',
+            'payment_reference' => $manual->external_trx_id,
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('universal_payment_transactions', ['id' => $manual->id, 'status' => 'verified']);
+        $this->assertDatabaseHas('commerce_orders', ['id' => $order->id, 'status' => 'completed', 'payment_status' => 'paid']);
+        $this->assertDatabaseHas('fee_invoices', ['id' => $order->invoice_id, 'status' => 'paid', 'paid_amount' => 900]);
+        $this->assertDatabaseHas('enrollments', ['user_id' => $student->id, 'course_id' => $course->id, 'status' => 'active']);
+        $this->assertDatabaseHas('payment_transactions', ['invoice_id' => $order->invoice_id, 'status' => 'settled']);
+    }
+
 }
