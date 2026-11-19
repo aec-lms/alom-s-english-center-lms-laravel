@@ -153,9 +153,9 @@ class CmsController extends Controller
             'pdf_thumbnail' => $pdfThumbPath,
             'seo_title' => $validated['seo_title'] ?? $validated['title'],
             'seo_description' => $validated['seo_description'] ?? null,
-            'is_published' => empty($validated['publish_at']) ? $request->boolean('is_published', true) : false,
+            'is_published' => false,
             'publish_at' => $validated['publish_at'] ?? null,
-            'editorial_status' => empty($validated['publish_at']) && $request->boolean('is_published', true) ? 'published' : 'draft',
+            'editorial_status' => 'draft',
         ]);
 
         $this->storePostRevision($post, $request);
@@ -232,9 +232,9 @@ class CmsController extends Controller
             'pdf_thumbnail' => $pdfThumbPath,
             'seo_title' => $validated['seo_title'] ?? $validated['title'],
             'seo_description' => $validated['seo_description'] ?? null,
-            'is_published' => empty($validated['publish_at']) ? $request->boolean('is_published') : false,
+            'is_published' => (bool) $post->is_published,
             'publish_at' => $validated['publish_at'] ?? null,
-            'editorial_status' => !empty($validated['publish_at']) ? 'draft' : ($request->boolean('is_published') ? (($post->editorial_status ?? 'published') === 'draft' ? 'published' : $post->editorial_status) : (in_array($post->editorial_status ?? 'draft', ['in_review', 'approved', 'changes_requested'], true) ? $post->editorial_status : 'draft')),
+            'editorial_status' => $post->editorial_status ?? ($post->is_published ? 'published' : 'draft'),
         ]);
 
         foreach ([[$oldAssets[0], $thumbPath], [$oldAssets[1], $pdfPath], [$oldAssets[2], $pdfThumbPath]] as [$oldPath, $newPath]) {
@@ -251,7 +251,7 @@ class CmsController extends Controller
         abort_if($post->trashed(), 404);
         abort_if($post->is_published, 422);
         abort_unless(in_array($post->editorial_status ?? 'draft', ['draft', 'changes_requested'], true), 422);
-        $post->forceFill(['editorial_status' => 'in_review', 'submitted_at' => now(), 'reviewed_at' => null, 'reviewed_by' => null, 'review_note' => null])->save();
+        $post->forceFill(['editorial_status' => 'in_review', 'submitted_at' => now(), 'submitted_by' => auth()->id(), 'reviewed_at' => null, 'reviewed_by' => null, 'review_note' => null])->save();
         $this->audit->log('cms.post_submitted_for_review', 'cms_post', (string) $post->id, []);
         return back()->with('status', 'Post submitted for editorial review.');
     }
@@ -260,6 +260,7 @@ class CmsController extends Controller
     {
         abort_if($post->trashed(), 404);
         abort_unless(($post->editorial_status ?? 'draft') === 'in_review', 422);
+        abort_if((int) $post->submitted_by === (int) auth()->id() || (int) $post->created_by === (int) auth()->id() || (int) $post->author_user_id === (int) auth()->id(), 403, 'The submitter or author cannot approve their own post.');
         $post->forceFill(['editorial_status' => 'approved', 'reviewed_at' => now(), 'reviewed_by' => auth()->id(), 'review_note' => null])->save();
         $this->audit->log('cms.post_approved', 'cms_post', (string) $post->id, []);
         return back()->with('status', 'Post approved; publish it when ready.');
@@ -269,6 +270,7 @@ class CmsController extends Controller
     {
         abort_if($post->trashed(), 404);
         abort_unless(($post->editorial_status ?? 'draft') === 'in_review', 422);
+        abort_if((int) $post->submitted_by === (int) auth()->id() || (int) $post->created_by === (int) auth()->id() || (int) $post->author_user_id === (int) auth()->id(), 403, 'The submitter or author cannot review their own post.');
         $data = $request->validate(['review_note' => ['required', 'string', 'min:5', 'max:2000']]);
         $post->forceFill(['editorial_status' => 'changes_requested', 'reviewed_at' => now(), 'reviewed_by' => auth()->id(), 'review_note' => $data['review_note']])->save();
         $this->audit->log('cms.post_changes_requested', 'cms_post', (string) $post->id, ['note_length' => strlen($data['review_note'])]);
