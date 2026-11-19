@@ -999,6 +999,7 @@ final class UnifiedCommerceCartTest extends TestCase
             'payer_email' => $student->email,
             'payer_phone' => '01700000000',
             'external_trx_id' => 'AEC-MANUAL-REF-' . strtoupper(bin2hex(random_bytes(3))),
+            'proof_file' => UploadedFile::fake()->create('bank-receipt.pdf', 100, 'application/pdf'),
         ])->assertRedirect('/cart')->assertSessionHas('status');
 
         $order = DB::table('commerce_orders')->where('user_id', $student->id)->first();
@@ -1007,6 +1008,8 @@ final class UnifiedCommerceCartTest extends TestCase
         $this->assertNotNull($manual);
         $this->assertSame('pending', $manual->status);
         $this->assertSame('bank_cash', $manual->gateway);
+        $this->assertNotNull($manual->proof_path);
+        Storage::disk('local')->assertExists($manual->proof_path);
         $this->assertSame('pending', $order->payment_status);
         $this->assertDatabaseHas('fee_invoices', ['id' => $order->invoice_id, 'status' => 'unpaid', 'paid_amount' => 0]);
 
@@ -1014,7 +1017,9 @@ final class UnifiedCommerceCartTest extends TestCase
         $this->actingAs($admin)->get('/plugins/universal-payment')
             ->assertOk()
             ->assertSee('name="payment_reference"', false)
+            ->assertSee('View receipt')
             ->assertSee($manual->external_trx_id);
+        $this->actingAs($admin)->get('/plugins/universal-payment/transactions/' . $manual->id . '/proof')->assertOk();
         $this->actingAs($admin)->post('/plugins/universal-payment/transactions/' . $manual->id . '/status', [
             'status' => 'verified',
             'payment_reference' => $manual->external_trx_id,
