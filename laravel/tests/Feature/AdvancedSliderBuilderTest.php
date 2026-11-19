@@ -218,4 +218,58 @@ class AdvancedSliderBuilderTest extends TestCase
             ->assertSee('))) / 90;', false);
     }
 
+
+    public function test_media_cleanup_never_follows_a_symlinked_slider_directory(): void
+    {
+        if (!function_exists('symlink')) {
+            $this->markTestSkipped('Symlink support is unavailable on this platform.');
+        }
+
+        $this->markSystemInstalled();
+        $this->activatePlugins(['slider-builder']);
+        $admin = $this->createUserWithRole('admin');
+
+        $uploads = public_path('uploads');
+        File::ensureDirectoryExists($uploads);
+        $sliderDirectory = public_path('uploads/sliders');
+        $backupDirectory = public_path('uploads/sliders-backup-' . bin2hex(random_bytes(4)));
+        $externalDirectory = sys_get_temp_dir() . '/aec-slider-target-' . bin2hex(random_bytes(6));
+        File::ensureDirectoryExists($externalDirectory);
+        file_put_contents($externalDirectory . '/keep.jpg', 'must-not-delete');
+        $hadOriginalDirectory = file_exists($sliderDirectory) || is_link($sliderDirectory);
+
+        try {
+            if ($hadOriginalDirectory) {
+                rename($sliderDirectory, $backupDirectory);
+            }
+            if (!@symlink($externalDirectory, $sliderDirectory)) {
+                $this->markTestSkipped('The test runner does not permit creating symlinks.');
+            }
+
+            $slide = HeroSlider::query()->create([
+                'key_name' => 'hero',
+                'title' => 'Symlink cleanup guard',
+                'image_path' => '/uploads/sliders/keep.jpg',
+                'is_active' => true,
+            ]);
+
+            $this->actingAs($admin)->put('/admin/slider-builder/' . $slide->id, [
+                'key_name' => 'hero',
+                'title' => 'Symlink cleanup guard',
+                'image_path' => '/assets/replacement.jpg',
+            ])->assertRedirect();
+
+            $this->assertFileExists($externalDirectory . '/keep.jpg');
+            $this->assertSame('must-not-delete', file_get_contents($externalDirectory . '/keep.jpg'));
+        } finally {
+            if (is_link($sliderDirectory)) {
+                unlink($sliderDirectory);
+            }
+            if ($hadOriginalDirectory && file_exists($backupDirectory)) {
+                rename($backupDirectory, $sliderDirectory);
+            }
+            File::deleteDirectory($externalDirectory);
+        }
+    }
+
 }
