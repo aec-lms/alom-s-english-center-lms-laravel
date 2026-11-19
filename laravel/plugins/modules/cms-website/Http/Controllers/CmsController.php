@@ -484,7 +484,7 @@ class CmsController extends Controller
             abort_if($hasAuthoredPosts, 422, "Reassign this user's authored or co-authored posts before removing Contributor/Editor access.");
         }
         if (!in_array('cms_editor', $newRoles, true)) {
-            abort_if(CmsPost::withTrashed()->where('assigned_editor_id', $user->id)->exists(), 422, 'Reassign this user's editor assignments before removing Editor access.');
+            abort_if(CmsPost::withTrashed()->where('assigned_editor_id', $user->id)->exists(), 422, "Reassign this user's editor assignments before removing Editor access.");
         }
         if (!in_array('cms_reviewer', $newRoles, true) && !in_array('cms_editor', $newRoles, true)) {
             abort_if(CmsPost::withTrashed()->where('assigned_reviewer_id', $user->id)->exists(), 422, 'Reassign all posts assigned to this user before removing Reviewer access.');
