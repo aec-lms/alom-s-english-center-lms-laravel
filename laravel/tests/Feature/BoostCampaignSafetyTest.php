@@ -30,6 +30,24 @@ class BoostCampaignSafetyTest extends TestCase
         $this->assertDatabaseCount('boost_campaigns', 0);
     }
 
+    public function test_campaign_creation_rejects_encoded_protocol_relative_redirects(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['admin-boosting']);
+        $admin = $this->createUserWithRole('admin');
+
+        foreach (['/%2f%2fattacker.example', '/%252f%252fattacker.example', '/%5c%5cattacker.example'] as $destination) {
+            $this->actingAs($admin)->post('/plugins/boost', [
+                'campaign_name' => 'Encoded Redirect',
+                'entity_type' => 'institution',
+                'placement' => 'homepage_featured',
+                'destination_url' => $destination,
+            ])->assertSessionHasErrors('destination_url');
+        }
+
+        $this->assertDatabaseCount('boost_campaigns', 0);
+    }
+
     public function test_campaign_creation_rejects_external_open_redirect_hosts(): void
     {
         $this->markSystemInstalled();
@@ -166,6 +184,7 @@ class BoostCampaignSafetyTest extends TestCase
         $this->actingAs($admin)->put('/plugins/boost/' . $campaign->id, [
             'campaign_name' => 'Target Switch',
             'entity_type' => 'offer',
+            'entity_id' => $targetCourse->id,
             'placement' => 'course_listing',
             'destination_url' => '/courses',
             'priority' => 5,
