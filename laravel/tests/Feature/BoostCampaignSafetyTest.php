@@ -201,6 +201,64 @@ class BoostCampaignSafetyTest extends TestCase
         ]);
     }
 
+    public function test_admin_dashboard_counts_eligible_campaigns_without_counting_stale_targets(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['admin-boosting', 'course-management', 'branch-management']);
+        $admin = $this->createUserWithRole('admin');
+
+        $publishedCourse = Course::query()->create([
+            'code' => 'BOOST-DASHBOARD-PUBLISHED',
+            'title' => 'Published Dashboard Course',
+            'slug' => 'published-dashboard-course',
+            'price' => 0,
+            'status' => 'published',
+        ]);
+        $draftCourse = Course::query()->create([
+            'code' => 'BOOST-DASHBOARD-DRAFT',
+            'title' => 'Draft Dashboard Course',
+            'slug' => 'draft-dashboard-course',
+            'price' => 0,
+            'status' => 'draft',
+        ]);
+        $activeBranch = Branch::query()->create([
+            'code' => 'BOOST-DASHBOARD-ACTIVE',
+            'name' => 'Active Dashboard Branch',
+            'city' => 'Dhaka',
+            'is_active' => true,
+        ]);
+        $inactiveBranch = Branch::query()->create([
+            'code' => 'BOOST-DASHBOARD-INACTIVE',
+            'name' => 'Inactive Dashboard Branch',
+            'city' => 'Dhaka',
+            'is_active' => false,
+        ]);
+
+        $campaigns = [
+            ['campaign_name' => 'Institution Wide', 'entity_type' => 'institution', 'entity_id' => null, 'placement' => 'homepage_featured'],
+            ['campaign_name' => 'Offer Wide', 'entity_type' => 'offer', 'entity_id' => null, 'placement' => 'notice_banner'],
+            ['campaign_name' => 'Published Course', 'entity_type' => 'course', 'entity_id' => $publishedCourse->id, 'placement' => 'course_listing'],
+            ['campaign_name' => 'Active Branch', 'entity_type' => 'branch', 'entity_id' => $activeBranch->id, 'placement' => 'course_listing'],
+            ['campaign_name' => 'Draft Course', 'entity_type' => 'course', 'entity_id' => $draftCourse->id, 'placement' => 'course_listing'],
+            ['campaign_name' => 'Inactive Branch', 'entity_type' => 'branch', 'entity_id' => $inactiveBranch->id, 'placement' => 'course_listing'],
+        ];
+
+        foreach ($campaigns as $campaign) {
+            BoostCampaign::query()->create(array_merge($campaign, [
+                'badge_text' => 'FEATURED',
+                'cta_text' => 'View',
+                'destination_url' => '/courses',
+                'status' => 'active',
+                'starts_at' => now()->subMinute(),
+                'ends_at' => now()->addDay(),
+            ]));
+        }
+
+        $this->actingAs($admin)->get('/plugins/boost')
+            ->assertOk()
+            ->assertViewHas('totals', fn (array $totals): bool => $totals['campaigns'] === 6 && $totals['active'] === 4);
+    }
+
     public function test_course_and_branch_campaigns_render_only_for_matching_public_courses(): void
     {
         $this->markSystemInstalled();
