@@ -41,6 +41,10 @@ class SliderBuilderController extends Controller
             ? $this->storeImage($request->file('mobile_image'))
             : ($validated['mobile_image_path'] ?? null);
         unset($validated['image'], $validated['mobile_image']);
+        $validated['text_alignment'] = $validated['text_alignment'] ?? 'center';
+        $validated['transition'] = $validated['transition'] ?? 'fade';
+        $validated['overlay_opacity'] = (int) ($validated['overlay_opacity'] ?? 45);
+        $validated['duration_ms'] = (int) ($validated['duration_ms'] ?? 5000);
         $validated['is_active'] = $request->boolean('is_active', true);
 
         $slider = HeroSlider::query()->create($validated);
@@ -70,6 +74,10 @@ class SliderBuilderController extends Controller
         }
 
         unset($validated['image'], $validated['mobile_image']);
+        $validated['text_alignment'] = $validated['text_alignment'] ?? $slider->text_alignment ?? 'center';
+        $validated['transition'] = $validated['transition'] ?? $slider->transition ?? 'fade';
+        $validated['overlay_opacity'] = (int) ($validated['overlay_opacity'] ?? $slider->overlay_opacity ?? 45);
+        $validated['duration_ms'] = (int) ($validated['duration_ms'] ?? $slider->duration_ms ?? 5000);
         $validated['is_active'] = $request->boolean('is_active');
         $slider->update($validated);
 
@@ -130,10 +138,10 @@ class SliderBuilderController extends Controller
             'mobile_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:6144'],
             'image_path' => ['nullable', 'string', 'max:255', 'regex:#^/(?!/)(?!.*(?:\.\.|%2e|%2f))[A-Za-z0-9/_\-.]+$#i'],
             'mobile_image_path' => ['nullable', 'string', 'max:255', 'regex:#^/(?!/)(?!.*(?:\.\.|%2e|%2f))[A-Za-z0-9/_\-.]+$#i'],
-            'text_alignment' => ['required', Rule::in(['left', 'center', 'right'])],
-            'transition' => ['required', Rule::in(['fade', 'slide'])],
-            'overlay_opacity' => ['required', 'integer', 'min:0', 'max:90'],
-            'duration_ms' => ['required', 'integer', 'min:2000', 'max:15000'],
+            'text_alignment' => ['nullable', Rule::in(['left', 'center', 'right'])],
+            'transition' => ['nullable', Rule::in(['fade', 'slide'])],
+            'overlay_opacity' => ['nullable', 'integer', 'min:0', 'max:90'],
+            'duration_ms' => ['nullable', 'integer', 'min:2000', 'max:15000'],
             'starts_at' => ['nullable', 'date'],
             'ends_at' => ['nullable', 'date', 'after:starts_at'],
             'open_new_tab' => ['nullable', 'boolean'],
