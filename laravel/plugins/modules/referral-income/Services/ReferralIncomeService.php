@@ -140,6 +140,13 @@ class ReferralIncomeService
         }
 
         return DB::transaction(function () use ($buyer, $sourceType, $sourceId, $paymentRefundId, $refundedAmount, $currency): ?int {
+            // Lock the authoritative refund row so concurrent retries serialize
+            // before checking/inserting the unique reversal record.
+            $refundRecord = DB::table('payment_refunds')->where('id', $paymentRefundId)->lockForUpdate()->first();
+            if (!$refundRecord || round((float) $refundRecord->amount, 2) !== round($refundedAmount, 2)) {
+                throw new RuntimeException('Referral reversal must match an existing recorded payment refund.');
+            }
+
             $existing = DB::table('referral_commission_reversals')
                 ->where('payment_refund_id', $paymentRefundId)->lockForUpdate()->first();
             if ($existing) {
