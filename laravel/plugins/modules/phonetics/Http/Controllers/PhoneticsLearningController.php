@@ -33,6 +33,27 @@ final class PhoneticsLearningController extends Controller
         $this->catalog->assertAccess($request->user(), $courseRef);
 
         $entries = $this->assignedEntries($request, $course, $request->query('lesson'));
+        $progress = [
+            'attempts' => 0,
+            'correct' => 0,
+            'accuracy' => 0,
+            'words_practiced' => 0,
+            'uk_attempts' => 0,
+            'us_attempts' => 0,
+        ];
+        if ($entries->isNotEmpty()) {
+            $progressQuery = PhoneticAttempt::query()
+                ->where('user_id', (string) $request->user()->getAuthIdentifier())
+                ->whereIn('entry_id', $entries->pluck('id'));
+            $progress['attempts'] = (clone $progressQuery)->count();
+            $progress['correct'] = (clone $progressQuery)->where('is_correct', true)->count();
+            $progress['accuracy'] = $progress['attempts'] > 0
+                ? (int) round(($progress['correct'] / $progress['attempts']) * 100)
+                : 0;
+            $progress['words_practiced'] = (clone $progressQuery)->distinct()->count('entry_id');
+            $progress['uk_attempts'] = (clone $progressQuery)->where('target_accent', 'uk')->count();
+            $progress['us_attempts'] = (clone $progressQuery)->where('target_accent', 'us')->count();
+        }
         $isPaid = $this->catalog->isPaid($course);
         $exams = PhoneticExam::query()->where('lms_driver', $this->catalog->driver())->where('status', 'published')
             ->where(fn ($scope) => $scope->whereNull('course_ref')->orWhere('course_ref', $courseRef))
