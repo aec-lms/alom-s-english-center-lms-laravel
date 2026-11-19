@@ -374,7 +374,8 @@ api/*",
    ->assertJsonPath('recordings.0.audio_url',url('/courses/british-american-phonetics/phonetics-learning/recordings/'.$recordingId.'/audio'))
    ->assertJsonPath('recordings.0.delete_url',url('/courses/british-american-phonetics/phonetics-learning/recordings/'.$recordingId));
   $otherStudent=$this->createUserWithRole('student');
-  $this->actingAs($otherStudent)->get('/courses/british-american-phonetics/phonetics-learning/recordings/'.$recordingId.'/audio')->assertForbidden();
+  DB::table('enrollments')->insert(['user_id'=>$otherStudent->id,'course_id'=>$courseId,'branch_id'=>null,'status'=>'active','created_at'=>now(),'updated_at'=>now()]);
+  $this->actingAs($otherStudent)->get('/courses/british-american-phonetics/phonetics-learning/recordings/'.$recordingId.'/audio')->assertNotFound();
   $admin=$this->createUserWithRole('admin');
   $this->actingAs($admin)->patch('/admin/phonetics/learning/recordings/'.$recordingId.'/review',[
    'score'=>4,'feedback'=>'Good clarity. Practise the final consonant release.',
