@@ -42,3 +42,15 @@ The `commerce_entitlements` table is the shared entitlement ledger. Other plugin
 6. Run the full Browser E2E suite, Composer audit and cPanel package build.
 
 Do not enable production checkout until provider sandbox acceptance is complete. The pull request does not configure merchant credentials or deploy the plugin to the live cPanel host.
+
+## Gift courses and gift vouchers — migration status
+
+Gift-course and gift-voucher purchases are **not yet supported** as unified-cart line items. Their existing legacy checkout remains separate while the recipient-specific settlement adapter is implemented.
+
+Do not add `gift_course` or `gift_voucher` to the generic buyer-entitlement flow. A generic entitlement is owned by the order buyer; a gift must instead fulfill a server-owned draft for its verified recipient. Payment settlement currently fails closed for unrecognized/special order-item types so a future gift item cannot accidentally grant access to the sender.
+
+The required adapter must bind each order item to exactly one server-created gift/voucher draft, reconcile the immutable amount/currency and branch snapshot against the settled invoice, and fulfill the recipient gift or voucher wallet only after full verified settlement. Duplicate callbacks must be idempotent across invoice creation, gift status, voucher token, wallet credit and ledger rows.
+
+Voucher refunds require an explicit ledger reversal policy: reverse only unspent wallet value; do not silently claw back value already spent. Redeemed course gifts and spent voucher value require an audited manual-review/recovery policy. Provider refund confirmation and ambiguous-outcome reconciliation must precede local refunded state.
+
+The legacy routes remain available during migration. This section is not an authorization to enable new gift checkout or to treat existing gift/voucher refund handling as complete.
