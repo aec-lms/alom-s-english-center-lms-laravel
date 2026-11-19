@@ -44,6 +44,7 @@ final class PhoneticsLearningController extends Controller
         if ($entries->isNotEmpty()) {
             $progressQuery = PhoneticAttempt::query()
                 ->where('user_id', (string) $request->user()->getAuthIdentifier())
+                ->where('course_ref', $courseRef)
                 ->whereIn('entry_id', $entries->pluck('id'));
             $progress['attempts'] = (clone $progressQuery)->count();
             $progress['correct'] = (clone $progressQuery)->where('is_correct', true)->count();
@@ -129,6 +130,7 @@ final class PhoneticsLearningController extends Controller
         $correct = hash_equals((string) $challenge['expected'], trim($data['selected_answer']));
         $attempt = PhoneticAttempt::query()->create([
             'user_id' => $request->user()->getAuthIdentifier(),
+            'course_ref' => $courseRef,
             'entry_id' => $entry->id,
             'target_accent' => $challenge['accent'],
             'quiz_mode' => 'course-vocabulary',
