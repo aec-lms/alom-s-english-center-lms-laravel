@@ -9,7 +9,7 @@
 
 A recursive Git tree scan of `laravel/plugins/modules/` at the inventory ref found **60 plugin manifests** (`plugin.json`). This is newer than the 58-plugin snapshot in `PLUGIN-58-FUNCTIONAL-ACCEPTANCE-MATRIX-2026-11-18.md`; that document remains a valid historical snapshot and must not be silently rewritten.
 
-All 60 manifest files were read. The current `category` values are not a normalized taxonomy: they include `academic`, `education`, `finance`, `payment-gateway`, `commerce`, `communications`, `communication`, `website`, `content`, `appearance`, `marketing`, `seo`, `analytics`, `operations`, `integration`, and `ai`. The Plugin Center displays the raw category value and sorts records by it; it does not currently enforce a closed category enum.
+All 60 manifest files were read. The current `category` values are not a normalized taxonomy: they include `academic`, `education`, `finance`, `payment-gateway`, `commerce`, `communications`, `communication`, `website`, `content`, `appearance`, `marketing`, `seo`, `analytics`, `operations`, `integration`, and `ai`. At that inventory ref, the Plugin Center displayed the raw category value and sorted records by it; it did not enforce a closed category enum. This PR adds a display-only registry and grouping layer without changing the raw values.
 
 ## Proposed functional taxonomy
 
