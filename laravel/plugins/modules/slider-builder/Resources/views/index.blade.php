@@ -93,6 +93,7 @@
         item.addEventListener('dragstart', (event) => {
             dragged = item;
             event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('text/plain', item.dataset.slideId || '');
             item.classList.add('opacity-40');
         });
         item.addEventListener('dragend', () => { item.classList.remove('opacity-40'); dragged = null; });
