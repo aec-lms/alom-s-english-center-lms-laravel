@@ -27,6 +27,11 @@ class CmsPost extends Model
         'seo_description',
         'is_published',
         'publish_at',
+        'editorial_status',
+        'submitted_at',
+        'reviewed_at',
+        'reviewed_by',
+        'review_note',
     ];
 
     protected $casts = ['is_published' => 'boolean', 'publish_at' => 'datetime'];
