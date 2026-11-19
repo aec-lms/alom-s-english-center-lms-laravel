@@ -7,6 +7,8 @@ namespace Tests\Feature;
 use App\Models\Permission;
 use App\Models\Role;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+use Plugins\Modules\CommerceCart\Services\CommerceCatalog;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
 use Plugins\Modules\PaymentManagement\Services\PaymentSettlementService;
@@ -14,6 +16,33 @@ use Tests\TestCase;
 
 final class UnifiedCommerceCartTest extends TestCase
 {
+    public function test_checkout_rejects_catalogue_price_currency_or_title_changes_after_add_to_cart(): void
+    {
+        $catalog = app(CommerceCatalog::class);
+        $cartItem = (object) [
+            'unit_price' => 499,
+            'currency' => 'BDT',
+            'title_snapshot' => 'Premium Monthly',
+        ];
+
+        $catalog->assertCartSnapshotUnchanged([
+            'price' => 499, 'currency' => 'BDT', 'title' => 'Premium Monthly',
+        ], $cartItem);
+
+        foreach ([
+            ['price' => 599, 'currency' => 'BDT', 'title' => 'Premium Monthly'],
+            ['price' => 499, 'currency' => 'USD', 'title' => 'Premium Monthly'],
+            ['price' => 499, 'currency' => 'BDT', 'title' => 'Premium Annual'],
+        ] as $changedSnapshot) {
+            try {
+                $catalog->assertCartSnapshotUnchanged($changedSnapshot, $cartItem);
+                $this->fail('Checkout must reject a changed cart snapshot.');
+            } catch (ValidationException $exception) {
+                $this->assertArrayHasKey('cart', $exception->errors());
+            }
+        }
+    }
+
     public function test_student_can_add_subscription_and_live_class_pass_to_one_cart_using_server_prices(): void
     {
         $this->markSystemInstalled();
