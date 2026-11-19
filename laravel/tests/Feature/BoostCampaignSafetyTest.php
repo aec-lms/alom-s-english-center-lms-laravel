@@ -94,6 +94,96 @@ class BoostCampaignSafetyTest extends TestCase
         $this->assertSame(1, $campaign->fresh()->clicks);
     }
 
+    public function test_course_and_branch_campaigns_render_only_for_matching_public_courses(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['admin-boosting', 'course-management', 'branch-management']);
+
+        $branch = Branch::query()->create([
+            'code' => 'BOOST-BR-01',
+            'name' => 'Dhanmondi Branch',
+            'city' => 'Dhaka',
+            'is_active' => true,
+        ]);
+        $branchCourse = Course::query()->create([
+            'code' => 'BOOST-BRANCH-COURSE',
+            'title' => 'Branch IELTS Course',
+            'slug' => 'branch-ielts-course',
+            'price' => 0,
+            'status' => 'published',
+            'branch_id' => $branch->id,
+        ]);
+        $otherCourse = Course::query()->create([
+            'code' => 'BOOST-OTHER-COURSE',
+            'title' => 'General Spoken Course',
+            'slug' => 'general-spoken-course',
+            'price' => 0,
+            'status' => 'published',
+            'branch_id' => null,
+        ]);
+
+        $branchCampaign = BoostCampaign::query()->create([
+            'campaign_name' => 'Dhanmondi Branch Promotion',
+            'entity_type' => 'branch',
+            'entity_id' => $branch->id,
+            'placement' => 'course_listing',
+            'badge_text' => 'BRANCH OFFER',
+            'cta_text' => 'View Branch Offer',
+            'destination_url' => '/courses',
+            'status' => 'active',
+            'starts_at' => now()->subMinute(),
+            'ends_at' => now()->addDay(),
+        ]);
+        $courseCampaign = BoostCampaign::query()->create([
+            'campaign_name' => 'IELTS Course Promotion',
+            'entity_type' => 'course',
+            'entity_id' => $otherCourse->id,
+            'placement' => 'course_listing',
+            'badge_text' => 'COURSE OFFER',
+            'cta_text' => 'View Course Offer',
+            'destination_url' => '/courses',
+            'status' => 'active',
+            'starts_at' => now()->subMinute(),
+            'ends_at' => now()->addDay(),
+        ]);
+
+        $this->get('/courses')
+            ->assertOk()
+            ->assertSee('Dhanmondi Branch Promotion')
+            ->assertSee('IELTS Course Promotion')
+            ->assertSee(route('plugins.boost.impression', $branchCampaign), false)
+            ->assertSee(route('plugins.boost.click', $courseCampaign), false);
+
+        $html = $this->get('/courses')->getContent();
+        $otherCourseCard = substr($html, (int) strpos($html, 'General Spoken Course') - 1800, 2600);
+        $this->assertStringNotContainsString('Dhanmondi Branch Promotion', $otherCourseCard);
+    }
+
+    public function test_global_homepage_campaigns_are_rendered_and_tracked(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['admin-boosting']);
+
+        $campaign = BoostCampaign::query()->create([
+            'campaign_name' => 'AEC Global Admission Offer',
+            'entity_type' => 'offer',
+            'entity_id' => null,
+            'placement' => 'homepage_featured',
+            'badge_text' => 'ADMISSION OPEN',
+            'cta_text' => 'Explore Offer',
+            'destination_url' => '/courses',
+            'status' => 'active',
+            'starts_at' => now()->subMinute(),
+            'ends_at' => now()->addDay(),
+        ]);
+
+        $this->get('/')
+            ->assertOk()
+            ->assertSee('AEC Global Admission Offer')
+            ->assertSee(route('plugins.boost.impression', $campaign), false)
+            ->assertSee(route('plugins.boost.click', $campaign), false);
+    }
+
     public function test_impressions_are_recorded_once_per_session_and_campaign(): void
     {
         $this->markSystemInstalled();
