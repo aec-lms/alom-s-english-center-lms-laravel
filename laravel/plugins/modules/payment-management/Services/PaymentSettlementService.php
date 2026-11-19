@@ -360,7 +360,7 @@ class PaymentSettlementService
         if ($recipientEmail === '' || $recipientEmail === $senderEmail) {
             throw new RuntimeException('Gift recipient must be different from the sender and have a valid email address.');
         }
-        if ($draft->recipient_user_id !== null) {
+        if (Schema::hasColumn($table, 'recipient_user_id') && $draft->recipient_user_id !== null) {
             $recipient = DB::table('users')->where('id', $draft->recipient_user_id)->first();
             if (!$recipient || strtolower(trim((string) $recipient->email)) !== $recipientEmail) {
                 throw new RuntimeException('Gift recipient account no longer matches the verified recipient email.');
