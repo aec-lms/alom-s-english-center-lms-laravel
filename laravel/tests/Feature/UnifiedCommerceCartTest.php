@@ -107,7 +107,7 @@ final class UnifiedCommerceCartTest extends TestCase
         $gift = DB::table('course_gifts')->where('sender_user_id', $student->id)->first();
         $this->assertNotNull($gift);
         $this->assertSame('awaiting_payment', $gift->status);
-        $this->assertSame('gift_course', DB::table('commerce_cart_items')->where('item_id', $gift->id)->value('item_type'));
+        $this->assertSame('gift_course', DB::table('commerce_cart_items')->where('item_type', 'gift_course')->where('item_id', $gift->id)->value('item_type'));
         $this->assertSame('gift.draft.recipient@example.test', $gift->recipient_email);
 
         $this->actingAs($student)->post('/cart/gifts/voucher', [
