@@ -198,8 +198,10 @@ class CourseCommercePaymentSettlementService
         if ($gift->status === 'paid') {
             throw new RuntimeException('Course gift is already settled by another payment.');
         }
+        if ($gift->expires_at && now()->greaterThan($gift->expires_at)) {
+            throw new RuntimeException('Course gift draft expired before payment settlement; manual reconciliation is required.');
+        }
         if ($gift->status !== 'awaiting_payment'
-            || ($gift->expires_at && now()->greaterThan($gift->expires_at))
             || strtoupper((string) $gift->currency) !== strtoupper((string) $transaction->currency)
             || abs((float) $gift->amount - (float) $transaction->amount) > 0.01) {
             throw new RuntimeException('Course gift amount, currency or status does not match the verified payment.');
