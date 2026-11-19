@@ -80,4 +80,58 @@ class CmsWebsiteSafetyTest extends TestCase
         ]);
     }
 
+
+    public function test_soft_deleted_post_can_be_restored_with_its_media_references_intact(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+        $admin = $this->createUserWithRole('admin');
+        $post = CmsPost::query()->create([
+            'slug' => 'restore-cms-post',
+            'title' => 'Restore CMS Post',
+            'category' => 'General',
+            'author' => 'AEC LMS',
+            'content' => 'Content to restore',
+            'thumbnail_path' => '/uploads/posts/restore.webp',
+            'pdf_path' => 'https://cdn.example.test/restore.pdf',
+            'is_published' => true,
+        ]);
+
+        $this->actingAs($admin)->delete('/admin/cms/posts/' . $post->id)
+            ->assertSessionHasNoErrors();
+
+        $this->assertSoftDeleted('cms_posts', ['id' => $post->id]);
+        $this->assertSame('/uploads/posts/restore.webp', CmsPost::withTrashed()->findOrFail($post->id)->thumbnail_path);
+
+        $this->actingAs($admin)->post('/admin/cms/posts/' . $post->id . '/restore')
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('cms_posts', [
+            'id' => $post->id,
+            'deleted_at' => null,
+            'thumbnail_path' => '/uploads/posts/restore.webp',
+        ]);
+    }
+
+    public function test_trashed_post_can_be_permanently_deleted(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+        $admin = $this->createUserWithRole('admin');
+        $post = CmsPost::query()->create([
+            'slug' => 'permanently-delete-cms-post',
+            'title' => 'Permanently Delete CMS Post',
+            'category' => 'General',
+            'author' => 'AEC LMS',
+            'content' => 'Content to delete',
+            'is_published' => false,
+        ]);
+        $post->delete();
+
+        $this->actingAs($admin)->delete('/admin/cms/posts/' . $post->id . '/force')
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseMissing('cms_posts', ['id' => $post->id]);
+    }
+
 }
