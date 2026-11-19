@@ -33,6 +33,7 @@
     let startedAt = Date.now();
     let completed = false;
     let maxTimer = null;
+    let hideTimer = null;
 
     if (@json((bool) $loaderSetting->respect_reduced_motion)) {
         overlay.classList.add('lb-respect-motion');
@@ -54,9 +55,13 @@
     function hideAfterMinimumDuration(markVisit) {
         if (completed) return;
         completed = true;
-        const remaining = Math.max(0, minDuration - (Date.now() - startedAt));
+        const elapsed = Date.now() - startedAt;
+        const remaining = Math.min(
+            Math.max(0, minDuration - elapsed),
+            Math.max(0, maxDuration - elapsed)
+        );
 
-        window.setTimeout(function () {
+        hideTimer = window.setTimeout(function () {
             overlay.classList.add('lb-hidden');
             overlay.setAttribute('aria-hidden', 'true');
             document.documentElement.removeAttribute('aria-busy');
@@ -74,6 +79,7 @@
     function forceHide() {
         if (completed) return;
         completed = true;
+        if (hideTimer !== null) window.clearTimeout(hideTimer);
         overlay.classList.add('lb-hidden');
         overlay.setAttribute('aria-hidden', 'true');
         document.documentElement.removeAttribute('aria-busy');
@@ -108,6 +114,7 @@
             /^\/(admin|api|payment|payments|checkout|webhook|webhooks|live-class|live-classes)(\/|$)/.test(destination.pathname)) return;
 
         completed = false;
+        if (hideTimer !== null) window.clearTimeout(hideTimer);
         startedAt = Date.now();
         overlay.classList.remove('lb-hidden');
         overlay.removeAttribute('aria-hidden');
