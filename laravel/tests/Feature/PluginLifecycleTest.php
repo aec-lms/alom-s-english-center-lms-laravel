@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Core\Plugins\PluginManager;
+use App\Providers\PluginServiceProvider;
 use App\Core\Versioning\VersionConstraint;
 use App\Models\PluginRecord;
 use App\Models\PluginSetting;
@@ -55,6 +56,106 @@ class PluginLifecycleTest extends TestCase
         $this->assertSame('manifest-secret', $manager->getSetting('sms-gateway', 'api_token'));
     }
 
+    public function test_plugin_install_registers_its_route_file_once_after_catalog_commit(): void
+    {
+        $this->markSystemInstalled();
+
+        $slug = 'route-once-probe';
+        $pluginDir = (string) config('plugins.modules_path') . DIRECTORY_SEPARATOR . $slug;
+        File::ensureDirectoryExists($pluginDir . DIRECTORY_SEPARATOR . 'Routes');
+        file_put_contents($pluginDir . DIRECTORY_SEPARATOR . 'plugin.json', json_encode([
+            'slug' => $slug,
+            'name' => 'Route Once Probe',
+            'version' => '1.0.0',
+            'core_compatibility' => '^2.0',
+            'dependencies' => [],
+        ], JSON_THROW_ON_ERROR));
+        file_put_contents(
+            $pluginDir . DIRECTORY_SEPARATOR . 'Routes' . DIRECTORY_SEPARATOR . 'web.php',
+            "<?php \\Illuminate\\Support\\Facades\\Route::get('/route-once-probe', fn () => 'ok')->name('plugins.route-once-probe.index');"
+        );
+
+        try {
+            $record = app(PluginManager::class)->install($slug);
+            $this->assertTrue($record->fresh()->is_installed);
+
+            $matchingRoutes = collect(app('router')->getRoutes())
+                ->filter(fn ($route): bool => $route->uri() === 'route-once-probe');
+
+            $this->assertCount(1, $matchingRoutes);
+            $this->assertSame('plugins.route-once-probe.index', $matchingRoutes->first()->getName());
+        } finally {
+            File::deleteDirectory($pluginDir);
+        }
+    }
+
+    public function test_plugin_service_provider_does_not_re_register_routes_when_route_cache_is_active(): void
+    {
+        $this->markSystemInstalled();
+
+        $slug = 'cached-route-probe';
+        $pluginDir = (string) config('plugins.modules_path') . DIRECTORY_SEPARATOR . $slug;
+        File::ensureDirectoryExists($pluginDir . DIRECTORY_SEPARATOR . 'Routes');
+        file_put_contents($pluginDir . DIRECTORY_SEPARATOR . 'plugin.json', json_encode([
+            'slug' => $slug,
+            'name' => 'Cached Route Probe',
+            'version' => '1.0.0',
+            'core_compatibility' => '^2.0',
+            'dependencies' => [],
+        ], JSON_THROW_ON_ERROR));
+        file_put_contents(
+            $pluginDir . DIRECTORY_SEPARATOR . 'Routes' . DIRECTORY_SEPARATOR . 'web.php',
+            "<?php \\Illuminate\\Support\\Facades\\Route::get('/cached-route-probe', fn () => 'ok')->name('plugins.cached-route-probe.index');"
+        );
+
+        PluginRecord::query()->create([
+            'slug' => $slug,
+            'name' => 'Cached Route Probe',
+            'version' => '1.0.0',
+            'is_installed' => true,
+            'is_enabled' => true,
+        ]);
+
+        $cachePath = $this->app->getCachedRoutesPath();
+        $hadCache = is_file($cachePath);
+        $previousCache = $hadCache ? file_get_contents($cachePath) : null;
+
+        try {
+            File::ensureDirectoryExists(dirname($cachePath));
+            file_put_contents($cachePath, "<?php return [];");
+
+            $provider = new PluginServiceProvider($this->app);
+            $provider->boot(app(PluginManager::class));
+
+            $matchingRoutes = collect(app('router')->getRoutes())
+                ->filter(fn ($route): bool => $route->uri() === 'cached-route-probe');
+
+            $this->assertCount(0, $matchingRoutes, 'Cached plugin routes must not be loaded a second time.');
+        } finally {
+            if ($hadCache && $previousCache !== false) {
+                file_put_contents($cachePath, $previousCache);
+            } else {
+                @unlink($cachePath);
+            }
+            File::deleteDirectory($pluginDir);
+            PluginRecord::query()->where('slug', $slug)->delete();
+        }
+    }
+
+    public function test_reinstall_does_not_reenable_an_administrator_disabled_plugin(): void
+    {
+        $this->markSystemInstalled();
+        $manager = app(PluginManager::class);
+
+        $manager->install('student-management');
+        $manager->disable('student-management');
+
+        $record = $manager->install('student-management');
+
+        $this->assertTrue($record->fresh()->is_installed);
+        $this->assertFalse($record->fresh()->is_enabled);
+    }
+
     public function test_plugin_core_compatibility_checks_minimum_semantic_versions(): void
     {
         $this->assertTrue(VersionConstraint::matches('2.0.0', '^2.0'));
@@ -67,58 +168,58 @@ class PluginLifecycleTest extends TestCase
     }
 
     public function test_plugin_manifest_rejects_invalid_duplicate_and_self_dependencies(): void
-    {
-        $directory = storage_path('framework/testing/plugin-manifest-' . bin2hex(random_bytes(6)));
-        File::ensureDirectoryExists($directory);
-
-        try {
-            foreach ([
-                ['dependencies' => ['valid-plugin', '../escape']],
-                ['dependencies' => ['valid-plugin', 'valid-plugin']],
-                ['dependencies' => ['manifest-probe']],
-                ['dependencies' => ['shared-plugin'], 'optional_dependencies' => ['shared-plugin']],
-                ['dependencies' => ['valid-plugin' => 'unexpected']],
-                ['provider' => 'Invalid Provider Class'],
-            ] as $invalidFields) {
-                $manifest = array_merge([
-                    'slug' => 'manifest-probe',
-                    'name' => 'Manifest Probe',
-                    'version' => '1.0.0',
-                ], $invalidFields);
-                File::put($directory . DIRECTORY_SEPARATOR . 'plugin.json', json_encode($manifest, JSON_THROW_ON_ERROR));
-
-                try {
-                    \App\Core\Plugins\PluginManifest::fromDirectory($directory);
-                    $this->fail('Malformed plugin manifest metadata must be rejected.');
-                } catch (\InvalidArgumentException) {
-                    $this->assertTrue(true);
+        {
+            $directory = storage_path('framework/testing/plugin-manifest-' . bin2hex(random_bytes(6)));
+            File::ensureDirectoryExists($directory);
+    
+            try {
+                foreach ([
+                    ['dependencies' => ['valid-plugin', '../escape']],
+                    ['dependencies' => ['valid-plugin', 'valid-plugin']],
+                    ['dependencies' => ['manifest-probe']],
+                    ['dependencies' => ['shared-plugin'], 'optional_dependencies' => ['shared-plugin']],
+                    ['dependencies' => ['valid-plugin' => 'unexpected']],
+                    ['provider' => 'Invalid Provider Class'],
+                ] as $invalidFields) {
+                    $manifest = array_merge([
+                        'slug' => 'manifest-probe',
+                        'name' => 'Manifest Probe',
+                        'version' => '1.0.0',
+                    ], $invalidFields);
+                    File::put($directory . DIRECTORY_SEPARATOR . 'plugin.json', json_encode($manifest, JSON_THROW_ON_ERROR));
+    
+                    try {
+                        \App\Core\Plugins\PluginManifest::fromDirectory($directory);
+                        $this->fail('Malformed plugin manifest metadata must be rejected.');
+                    } catch (\InvalidArgumentException) {
+                        $this->assertTrue(true);
+                    }
                 }
+            } finally {
+                File::deleteDirectory($directory);
             }
-        } finally {
-            File::deleteDirectory($directory);
         }
-    }
 
     public function test_plugin_discovery_rejects_manifest_folder_slug_mismatch(): void
-    {
-        $this->markSystemInstalled();
-        $modulesPath = (string) config('plugins.modules_path');
-        $directory = $modulesPath . DIRECTORY_SEPARATOR . 'folder-identity-probe';
-        File::ensureDirectoryExists($directory);
-        File::put($directory . DIRECTORY_SEPARATOR . 'plugin.json', json_encode([
-            'slug' => 'different-plugin-identity',
-            'name' => 'Mismatched Plugin',
-            'version' => '1.0.0',
-        ], JSON_THROW_ON_ERROR));
-
-        try {
-            $this->expectException(RuntimeException::class);
-            $this->expectExceptionMessage('does not match manifest slug');
-            app(PluginManager::class)->discoverManifests();
-        } finally {
-            File::deleteDirectory($directory);
+        {
+            $this->markSystemInstalled();
+            $modulesPath = (string) config('plugins.modules_path');
+            $directory = $modulesPath . DIRECTORY_SEPARATOR . 'folder-identity-probe';
+            File::ensureDirectoryExists($directory);
+            File::put($directory . DIRECTORY_SEPARATOR . 'plugin.json', json_encode([
+                'slug' => 'different-plugin-identity',
+                'name' => 'Mismatched Plugin',
+                'version' => '1.0.0',
+            ], JSON_THROW_ON_ERROR));
+    
+            try {
+                $this->expectException(RuntimeException::class);
+                $this->expectExceptionMessage('does not match manifest slug');
+                app(PluginManager::class)->discoverManifests();
+            } finally {
+                File::deleteDirectory($directory);
+            }
         }
-    }
 
     public function test_student_management_installs_without_optional_branch_plugin(): void
     {
