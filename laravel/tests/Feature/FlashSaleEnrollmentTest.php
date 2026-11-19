@@ -242,4 +242,52 @@ class FlashSaleEnrollmentTest extends TestCase
         $this->assertEquals(180.00, $quote['metadata']['flash_sale']['discount_amount']);
     }
 
+    public function test_admin_can_create_premium_campaign_and_lifecycle_is_audited(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'course-management', 'flash-sale']);
+
+        $admin = $this->createUserWithRole('admin');
+        $course = Course::query()->create([
+            'code' => 'FLASH-CREATE-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'title' => 'Premium Campaign Course',
+            'slug' => 'premium-campaign-' . bin2hex(random_bytes(3)),
+            'price' => 1500,
+            'status' => 'published',
+        ]);
+
+        $this->actingAs($admin)->post('/admin/flash-sales', [
+            'course_id' => $course->id,
+            'title' => 'Premium Launch Week',
+            'subtitle' => 'A focused offer for ambitious learners',
+            'description' => 'Join the next learning cohort with a limited-time price.',
+            'badge_text' => 'LAUNCH OFFER',
+            'banner_image_url' => 'https://cdn.example.test/campaign.webp',
+            'cta_label' => 'Explore course',
+            'terms' => 'Offer applies to new enrollments only.',
+            'priority' => 25,
+            'discount_type' => 'percent',
+            'discount_value' => 20,
+            'starts_at' => now()->subMinute()->format('Y-m-d H:i:s'),
+            'ends_at' => now()->addDay()->format('Y-m-d H:i:s'),
+            'is_published' => 1,
+            'is_active' => 1,
+        ])->assertSessionHasNoErrors();
+
+        $sale = DB::table('flash_sales')->where('title', 'Premium Launch Week')->first();
+        $this->assertNotNull($sale);
+        $this->assertSame('A focused offer for ambitious learners', $sale->subtitle);
+        $this->assertSame('LAUNCH OFFER', $sale->badge_text);
+        $this->assertSame('https://cdn.example.test/campaign.webp', $sale->banner_image_url);
+        $this->assertEquals(25, $sale->priority);
+
+        if (\Illuminate\Support\Facades\Schema::hasTable('audit_logs')) {
+            $this->assertDatabaseHas('audit_logs', [
+                'action' => 'flash_sale.created',
+                'entity_type' => 'flash_sale',
+                'entity_id' => (string) $sale->id,
+            ]);
+        }
+    }
+
 }
