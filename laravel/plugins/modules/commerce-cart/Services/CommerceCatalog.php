@@ -132,7 +132,7 @@ class CommerceCatalog
         }
         $userBranchId = null;
         if ($user && method_exists($user, 'getAuthIdentifier')
-            && app(\\App\\Core\\Plugins\\PluginManager::class)->isEnabled('student-management')
+            && app(\App\Core\Plugins\PluginManager::class)->isEnabled('student-management')
             && Schema::hasTable('students')
             && Schema::hasColumn('students', 'branch_id')) {
             $profileBranchId = DB::table('students')->where('user_id', $user->getAuthIdentifier())->value('branch_id');
