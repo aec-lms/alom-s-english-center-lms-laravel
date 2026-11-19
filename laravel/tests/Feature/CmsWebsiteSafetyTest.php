@@ -328,4 +328,50 @@ class CmsWebsiteSafetyTest extends TestCase
         ]);
     }
 
+
+    public function test_live_post_revision_restore_is_rejected_without_mutating_published_content(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+        $admin = $this->createUserWithRole('admin');
+        $post = CmsPost::query()->create([
+            'slug' => 'published-revision-protected',
+            'title' => 'Published Original',
+            'category' => 'General',
+            'author' => 'AEC',
+            'content' => 'Live body must remain unchanged',
+            'is_published' => true,
+            'editorial_status' => 'published',
+        ]);
+        $revisionId = DB::table('cms_post_revisions')->insertGetId([
+            'post_id' => $post->id,
+            'user_id' => $admin->id,
+            'title' => 'Historical Snapshot',
+            'slug' => 'published-revision-protected',
+            'category' => 'General',
+            'category_id' => null,
+            'author' => 'AEC',
+            'excerpt' => null,
+            'content' => 'Historical body',
+            'thumbnail_path' => null,
+            'pdf_path' => null,
+            'pdf_thumbnail' => null,
+            'seo_title' => null,
+            'seo_description' => null,
+            'is_published' => false,
+            'created_at' => now(),
+        ]);
+
+        $this->actingAs($admin)->post('/admin/cms/posts/' . $post->id . '/revisions/' . $revisionId . '/restore')
+            ->assertStatus(422);
+
+        $this->assertDatabaseHas('cms_posts', [
+            'id' => $post->id,
+            'title' => 'Published Original',
+            'content' => 'Live body must remain unchanged',
+            'is_published' => true,
+            'editorial_status' => 'published',
+        ]);
+    }
+
 }
