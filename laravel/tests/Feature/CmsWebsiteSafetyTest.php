@@ -143,7 +143,7 @@ class CmsWebsiteSafetyTest extends TestCase
         $admin = $this->createUserWithRole('admin');
         $post = CmsPost::query()->create(['slug' => 'revision-test-post', 'title' => 'Original Title', 'category' => 'General', 'author' => 'AEC LMS', 'content' => 'Original content', 'is_published' => false]);
         $this->actingAs($admin)->put('/admin/cms/posts/' . $post->id, [
-            'title' => 'Changed Title', 'slug' => 'changed-title', 'content' => 'Changed content', 'is_published' => '1',
+            'title' => 'Changed Title', 'slug' => 'changed-title', 'content' => 'Changed content',
         ])->assertSessionHasNoErrors();
         $revision = DB::table('cms_post_revisions')->where('post_id', $post->id)->first();
         $this->assertNotNull($revision);
