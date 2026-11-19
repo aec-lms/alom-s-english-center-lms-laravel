@@ -200,4 +200,82 @@ class AdmissionManagementWorkflowTest extends TestCase
             'email' => 'closed-intake@aec.test',
         ]);
     }
+
+    public function test_admission_documents_are_stored_on_private_disk_and_require_authenticated_admin_access(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['admission-management']);
+        Storage::fake('local');
+
+        $admin = $this->createUserWithRole('admin');
+        $application = AdmissionApplication::query()->create([
+            'application_code' => 'ADM-DOC-0001',
+            'applicant_name' => 'Document Applicant',
+            'email' => 'document-applicant@aec.test',
+            'phone' => '01700000008',
+            'desired_course' => 'IELTS Academic',
+            'status' => 'pending',
+        ]);
+
+        $response = $this->actingAs($admin)->post('/admin/admissions/' . $application->id . '/documents', [
+            'document' => UploadedFile::fake()->create('transcript.pdf', 128, 'application/pdf'),
+        ]);
+
+        $response->assertSessionHasNoErrors();
+        $document = $application->documents()->firstOrFail();
+        $this->assertSame('local', $document->disk);
+        $this->assertSame('transcript.pdf', $document->original_name);
+        Storage::disk('local')->assertExists($document->path);
+
+        $this->actingAs($admin)->get('/admin/admissions/' . $application->id . '/documents/' . $document->id)
+            ->assertOk()
+            ->assertHeader('X-Content-Type-Options', 'nosniff');
+
+        auth()->logout();
+        $this->get('/admin/admissions/' . $application->id . '/documents/' . $document->id)
+            ->assertRedirect();
+    }
+
+    public function test_only_approved_applications_convert_and_conversion_is_idempotent(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['admission-management', 'student-management']);
+
+        $admin = $this->createUserWithRole('admin');
+        $studentUser = $this->createUserWithRole('student');
+        $student = Student::query()->create([
+            'user_id' => $studentUser->id,
+            'student_code' => 'STU-EXIST-001',
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+        ]);
+
+        $application = AdmissionApplication::query()->create([
+            'application_code' => 'ADM-CONVERT-0001',
+            'applicant_name' => 'Existing Student Applicant',
+            'email' => $studentUser->email,
+            'phone' => '01700000009',
+            'desired_course' => 'IELTS Academic',
+            'status' => 'pending',
+        ]);
+
+        $this->actingAs($admin)->post('/admin/admissions/' . $application->id . '/convert-to-student')
+            ->assertStatus(422);
+        $this->assertNull($application->fresh()->converted_student_id);
+
+        $application->update(['status' => 'approved']);
+
+        $this->actingAs($admin)->post('/admin/admissions/' . $application->id . '/convert-to-student')
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame($student->id, $application->fresh()->converted_student_id);
+        $this->assertDatabaseCount('students', 1);
+
+        $this->actingAs($admin)->post('/admin/admissions/' . $application->id . '/convert-to-student')
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseCount('students', 1);
+        $this->assertSame($student->id, $application->fresh()->converted_student_id);
+    }
+
 }
