@@ -699,7 +699,7 @@ class PaymentSettlementStateMachineTest extends TestCase
             app(PaymentSettlementService::class)->settleTransaction($transaction, 'EXPIRED-GIFT-PROVIDER');
             $this->fail('An expired course gift must never be fulfilled by a late payment callback.');
         } catch (RuntimeException $exception) {
-            $this->assertSame('Gift and voucher items require dedicated recipient fulfillment and cannot use buyer entitlements.', $exception->getMessage());
+            $this->assertSame('Gift draft expired before payment settlement; manual reconciliation is required.', $exception->getMessage());
         }
 
         $this->assertDatabaseHas('course_gifts', ['id' => $giftId, 'status' => 'awaiting_payment', 'invoice_id' => null]);
