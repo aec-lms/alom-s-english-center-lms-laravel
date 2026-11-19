@@ -139,6 +139,10 @@ class ReferralIncomeService
             return null;
         }
 
+        if (!Schema::hasTable('payment_refunds') || !Schema::hasTable('referral_commission_reversals')) {
+            return null;
+        }
+
         return DB::transaction(function () use ($buyer, $sourceType, $sourceId, $paymentRefundId, $refundedAmount, $currency): ?int {
             // Lock the authoritative refund row so concurrent retries serialize
             // before checking/inserting the unique reversal record.
