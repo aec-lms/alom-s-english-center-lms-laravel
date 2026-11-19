@@ -67,7 +67,7 @@ class PluginServiceProvider extends ServiceProvider
 
             // The compiled route cache already contains the enabled plugins' routes.
             // Requiring their route files again would register duplicate URI/name entries.
-            if (!$this->app->routesAreCached()) {
+            if (!is_file($this->app->getCachedRoutesPath())) {
                 $manager->loadPluginRoutes($manifest);
             }
         }
