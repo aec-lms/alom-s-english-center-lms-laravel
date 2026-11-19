@@ -7,13 +7,19 @@ namespace Plugins\Modules\AdmissionManagement\Http\Controllers;
 use App\Core\Security\AuditLogger;
 use App\Core\Plugins\PluginManager;
 use App\Http\Controllers\Controller;
+use App\Models\Role;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Plugins\Modules\AdmissionManagement\Models\AdmissionApplication;
+use Plugins\Modules\AdmissionManagement\Models\AdmissionDocument;
+use Plugins\Modules\StudentManagement\Models\Student;
 
 class AdmissionController extends Controller
 {
@@ -49,7 +55,7 @@ class AdmissionController extends Controller
                 });
             });
 
-        $applications = $query->orderByRaw("CASE status WHEN 'pending' THEN 0 WHEN 'screening' THEN 1 WHEN 'shortlisted' THEN 2 WHEN 'waitlisted' THEN 3 WHEN 'approved' THEN 4 ELSE 5 END")
+        $applications = $query->with(['documents' => fn ($q) => $q->latest()])->orderByRaw("CASE status WHEN 'pending' THEN 0 WHEN 'screening' THEN 1 WHEN 'shortlisted' THEN 2 WHEN 'waitlisted' THEN 3 WHEN 'approved' THEN 4 ELSE 5 END")
             ->orderByDesc('created_at')
             ->paginate(20)
             ->withQueryString();
@@ -220,6 +226,157 @@ class AdmissionController extends Controller
         ]);
 
         return back()->with('status', "Application {$updated->application_code} moved to {$updated->status}.");
+    }
+
+
+
+    public function storeDocument(Request $request, AdmissionApplication $application): RedirectResponse
+    {
+        $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
+        $this->assertApplicationBranchAccess($actor, $application);
+        abort_unless(Schema::hasTable('admission_documents'), 503, 'Admission document storage is not installed.');
+
+        $validated = $request->validate([
+            'document' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
+        ]);
+
+        $file = $validated['document'];
+        $extension = strtolower((string) $file->extension());
+        abort_unless(in_array($extension, ['pdf', 'jpg', 'jpeg', 'png'], true), 422, 'Unsupported document format.');
+
+        $filename = (string) Str::uuid() . '.' . $extension;
+        $storedPath = $file->storeAs('admission-documents/' . $application->id, $filename, 'local');
+        if (!$storedPath) {
+            abort(500, 'The admission document could not be stored.');
+        }
+
+        $document = AdmissionDocument::query()->create([
+            'admission_application_id' => $application->id,
+            'uploaded_by' => $actor?->id,
+            'disk' => 'local',
+            'path' => $storedPath,
+            'original_name' => mb_substr(basename(str_replace('\\', '/', $file->getClientOriginalName())), 0, 255),
+            'mime_type' => (string) $file->getMimeType(),
+            'size_bytes' => (int) $file->getSize(),
+            'sha256' => hash_file('sha256', $file->getRealPath()),
+        ]);
+
+        $this->audit->log('admission.document_uploaded', 'admission_document', (string) $document->id, [
+            'application_id' => $application->id,
+            'size_bytes' => $document->size_bytes,
+            'mime_type' => $document->mime_type,
+        ]);
+
+        return back()->with('status', 'Admission document uploaded securely.');
+    }
+
+    public function downloadDocument(Request $request, AdmissionApplication $application, AdmissionDocument $document)
+    {
+        $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
+        $this->assertApplicationBranchAccess($actor, $application);
+        abort_unless((int) $document->admission_application_id === (int) $application->id, 404);
+        abort_unless($document->disk === 'local', 404);
+        abort_unless(Storage::disk('local')->exists($document->path), 404);
+
+        $this->audit->log('admission.document_downloaded', 'admission_document', (string) $document->id, [
+            'application_id' => $application->id,
+        ]);
+
+        return Storage::disk('local')->download($document->path, $document->original_name, [
+            'Content-Type' => $document->mime_type,
+            'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'private, no-store',
+        ]);
+    }
+
+    public function convertToStudent(Request $request, AdmissionApplication $application): RedirectResponse
+    {
+        $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
+        $this->assertApplicationBranchAccess($actor, $application);
+
+        abort_unless(app(PluginManager::class)->isEnabled('student-management')
+            && Schema::hasTable('students')
+            && Schema::hasTable('roles')
+            && Schema::hasTable('role_user'), 503, 'Student Management and its role integration must be enabled first.');
+
+        $createdAccount = false;
+        $student = DB::transaction(function () use ($application, &$createdAccount): Student {
+            $locked = AdmissionApplication::query()->lockForUpdate()->findOrFail($application->id);
+            abort_unless($locked->status === 'approved', 422, 'Only approved applicants can be converted to students.');
+
+            if ($locked->converted_student_id) {
+                return Student::query()->findOrFail($locked->converted_student_id);
+            }
+
+            $studentRole = Role::query()->where('slug', 'student')->first();
+            abort_unless($studentRole, 503, 'The Student role is not configured.');
+
+            $email = strtolower(trim((string) $locked->email));
+            $user = User::query()->whereRaw('LOWER(email) = ?', [$email])->lockForUpdate()->first();
+
+            if ($user && !$user->hasRole('student')) {
+                abort(409, 'This email already belongs to a non-student account. Resolve the account ownership before conversion.');
+            }
+
+            if (!$user) {
+                $user = User::query()->create([
+                    'name' => $locked->applicant_name,
+                    'email' => $email,
+                    'phone' => $locked->phone,
+                    'branch_id' => $locked->branch_id,
+                    'password' => Str::random(64),
+                    'is_active' => true,
+                ]);
+                $createdAccount = true;
+            }
+
+            $user->roles()->syncWithoutDetaching([$studentRole->id]);
+
+            $student = Student::query()->where('user_id', $user->id)->first();
+            if (!$student) {
+                $studentCode = 'STU-' . strtoupper(Str::random(10));
+                while (Student::query()->where('student_code', $studentCode)->exists()) {
+                    $studentCode = 'STU-' . strtoupper(Str::random(10));
+                }
+
+                $student = Student::query()->create([
+                    'user_id' => $user->id,
+                    'branch_id' => $locked->branch_id,
+                    'student_code' => $studentCode,
+                    'admission_date' => now()->toDateString(),
+                    'status' => 'active',
+                ]);
+            }
+
+            $locked->update([
+                'converted_student_id' => $student->id,
+                'converted_at' => now(),
+            ]);
+
+            return $student;
+        }, 3);
+
+        $resetLinkStatus = null;
+        if ($createdAccount) {
+            try {
+                $resetLinkStatus = Password::sendResetLink(['email' => strtolower(trim((string) $application->email))]);
+            } catch (\Throwable $exception) {
+                report($exception);
+            }
+        }
+
+        $this->audit->log('admission.converted_to_student', 'admission_application', (string) $application->id, [
+            'student_id' => $student->id,
+            'created_account' => $createdAccount,
+            'password_reset_notification' => $resetLinkStatus,
+        ]);
+
+        return back()->with('status', $createdAccount
+            ? 'Applicant converted to student. A password setup email has been requested; confirm mail delivery before sharing login instructions.'
+            : 'Applicant linked to the existing student account successfully.');
     }
 
     private function branchIntegrationAvailable(): bool
