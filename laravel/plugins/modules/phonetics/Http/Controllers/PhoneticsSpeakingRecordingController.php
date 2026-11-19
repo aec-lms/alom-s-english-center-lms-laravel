@@ -286,7 +286,7 @@ final class PhoneticsSpeakingRecordingController extends Controller
             // Re-check branch authorization under the same transaction and
             // lock the student's host-LMS row to close the branch-move race
             // between the initial request check and the review write.
-            $this->assertReviewerBranchAccess($request, $locked, $course, true);
+            $this->assertReviewerBranchAccess($request, $locked, $course, true, true);
             $wasReviewed = $locked->status === 'reviewed';
             $previousScore = $locked->score;
 
@@ -344,7 +344,8 @@ final class PhoneticsSpeakingRecordingController extends Controller
         Request $request,
         PhoneticSpeakingRecording $recording,
         object $course,
-        bool $lockStudent = false
+        bool $lockStudent = false,
+        bool $lockCourse = false
     ): void {
         $reviewer = $request->user();
         abort_unless($reviewer, 401);
@@ -393,6 +394,17 @@ final class PhoneticsSpeakingRecordingController extends Controller
             'The connected LMS course branch mapping is unavailable for recording review.'
         );
         $courseBranchId = data_get($course, $courseBranchColumn);
+        if ($lockCourse) {
+            // The course branch is part of the authorization boundary too.
+            // Lock its host-LMS row in the review transaction so a concurrent
+            // branch reassignment cannot race the final permission check.
+            $courseRow = DB::table($courseTable)
+                ->where($courseIdColumn, $this->catalog->courseId($course))
+                ->lockForUpdate()
+                ->first([$courseBranchColumn]);
+            abort_unless($courseRow, 404, 'Course is no longer available.');
+            $courseBranchId = $courseRow->{$courseBranchColumn};
+        }
         abort_unless(
             $courseBranchId === null || (string) $courseBranchId === (string) $reviewerBranchId,
             404,
