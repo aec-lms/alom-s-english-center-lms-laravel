@@ -73,12 +73,12 @@ class PluginCategoryRegistryTest extends TestCase
 
         $response = $this->actingAs($admin)->get('/admin/plugins')->assertOk();
 
-        $response->assertSee('Academic &amp; Learning')
-            ->assertSee('Student &amp; People Lifecycle')
-            ->assertSee('Finance &amp; Commerce')
-            ->assertSee('Content &amp; Website CMS')
+        $response->assertSee('Academic & Learning')
+            ->assertSee('Student & People Lifecycle')
+            ->assertSee('Finance & Commerce')
+            ->assertSee('Content & Website CMS')
             ->assertSee('Platform Branding')
-            ->assertSee('Course &amp; Academic Management')
+            ->assertSee('Course & Academic Management')
             ->assertSee('Universal Payment Gateway Plugin');
     }
 
