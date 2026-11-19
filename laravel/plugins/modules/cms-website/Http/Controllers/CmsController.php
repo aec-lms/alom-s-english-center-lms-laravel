@@ -530,7 +530,9 @@ class CmsController extends Controller
             $primaryAuthorId = (int) ($validated['author_user_id'] ?? $post?->author_user_id ?? $actor->id);
             $creatorId = (int) ($post?->created_by ?? $actor->id);
             $coAuthorIds = array_map('intval', $validated['co_authors'] ?? []);
-            abort_if($reviewerId === $primaryAuthorId || $reviewerId === $creatorId || in_array($reviewerId, $coAuthorIds, true), 422, 'The reviewer must be independent from the author, creator and co-authors.');
+            abort_if($reviewerId === $primaryAuthorId || $reviewerId === $creatorId || in_array($reviewerId, $coAuthorIds, true)
+                || (!empty($validated['assigned_editor_id']) && $reviewerId === (int) $validated['assigned_editor_id']),
+                422, 'The reviewer must be independent from the author, creator, co-authors and assigned editor.');
         }
     }
 
@@ -568,6 +570,7 @@ class CmsController extends Controller
             || (int) $post->created_by === (int) $user->id
             || (int) $post->author_user_id === (int) $user->id
             || $post->contributors()->where('users.id', $user->id)->exists(), 403, 'Authors cannot review their own posts.');
+        abort_if((int) $post->assigned_editor_id === (int) $user->id, 403, 'The assigned editor cannot independently review the same post.');
         if ($post->assigned_reviewer_id) {
             abort_unless((int) $post->assigned_reviewer_id === (int) $user->id, 403, 'This post is assigned to another reviewer.');
         }
