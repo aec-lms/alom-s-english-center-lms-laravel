@@ -400,4 +400,85 @@ class CmsWebsiteSafetyTest extends TestCase
             'reviewed_by' => null,
         ]);
     }
+
+    public function test_trashed_post_keeps_its_media_and_is_hidden_from_public_hub_until_restored(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+        $admin = $this->createUserWithRole('admin');
+
+        $relativePath = '/uploads/posts/recycle-bin-preserved-' . uniqid() . '.webp';
+        $absolutePath = public_path(ltrim($relativePath, '/'));
+        if (!is_dir(dirname($absolutePath))) {
+            mkdir(dirname($absolutePath), 0755, true);
+        }
+        file_put_contents($absolutePath, 'fake image bytes');
+
+        try {
+            $post = CmsPost::query()->create([
+                'slug' => 'recycle-bin-post-' . uniqid(),
+                'title' => 'Recycle Bin Preserved Article',
+                'category' => 'General',
+                'author' => 'AEC LMS',
+                'content' => 'This article must survive restore.',
+                'thumbnail_path' => $relativePath,
+                'is_published' => true,
+            ]);
+
+            $this->get('/learn')->assertOk()->assertSee('Recycle Bin Preserved Article');
+            $this->get('/learn/' . $post->slug)->assertOk()->assertSee('This article must survive restore.');
+
+            $this->actingAs($admin)->delete('/admin/cms/posts/' . $post->id)
+                ->assertRedirect()->assertSessionHasNoErrors();
+
+            $this->assertSoftDeleted('cms_posts', ['id' => $post->id]);
+            $this->assertFileExists($absolutePath);
+            $this->get('/learn')->assertOk()->assertDontSee('Recycle Bin Preserved Article');
+            $this->get('/learn/' . $post->slug)->assertNotFound();
+
+            $this->actingAs($admin)->post('/admin/cms/posts/' . $post->id . '/restore')
+                ->assertRedirect()->assertSessionHasNoErrors();
+
+            $this->assertDatabaseHas('cms_posts', ['id' => $post->id, 'deleted_at' => null]);
+            $this->assertFileExists($absolutePath);
+            $this->get('/learn')->assertOk()->assertSee('Recycle Bin Preserved Article');
+            $this->get('/learn/' . $post->slug)->assertOk()->assertSee('This article must survive restore.');
+        } finally {
+            if (is_file($absolutePath)) {
+                @unlink($absolutePath);
+            }
+        }
+    }
+
+
+    public function test_updating_a_post_without_seo_fields_preserves_existing_seo_metadata(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+        $admin = $this->createUserWithRole('admin');
+        $post = CmsPost::query()->create([
+            'slug' => 'seo-preservation-' . uniqid(),
+            'title' => 'SEO Preservation Article',
+            'category' => 'General',
+            'author' => 'AEC LMS',
+            'content' => 'Original article body.',
+            'seo_title' => 'Original Search Title',
+            'seo_description' => 'Original search description remains intact.',
+            'is_published' => false,
+        ]);
+
+        $this->actingAs($admin)->put('/admin/cms/posts/' . $post->id, [
+            'title' => 'Updated SEO Preservation Article',
+            'slug' => 'seo-preservation-updated-' . uniqid(),
+            'content' => 'Updated article body.',
+            'is_published' => '1',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('cms_posts', [
+            'id' => $post->id,
+            'seo_title' => 'Original Search Title',
+            'seo_description' => 'Original search description remains intact.',
+        ]);
+    }
+
 }\n
