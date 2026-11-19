@@ -15,14 +15,15 @@ Schedule::command('lms:backup:offsite')->weeklyOn(0, '04:00')->withoutOverlappin
 
 
 Schedule::call(function (): void {
-    if (!Schema::hasTable('cms_posts') || !Schema::hasColumn('cms_posts', 'publish_at')) {
+    if (!Schema::hasTable('cms_posts') || !Schema::hasColumn('cms_posts', 'publish_at') || !Schema::hasColumn('cms_posts', 'editorial_status')) {
         return;
     }
 
     DB::table('cms_posts')
         ->whereNull('deleted_at')
         ->where('is_published', false)
+        ->where('editorial_status', 'approved')
         ->whereNotNull('publish_at')
         ->where('publish_at', '<=', now())
-        ->update(['is_published' => true, 'publish_at' => null, 'updated_at' => now()]);
-})->name('cms-post-auto-publish')->everyMinute()->withoutOverlapping();
+        ->update(['is_published' => true, 'editorial_status' => 'published', 'publish_at' => null, 'updated_at' => now()]);
+})->name('cms-publish-scheduled-posts')->everyMinute()->withoutOverlapping();
