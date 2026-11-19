@@ -75,7 +75,10 @@ class CourseGiftCommerceTest extends TestCase
 
         Config::set('mail.default', 'array');
         Config::set('mail.mailers.smtp.host', 'before-gift-job.example.test');
-        Mail::fake();
+        $mailer = \\Mockery::mock();
+        $mailer->shouldReceive('html')->once();
+        Mail::shouldReceive('purge')->with('smtp')->twice();
+        Mail::shouldReceive('mailer')->with('smtp')->once()->andReturn($mailer);
 
         (new SendGiftRecipientEmailJob('gift_course', $giftId))->handle(app(PluginManager::class));
 
