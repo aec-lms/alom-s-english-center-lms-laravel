@@ -61,7 +61,7 @@ class MobileApiBranchIsolationTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-        DB::table('courses')->insert([
+        $courseB = DB::table('courses')->insertGetId([
             'code' => 'MOB-B-' . strtoupper(substr(uniqid(), -8)),
             'title' => 'Mobile Branch B Course',
             'slug' => 'mobile-branch-b-' . uniqid(),
@@ -140,12 +140,9 @@ class MobileApiBranchIsolationTest extends TestCase
             ->assertJsonFragment(['title' => 'Mobile Branch A Exam'])
             ->assertJsonFragment(['title' => 'Global Mobile Exam'])
             ->assertJsonMissing(['title' => 'Mobile Branch B Exam']);
-        $this->withToken($token)->getJson('/api/v1/courses/mobile-global-' . substr('', 0))
-            ->assertNotFound();
-
         $this->withToken($token)->getJson('/api/v1/courses/' . DB::table('courses')->where('id', $courseA)->value('slug'))
             ->assertOk();
-        $this->withToken($token)->getJson('/api/v1/courses/' . DB::table('courses')->where('id', $courseA + 1)->value('slug'))
+        $this->withToken($token)->getJson('/api/v1/courses/' . DB::table('courses')->where('id', $courseB)->value('slug'))
             ->assertNotFound();
 
         $globalSlug = DB::table('courses')->where('id', $globalCourse)->value('slug');
