@@ -243,6 +243,12 @@ class ReferralIncomeService
                 ]);
             }
 
+            $amount = round((float) $commissions->sum('commission_amount'), 2);
+            $minimum = (float) (DB::table('referral_income_rules')->where('referrer_type', $type)->value('minimum_payout') ?? 500);
+            if ($amount < $minimum) {
+                throw ValidationException::withMessages(['payout' => 'Your approved BDT balance has not reached the minimum payout amount. Foreign-currency commissions are kept separate and cannot be paid through local BDT methods.']);
+            }
+
             $payoutId = DB::table('referral_payout_requests')->insertGetId([
                 'user_id' => $owner->id, 'owner_type' => $type, 'amount' => $amount, 'currency' => 'BDT',
                 'method' => $method, 'account_details_encrypted' => Crypt::encryptString(trim($accountDetails)),
