@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Models\Permission;
 use App\Models\Role;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use Plugins\Modules\CommerceCart\Services\CommerceCatalog;
 use Plugins\Modules\CourseManagement\Models\Course;
