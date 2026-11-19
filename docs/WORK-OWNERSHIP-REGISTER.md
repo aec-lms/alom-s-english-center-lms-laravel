@@ -19,6 +19,18 @@ Governance: [Issue #285 — Official Team Instructions](https://github.com/aec-l
 7. A PR is not merge-ready merely because some checks pass. Required CI, independent review, conflict checks, and acceptance criteria must all pass.
 8. Do not close, replace, or overwrite another contributor's work as part of deduplication. Reconcile with the owner first.
 
+## Group workflow and overlap arbitration
+
+All contributors and automated work sessions operate from one shared workflow queue; work is coordinated as a group, not as independent parallel task lists.
+
+1. **One task, one implementation owner:** when two or more contributors' work overlaps in outcome, module, files, migration, API, or tests, select exactly one primary implementer. Other contributors must pause overlapping edits and must not create a second implementation.
+2. **Coordinator resolves overlap first:** compare the registered scope, active branches, changed files, dependencies, and current progress. Keep the most complete safe implementation as the canonical line of work unless there is a documented technical reason to replace it. Record the decision and owner in this register and the linked issue/PR.
+3. **Others help without duplicating:** additional contributors may review, test, document, or take a separately bounded subtask only after the primary owner agrees and the boundary is recorded. Shared-file edits must be sequenced and coordinated.
+4. **Claim and sync before every task:** check the shared register and GitHub issues/PRs/branches, announce the intended scope, confirm the owner, then work on the assigned branch. Update status and blockers as the work progresses.
+5. **Handoffs are explicit:** if an owner is unavailable or work must transfer, record the current state, commits, remaining tasks, and receiving owner before another contributor continues. No silent takeover or parallel fork.
+6. **Conflict response:** stop overlapping changes, do not merge competing PRs, compare implementation and tests, choose one canonical path with the owner/maintainer, then close or narrow redundant work only after coordination.
+7. **Quality gates apply to the group:** no merge or production deployment while required CI, independent review, security/regression checks, or acceptance criteria are incomplete.
+
 ## Status definitions
 
 | Status | Meaning |
@@ -49,7 +61,7 @@ The rows below were refreshed against the repository's open pull requests and ex
 | [#283](../pull/283) | CMS multi-author contributor and editorial access management | `mdlalchandakand-cell` | Maintainer review pending | Content & Website CMS; must preserve approval independence and prevent author self-approval/publish bypass | CI Passed; Draft | `feat/cms-contributor-management-v2` | Security Audit, Browser E2E, and Laravel passed on recorded head; independent source review and workflow bypass tests remain |
 | [#276](../pull/276) | Advanced responsive campaign slider builder | `aec-lms` | Maintainer review pending | Content & Website CMS; do not duplicate existing slider/content builder | CI Passed; Open, not Draft | `feat/advanced-slider-builder` | Security Audit, Browser E2E, and Laravel passed on recorded head; independent review and acceptance checks remain |
 
-| [#295](../pull/295) | Governance: central ownership and status register | `mdlalchandakand-cell` | Independent maintainer review required | Repository-wide coordination; canonical register only, no competing ownership tracker | CI Pending; Ready for Review | `chore/central-work-ownership-register` | Composer Security Audit passed on exact head `88d2bc912edd8bea52ab0630e60128dc168fc737`; Laravel and Browser E2E are still running; no independent review submitted yet |
+| [#295](../pull/295) | Governance: central ownership and status register | `mdlalchandakand-cell` | Independent maintainer review required | Repository-wide coordination; canonical register and group workflow arbitration; no competing ownership tracker | CI Pending; Ready for Review | `chore/central-work-ownership-register` | Group overlap-arbitration rules added; Composer Security Audit passed on exact head before this update; Laravel and Browser E2E rerun on each new head; no independent review submitted yet |
 | [#297](../pull/297) | Student Management admin edit controls: branch assignment and password reset | `md-lalchand` | Maintainer review pending | Student & People Lifecycle; bounded to student edit view/tests; no Teacher Management, enrollment, commerce, or shared lifecycle controller changes | CI Passed; Draft | `fix/student-management-admin-edit-controls` | Laravel, Browser E2E, and Composer Security Audit all passed on exact head `92b816d8ba69809d3c067f049035bb9ea45e779d`; independent source review and branch authorization/password-reset regression review remain |
 
 ## Work not yet represented by an open PR
@@ -71,4 +83,4 @@ Copy this row format when adding work:
 
 ## Reconciliation log
 
-- **2026-11-19:** Initial register created and reconciled against open PRs. Follow-up reconciliation added #295, #296, and #297; recorded exact-head CI outcomes; documented #275/#294 and #288/#292 shared-file boundaries; and retained the Teacher Management parse error as an owner-action blocker. #297 exact-head checks are green; #295 Laravel/Browser E2E remain in progress; #292 has no workflow runs; #275's Laravel workflow is incomplete because its MySQL job was cancelled. Existing PR authors are initial accountable owners pending confirmation. This is a point-in-time snapshot; refresh it before assigning new overlapping work.
+- **2026-11-19:** Group workflow and overlap-arbitration rules added at the user's direction: one canonical implementer for overlapping work, explicit handoffs, and coordinated supporting review/testing. Initial register created and reconciled against open PRs. Follow-up reconciliation added #295, #296, and #297; recorded exact-head CI outcomes; documented #275/#294 and #288/#292 shared-file boundaries; and retained the Teacher Management parse error as an owner-action blocker. #297 exact-head checks are green; #295 Laravel/Browser E2E remain in progress; #292 has no workflow runs; #275's Laravel workflow is incomplete because its MySQL job was cancelled. Existing PR authors are initial accountable owners pending confirmation. This is a point-in-time snapshot; refresh it before assigning new overlapping work.
