@@ -64,7 +64,7 @@ class CmsWebsiteSafetyTest extends TestCase
             'category' => 'General',
             'author' => 'AEC LMS',
             'content' => 'Existing content',
-            'is_published' => true,
+            'is_published' => false,
         ]);
 
         $this->actingAs($admin)->put('/admin/cms/posts/' . $post->id, [
