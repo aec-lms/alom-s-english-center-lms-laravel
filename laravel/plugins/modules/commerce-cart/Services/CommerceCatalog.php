@@ -170,6 +170,10 @@ class CommerceCatalog
         }
         $courseBranchId = Schema::hasColumn('courses', 'branch_id') ? ($course->branch_id ?? null) : null;
         $this->assertBranchAccess($user, $courseBranchId);
+        if (Schema::hasTable('batches') && Schema::hasColumn('batches', 'status') && Schema::hasColumn('batches', 'course_id')
+            && DB::table('batches')->where('course_id', $course->id)->where('status', 'open')->exists()) {
+            throw ValidationException::withMessages(['item' => 'This course has an open batch. Contact admissions before gifting it.']);
+        }
 
         $price = round((float) $gift->amount, 2);
         if ($price <= 0 || strtoupper((string) $gift->currency) !== strtoupper((string) config('lms.default_currency', 'BDT'))) {
