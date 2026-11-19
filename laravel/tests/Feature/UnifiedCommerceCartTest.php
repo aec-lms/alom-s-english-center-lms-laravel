@@ -8,6 +8,7 @@ use App\Models\Permission;
 use App\Models\Role;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
@@ -69,6 +70,9 @@ final class UnifiedCommerceCartTest extends TestCase
             ->assertOk()
             ->assertDontSee($token)
             ->assertDontSee('delivery.center.recipient@example.test');
+
+        // This test verifies the sender-authorized retry dispatch, not SMTP delivery.
+        Queue::fake();
 
         $this->actingAs($sender)->post('/student/course-commerce/gifts/' . $giftId . '/resend')
             ->assertRedirect();
