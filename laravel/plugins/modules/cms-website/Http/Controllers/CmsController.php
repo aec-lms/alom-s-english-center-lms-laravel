@@ -490,7 +490,7 @@ class CmsController extends Controller
             abort_if(CmsPost::query()->where('assigned_reviewer_id', $user->id)->exists(), 422, 'Reassign all posts assigned to this user before removing Reviewer access.');
         }
         if (!in_array('cms_author_manager', $newRoles, true) && $user->hasRole('cms_author_manager')) {
-            $otherManagers = User::query()->where('is_active', true)->whereKeyNot($user->id)
+            $otherManagers = User::query()->where('is_active', true)->where('id', '!=', $user->id)
                 ->whereHas('roles', fn ($roles) => $roles->where('slug', 'cms_author_manager'))->exists();
             abort_unless($otherManagers, 422, 'At least one other active CMS Contributor Manager must remain before removing this access.');
         }
