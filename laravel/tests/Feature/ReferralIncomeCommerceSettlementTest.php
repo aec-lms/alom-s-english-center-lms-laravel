@@ -387,7 +387,7 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
         try {
             $service->reverseSettledPurchase($buyer, 'commerce_order', (string) $orderId, $unrelatedRefundId, 1000, 'BDT');
             $this->fail('A refund from a different invoice must not reverse this order commission.');
-        } catch (\\RuntimeException $exception) {
+        } catch (\RuntimeException $exception) {
             $this->assertStringContainsString('does not belong', $exception->getMessage());
         }
         $this->assertDatabaseHas('referral_commissions', ['id' => $commissionId, 'commission_amount' => 50, 'status' => 'pending']);
