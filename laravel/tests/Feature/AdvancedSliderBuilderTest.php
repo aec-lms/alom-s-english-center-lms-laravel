@@ -100,6 +100,24 @@ class AdvancedSliderBuilderTest extends TestCase
         $this->assertSame(0, $banner->fresh()->sort_order);
     }
 
+    public function test_initial_hero_slide_honors_open_new_tab_before_javascript_initializes(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['slider-builder']);
+        HeroSlider::query()->create([
+            'key_name' => 'hero',
+            'title' => 'External campaign',
+            'cta_url' => 'https://example.com/campaign',
+            'open_new_tab' => true,
+            'is_active' => true,
+            'sort_order' => 0,
+        ]);
+
+        $this->get('/')
+            ->assertOk()
+            ->assertSee('target="_blank" rel="noopener noreferrer"', false);
+    }
+
     public function test_visible_now_scope_excludes_inactive_and_out_of_window_slides(): void
     {
         $this->markSystemInstalled();
