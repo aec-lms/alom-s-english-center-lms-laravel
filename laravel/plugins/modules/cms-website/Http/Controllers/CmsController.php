@@ -262,19 +262,30 @@ class CmsController extends Controller
         $user = $request->user();
         $query = CmsPost::query()->with(['primaryAuthor', 'contributors', 'assignedEditor', 'assignedReviewer'])->latest('updated_at');
 
-        if ($user->hasPermission('cms.posts.review')
-            && !$user->hasPermission('cms.posts.edit_own')
-            && !$user->hasPermission('cms.posts.edit_all')
-            && !$user->hasPermission('cms.authors.assign')) {
-            $query->where('editorial_status', 'in_review')
-                ->where(fn ($posts) => $posts->whereNull('assigned_reviewer_id')->orWhere('assigned_reviewer_id', $user->id));
-        } elseif (!$user->hasPermission('cms.posts.edit_all') && !$user->hasPermission('cms.authors.assign')) {
-            $query->where(function ($posts) use ($user): void {
+        $canEditAll = $user->hasPermission('cms.posts.edit_all');
+        $canAssign = $user->hasPermission('cms.authors.assign');
+        $canReview = $user->hasPermission('cms.posts.review');
+        $canEditOwn = $user->hasPermission('cms.posts.edit_own');
+        if (!$canEditAll && !$canAssign) {
+            $ownPosts = function ($posts) use ($user): void {
                 $posts->where('created_by', $user->id)
                     ->orWhere('author_user_id', $user->id)
                     ->orWhere('assigned_editor_id', $user->id)
                     ->orWhereHas('contributors', fn ($contributors) => $contributors->where('users.id', $user->id));
-            });
+            };
+            if ($canReview && $canEditOwn) {
+                $query->where(function ($posts) use ($ownPosts, $user): void {
+                    $posts->where($ownPosts)->orWhere(function ($reviewQueue) use ($user): void {
+                        $reviewQueue->where('editorial_status', 'in_review')
+                            ->where(fn ($assigned) => $assigned->whereNull('assigned_reviewer_id')->orWhere('assigned_reviewer_id', $user->id));
+                    });
+                });
+            } elseif ($canReview) {
+                $query->where('editorial_status', 'in_review')
+                    ->where(fn ($posts) => $posts->whereNull('assigned_reviewer_id')->orWhere('assigned_reviewer_id', $user->id));
+            } else {
+                $query->where($ownPosts);
+            }
         }
 
         $posts = $query->paginate(20)->withQueryString();
