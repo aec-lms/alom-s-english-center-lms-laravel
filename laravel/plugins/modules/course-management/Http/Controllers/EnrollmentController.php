@@ -80,7 +80,7 @@ class EnrollmentController extends Controller
 
         $quote = ['subtotal' => round((float) $course->price, 2), 'discount' => 0.0, 'total' => round((float) $course->price, 2)];
         if ($this->plugins->isEnabled('flash-sale') && Schema::hasTable('flash_sales')) {
-            $quote = app(\\Plugins\\Modules\\FlashSale\\Services\\FlashSalePricingService::class)
+            $quote = app(\Plugins\Modules\FlashSale\Services\FlashSalePricingService::class)
                 ->quote((int) $course->id, $branchId !== null ? (int) $branchId : null);
         }
         $originalPrice = (float) $quote['subtotal'];
