@@ -247,6 +247,9 @@ class CourseCommercePaymentSettlementService
             || (int) ($voucher->payment_transaction_id ?? 0) !== (int) $transaction->id) {
             throw new RuntimeException('Gift voucher does not match the payment transaction.');
         }
+        $voucherBranchId = $transaction->branch_id !== null ? (int) $transaction->branch_id : null;
+        $this->assertSettlementBranchAccess((int) $transaction->user_id, $voucherBranchId, $voucherBranchId, []);
+
         if ($voucher->status === 'paid') {
             throw new RuntimeException('Gift voucher is already settled by another payment.');
         }
