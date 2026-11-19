@@ -5,6 +5,7 @@
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div><h1 class="text-2xl font-extrabold">Course Vocabulary & Exams</h1><p class="mt-1 text-sm text-slate-500">Assign words by course, category, lesson and batch. Create exams for free, paid or all courses.</p></div>
         <a href="{{ route('plugins.phonetics.admin.index') }}" class="rounded-lg border px-4 py-2 text-sm font-semibold">Vocabulary Library</a>
+        <a href="{{ route('plugins.phonetics.admin.learning.recordings') }}" class="rounded-lg border px-4 py-2 text-sm font-semibold">Speaking Review</a>
     </div>
 
     <section class="rounded-xl border bg-white p-5">
