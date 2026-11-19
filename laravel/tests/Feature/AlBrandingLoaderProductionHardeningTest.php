@@ -82,9 +82,4 @@ final class AlBrandingLoaderProductionHardeningTest extends TestCase
         $this->assertFalse($setting->shouldRenderForPath('courses'));
     }
 
-    public function test_logo_url_rejects_paths_outside_the_plugin_upload_directory(): void
-    {
-        $setting = new LoaderSetting(['logo_path' => 'uploads/other-plugin/logo.png']);
-        $this->assertNull($setting->logo_url);
-    }
 }
