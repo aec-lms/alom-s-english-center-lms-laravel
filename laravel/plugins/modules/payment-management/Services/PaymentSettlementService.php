@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
+use App\Core\Plugins\PluginManager;
 use App\Models\User;
 use Plugins\Modules\ReferralIncome\Services\ReferralIncomeService;
 use RuntimeException;
@@ -70,6 +71,32 @@ class PaymentSettlementService
                     ->update(['status' => 'active', 'updated_at' => now()]);
             }
 
+            if ($newPaid >= (float) $invoice->net_amount
+                && Schema::hasTable('enrollments')
+                && Schema::hasColumn('enrollments', 'invoice_id')
+                && Schema::hasColumn('enrollments', 'branch_id')
+                && Schema::hasTable('courses')
+                && Schema::hasColumn('courses', 'branch_id')) {
+                $pendingEnrollments = DB::table('enrollments')->where('invoice_id', $invoice->id)
+                    ->where('status', 'pending')->lockForUpdate()->get();
+                foreach ($pendingEnrollments as $pendingEnrollment) {
+                    $courseBranchId = DB::table('courses')->where('id', $pendingEnrollment->course_id)->value('branch_id');
+                    $enrollmentBranchId = $pendingEnrollment->branch_id !== null ? (int) $pendingEnrollment->branch_id : null;
+                    $buyer = User::query()->find((int) $pendingEnrollment->user_id);
+                    if (!$buyer) {
+                        throw new RuntimeException('Pending course enrollment student account no longer exists.');
+                    }
+                    $assignedBranchId = $this->assignedBranchId($buyer);
+                    if ($courseBranchId !== null && ($enrollmentBranchId !== (int) $courseBranchId
+                        || $assignedBranchId !== (int) $courseBranchId)) {
+                        throw new RuntimeException('Pending course enrollment branch does not match the current student and source course.');
+                    }
+                    if ($enrollmentBranchId !== null && $assignedBranchId !== $enrollmentBranchId) {
+                        throw new RuntimeException('Student branch assignment changed after invoice creation; manual payment reconciliation is required.');
+                    }
+                }
+            }
+
             if ($newPaid >= (float) $invoice->net_amount && Schema::hasTable('commerce_orders')) {
                 // Refuse to grant commerce access if the order, invoice, pending
                 // enrollment, and source course disagree about branch ownership.
@@ -87,36 +114,12 @@ class PaymentSettlementService
                             throw new RuntimeException('Commerce order student account no longer exists.');
                         }
 
-                        $assignedBranchId = null;
-                        if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('student-management')
-                            && Schema::hasTable('students')
-                            && Schema::hasColumn('students', 'branch_id')) {
-                            $profileBranchId = DB::table('students')->where('user_id', $buyer->id)->value('branch_id');
-                            if ($profileBranchId !== null) {
-                                $assignedBranchId = (int) $profileBranchId;
-                            }
-                        }
-                        if ($assignedBranchId === null && Schema::hasColumn('users', 'branch_id') && $buyer->branch_id !== null) {
-                            $assignedBranchId = (int) $buyer->branch_id;
-                        }
+                        $assignedBranchId = $this->assignedBranchId($buyer);
                         if ($assignedBranchId !== $orderBranchId) {
                             throw new RuntimeException('Student branch assignment changed after checkout; manual payment reconciliation is required.');
                         }
                     }
                 }
-                if (Schema::hasTable('enrollments') && Schema::hasColumn('enrollments', 'invoice_id')
-                    && Schema::hasColumn('enrollments', 'branch_id') && Schema::hasTable('courses')
-                    && Schema::hasColumn('courses', 'branch_id')) {
-                    $pendingEnrollments = DB::table('enrollments')->where('invoice_id', $invoice->id)
-                        ->where('status', 'pending')->lockForUpdate()->get();
-                    foreach ($pendingEnrollments as $pendingEnrollment) {
-                        $courseBranchId = DB::table('courses')->where('id', $pendingEnrollment->course_id)->value('branch_id');
-                        if ($courseBranchId !== null && (int) ($pendingEnrollment->branch_id ?? 0) !== (int) $courseBranchId) {
-                            throw new RuntimeException('Pending course enrollment branch does not match the source course.');
-                        }
-                    }
-                }
-
                 $orders = DB::table('commerce_orders')->where('invoice_id', $invoice->id)->lockForUpdate()->get();
                 foreach ($orders as $order) {
                     if ($order->payment_status === 'paid') continue;
@@ -201,5 +204,21 @@ class PaymentSettlementService
 
             return $lockedTx->fresh();
         });
+    }
+
+    private function assignedBranchId(User $user): ?int
+    {
+        if (app(PluginManager::class)->isEnabled('student-management')
+            && Schema::hasTable('students')
+            && Schema::hasColumn('students', 'branch_id')) {
+            $profileBranchId = DB::table('students')->where('user_id', $user->id)->value('branch_id');
+            if ($profileBranchId !== null) {
+                return (int) $profileBranchId;
+            }
+        }
+
+        return Schema::hasColumn('users', 'branch_id') && $user->branch_id !== null
+            ? (int) $user->branch_id
+            : null;
     }
 }
