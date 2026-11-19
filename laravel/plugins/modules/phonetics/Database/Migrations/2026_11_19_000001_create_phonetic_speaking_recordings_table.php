@@ -9,10 +9,9 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (Schema::hasTable('phonetic_speaking_recordings')) {
-            return;
-        }
-
+        // Let the migration fail if an unowned table already exists. Returning
+        // here would still mark this migration as applied, and down() could then
+        // delete a table this migration never created.
         Schema::create('phonetic_speaking_recordings', function (Blueprint $table): void {
             $table->id();
             $table->string('lms_driver', 64)->index();
