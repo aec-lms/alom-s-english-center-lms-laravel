@@ -25,6 +25,7 @@ class TeacherStandaloneTest extends TestCase
             'email' => 'global.teacher@aec.test',
             'employee_code' => 'TEACHER-GLOBAL-001',
             'specialization' => 'English Grammar',
+            'password' => 'AecTeacher!2026Strong',
             'is_active' => '1',
         ])->assertRedirect()->assertSessionHasNoErrors();
 
@@ -49,6 +50,7 @@ class TeacherStandaloneTest extends TestCase
             'email' => 'retained.instructor@aec.test',
             'employee_code' => 'SAFE-TEACH-001',
             'specialization' => 'English Grammar',
+            'password' => 'AecTeacher!2026Strong',
             'is_active' => '1',
         ])->assertRedirect()->assertSessionHasNoErrors();
 
@@ -81,6 +83,7 @@ class TeacherStandaloneTest extends TestCase
             'email' => 'safe.upload@aec.test',
             'employee_code' => 'SAFE-UPLOAD-001',
             'specialization' => 'English Grammar',
+            'password' => 'AecTeacher!2026Strong',
             'is_active' => '1',
             'photo' => $image,
         ])->assertRedirect()->assertSessionHasNoErrors();
