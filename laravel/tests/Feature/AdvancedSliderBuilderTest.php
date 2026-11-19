@@ -23,6 +23,41 @@ class AdvancedSliderBuilderTest extends TestCase
         $this->assertContains('cms-website', $manifest['dependencies'] ?? []);
     }
 
+    public function test_failed_slider_creation_removes_newly_uploaded_managed_images(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['slider-builder']);
+        $admin = $this->createUserWithRole('admin');
+        $directory = public_path('uploads/sliders');
+        File::ensureDirectoryExists($directory);
+        $before = array_map(static fn ($file) => $file->getFilename(), File::files($directory));
+
+        HeroSlider::creating(static function (): void {
+            throw new \\RuntimeException('Simulated slider persistence failure.');
+        });
+
+        try {
+            $this->withoutExceptionHandling();
+            try {
+                $this->actingAs($admin)->post('/admin/slider-builder', [
+                    'key_name' => 'hero',
+                    'title' => 'Persistence failure cleanup',
+                    'image' => UploadedFile::fake()->image('failed-upload.jpg'),
+                ]);
+                $this->fail('Expected the simulated persistence failure.');
+            } catch (\\RuntimeException $exception) {
+                $this->assertSame('Simulated slider persistence failure.', $exception->getMessage());
+            }
+        } finally {
+            HeroSlider::flushEventListeners();
+        }
+
+        $after = array_map(static fn ($file) => $file->getFilename(), File::files($directory));
+        sort($before);
+        sort($after);
+        $this->assertSame($before, $after, 'Failed persistence must not leave an orphaned slider image.');
+    }
+
     public function test_admin_can_create_a_responsive_scheduled_slider(): void
     {
         $this->markSystemInstalled();
