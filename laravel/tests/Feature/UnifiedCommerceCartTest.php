@@ -1092,9 +1092,9 @@ final class UnifiedCommerceCartTest extends TestCase
         $gift = DB::table('course_gifts')->where('sender_user_id', $student->id)->first();
         $this->assertNotNull($gift);
 
-        $payments = \\Mockery::mock(UniversalPaymentOrchestrator::class);
+        $payments = \Mockery::mock(UniversalPaymentOrchestrator::class);
         $payments->shouldReceive('assertGatewayReady')->once()->with('gateway-sslcommerz');
-        $payments->shouldReceive('initiate')->once()->andThrow(new \\RuntimeException('Provider definitively rejected checkout.'));
+        $payments->shouldReceive('initiate')->once()->andThrow(new \RuntimeException('Provider definitively rejected checkout.'));
         $this->app->instance(UniversalPaymentOrchestrator::class, $payments);
 
         $this->actingAs($student)->post('/cart/checkout', [
