@@ -245,13 +245,14 @@ class CommerceCartController extends Controller
             $subtotal = round(collect($resolved)->sum(fn ($pair) => $pair[1]['price'] * (int) $pair[0]->quantity), 2);
             abort_if($subtotal <= 0, 422, 'The checkout total must be greater than zero.');
 
+            $branchId = $this->assignedBranchId($user);
             $invoice = FeeInvoice::query()->create([
                 'invoice_number' => 'WEB-' . strtoupper(Str::random(10)),
                 'student_id' => null,
                 'payer_name' => $data['payer_name'],
                 'payer_email' => strtolower($data['payer_email']),
                 'payer_phone' => $data['payer_phone'],
-                'branch_id' => $user->branch_id ?? null,
+                'branch_id' => $branchId,
                 'subtotal_amount' => $subtotal,
                 'discount_amount' => 0,
                 'net_amount' => $subtotal,
@@ -299,19 +300,19 @@ class CommerceCartController extends Controller
                     }
                     if ($existingEnrollment && $existingEnrollment->status === 'pending') {
                         if (isset($existingEnrollment->branch_id) && $existingEnrollment->branch_id !== null
-                            && $user->branch_id !== null && (int) $existingEnrollment->branch_id !== (int) $user->branch_id) {
+                            && $branchId !== null && (int) $existingEnrollment->branch_id !== (int) $branchId) {
                             throw new \RuntimeException('An existing pending enrollment belongs to a different branch.');
                         }
                         DB::table('enrollments')->where('id', $existingEnrollment->id)->update([
                             'invoice_id' => $invoice->id,
-                            'branch_id' => $user->branch_id ?? null,
+                            'branch_id' => $branchId,
                             'updated_at' => now(),
                         ]);
                     } elseif (!$existingEnrollment) {
                         DB::table('enrollments')->insert([
                             'user_id' => $user->id,
                             'course_id' => $fresh['id'],
-                            'branch_id' => $user->branch_id ?? null,
+                            'branch_id' => $branchId,
                             'invoice_id' => $invoice->id,
                             'status' => 'pending',
                             'created_at' => now(),
@@ -349,6 +350,20 @@ class CommerceCartController extends Controller
                     ? 'The gateway response was ambiguous. Do not retry yet; contact support with order ' . $order->order_number . ' for reconciliation.'
                     : 'The gateway could not start checkout. No access was granted. You can add the items to a new cart and try again.']);
         }
+    }
+
+    private function assignedBranchId($user): ?int
+    {
+        if (app(PluginManager::class)->isEnabled('student-management')
+            && Schema::hasTable('students')
+            && Schema::hasColumn('students', 'branch_id')) {
+            $profileBranchId = DB::table('students')->where('user_id', $user->id)->value('branch_id');
+            if ($profileBranchId !== null) {
+                return (int) $profileBranchId;
+            }
+        }
+
+        return $user->branch_id !== null ? (int) $user->branch_id : null;
     }
 
     private function activeCart(int $userId): object
