@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Plugins\Modules\TeacherManagement\Models\Teacher;
@@ -49,13 +50,13 @@ class TeacherController extends Controller
             'name' => ['required', 'string', 'max:150'],
             'email' => ['required', 'email', 'max:190', 'unique:users,email'],
             'password' => ['nullable', 'string', 'min:6'],
-            'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
+            'branch_id' => array_merge(['nullable', 'integer'], Schema::hasTable('branches') ? [Rule::exists('branches', 'id')] : ['prohibited']),
             'employee_code' => ['required', 'string', 'max:60', 'unique:teachers,employee_code'],
             'specialization' => ['required', 'string', 'max:160'],
             'credentials' => ['nullable', 'string', 'max:255'],
             'bio' => ['nullable', 'string', 'max:1000'],
-            'youtube_url' => ['nullable', 'string', 'max:255'],
-            'facebook_url' => ['nullable', 'string', 'max:255'],
+            'youtube_url' => ['nullable', 'url', 'max:255'],
+            'facebook_url' => ['nullable', 'url', 'max:255'],
             'photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
             'photo_url' => ['nullable', 'string', 'max:255'],
             'is_active' => ['nullable', 'boolean'],
@@ -117,14 +118,14 @@ class TeacherController extends Controller
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:150'],
-            'email' => ['nullable', 'email', 'max:190'],
-            'branch_id' => ['nullable', 'integer'],
+            'email' => ['nullable', 'email', 'max:190', Rule::unique('users', 'email')->ignore($teacher->user_id)],
+            'branch_id' => array_merge(['nullable', 'integer'], Schema::hasTable('branches') ? [Rule::exists('branches', 'id')] : ['prohibited']),
             'employee_code' => ['required', 'string', 'max:60', 'unique:teachers,employee_code,' . $teacher->id],
             'specialization' => ['required', 'string', 'max:160'],
             'credentials' => ['nullable', 'string', 'max:255'],
             'bio' => ['nullable', 'string', 'max:1000'],
-            'youtube_url' => ['nullable', 'string', 'max:255'],
-            'facebook_url' => ['nullable', 'string', 'max:255'],
+            'youtube_url' => ['nullable', 'url', 'max:255'],
+            'facebook_url' => ['nullable', 'url', 'max:255'],
             'photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
             'photo_url' => ['nullable', 'string', 'max:255'],
             'is_active' => ['nullable', 'boolean'],
@@ -164,11 +165,8 @@ class TeacherController extends Controller
                     'branch_id' => $validated['branch_id'] ?? null,
                     'is_active' => $isActive,
                 ];
-                if (!empty($validated['email']) && $validated['email'] !== $teacher->user->email) {
-                    $exists = User::query()->where('email', strtolower($validated['email']))->where('id', '!=', $teacher->user->id)->exists();
-                    if (!$exists) {
-                        $userUpdates['email'] = strtolower($validated['email']);
-                    }
+                if (array_key_exists('email', $validated) && !empty($validated['email'])) {
+                    $userUpdates['email'] = strtolower(trim($validated['email']));
                 }
                 $teacher->user->update($userUpdates);
             }
