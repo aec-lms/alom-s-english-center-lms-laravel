@@ -1335,6 +1335,12 @@ class PluginManager
      */
     public function loadPluginRoutes(PluginManifest $manifest): void
     {
+        // A compiled route cache already contains the deployment's plugin routes.
+        // Runtime requires would bypass that cache and can create duplicate routes.
+        if (app()->routesAreCached()) {
+            return;
+        }
+
         foreach (['Routes/web.php', 'Routes/api.php'] as $relative) {
             $routeFile = rtrim($manifest->basePath, DIRECTORY_SEPARATOR)
                 . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relative);
