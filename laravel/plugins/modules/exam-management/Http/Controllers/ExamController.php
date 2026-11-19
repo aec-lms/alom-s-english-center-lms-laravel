@@ -106,28 +106,35 @@ class ExamController extends Controller
             'is_published' => ['nullable', 'boolean'],
         ]);
 
-        $courseId = array_key_exists('course_id', $validated)
-            ? ($validated['course_id'] !== null ? (int) $validated['course_id'] : null)
-            : ($exam->course_id !== null ? (int) $exam->course_id : null);
-        $course = null;
-        if ($courseId !== null) {
-            abort_unless(app(\App\Core\Plugins\PluginManager::class)->isEnabled('course-management') && Schema::hasTable('courses'), 503, 'Enable Course Management to attach an exam to a course.');
-            $course = DB::table('courses')->where('id', $courseId)->first();
-            abort_unless($course && (int) ($course->branch_id ?? 0) === (int) ($exam->branch_id ?? 0), 422, 'Exam and course must belong to the same branch.');
-        }
+        $updatedExam = DB::transaction(function () use ($exam, $validated, $request): Exam {
+            // Attempt creation locks this same row before reading the grading policy.
+            // Serialize policy edits so an attempt sees one coherent exam version.
+            $lockedExam = Exam::query()->whereKey($exam->id)->lockForUpdate()->firstOrFail();
+            $courseId = array_key_exists('course_id', $validated)
+                ? ($validated['course_id'] !== null ? (int) $validated['course_id'] : null)
+                : ($lockedExam->course_id !== null ? (int) $lockedExam->course_id : null);
 
-        $exam->update([
-            'course_id' => $courseId,
-            'title' => $validated['title'],
-            'duration_minutes' => (int) $validated['duration_minutes'],
-            'max_attempts' => (int) ($validated['max_attempts'] ?? $exam->max_attempts ?? 1),
-            'pass_marks' => (float) $validated['pass_marks'],
-            'is_published' => $request->boolean('is_published'),
-        ]);
+            if ($courseId !== null) {
+                abort_unless(app(\App\Core\Plugins\PluginManager::class)->isEnabled('course-management') && Schema::hasTable('courses'), 503, 'Enable Course Management to attach an exam to a course.');
+                $course = DB::table('courses')->where('id', $courseId)->first();
+                abort_unless($course && (int) ($course->branch_id ?? 0) === (int) ($lockedExam->branch_id ?? 0), 422, 'Exam and course must belong to the same branch.');
+            }
 
-        $this->audit->log('exam.updated', 'exam', (string) $exam->id, ['title' => $exam->title]);
+            $lockedExam->update([
+                'course_id' => $courseId,
+                'title' => $validated['title'],
+                'duration_minutes' => (int) $validated['duration_minutes'],
+                'max_attempts' => (int) ($validated['max_attempts'] ?? $lockedExam->max_attempts ?? 1),
+                'pass_marks' => (float) $validated['pass_marks'],
+                'is_published' => $request->boolean('is_published'),
+            ]);
 
-        return back()->with('status', "Exam '{$exam->title}' updated.");
+            return $lockedExam->fresh();
+        });
+
+        $this->audit->log('exam.updated', 'exam', (string) $updatedExam->id, ['title' => $updatedExam->title]);
+
+        return back()->with('status', "Exam '{$updatedExam->title}' updated.");
     }
 
         public function destroy(Request $request, Exam $exam): RedirectResponse
