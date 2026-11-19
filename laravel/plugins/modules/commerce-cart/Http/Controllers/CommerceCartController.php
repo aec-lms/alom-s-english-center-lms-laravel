@@ -48,13 +48,13 @@ class CommerceCartController extends Controller
     {
         abort_unless($request->user()?->hasRole('student'), 403, 'Only student accounts can add learning products to the shopping cart.');
         $data = $request->validate([
-            'item_type' => ['required', 'string', 'in:course,ebook,mock_test,exam,subscription,live_class,other'],
+            'item_type' => ['required', 'string', 'in:course,ebook,mock_test,exam,subscription,live_class,other,gift_course,gift_voucher'],
             'item_id' => ['required', 'integer', 'min:1'],
             'quantity' => ['nullable', 'integer', 'min:1', 'max:20'],
         ]);
         $item = $this->catalog->resolve($data['item_type'], (int) $data['item_id'], $request->user());
         if ($item['type'] !== 'other' && (int) ($data['quantity'] ?? 1) !== 1) {
-            return back()->withErrors(['quantity' => 'Course access, eBooks, exams, subscriptions and live-class passes can only be purchased once per order.']);
+            return back()->withErrors(['quantity' => 'Access-based products and gift drafts can only be purchased once per order.']);
         }
         $cart = $this->activeCart((int) $request->user()->id);
 
@@ -104,7 +104,7 @@ class CommerceCartController extends Controller
 
             if ($cartItem->item_type !== 'other' && (int) $data['quantity'] !== 1) {
                 throw \Illuminate\Validation\ValidationException::withMessages([
-                    'quantity' => 'Course access, eBooks, exams, subscriptions and live-class passes can only be purchased once per order.',
+                    'quantity' => 'Access-based products and gift drafts can only be purchased once per order.',
                 ]);
             }
 
@@ -305,7 +305,7 @@ class CommerceCartController extends Controller
             ]);
 
             foreach ($resolved as [$cartItem, $fresh]) {
-                DB::table('commerce_order_items')->insert([
+                $orderItemId = DB::table('commerce_order_items')->insertGetId([
                     'order_id' => $orderId,
                     'item_type' => $fresh['type'],
                     'item_id' => $fresh['id'],
@@ -317,6 +317,22 @@ class CommerceCartController extends Controller
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
+
+                if ($fresh['type'] === 'gift_course') {
+                    $linked = DB::table('course_gifts')->where('id', (int) $fresh['id'])
+                        ->where('sender_user_id', $user->id)->where('status', 'awaiting_payment')
+                        ->whereNull('invoice_id')->whereNull('payment_transaction_id')
+                        ->whereNull('commerce_order_item_id')
+                        ->update(['commerce_order_item_id' => $orderItemId, 'updated_at' => now()]);
+                    abort_unless($linked === 1, 409, 'This course gift draft has already been attached to another order.');
+                } elseif ($fresh['type'] === 'gift_voucher') {
+                    $linked = DB::table('course_gift_vouchers')->where('id', (int) $fresh['id'])
+                        ->where('sender_user_id', $user->id)->where('status', 'awaiting_payment')
+                        ->whereNull('invoice_id')->whereNull('payment_transaction_id')
+                        ->whereNull('commerce_order_item_id')
+                        ->update(['commerce_order_item_id' => $orderItemId, 'updated_at' => now()]);
+                    abort_unless($linked === 1, 409, 'This gift voucher draft has already been attached to another order.');
+                }
 
                 if ($fresh['type'] === 'course' && Schema::hasTable('enrollments')
                     && Schema::hasColumn('enrollments', 'invoice_id')) {
