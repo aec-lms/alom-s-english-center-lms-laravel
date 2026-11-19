@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Admin;
 
+use App\Core\Plugins\PluginCategoryRegistry;
 use App\Core\Plugins\PluginIconRegistry;
 
 use App\Core\Plugins\PluginManager;
@@ -37,13 +38,16 @@ class PluginCenterController extends Controller
         $records = PluginRecord::query()->orderBy('category')->orderBy('name')->get()->map(function (PluginRecord $record) use ($manifests, $recentLogs) {
             $manifest = $manifests[$record->slug] ?? null;
             $record->setAttribute('icon', $manifest?->icon ?? PluginIconRegistry::resolve($record->slug, $record->category));
+            $categoryKey = PluginCategoryRegistry::keyFor((string) $record->slug, (string) $record->category);
+            $record->setAttribute('category_key', $categoryKey);
+            $record->setAttribute('category_label', PluginCategoryRegistry::labels()[$categoryKey]);
             $record->setAttribute('is_compatible', $manifest ? $this->plugins->isCompatible($manifest) : false);
             $record->setAttribute('has_settings', $manifest && count($manifest->settingsSchema) > 0);
             $record->setAttribute('manifest_version', $manifest?->version ?? $record->version);
             $record->setAttribute('update_available', $manifest && version_compare($manifest->version, $record->version, '>'));
             $record->setAttribute('recent_logs', $recentLogs->get($record->slug, collect())->take(3));
             return $record;
-        });
+        })->sortBy(fn (PluginRecord $record) => $record->category_label . '|' . $record->name)->values();
 
         $archives = Schema::hasTable('plugin_archives') ? PluginArchive::query()->latest('deleted_at')->get() : collect();
 
