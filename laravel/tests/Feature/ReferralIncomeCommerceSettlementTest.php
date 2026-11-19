@@ -170,6 +170,60 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
             ->sum('commission_reversal_amount'), 2));
     }
 
+    public function test_commissions_with_unresolved_refund_recovery_cannot_be_paid_out(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['referral-income', 'student-management', 'payment-management']);
+
+        $referrer = $this->createUserWithRole('student');
+        $buyer = $this->createUserWithRole('student');
+        $service = app(ReferralIncomeService::class);
+        $service->applyCode($buyer, $service->createOrGetCode($referrer));
+        $commissionId = $service->recordSettledPurchase($buyer, 'commerce_order', 'RECOVERY-ORDER-1', 1000.00, 'BDT');
+
+        DB::table('referral_commissions')->where('id', $commissionId)->update([
+            'status' => 'approved',
+            'updated_at' => now(),
+        ]);
+        $paymentId = DB::table('payment_transactions')->insertGetId([
+            'transaction_ref' => 'REFUND-RECOVERY-' . strtoupper(bin2hex(random_bytes(4))),
+            'invoice_id' => null,
+            'branch_id' => null,
+            'gateway_slug' => 'offline',
+            'amount' => 1000.00,
+            'currency' => 'BDT',
+            'status' => 'settled',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $refundId = DB::table('payment_refunds')->insertGetId([
+            'payment_transaction_id' => $paymentId,
+            'amount' => 1000.00,
+            'reason' => 'Recovery hold test',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('referral_commission_reversals')->insert([
+            'referral_commission_id' => $commissionId,
+            'payment_refund_id' => $refundId,
+            'refunded_amount' => 1000.00,
+            'commission_reversal_amount' => 50.00,
+            'currency' => 'BDT',
+            'status' => 'recovery_due',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        try {
+            $service->requestPayout($referrer, 'bkash', '01700000000');
+            $this->fail('A commission with unresolved refund recovery must not be paid out.');
+        } catch (\\Illuminate\\Validation\\ValidationException $exception) {
+            $this->assertArrayHasKey('payout', $exception->errors());
+        }
+
+        $this->assertDatabaseCount('referral_payout_requests', 0);
+    }
+
     public function test_student_cannot_refer_themselves_or_apply_two_referral_codes(): void
     {
         $this->markSystemInstalled();
