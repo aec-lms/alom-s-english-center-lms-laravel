@@ -429,7 +429,6 @@ class CmsController extends Controller
             ->where('is_active', true)
             ->whereDoesntHave('roles', fn ($roles) => $roles->where('slug', 'admin'))
             ->with(['roles' => fn ($roles) => $roles->whereIn('slug', ['cms_contributor', 'cms_editor', 'cms_reviewer', 'cms_author_manager'])])
-            ->whereHas('roles', fn ($roles) => $roles->whereIn('slug', ['cms_contributor', 'cms_editor', 'cms_reviewer', 'cms_author_manager']))
             ->orderBy('name')->paginate(30);
         return view('cms-website::contributors', compact('contributors'));
     }
