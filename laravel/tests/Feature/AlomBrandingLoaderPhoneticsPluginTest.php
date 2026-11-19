@@ -47,6 +47,22 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
   $this->actingAs($student)->get('/courses/british-american-phonetics/phonetics-learning')->assertForbidden();
  }
 
+ public function test_phonetics_is_available_only_to_enrolled_students_of_the_configured_phonetics_course():void{
+  $this->markSystemInstalled();
+  $this->activatePlugins(['course-management','phonetics']);
+  $student=$this->createUserWithRole('student');
+  $phoneticsCourseId=DB::table('courses')->insertGetId(['code'=>'PHON-ONLY-001','title'=>'British and American Phonetics','slug'=>'british-american-phonetics','description'=>'Dedicated phonetics course','price'=>0,'status'=>'published','created_at'=>now(),'updated_at'=>now()]);
+  $otherCourseId=DB::table('courses')->insertGetId(['code'=>'GENERAL-001','title'=>'General English','slug'=>'general-english','description'=>'Unrelated course','price'=>0,'status'=>'published','created_at'=>now(),'updated_at'=>now()]);
+  DB::table('enrollments')->insert([
+   ['user_id'=>$student->id,'course_id'=>$phoneticsCourseId,'branch_id'=>null,'status'=>'active','created_at'=>now(),'updated_at'=>now()],
+   ['user_id'=>$student->id,'course_id'=>$otherCourseId,'branch_id'=>null,'status'=>'active','created_at'=>now(),'updated_at'=>now()],
+  ]);
+  PhoneticSetting::query()->firstOrCreate(['id'=>1],['enabled'=>true,'course_slug'=>'british-american-phonetics','course_title'=>'British & American Phonetics Course','require_course_enrollment'=>false]);
+  PhoneticSetting::query()->whereKey(1)->update(['require_course_enrollment'=>false]);
+  $this->actingAs($student)->get('/courses/british-american-phonetics/phonetics-learning')->assertOk();
+  $this->actingAs($student)->get('/courses/general-english/phonetics-learning')->assertNotFound();
+ }
+
  public function test_phonetics_admin_uploads_safe_media_and_rejects_svg():void{
   $this->markSystemInstalled();
   $this->activatePlugins(['phonetics']);
@@ -150,7 +166,7 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
   $exam=DB::table('phonetic_exams')->where('slug','lesson-one-vocabulary-exam')->first();
   $this->assertNotNull($exam);
   $this->assertDatabaseHas('phonetic_exam_questions',['exam_id'=>$exam->id,'word_id'=>$word->id]);
-  $this->actingAs($student)->get('/courses/vocabulary-starter/phonetics-learning?lesson='.$lessonId)->assertOk()->assertSee('aec-vocabulary-test')->assertSee('Lesson One Vocabulary Exam');
+  PhoneticSetting::query()->firstOrCreate(['id'=>1],['enabled'=>true,'course_slug'=>'vocabulary-starter','course_title'=>'Vocabulary Starter']);\n  PhoneticSetting::query()->whereKey(1)->update(['course_slug'=>'vocabulary-starter']);\n  $this->actingAs($student)->get('/courses/vocabulary-starter/phonetics-learning?lesson='.$lessonId)->assertOk()->assertSee('aec-vocabulary-test')->assertSee('Lesson One Vocabulary Exam');
   $this->actingAs($student)->get('/courses/vocabulary-starter/phonetics-learning/exams/lesson-one-vocabulary-exam?lesson='.$lessonId)->assertOk();
   $attempt=DB::table('phonetic_exam_attempts')->where('exam_id',$exam->id)->where('user_id',$student->id)->first();
   $question=DB::table('phonetic_exam_questions')->where('exam_id',$exam->id)->first();
