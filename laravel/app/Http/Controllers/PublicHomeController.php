@@ -16,12 +16,15 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 use Plugins\Modules\CmsWebsite\Models\CmsPost;
+use Plugins\Modules\AdminBoosting\Models\BoostCampaign;
 
 class PublicHomeController extends Controller
 {
     public function index(): View
     {
         $homepage = $this->loadHomepageConfig();
+        $homepageBoostCampaigns = $this->homepageBoostCampaigns('homepage_featured');
+        $homepageNoticeCampaigns = $this->homepageBoostCampaigns('notice_banner');
 
         $liveStats = [
             'students' => Schema::hasTable('students') ? DB::table('students')->count() : 0,
@@ -88,7 +91,9 @@ class PublicHomeController extends Controller
             'leftReviews',
             'rightReviews',
             'homepage',
-            'digitalCarouselItems'
+            'digitalCarouselItems',
+            'homepageBoostCampaigns',
+            'homepageNoticeCampaigns'
         ));
     }
 
@@ -242,7 +247,52 @@ class PublicHomeController extends Controller
             })->values();
         }
 
-        return view('public.courses', compact('courses', 'categories', 'filteredCourses', 'activeCategory', 'searchTerm', 'courseSocialProofSettings', 'courseSocialProofStats'));
+        $boostCampaignsByCourse = [];
+        if ($filteredCourses->isNotEmpty() && Schema::hasTable('boost_campaigns') && app(PluginManager::class)->isEnabled('admin-boosting')) {
+            $courseIds = $filteredCourses->pluck('id')->map(fn ($id): int => (int) $id)->all();
+            $branchIds = $filteredCourses->pluck('branch_id')->filter()->unique()->map(fn ($id): int => (int) $id)->all();
+            $activeBranchIds = Schema::hasTable('branches') && app(PluginManager::class)->isEnabled('branch-management') && $branchIds !== []
+                ? DB::table('branches')->whereIn('id', $branchIds)->where('is_active', true)
+                    ->when(Schema::hasColumn('branches', 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))
+                    ->pluck('id')->map(fn ($id): int => (int) $id)->all()
+                : [];
+
+            $boostCampaigns = BoostCampaign::query()
+                ->where('placement', 'course_listing')
+                ->where('status', 'active')
+                ->where(fn ($query) => $query->whereNull('starts_at')->orWhere('starts_at', '<=', now()))
+                ->where(fn ($query) => $query->whereNull('ends_at')->orWhere('ends_at', '>=', now()))
+                ->where(function ($query) use ($courseIds, $activeBranchIds): void {
+                    $query->where(fn ($global) => $global->whereIn('entity_type', ['institution', 'offer'])->whereNull('entity_id'));
+                    if ($courseIds !== []) {
+                        $query->orWhere(fn ($course) => $course->where('entity_type', 'course')->whereIn('entity_id', $courseIds));
+                    }
+                    if ($activeBranchIds !== []) {
+                        $query->orWhere(fn ($branch) => $branch->where('entity_type', 'branch')->whereIn('entity_id', $activeBranchIds));
+                    }
+                })
+                ->orderByDesc('priority')
+                ->orderBy('id')
+                ->limit(150)
+                ->get();
+
+            foreach ($filteredCourses as $catalogCourse) {
+                $catalogCourseId = (int) $catalogCourse->id;
+                $catalogBranchId = (int) ($catalogCourse->branch_id ?? 0);
+                $boostCampaignsByCourse[$catalogCourseId] = $boostCampaigns->filter(
+                    fn (BoostCampaign $campaign): bool => (
+                        in_array($campaign->entity_type, ['institution', 'offer'], true) && $campaign->entity_id === null
+                    ) || (
+                        $campaign->entity_type === 'course' && (int) $campaign->entity_id === $catalogCourseId
+                    ) || (
+                        $campaign->entity_type === 'branch' && $catalogBranchId > 0 && in_array($catalogBranchId, $activeBranchIds, true)
+                        && (int) $campaign->entity_id === $catalogBranchId
+                    )
+                )->values();
+            }
+        }
+
+        return view('public.courses', compact('courses', 'categories', 'filteredCourses', 'activeCategory', 'searchTerm', 'courseSocialProofSettings', 'courseSocialProofStats', 'boostCampaignsByCourse'));
     }
 
     public function courseShow(string $slug): View
@@ -724,11 +774,63 @@ class PublicHomeController extends Controller
         return is_array($blocks) ? trim((string) ($blocks[0]['content'] ?? '')) : '';
     }
 
+    private function activeBoostCampaigns(string $placement): Collection
+    {
+        if (!Schema::hasTable('boost_campaigns') || !app(PluginManager::class)->isEnabled('admin-boosting')) {
+            return collect();
+        }
+
+        return BoostCampaign::query()
+            ->where('placement', $placement)
+            ->where('status', 'active')
+            ->where(fn ($query) => $query->whereNull('starts_at')->orWhere('starts_at', '<=', now()))
+            ->where(fn ($query) => $query->whereNull('ends_at')->orWhere('ends_at', '>=', now()))
+            ->orderByDesc('priority')
+            ->orderBy('id')
+            ->limit(100)
+            ->get();
+    }
+
+    private function homepageBoostCampaigns(string $placement): Collection
+    {
+        $campaigns = $this->activeBoostCampaigns($placement);
+        $courseIds = $campaigns->where('entity_type', 'course')
+            ->pluck('entity_id')->filter()->unique()->values();
+
+        // Resolve all course targets in one query rather than issuing one
+        // existence query per campaign on every homepage request.
+        $publishedCourseIds = collect();
+        if ($courseIds->isNotEmpty() && Schema::hasTable('courses')) {
+            $publishedCourseIds = DB::table('courses')
+                ->whereIn('id', $courseIds)
+                ->where('status', 'published')
+                ->when(Schema::hasColumn('courses', 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->flip();
+        }
+
+        return $campaigns
+            ->filter(function (BoostCampaign $campaign) use ($publishedCourseIds): bool {
+                if (in_array($campaign->entity_type, ['institution', 'offer'], true)) {
+                    return $campaign->entity_id === null;
+                }
+
+                return $campaign->entity_type === 'course'
+                    && $campaign->entity_id !== null
+                    && $publishedCourseIds->has((int) $campaign->entity_id);
+            })
+            ->take(4)
+            ->values();
+    }
+
     private function catalogCourses(): Collection
     {
         if (!Schema::hasTable('courses')) return collect();
 
-        $query = DB::table('courses')->where('status', 'published')->orderByDesc('id')->get();
+        $query = DB::table('courses')->where('status', 'published')
+            ->when(Schema::hasColumn('courses', 'deleted_at'), fn ($builder) => $builder->whereNull('deleted_at'))
+            ->orderByDesc('id')->get();
         $catMap = Schema::hasTable('course_categories')
             ? DB::table('course_categories')->pluck('name', 'id')
             : collect();
