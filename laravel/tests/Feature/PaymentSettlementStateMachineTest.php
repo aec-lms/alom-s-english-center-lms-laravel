@@ -254,6 +254,93 @@ class PaymentSettlementStateMachineTest extends TestCase
         ]);
     }
 
+    public function test_commerce_order_currency_and_total_must_match_invoice_before_fulfillment(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'commerce-cart']);
+
+        foreach (['currency', 'total'] as $case) {
+            $buyer = $this->createUserWithRole('student');
+            $invoice = FeeInvoice::query()->create([
+                'invoice_number' => 'ORDER-RECONCILE-' . strtoupper(uniqid()),
+                'payer_name' => $buyer->name,
+                'payer_email' => $buyer->email,
+                'subtotal_amount' => 500,
+                'discount_amount' => 0,
+                'net_amount' => 500,
+                'paid_amount' => 0,
+                'currency' => 'BDT',
+                'status' => 'unpaid',
+            ]);
+            $orderId = DB::table('commerce_orders')->insertGetId([
+                'order_number' => 'ORDER-CHECK-' . strtoupper(uniqid()),
+                'user_id' => $buyer->id,
+                'invoice_id' => $invoice->id,
+                'branch_id' => null,
+                'currency' => $case === 'currency' ? 'USD' : 'BDT',
+                'subtotal' => 500,
+                'discount_total' => 0,
+                'grand_total' => $case === 'total' ? 450 : 500,
+                'status' => 'awaiting_payment',
+                'payment_status' => 'unpaid',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            DB::table('commerce_order_items')->insert([
+                'order_id' => $orderId,
+                'item_type' => 'course',
+                'item_id' => 987650 + $buyer->id,
+                'title_snapshot' => 'Order reconciliation course',
+                'quantity' => 1,
+                'unit_price' => 500,
+                'line_total' => 500,
+                'metadata' => json_encode(['resource_id' => 987650 + $buyer->id], JSON_THROW_ON_ERROR),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            $transaction = PaymentTransaction::query()->create([
+                'transaction_ref' => 'ORDER-CHECK-TXN-' . strtoupper(uniqid()),
+                'invoice_id' => $invoice->id,
+                'gateway_slug' => 'offline',
+                'amount' => 500,
+                'currency' => 'BDT',
+                'status' => 'initiated',
+                'metadata' => [],
+            ]);
+
+            try {
+                app(PaymentSettlementService::class)->settleTransaction(
+                    $transaction,
+                    'ORDER-CHECK-PROVIDER-' . $case,
+                );
+                $this->fail('Inconsistent commerce order data must block fulfillment.');
+            } catch (RuntimeException $exception) {
+                $expected = $case === 'currency'
+                    ? 'Commerce order currency does not match the invoice currency.'
+                    : 'Commerce order total does not match the invoice amount.';
+                $this->assertSame($expected, $exception->getMessage());
+            }
+
+            $this->assertDatabaseHas('payment_transactions', [
+                'id' => $transaction->id,
+                'status' => 'initiated',
+                'external_reference' => null,
+            ]);
+            $this->assertDatabaseHas('fee_invoices', [
+                'id' => $invoice->id,
+                'paid_amount' => 0,
+                'status' => 'unpaid',
+            ]);
+            $this->assertDatabaseHas('commerce_orders', [
+                'id' => $orderId,
+                'status' => 'awaiting_payment',
+                'payment_status' => 'unpaid',
+            ]);
+        }
+
+        $this->assertDatabaseCount('commerce_entitlements', 0);
+    }
+
     public function test_late_verified_callback_cannot_resettle_a_refunded_transaction(): void
     {
         $this->markSystemInstalled();
