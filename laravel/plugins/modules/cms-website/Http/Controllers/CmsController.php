@@ -25,10 +25,12 @@ class CmsController extends Controller
     {
         $categories = Schema::hasTable('cms_categories') ? CmsCategory::query()->orderBy('name')->get() : collect();
         $posts = Schema::hasTable('cms_posts') ? CmsPost::query()->latest()->get() : collect();
+        $trashedPosts = Schema::hasTable('cms_posts') ? CmsPost::onlyTrashed()->latest('deleted_at')->get() : collect();
+        $postRevisions = Schema::hasTable('cms_post_revisions') ? DB::table('cms_post_revisions')->orderByDesc('created_at')->get()->groupBy('post_id') : collect();
         $inquiries = Schema::hasTable('contact_inquiries') ? DB::table('contact_inquiries')->orderByDesc('id')->limit(50)->get() : collect();
         $homepage = $this->loadHomepageConfig();
 
-        return view('cms-website::index', compact('categories', 'posts', 'inquiries', 'homepage'));
+        return view('cms-website::index', compact('categories', 'posts', 'trashedPosts', 'postRevisions', 'inquiries', 'homepage'));
     }
 
     public function storeCategory(Request $request): RedirectResponse
@@ -85,10 +87,7 @@ class CmsController extends Controller
     {
         $name = $category->name;
         $id = (string) $category->id;
-        DB::transaction(function () use ($category): void {
-            CmsPost::query()->where('category_id', $category->id)->update(['category_id' => null]);
-            $category->delete();
-        });
+        $category->delete();
         $this->audit->log('cms.category_deleted', 'cms_category', $id, ['name' => $name]);
 
         return back()->with('status', "CMS Category '{$name}' deleted.");
@@ -113,6 +112,7 @@ class CmsController extends Controller
             'pdf_thumbnail' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
             'pdf_thumbnail_url' => ['nullable', 'string', 'max:255', function (string $attribute, mixed $value, \Closure $fail): void { if (!$this->isSafeMediaReference($value)) $fail('The PDF thumbnail URL must be a safe HTTPS URL or local path.'); }],
             'is_published' => ['nullable', 'boolean'],
+            'publish_at' => ['nullable', 'date'],
         ]);
 
         $categoryName = trim((string) ($validated['category'] ?? 'General')) ?: 'General';
@@ -153,9 +153,14 @@ class CmsController extends Controller
             'pdf_thumbnail' => $pdfThumbPath,
             'seo_title' => $validated['seo_title'] ?? $validated['title'],
             'seo_description' => $validated['seo_description'] ?? null,
-            'is_published' => $request->boolean('is_published', true),
+            'created_by' => $request->user()->getAuthIdentifier(),
+            'author_user_id' => $request->user()->getAuthIdentifier(),
+            'is_published' => false,
+            'publish_at' => $validated['publish_at'] ?? null,
+            'editorial_status' => 'draft',
         ]);
 
+        $this->storePostRevision($post, $request);
         $this->audit->log('cms.post_created', 'cms_post', (string) $post->id, ['slug' => $post->slug]);
 
         return back()->with('status', "Post '{$post->title}' created.");
@@ -163,6 +168,7 @@ class CmsController extends Controller
 
     public function updatePost(Request $request, CmsPost $post): RedirectResponse
     {
+        abort_if($post->is_published, 422, 'Published content is protected. Create a new draft revision and submit it for approval before replacing live content.');
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:200'],
             'slug' => ['required', 'alpha_dash', 'max:180', 'unique:cms_posts,slug,' . $post->id],
@@ -180,6 +186,7 @@ class CmsController extends Controller
             'pdf_thumbnail' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
             'pdf_thumbnail_url' => ['nullable', 'string', 'max:255', function (string $attribute, mixed $value, \Closure $fail): void { if (!$this->isSafeMediaReference($value)) $fail('The PDF thumbnail URL must be a safe HTTPS URL or local path.'); }],
             'is_published' => ['nullable', 'boolean'],
+            'publish_at' => ['nullable', 'date'],
         ]);
 
         $categoryName = trim((string) ($validated['category'] ?? $post->category ?? 'General')) ?: 'General';
@@ -191,6 +198,7 @@ class CmsController extends Controller
             }
         }
 
+        $this->storePostRevision($post, $request);
         $oldAssets = [$post->thumbnail_path, $post->pdf_path, $post->pdf_thumbnail];
 
         $thumbPath = $post->thumbnail_path;
@@ -227,7 +235,15 @@ class CmsController extends Controller
             'pdf_thumbnail' => $pdfThumbPath,
             'seo_title' => $validated['seo_title'] ?? ($post->seo_title ?: $validated['title']),
             'seo_description' => $validated['seo_description'] ?? $post->seo_description,
-            'is_published' => $request->boolean('is_published'),
+            'is_published' => (bool) $post->is_published,
+            'publish_at' => $validated['publish_at'] ?? null,
+            // Any content edit invalidates a previous approval. It must be reviewed again.
+            'editorial_status' => 'draft',
+            'submitted_at' => null,
+            'submitted_by' => null,
+            'reviewed_at' => null,
+            'reviewed_by' => null,
+            'review_note' => null,
         ]);
 
         foreach ([[$oldAssets[0], $thumbPath], [$oldAssets[1], $pdfPath], [$oldAssets[2], $pdfThumbPath]] as [$oldPath, $newPath]) {
@@ -239,16 +255,190 @@ class CmsController extends Controller
         return back()->with('status', "Post '{$post->title}' updated.");
     }
 
+    public function submitPostForReview(CmsPost $post): RedirectResponse
+    {
+        DB::transaction(function () use ($post): void {
+            $locked = CmsPost::query()->lockForUpdate()->findOrFail($post->id);
+            abort_if($locked->is_published, 422);
+            abort_unless(in_array($locked->editorial_status ?? 'draft', ['draft', 'changes_requested'], true), 422);
+            $locked->forceFill(['editorial_status' => 'in_review', 'submitted_at' => now(), 'submitted_by' => auth()->id(), 'reviewed_at' => null, 'reviewed_by' => null, 'review_note' => null])->save();
+            $this->audit->log('cms.post_submitted_for_review', 'cms_post', (string) $locked->id, []);
+        }, 3);
+        return back()->with('status', 'Post submitted for editorial review.');
+    }
+
+    public function approvePost(CmsPost $post): RedirectResponse
+    {
+        DB::transaction(function () use ($post): void {
+            $locked = CmsPost::query()->lockForUpdate()->findOrFail($post->id);
+            abort_unless(($locked->editorial_status ?? 'draft') === 'in_review' && !$locked->is_published, 422);
+            abort_if((int) $locked->submitted_by === (int) auth()->id() || (int) $locked->created_by === (int) auth()->id() || (int) $locked->author_user_id === (int) auth()->id(), 403, 'The submitter or author cannot approve their own post.');
+            $locked->forceFill(['editorial_status' => 'approved', 'reviewed_at' => now(), 'reviewed_by' => auth()->id(), 'review_note' => null])->save();
+            $this->audit->log('cms.post_approved', 'cms_post', (string) $locked->id, []);
+        }, 3);
+        return back()->with('status', 'Post approved; publish it when ready.');
+    }
+
+    public function requestPostChanges(Request $request, CmsPost $post): RedirectResponse
+    {
+        $data = $request->validate(['review_note' => ['required', 'string', 'min:5', 'max:2000']]);
+        DB::transaction(function () use ($post, $data): void {
+            $locked = CmsPost::query()->lockForUpdate()->findOrFail($post->id);
+            abort_unless(($locked->editorial_status ?? 'draft') === 'in_review' && !$locked->is_published, 422);
+            abort_if((int) $locked->submitted_by === (int) auth()->id() || (int) $locked->created_by === (int) auth()->id() || (int) $locked->author_user_id === (int) auth()->id(), 403, 'The submitter or author cannot review their own post.');
+            $locked->forceFill(['editorial_status' => 'changes_requested', 'reviewed_at' => now(), 'reviewed_by' => auth()->id(), 'review_note' => $data['review_note']])->save();
+            $this->audit->log('cms.post_changes_requested', 'cms_post', (string) $locked->id, ['note_length' => strlen($data['review_note'])]);
+        }, 3);
+        return back()->with('status', 'Editorial changes requested.');
+    }
+
+    public function publishApprovedPost(CmsPost $post): RedirectResponse
+    {
+        DB::transaction(function () use ($post): void {
+            $locked = CmsPost::query()->lockForUpdate()->findOrFail($post->id);
+            abort_unless(($locked->editorial_status ?? 'draft') === 'approved' && !$locked->is_published, 422);
+            $locked->forceFill(['is_published' => true, 'editorial_status' => 'published', 'publish_at' => null])->save();
+            $this->audit->log('cms.post_published_after_approval', 'cms_post', (string) $locked->id, []);
+        }, 3);
+        return back()->with('status', 'Approved post published.');
+    }
+
     public function destroyPost(CmsPost $post): RedirectResponse
     {
-        // Keep linked files while the post is in the recycle bin. A restored post
-        // must not point to media that was deleted during soft deletion.
+        // Soft deletion must retain media so a restored post remains complete.
         $title = $post->title;
         $id = (string) $post->id;
         $post->delete();
-        $this->audit->log('cms.post_deleted', 'cms_post', $id, ['title' => $title]);
+        $this->audit->log('cms.post_trashed', 'cms_post', $id, ['title' => $title]);
 
-        return back()->with('status', "Post '{$title}' deleted.");
+        return back()->with('status', "Post '{$title}' moved to the Recycle Bin.");
+    }
+
+    public function restoreRevision(Request $request, CmsPost $post, int $revisionId): RedirectResponse
+    {
+        abort_unless(Schema::hasTable('cms_post_revisions'), 404);
+        $oldAssets = [];
+
+        DB::transaction(function () use ($request, $post, $revisionId, &$oldAssets): void {
+            $locked = CmsPost::query()->lockForUpdate()->findOrFail($post->id);
+            abort_if($locked->is_published, 422, 'Published content cannot be overwritten through revision restore.');
+
+            $revision = DB::table('cms_post_revisions')
+                ->where('id', $revisionId)
+                ->where('post_id', $locked->id)
+                ->lockForUpdate()
+                ->first();
+            abort_unless($revision, 404);
+
+            // Preserve the current version before restoring historical content.
+            $this->storePostRevision($locked, $request);
+            $oldAssets = [$locked->thumbnail_path, $locked->pdf_path, $locked->pdf_thumbnail];
+
+            $attributes = [
+                'title' => $revision->title,
+                'slug' => $revision->slug,
+                'category' => $revision->category,
+                'category_id' => $revision->category_id,
+                'author' => $revision->author,
+                'excerpt' => $revision->excerpt,
+                'content' => $revision->content,
+                'thumbnail_path' => $revision->thumbnail_path,
+                'pdf_path' => $revision->pdf_path,
+                'pdf_thumbnail' => $revision->pdf_thumbnail,
+                'seo_title' => $revision->seo_title,
+                'seo_description' => $revision->seo_description,
+                // A historical published snapshot is restored as an unpublished draft.
+                'is_published' => false,
+                'publish_at' => null,
+            ];
+
+            if (Schema::hasColumn('cms_posts', 'editorial_status')) {
+                $attributes += [
+                    'editorial_status' => 'draft',
+                    'submitted_at' => null,
+                    'submitted_by' => null,
+                    'reviewed_at' => null,
+                    'reviewed_by' => null,
+                    'review_note' => null,
+                ];
+            }
+
+            $locked->forceFill($attributes)->save();
+            $this->audit->log('cms.post_revision_restored', 'cms_post', (string) $locked->id, ['revision_id' => $revisionId]);
+        }, 3);
+
+        foreach ($oldAssets as $assetPath) {
+            if ($assetPath) {
+                $this->deleteUnusedUpload($assetPath, (int) $post->id);
+            }
+        }
+
+        return back()->with('status', "Revision restored for '{$post->fresh()->title}'.");
+    }
+
+    private function storePostRevision(CmsPost $post, Request $request): void
+    {
+        if (!Schema::hasTable('cms_post_revisions')) return;
+        DB::table('cms_post_revisions')->insert([
+            'post_id' => $post->id, 'user_id' => $request->user()?->getAuthIdentifier(),
+            'title' => $post->title, 'slug' => $post->slug, 'category' => $post->category ?? 'General',
+            'category_id' => $post->category_id, 'author' => $post->author, 'excerpt' => $post->excerpt,
+            'content' => $post->content, 'thumbnail_path' => $post->thumbnail_path, 'pdf_path' => $post->pdf_path,
+            'pdf_thumbnail' => $post->pdf_thumbnail, 'seo_title' => $post->seo_title,
+            'seo_description' => $post->seo_description, 'is_published' => (bool) $post->is_published,
+            'publish_at' => $post->publish_at,
+            'created_at' => now(),
+        ]);
+    }
+
+    public function restorePost(int $postId): RedirectResponse
+    {
+        $title = null;
+        DB::transaction(function () use ($postId, &$title): void {
+            $post = CmsPost::withTrashed()->lockForUpdate()->findOrFail($postId);
+            abort_unless($post->trashed(), 404);
+
+            $post->restore();
+            $title = $post->title;
+            $this->audit->log('cms.post_restored', 'cms_post', (string) $post->id, ['slug' => $post->slug]);
+        }, 3);
+
+        return back()->with('status', "Post '{$title}' restored.");
+    }
+
+    public function forceDeletePost(int $postId): RedirectResponse
+    {
+        $assets = [];
+        $title = null;
+        DB::transaction(function () use ($postId, &$assets, &$title): void {
+            $post = CmsPost::withTrashed()->lockForUpdate()->findOrFail($postId);
+            abort_unless($post->trashed(), 404);
+
+            $title = $post->title;
+            $id = (string) $post->id;
+            $assets = [$post->thumbnail_path, $post->pdf_path, $post->pdf_thumbnail];
+
+            if (Schema::hasTable('cms_post_revisions')) {
+                $revisionAssets = DB::table('cms_post_revisions')
+                    ->where('post_id', $post->id)
+                    ->lockForUpdate()
+                    ->get(['thumbnail_path', 'pdf_path', 'pdf_thumbnail']);
+                foreach ($revisionAssets as $revisionAsset) {
+                    array_push($assets, $revisionAsset->thumbnail_path, $revisionAsset->pdf_path, $revisionAsset->pdf_thumbnail);
+                }
+                DB::table('cms_post_revisions')->where('post_id', $post->id)->delete();
+            }
+
+            $post->forceDelete();
+            $this->audit->log('cms.post_permanently_deleted', 'cms_post', $id, ['title' => $title]);
+        }, 3);
+
+        // Clean files only after the database transaction commits; shared files remain protected.
+        foreach ($assets as $assetPath) {
+            $this->deleteUnusedUpload($assetPath);
+        }
+
+        return back()->with('status', "Post '{$title}' permanently deleted.");
     }
 
     public function saveHomepage(Request $request): RedirectResponse
@@ -408,6 +598,7 @@ class CmsController extends Controller
         if (!$path || !str_starts_with($path, '/uploads/')) return;
         $references = [
             'cms_posts' => ['thumbnail_path', 'pdf_thumbnail', 'pdf_path'],
+            'cms_post_revisions' => ['thumbnail_path', 'pdf_thumbnail', 'pdf_path'],
             'courses' => ['thumbnail', 'pdf_thumbnail', 'pdf_path'],
             'storefront_items' => ['thumbnail_path', 'pdf_thumbnail_path', 'download_url'],
         ];
@@ -423,7 +614,14 @@ class CmsController extends Controller
         $absolute = public_path(ltrim($path, '/'));
         $root = realpath(public_path('uploads'));
         $file = realpath($absolute);
-        if ($root && $file && str_starts_with($file, $root . DIRECTORY_SEPARATOR) && is_file($file)) @unlink($file);
+
+        // Never follow a symlink while deleting user-managed CMS media.
+        if (!$root || !$file || is_link($absolute) || $file !== $absolute
+            || !str_starts_with($file, $root . DIRECTORY_SEPARATOR) || !is_file($absolute)) {
+            return;
+        }
+
+        @unlink($absolute);
     }
 
     private function defaultHomepageConfig(): array
