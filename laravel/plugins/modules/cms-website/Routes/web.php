@@ -34,6 +34,7 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:cms-website', 'permission
         Route::get('/editorial', [CmsController::class, 'editorialDashboard'])->name('editorial');
         Route::post('/editorial/posts', [CmsController::class, 'storeEditorialPost'])->middleware('permission:cms.posts.create')->name('editorial.posts.store');
         Route::put('/editorial/posts/{post}', [CmsController::class, 'updateEditorialPost'])->middleware('permission:cms.posts.edit_own')->name('editorial.posts.update');
+        Route::put('/editorial/posts/{post}/assignments', [CmsController::class, 'updatePostAssignments'])->middleware('permission:cms.authors.assign')->name('editorial.posts.assignments');
         Route::post('/editorial/posts/{post}/submit-review', [CmsController::class, 'submitPostForReview'])->middleware('permission:cms.posts.submit')->name('editorial.posts.submit-review');
         Route::post('/editorial/posts/{post}/approve', [CmsController::class, 'approvePost'])->middleware('permission:cms.posts.review')->name('editorial.posts.approve');
         Route::post('/editorial/posts/{post}/request-changes', [CmsController::class, 'requestPostChanges'])->middleware('permission:cms.posts.review')->name('editorial.posts.request-changes');
