@@ -35,7 +35,10 @@ final class PhoneticsSpeakingRecordingController extends Controller
         $entry = $this->assignedEntry($request, $course, (int) $data['entry_id']);
         $file = $data['recording'];
         $disk = $this->privateDisk();
-        $path = $file->store('students/'.hash('sha256', (string) $request->user()->getAuthIdentifier()), $disk);
+        $directory = 'students/'.hash('sha256', (string) $request->user()->getAuthIdentifier());
+        $filename = $file->hashName();
+        $path = $disk->putFileAs($directory, $file, $filename);
+        abort_unless(is_string($path) && $path !== '', 500, 'The private recording could not be stored.');
 
         try {
             $recording = DB::transaction(fn () => PhoneticSpeakingRecording::query()->create([
@@ -94,6 +97,20 @@ final class PhoneticsSpeakingRecordingController extends Controller
             404
         );
 
+        return $this->recordingFileResponse($recording);
+    }
+
+    public function adminStream(PhoneticSpeakingRecording $recording)
+    {
+        abort_unless($recording->lms_driver === $this->catalog->driver(), 404);
+        $course = $this->catalog->course($recording->course_ref);
+        $this->catalog->assertCourseAvailable($course);
+        $this->catalog->assertDedicatedCourse($course);
+        return $this->recordingFileResponse($recording);
+    }
+
+    private function recordingFileResponse(PhoneticSpeakingRecording $recording)
+    {
         $disk = $this->privateDisk();
         abort_unless($disk->exists($recording->storage_path), 404);
         return response()->file($disk->path($recording->storage_path), [
