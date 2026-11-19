@@ -115,7 +115,7 @@ class AdmissionController extends Controller
 
         $application = AdmissionApplication::query()
             ->where('application_code', strtoupper(trim($validated['application_code'])))
-            ->where('email', strtolower(trim($validated['email'])))
+            ->whereRaw('LOWER(email) = ?', [strtolower(trim($validated['email']))])
             ->first();
 
         return view('admission-management::track', [
