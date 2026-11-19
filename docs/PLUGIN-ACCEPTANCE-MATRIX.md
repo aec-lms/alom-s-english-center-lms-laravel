@@ -126,7 +126,7 @@ The current-main CI checks for this exact commit have now all completed successf
 - Browser E2E smoke workflow: passed.
 - Composer lockfile/security audit: passed.
 
-The current tree contains 44 plugin manifests. The parameterized `AllPluginsIndependentAcceptanceTest` discovers plugin slugs from the module directories at runtime, so its lifecycle scenarios include all 44 manifests on this candidate rather than a hard-coded historical list. Its common lifecycle assertions cover provider autoload, independent install/enable, ZIP update, disable/re-enable, uninstall/reinstall, settings reset, Recycle Bin restore, and permanent-delete recovery handling. This is lifecycle acceptance only, not proof that every plugin's complete business feature set is correct.
+The current main tree contains 59 plugin manifests; the PR #269 candidate contains 60, including the new commerce-cart module. The parameterized `AllPluginsIndependentAcceptanceTest` discovers plugin slugs from the module directories at runtime, so its lifecycle scenarios include all 44 manifests on this candidate rather than a hard-coded historical list. Its common lifecycle assertions cover provider autoload, independent install/enable, ZIP update, disable/re-enable, uninstall/reinstall, settings reset, Recycle Bin restore, and permanent-delete recovery handling. This is lifecycle acceptance only, not proof that every plugin's complete business feature set is correct.
 
 ### Current 44-plugin inventory and focused test references
 
@@ -201,4 +201,4 @@ The current candidate adds targeted regression coverage beyond the historical in
 | Commerce Cart + Payment Management | Offline refunds could leave paid orders and non-course entitlements active | Suspend order entitlements and revoke order-bound exam/eBook access when invoice becomes underpaid; restore entitlements on later verified settlement | Regression test covers partial refund and repayment; exact-head CI pending |
 | Commerce Cart + Payment Management | Existing suspended entitlement rows were not reactivated by insert-ignore settlement writes | Settlement now upserts the existing entitlement and refreshes its active state | Covered by refund/repayment regression; exact-head CI pending |
 
-These are focused fixes, not a substitute for the complete per-plugin acceptance gate. All 44 current plugin manifests still require feature-by-feature review and exact-candidate validation. No plugin is promoted to fully accepted by this checkpoint.
+These are focused fixes, not a substitute for the complete per-plugin acceptance gate. All 60 candidate plugin manifests still require feature-by-feature review and exact-candidate validation. No plugin is promoted to fully accepted by this checkpoint.
