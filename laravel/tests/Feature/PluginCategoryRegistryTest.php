@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Core\Plugins\PluginCategoryRegistry;
+use Illuminate\Support\Facades\File;
 use Tests\TestCase;
 
 class PluginCategoryRegistryTest extends TestCase
@@ -15,6 +16,18 @@ class PluginCategoryRegistryTest extends TestCase
 
         $this->assertCount(60, $slugs);
         $this->assertCount(60, array_unique($slugs));
+
+        $manifestSlugs = [];
+        foreach (File::directories(base_path('plugins/modules')) as $directory) {
+            $manifestPath = $directory . DIRECTORY_SEPARATOR . 'plugin.json';
+            if (!File::exists($manifestPath)) continue;
+            $manifest = json_decode(File::get($manifestPath), true, 512, JSON_THROW_ON_ERROR);
+            $manifestSlugs[] = (string) ($manifest['slug'] ?? basename($directory));
+        }
+        sort($manifestSlugs);
+        $registeredSlugs = $slugs;
+        sort($registeredSlugs);
+        $this->assertSame($manifestSlugs, $registeredSlugs, 'Every current plugin manifest must have exactly one canonical category.');
 
         foreach ($slugs as $slug) {
             $key = PluginCategoryRegistry::keyFor($slug);
