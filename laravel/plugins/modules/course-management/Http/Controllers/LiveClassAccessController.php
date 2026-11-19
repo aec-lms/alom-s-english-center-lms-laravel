@@ -186,6 +186,7 @@ class LiveClassAccessController extends Controller
                 ->where('entitlement_type', 'live_class')
                 ->where('resource_id', $liveClassId)
                 ->where('status', 'active')
+                ->where(fn ($query) => $query->whereNull('starts_at')->orWhere('starts_at', '<=', now()))
                 ->where(fn ($query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', now()))
                 ->exists();
 
