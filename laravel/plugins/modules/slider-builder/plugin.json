@@ -6,9 +6,7 @@
     "category": "website",
     "description": "Advanced responsive slider and campaign builder with scheduling, CTA controls, transitions, and image uploads.",
     "core_compatibility": "^2.0",
-    "dependencies": [
-        "cms-website"
-    ],
+    "dependencies": [],
     "provider": "Plugins\\Modules\\SliderBuilder\\Providers\\SliderBuilderServiceProvider",
     "permissions": [
         {
