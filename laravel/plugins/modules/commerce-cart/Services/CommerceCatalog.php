@@ -172,6 +172,26 @@ class CommerceCatalog
         }
         $courseBranchId = Schema::hasColumn('courses', 'branch_id') ? ($course->branch_id ?? null) : null;
         $this->assertBranchAccess($user, $courseBranchId);
+        if ($courseBranchId !== null
+            && Schema::hasColumn('course_gifts', 'recipient_user_id')
+            && $gift->recipient_user_id !== null) {
+            $recipientBranchId = null;
+            if (app(\\App\\Core\\Plugins\\PluginManager::class)->isEnabled('student-management')
+                && Schema::hasTable('students')
+                && Schema::hasColumn('students', 'branch_id')) {
+                $recipientBranchId = DB::table('students')
+                    ->where('user_id', (int) $gift->recipient_user_id)->value('branch_id');
+            }
+            if ($recipientBranchId === null && Schema::hasColumn('users', 'branch_id')) {
+                $recipientBranchId = DB::table('users')
+                    ->where('id', (int) $gift->recipient_user_id)->value('branch_id');
+            }
+            if ($recipientBranchId === null || (int) $recipientBranchId !== (int) $courseBranchId) {
+                throw ValidationException::withMessages([
+                    'item' => 'The selected recipient is not assigned to the branch that owns this course.',
+                ]);
+            }
+        }
         if (Schema::hasTable('batches') && Schema::hasColumn('batches', 'status') && Schema::hasColumn('batches', 'course_id')
             && DB::table('batches')->where('course_id', $course->id)->where('status', 'open')->exists()) {
             throw ValidationException::withMessages(['item' => 'This course has an open batch. Contact admissions before gifting it.']);
