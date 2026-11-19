@@ -195,6 +195,9 @@ class CommerceCartController extends Controller
         ]);
         abort_unless(Schema::hasTable('fee_invoices') && app(PluginManager::class)->isEnabled('fees-management'), 503, 'The Fees & Invoicing module must be enabled for checkout.');
         abort_unless(app(PluginManager::class)->isEnabled('universal-payment'), 503, 'Universal Payment must be enabled.');
+        abort_unless(app(PluginManager::class)->isEnabled('payment-management')
+            && Schema::hasTable('payment_transactions'), 503,
+            'Payment Management must be enabled before unified commerce checkout.');
 
         try {
             $payments->assertGatewayReady($data['gateway']);
