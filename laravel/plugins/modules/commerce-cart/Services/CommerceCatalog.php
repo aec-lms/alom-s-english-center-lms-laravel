@@ -62,7 +62,7 @@ class CommerceCatalog
         $metadata = ['course_id' => $id];
         if (app(\\App\\Core\\Plugins\\PluginManager::class)->isEnabled('flash-sale')
             && Schema::hasTable('flash_sales')) {
-            $branchId = $courseBranchId !== null ? (int) $courseBranchId : null;
+            $branchId = $courseBranchId !== null ? (int) $courseBranchId : $this->userBranchId($user);
             $quote = app(\\Plugins\\Modules\\FlashSale\\Services\\FlashSalePricingService::class)
                 ->quote($id, $branchId);
             $price = (float) $quote['total'];
@@ -168,6 +168,26 @@ class CommerceCatalog
         if ($userBranchId === null || (int) $userBranchId !== (int) $resourceBranchId) {
             throw ValidationException::withMessages(['item' => 'This item is not available to your assigned branch.']);
         }
+    }
+
+    private function userBranchId(?Authenticatable $user): ?int
+    {
+        if (!$user || !method_exists($user, 'getAuthIdentifier')) return null;
+
+        if (app(\\App\\Core\\Plugins\\PluginManager::class)->isEnabled('student-management')
+            && Schema::hasTable('students') && Schema::hasColumn('students', 'branch_id')) {
+            $profileBranchId = DB::table('students')
+                ->where('user_id', $user->getAuthIdentifier())
+                ->value('branch_id');
+            if ($profileBranchId !== null) return (int) $profileBranchId;
+        }
+
+        if (method_exists($user, 'getAttribute')) {
+            $branchId = $user->getAttribute('branch_id');
+            return $branchId !== null ? (int) $branchId : null;
+        }
+
+        return null;
     }
 
     private function snapshot(string $type, int $id, string $title, float $price, array $metadata): array
