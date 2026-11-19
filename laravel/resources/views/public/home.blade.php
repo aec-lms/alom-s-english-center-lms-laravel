@@ -75,6 +75,39 @@
 
 @include('public.partials.navbar')
 
+@if (($homepageNoticeCampaigns ?? collect())->isNotEmpty())
+    <section class="bg-[#FFF7E6] border-b border-amber-200 px-4 py-2.5">
+        <div class="max-w-[1280px] mx-auto flex flex-col sm:flex-row sm:items-center gap-2">
+            @foreach ($homepageNoticeCampaigns as $noticeCampaign)
+                <div class="flex flex-1 items-center justify-between gap-3 text-xs">
+                    <img src="{{ route('plugins.boost.impression', $noticeCampaign) }}" alt="" width="1" height="1" class="absolute w-px h-px opacity-0 pointer-events-none">
+                    <div class="min-w-0"><span class="font-extrabold text-amber-800">{{ $noticeCampaign->badge_text ?: 'NOTICE' }}</span><span class="ml-2 font-semibold text-slate-800">{{ $noticeCampaign->campaign_name }}</span></div>
+                    <a href="{{ route('plugins.boost.click', $noticeCampaign) }}" rel="nofollow" class="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-[10px] font-bold text-white hover:bg-amber-700">{{ $noticeCampaign->cta_text ?: 'View details' }}</a>
+                </div>
+            @endforeach
+        </div>
+    </section>
+@endif
+
+@if (($homepageBoostCampaigns ?? collect())->isNotEmpty())
+    <section class="bg-gradient-to-r from-[#EAF2FF] via-white to-[#E8F8FF] border-b border-sky-100 px-4 py-5">
+        <div class="max-w-[1280px] mx-auto grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+            @foreach ($homepageBoostCampaigns as $boostCampaign)
+                <article class="relative rounded-2xl border border-blue-100 bg-white p-4 shadow-sm hover:shadow-lg transition-shadow">
+                    <img src="{{ route('plugins.boost.impression', $boostCampaign) }}" alt="" width="1" height="1" class="absolute w-px h-px opacity-0 pointer-events-none">
+                    <div class="flex items-start justify-between gap-2">
+                        <span class="inline-flex rounded-full bg-indigo-50 px-2 py-1 text-[9px] font-extrabold uppercase tracking-wide text-indigo-700">{{ $boostCampaign->badge_text ?: 'FEATURED' }}</span>
+                        <span class="text-[9px] font-bold uppercase tracking-wide text-slate-400">Sponsored</span>
+                    </div>
+                    <h2 class="mt-2 text-sm font-extrabold leading-snug text-slate-900">{{ $boostCampaign->campaign_name }}</h2>
+                    <a href="{{ route('plugins.boost.click', $boostCampaign) }}" rel="nofollow" class="mt-3 inline-flex items-center gap-1 rounded-lg bg-[#0057FF] px-3 py-2 text-[11px] font-bold text-white hover:bg-blue-700">{{ $boostCampaign->cta_text ?: 'Explore Now' }} <span aria-hidden="true">→</span></a>
+                </article>
+            @endforeach
+        </div>
+    </section>
+@endif
+
+
 <!-- 2. DEEP TEAL HERO STAGE: 3-CARD PEEK CAROUSEL + DUAL BENTO CARDS -->
 <section class="bg-gradient-to-b from-[#022D41] via-[#032638] to-[#021E2E] text-white pt-8 pb-14 px-4 sm:px-6 overflow-hidden">
     <div class="max-w-[1280px] mx-auto space-y-8">
@@ -227,6 +260,7 @@
     </div>
 </section>
 @endif
+
 
 <!-- 3. CHOOSE YOUR LEARNING PATH (ADMIN-CONTROLLED 6 PASTEL CARDS) -->
 @if ($homepage['show_learning_paths'] ?? true)
