@@ -282,6 +282,8 @@ class CmsController extends Controller
             ? CmsCategory::query()->where('is_active', true)->orderBy('name')->get()
             : collect();
         $canCreate = $user->hasPermission('cms.posts.create');
+        $canEditAll = $user->hasPermission('cms.posts.edit_all');
+        $canEditOwn = $user->hasPermission('cms.posts.edit_own');
         $canAssign = $user->hasPermission('cms.authors.assign');
         $canSubmit = $user->hasPermission('cms.posts.submit');
         $canReview = $user->hasPermission('cms.posts.review');
@@ -299,7 +301,7 @@ class CmsController extends Controller
             : collect();
 
         return view('cms-website::editorial', compact(
-            'posts', 'categories', 'canCreate', 'canAssign', 'canSubmit', 'canReview', 'canPublish',
+            'posts', 'categories', 'canCreate', 'canEditAll', 'canEditOwn', 'canAssign', 'canSubmit', 'canReview', 'canPublish',
             'availableAuthors', 'availableEditors', 'availableReviewers'
         ));
     }
@@ -378,7 +380,7 @@ class CmsController extends Controller
             'assigned_editor_id' => ['nullable', 'integer', 'exists:users,id'],
             'assigned_reviewer_id' => ['nullable', 'integer', 'exists:users,id'],
         ]);
-        $this->validateEditorialAssignments($user, $validated);
+        $this->validateEditorialAssignments($user, $validated, $post);
 
         $authorId = (int) $post->author_user_id;
         if ($user->hasPermission('cms.authors.assign') && !empty($validated['author_user_id'])) {
@@ -423,6 +425,45 @@ class CmsController extends Controller
         return redirect()->route('plugins.cms.editorial')->with('status', "Draft '{$post->title}' updated.");
     }
 
+
+    public function updatePostAssignments(Request $request, CmsPost $post): RedirectResponse
+    {
+        $user = $request->user();
+        abort_unless($user && $user->hasPermission('cms.authors.assign'), 403);
+        abort_if($post->is_published, 422, 'Published post assignments are locked.');
+        $validated = $request->validate([
+            'author_user_id' => ['nullable', 'integer', 'exists:users,id'],
+            'assigned_editor_id' => ['nullable', 'integer', 'exists:users,id'],
+            'assigned_reviewer_id' => ['nullable', 'integer', 'exists:users,id'],
+            'co_authors' => ['nullable', 'array', 'max:10'],
+            'co_authors.*' => ['required', 'integer', 'distinct', 'exists:users,id'],
+        ]);
+        $this->validateEditorialAssignments($user, $validated, $post);
+
+        DB::transaction(function () use ($post, $validated, $user): void {
+            $locked = CmsPost::query()->lockForUpdate()->findOrFail($post->id);
+            abort_if($locked->is_published, 422);
+            $authorId = (int) ($validated['author_user_id'] ?? $locked->author_user_id);
+            if ($authorId) $this->assertCmsAuthor($authorId);
+            $author = $authorId ? User::query()->find($authorId) : null;
+            $locked->forceFill([
+                'author_user_id' => $authorId ?: null,
+                'author' => $author?->name ?? $locked->author,
+                'assigned_editor_id' => $validated['assigned_editor_id'] ?? null,
+                'assigned_reviewer_id' => $validated['assigned_reviewer_id'] ?? null,
+                'updated_by' => $user->id,
+            ])->save();
+            $this->syncCmsCoAuthors($locked, $validated['co_authors'] ?? [], $authorId ?: null);
+            $this->audit->log('cms.post_assignments_updated', 'cms_post', (string) $locked->id, [
+                'author_user_id' => $authorId,
+                'assigned_editor_id' => $locked->assigned_editor_id,
+                'assigned_reviewer_id' => $locked->assigned_reviewer_id,
+            ]);
+        }, 3);
+
+        return back()->with('status', "Contributor assignments updated for '{$post->title}'.");
+    }
+
     public function contributorsIndex(): View
     {
         $contributors = User::query()
@@ -441,8 +482,20 @@ class CmsController extends Controller
             'roles' => ['nullable', 'array', 'max:4'],
             'roles.*' => ['required', 'string', 'distinct', 'in:cms_contributor,cms_editor,cms_reviewer,cms_author_manager'],
         ]);
+        $newRoles = $validated['roles'] ?? [];
+        if (!in_array('cms_contributor', $newRoles, true) && !in_array('cms_editor', $newRoles, true)) {
+            $hasAuthoredPosts = CmsPost::query()->where(fn ($q) => $q->where('author_user_id', $user->id)->orWhere('created_by', $user->id))->exists()
+                || (Schema::hasTable('cms_post_authors') && DB::table('cms_post_authors')->where('user_id', $user->id)->exists());
+            abort_if($hasAuthoredPosts, 422, 'Reassign this user's authored or co-authored posts before removing Contributor/Editor access.');
+        }
+        if (!in_array('cms_editor', $newRoles, true)) {
+            abort_if(CmsPost::query()->where('assigned_editor_id', $user->id)->exists(), 422, 'Reassign this user's editor assignments before removing Editor access.');
+        }
+        if (!in_array('cms_reviewer', $newRoles, true) && !in_array('cms_editor', $newRoles, true)) {
+            abort_if(CmsPost::query()->where('assigned_reviewer_id', $user->id)->where('editorial_status', 'in_review')->exists(), 422, 'Reassign this user's pending reviews before removing Reviewer access.');
+        }
 
-        $roleIds = DB::table('roles')->whereIn('slug', $validated['roles'] ?? [])->pluck('id')->all();
+        $roleIds = DB::table('roles')->whereIn('slug', $newRoles)->pluck('id')->all();
         $cmsRoleIds = DB::table('roles')->whereIn('slug', ['cms_contributor', 'cms_editor', 'cms_reviewer', 'cms_author_manager'])->pluck('id')->all();
         DB::transaction(function () use ($user, $roleIds, $cmsRoleIds): void {
             $user->roles()->detach($cmsRoleIds);
@@ -453,7 +506,7 @@ class CmsController extends Controller
         return back()->with('status', "CMS access updated for {$user->name}.");
     }
 
-    private function validateEditorialAssignments(User $actor, array $validated): void
+    private function validateEditorialAssignments(User $actor, array $validated, ?CmsPost $post = null): void
     {
         if (!$actor->hasPermission('cms.authors.assign')) {
             abort_if(!empty($validated['co_authors']) || !empty($validated['author_user_id']) || !empty($validated['assigned_editor_id']) || !empty($validated['assigned_reviewer_id']), 403);
@@ -467,6 +520,13 @@ class CmsController extends Controller
         }
         if (!empty($validated['assigned_reviewer_id'])) {
             abort_unless(User::query()->whereKey($validated['assigned_reviewer_id'])->where('is_active', true)->whereHas('roles', fn ($q) => $q->whereIn('slug', ['cms_reviewer', 'cms_editor']))->exists(), 422, 'The selected reviewer is not an active CMS Reviewer.');
+        }
+        if (!empty($validated['assigned_reviewer_id'])) {
+            $reviewerId = (int) $validated['assigned_reviewer_id'];
+            $primaryAuthorId = (int) ($validated['author_user_id'] ?? $post?->author_user_id ?? $actor->id);
+            $creatorId = (int) ($post?->created_by ?? $actor->id);
+            $coAuthorIds = array_map('intval', $validated['co_authors'] ?? []);
+            abort_if($reviewerId === $primaryAuthorId || $reviewerId === $creatorId || in_array($reviewerId, $coAuthorIds, true), 422, 'The reviewer must be independent from the author, creator and co-authors.');
         }
     }
 
