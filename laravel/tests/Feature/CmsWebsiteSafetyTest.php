@@ -298,4 +298,34 @@ class CmsWebsiteSafetyTest extends TestCase
         ]);
     }
 
+
+    public function test_original_post_creator_cannot_approve_even_when_another_admin_submitted_it(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+        $creator = $this->createUserWithRole('admin');
+        $submitter = $this->createUserWithRole('admin');
+        $post = CmsPost::query()->create([
+            'slug' => 'creator-review-separation',
+            'title' => 'Creator Review Separation',
+            'category' => 'General',
+            'author' => 'AEC',
+            'content' => 'Draft content',
+            'created_by' => $creator->id,
+            'author_user_id' => $creator->id,
+            'is_published' => false,
+            'editorial_status' => 'draft',
+        ]);
+
+        $this->actingAs($submitter)->post('/admin/cms/posts/' . $post->id . '/submit-review')->assertSessionHasNoErrors();
+        $this->actingAs($creator)->post('/admin/cms/posts/' . $post->id . '/approve')->assertForbidden();
+
+        $this->assertDatabaseHas('cms_posts', [
+            'id' => $post->id,
+            'editorial_status' => 'in_review',
+            'submitted_by' => $submitter->id,
+            'reviewed_by' => null,
+        ]);
+    }
+
 }
