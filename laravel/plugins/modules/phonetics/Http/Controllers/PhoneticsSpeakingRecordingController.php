@@ -132,12 +132,13 @@ final class PhoneticsSpeakingRecordingController extends Controller
         return $this->recordingFileResponse($recording);
     }
 
-    public function adminStream(PhoneticSpeakingRecording $recording)
+    public function adminStream(Request $request, PhoneticSpeakingRecording $recording)
     {
         abort_unless($recording->lms_driver === $this->catalog->driver(), 404);
         $course = $this->catalog->course($recording->course_ref);
         $this->catalog->assertCourseAvailable($course);
         $this->catalog->assertDedicatedCourse($course);
+        $this->assertReviewerBranchAccess($request, $recording, $course);
         return $this->recordingFileResponse($recording);
     }
 
@@ -175,20 +176,43 @@ final class PhoneticsSpeakingRecordingController extends Controller
         return response()->json(['deleted' => true]);
     }
 
-    public function reviewQueue()
+    public function reviewQueue(Request $request)
     {
+        $query = PhoneticSpeakingRecording::query()
+            ->with('word:id,word,category')
+            ->where('lms_driver', $this->catalog->driver());
+
+        if (!$this->isGlobalPhoneticsAdmin($request->user())) {
+            $branchId = data_get($request->user(), 'branch_id');
+            abort_unless($branchId !== null, 403, 'A branch assignment is required to review student recordings.');
+            $userMap = config('phonetics.users', []);
+            $userTable = $userMap['table'] ?? 'users';
+            $userIdColumn = $userMap['id'] ?? 'id';
+            abort_unless(
+                is_string($userTable) && is_string($userIdColumn)
+                    && Schema::hasTable($userTable)
+                    && Schema::hasColumn($userTable, $userIdColumn)
+                    && Schema::hasColumn($userTable, 'branch_id'),
+                503,
+                'The connected LMS branch mapping is unavailable for recording review.'
+            );
+            $query->whereIn('user_id', DB::table($userTable)
+                ->select($userIdColumn)
+                ->where('branch_id', $branchId));
+        }
+
         return view('phonetics::admin.recordings', [
-            'recordings' => PhoneticSpeakingRecording::query()
-                ->with('word:id,word,category')
-                ->where('lms_driver', $this->catalog->driver())
-                ->latest()
-                ->paginate(30),
+            'recordings' => $query->latest()->paginate(30),
         ]);
     }
 
     public function review(Request $request, PhoneticSpeakingRecording $recording)
     {
         abort_unless($recording->lms_driver === $this->catalog->driver(), 404);
+        $course = $this->catalog->course($recording->course_ref);
+        $this->catalog->assertCourseAvailable($course);
+        $this->catalog->assertDedicatedCourse($course);
+        $this->assertReviewerBranchAccess($request, $recording, $course);
         $data = $request->validate([
             'score' => ['required', 'integer', 'min:1', 'max:5'],
             'feedback' => ['required', 'string', 'min:3', 'max:2000'],
@@ -213,6 +237,83 @@ final class PhoneticsSpeakingRecordingController extends Controller
         });
 
         return back()->with('status', 'Pronunciation recording reviewed.');
+    }
+
+    private function isGlobalPhoneticsAdmin(?object $user): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        if ((bool) data_get($user, 'is_admin', false)) {
+            return true;
+        }
+
+        $roles = config('phonetics.access.admin_roles', ['admin', 'super_admin']);
+        if (method_exists($user, 'hasRole')) {
+            foreach ($roles as $role) {
+                if ($user->hasRole($role)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Global administrators may review all submissions. Branch-scoped staff
+     * can only play/review recordings submitted by students in their branch.
+     */
+    private function assertReviewerBranchAccess(
+        Request $request,
+        PhoneticSpeakingRecording $recording,
+        object $course
+    ): void {
+        $reviewer = $request->user();
+        abort_unless($reviewer, 401);
+
+        if ($this->isGlobalPhoneticsAdmin($reviewer)) {
+            return;
+        }
+
+        $reviewerBranchId = data_get($reviewer, 'branch_id');
+        abort_unless($reviewerBranchId !== null, 403, 'A branch assignment is required to review student recordings.');
+
+        $userMap = config('phonetics.users', []);
+        $userTable = $userMap['table'] ?? 'users';
+        $userIdColumn = $userMap['id'] ?? 'id';
+        abort_unless(
+            is_string($userTable) && is_string($userIdColumn)
+                && Schema::hasTable($userTable)
+                && Schema::hasColumn($userTable, $userIdColumn)
+                && Schema::hasColumn($userTable, 'branch_id'),
+            503,
+            'The connected LMS branch mapping is unavailable for recording review.'
+        );
+
+        $student = DB::table($userTable)
+            ->where($userIdColumn, $recording->user_id)
+            ->first(['branch_id']);
+        abort_unless(
+            $student && $student->branch_id !== null
+                && (string) $student->branch_id === (string) $reviewerBranchId,
+            404,
+            'Recording not found in your branch.'
+        );
+
+        $courseMap = config('phonetics.catalog.courses', []);
+        $courseBranchColumn = $courseMap['branch_id'] ?? 'branch_id';
+        if (is_string($courseBranchColumn) && Schema::hasTable($courseMap['table'] ?? '')) {
+            if (Schema::hasColumn($courseMap['table'], $courseBranchColumn)) {
+                $courseBranchId = data_get($course, $courseBranchColumn);
+                abort_unless(
+                    $courseBranchId === null || (string) $courseBranchId === (string) $reviewerBranchId,
+                    404,
+                    'Course is not available to your branch.'
+                );
+            }
+        }
     }
 
     private function assignedEntry(Request $request, object $course, int $entryId)
