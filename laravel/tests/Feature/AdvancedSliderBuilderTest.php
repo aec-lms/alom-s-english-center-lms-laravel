@@ -81,6 +81,25 @@ class AdvancedSliderBuilderTest extends TestCase
         ]);
     }
 
+    public function test_admin_can_reorder_slides_without_mixing_placements(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['slider-builder']);
+        $admin = $this->createUserWithRole('admin');
+        $first = HeroSlider::query()->create(['key_name' => 'hero', 'title' => 'First']);
+        $second = HeroSlider::query()->create(['key_name' => 'hero', 'title' => 'Second']);
+        $banner = HeroSlider::query()->create(['key_name' => 'banner_slider', 'title' => 'Banner']);
+
+        $this->actingAs($admin)->patchJson('/admin/slider-builder/reorder', [
+            'key_name' => 'hero',
+            'items' => [['id' => $second->id], ['id' => $first->id]],
+        ])->assertOk()->assertJson(['success' => true]);
+
+        $this->assertSame(10, $second->fresh()->sort_order);
+        $this->assertSame(20, $first->fresh()->sort_order);
+        $this->assertSame(0, $banner->fresh()->sort_order);
+    }
+
     public function test_visible_now_scope_excludes_inactive_and_out_of_window_slides(): void
     {
         $this->markSystemInstalled();
