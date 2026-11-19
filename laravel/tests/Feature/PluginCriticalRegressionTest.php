@@ -227,7 +227,7 @@ class PluginCriticalRegressionTest extends TestCase
         $this->assertStringContainsString('$this->branchUserIds((int) $actor->branch_id)', $controller);
         $this->assertStringContainsString('$recipientBranchId = app(BranchAccess::class)->contextBranchId($recipient);', $controller);
         $this->assertStringContainsString('abort_unless($recipientBranchId !== null && $recipientBranchId === (int) $actor->branch_id, 404);', $controller);
-        $this->assertStringContainsString("'branch_id' => \$recipientBranchId", $controller);
+        $this->assertStringContainsString("'branch_id' => $recipientBranchId", $controller);
         $this->assertStringContainsString("branch_id", $migration);
     }
 
