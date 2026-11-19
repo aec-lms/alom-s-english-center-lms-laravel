@@ -110,6 +110,9 @@
                             <td class="font-bold">{{ $tx->currency }} {{ number_format((float) $tx->amount, 2) }}</td>
                             <td><span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase {{ $tx->status === 'verified' ? 'bg-emerald-100 text-emerald-800' : ($tx->status === 'refunded' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800') }}">{{ $tx->status }}</span></td>
                             <td>
+                                @if ($tx->proof_path)
+                                    <a href="{{ route('plugins.universal_payment.proof', $tx) }}" class="mr-2 text-blue-700 underline">View receipt</a>
+                                @endif
                                 @if (in_array($tx->gateway, ['bank_cash', 'offline'], true) && $tx->status === 'pending')
                                     <form method="POST" action="{{ route('plugins.universal_payment.status', $tx) }}" class="inline-flex items-center gap-1.5">
                                         @csrf
