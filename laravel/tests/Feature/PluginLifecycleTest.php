@@ -377,7 +377,7 @@ class PluginLifecycleTest extends TestCase
     public function test_separated_builders_install_and_uninstall_independently_while_preserving_data(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['page-builder', 'slider-builder', 'carousel-builder', 'cms-website']);
+        $this->activatePlugins(['cms-website', 'page-builder', 'slider-builder', 'carousel-builder']);
 
         DB::table('cms_pages')->insert([
             'slug' => 'ielts-guarantee',
