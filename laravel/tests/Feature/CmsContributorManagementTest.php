@@ -203,4 +203,28 @@ final class CmsContributorManagementTest extends TestCase
     }
 
 
+
+    public function test_cms_editor_cannot_self_approve_its_own_submission(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+        $editor = $this->createUserWithRole('teacher');
+        $this->grantCmsRole($editor, 'cms_editor');
+        $post = $this->createDraft($editor, 'Editor Self Review Draft');
+
+        $this->actingAs($editor)->post('/admin/cms/editorial/posts/' . $post->id . '/submit-review')
+            ->assertSessionHasNoErrors();
+        $this->actingAs($editor)->post('/admin/cms/editorial/posts/' . $post->id . '/approve')
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('cms_posts', [
+            'id' => $post->id,
+            'editorial_status' => 'in_review',
+            'submitted_by' => $editor->id,
+            'reviewed_by' => null,
+            'is_published' => false,
+        ]);
+    }
+
+
 }
