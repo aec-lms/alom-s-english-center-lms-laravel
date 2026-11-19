@@ -274,6 +274,7 @@ class PluginManager
             throw $e;
         }
 
+        $this->clearCachedPluginRoutes();
         event(new PluginLifecycleEvent('updated', $manifest->slug, $manifest->version, $actorId, ['from_version' => $fromVersion]));
 
         return $updated;
@@ -491,6 +492,7 @@ class PluginManager
             return $record->fresh();
         });
 
+        $this->clearCachedPluginRoutes();
         event(new PluginLifecycleEvent('disabled', $slug, $record->version, $actorId));
 
         return $record;
@@ -525,6 +527,7 @@ class PluginManager
             return $record->fresh();
         });
 
+        $this->clearCachedPluginRoutes();
         event(new PluginLifecycleEvent('uninstalled', $slug, $record->version, $actorId));
 
         return $record;
@@ -1333,15 +1336,24 @@ class PluginManager
      * Route files are required again after runtime installation so newly enabled
      * modules are available without restarting the application.
      */
+    private function clearCachedPluginRoutes(): void
+    {
+        $cachePath = app()->getCachedRoutesPath();
+        if (!is_file($cachePath)) {
+            return;
+        }
+
+        Artisan::call('route:clear');
+        if (is_file($cachePath)) {
+            throw new RuntimeException('Compiled plugin routes could not be invalidated after a plugin lifecycle change.');
+        }
+    }
+
     public function loadPluginRoutes(PluginManifest $manifest): void
     {
         // A compiled route cache already contains the deployment's plugin routes.
         // Runtime requires would bypass that cache and can create duplicate routes.
-        if (is_file(app()->getCachedRoutesPath())) {
-            // Runtime plugin installation changes the enabled route set. Clear the
-            // stale compiled file, then register this plugin's routes in this process.
-            Artisan::call('route:clear');
-        }
+        $this->clearCachedPluginRoutes();
 
         foreach (['Routes/web.php', 'Routes/api.php'] as $relative) {
             $routeFile = rtrim($manifest->basePath, DIRECTORY_SEPARATOR)
