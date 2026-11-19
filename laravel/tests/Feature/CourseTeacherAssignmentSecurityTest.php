@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use Illuminate\\Support\\Facades\\DB;
-use Plugins\\Modules\\CourseManagement\\Models\\Course;
-use Tests\\TestCase;
+use Illuminate\Support\Facades\DB;
+use Plugins\Modules\CourseManagement\Models\Course;
+use Tests\TestCase;
 
 final class CourseTeacherAssignmentSecurityTest extends TestCase
 {
