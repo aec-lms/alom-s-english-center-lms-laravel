@@ -25,7 +25,7 @@ class BoostController extends Controller
 
         $totals = [
             'campaigns' => $campaigns->count(),
-            'active' => $campaigns->where('status', 'active')->count(),
+            'active' => $campaigns->filter(fn (BoostCampaign $campaign): bool => $this->isEligible($campaign))->count(),
             'impressions' => (int) $campaigns->sum('impressions'),
             'clicks' => (int) $campaigns->sum('clicks'),
         ];
