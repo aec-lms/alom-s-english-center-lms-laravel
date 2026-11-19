@@ -62,11 +62,15 @@ class StudentController extends Controller
             $validated['branch_id'] = $actor->branch_id;
         }
 
+        // Fail closed before creating a user if the canonical student role is unavailable.
+        $studentRole = Role::query()->where('slug', 'student')->first();
+        abort_unless($studentRole, 503, 'Student role is not configured. Contact an administrator.');
+
         $code = !empty($validated['student_code'])
             ? trim($validated['student_code'])
             : 'STU-' . strtoupper(Str::random(6));
 
-        $student = DB::transaction(function () use ($validated, $code): Student {
+        $student = DB::transaction(function () use ($validated, $code, $studentRole): Student {
             $user = User::query()->create([
                 'name' => $validated['name'],
                 'email' => strtolower($validated['email']),
@@ -75,9 +79,7 @@ class StudentController extends Controller
                 'branch_id' => $validated['branch_id'] ?? null,
                 'is_active' => ($validated['status'] ?? 'active') === 'active',
             ]);
-            if ($role = Role::query()->where('slug', 'student')->first()) {
-                $user->roles()->sync([$role->id]);
-            }
+            $user->roles()->sync([$studentRole->id]);
             return Student::query()->create([
                 'user_id' => $user->id,
                 'branch_id' => $validated['branch_id'] ?? null,
