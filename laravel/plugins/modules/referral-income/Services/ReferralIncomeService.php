@@ -121,74 +121,97 @@ class ReferralIncomeService
     }
 
     /**
-     * Reverse referral commission proportionally after a verified refund.
-     * The payment_refund_id unique key makes retries safe. Paid commissions
-     * are not silently rewritten: a recovery balance is recorded for admin review.
+     * Reverse commission only for an authoritative, recorded refund.
+     * Each payment_refund_id is idempotent; paid or payout-committed commissions
+     * are not silently edited and instead create a recovery_due ledger entry.
      */
     public function reverseSettledPurchase(
         User $buyer,
         string $sourceType,
         string|int $sourceId,
         int $paymentRefundId,
-        float $refundAmount,
-        string $currency = 'BDT'
+        float $refundedAmount,
+        string $currency = 'BDT',
     ): ?int {
-        if ($refundAmount <= 0 || $paymentRefundId < 1 || !Schema::hasTable('referral_commission_reversals')) {
+        if ($paymentRefundId < 1 || $refundedAmount <= 0
+            || strlen((string) $sourceId) > 80
+            || !preg_match('/^[a-z0-9_-]{2,40}$/i', $sourceType)) {
             return null;
         }
 
-        return DB::transaction(function () use ($buyer, $sourceType, $sourceId, $paymentRefundId, $refundAmount, $currency): ?int {
+        if (!Schema::hasTable('payment_refunds') || !Schema::hasTable('referral_commission_reversals')) {
+            return null;
+        }
+
+        return DB::transaction(function () use ($buyer, $sourceType, $sourceId, $paymentRefundId, $refundedAmount, $currency): ?int {
+            // Lock the authoritative refund row so concurrent retries serialize
+            // before checking/inserting the unique reversal record.
+            $refundRecord = DB::table('payment_refunds')->where('id', $paymentRefundId)->lockForUpdate()->first();
+            if (!$refundRecord || round((float) $refundRecord->amount, 2) !== round($refundedAmount, 2)) {
+                throw new RuntimeException('Referral reversal must match an existing recorded payment refund.');
+            }
+
+            $existing = DB::table('referral_commission_reversals')
+                ->where('payment_refund_id', $paymentRefundId)->lockForUpdate()->first();
+            if ($existing) {
+                return (int) $existing->id;
+            }
+
             $commission = DB::table('referral_commissions')
                 ->where('referred_user_id', $buyer->id)
                 ->where('source_type', $sourceType)
                 ->where('source_id', (string) $sourceId)
                 ->where('currency', strtoupper($currency))
                 ->lockForUpdate()->first();
-            if (!$commission) return null;
 
-            $existing = DB::table('referral_commission_reversals')
-                ->where('payment_refund_id', $paymentRefundId)->first();
-            if ($existing) return (int) $existing->id;
+            if (!$commission) {
+                return null;
+            }
 
             $alreadyReversed = (float) DB::table('referral_commission_reversals')
-                ->where('commission_id', $commission->id)->sum('refund_amount');
-            $eligibleAmount = (float) $commission->eligible_amount;
-            $remainingEligible = max(0, round($eligibleAmount - $alreadyReversed, 2));
-            $appliedRefund = min(round($refundAmount, 2), $remainingEligible);
-            if ($appliedRefund <= 0 || $eligibleAmount <= 0) return null;
+                ->where('referral_commission_id', $commission->id)
+                ->sum('refunded_amount');
+            $refund = round($refundedAmount, 2);
+            $eligible = round((float) $commission->eligible_amount, 2);
+            if ($refund > round($eligible - $alreadyReversed, 2) + 0.01) {
+                throw new RuntimeException('Referral commission reversal exceeds the remaining eligible purchase amount.');
+            }
 
-            $reversalAmount = round($appliedRefund * ((float) $commission->commission_percent / 100), 2);
+            $alreadyReversedCommission = (float) DB::table('referral_commission_reversals')
+                ->where('referral_commission_id', $commission->id)
+                ->sum('commission_reversal_amount');
+            $originalCommission = round($eligible * ((float) $commission->commission_percent / 100), 2);
+            $cumulativeRefunded = round($alreadyReversed + $refund, 2);
+            $cumulativeTarget = $cumulativeRefunded >= $eligible - 0.01
+                ? $originalCommission
+                : round($cumulativeRefunded * ((float) $commission->commission_percent / 100), 2);
+            $reversalAmount = min(
+                max(0, round($originalCommission - $alreadyReversedCommission, 2)),
+                max(0, round($cumulativeTarget - $alreadyReversedCommission, 2)),
+            );
+            $reversalAmount = round($reversalAmount, 2);
+            $requiresRecovery = $commission->status === 'paid'
+                || $commission->status === 'payout_requested'
+                || $commission->payout_request_id !== null;
+
             $reversalId = DB::table('referral_commission_reversals')->insertGetId([
-                'commission_id' => $commission->id,
+                'referral_commission_id' => $commission->id,
                 'payment_refund_id' => $paymentRefundId,
-                'refund_amount' => $appliedRefund,
+                'refunded_amount' => $refund,
                 'commission_reversal_amount' => $reversalAmount,
                 'currency' => strtoupper($currency),
-                'status' => $commission->status === 'paid' ? 'recovery_due' : 'applied',
+                'status' => $requiresRecovery ? 'recovery_due' : 'applied',
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
 
-            if ($commission->status !== 'paid') {
-                $newEligible = max(0, round($eligibleAmount - $alreadyReversed - $appliedRefund, 2));
-                $newCommission = max(0, round((float) $commission->commission_amount - $reversalAmount, 2));
-                $fullyReversed = $newEligible <= 0.009;
+            if (!$requiresRecovery) {
+                $remainingCommission = max(0, round((float) $commission->commission_amount - $reversalAmount, 2));
                 DB::table('referral_commissions')->where('id', $commission->id)->update([
-                    'commission_amount' => $newCommission,
-                    'status' => $fullyReversed ? 'reversed' : $commission->status,
+                    'commission_amount' => $remainingCommission,
+                    'status' => $remainingCommission <= 0 ? 'reversed' : $commission->status,
                     'updated_at' => now(),
                 ]);
-
-                if (in_array($commission->status, ['payout_requested', 'payout_approved'], true) && $commission->payout_request_id) {
-                    $payoutTotal = (float) DB::table('referral_commissions')
-                        ->where('payout_request_id', $commission->payout_request_id)
-                        ->whereIn('status', ['payout_requested', 'payout_approved'])
-                        ->sum('commission_amount');
-                    DB::table('referral_payout_requests')->where('id', $commission->payout_request_id)->update([
-                        'amount' => round($payoutTotal, 2),
-                        'updated_at' => now(),
-                    ]);
-                }
             }
 
             return (int) $reversalId;
@@ -207,6 +230,15 @@ class ReferralIncomeService
             // Never combine foreign-currency commissions or silently treat them as BDT.
             $commissions = DB::table('referral_commissions')->where('referrer_user_id', $owner->id)
                 ->where('status', 'approved')->where('currency', 'BDT')->orderBy('id')->lockForUpdate()->get();
+            if (Schema::hasTable('referral_commission_reversals')
+                && DB::table('referral_commission_reversals')
+                    ->whereIn('referral_commission_id', $commissions->pluck('id'))
+                    ->where('status', 'recovery_due')->exists()) {
+                throw ValidationException::withMessages([
+                    'payout' => 'A refunded commission is awaiting recovery reconciliation and cannot be paid again yet.',
+                ]);
+            }
+
             $amount = round((float) $commissions->sum('commission_amount'), 2);
             $minimum = (float) (DB::table('referral_income_rules')->where('referrer_type', $type)->value('minimum_payout') ?? 500);
             if ($amount < $minimum) {
