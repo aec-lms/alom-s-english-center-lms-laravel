@@ -23,6 +23,7 @@ use App\Http\Controllers\Admin\PluginCenterController;
 use App\Http\Controllers\Admin\UpdateCenterController;
 use App\Http\Controllers\Admin\UserRoleController;
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\LanguageController;
 use App\Http\Controllers\InstallerController;
 use App\Http\Controllers\PublicHomeController;
 use App\Http\Controllers\PortalController;
