@@ -20,6 +20,8 @@ final class AlBrandingLoaderProductionHardeningTest extends TestCase
         $this->assertStringContainsString('Math.min(', $view);
         $this->assertStringContainsString('Math.max(0, maxDuration - elapsed)', $view);
         $this->assertStringContainsString('window.setTimeout(forceHide, maxDuration)', $view);
+        $this->assertStringContainsString('event.target instanceof Element', $view);
+        $this->assertStringContainsString('transition:none!important', $view);
     }
 
     public function test_first_visit_is_recorded_only_after_a_successful_window_load(): void
@@ -74,4 +76,28 @@ final class AlBrandingLoaderProductionHardeningTest extends TestCase
         $this->assertNotNull($setting->logo_url);
     }
 
+    public function test_model_respects_excluded_paths_and_keeps_public_pages_enabled(): void
+    {
+        $setting = new LoaderSetting([
+            'enabled' => true,
+            'excluded_paths' => ['admin/*', 'api/*', 'payment/*'],
+        ]);
+
+        $this->assertFalse($setting->shouldRenderForPath('admin/users'));
+        $this->assertFalse($setting->shouldRenderForPath('api/courses'));
+        $this->assertFalse($setting->shouldRenderForPath('payment/checkout'));
+        $this->assertTrue($setting->shouldRenderForPath('courses'));
+    }
+
+    public function test_model_never_renders_when_disabled(): void
+    {
+        $setting = new LoaderSetting(['enabled' => false]);
+        $this->assertFalse($setting->shouldRenderForPath('courses'));
+    }
+
+    public function test_logo_url_rejects_paths_outside_the_plugin_upload_directory(): void
+    {
+        $setting = new LoaderSetting(['logo_path' => 'uploads/other-plugin/logo.png']);
+        $this->assertNull($setting->logo_url);
+    }
 }
