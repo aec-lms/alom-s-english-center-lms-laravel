@@ -483,4 +483,38 @@ class CmsWebsiteSafetyTest extends TestCase
         ]);
     }
 
+
+    public function test_existing_draft_cannot_bypass_editorial_review_through_update_publish_flag(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+        $admin = $this->createUserWithRole('admin');
+        $post = CmsPost::query()->create([
+            'slug' => 'update-publish-bypass-' . uniqid(),
+            'title' => 'Draft Must Stay Unpublished',
+            'category' => 'General',
+            'author' => 'AEC LMS',
+            'content' => 'Original draft content.',
+            'is_published' => false,
+            'editorial_status' => 'draft',
+        ]);
+
+        $this->actingAs($admin)->put('/admin/cms/posts/' . $post->id, [
+            'title' => 'Updated Draft Must Stay Unpublished',
+            'slug' => $post->slug,
+            'content' => 'Updated draft content.',
+            'is_published' => '1',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('cms_posts', [
+            'id' => $post->id,
+            'title' => 'Updated Draft Must Stay Unpublished',
+            'is_published' => false,
+            'editorial_status' => 'draft',
+            'submitted_by' => null,
+            'reviewed_by' => null,
+        ]);
+    }
+
+
 }
