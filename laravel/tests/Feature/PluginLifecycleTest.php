@@ -88,9 +88,9 @@ class PluginLifecycleTest extends TestCase
                 File::put($directory . DIRECTORY_SEPARATOR . 'plugin.json', json_encode($manifest, JSON_THROW_ON_ERROR));
 
                 try {
-                    \\App\\Core\\Plugins\\PluginManifest::fromDirectory($directory);
+                    \App\Core\Plugins\PluginManifest::fromDirectory($directory);
                     $this->fail('Malformed plugin manifest metadata must be rejected.');
-                } catch (\\InvalidArgumentException) {
+                } catch (\InvalidArgumentException) {
                     $this->assertTrue(true);
                 }
             }
