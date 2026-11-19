@@ -83,7 +83,7 @@ final class TeacherProfileValidationTest extends TestCase
         $this->activatePlugins(['teacher-management', 'branch-management']);
         $admin = $this->createUserWithRole('admin');
 
-        $branchId = \\Illuminate\\Support\\Facades\\DB::table('branches')->insertGetId([
+        $branchId = \Illuminate\Support\Facades\DB::table('branches')->insertGetId([
             'name' => 'Teacher Branch',
             'code' => 'TBR-' . strtoupper(bin2hex(random_bytes(3))),
             'is_active' => true,
