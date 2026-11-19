@@ -66,6 +66,22 @@ class PluginCategoryRegistryTest extends TestCase
         $this->assertSame('Other', PluginCategoryRegistry::labelFor('future-unknown-plugin', 'unclassified'));
     }
 
+    public function test_plugin_center_groups_catalog_cards_by_canonical_category(): void
+    {
+        $this->markSystemInstalled();
+        $admin = $this->createUserWithRole('admin');
+
+        $response = $this->actingAs($admin)->get('/admin/plugins')->assertOk();
+
+        $response->assertSee('Academic &amp; Learning')
+            ->assertSee('Student &amp; People Lifecycle')
+            ->assertSee('Finance &amp; Commerce')
+            ->assertSee('Content &amp; Website CMS')
+            ->assertSee('Platform Branding')
+            ->assertSee('course-management')
+            ->assertSee('universal-payment');
+    }
+
     public function test_category_resolution_does_not_rewrite_manifest_category_values(): void
     {
         $this->assertSame('academic-learning', PluginCategoryRegistry::keyFor('course-management', 'academic'));
