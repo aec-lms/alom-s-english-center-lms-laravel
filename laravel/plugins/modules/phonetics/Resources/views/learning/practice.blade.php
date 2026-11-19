@@ -49,6 +49,16 @@
                 <div class="rounded-lg bg-slate-50 p-3"><b>American English</b><p class="mt-1 text-lg">{{ $entry->us_ipa }}</p>@if($entry->us_audio_url)<audio class="mt-2 w-full" controls preload="none" src="{{ $entry->us_audio_url }}"></audio>@endif@if($setting->show_articulatory_notes)<p class="mt-2 text-xs">{{ $entry->us_note }}</p>@endif</div>
             </div>
             @if($entry->example_sentence)<p class="mt-3 text-sm italic">{{ $entry->example_sentence }}</p>@endif
+            <div class="mt-4 rounded-xl border border-dashed p-4 phonetics-recorder" data-upload-url="{{ route('plugins.phonetics.learning.recordings.store',['courseSlug'=>request()->route('courseSlug')]) }}" data-entry-id="{{ $entry->id }}">
+                <p class="font-semibold">Speaking practice</p>
+                <p class="mt-1 text-xs text-slate-500">Record up to 120 seconds. Your recording stays private and is submitted for teacher review.</p>
+                <div class="mt-3 flex flex-wrap gap-2">
+                    <button type="button" class="record-start rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white">Start recording</button>
+                    <button type="button" class="record-stop rounded-lg bg-slate-700 px-4 py-2 text-sm font-bold text-white" disabled>Stop & submit</button>
+                </div>
+                <audio class="record-preview mt-3 hidden w-full" controls></audio>
+                <p class="record-status mt-2 text-sm" role="status" aria-live="polite"></p>
+            </div>
         </article>
         @empty
         <div class="rounded-xl border bg-white p-8 text-center text-slate-500 md:col-span-2">No vocabulary has been assigned to this course, lesson or batch yet.</div>
@@ -71,6 +81,39 @@
 </main>
 <script>
 (() => {
+ const csrf=document.querySelector('meta[name=csrf-token]')?.content||'';
+ document.querySelectorAll('.phonetics-recorder').forEach((widget)=>{
+  const start=widget.querySelector('.record-start'),stop=widget.querySelector('.record-stop'),status=widget.querySelector('.record-status'),preview=widget.querySelector('.record-preview');
+  let recorder=null,stream=null,chunks=[],startedAt=0,previewUrl=null;
+  const finishTracks=()=>{if(stream){stream.getTracks().forEach(track=>track.stop());stream=null;}};
+  start.addEventListener('click',async()=>{
+   if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder){status.textContent='Microphone recording is not supported in this browser. Try a current Chrome, Edge or Firefox browser.';return;}
+   start.disabled=true;status.textContent='Waiting for microphone permission…';
+   try{
+    stream=await navigator.mediaDevices.getUserMedia({audio:true});
+    const preferred=['audio/webm;codecs=opus','audio/ogg;codecs=opus','audio/webm'].find(type=>MediaRecorder.isTypeSupported(type));
+    recorder=preferred?new MediaRecorder(stream,{mimeType:preferred}):new MediaRecorder(stream);chunks=[];startedAt=Date.now();
+    recorder.addEventListener('dataavailable',event=>{if(event.data.size)chunks.push(event.data);});
+    recorder.addEventListener('stop',async()=>{
+     const duration=Math.max(1,Math.ceil((Date.now()-startedAt)/1000));finishTracks();stop.disabled=true;
+     if(duration>120){status.textContent='Maximum recording length is 120 seconds. Please record a shorter answer.';start.disabled=false;return;}
+     const blob=new Blob(chunks,{type:recorder.mimeType||'audio/webm'});
+     if(previewUrl)URL.revokeObjectURL(previewUrl);previewUrl=URL.createObjectURL(blob);preview.src=previewUrl;preview.classList.remove('hidden');
+     const extension=blob.type.includes('ogg')?'ogg':blob.type.includes('mp4')?'m4a':'webm';
+     const data=new FormData();data.append('_token',csrf);data.append('entry_id',widget.dataset.entryId);data.append('duration_seconds',String(duration));data.append('recording',new File([blob],'phonetics-practice.'+extension,{type:blob.type}));
+     status.textContent='Uploading securely…';
+     try{
+      const response=await fetch(widget.dataset.uploadUrl,{method:'POST',headers:{Accept:'application/json','X-CSRF-TOKEN':csrf},body:data});
+      const result=await response.json();if(!response.ok)throw new Error(result.message||'Upload failed.');
+      status.textContent='Submitted for teacher review. Recording #'+result.recording_id+'.';
+     }catch(error){status.textContent=error.message||'Unable to upload recording. Please try again.';}
+     start.disabled=false;
+    },{once:true});
+    recorder.start();start.disabled=true;stop.disabled=false;status.textContent='Recording… speak clearly. Maximum 120 seconds.';
+   }catch(error){finishTracks();start.disabled=false;status.textContent=error.name==='NotAllowedError'?'Microphone permission was denied. Allow microphone access and try again.':'Could not start microphone recording.';}
+  });
+  stop.addEventListener('click',()=>{if(recorder&&recorder.state!=='inactive'){stop.disabled=true;status.textContent='Finishing recording…';recorder.stop();}});
+ });
  const form=document.getElementById('course-phonetics-practice');if(!form)return;
  form.addEventListener('submit',async(event)=>{
   event.preventDefault();const button=form.querySelector('button');const result=document.getElementById('course-phonetics-result');button.disabled=true;result.textContent='Checking…';
