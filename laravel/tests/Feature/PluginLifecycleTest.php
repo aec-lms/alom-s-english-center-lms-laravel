@@ -845,7 +845,7 @@ PHP;
             try {
                 app(PluginManager::class)->enable($slug);
                 $this->fail('A plugin with an invalid route file must not remain enabled.');
-            } catch (\\ParseError $exception) {
+            } catch (\ParseError $exception) {
                 $this->assertStringContainsString('unexpected', strtolower($exception->getMessage()));
             }
 
