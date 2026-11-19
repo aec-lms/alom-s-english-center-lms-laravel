@@ -155,8 +155,8 @@ class BoostCampaignSafetyTest extends TestCase
             ->assertSee(route('plugins.boost.click', $courseCampaign), false);
 
         $html = $this->get('/courses')->getContent();
-        $otherCourseCard = substr($html, (int) strpos($html, 'General Spoken Course') - 1800, 2600);
-        $this->assertStringNotContainsString('Dhanmondi Branch Promotion', $otherCourseCard);
+        $this->assertSame(1, substr_count($html, 'Dhanmondi Branch Promotion'), 'A branch campaign must render only on courses belonging to its target branch.');
+        $this->assertSame(1, substr_count($html, 'IELTS Course Promotion'), 'A course campaign must render only on its target course.');
     }
 
     public function test_global_homepage_campaigns_are_rendered_and_tracked(): void
