@@ -37,7 +37,10 @@ class SliderBuilderController extends Controller
         $validated['image_path'] = $request->hasFile('image')
             ? $this->storeImage($request->file('image'))
             : ($validated['image_path'] ?? null);
-        unset($validated['image']);
+        $validated['mobile_image_path'] = $request->hasFile('mobile_image')
+            ? $this->storeImage($request->file('mobile_image'))
+            : ($validated['mobile_image_path'] ?? null);
+        unset($validated['image'], $validated['mobile_image']);
         $validated['is_active'] = $request->boolean('is_active', true);
 
         $slider = HeroSlider::query()->create($validated);
