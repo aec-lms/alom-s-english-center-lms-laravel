@@ -142,13 +142,13 @@ final class UnifiedCommerceCartTest extends TestCase
             'id' => $gift->id,
             'commerce_order_item_id' => $courseGiftOrderItem->id,
             'status' => 'awaiting_payment',
-            'invoice_id' => $order->invoice_id,
+            'invoice_id' => null,
         ]);
         $this->assertDatabaseHas('course_gift_vouchers', [
             'id' => $voucher->id,
             'commerce_order_item_id' => $voucherOrderItem->id,
             'status' => 'awaiting_payment',
-            'invoice_id' => $order->invoice_id,
+            'invoice_id' => null,
         ]);
     }
 
