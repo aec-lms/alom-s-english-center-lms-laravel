@@ -23,6 +23,25 @@ class PluginCategoryRegistryTest extends TestCase
         }
     }
 
+    public function test_registry_matches_every_current_plugin_manifest_slug(): void
+    {
+        $manifestFiles = glob(base_path('plugins/modules/*/plugin.json')) ?: [];
+        $manifestSlugs = [];
+
+        foreach ($manifestFiles as $manifestPath) {
+            $manifest = json_decode((string) file_get_contents($manifestPath), true, 512, JSON_THROW_ON_ERROR);
+            $this->assertIsArray($manifest);
+            $this->assertIsString($manifest['slug'] ?? null);
+            $manifestSlugs[] = $manifest['slug'];
+        }
+
+        $registeredSlugs = PluginCategoryRegistry::knownSlugs();
+        sort($manifestSlugs);
+        sort($registeredSlugs);
+
+        $this->assertSame($manifestSlugs, $registeredSlugs, 'Every plugin manifest must be classified exactly once.');
+    }
+
     public function test_legacy_categories_and_unknown_future_plugins_fall_back_safely(): void
     {
         $this->assertSame('academic-learning', PluginCategoryRegistry::keyFor('future-academic-plugin', 'education'));
