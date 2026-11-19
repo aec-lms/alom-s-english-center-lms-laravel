@@ -19,7 +19,7 @@ class CourseTeacherAssignmentController extends Controller
     {
         $branchId = $this->branches->assignedBranchId($request->user());
         $courses = DB::table('courses')->whereNull('deleted_at')->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))->orderBy('title')->get(['id', 'title', 'branch_id']);
-        $teachers = User::query()->whereHas('roles', fn ($q) => $q->where('slug', 'teacher'))
+        $teachers = User::query()->where('is_active', true)->whereHas('roles', fn ($q) => $q->where('slug', 'teacher'))
             ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
             ->orderBy('name')->get(['id', 'name', 'email', 'branch_id']);
         $assignments = DB::table('course_teacher_assignments')
@@ -44,7 +44,7 @@ class CourseTeacherAssignmentController extends Controller
             ->first();
         abort_unless($course, 404, 'Course not found in your assigned branch.');
         $teacher = User::query()->findOrFail($data['teacher_user_id']);
-        abort_unless($teacher->hasRole('teacher'), 422, 'Select an active teacher account.');
+        abort_unless($teacher->hasRole('teacher') && (bool) $teacher->is_active, 422, 'Select an active teacher account.');
         if ($branchId !== null) {
             abort_unless((int) $course->branch_id === $branchId && (int) $teacher->branch_id === $branchId, 404, 'Course and teacher must belong to your assigned branch.');
         }
