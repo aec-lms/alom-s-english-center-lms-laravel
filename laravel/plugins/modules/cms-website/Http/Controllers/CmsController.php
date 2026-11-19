@@ -307,9 +307,15 @@ class CmsController extends Controller
         $title = $post->title;
         $id = (string) $post->id;
         $assets = [$post->thumbnail_path, $post->pdf_path, $post->pdf_thumbnail];
+        if (Schema::hasTable('cms_post_revisions')) {
+            $revisionAssets = DB::table('cms_post_revisions')->where('post_id', $post->id)->get(['thumbnail_path', 'pdf_path', 'pdf_thumbnail']);
+            foreach ($revisionAssets as $revisionAsset) {
+                array_push($assets, $revisionAsset->thumbnail_path, $revisionAsset->pdf_path, $revisionAsset->pdf_thumbnail);
+            }
+            DB::table('cms_post_revisions')->where('post_id', $post->id)->delete();
+        }
 
-        // Remove the row first; the shared-reference check then protects files
-        // still used by courses, store items, or other posts.
+        // Remove the row and its revision history, then clean only truly unreferenced files.
         $post->forceDelete();
         foreach ($assets as $assetPath) {
             $this->deleteUnusedUpload($assetPath);
@@ -477,6 +483,7 @@ class CmsController extends Controller
         if (!$path || !str_starts_with($path, '/uploads/')) return;
         $references = [
             'cms_posts' => ['thumbnail_path', 'pdf_thumbnail', 'pdf_path'],
+            'cms_post_revisions' => ['thumbnail_path', 'pdf_thumbnail', 'pdf_path'],
             'courses' => ['thumbnail', 'pdf_thumbnail', 'pdf_path'],
             'storefront_items' => ['thumbnail_path', 'pdf_thumbnail_path', 'download_url'],
         ];
