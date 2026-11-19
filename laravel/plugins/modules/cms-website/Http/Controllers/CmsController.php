@@ -259,6 +259,8 @@ class CmsController extends Controller
         abort_unless(Schema::hasTable('cms_post_revisions'), 404);
         $revision = DB::table('cms_post_revisions')->where('id', $revisionId)->where('post_id', $post->id)->first();
         abort_unless($revision, 404);
+        // Snapshot the current content before restoring the selected historical version.
+        $this->storePostRevision($post, $request);
         $currentAssets = [$post->thumbnail_path, $post->pdf_path, $post->pdf_thumbnail];
         $post->update([
             'title' => $revision->title, 'slug' => $revision->slug, 'category' => $revision->category,
@@ -273,7 +275,6 @@ class CmsController extends Controller
                 $this->deleteUnusedUpload($assetPath, (int) $post->id);
             }
         }
-        $this->storePostRevision($post, $request);
         $this->audit->log('cms.post_revision_restored', 'cms_post', (string) $post->id, ['revision_id' => $revisionId]);
         return back()->with('status', "Revision restored for '{$post->title}'.");
     }
