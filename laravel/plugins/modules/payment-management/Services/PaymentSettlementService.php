@@ -410,6 +410,15 @@ class PaymentSettlementService
             if ($courseBranchId !== null && $courseBranchId !== $orderBranchId) {
                 throw new RuntimeException('Gifted course branch no longer matches the sender branch; manual reconciliation is required.');
             }
+            if (Schema::hasColumn('course_gifts', 'recipient_user_id') && $draft->recipient_user_id !== null) {
+                $recipient = User::query()->find((int) $draft->recipient_user_id);
+                if (!$recipient || strtolower(trim((string) $recipient->email)) !== $recipientEmail) {
+                    throw new RuntimeException('The known gift recipient account no longer matches the recipient email.');
+                }
+                if ($courseBranchId !== null && $this->assignedBranchId($recipient) !== $courseBranchId) {
+                    throw new RuntimeException('The known gift recipient is not assigned to the course branch; manual reconciliation is required.');
+                }
+            }
         } else {
             foreach (['course_gift_wallets', 'course_gift_wallet_transactions', 'course_gift_voucher_redemptions'] as $requiredTable) {
                 if (!Schema::hasTable($requiredTable)) {
