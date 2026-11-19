@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use Plugins\Modules\CommerceCart\Services\CommerceCatalog;
 use Plugins\Modules\CourseManagement\Models\Course;
+use Plugins\Modules\BranchManagement\Models\Branch;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\MarketingManagement\Models\PromoCoupon;
 use Plugins\Modules\UniversalPayment\Services\UniversalPaymentOrchestrator;
@@ -151,6 +152,47 @@ final class UnifiedCommerceCartTest extends TestCase
             'status' => 'awaiting_payment',
             'invoice_id' => null,
         ]);
+    }
+
+    public function test_course_gift_draft_endpoint_rejects_courses_from_another_branch(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['commerce-cart', 'course-management', 'branch-management']);
+        $student = $this->createUserWithRole('student');
+        $senderBranch = Branch::query()->create([
+            'code' => 'GIFT-SENDER-' . $student->id,
+            'name' => 'Gift Sender Branch',
+            'is_active' => true,
+        ]);
+        $otherBranch = Branch::query()->create([
+            'code' => 'GIFT-OTHER-' . $student->id,
+            'name' => 'Other Gift Branch',
+            'is_active' => true,
+        ]);
+
+        if (Schema::hasColumn('users', 'branch_id')) {
+            $student->forceFill(['branch_id' => $senderBranch->id])->save();
+        }
+
+        $course = Course::query()->create([
+            'code' => 'CROSS-BRANCH-GIFT-' . $student->id,
+            'title' => 'Other Branch Gift Course',
+            'slug' => 'other-branch-gift-course-' . $student->id,
+            'price' => 1800,
+            'status' => 'published',
+            'branch_id' => $otherBranch->id,
+        ]);
+
+        $this->actingAs($student)->post('/cart/gifts/course', [
+            'course_id' => $course->id,
+            'recipient_email' => 'cross.branch.recipient@example.test',
+        ])->assertSessionHasErrors('course_id');
+
+        $this->assertDatabaseMissing('course_gifts', [
+            'sender_user_id' => $student->id,
+            'course_id' => $course->id,
+        ]);
+        $this->assertDatabaseMissing('commerce_cart_items', ['item_type' => 'gift_course']);
     }
 
     public function test_checkout_rejects_catalogue_price_currency_or_title_changes_after_add_to_cart(): void
