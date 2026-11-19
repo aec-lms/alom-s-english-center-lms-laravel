@@ -437,6 +437,7 @@ class CmsController extends Controller
         DB::transaction(function () use ($post, $validated, $user): void {
             $locked = CmsPost::query()->lockForUpdate()->findOrFail($post->id);
             abort_if($locked->is_published, 422);
+            $this->validateEditorialAssignments($user, $validated, $locked);
             $authorId = (int) ($validated['author_user_id'] ?? $locked->author_user_id);
             if ($authorId) $this->assertCmsAuthor($authorId);
             $author = $authorId ? User::query()->find($authorId) : null;
