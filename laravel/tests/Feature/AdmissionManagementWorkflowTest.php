@@ -148,7 +148,7 @@ class AdmissionManagementWorkflowTest extends TestCase
             'address' => 'Dhaka, Bangladesh',
         ])->assertSessionHasNoErrors();
 
-        $application = AdmissionApplication::query()->where('email', 'PUBLIC.APPLICANT@AEC.TEST')->first();
+        $application = AdmissionApplication::query()->where('email', 'public.applicant@aec.test')->first();
         $this->assertNotNull($application);
         $this->assertSame('pending', $application->status);
         $this->assertSame('website', $application->application_source);
