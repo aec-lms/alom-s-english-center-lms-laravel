@@ -124,10 +124,11 @@ class PluginManager
         $previousAttributes = $previousRecord?->getAttributes();
         $wasInstalled = (bool) ($previousRecord?->is_installed);
         $wasEnabled = (bool) ($previousRecord?->is_enabled);
+        $previousInstalledAt = $previousRecord?->installed_at;
         $migratedRelative = $this->runPluginMigrations($manifest);
 
         try {
-            $record = DB::transaction(function () use ($manifest, $actorId, $wasInstalled, $wasEnabled): PluginRecord {
+            $record = DB::transaction(function () use ($manifest, $actorId, $wasInstalled, $wasEnabled, $previousInstalledAt): PluginRecord {
                 $record = PluginRecord::query()->updateOrCreate(
                     ['slug' => $manifest->slug],
                     [
@@ -143,7 +144,7 @@ class PluginManager
                         // Re-running install must not silently re-enable a plugin
                         // that an administrator deliberately disabled.
                         'is_enabled' => $wasInstalled ? $wasEnabled : true,
-                        'installed_at' => $wasInstalled ? ($previousRecord?->installed_at ?? now()) : now(),
+                        'installed_at' => $wasInstalled ? ($previousInstalledAt ?? now()) : now(),
                     ]
                 );
 
