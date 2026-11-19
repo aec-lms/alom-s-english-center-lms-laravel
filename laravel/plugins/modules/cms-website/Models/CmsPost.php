@@ -29,6 +29,7 @@ class CmsPost extends Model
         'publish_at',
         'editorial_status',
         'submitted_at',
+        'submitted_by',
         'reviewed_at',
         'reviewed_by',
         'review_note',
