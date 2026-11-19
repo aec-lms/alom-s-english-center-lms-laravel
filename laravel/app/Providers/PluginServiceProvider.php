@@ -61,6 +61,7 @@ class PluginServiceProvider extends ServiceProvider
             }
             $provider = $this->app->resolveProvider($manifest->providerClass);
             $this->app->register($provider);
+            $manager->loadPluginRoutes($manifest);
         }
     }
 }
