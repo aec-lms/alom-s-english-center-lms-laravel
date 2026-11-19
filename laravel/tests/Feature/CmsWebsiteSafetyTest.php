@@ -517,4 +517,51 @@ class CmsWebsiteSafetyTest extends TestCase
     }
 
 
+
+    public function test_restoring_a_published_historical_revision_never_republishes_a_draft(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+        $admin = $this->createUserWithRole('admin');
+        $post = CmsPost::query()->create([
+            'slug' => 'revision-publish-safety-' . uniqid(),
+            'title' => 'Current Unpublished Draft',
+            'category' => 'General',
+            'author' => 'AEC LMS',
+            'content' => 'Current draft content.',
+            'is_published' => false,
+        ]);
+
+        $revisionId = DB::table('cms_post_revisions')->insertGetId([
+            'post_id' => $post->id,
+            'user_id' => $admin->id,
+            'title' => 'Previously Published Snapshot',
+            'slug' => 'previously-published-snapshot-' . uniqid(),
+            'category' => 'General',
+            'author' => 'AEC LMS',
+            'content' => 'Historical content that was once published.',
+            'is_published' => true,
+            'created_at' => now(),
+        ]);
+
+        $this->actingAs($admin)->post('/admin/cms/posts/' . $post->id . '/revisions/' . $revisionId . '/restore')
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('cms_posts', [
+            'id' => $post->id,
+            'title' => 'Previously Published Snapshot',
+            'is_published' => false,
+        ]);
+
+        if (\\Illuminate\\Support\\Facades\\Schema::hasColumn('cms_posts', 'editorial_status')) {
+            $this->assertDatabaseHas('cms_posts', [
+                'id' => $post->id,
+                'editorial_status' => 'draft',
+                'submitted_by' => null,
+                'reviewed_by' => null,
+            ]);
+        }
+    }
+
 }
