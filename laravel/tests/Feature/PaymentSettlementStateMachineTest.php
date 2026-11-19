@@ -762,4 +762,104 @@ class PaymentSettlementStateMachineTest extends TestCase
         $this->assertDatabaseHas('course_gifts', ['id' => $giftId, 'status' => 'paid', 'invoice_id' => $invoice->id]);
     }
 
+    public function test_rejected_manual_gift_order_releases_its_draft_for_retry(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'commerce-cart', 'course-management', 'universal-payment']);
+        $buyer = $this->createUserWithRole('student');
+        $admin = $this->createUserWithRole('admin');
+        $course = Course::query()->create([
+            'code' => 'GIFT-REJECT-' . strtoupper(bin2hex(random_bytes(3))),
+            'title' => 'Retryable Gift Course',
+            'slug' => 'retryable-gift-' . strtolower(bin2hex(random_bytes(3))),
+            'price' => 500,
+            'status' => 'published',
+        ]);
+        $invoice = FeeInvoice::query()->create([
+            'invoice_number' => 'GIFT-REJECT-' . strtoupper(bin2hex(random_bytes(4))),
+            'payer_name' => $buyer->name,
+            'payer_email' => $buyer->email,
+            'subtotal_amount' => 500,
+            'discount_amount' => 0,
+            'net_amount' => 500,
+            'paid_amount' => 0,
+            'currency' => 'BDT',
+            'status' => 'unpaid',
+        ]);
+        $orderId = DB::table('commerce_orders')->insertGetId([
+            'order_number' => 'GIFT-REJECT-ORDER-' . strtoupper(bin2hex(random_bytes(3))),
+            'user_id' => $buyer->id,
+            'invoice_id' => $invoice->id,
+            'branch_id' => null,
+            'currency' => 'BDT',
+            'subtotal' => 500,
+            'discount_total' => 0,
+            'grand_total' => 500,
+            'status' => 'awaiting_payment',
+            'payment_status' => 'pending',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $giftId = DB::table('course_gifts')->insertGetId([
+            'sender_user_id' => $buyer->id,
+            'recipient_user_id' => null,
+            'recipient_email' => 'retry-recipient@example.test',
+            'course_id' => $course->id,
+            'invoice_id' => null,
+            'redeem_token_hash' => hash('sha256', bin2hex(random_bytes(32))),
+            'status' => 'awaiting_payment',
+            'currency' => 'BDT',
+            'amount' => 500,
+            'subtotal_amount' => 500,
+            'discount_amount' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $itemId = DB::table('commerce_order_items')->insertGetId([
+            'order_id' => $orderId,
+            'item_type' => 'gift_course',
+            'item_id' => $giftId,
+            'title_snapshot' => 'Gift: Retryable Gift Course',
+            'quantity' => 1,
+            'unit_price' => 500,
+            'line_total' => 500,
+            'metadata' => json_encode(['course_gift_id' => $giftId, 'course_id' => $course->id]),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('course_gifts')->where('id', $giftId)->update(['commerce_order_item_id' => $itemId]);
+
+        $manual = DB::table('universal_payment_transactions')->insertGetId([
+            'reference' => 'UPAY-REJECT-' . strtoupper(bin2hex(random_bytes(3))),
+            'payer_name' => $buyer->name,
+            'payer_contact' => '01700000000',
+            'item_title' => 'Commerce Order',
+            'gateway' => 'bank_cash',
+            'currency' => 'BDT',
+            'amount' => 500,
+            'external_trx_id' => 'BANK-REJECT-' . strtoupper(bin2hex(random_bytes(3))),
+            'status' => 'pending',
+            'user_id' => $buyer->id,
+            'branch_id' => null,
+            'fee_invoice_id' => $invoice->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($admin)->post('/plugins/universal-payment/transactions/' . $manual . '/status', [
+            'status' => 'rejected',
+            'payment_reference' => 'BANK-REJECTED-RECEIPT',
+        ])->assertRedirect()->assertSessionHas('status');
+
+        $this->assertDatabaseHas('universal_payment_transactions', ['id' => $manual, 'status' => 'rejected']);
+        $this->assertDatabaseHas('commerce_orders', ['id' => $orderId, 'status' => 'failed', 'payment_status' => 'failed']);
+        $this->assertDatabaseHas('course_gifts', [
+            'id' => $giftId,
+            'status' => 'awaiting_payment',
+            'invoice_id' => null,
+            'commerce_order_item_id' => null,
+        ]);
+        $this->assertDatabaseHas('fee_invoices', ['id' => $invoice->id, 'status' => 'unpaid', 'paid_amount' => 0]);
+    }
+
 }
