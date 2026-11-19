@@ -215,7 +215,7 @@ class AdmissionController extends Controller
                 'reviewed_by' => $actor?->id,
                 'reviewed_at' => now(),
                 'interview_at' => array_key_exists('interview_at', $validated) ? $validated['interview_at'] : $locked->interview_at,
-                'assigned_to' => $validated['assigned_to'] ?? $locked->assigned_to,
+                'assigned_to' => array_key_exists('assigned_to', $validated) ? $validated['assigned_to'] : $locked->assigned_to,
             ]);
 
             return [$locked->fresh(), $current];
