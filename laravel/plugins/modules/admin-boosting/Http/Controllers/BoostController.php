@@ -170,6 +170,10 @@ class BoostController extends Controller
                 }
 
                 $type = (string) $request->input('entity_type');
+                if (in_array($type, ['institution', 'offer'], true)) {
+                    return;
+                }
+
                 if ($type === 'branch' && $request->input('placement') !== 'course_listing') {
                     $fail('Branch-targeted campaigns must use the course listing placement.');
                     return;
@@ -210,13 +214,35 @@ class BoostController extends Controller
 
     private function isSafeDestination(string $destination): bool
     {
-        if ($destination === '' || preg_match('/[\x00-\x1F\x7F]/', $destination)) {
+        if ($destination === '' || preg_match('/[\x00-\x1F\x7F]/', $destination)
+            || !str_starts_with($destination, '/') || str_starts_with($destination, '//')) {
             return false;
         }
 
-        return str_starts_with($destination, '/')
-            && !str_starts_with($destination, '//')
-            && !str_contains($destination, '\\');
+        $parts = parse_url($destination);
+        if ($parts === false || isset($parts['scheme']) || isset($parts['host'])
+            || isset($parts['user']) || isset($parts['pass'])) {
+            return false;
+        }
+
+        $path = (string) ($parts['path'] ?? '');
+        if (!str_starts_with($path, '/')) {
+            return false;
+        }
+
+        // Decode repeatedly so encoded and double-encoded protocol-relative
+        // paths or backslashes cannot bypass the redirect allowlist.
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $decoded = rawurldecode($path);
+            if ($decoded === $path) {
+                break;
+            }
+            $path = $decoded;
+        }
+
+        return !str_starts_with($path, '//')
+            && !str_contains($path, '\\')
+            && !preg_match('/[\x00-\x20\x7F]/', $path);
     }
 
     /**
