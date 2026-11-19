@@ -107,6 +107,43 @@ class CourseGiftCommerceTest extends TestCase
         $this->assertDatabaseCount('course_gift_wallet_transactions', 0);
     }
 
+    public function test_expired_paid_course_gift_cannot_be_redeemed(): void
+    {
+        $sender = $this->createUserWithRole('student');
+        $recipient = $this->createUserWithRole('student');
+        $recipient->update(['email' => 'expired-gift-recipient@example.test']);
+        $course = Course::query()->create([
+            'code' => 'EXPIRED-GIFT-001',
+            'title' => 'Expired Gift Course',
+            'slug' => 'expired-gift-course',
+            'price' => 900,
+            'status' => 'published',
+        ]);
+        $token = str_repeat('E', 64);
+        $giftId = DB::table('course_gifts')->insertGetId([
+            'sender_user_id' => $sender->id,
+            'recipient_user_id' => null,
+            'recipient_email' => $recipient->email,
+            'course_id' => $course->id,
+            'invoice_id' => null,
+            'redeem_token_hash' => hash('sha256', $token),
+            'redeem_token_encrypted' => encrypt($token),
+            'status' => 'paid',
+            'currency' => 'BDT',
+            'amount' => 900,
+            'paid_at' => now()->subDays(91),
+            'expires_at' => now()->subMinute(),
+            'created_at' => now()->subDays(91),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($recipient)->post('/student/course-commerce/gifts/redeem/' . $token)
+            ->assertStatus(410);
+
+        $this->assertDatabaseHas('course_gifts', ['id' => $giftId, 'status' => 'paid', 'recipient_user_id' => null]);
+        $this->assertDatabaseMissing('enrollments', ['user_id' => $recipient->id, 'course_id' => $course->id]);
+    }
+
     public function test_paid_course_gift_can_only_be_redeemed_by_recipient_email_and_only_once(): void
     {
         $sender = $this->createUserWithRole('student');
