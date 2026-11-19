@@ -16,8 +16,6 @@ use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\PaymentManagement\Models\PaymentRefund;
 use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
 use Plugins\Modules\PaymentManagement\Services\PaymentSettlementService;
-use Plugins\Modules\ReferralIncome\Services\ReferralIncomeService;
-use App\Models\User;
 
 class PaymentController extends Controller
 {
@@ -128,6 +126,31 @@ class PaymentController extends Controller
                     'approved_by' => $actor?->id,
                 ]);
 
+                // Financial reversals remain active even if the optional referral
+                // plugin has since been disabled; only its installed ledger tables matter.
+                if ($lockedTx->invoice_id
+                    && Schema::hasTable('commerce_orders')
+                    && Schema::hasTable('referral_commissions')
+                    && Schema::hasTable('referral_commission_reversals')) {
+                    $order = DB::table('commerce_orders')
+                        ->where('invoice_id', $lockedTx->invoice_id)
+                        ->lockForUpdate()->first();
+                    if ($order) {
+                        $buyer = \App\Models\User::query()->find((int) $order->user_id);
+                        if ($buyer) {
+                            app(\Plugins\Modules\ReferralIncome\Services\ReferralIncomeService::class)
+                                ->reverseSettledPurchase(
+                                    $buyer,
+                                    'commerce_order',
+                                    (string) $order->id,
+                                    (int) $refund->id,
+                                    $refundAmount,
+                                    (string) $lockedTx->currency,
+                                );
+                        }
+                    }
+                }
+
                 $totalRefunded = round($alreadyRefunded + $refundAmount, 2);
                 if ($totalRefunded >= (float) $lockedTx->amount) {
                     $lockedTx->update(['status' => 'refunded']);
@@ -147,27 +170,6 @@ class PaymentController extends Controller
                             ->where('invoice_id', $invoice->id)
                             ->where('status', 'active')
                             ->update(['status' => 'pending', 'updated_at' => now()]);
-                    }
-                }
-
-                // Keep referral reversal atomic with the recorded refund.
-                if (app(PluginManager::class)->isEnabled('referral-income')
-                    && Schema::hasTable('commerce_orders')
-                    && Schema::hasTable('referral_commissions')
-                    && Schema::hasTable('referral_commission_reversals')) {
-                    $order = DB::table('commerce_orders')->where('invoice_id', $lockedTx->invoice_id)->lockForUpdate()->first();
-                    if ($order) {
-                        $buyer = User::query()->find((int) $order->user_id);
-                        if ($buyer) {
-                            app(ReferralIncomeService::class)->reverseSettledPurchase(
-                                $buyer,
-                                'commerce_order',
-                                (string) $order->id,
-                                (int) $refund->id,
-                                $refundAmount,
-                                (string) $lockedTx->currency
-                            );
-                        }
                     }
                 }
             });
