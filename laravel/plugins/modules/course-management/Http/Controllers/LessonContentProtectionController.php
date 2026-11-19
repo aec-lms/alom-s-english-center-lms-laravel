@@ -105,13 +105,16 @@ class LessonContentProtectionController extends Controller
         $courseRow = DB::table('courses')->where('id', $course)->where('status', 'published')->first();
         abort_unless($courseRow, 404);
 
-        $enrolled = DB::table('enrollments')
+        $enrollment = DB::table('enrollments')
             ->where('user_id', $request->user()->id)
             ->where('course_id', $course)
-            ->where('branch_id', $courseRow->branch_id)
             ->where('status', 'active')
-            ->exists();
-        abort_unless($enrolled, 403, 'An active enrollment in this branch is required to access this course.');
+            ->first();
+        $this->assertStudentCourseAccess(
+            $request,
+            $courseRow->branch_id !== null ? (int) $courseRow->branch_id : null,
+            $enrollment
+        );
 
         $lessons = DB::table('course_lessons')
             ->where('course_id', $course)
@@ -245,15 +248,56 @@ class LessonContentProtectionController extends Controller
             ->first();
         abort_unless($row && !empty($row->media_path), 404, 'Published lesson media not found.');
 
-        $enrolled = DB::table('enrollments')
+        $enrollment = DB::table('enrollments')
             ->where('user_id', $request->user()->id)
             ->where('course_id', $row->course_id)
-            ->where('branch_id', $row->course_branch_id)
             ->where('status', 'active')
-            ->exists();
+            ->first();
 
-        abort_unless($enrolled, 403, 'An active enrollment is required to view this lesson.');
+        $this->assertStudentCourseAccess(
+            $request,
+            $row->course_branch_id !== null ? (int) $row->course_branch_id : null,
+            $enrollment
+        );
         return $row;
+    }
+
+    private function assertStudentCourseAccess(Request $request, ?int $courseBranchId, ?object $enrollment): void
+    {
+        abort_unless($enrollment, 403, 'An active enrollment is required to view this course.');
+
+        $studentBranchId = $this->studentBranchId($request);
+        if ($courseBranchId !== null) {
+            abort_unless(
+                $studentBranchId !== null && $studentBranchId === $courseBranchId,
+                403,
+                'Course is outside your current student branch.'
+            );
+        }
+
+        if ($enrollment->branch_id !== null) {
+            abort_unless(
+                $studentBranchId !== null && $studentBranchId === (int) $enrollment->branch_id,
+                403,
+                'Enrollment is outside your current student branch.'
+            );
+        }
+    }
+
+    private function studentBranchId(Request $request): ?int
+    {
+        $student = $request->user();
+        if (app(PluginManager::class)->isEnabled('student-management')
+            && Schema::hasTable('students')
+            && Schema::hasColumn('students', 'user_id')
+            && Schema::hasColumn('students', 'branch_id')) {
+            $profileBranchId = DB::table('students')->where('user_id', $student->id)->value('branch_id');
+            if ($profileBranchId !== null) {
+                return (int) $profileBranchId;
+            }
+        }
+
+        return $student->branch_id !== null ? (int) $student->branch_id : null;
     }
 
     private function privateRoot(): string
