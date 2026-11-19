@@ -107,13 +107,21 @@
     }
 
     document.documentElement.setAttribute('aria-busy', 'true');
-    window.addEventListener('load', function () {
-        if (maxTimer !== null) window.clearTimeout(maxTimer);
-        hideAfterMinimumDuration(true);
-    }, { once: true });
 
     // A broken asset or stalled request must not leave the whole LMS covered forever.
     maxTimer = window.setTimeout(forceHide, maxDuration);
+
+    const onPageLoad = function () {
+        if (maxTimer !== null) window.clearTimeout(maxTimer);
+        hideAfterMinimumDuration(true);
+    };
+
+    // Components may be injected after the browser's one-time load event (e.g. Livewire).
+    if (document.readyState === 'complete') {
+        onPageLoad();
+    } else {
+        window.addEventListener('load', onPageLoad, { once: true });
+    }
 
     document.addEventListener('click', function (event) {
         if (mode !== 'every-load' || event.defaultPrevented || event.button !== 0 ||
