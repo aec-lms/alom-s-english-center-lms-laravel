@@ -131,6 +131,38 @@ class StudentStandaloneTest extends TestCase
     }
 
 
+    public function test_admin_edit_with_blank_password_preserves_existing_student_password(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'student-management']);
+        $admin = $this->createUserWithRole('admin');
+
+        $this->actingAs($admin)->post('/admin/students', [
+            'name' => 'Password Preservation Learner',
+            'email' => 'password.preserve@aec.test',
+            'password' => 'OriginalPassword123!',
+            'student_code' => 'PASSWORD-PRESERVE-001',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $student = Student::query()->where('student_code', 'PASSWORD-PRESERVE-001')->firstOrFail();
+        $student->load('user');
+        $originalHash = $student->user->password;
+
+        $this->actingAs($admin)->put('/admin/students/' . $student->id, [
+            'name' => 'Password Preservation Learner Updated',
+            'email' => 'password.preserve@aec.test',
+            'phone' => '01700000001',
+            'student_code' => 'PASSWORD-PRESERVE-001',
+            'status' => 'active',
+            'password' => '',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $student->refresh()->load('user');
+        $this->assertSame($originalHash, $student->user->password);
+        $this->assertTrue(Hash::check('OriginalPassword123!', $student->user->password));
+    }
+
+
     public function test_branch_manager_cannot_cross_branch_edit_delete_or_create_student_records(): void
     {
         $this->markSystemInstalled();
