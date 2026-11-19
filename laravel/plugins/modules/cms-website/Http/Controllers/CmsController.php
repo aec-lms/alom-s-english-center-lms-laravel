@@ -512,6 +512,8 @@ class CmsController extends Controller
 
     public function submitPostForReview(CmsPost $post): RedirectResponse
     {
+        abort_unless(auth()->user()?->hasPermission('cms.posts.submit'), 403);
+        $this->assertCanEditPost($post);
         DB::transaction(function () use ($post): void {
             $locked = CmsPost::query()->lockForUpdate()->findOrFail($post->id);
             abort_if($locked->is_published, 422);
@@ -524,6 +526,7 @@ class CmsController extends Controller
 
     public function approvePost(CmsPost $post): RedirectResponse
     {
+        $this->assertCanReviewPost($post);
         DB::transaction(function () use ($post): void {
             $locked = CmsPost::query()->lockForUpdate()->findOrFail($post->id);
             abort_unless(($locked->editorial_status ?? 'draft') === 'in_review' && !$locked->is_published, 422);
@@ -536,6 +539,7 @@ class CmsController extends Controller
 
     public function requestPostChanges(Request $request, CmsPost $post): RedirectResponse
     {
+        $this->assertCanReviewPost($post);
         $data = $request->validate(['review_note' => ['required', 'string', 'min:5', 'max:2000']]);
         DB::transaction(function () use ($post, $data): void {
             $locked = CmsPost::query()->lockForUpdate()->findOrFail($post->id);
@@ -549,6 +553,7 @@ class CmsController extends Controller
 
     public function publishApprovedPost(CmsPost $post): RedirectResponse
     {
+        abort_unless(auth()->user()?->hasPermission('cms.posts.publish'), 403);
         DB::transaction(function () use ($post): void {
             $locked = CmsPost::query()->lockForUpdate()->findOrFail($post->id);
             abort_unless(($locked->editorial_status ?? 'draft') === 'approved' && !$locked->is_published, 422);
