@@ -122,7 +122,11 @@ class PluginLifecycleTest extends TestCase
 
             $manifest = \App\Core\Plugins\PluginManifest::fromDirectory($pluginDir);
             $manager = \Mockery::mock(PluginManager::class);
-            $manager->shouldReceive('discoverManifests')->once()->andReturn([$slug => $manifest]);
+            if ($this->app->environment('testing') && (bool) env('AEC_TEST_EXPLICIT_PLUGIN_BOOT', false)) {
+                $manager->shouldNotReceive('discoverManifests');
+            } else {
+                $manager->shouldReceive('discoverManifests')->once()->andReturn([$slug => $manifest]);
+            }
             $manager->shouldNotReceive('loadPluginRoutes');
 
             $provider = new PluginServiceProvider($this->app);
