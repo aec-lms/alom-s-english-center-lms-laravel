@@ -46,6 +46,7 @@ final class AlomBrandingLoaderPhoneticsPluginTest extends TestCase{
    'selected_answer'=>$challenge['expected'],
   ])->assertStatus(409);
   $this->assertSame(1,DB::table('alom_english_center_phonetic_attempts')->where('user_id',$student->id)->count());
+  $this->actingAs($student)->get('/courses/british-american-phonetics/phonetics-learning')->assertOk()->assertSee('Practice progress')->assertSee('Correct answers')->assertSee('100%')->assertSee('Words practiced');
   DB::table('enrollments')->where('user_id',$student->id)->delete();
   $this->actingAs($student)->get('/courses/british-american-phonetics/phonetics-learning')->assertForbidden();
  }
