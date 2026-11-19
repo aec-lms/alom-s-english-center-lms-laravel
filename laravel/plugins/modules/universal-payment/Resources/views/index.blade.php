@@ -113,6 +113,7 @@
                                 @if (in_array($tx->gateway, ['bank_cash', 'offline'], true) && $tx->status === 'pending')
                                     <form method="POST" action="{{ route('plugins.universal_payment.status', $tx) }}" class="inline-flex items-center gap-1.5">
                                         @csrf
+                                        <input name="payment_reference" required maxlength="120" value="{{ $tx->external_trx_id }}" aria-label="Verified bank receipt reference" class="w-36 rounded border border-slate-300 px-1.5 py-1 text-[11px] font-mono">
                                         <select name="status" class="rounded border border-slate-300 px-1.5 py-1 text-[11px]">
                                             <option value="verified">Verify</option>
                                             <option value="rejected">Reject</option>
