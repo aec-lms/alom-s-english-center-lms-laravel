@@ -122,10 +122,12 @@ class PluginManager
 
         $previousRecord = PluginRecord::query()->where('slug', $slug)->first();
         $previousAttributes = $previousRecord?->getAttributes();
+        $wasInstalled = (bool) ($previousRecord?->is_installed);
+        $wasEnabled = (bool) ($previousRecord?->is_enabled);
         $migratedRelative = $this->runPluginMigrations($manifest);
 
         try {
-            $record = DB::transaction(function () use ($manifest, $actorId): PluginRecord {
+            $record = DB::transaction(function () use ($manifest, $actorId, $wasInstalled, $wasEnabled): PluginRecord {
                 $record = PluginRecord::query()->updateOrCreate(
                     ['slug' => $manifest->slug],
                     [
@@ -138,8 +140,10 @@ class PluginManager
                         'dependencies' => $manifest->dependencies,
                         'manifest_snapshot' => $manifest->toArray(),
                         'is_installed' => true,
-                        'is_enabled' => true,
-                        'installed_at' => now(),
+                        // Re-running install must not silently re-enable a plugin
+                        // that an administrator deliberately disabled.
+                        'is_enabled' => $wasInstalled ? $wasEnabled : true,
+                        'installed_at' => $wasInstalled ? ($previousRecord?->installed_at ?? now()) : now(),
                     ]
                 );
 
@@ -148,8 +152,10 @@ class PluginManager
                 $instance = $this->resolvePluginInstance($manifest);
                 if ($instance) {
                     app()->register($instance);
-                    $instance->onInstall();
-                    $instance->onEnable();
+                    if (!$wasInstalled) {
+                        $instance->onInstall();
+                        $instance->onEnable();
+                    }
                 }
 
                 $this->audit->log('plugin.installed', 'plugin', $manifest->slug, ['version' => $manifest->version], $actorId);
@@ -159,7 +165,9 @@ class PluginManager
 
             // Register plugin routes after the database transaction commits so the router
             // sees a stable installed/enabled plugin state in tests and long-lived workers.
-            $this->loadPluginRoutes($manifest);
+            if (!$wasInstalled) {
+                $this->loadPluginRoutes($manifest);
+            }
         } catch (Throwable $e) {
             // Route registration happens after commit. If it fails, compensate the
             // committed catalog state before rolling back the plugin migrations.
