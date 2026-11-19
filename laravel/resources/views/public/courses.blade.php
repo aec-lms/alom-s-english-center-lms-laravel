@@ -55,6 +55,16 @@
                         $purchases = (int) (($courseSocialProofStats[$course->id]['purchases'] ?? 0));
                     @endphp
                     <article class="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-xs hover:shadow-xl hover:-translate-y-1 transition-all duration-200 flex flex-col">
+                        @foreach (($boostCampaignsByCourse[$course->id] ?? collect()) as $boostCampaign)
+                            <div class="relative flex items-center justify-between gap-3 border-b border-indigo-100 bg-gradient-to-r from-indigo-50 to-sky-50 px-4 py-3">
+                                <img src="{{ route('plugins.boost.impression', $boostCampaign) }}" alt="" width="1" height="1" class="absolute w-px h-px opacity-0 pointer-events-none" loading="lazy">
+                                <div class="min-w-0">
+                                    <span class="text-[9px] font-extrabold uppercase tracking-wider text-indigo-700">{{ $boostCampaign->badge_text ?: 'FEATURED' }} · Sponsored</span>
+                                    <div class="mt-0.5 truncate text-xs font-extrabold text-slate-900">{{ $boostCampaign->campaign_name }}</div>
+                                </div>
+                                <a href="{{ route('plugins.boost.click', $boostCampaign) }}" rel="nofollow" class="shrink-0 rounded-lg bg-indigo-600 px-3 py-2 text-[10px] font-bold text-white hover:bg-indigo-700">{{ $boostCampaign->cta_text ?: 'Explore' }}</a>
+                            </div>
+                        @endforeach
                         <a href="{{ route('public.courses.show', $course->slug) }}" class="relative h-48 bg-[#022D41] overflow-hidden block">
                             <img src="{{ $thumb }}" alt="{{ $course->title }}" class="w-full h-full object-cover">
                             @if (!empty($course->category))
