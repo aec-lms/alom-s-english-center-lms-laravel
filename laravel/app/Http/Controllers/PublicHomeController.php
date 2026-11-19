@@ -16,12 +16,14 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 use Plugins\Modules\CmsWebsite\Models\CmsPost;
+use Plugins\Modules\AdminBoosting\Models\BoostCampaign;
 
 class PublicHomeController extends Controller
 {
     public function index(): View
     {
         $homepage = $this->loadHomepageConfig();
+        $homepageBoostCampaigns = $this->homepageBoostCampaigns();
 
         $liveStats = [
             'students' => Schema::hasTable('students') ? DB::table('students')->count() : 0,
@@ -88,7 +90,8 @@ class PublicHomeController extends Controller
             'leftReviews',
             'rightReviews',
             'homepage',
-            'digitalCarouselItems'
+            'digitalCarouselItems',
+            'homepageBoostCampaigns'
         ));
     }
 
@@ -242,7 +245,52 @@ class PublicHomeController extends Controller
             })->values();
         }
 
-        return view('public.courses', compact('courses', 'categories', 'filteredCourses', 'activeCategory', 'searchTerm', 'courseSocialProofSettings', 'courseSocialProofStats'));
+        $boostCampaignsByCourse = [];
+        if ($filteredCourses->isNotEmpty() && Schema::hasTable('boost_campaigns') && app(PluginManager::class)->isEnabled('admin-boosting')) {
+            $courseIds = $filteredCourses->pluck('id')->map(fn ($id): int => (int) $id)->all();
+            $branchIds = $filteredCourses->pluck('branch_id')->filter()->unique()->map(fn ($id): int => (int) $id)->all();
+            $activeBranchIds = Schema::hasTable('branches') && $branchIds !== []
+                ? DB::table('branches')->whereIn('id', $branchIds)->where('is_active', true)
+                    ->when(Schema::hasColumn('branches', 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))
+                    ->pluck('id')->map(fn ($id): int => (int) $id)->all()
+                : [];
+
+            $boostCampaigns = BoostCampaign::query()
+                ->where('placement', 'course_listing')
+                ->where('status', 'active')
+                ->where(fn ($query) => $query->whereNull('starts_at')->orWhere('starts_at', '<=', now()))
+                ->where(fn ($query) => $query->whereNull('ends_at')->orWhere('ends_at', '>=', now()))
+                ->where(function ($query) use ($courseIds, $activeBranchIds): void {
+                    $query->where(fn ($global) => $global->whereIn('entity_type', ['institution', 'offer'])->whereNull('entity_id'));
+                    if ($courseIds !== []) {
+                        $query->orWhere(fn ($course) => $course->where('entity_type', 'course')->whereIn('entity_id', $courseIds));
+                    }
+                    if ($activeBranchIds !== []) {
+                        $query->orWhere(fn ($branch) => $branch->where('entity_type', 'branch')->whereIn('entity_id', $activeBranchIds));
+                    }
+                })
+                ->orderByDesc('priority')
+                ->orderBy('id')
+                ->limit(150)
+                ->get();
+
+            foreach ($filteredCourses as $catalogCourse) {
+                $catalogCourseId = (int) $catalogCourse->id;
+                $catalogBranchId = (int) ($catalogCourse->branch_id ?? 0);
+                $boostCampaignsByCourse[$catalogCourseId] = $boostCampaigns->filter(
+                    fn (BoostCampaign $campaign): bool => (
+                        in_array($campaign->entity_type, ['institution', 'offer'], true) && $campaign->entity_id === null
+                    ) || (
+                        $campaign->entity_type === 'course' && (int) $campaign->entity_id === $catalogCourseId
+                    ) || (
+                        $campaign->entity_type === 'branch' && $catalogBranchId > 0 && in_array($catalogBranchId, $activeBranchIds, true)
+                        && (int) $campaign->entity_id === $catalogBranchId
+                    )
+                )->values();
+            }
+        }
+
+        return view('public.courses', compact('courses', 'categories', 'filteredCourses', 'activeCategory', 'searchTerm', 'courseSocialProofSettings', 'courseSocialProofStats', 'boostCampaignsByCourse'));
     }
 
     public function courseShow(string $slug): View
@@ -722,6 +770,44 @@ class PublicHomeController extends Controller
         $blocks = json_decode((string) ($page->blocks_json ?? '[]'), true);
 
         return is_array($blocks) ? trim((string) ($blocks[0]['content'] ?? '')) : '';
+    }
+
+    private function activeBoostCampaigns(string $placement): Collection
+    {
+        if (!Schema::hasTable('boost_campaigns') || !app(PluginManager::class)->isEnabled('admin-boosting')) {
+            return collect();
+        }
+
+        return BoostCampaign::query()
+            ->where('placement', $placement)
+            ->where('status', 'active')
+            ->where(fn ($query) => $query->whereNull('starts_at')->orWhere('starts_at', '<=', now()))
+            ->where(fn ($query) => $query->whereNull('ends_at')->orWhere('ends_at', '>=', now()))
+            ->orderByDesc('priority')
+            ->orderBy('id')
+            ->limit(100)
+            ->get();
+    }
+
+    private function homepageBoostCampaigns(): Collection
+    {
+        return $this->activeBoostCampaigns('homepage_featured')
+            ->filter(function (BoostCampaign $campaign): bool {
+                if (in_array($campaign->entity_type, ['institution', 'offer'], true)) {
+                    return $campaign->entity_id === null;
+                }
+
+                if ($campaign->entity_type === 'course' && $campaign->entity_id !== null && Schema::hasTable('courses')) {
+                    return DB::table('courses')->where('id', $campaign->entity_id)
+                        ->where('status', 'published')
+                        ->when(Schema::hasColumn('courses', 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))
+                        ->exists();
+                }
+
+                return false;
+            })
+            ->take(4)
+            ->values();
     }
 
     private function catalogCourses(): Collection
