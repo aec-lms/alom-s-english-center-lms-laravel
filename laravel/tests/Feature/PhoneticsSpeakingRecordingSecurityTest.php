@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use Illuminate\\Support\\Facades\\Cache;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Facades\\Schema;
-use Plugins\\Modules\\Phonetics\\Models\\PhoneticEntry;
-use Plugins\\Modules\\Phonetics\\Models\\PhoneticSetting;
-use Plugins\\Modules\\Phonetics\\Models\\PhoneticSpeakingRecording;
-use Tests\\TestCase;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Plugins\Modules\Phonetics\Models\PhoneticEntry;
+use Plugins\Modules\Phonetics\Models\PhoneticSetting;
+use Plugins\Modules\Phonetics\Models\PhoneticSpeakingRecording;
+use Tests\TestCase;
 
 final class PhoneticsSpeakingRecordingSecurityTest extends TestCase
 {
