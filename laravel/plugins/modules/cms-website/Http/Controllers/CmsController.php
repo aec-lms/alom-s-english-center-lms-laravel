@@ -25,10 +25,11 @@ class CmsController extends Controller
     {
         $categories = Schema::hasTable('cms_categories') ? CmsCategory::query()->orderBy('name')->get() : collect();
         $posts = Schema::hasTable('cms_posts') ? CmsPost::query()->latest()->get() : collect();
+        $trashedPosts = Schema::hasTable('cms_posts') ? CmsPost::onlyTrashed()->latest('deleted_at')->get() : collect();
         $inquiries = Schema::hasTable('contact_inquiries') ? DB::table('contact_inquiries')->orderByDesc('id')->limit(50)->get() : collect();
         $homepage = $this->loadHomepageConfig();
 
-        return view('cms-website::index', compact('categories', 'posts', 'inquiries', 'homepage'));
+        return view('cms-website::index', compact('categories', 'posts', 'trashedPosts', 'inquiries', 'homepage'));
     }
 
     public function storeCategory(Request $request): RedirectResponse
@@ -238,15 +239,45 @@ class CmsController extends Controller
 
     public function destroyPost(CmsPost $post): RedirectResponse
     {
-        foreach ([$post->thumbnail_path, $post->pdf_path, $post->pdf_thumbnail] as $assetPath) {
-            $this->deleteUnusedUpload($assetPath, (int) $post->id);
-        }
+        // Soft deletion must retain media so a restored post remains complete.
         $title = $post->title;
         $id = (string) $post->id;
         $post->delete();
-        $this->audit->log('cms.post_deleted', 'cms_post', $id, ['title' => $title]);
+        $this->audit->log('cms.post_trashed', 'cms_post', $id, ['title' => $title]);
 
-        return back()->with('status', "Post '{$title}' deleted.");
+        return back()->with('status', "Post '{$title}' moved to the Recycle Bin.");
+    }
+
+    public function restorePost(int $postId): RedirectResponse
+    {
+        $post = CmsPost::withTrashed()->findOrFail($postId);
+        abort_unless($post->trashed(), 404);
+
+        $post->restore();
+        $this->audit->log('cms.post_restored', 'cms_post', (string) $post->id, ['slug' => $post->slug]);
+
+        return back()->with('status', "Post '{$post->title}' restored.");
+    }
+
+    public function forceDeletePost(int $postId): RedirectResponse
+    {
+        $post = CmsPost::withTrashed()->findOrFail($postId);
+        abort_unless($post->trashed(), 404);
+
+        $title = $post->title;
+        $id = (string) $post->id;
+        $assets = [$post->thumbnail_path, $post->pdf_path, $post->pdf_thumbnail];
+
+        // Remove the row first; the shared-reference check then protects files
+        // still used by courses, store items, or other posts.
+        $post->forceDelete();
+        foreach ($assets as $assetPath) {
+            $this->deleteUnusedUpload($assetPath);
+        }
+
+        $this->audit->log('cms.post_permanently_deleted', 'cms_post', $id, ['title' => $title]);
+
+        return back()->with('status', "Post '{$title}' permanently deleted.");
     }
 
     public function saveHomepage(Request $request): RedirectResponse
