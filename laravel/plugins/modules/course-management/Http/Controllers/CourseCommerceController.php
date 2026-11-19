@@ -407,6 +407,7 @@ class CourseCommerceController extends Controller
             ->where('status', 'paid')->first();
         abort_unless($voucher, 404, 'This gift voucher is not available.');
         abort_if($voucher->expires_at && now()->greaterThan($voucher->expires_at), 410, 'This gift voucher has expired.');
+        abort_if((int) $voucher->sender_user_id === (int) $student->id, 403, 'The sender cannot redeem their own voucher.');
         abort_unless(hash_equals(strtolower((string) $voucher->recipient_email), strtolower((string) $student->email)),
             403, 'Sign in with the email address that received this voucher.');
         return view('course-management::commerce.voucher-redeem', compact('voucher', 'token'));
@@ -421,6 +422,10 @@ class CourseCommerceController extends Controller
             $voucher = DB::table('course_gift_vouchers')->where('redeem_token_hash', hash('sha256', $token))
                 ->lockForUpdate()->first();
             abort_unless($voucher && $voucher->status === 'paid', 409, 'This gift voucher has already been claimed or is unavailable.');
+            abort_if((int) $voucher->sender_user_id === (int) $student->id, 403, 'The sender cannot redeem their own voucher.');
+            $remainingAmount = round((float) $voucher->remaining_amount, 2);
+            $voucherAmount = round((float) $voucher->amount, 2);
+            abort_if($remainingAmount <= 0 || $remainingAmount > $voucherAmount + 0.01, 409, 'Gift voucher remaining balance is invalid; contact support.');
             $this->assertGiftInvoiceFullyPaid($voucher->invoice_id ?? null, $voucher->payment_transaction_id ?? null, (float) $voucher->amount, (string) $voucher->currency, $voucher->unified_payment_transaction_id ?? null);
             abort_if($voucher->expires_at && now()->greaterThan($voucher->expires_at), 410, 'This gift voucher has expired.');
             abort_unless(hash_equals(strtolower((string) $voucher->recipient_email), strtolower((string) $student->email)),
@@ -440,7 +445,7 @@ class CourseCommerceController extends Controller
             abort_if(DB::table('course_gift_wallet_transactions')->where('reference', $reference)->exists(), 409,
                 'This voucher has already been credited to a wallet.');
             DB::table('course_gift_wallets')->where('id', $wallet->id)->update([
-                'balance' => round((float) $wallet->balance + (float) $voucher->remaining_amount, 2),
+                'balance' => round((float) $wallet->balance + $remainingAmount, 2),
                 'updated_at' => now(),
             ]);
             DB::table('course_gift_wallet_transactions')->insert([
@@ -450,7 +455,7 @@ class CourseCommerceController extends Controller
                 'type' => 'credit',
                 'status' => 'completed',
                 'reference' => $reference,
-                'amount' => $voucher->remaining_amount,
+                'amount' => $remainingAmount,
                 'metadata' => json_encode(['source' => 'gift_voucher_claim'], JSON_THROW_ON_ERROR),
                 'created_at' => now(),
                 'updated_at' => now(),
