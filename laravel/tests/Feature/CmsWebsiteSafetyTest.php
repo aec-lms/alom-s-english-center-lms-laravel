@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use Plugins\Modules\CmsWebsite\Models\CmsPost;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class CmsWebsiteSafetyTest extends TestCase
@@ -80,6 +81,125 @@ class CmsWebsiteSafetyTest extends TestCase
         ]);
     }
 
+
+    public function test_soft_deleted_post_can_be_restored_with_its_media_references_intact(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+        $admin = $this->createUserWithRole('admin');
+        $post = CmsPost::query()->create([
+            'slug' => 'restore-cms-post',
+            'title' => 'Restore CMS Post',
+            'category' => 'General',
+            'author' => 'AEC LMS',
+            'content' => 'Content to restore',
+            'thumbnail_path' => '/uploads/posts/restore.webp',
+            'pdf_path' => 'https://cdn.example.test/restore.pdf',
+            'is_published' => true,
+        ]);
+
+        $this->actingAs($admin)->delete('/admin/cms/posts/' . $post->id)
+            ->assertSessionHasNoErrors();
+
+        $this->assertSoftDeleted('cms_posts', ['id' => $post->id]);
+        $this->assertSame('/uploads/posts/restore.webp', CmsPost::withTrashed()->findOrFail($post->id)->thumbnail_path);
+
+        $this->actingAs($admin)->post('/admin/cms/posts/' . $post->id . '/restore')
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('cms_posts', [
+            'id' => $post->id,
+            'deleted_at' => null,
+            'thumbnail_path' => '/uploads/posts/restore.webp',
+        ]);
+    }
+
+    public function test_trashed_post_can_be_permanently_deleted(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+        $admin = $this->createUserWithRole('admin');
+        $post = CmsPost::query()->create([
+            'slug' => 'permanently-delete-cms-post',
+            'title' => 'Permanently Delete CMS Post',
+            'category' => 'General',
+            'author' => 'AEC LMS',
+            'content' => 'Content to delete',
+            'is_published' => false,
+        ]);
+        $post->delete();
+
+        $this->actingAs($admin)->delete('/admin/cms/posts/' . $post->id . '/force')
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseMissing('cms_posts', ['id' => $post->id]);
+    }
+
+
+    public function test_permanent_delete_does_not_follow_media_symlinks(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+        $admin = $this->createUserWithRole('admin');
+
+        $directory = public_path('uploads/posts');
+        if (!is_dir($directory)) {
+            mkdir($directory, 0755, true);
+        }
+
+        $target = $directory . '/retained-target-' . bin2hex(random_bytes(4)) . '.webp';
+        $aliasName = 'cms-symlink-' . bin2hex(random_bytes(4)) . '.webp';
+        $alias = $directory . '/' . $aliasName;
+        file_put_contents($target, 'shared upload fixture');
+
+        if (!function_exists('symlink') || !@symlink($target, $alias)) {
+            @unlink($target);
+            $this->markTestSkipped('Symlinks are not available in this test environment.');
+        }
+
+        try {
+            $post = CmsPost::query()->create([
+                'slug' => 'symlink-media-cleanup-' . bin2hex(random_bytes(3)),
+                'title' => 'Symlink media cleanup',
+                'category' => 'General',
+                'author' => 'AEC LMS',
+                'content' => 'Content',
+                'thumbnail_path' => '/uploads/posts/' . $aliasName,
+                'is_published' => false,
+            ]);
+            $post->delete();
+
+            $this->actingAs($admin)->delete('/admin/cms/posts/' . $post->id . '/force')
+                ->assertSessionHasNoErrors();
+
+            $this->assertFileExists($target, 'Permanent deletion must not unlink a symlink target.');
+            $this->assertDatabaseMissing('cms_posts', ['id' => $post->id]);
+        } finally {
+            @unlink($alias);
+            @unlink($target);
+        }
+    }
+
+    public function test_post_update_saves_revision_and_revision_can_be_restored(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+        $admin = $this->createUserWithRole('admin');
+        $post = CmsPost::query()->create(['slug' => 'revision-test-post', 'title' => 'Original Title', 'category' => 'General', 'author' => 'AEC LMS', 'content' => 'Original content', 'is_published' => false]);
+        $this->actingAs($admin)->put('/admin/cms/posts/' . $post->id, [
+            'title' => 'Changed Title', 'slug' => 'changed-title', 'content' => 'Changed content',
+        ])->assertSessionHasNoErrors();
+        $revision = DB::table('cms_post_revisions')->where('post_id', $post->id)->first();
+        $this->assertNotNull($revision);
+        $this->assertSame('Original Title', $revision->title);
+        $this->actingAs($admin)->post('/admin/cms/posts/' . $post->id . '/revisions/' . $revision->id . '/restore')->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('cms_posts', ['id' => $post->id, 'title' => 'Original Title', 'slug' => 'revision-test-post', 'content' => 'Original content']);
+        $this->assertSame(2, DB::table('cms_post_revisions')->where('post_id', $post->id)->count());
+        $this->assertDatabaseHas('cms_post_revisions', ['post_id' => $post->id, 'title' => 'Changed Title', 'content' => 'Changed content']);
+    }
+
+
+
     public function test_trashed_post_keeps_its_media_and_is_hidden_from_public_hub_until_restored(): void
     {
         $this->markSystemInstalled();
@@ -115,7 +235,7 @@ class CmsWebsiteSafetyTest extends TestCase
             $this->get('/learn')->assertOk()->assertDontSee('Recycle Bin Preserved Article');
             $this->get('/learn/' . $post->slug)->assertNotFound();
 
-            $this->actingAs($admin)->post('/admin/recycle-bin/cms-posts/' . $post->id . '/restore')
+            $this->actingAs($admin)->post('/admin/cms/posts/' . $post->id . '/restore')
                 ->assertRedirect()->assertSessionHasNoErrors();
 
             $this->assertDatabaseHas('cms_posts', ['id' => $post->id, 'deleted_at' => null]);
@@ -128,6 +248,7 @@ class CmsWebsiteSafetyTest extends TestCase
             }
         }
     }
+
 
     public function test_updating_a_post_without_seo_fields_preserves_existing_seo_metadata(): void
     {
@@ -157,6 +278,53 @@ class CmsWebsiteSafetyTest extends TestCase
             'seo_title' => 'Original Search Title',
             'seo_description' => 'Original search description remains intact.',
         ]);
+    }
+
+
+    public function test_restoring_a_published_historical_revision_never_republishes_a_draft(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+        $admin = $this->createUserWithRole('admin');
+        $post = CmsPost::query()->create([
+            'slug' => 'revision-publish-safety-' . uniqid(),
+            'title' => 'Current Unpublished Draft',
+            'category' => 'General',
+            'author' => 'AEC LMS',
+            'content' => 'Current draft content.',
+            'is_published' => false,
+        ]);
+
+        $revisionId = DB::table('cms_post_revisions')->insertGetId([
+            'post_id' => $post->id,
+            'user_id' => $admin->id,
+            'title' => 'Previously Published Snapshot',
+            'slug' => 'previously-published-snapshot-' . uniqid(),
+            'category' => 'General',
+            'author' => 'AEC LMS',
+            'content' => 'Historical content that was once published.',
+            'is_published' => true,
+            'created_at' => now(),
+        ]);
+
+        $this->actingAs($admin)->post('/admin/cms/posts/' . $post->id . '/revisions/' . $revisionId . '/restore')
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('cms_posts', [
+            'id' => $post->id,
+            'title' => 'Previously Published Snapshot',
+            'is_published' => false,
+        ]);
+
+        if (Schema::hasColumn('cms_posts', 'editorial_status')) {
+            $this->assertDatabaseHas('cms_posts', [
+                'id' => $post->id,
+                'editorial_status' => 'draft',
+                'submitted_by' => null,
+                'reviewed_by' => null,
+            ]);
+        }
     }
 
 }
