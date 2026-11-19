@@ -239,7 +239,7 @@ class CourseGiftCommerceTest extends TestCase
         $this->assertDatabaseHas('universal_payment_transactions', [
             'id' => $transaction->id,
             'status' => 'verified',
-            'external_trx_id' => 'BANK-COURSE-1',
+            'external_trx_id' => 'COURSE-VALIDATION-1',
         ]);
         $this->assertDatabaseHas('course_cart_orders', [
             'id' => $orderId,
