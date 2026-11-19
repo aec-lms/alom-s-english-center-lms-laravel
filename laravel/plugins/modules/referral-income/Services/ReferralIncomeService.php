@@ -230,6 +230,15 @@ class ReferralIncomeService
             // Never combine foreign-currency commissions or silently treat them as BDT.
             $commissions = DB::table('referral_commissions')->where('referrer_user_id', $owner->id)
                 ->where('status', 'approved')->where('currency', 'BDT')->orderBy('id')->lockForUpdate()->get();
+            if (Schema::hasTable('referral_commission_reversals')
+                && DB::table('referral_commission_reversals')
+                    ->whereIn('referral_commission_id', $commissions->pluck('id'))
+                    ->where('status', 'recovery_due')->exists()) {
+                throw ValidationException::withMessages([
+                    'payout' => 'A refunded commission is awaiting recovery reconciliation and cannot be paid again yet.',
+                ]);
+            }
+
             $amount = round((float) $commissions->sum('commission_amount'), 2);
             $minimum = (float) (DB::table('referral_income_rules')->where('referrer_type', $type)->value('minimum_payout') ?? 500);
             if ($amount < $minimum) {
