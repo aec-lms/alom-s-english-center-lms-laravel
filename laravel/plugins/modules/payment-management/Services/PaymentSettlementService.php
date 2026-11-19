@@ -119,6 +119,39 @@ class PaymentSettlementService
                 // enrollment, and source course disagree about branch ownership.
                 $preflightOrders = DB::table('commerce_orders')->where('invoice_id', $invoice->id)->lockForUpdate()->get();
                 foreach ($preflightOrders as $preflightOrder) {
+                    // A settled invoice is not sufficient proof that a linked
+                    // commerce order is internally consistent. Validate the
+                    // persisted order snapshot before granting any entitlement.
+                    $orderCurrency = strtoupper(trim((string) ($preflightOrder->currency ?? '')));
+                    $invoiceCurrency = strtoupper(trim((string) $invoice->currency));
+                    if ($orderCurrency === '' || $orderCurrency !== $invoiceCurrency) {
+                        throw new RuntimeException('Commerce order currency does not match the invoice currency.');
+                    }
+                    if (abs(round((float) $preflightOrder->grand_total, 2) - round((float) $invoice->net_amount, 2)) > 0.01) {
+                        throw new RuntimeException('Commerce order total does not match the invoice amount.');
+                    }
+                    $orderSubtotal = round((float) $preflightOrder->subtotal, 2);
+                    $orderDiscount = round((float) $preflightOrder->discount_total, 2);
+                    $orderGrandTotal = round((float) $preflightOrder->grand_total, 2);
+                    if ($orderSubtotal <= 0 || $orderDiscount < 0 || $orderDiscount > $orderSubtotal
+                        || abs(round($orderSubtotal - $orderDiscount, 2) - $orderGrandTotal) > 0.01) {
+                        throw new RuntimeException('Commerce order subtotal, discount, and total do not reconcile.');
+                    }
+                    if (!Schema::hasTable('commerce_order_items')) {
+                        throw new RuntimeException('Commerce order items are unavailable for settlement verification.');
+                    }
+                    $settlementItems = DB::table('commerce_order_items')
+                        ->where('order_id', $preflightOrder->id)
+                        ->lockForUpdate()
+                        ->get();
+                    if ($settlementItems->isEmpty()) {
+                        throw new RuntimeException('An empty commerce order cannot be settled.');
+                    }
+                    $itemsSubtotal = round($settlementItems->sum(fn ($item) => (float) $item->line_total), 2);
+                    if (abs($itemsSubtotal - $orderSubtotal) > 0.01) {
+                        throw new RuntimeException('Commerce order items do not reconcile with the order subtotal.');
+                    }
+
                     if (Schema::hasColumn('commerce_orders', 'branch_id') && Schema::hasColumn('fee_invoices', 'branch_id')) {
                         $orderBranchId = $preflightOrder->branch_id !== null ? (int) $preflightOrder->branch_id : null;
                         $invoiceBranchId = $invoice->branch_id !== null ? (int) $invoice->branch_id : null;
