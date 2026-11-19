@@ -15,7 +15,7 @@ class SetApplicationLocale
     public function handle(Request $request, Closure $next): Response
     {
         $sessionLocale = $request->hasSession() ? $request->session()->get('locale') : null;
-        $configuredLocale = str_replace('_', '-', (string) config('app.locale', 'en'));
+        $configuredLocale = str_replace('_', '-', (string) config('lms.default_locale', config('app.locale', 'en')));
         $defaultLocale = strtolower(explode('-', $configuredLocale)[0] ?? 'en');
         $locale = is_string($sessionLocale) ? $sessionLocale : $defaultLocale;
 
