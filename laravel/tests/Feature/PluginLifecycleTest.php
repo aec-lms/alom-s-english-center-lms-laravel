@@ -122,15 +122,11 @@ class PluginLifecycleTest extends TestCase
 
             $manifest = \App\Core\Plugins\PluginManifest::fromDirectory($pluginDir);
             $manager = \Mockery::mock(PluginManager::class);
-            if ($this->app->environment('testing') && (bool) env('AEC_TEST_EXPLICIT_PLUGIN_BOOT', false)) {
-                $manager->shouldNotReceive('discoverManifests');
-            } else {
-                $manager->shouldReceive('discoverManifests')->once()->andReturn([$slug => $manifest]);
-            }
+            // Exercise the normal provider boot path even when the MySQL suite
+            // disables automatic plugin boot for the rest of its tests.
+            $manager->shouldReceive('discoverManifests')->once()->andReturn([$slug => $manifest]);
             $manager->shouldNotReceive('loadPluginRoutes');
 
-            // Exercise the normal provider boot path; CI's explicit-plugin-boot flag
-            // intentionally bypasses provider discovery for the rest of the test suite.
             $this->app['env'] = 'production';
             $provider = new PluginServiceProvider($this->app);
             $provider->boot($manager);
