@@ -19,7 +19,8 @@
     "fees-management",
     "referral-income",
     "student-management",
-    "marketing-management"
+    "marketing-management",
+    "course-management"
   ],
   "admin_menu": [
     {
