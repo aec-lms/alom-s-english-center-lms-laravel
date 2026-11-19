@@ -12,7 +12,7 @@
     <section class="rounded-2xl border bg-white p-5 shadow-sm" aria-label="Practice progress">
         <div class="flex flex-wrap items-center justify-between gap-2">
             <h2 class="text-lg font-extrabold">Practice progress</h2>
-            <span class="text-sm text-slate-500">Current course / lesson / batch</span>
+            <span class="text-sm text-slate-500">Your attempts on these assigned vocabulary items</span>
         </div>
         <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
             <div class="rounded-lg bg-slate-50 p-3"><p class="text-xs text-slate-500">Attempts</p><p class="mt-1 text-2xl font-extrabold">{{ $progress['attempts'] }}</p></div>
