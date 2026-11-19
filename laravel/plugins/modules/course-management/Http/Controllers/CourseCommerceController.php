@@ -66,6 +66,7 @@ class CourseCommerceController extends Controller
 
         DB::transaction(function () use ($student, $course): void {
             DB::table('users')->where('id', $student->id)->lockForUpdate()->first();
+            $this->assertNoUnresolvedOrder((int) $student->id);
             $cart = DB::table('course_carts')->where('user_id', $student->id)->where('status', 'active')->lockForUpdate()->first();
             if (!$cart) {
                 $cartId = DB::table('course_carts')->insertGetId([
@@ -469,11 +470,12 @@ class CourseCommerceController extends Controller
             'payer_contact' => ['required', 'string', 'min:7', 'max:40'],
             'coupon_code' => ['nullable', 'string', 'max:40'],
         ]);
-        $this->assertCheckoutReady();
+        $this->assertCheckoutStorageReady();
 
         $couponService = new CourseCouponService();
         $created = DB::transaction(function () use ($student, $validated, $couponService): array {
             DB::table('users')->where('id', $student->id)->lockForUpdate()->first();
+            $this->assertNoUnresolvedOrder((int) $student->id);
             $cart = DB::table('course_carts')->where('user_id', $student->id)->where('status', 'active')->lockForUpdate()->first();
             abort_unless($cart, 422, 'Your course cart is empty.');
 
@@ -517,6 +519,9 @@ class CourseCommerceController extends Controller
                 }
             }
             $gatewayAmount = round(max(0, $total - $walletCredit), 2);
+            if ($gatewayAmount > 0) {
+                $this->assertGatewayCheckoutReady();
+            }
 
             $orderId = DB::table('course_cart_orders')->insertGetId([
                 'cart_id' => $cart->id,
@@ -609,7 +614,7 @@ class CourseCommerceController extends Controller
         }, 3);
 
         if ($created['free']) {
-            return redirect()->route('course-commerce.cart')->with('status', 'Your coupon covered the full cart. All selected courses are now active.');
+            return redirect()->route('course-commerce.cart')->with('status', 'Your course wallet or coupon covered the full cart. All selected courses are now active.');
         }
 
         try {
@@ -733,15 +738,44 @@ class CourseCommerceController extends Controller
         ]);
     }
 
-    private function assertCheckoutReady(): void
+    private function assertCheckoutStorageReady(): void
+    {
+        abort_unless($this->plugins->isEnabled('fees-management')
+            && Schema::hasTable('fee_invoices')
+            && Schema::hasTable('enrollments')
+            && Schema::hasColumn('enrollments', 'invoice_id')
+            && Schema::hasTable('course_cart_orders')
+            && Schema::hasTable('course_cart_order_items'), 503,
+            'Course checkout storage is not ready. Enable Fees Management and install the course-commerce migrations.');
+    }
+
+    private function assertGatewayCheckoutReady(): void
     {
         abort_unless($this->plugins->isEnabled('universal-payment')
             && $this->plugins->isEnabled('gateway-sslcommerz')
-            && $this->plugins->isEnabled('fees-management')
-            && Schema::hasTable('universal_payment_transactions')
-            && Schema::hasTable('fee_invoices')
-            && Schema::hasTable('enrollments'), 503,
-            'Enable Universal Payment, SSLCOMMERZ Gateway and Fees Management before purchasing courses online.');
+            && Schema::hasTable('universal_payment_transactions'), 503,
+            'Enable Universal Payment and the SSLCOMMERZ Gateway before accepting an online course payment.');
+    }
+
+    private function assertCheckoutReady(): void
+    {
+        $this->assertCheckoutStorageReady();
+        $this->assertGatewayCheckoutReady();
+    }
+
+    private function assertNoUnresolvedOrder(int $userId): void
+    {
+        if (!Schema::hasTable('course_cart_orders')) {
+            return;
+        }
+
+        $hasUnresolvedOrder = DB::table('course_cart_orders')
+            ->where('user_id', $userId)
+            ->whereIn('status', ['awaiting_payment', 'risk_review', 'processing'])
+            ->exists();
+
+        abort_if($hasUnresolvedOrder, 409,
+            'A previous course order is awaiting payment confirmation or reconciliation. Contact support before starting another checkout.');
     }
 
     private function giftVoucherSettings(): array
