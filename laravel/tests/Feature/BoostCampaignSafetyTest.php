@@ -461,4 +461,46 @@ class BoostCampaignSafetyTest extends TestCase
         $this->assertSame(0, $campaign->fresh()->clicks);
         $this->assertDatabaseCount('boost_campaign_events', 0);
     }
+    public function test_campaign_updates_validate_date_boundaries_against_existing_values(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['admin-boosting']);
+        $admin = $this->createUserWithRole('admin');
+        $start = now()->addDay()->startOfMinute();
+        $end = now()->addDays(3)->startOfMinute();
+        $campaign = BoostCampaign::query()->create([
+            'campaign_name' => 'Date Boundary Guard',
+            'entity_type' => 'institution',
+            'entity_id' => null,
+            'placement' => 'homepage_featured',
+            'destination_url' => '/courses',
+            'status' => 'active',
+            'starts_at' => $start,
+            'ends_at' => $end,
+        ]);
+
+        $this->actingAs($admin)->put('/plugins/boost/' . $campaign->id, [
+            'campaign_name' => 'Date Boundary Guard',
+            'entity_type' => 'institution',
+            'placement' => 'homepage_featured',
+            'destination_url' => '/courses',
+            'priority' => 5,
+            'status' => 'active',
+            'starts_at' => now()->addDays(4)->toDateTimeString(),
+        ])->assertSessionHasErrors('ends_at');
+
+        $this->actingAs($admin)->put('/plugins/boost/' . $campaign->id, [
+            'campaign_name' => 'Date Boundary Guard',
+            'entity_type' => 'institution',
+            'placement' => 'homepage_featured',
+            'destination_url' => '/courses',
+            'priority' => 5,
+            'status' => 'active',
+            'ends_at' => now()->addHours(12)->toDateTimeString(),
+        ])->assertSessionHasErrors('ends_at');
+
+        $this->assertTrue($campaign->fresh()->starts_at->equalTo($start));
+        $this->assertTrue($campaign->fresh()->ends_at->equalTo($end));
+    }
+
 }
