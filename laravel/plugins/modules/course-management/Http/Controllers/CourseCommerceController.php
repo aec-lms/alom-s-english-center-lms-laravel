@@ -350,7 +350,7 @@ class CourseCommerceController extends Controller
                             && hash_equals((string) $gift->redeem_token_hash, hash('sha256', $token))) {
                             $redeemUrl = route('course-commerce.gifts.redeem-form', ['token' => $token]);
                         }
-                    } catch (\\Throwable) {
+                    } catch (\Throwable) {
                         $redeemUrl = null;
                     }
                 }
@@ -387,7 +387,7 @@ class CourseCommerceController extends Controller
                             && hash_equals((string) $gift->redeem_token_hash, hash('sha256', $token))) {
                             $redeemUrl = route('course-commerce.vouchers.redeem-form', ['token' => $token]);
                         }
-                    } catch (\\Throwable) {
+                    } catch (\Throwable) {
                         $redeemUrl = null;
                     }
                 }
