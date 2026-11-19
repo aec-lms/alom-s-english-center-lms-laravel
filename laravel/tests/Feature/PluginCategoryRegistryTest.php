@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use App\\Core\\Plugins\\PluginCategoryRegistry;
-use Tests\\TestCase;
+use App\Core\Plugins\PluginCategoryRegistry;
+use Tests\TestCase;
 
 class PluginCategoryRegistryTest extends TestCase
 {
