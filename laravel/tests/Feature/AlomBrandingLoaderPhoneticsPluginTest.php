@@ -401,12 +401,12 @@ api/*",
   ]);
   PhoneticSetting::query()->firstOrCreate(['id'=>1],['enabled'=>true,'course_slug'=>'british-american-phonetics','course_title'=>'British & American Phonetics']);
   PhoneticSetting::query()->whereKey(1)->update(['enabled'=>true,'course_slug'=>'british-american-phonetics']);
-  \Illuminate\\Support\\Facades\\Cache::forget('phonetics.settings');
+  \Illuminate\Support\Facades\Cache::forget('phonetics.settings');
   $entry=PhoneticEntry::query()->create(['word'=>'branch-voice-test','category'=>'rhoticity','uk_ipa'=>'/vɔɪs/','us_ipa'=>'/vɔɪs/','is_active'=>true,'sort_order'=>2]);
   $recordings=[];
   foreach([$studentA,$studentB] as $index=>$student){
    $relativePath='students/branch-test/recording-'.$index.'.webm';
-   $recordings[]=\Plugins\\Modules\\Phonetics\\Models\\PhoneticSpeakingRecording::query()->create([
+   $recordings[]=\Plugins\Modules\Phonetics\Models\PhoneticSpeakingRecording::query()->create([
     'lms_driver'=>'aec','user_id'=>(string)$student->getAuthIdentifier(),'entry_id'=>$entry->id,
     'course_ref'=>(string)$courseId,'storage_path'=>$relativePath,'mime_type'=>'audio/webm',
     'size_bytes'=>16,'duration_seconds'=>5,'status'=>'pending',
