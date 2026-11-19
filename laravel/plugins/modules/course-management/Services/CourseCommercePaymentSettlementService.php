@@ -21,8 +21,14 @@ class CourseCommercePaymentSettlementService
     {
         return DB::transaction(function () use ($transaction, $validationId, $providerDetails): UniversalPaymentTransaction {
             $locked = UniversalPaymentTransaction::query()->whereKey($transaction->id)->lockForUpdate()->firstOrFail();
+            if ($locked->status === 'refunded') {
+                throw new RuntimeException('A refunded course-commerce transaction cannot be settled again.');
+            }
             if ($locked->status === 'verified') {
                 return $locked;
+            }
+            if (!in_array($locked->status, ['pending', 'risk_review'], true)) {
+                throw new RuntimeException('Course commerce payment is not in a payable state.');
             }
 
             if (!$locked->user_id || $locked->gateway !== 'sslcommerz') {
