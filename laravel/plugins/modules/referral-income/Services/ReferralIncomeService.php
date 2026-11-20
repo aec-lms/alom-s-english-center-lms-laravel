@@ -394,6 +394,8 @@ class ReferralIncomeService
             }
 
             $gateway = strtolower(trim((string) $refundTransaction->gateway_slug));
+            $providerGateway = $gateway;
+            $providerReference = null;
             if ($gateway === 'offline') {
                 $approver = empty($refundRecord->approved_by)
                     ? null
@@ -406,15 +408,21 @@ class ReferralIncomeService
                 if (!Schema::hasColumn('payment_refunds', 'provider_refund_reference') || $providerReference === '') {
                     throw new RuntimeException('Provider refund reference is required before commission reversal.');
                 }
+                if (!Schema::hasColumn('referral_commission_reversals', 'provider_gateway')
+                    || !Schema::hasColumn('referral_commission_reversals', 'provider_refund_reference')) {
+                    throw new RuntimeException('Provider refund identity migration is required before commission reversal.');
+                }
 
-                $duplicateProviderReference = DB::table('payment_refunds as existing_refund')
-                    ->join('payment_transactions as existing_transaction', 'existing_transaction.id', '=', 'existing_refund.payment_transaction_id')
-                    ->where('existing_refund.provider_refund_reference', $providerReference)
-                    ->where('existing_transaction.gateway_slug', $refundTransaction->gateway_slug)
-                    ->where('existing_refund.id', '!=', $paymentRefundId)
-                    ->exists();
-                if ($duplicateProviderReference) {
-                    throw new RuntimeException('Provider refund reference has already been reconciled.');
+                $existingProviderRefund = DB::table('referral_commission_reversals')
+                    ->where('provider_gateway', $providerGateway)
+                    ->where('provider_refund_reference', $providerReference)
+                    ->lockForUpdate()
+                    ->first();
+                if ($existingProviderRefund) {
+                    if ((int) $existingProviderRefund->payment_refund_id === $paymentRefundId) {
+                        return (int) $existingProviderRefund->id;
+                    }
+                    throw new RuntimeException('Provider refund reference has already been applied to another refund record.');
                 }
             }
 
@@ -464,6 +472,8 @@ class ReferralIncomeService
             $reversalId = DB::table('referral_commission_reversals')->insertGetId([
                 'referral_commission_id' => $commission->id,
                 'payment_refund_id' => $paymentRefundId,
+                'provider_gateway' => $providerGateway,
+                'provider_refund_reference' => $providerReference,
                 'refunded_amount' => $refund,
                 'commission_reversal_amount' => $reversalAmount,
                 'currency' => strtoupper($currency),
