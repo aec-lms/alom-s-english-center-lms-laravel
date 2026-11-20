@@ -173,14 +173,21 @@ class RecycleBinController extends Controller
             $teacher = Teacher::withTrashed()->lockForUpdate()->findOrFail($teacherId);
             abort_unless($teacher->trashed(), 409, 'This instructor is not in the Recycle Bin.');
 
-            $wasActive = (bool) $teacher->deleted_user_was_active;
-            $teacher->restore();
-            $teacher->deleted_user_was_active = null;
-            $teacher->save();
+            // Match teacher lifecycle locking: lock the profile first, then its login account.
+            $user = $teacher->user()->lockForUpdate()->first();
+            abort_unless($user, 409, 'The linked teacher account is missing; the profile was not restored.');
 
-            if ($teacher->user) {
-                $teacher->user->update(['is_active' => $wasActive]);
+            $wasActive = Schema::hasColumn('teachers', 'deleted_user_was_active')
+                ? (bool) $teacher->deleted_user_was_active
+                : false; // Fail closed if an older installation lacks the recycle-state migration.
+
+            $teacher->restore();
+            if (Schema::hasColumn('teachers', 'deleted_user_was_active')) {
+                $teacher->deleted_user_was_active = null;
+                $teacher->save();
             }
+
+            $user->update(['is_active' => $wasActive]);
 
             $this->audit->log('recycle_bin.teacher_restored', 'teacher', (string) $teacher->id, [
                 'employee_code' => $teacher->employee_code,
