@@ -33,20 +33,9 @@ return new class extends Migration {
 
     public function down(): void
     {
-        if (!Schema::hasTable('courses') || !Schema::hasColumn('courses', 'deleted_at')) {
-            return;
-        }
-
-        Schema::table('courses', function (Blueprint $table): void {
-            $table->dropSoftDeletes();
-        });
-
-        foreach (['course_categories', 'live_classes'] as $tableName) {
-            if (Schema::hasTable($tableName) && Schema::hasColumn($tableName, 'deleted_at')) {
-                Schema::table($tableName, function (Blueprint $table): void {
-                    $table->dropSoftDeletes();
-                });
-            }
-        }
+        // Intentionally non-destructive: these conditional additive columns may
+        // pre-date this migration on customer installations. Without durable
+        // per-install ownership evidence, dropping them could destroy customer
+        // schema or soft-delete history. Retain the nullable columns on rollback.
     }
 };
