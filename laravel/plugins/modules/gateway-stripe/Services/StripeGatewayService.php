@@ -33,11 +33,24 @@ class StripeGatewayService
             throw new RuntimeException('Stripe requires a PaymentMethod ID created by Stripe.js (pm_...). Raw card details are never accepted.');
         }
 
+        $providerMode = str_starts_with($secretKey, 'sk_live_') ? 'live' : 'test';
+        $description = 'AEC LMS invoice ' . $invoice->invoice_number;
+        $returnUrl = url('/payments/stripe/return');
         $reservation = $this->reservations->reserve(
             $invoice,
             'gateway-stripe',
             'STRP',
-            ['payment_method_id' => $paymentToken],
+            [
+                'fingerprint_parameters' => [
+                    'payment_method_id' => $paymentToken,
+                    'confirm' => 'true',
+                    'automatic_payment_methods_enabled' => 'true',
+                    'provider_mode' => $providerMode,
+                    'invoice_number' => (string) $invoice->invoice_number,
+                    'description' => $description,
+                    'return_url' => $returnUrl,
+                ],
+            ],
             $idempotencyKey,
         );
         $invoice = $reservation['invoice'];
@@ -72,8 +85,8 @@ class StripeGatewayService
                     'automatic_payment_methods[enabled]' => 'true',
                     'metadata[transaction_ref]' => $tx->transaction_ref,
                     'metadata[invoice_number]' => (string) $invoice->invoice_number,
-                    'description' => 'AEC LMS invoice ' . $invoice->invoice_number,
-                    'return_url' => url('/payments/stripe/return'),
+                    'description' => $description,
+                    'return_url' => $returnUrl,
                 ]);
 
             if (!$response->successful()) {
