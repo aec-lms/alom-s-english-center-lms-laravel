@@ -10,12 +10,15 @@ use RuntimeException;
 
 class RefundProviderRegistry
 {
+    /**
+     * Resolve optional gateway adapters dynamically so payment-management
+     * does not declare circular manifest dependencies on gateway plugins.
+     */
     private const ADAPTERS = [
-        'gateway-stripe' => \Plugins\Modules\GatewayStripe\Services\StripeRefundAdapter::class,
-        'gateway-paypal' => \Plugins\Modules\GatewayPaypal\Services\PaypalRefundAdapter::class,
-        'gateway-sslcommerz' => \Plugins\Modules\GatewaySslcommerz\Services\SslcommerzRefundAdapter::class,
+        'gateway-stripe' => ['module' => 'GatewayStripe', 'adapter' => 'StripeRefundAdapter'],
+        'gateway-paypal' => ['module' => 'GatewayPaypal', 'adapter' => 'PaypalRefundAdapter'],
+        'gateway-sslcommerz' => ['module' => 'GatewaySslcommerz', 'adapter' => 'SslcommerzRefundAdapter'],
     ];
-
     public function __construct(private readonly PluginManager $plugins) {}
 
     public function forTransaction(PaymentTransaction $transaction, bool $reconciliation = false): RefundProviderAdapter
