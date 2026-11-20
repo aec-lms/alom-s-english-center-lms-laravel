@@ -296,8 +296,8 @@ class ReferralIncomeService
             }
 
             // Bind the refund to an authoritative, buyer-owned source order and
-            // its paid invoice. The course-cart path also verifies the original
-            // Universal Payment transaction that settled that exact invoice.
+            // its invoice. Read the source keys first, then acquire row locks in
+            // the same order as the relevant settlement path.
             if (!in_array($sourceType, ['commerce_order', 'course_cart_order'], true)
                 || !Schema::hasTable('payment_transactions')
                 || !Schema::hasTable('fee_invoices')) {
@@ -309,27 +309,63 @@ class ReferralIncomeService
                 throw new RuntimeException('Referral reversal source order table is unavailable.');
             }
 
-            $order = DB::table($sourceTable)
+            $orderSnapshot = DB::table($sourceTable)
                 ->where('id', (int) $sourceId)
                 ->where('user_id', $buyer->id)
-                ->lockForUpdate()
                 ->first();
-            if (!$order || empty($order->invoice_id)) {
+            if (!$orderSnapshot || empty($orderSnapshot->invoice_id)) {
                 throw new RuntimeException('Referral reversal order does not belong to this buyer or has no invoice.');
             }
 
+            if ($sourceType === 'course_cart_order') {
+                if (empty($orderSnapshot->payment_transaction_id) || !Schema::hasTable('universal_payment_transactions')) {
+                    throw new RuntimeException('Referral reversal course-cart order has no verified original payment transaction.');
+                }
+
+                $originalPayment = DB::table('universal_payment_transactions')
+                    ->where('id', (int) $orderSnapshot->payment_transaction_id)
+                    ->where('user_id', $buyer->id)
+                    ->lockForUpdate()
+                    ->first();
+                if (!$originalPayment
+                    || (int) $originalPayment->invoice_id !== (int) $orderSnapshot->invoice_id
+                    || $originalPayment->status !== 'verified') {
+                    throw new RuntimeException('Course-cart order is not bound to a verified Universal Payment transaction.');
+                }
+            }
+
+            User::query()->whereKey($buyer->id)->lockForUpdate()->firstOrFail();
+
+            if ($sourceType === 'commerce_order') {
+                $invoice = DB::table('fee_invoices')->where('id', $orderSnapshot->invoice_id)->lockForUpdate()->first();
+                $order = DB::table($sourceTable)
+                    ->where('id', (int) $sourceId)
+                    ->where('user_id', $buyer->id)
+                    ->lockForUpdate()
+                    ->first();
+            } else {
+                $order = DB::table($sourceTable)
+                    ->where('id', (int) $sourceId)
+                    ->where('user_id', $buyer->id)
+                    ->lockForUpdate()
+                    ->first();
+                $invoice = DB::table('fee_invoices')->where('id', $orderSnapshot->invoice_id)->lockForUpdate()->first();
+            }
+
+            if (!$order || !$invoice || (int) $order->invoice_id !== (int) $orderSnapshot->invoice_id) {
+                throw new RuntimeException('Referral reversal source order or invoice changed during reconciliation.');
+            }
+
             $orderCurrency = strtoupper(trim((string) $order->currency));
-            if ($orderCurrency !== strtoupper(trim($currency))) {
-                throw new RuntimeException('Referral reversal currency does not match the source order currency.');
+            if ($orderCurrency !== strtoupper(trim($currency))
+                || !in_array((string) $invoice->status, ['paid', 'partially_refunded', 'refunded'], true)) {
+                throw new RuntimeException('Referral reversal currency or invoice settlement state does not match the source order.');
             }
 
             $orderAmount = $sourceType === 'commerce_order'
                 ? (float) $order->grand_total
                 : (float) $order->net_amount;
-            $invoice = DB::table('fee_invoices')->where('id', $order->invoice_id)->lockForUpdate()->first();
-            if (!$invoice
-                || !in_array((string) $invoice->status, ['paid', 'partially_refunded', 'refunded'], true)
-                || abs($orderAmount - (float) $invoice->net_amount) > 0.01
+            if (abs($orderAmount - (float) $invoice->net_amount) > 0.01
                 || strtoupper(trim((string) $invoice->currency)) !== $orderCurrency) {
                 throw new RuntimeException('Referral reversal source order does not match its authoritative invoice amount and currency.');
             }
@@ -340,23 +376,8 @@ class ReferralIncomeService
                         && !in_array((string) $order->payment_status, ['paid', 'settled', 'partially_refunded', 'refunded'], true))) {
                     throw new RuntimeException('Referral reversal commerce order has no verified paid state.');
                 }
-            } else {
-                if (!in_array((string) $order->status, ['paid', 'refunded'], true)
-                    || empty($order->payment_transaction_id)
-                    || !Schema::hasTable('universal_payment_transactions')) {
-                    throw new RuntimeException('Referral reversal course-cart order has no verified original payment transaction.');
-                }
-
-                $originalPayment = DB::table('universal_payment_transactions')
-                    ->where('id', (int) $order->payment_transaction_id)
-                    ->where('user_id', $buyer->id)
-                    ->lockForUpdate()
-                    ->first();
-                if (!$originalPayment
-                    || (int) $originalPayment->invoice_id !== (int) $order->invoice_id
-                    || $originalPayment->status !== 'verified') {
-                    throw new RuntimeException('Course-cart order is not bound to a verified Universal Payment transaction.');
-                }
+            } elseif (!in_array((string) $order->status, ['paid', 'refunded'], true)) {
+                throw new RuntimeException('Referral reversal course-cart order has no verified paid state.');
             }
 
             $refundTransaction = DB::table('payment_transactions')
