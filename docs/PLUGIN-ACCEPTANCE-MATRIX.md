@@ -297,3 +297,8 @@ A recursive Git tree scan of **main** at exact commit `db493c6525f110cd4815024f7
 | `visitor-popup-ads` | 17 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
 
 **Acceptance interpretation:** a named feature test is evidence of targeted coverage only. Full acceptance still requires the per-plugin CRUD/validation/role/branch/audit/failure matrix, browser workflow, SQLite and MySQL 8 CI, package checks, and external provider/staging gates where applicable. No plugin is declared production-certified by manifest presence or test-file presence.
+
+
+## Mainline delta since the 60-manifest inventory snapshot (2026-11-20)
+
+The 60-slug inventory was first scanned at `db493c6525f110cd4815024f7a8965c1da8baa22`. A Git comparison through current main commit `73722f154e5e3361de15320c9b3a9b3f68c71e7d` reports 443 commits ahead and 65 changed files. Of those changes, the only plugin manifest files are updates to `cms-website/plugin.json`, `course-management/plugin.json`, and `payment-management/plugin.json`; no plugin manifest path was added or removed. The slug count therefore remains 60 at this checkpoint. The per-plugin tracked-file counts in the preceding table remain the earlier `db493...` snapshot and must be regenerated against `73722...` before using them as current file counts.
