@@ -200,3 +200,18 @@ Therefore review/CI are not currently enforced by this ruleset. An authorized re
 ### PR #331 reconciliation
 
 PR #331 was merged into main as commit `0f3aad9cc469d1abff7fcb7efcd6610ba3fbfc30` on 2026-11-20. This current-main addendum replaces the earlier point-in-time status entries above; no historical CI/review result is carried forward to a different head.
+
+
+### Phonetics private speaking recordings — PR #292 / ownership-doc reconciliation
+
+| Item | Current verified state (2026-11-20) |
+|---|---|
+| Feature PR | [#292](../pull/292), head `2db83e4cf04bfe06177526dd4959575bab27d0a8`, branch `feature/phonetics-speaking-recordings-review`, Draft; 10 recording-related changed paths. |
+| Shared baseline owner | Merged [#288](../pull/288) owns the dedicated-course Phonetics practice baseline and its baseline tests. #292 owns the recording migration/model/controller/routes, recording admin views, recorder/history integration, and recording-specific feature/security tests. The current #292 changed-file list does not include #288's branding-loader test. |
+| Exact-head CI | Laravel SQLite, Laravel MySQL 8, Browser E2E, and Composer Security Audit were verified green for the recorded #292 head. These results do not transfer to a later head after synchronization. |
+| Mainline divergence | The last live compare recorded #292 as 66 commits ahead / 461 behind `main`, merge base `db493c6525f110cd4815024f7a8965c1da8baa22`. The feature diff overlaps current-main shared files; wholesale copying of the old practice view, routes, or manifest risks losing newer mainline changes. A conflict-aware sync and fresh 10-path diff/ownership audit are mandatory. |
+| Security/test review | Source audit recorded self-review denial, reviewer permission revalidation under deterministic locks, branch/course scope rechecks, and private audio response handling. The MySQL concurrency regression test is present; its synchronous listener/lock-timeout orchestration remains a test-quality caveat and should be independently reviewed rather than treated as proof of all possible race schedules. |
+| Independent approval | No independent APPROVED review was present at the last review query. Request fresh maintainer review after the synchronized candidate is ready. |
+| Documentation follow-up | [#348](../pull/348) is a two-commit docs-only reconciliation of #292's ownership/status, but this current-mainline addendum records the same feature boundary in the broader current-main register. Do not merge both documentation PRs if they carry duplicate register content; compare the final diffs and retain one canonical update. |
+
+**Required next steps:** an authorized branch owner must perform the conflict-aware integration of #292 onto current `main` (or explicitly authorize a new integration branch), preserve all unrelated mainline changes, rerun the full exact-head matrix (SQLite, MySQL 8, Browser E2E, Composer Audit, lint/Blade/build/package), attach responsive/accessibility evidence, and obtain independent maintainer approval. Keep #292 Draft until every gate is met. The GitHub connector available to this workflow exposes file/branch-pointer operations but no conflict-aware merge/rebase/cherry-pick operation; no unsafe replacement of shared files or force-update is authorized.
