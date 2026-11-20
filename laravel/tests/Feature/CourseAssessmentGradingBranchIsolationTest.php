@@ -179,7 +179,7 @@ final class CourseAssessmentGradingBranchIsolationTest extends TestCase
         ])->assertForbidden();
     }
 
-    public function test_teacher_can_grade_same_branch_course_and_global_teacher_is_limited_to_global_course(): void
+    public function test_same_branch_teacher_can_grade_but_unassigned_teacher_is_denied(): void
     {
         $this->setupAssessmentPlugins();
         $branchA = $this->createBranch('A');
@@ -200,22 +200,24 @@ final class CourseAssessmentGradingBranchIsolationTest extends TestCase
             'graded_by' => $teacher->id,
         ]);
 
-        $globalTeacher = $this->createTeacher(null, null);
-        $globalCourse = $this->createCourse(null);
-        $globalAttempt = $this->createPendingAttempt($globalCourse, null, 'Global Assessment');
-        $this->assignTeacher((int) $globalTeacher->id, $globalCourse);
-
-        $branchOnlyAttempt = $this->createPendingAttempt($courseA, $branchA, 'Branch-only Assessment');
-        $this->assignTeacher((int) $globalTeacher->id, $courseA);
-        $this->actingAs($globalTeacher)
+        $unassignedTeacher = $this->createTeacher(null, null);
+        $unassignedAttempt = $this->createPendingAttempt($courseA, $branchA, 'Unassigned Teacher Must Not Grade');
+        $this->assignTeacher((int) $unassignedTeacher->id, $courseA);
+        $this->actingAs($unassignedTeacher)
             ->get(route('plugins.course-assessments.grading.index'))
-            ->assertOk()
-            ->assertSee('Global Assessment')
-            ->assertDontSee('Branch-only Assessment');
+            ->assertForbidden();
 
-        $branchOnlyQuestion = (int) DB::table('course_assessment_attempt_questions')->where('attempt_id', $branchOnlyAttempt)->value('id');
-        $this->actingAs($globalTeacher)->patch(route('plugins.course-assessments.grading.update', $branchOnlyAttempt), [
-            'scores' => [$branchOnlyQuestion => 2],
+        $unassignedQuestion = (int) DB::table('course_assessment_attempt_questions')->where('attempt_id', $unassignedAttempt)->value('id');
+        $this->actingAs($unassignedTeacher)->patch(route('plugins.course-assessments.grading.update', $unassignedAttempt), [
+            'scores' => [$unassignedQuestion => 2],
         ])->assertForbidden();
+
+        $this->assertDatabaseHas('course_assessment_attempts', [
+            'id' => $unassignedAttempt,
+            'status' => 'pending_review',
+            'manual_score' => 0,
+            'graded_by' => null,
+        ]);
     }
+
 }
