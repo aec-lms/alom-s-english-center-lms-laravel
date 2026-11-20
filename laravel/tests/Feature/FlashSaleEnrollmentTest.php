@@ -337,6 +337,11 @@ class FlashSaleEnrollmentTest extends TestCase
         $this->assertSame('Winning Public Offer', $quote['sale']->title);
         $this->assertEquals(1800.00, $quote['total']);
 
+        DB::table('flash_sale_settings')->updateOrInsert(
+            ['id' => 1],
+            ['page_enabled' => true, 'page_title' => 'Flash Sale', 'created_at' => now(), 'updated_at' => now()]
+        );
+
         $this->get('/flash-sale')
             ->assertOk()
             ->assertSee('Flash Sale')
@@ -344,6 +349,25 @@ class FlashSaleEnrollmentTest extends TestCase
             ->assertDontSee('Lower Priority Public Offer')
             ->assertSee('Public Flash Sale Course')
             ->assertSee('1,800.00');
+    }
+
+    public function test_public_storefront_requires_explicit_enabled_page_setting(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'course-management', 'flash-sale']);
+
+        DB::table('flash_sale_settings')->delete();
+
+        $this->get('/flash-sale')->assertNotFound();
+
+        DB::table('flash_sale_settings')->insert([
+            'page_enabled' => false,
+            'page_title' => 'Flash Sale',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->get('/flash-sale')->assertNotFound();
     }
 
     public function test_pricing_resolver_rejects_campaign_branch_that_conflicts_with_course_branch(): void
