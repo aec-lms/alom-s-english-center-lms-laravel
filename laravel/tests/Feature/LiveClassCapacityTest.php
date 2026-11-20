@@ -594,7 +594,7 @@ class LiveClassCapacityTest extends TestCase
                 $this->actingAs($student)
                     ->postJson('/live-classes/' . $liveClass->id . '/heartbeat');
                 $this->fail('Heartbeat must wait for the in-progress account deactivation.');
-            } catch (\\Illuminate\\Database\\QueryException $exception) {
+            } catch (\Illuminate\\Database\\QueryException $exception) {
                 $this->assertContains((int) ($exception->errorInfo[1] ?? 0), [1205, 1213], $exception->getMessage());
             }
 
@@ -616,7 +616,7 @@ class LiveClassCapacityTest extends TestCase
                 ->where('subject_id', (string) $liveClass->id)
                 ->count();
             $this->assertSame($eventsBefore, $eventsAfter);
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             DB::setDefaultConnection($primaryName);
             if ($primary->transactionLevel() > 0) {
                 $primary->rollBack();
