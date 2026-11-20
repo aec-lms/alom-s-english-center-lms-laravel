@@ -152,7 +152,6 @@ class RecycleBinController extends Controller
                 : null;
 
             $student->restore();
-            $student->deleted_user_was_active = null;
             $student->save();
 
             if ($user && $user->is_active) {
@@ -188,7 +187,6 @@ class RecycleBinController extends Controller
                 : null;
 
             $teacher->restore();
-            $teacher->deleted_user_was_active = null;
             $teacher->save();
 
             if ($user && $user->is_active) {
