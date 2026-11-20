@@ -29,7 +29,7 @@
         <div class="col-sm-6 col-xl-3"><div class="fs-stat"><span class="fs-help">Total campaigns</span><strong>{{ $sales->total() }}</strong><span class="fs-help">Across all pages</span></div></div>
         <div class="col-sm-6 col-xl-3"><div class="fs-stat"><span class="fs-help">Current page</span><strong>{{ $sales->count() }}</strong><span class="fs-help">Campaign records</span></div></div>
         <div class="col-sm-6 col-xl-3"><div class="fs-stat"><span class="fs-help">Storefront</span><strong class="fs-pill mt-2">{{ ($settings?->page_enabled ?? true) ? 'Visible' : 'Hidden' }}</strong><span class="fs-help">Public campaign landing page</span></div></div>
-        <div class="col-sm-6 col-xl-3"><div class="fs-stat"><span class="fs-help">Pricing authority</span><strong class="fs-pill mt-2">Server verified</strong><span class="fs-help">Enrollment and unified cart</span></div></div>
+        <div class="col-sm-6 col-xl-3"><div class="fs-stat"><span class="fs-help">Pricing engine</span><strong class="fs-pill mt-2">Server-side quote</strong><span class="fs-help">Enrollment and cart integration tracked separately</span></div></div>
     </div>
 
     <div class="fs-card card mb-4">
