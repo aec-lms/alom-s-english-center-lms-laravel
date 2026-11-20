@@ -32,6 +32,7 @@ class AssessmentGradingController extends Controller
                 abort_unless(Schema::hasTable('course_teacher_assignments') && Schema::hasTable('courses'), 403, 'Teacher course assignments are required.');
 
                 $branchId = $profile->branch_id === null ? null : (int) $profile->branch_id;
+                abort_unless($branchId !== null, 403, 'Unassigned teachers cannot grade course assessments.');
                 $q->whereHas('assessmentSet', function ($setQuery) use ($actor, $branchId): void {
                     if ($branchId === null) {
                         $setQuery->whereNull('branch_id');
@@ -133,14 +134,11 @@ class AssessmentGradingController extends Controller
         $this->assertTeacherBranchConsistency($actor, $profile);
 
         $branchId = $profile->branch_id === null ? null : (int) $profile->branch_id;
-        abort_unless($set->branch_id === null
-            ? $branchId === null
-            : $branchId !== null && (int) $set->branch_id === $branchId, 403, 'Assessment belongs to another branch.');
+        abort_unless($branchId !== null, 403, 'Unassigned teachers cannot grade course assessments.');
+        abort_unless($set->branch_id !== null && (int) $set->branch_id === $branchId, 403, 'Assessment belongs to another branch.');
 
         if ($course !== null) {
-            abort_unless($course->branch_id === null
-                ? $branchId === null
-                : $branchId !== null && (int) $course->branch_id === $branchId, 403, 'Course belongs to another branch.');
+            abort_unless($course->branch_id !== null && (int) $course->branch_id === $branchId, 403, 'Course belongs to another branch.');
         }
 
         abort_unless(Schema::hasTable('course_teacher_assignments'), 403, 'Teacher course assignments are required.');
