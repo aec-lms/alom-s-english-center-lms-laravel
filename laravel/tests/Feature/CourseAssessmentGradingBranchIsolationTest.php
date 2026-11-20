@@ -431,7 +431,7 @@ final class CourseAssessmentGradingBranchIsolationTest extends TestCase
 
             $this->assertGradingUnchanged($attemptId, $questionId, $teacher->id, 4, 'Before account deactivation.');
             $this->assertSame($auditCount, $this->gradeAuditCount($attemptId));
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             if ($primary->transactionLevel() > 0) {
                 $primary->rollBack();
             }
@@ -493,7 +493,7 @@ final class CourseAssessmentGradingBranchIsolationTest extends TestCase
 
             $this->assertGradingUnchanged($attemptId, $questionId, $teacher->id, 4, 'Before role revocation.');
             $this->assertSame($auditCount, $this->gradeAuditCount($attemptId));
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             if ($primary->transactionLevel() > 0) {
                 $primary->rollBack();
             }
