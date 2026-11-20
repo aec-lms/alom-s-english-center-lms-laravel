@@ -186,6 +186,7 @@ class ReferralIncomeController extends Controller
         ]);
 
         DB::transaction(function () use ($request, $reversal, $data): void {
+            $this->assertAuditAvailable();
             $record = DB::table('referral_commission_reversals')
                 ->where('id', $reversal)
                 ->lockForUpdate()
@@ -201,6 +202,12 @@ class ReferralIncomeController extends Controller
                 'reviewed_at' => now(),
                 'updated_at' => now(),
             ]);
+
+            $this->audit->log('referral_income.recovery_reviewed', 'referral_commission_reversal', (string) $reversal, [
+                'from' => 'recovery_due',
+                'to' => $data['status'],
+                'reason' => isset($data['admin_note']) ? trim($data['admin_note']) : null,
+            ], (int) $request->user()->id);
         });
 
         return back()->with('status', 'Referral recovery reconciliation saved.');
@@ -210,6 +217,7 @@ class ReferralIncomeController extends Controller
     {
         $data = $request->validate(['status' => ['required', 'in:approved,rejected,paid'], 'admin_note' => ['nullable', 'string', 'max:1000']]);
         DB::transaction(function () use ($request, $payout, $data): void {
+            $this->assertAuditAvailable();
             $record = DB::table('referral_payout_requests')->where('id', $payout)->lockForUpdate()->first();
             $validTransition = $record !== null
                 && (($record->status === 'pending' && in_array($data['status'], ['approved', 'rejected'], true))
@@ -242,6 +250,14 @@ class ReferralIncomeController extends Controller
                 DB::table('referral_commissions')->where('payout_request_id', $payout)->where('status', 'payout_requested')
                     ->update(['status' => 'payout_approved', 'updated_at' => now()]);
             }
+
+            $this->audit->log('referral_income.payout_reviewed', 'referral_payout_request', (string) $payout, [
+                'from' => $record->status,
+                'to' => $data['status'],
+                'amount' => (string) $record->amount,
+                'currency' => (string) $record->currency,
+                'reason' => isset($data['admin_note']) ? trim($data['admin_note']) : null,
+            ], (int) $request->user()->id);
         });
         return back()->with('status', 'Payout review saved.');
     }
