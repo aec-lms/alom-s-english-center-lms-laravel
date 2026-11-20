@@ -604,6 +604,61 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
         Http::assertSentCount(2);
     }
 
+    public function test_sslcommerz_initiation_rejects_a_different_merchant_transaction_id(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'gateway-sslcommerz']);
+
+        app(PluginManager::class)->saveSettings('gateway-sslcommerz', [
+            'store_id' => 'aec-refund-sandbox',
+            'store_password' => 'ssl-refund-sandbox-secret',
+            'sandbox_mode' => '1',
+            'refunds_enabled' => '1',
+        ], ['store_password']);
+
+        [$invoice, $transaction] = $this->createSettledPayment(
+            'gateway-sslcommerz',
+            'SSL-VALIDATION-REF-MISMATCH-001',
+            ['bank_transaction_id' => 'BANK-REFUND-MISMATCH-001'],
+        );
+        $requester = $this->createUserWithRole('admin');
+        $approver = $this->createUserWithRole('admin');
+
+        Http::fake(function (ClientRequest $request) {
+            if (isset($request->data()['refund_trans_id'])) {
+                return Http::response([
+                    'APIConnect' => 'DONE',
+                    'bank_tran_id' => 'BANK-REFUND-MISMATCH-001',
+                    'trans_id' => 'SOME-OTHER-MERCHANT-TRANSACTION',
+                    'refund_ref_id' => 'SSL-REFUND-MISMATCH-001',
+                    'status' => 'success',
+                    'errorReason' => '',
+                ], 200);
+            }
+
+            return Http::response([], 500);
+        });
+
+        $service = app(RefundOrchestrationService::class);
+        $refund = $service->requestOnlineRefund(
+            $transaction,
+            100,
+            'SSLCOMMERZ mismatched transaction response',
+            (int) $requester->id,
+            'ssl-refund-mismatch-idem-001',
+        );
+        $review = $service->approveAndSubmit($refund, (int) $approver->id);
+
+        $this->assertSame('requires_review', $review->status);
+        $this->assertSame('provider_response_mismatch', $review->provider_status);
+        $this->assertNull($review->provider_refund_reference);
+        $this->assertNull($review->ledger_applied_at);
+        $this->assertSame(1000.0, (float) $invoice->fresh()->paid_amount);
+        $this->assertSame('paid', $invoice->fresh()->status);
+        $this->assertSame('settled', $transaction->fresh()->status);
+        Http::assertSentCount(1);
+    }
+
     public function test_paypal_refund_for_a_different_capture_is_rejected_without_ledger_mutation(): void
     {
         $this->markSystemInstalled();
