@@ -317,7 +317,18 @@ class ReferralIncomeService
                 throw new RuntimeException('Referral reversal order does not belong to this buyer or has no invoice.');
             }
 
-            if ($sourceType === 'course_cart_order') {
+            if ($sourceType === 'commerce_order') {
+                // PaymentSettlementService locks invoice before buyer and order.
+                $invoice = DB::table('fee_invoices')->where('id', $orderSnapshot->invoice_id)->lockForUpdate()->first();
+                User::query()->whereKey($buyer->id)->lockForUpdate()->firstOrFail();
+                $order = DB::table($sourceTable)
+                    ->where('id', (int) $sourceId)
+                    ->where('user_id', $buyer->id)
+                    ->lockForUpdate()
+                    ->first();
+            } else {
+                // CourseCommercePaymentSettlementService locks Universal Payment,
+                // buyer, then cart order; preserve that exact order here.
                 if (empty($orderSnapshot->payment_transaction_id) || !Schema::hasTable('universal_payment_transactions')) {
                     throw new RuntimeException('Referral reversal course-cart order has no verified original payment transaction.');
                 }
@@ -332,18 +343,8 @@ class ReferralIncomeService
                     || $originalPayment->status !== 'verified') {
                     throw new RuntimeException('Course-cart order is not bound to a verified Universal Payment transaction.');
                 }
-            }
 
-            User::query()->whereKey($buyer->id)->lockForUpdate()->firstOrFail();
-
-            if ($sourceType === 'commerce_order') {
-                $invoice = DB::table('fee_invoices')->where('id', $orderSnapshot->invoice_id)->lockForUpdate()->first();
-                $order = DB::table($sourceTable)
-                    ->where('id', (int) $sourceId)
-                    ->where('user_id', $buyer->id)
-                    ->lockForUpdate()
-                    ->first();
-            } else {
+                User::query()->whereKey($buyer->id)->lockForUpdate()->firstOrFail();
                 $order = DB::table($sourceTable)
                     ->where('id', (int) $sourceId)
                     ->where('user_id', $buyer->id)
