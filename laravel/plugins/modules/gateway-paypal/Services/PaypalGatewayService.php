@@ -183,7 +183,7 @@ class PaypalGatewayService
         $orderId = (string) ($tx->metadata['paypal_order_id'] ?? '');
         if ($orderId === '') throw new RuntimeException('PayPal order reference is missing.');
 
-        $response = Http::withToken($this->accessToken())->acceptJson()
+        $response = Http::withToken($this->accessToken($this->apiBase()))->acceptJson()
             ->withHeaders(['PayPal-Request-Id' => 'capture-' . $tx->transaction_ref])
             ->timeout(25)->post($this->apiBase() . '/v2/checkout/orders/' . rawurlencode($orderId) . '/capture');
 
