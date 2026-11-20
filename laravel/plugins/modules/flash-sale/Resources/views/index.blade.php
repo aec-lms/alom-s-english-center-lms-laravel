@@ -104,19 +104,14 @@
 .flash-studio .table th,.flash-studio .table td{padding:.9rem .75rem;border-bottom:1px solid var(--fs-line);vertical-align:middle}
 .flash-studio .table th{font-size:.75rem;font-weight:800;color:#475569;white-space:nowrap}
 .flash-studio .table td{font-size:.86rem;color:#263247}
-.flash-studio .fs-edit-details[open]::before{
-  content:"";position:fixed;inset:0;z-index:1000;background:rgba(15,23,42,.56);
-}
-.flash-studio .fs-edit-details[open]>summary{position:relative;z-index:1002}
 .flash-studio .fs-edit-details[open]>form{
-  position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);
-  width:min(720px,calc(100vw - 2rem));max-height:calc(100vh - 2rem);
-  overflow-y:auto;margin:0;padding:1.35rem;background:#fff;
-  border:1px solid #cbd5e1;border-radius:18px;
-  box-shadow:0 28px 90px rgba(15,23,42,.32);
+  position:relative;width:min(100%,720px);max-height:none;overflow:visible;
+  margin:.75rem 0 1rem;padding:1.35rem;background:#fff;
+  border:1px solid #cbd5e1;border-radius:14px;
+  box-shadow:0 8px 24px rgba(15,23,42,.08);
 }
 .flash-studio .fs-edit-details[open]>form .row{row-gap:.9rem}
-.flash-studio .fs-edit-modal-bar{
+.flash-studio .fs-edit-disclosure-bar{
   display:flex;align-items:center;justify-content:space-between;gap:1rem;
   padding-bottom:.85rem;margin-bottom:1rem;border-bottom:1px solid var(--fs-line);
 }
@@ -133,7 +128,7 @@
 }
 @media(max-width:767.98px){
   .flash-studio{padding:1rem}
-  .flash-studio .fs-edit-details[open]>form{width:calc(100vw - 1rem);max-height:calc(100vh - 1rem);padding:1rem}
+  .flash-studio .fs-edit-details[open]>form{width:100%;padding:1rem}
   .flash-studio .col-6{grid-column:span 12}
   .flash-studio .col-md-4{grid-column:span 12}
   .flash-studio .card-body{padding:1rem}
@@ -215,10 +210,10 @@
                         <td class="text-end">
                             <details class="text-start fs-edit-details">
                                 <summary class="btn btn-sm btn-outline-primary">Edit campaign</summary>
-                                <form class="border rounded-3 p-3 mt-2 bg-light" role="dialog" aria-modal="true" aria-label="Edit campaign {{ $sale->title }}" method="post" action="{{ url('/admin/flash-sales/'.$sale->id) }}">@csrf @method('PUT')
-                                    <div class="fs-edit-modal-bar">
-                                        <strong>Edit campaign</strong>
-                                        <button type="button" class="btn btn-sm btn-outline-secondary" aria-label="Close editor" onclick="this.closest('details').querySelector('summary').click()">Close editor</button>
+                                <form class="border rounded-3 p-3 mt-2 bg-light" aria-labelledby="edit-campaign-heading-{{ $sale->id }}" method="post" action="{{ url('/admin/flash-sales/'.$sale->id) }}">@csrf @method('PUT')
+                                    <div class="fs-edit-disclosure-bar">
+                                        <h3 class="mb-0" id="edit-campaign-heading-{{ $sale->id }}">Edit campaign: {{ $sale->title }}</h3>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" aria-label="Close editor" onclick="const disclosure = this.closest('details'); disclosure.open = false; disclosure.querySelector('summary').focus();">Close editor</button>
                                     </div>
                                     <div class="row g-2">
                                         <div class="col-12"><label class="form-label" for="edit-title-{{ $sale->id }}">Campaign name</label><input id="edit-title-{{ $sale->id }}" class="form-control" name="title" value="{{ $sale->title }}" required maxlength="160"></div>

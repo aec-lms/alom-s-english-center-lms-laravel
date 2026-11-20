@@ -137,9 +137,15 @@ test('administrator can inspect Flash Sale Studio with responsive, labelled, key
   await page.screenshot({ path: 'test-results/flash-sale-admin-mobile-overview.png', fullPage: true });
 
   await page.setViewportSize({ width: 1440, height: 1100 });
-  await page.locator('.fs-edit-details > summary').click();
-  const editForm = page.getByRole('dialog', { name: 'Edit campaign E2E Winter Offer' });
-  await expect(editForm).toHaveAttribute('aria-modal', 'true');
+  const editDisclosure = page.locator('.fs-edit-details');
+  const editSummary = editDisclosure.locator(':scope > summary');
+  await editSummary.focus();
+  await page.keyboard.press('Enter');
+  await expect(editDisclosure).toHaveAttribute('open', '');
+  const editForm = page.getByRole('form', { name: 'Edit campaign: E2E Winter Offer' });
+  await expect(editForm).toBeVisible();
+  await expect(editForm).not.toHaveAttribute('role', 'dialog');
+  await expect(editForm).not.toHaveAttribute('aria-modal');
 
   const editLabels = [
     'Campaign name',
@@ -158,7 +164,6 @@ test('administrator can inspect Flash Sale Studio with responsive, labelled, key
     'Branch ID (blank = all)',
     'Published',
     'Enabled',
-    'Close editor',
   ];
   for (const label of editLabels) {
     await expect(editForm.getByLabel(label)).toBeVisible();
@@ -166,7 +171,13 @@ test('administrator can inspect Flash Sale Studio with responsive, labelled, key
 
   const editTitle = editForm.getByLabel('Campaign name');
   const editCourse = editForm.getByLabel('Course');
-  await editTitle.focus();
+  const closeEditor = editForm.getByRole('button', { name: 'Close editor' });
+  await expect(editSummary).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(closeEditor).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(editTitle).toBeFocused();
+  expect(await editTitle.evaluate((node) => node.matches(':focus-visible'))).toBe(true);
   await page.keyboard.press('Tab');
   await expect(editCourse).toBeFocused();
   expect(await editCourse.evaluate((node) => node.matches(':focus-visible'))).toBe(true);
@@ -176,7 +187,8 @@ test('administrator can inspect Flash Sale Studio with responsive, labelled, key
     width: node.getBoundingClientRect().width,
     viewportWidth: window.innerWidth,
   }));
-  expect(desktopEditor.position).toBe('fixed');
+  expect(desktopEditor.position).not.toBe('fixed');
+  expect(desktopEditor.width).toBeGreaterThan(0);
   expect(desktopEditor.width).toBeLessThan(desktopEditor.viewportWidth);
   await page.screenshot({ path: 'test-results/flash-sale-admin-desktop-editor.png' });
 
@@ -186,6 +198,10 @@ test('administrator can inspect Flash Sale Studio with responsive, labelled, key
   expect(mobileEditorWidth).toBeLessThan(375);
   await page.screenshot({ path: 'test-results/flash-sale-admin-mobile-editor.png' });
 
-  await editForm.getByRole('button', { name: 'Close editor' }).click();
+  await closeEditor.focus();
+  await expect(closeEditor).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(editDisclosure).not.toHaveAttribute('open', '');
   await expect(editForm).toBeHidden();
+  await expect(editSummary).toBeFocused();
 });
