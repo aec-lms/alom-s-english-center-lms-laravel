@@ -401,6 +401,7 @@ class ExamAttemptSnapshotTest extends TestCase
         $this->activatePlugins(['exam-management']);
         $student = $this->createUserWithRole('student');
         [$exam, $question] = $this->createSnapshotFixture();
+        $token = $student->createToken('maximum-exam-snapshot-mobile')->plainTextToken;
         $exam->update(['duration_minutes' => 360, 'pass_marks' => 100000]);
 
         $questions = [];
@@ -445,6 +446,13 @@ class ExamAttemptSnapshotTest extends TestCase
             ->assertOk()
             ->assertSee(str_repeat('Q', 10000))
             ->assertSee('Boundary question 500');
+
+        $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson("/api/v1/my/exams/{$exam->id}/attempts")
+            ->assertOk()
+            ->assertJsonCount(500, 'questions')
+            ->assertJsonMissingPath('questions.0.correct_option_index')
+            ->assertJsonMissingPath('questions.0.negative_marks');
 
         $this->assertSame(500, count($attempt->fresh()->exam_snapshot['questions']));
         $this->assertSame(100000.0, (float) collect($attempt->fresh()->exam_snapshot['questions'])->sum('marks'));
