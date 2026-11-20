@@ -20,6 +20,8 @@ test('public Flash Sale storefront shows the server-calculated offer and fits mo
   await expect(page.getByRole('link', { name: 'Explore course' }))
     .toHaveAttribute('href', /\/courses\/e2e-premium-english-course$/);
 
+  await page.screenshot({ path: 'test-results/flash-sale-storefront-desktop.png', fullPage: true });
+
   await page.setViewportSize({ width: 375, height: 812 });
   await page.reload();
   await expect(page.locator('.fp-card')).toBeVisible();
@@ -31,6 +33,7 @@ test('public Flash Sale storefront shows the server-calculated offer and fits mo
   }));
   expect(layout.documentWidth).toBeLessThanOrEqual(layout.viewportWidth + 1);
   expect(layout.cardWidth).toBeGreaterThan(0);
+  await page.screenshot({ path: 'test-results/flash-sale-storefront-mobile.png', fullPage: true });
 });
 
 test('administrator can inspect Flash Sale Studio and its integration boundary', async ({ page }) => {
@@ -63,10 +66,17 @@ test('administrator can inspect Flash Sale Studio and its integration boundary',
   await expect(editForm.getByLabel('Campaign name')).toBeVisible();
   await expect(editForm.getByLabel('Published')).toBeVisible();
   await expect(editForm.getByLabel('Enabled')).toBeVisible();
+  await page.screenshot({ path: 'test-results/flash-sale-admin-desktop.png', fullPage: true });
 
   await page.setViewportSize({ width: 375, height: 812 });
   const mobileColumns = await page.locator('.fs-metrics').evaluate((node) =>
     getComputedStyle(node).gridTemplateColumns.split(' ').length
   );
   expect(mobileColumns).toBe(1);
+  const mobileLayout = await page.evaluate(() => ({
+    viewportWidth: document.documentElement.clientWidth,
+    documentWidth: document.documentElement.scrollWidth,
+  }));
+  expect(mobileLayout.documentWidth).toBeLessThanOrEqual(mobileLayout.viewportWidth + 1);
+  await page.screenshot({ path: 'test-results/flash-sale-admin-mobile.png', fullPage: true });
 });
