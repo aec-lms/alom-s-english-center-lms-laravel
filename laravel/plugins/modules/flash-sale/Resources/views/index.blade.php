@@ -7,7 +7,14 @@
 .flash-studio .fs-card{border:1px solid var(--fs-line);border-radius:16px;box-shadow:0 8px 28px rgba(15,23,42,.045)}
 .flash-studio .fs-kicker{font-size:.72rem;letter-spacing:.13em;text-transform:uppercase;font-weight:800;opacity:.72}
 .flash-studio .form-label{font-size:.82rem;font-weight:650;color:#334155}
-.flash-studio .fs-stat{border:1px solid var(--fs-line);border-radius:14px;padding:16px;background:#fff}
+.flash-studio .fs-stat{border:1px solid var(--fs-line);border-radius:14px;padding:16px;background:#fff;min-width:0}
+.flash-studio .fs-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1rem}
+.flash-studio .fs-hero h1{font-size:clamp(1.85rem,3vw,2.6rem);line-height:1.12;letter-spacing:-.045em}
+.flash-studio .fs-preview-link{display:inline-flex;align-items:center;justify-content:center;background:#fff;color:#172033;border:1px solid rgba(255,255,255,.75);border-radius:12px;padding:.7rem 1rem;font-weight:750;text-decoration:none}
+.flash-studio .fs-preview-link:hover{background:#eef2ff;color:#1e1b4b}
+.flash-studio .fs-preview-link:focus-visible{outline:3px solid #fbbf24;outline-offset:3px}
+@media(max-width:1199.98px){.flash-studio .fs-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:575.98px){.flash-studio .fs-metrics{grid-template-columns:1fr}.flash-studio .fs-hero{padding:1.35rem}}
 .flash-studio .fs-stat strong{display:block;font-size:1.5rem;letter-spacing:-.04em}
 .flash-studio .table>:not(caption)>*>*{padding:1rem .85rem}
 .flash-studio .fs-pill{display:inline-flex;border-radius:999px;padding:.25rem .65rem;font-size:.72rem;font-weight:750;background:#eef2ff;color:#3730a3}
@@ -19,17 +26,17 @@
     <div class="fs-hero mb-4">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
             <div><div class="fs-kicker mb-2">Growth • Promotions • Revenue</div><h1 class="h2 fw-bold mb-2">Flash Sale Studio</h1><p class="mb-0 opacity-75">Create premium, time-bound course campaigns with consistent server-side pricing.</p></div>
-            <a href="{{ url('/flash-sale') }}" target="_blank" rel="noopener" class="btn btn-light fw-semibold">Preview storefront ↗</a>
+            <a href="{{ url('/flash-sale') }}" target="_blank" rel="noopener" class="fs-preview-link">Preview storefront ↗</a>
         </div>
     </div>
     @if(session('status'))<div class="alert alert-success">{{ session('status') }}</div>@endif
     @if($errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif
 
-    <div class="row g-3 mb-4">
-        <div class="col-sm-6 col-xl-3"><div class="fs-stat"><span class="fs-help">Total campaigns</span><strong>{{ $sales->total() }}</strong><span class="fs-help">Across all pages</span></div></div>
-        <div class="col-sm-6 col-xl-3"><div class="fs-stat"><span class="fs-help">Current page</span><strong>{{ $sales->count() }}</strong><span class="fs-help">Campaign records</span></div></div>
-        <div class="col-sm-6 col-xl-3"><div class="fs-stat"><span class="fs-help">Storefront</span><strong class="fs-pill mt-2">{{ ($settings?->page_enabled ?? false) ? 'Visible' : 'Hidden' }}</strong><span class="fs-help">Public campaign landing page</span></div></div>
-        <div class="col-sm-6 col-xl-3"><div class="fs-stat"><span class="fs-help">Pricing engine</span><strong class="fs-pill mt-2">Server-side quote</strong><span class="fs-help">Enrollment and cart integration tracked separately</span></div></div>
+    <div class="fs-metrics mb-4">
+        <div class="fs-stat"><span class="fs-help">Total campaigns</span><strong>{{ $sales->total() }}</strong><span class="fs-help">Across all pages</span></div>
+        <div class="fs-stat"><span class="fs-help">Current page</span><strong>{{ $sales->count() }}</strong><span class="fs-help">Campaign records</span></div>
+        <div class="fs-stat"><span class="fs-help">Storefront</span><strong class="fs-pill mt-2">{{ ($settings?->page_enabled ?? false) ? 'Visible' : 'Hidden' }}</strong><span class="fs-help">Public campaign landing page</span></div>
+        <div class="fs-stat"><span class="fs-help">Pricing engine</span><strong class="fs-pill mt-2">Server-side quote</strong><span class="fs-help">Enrollment and cart integration tracked separately</span></div>
     </div>
 
     <div class="fs-card card mb-4">
@@ -38,7 +45,7 @@
             <form method="post" action="{{ url('/admin/flash-sales/page-settings') }}">@csrf
                 <div class="row g-3 align-items-end">
                     <div class="col-lg-6"><label class="form-label" for="flash-sale-page-title">Page headline</label><input id="flash-sale-page-title" class="form-control" name="page_title" maxlength="160" value="{{ $settings->page_title ?? 'Flash Sale' }}" required></div>
-                    <div class="col-lg-3"><input type="hidden" name="page_enabled" value="0"><div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" role="switch" id="page_enabled" name="page_enabled" value="1" @checked($settings?->page_enabled ?? true)><label class="form-check-label fw-semibold" for="page_enabled">Publish storefront</label></div></div>
+                    <div class="col-lg-3"><input type="hidden" name="page_enabled" value="0"><div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" role="switch" id="page_enabled" name="page_enabled" value="1" @checked($settings?->page_enabled ?? false)><label class="form-check-label fw-semibold" for="page_enabled">Publish storefront</label></div></div>
                     <div class="col-lg-3"><button class="btn btn-dark w-100">Save storefront</button></div>
                 </div>
             </form>
@@ -50,20 +57,20 @@
             <div class="d-flex flex-wrap justify-content-between gap-2 mb-3"><div><div class="fs-kicker text-primary">Campaign builder</div><h2 class="h5 fw-bold mt-1 mb-1">Create a premium offer</h2><p class="fs-help mb-0">Use a clear offer, accurate schedule and course-specific eligibility.</p></div><span class="fs-pill">New campaign</span></div>
             <form method="post" action="{{ url('/admin/flash-sales') }}">@csrf
                 <div class="row g-3">
-                    <div class="col-lg-4"><label class="form-label">Campaign name</label><input class="form-control" name="title" maxlength="160" placeholder="e.g. IELTS Masterclass Weekend" required></div>
-                    <div class="col-lg-4"><label class="form-label">Course</label><select class="form-select" name="course_id" required><option value="">Choose a course</option>@foreach($courses as $course)<option value="{{ $course->id }}">{{ $course->title }}</option>@endforeach</select></div>
-                    <div class="col-lg-4"><label class="form-label">Short headline</label><input class="form-control" name="subtitle" maxlength="220" placeholder="A limited-time opportunity to level up"></div>
-                    <div class="col-lg-4"><label class="form-label">Discount model</label><select class="form-select" name="discount_type"><option value="percent">Percentage discount</option><option value="fixed">Fixed amount off</option></select></div>
-                    <div class="col-lg-4"><label class="form-label">Discount value</label><input class="form-control" type="number" step="0.01" min="0.01" max="1000000" name="discount_value" placeholder="25" required></div>
-                    <div class="col-lg-4"><label class="form-label">Highlight badge</label><input class="form-control" name="badge_text" maxlength="40" placeholder="BEST VALUE / 25% OFF"></div>
-                    <div class="col-lg-6"><label class="form-label">Campaign banner image URL (HTTPS)</label><input class="form-control" type="url" name="banner_image_url" maxlength="2048" placeholder="https://example.com/campaign.webp"></div>
-                    <div class="col-lg-3"><label class="form-label">Button label</label><input class="form-control" name="cta_label" maxlength="40" value="Explore offer"></div>
-                    <div class="col-lg-3"><label class="form-label">Display priority</label><input class="form-control" type="number" name="priority" min="0" max="10000" value="0"><div class="fs-help mt-1">Higher priority wins for overlapping offers.</div></div>
-                    <div class="col-lg-6"><label class="form-label">Starts at</label><input class="form-control" type="datetime-local" name="starts_at" required></div>
-                    <div class="col-lg-6"><label class="form-label">Ends at</label><input class="form-control" type="datetime-local" name="ends_at" required></div>
-                    <div class="col-12"><label class="form-label">Campaign description</label><textarea class="form-control" name="description" rows="3" maxlength="5000" placeholder="Explain the learning outcome and what makes this offer valuable."></textarea></div>
-                    <div class="col-12"><label class="form-label">Terms & conditions</label><textarea class="form-control" name="terms" rows="2" maxlength="5000" placeholder="Eligibility, exclusions and important offer terms."></textarea></div>
-                    <div class="col-md-4"><label class="form-label">Branch targeting</label><select class="form-select" name="branch_id"><option value="">All eligible branches</option>@if(\Illuminate\Support\Facades\Schema::hasTable('branches'))@foreach(\Illuminate\Support\Facades\DB::table('branches')->where('is_active', true)->orderBy('name')->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach @endif</select><div class="fs-help mt-1">Branch managers are automatically scoped to their assigned branch.</div></div>
+                    <div class="col-lg-4"><label class="form-label" for="create-title">Campaign name</label><input id="create-title" class="form-control" name="title" maxlength="160" placeholder="e.g. IELTS Masterclass Weekend" required></div>
+                    <div class="col-lg-4"><label class="form-label" for="create-course">Course</label><select id="create-course" class="form-select" name="course_id" required><option value="">Choose a course</option>@foreach($courses as $course)<option value="{{ $course->id }}">{{ $course->title }}</option>@endforeach</select></div>
+                    <div class="col-lg-4"><label class="form-label" for="create-subtitle">Short headline</label><input id="create-subtitle" class="form-control" name="subtitle" maxlength="220" placeholder="A limited-time opportunity to level up"></div>
+                    <div class="col-lg-4"><label class="form-label" for="create-discount-type">Discount model</label><select id="create-discount-type" class="form-select" name="discount_type"><option value="percent">Percentage discount</option><option value="fixed">Fixed amount off</option></select></div>
+                    <div class="col-lg-4"><label class="form-label" for="create-discount-value">Discount value</label><input id="create-discount-value" class="form-control" type="number" step="0.01" min="0.01" max="1000000" name="discount_value" placeholder="25" required></div>
+                    <div class="col-lg-4"><label class="form-label" for="create-badge-text">Highlight badge</label><input id="create-badge-text" class="form-control" name="badge_text" maxlength="40" placeholder="BEST VALUE / 25% OFF"></div>
+                    <div class="col-lg-6"><label class="form-label" for="create-banner-url">Campaign banner image URL (HTTPS)</label><input id="create-banner-url" class="form-control" type="url" name="banner_image_url" maxlength="2048" placeholder="https://example.com/campaign.webp"></div>
+                    <div class="col-lg-3"><label class="form-label" for="create-cta-label">Button label</label><input id="create-cta-label" class="form-control" name="cta_label" maxlength="40" value="Explore offer"></div>
+                    <div class="col-lg-3"><label class="form-label" for="create-priority">Display priority</label><input id="create-priority" class="form-control" type="number" name="priority" min="0" max="10000" value="0"><div class="fs-help mt-1">Higher priority wins for overlapping offers.</div></div>
+                    <div class="col-lg-6"><label class="form-label" for="create-starts-at">Starts at</label><input id="create-starts-at" class="form-control" type="datetime-local" name="starts_at" required></div>
+                    <div class="col-lg-6"><label class="form-label" for="create-ends-at">Ends at</label><input id="create-ends-at" class="form-control" type="datetime-local" name="ends_at" required></div>
+                    <div class="col-12"><label class="form-label" for="create-description">Campaign description</label><textarea id="create-description" class="form-control" name="description" rows="3" maxlength="5000" placeholder="Explain the learning outcome and what makes this offer valuable."></textarea></div>
+                    <div class="col-12"><label class="form-label" for="create-terms">Terms & conditions</label><textarea id="create-terms" class="form-control" name="terms" rows="2" maxlength="5000" placeholder="Eligibility, exclusions and important offer terms."></textarea></div>
+                    <div class="col-md-4"><label class="form-label" for="create-branch">Branch targeting</label><select id="create-branch" class="form-select" name="branch_id"><option value="">All eligible branches</option>@if(\Illuminate\Support\Facades\Schema::hasTable('branches'))@foreach(\Illuminate\Support\Facades\DB::table('branches')->where('is_active', true)->orderBy('name')->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach @endif</select><div class="fs-help mt-1">Branch managers are automatically scoped to their assigned branch.</div></div>
                     <div class="col-md-4 d-flex align-items-end"><div class="form-check form-switch mb-2"><input type="checkbox" class="form-check-input" id="create-published" name="is_published" value="1"><label class="form-check-label" for="create-published">Publish immediately</label></div></div>
                     <div class="col-md-4 d-flex align-items-end"><div class="form-check form-switch mb-2"><input type="checkbox" class="form-check-input" id="create-active" name="is_active" value="1" checked><label class="form-check-label" for="create-active">Campaign enabled</label></div></div>
                 </div>
@@ -90,20 +97,20 @@
                                 <summary class="btn btn-sm btn-outline-primary">Edit campaign</summary>
                                 <form class="border rounded-3 p-3 mt-2 bg-light" method="post" action="{{ url('/admin/flash-sales/'.$sale->id) }}">@csrf @method('PUT')
                                     <div class="row g-2">
-                                        <div class="col-12"><label class="form-label">Campaign name</label><input class="form-control" name="title" value="{{ $sale->title }}" required maxlength="160"></div>
-                                        <div class="col-12"><label class="form-label">Course</label><select class="form-select" name="course_id" required>@foreach($courses as $course)<option value="{{ $course->id }}" @selected((int)$course->id === (int)$sale->course_id)>{{ $course->title }}</option>@endforeach</select></div>
-                                        <div class="col-12"><label class="form-label">Headline</label><input class="form-control" name="subtitle" value="{{ $sale->subtitle }}" maxlength="220"></div>
-                                        <div class="col-6"><label class="form-label">Type</label><select class="form-select" name="discount_type"><option value="percent" @selected($sale->discount_type === 'percent')>Percent</option><option value="fixed" @selected($sale->discount_type === 'fixed')>Fixed</option></select></div>
-                                        <div class="col-6"><label class="form-label">Value</label><input class="form-control" type="number" step="0.01" min="0.01" name="discount_value" value="{{ $sale->discount_value }}" required></div>
-                                        <div class="col-6"><label class="form-label">Badge</label><input class="form-control" name="badge_text" value="{{ $sale->badge_text }}" maxlength="40"></div>
-                                        <div class="col-6"><label class="form-label">Priority</label><input class="form-control" type="number" name="priority" min="0" max="10000" value="{{ $sale->priority ?? 0 }}"></div>
-                                        <div class="col-12"><label class="form-label">Banner URL (HTTPS)</label><input class="form-control" type="url" name="banner_image_url" value="{{ $sale->banner_image_url }}" maxlength="2048"></div>
-                                        <div class="col-12"><label class="form-label">Button label</label><input class="form-control" name="cta_label" value="{{ $sale->cta_label ?? 'Explore offer' }}" maxlength="40"></div>
-                                        <div class="col-6"><label class="form-label">Starts</label><input class="form-control" type="datetime-local" name="starts_at" value="{{ \Illuminate\Support\Carbon::parse($sale->starts_at)->format('Y-m-d\\TH:i') }}" required></div>
-                                        <div class="col-6"><label class="form-label">Ends</label><input class="form-control" type="datetime-local" name="ends_at" value="{{ \Illuminate\Support\Carbon::parse($sale->ends_at)->format('Y-m-d\\TH:i') }}" required></div>
-                                        <div class="col-12"><label class="form-label">Description</label><textarea class="form-control" name="description" rows="2" maxlength="5000">{{ $sale->description }}</textarea></div>
-                                        <div class="col-12"><label class="form-label">Terms</label><textarea class="form-control" name="terms" rows="2" maxlength="5000">{{ $sale->terms }}</textarea></div>
-                                        <div class="col-12"><label class="form-label">Branch ID (blank = all)</label><input class="form-control" type="number" name="branch_id" min="1" value="{{ $sale->branch_id }}"></div>
+                                        <div class="col-12"><label class="form-label" for="edit-title-{{ $sale->id }}">Campaign name</label><input id="edit-title-{{ $sale->id }}" class="form-control" name="title" value="{{ $sale->title }}" required maxlength="160"></div>
+                                        <div class="col-12"><label class="form-label" for="edit-course-{{ $sale->id }}">Course</label><select id="edit-course-{{ $sale->id }}" class="form-select" name="course_id" required>@foreach($courses as $course)<option value="{{ $course->id }}" @selected((int)$course->id === (int)$sale->course_id)>{{ $course->title }}</option>@endforeach</select></div>
+                                        <div class="col-12"><label class="form-label" for="edit-subtitle-{{ $sale->id }}">Headline</label><input id="edit-subtitle-{{ $sale->id }}" class="form-control" name="subtitle" value="{{ $sale->subtitle }}" maxlength="220"></div>
+                                        <div class="col-6"><label class="form-label" for="edit-type-{{ $sale->id }}">Type</label><select id="edit-type-{{ $sale->id }}" class="form-select" name="discount_type"><option value="percent" @selected($sale->discount_type === 'percent')>Percent</option><option value="fixed" @selected($sale->discount_type === 'fixed')>Fixed</option></select></div>
+                                        <div class="col-6"><label class="form-label" for="edit-value-{{ $sale->id }}">Value</label><input id="edit-value-{{ $sale->id }}" class="form-control" type="number" step="0.01" min="0.01" name="discount_value" value="{{ $sale->discount_value }}" required></div>
+                                        <div class="col-6"><label class="form-label" for="edit-badge-{{ $sale->id }}">Badge</label><input id="edit-badge-{{ $sale->id }}" class="form-control" name="badge_text" value="{{ $sale->badge_text }}" maxlength="40"></div>
+                                        <div class="col-6"><label class="form-label" for="edit-priority-{{ $sale->id }}">Priority</label><input id="edit-priority-{{ $sale->id }}" class="form-control" type="number" name="priority" min="0" max="10000" value="{{ $sale->priority ?? 0 }}"></div>
+                                        <div class="col-12"><label class="form-label" for="edit-banner-url-{{ $sale->id }}">Banner URL (HTTPS)</label><input id="edit-banner-url-{{ $sale->id }}" class="form-control" type="url" name="banner_image_url" value="{{ $sale->banner_image_url }}" maxlength="2048"></div>
+                                        <div class="col-12"><label class="form-label" for="edit-cta-label-{{ $sale->id }}">Button label</label><input id="edit-cta-label-{{ $sale->id }}" class="form-control" name="cta_label" value="{{ $sale->cta_label ?? 'Explore offer' }}" maxlength="40"></div>
+                                        <div class="col-6"><label class="form-label" for="edit-starts-at-{{ $sale->id }}">Starts</label><input id="edit-starts-at-{{ $sale->id }}" class="form-control" type="datetime-local" name="starts_at" value="{{ \Illuminate\Support\Carbon::parse($sale->starts_at)->format('Y-m-d\\TH:i') }}" required></div>
+                                        <div class="col-6"><label class="form-label" for="edit-ends-at-{{ $sale->id }}">Ends</label><input id="edit-ends-at-{{ $sale->id }}" class="form-control" type="datetime-local" name="ends_at" value="{{ \Illuminate\Support\Carbon::parse($sale->ends_at)->format('Y-m-d\\TH:i') }}" required></div>
+                                        <div class="col-12"><label class="form-label" for="edit-description-{{ $sale->id }}">Description</label><textarea id="edit-description-{{ $sale->id }}" class="form-control" name="description" rows="2" maxlength="5000">{{ $sale->description }}</textarea></div>
+                                        <div class="col-12"><label class="form-label" for="edit-terms-{{ $sale->id }}">Terms</label><textarea id="edit-terms-{{ $sale->id }}" class="form-control" name="terms" rows="2" maxlength="5000">{{ $sale->terms }}</textarea></div>
+                                        <div class="col-12"><label class="form-label" for="edit-branch-{{ $sale->id }}">Branch ID (blank = all)</label><input id="edit-branch-{{ $sale->id }}" class="form-control" type="number" name="branch_id" min="1" value="{{ $sale->branch_id }}"></div>
                                         <div class="col-6"><div class="form-check"><input class="form-check-input" type="checkbox" name="is_published" value="1" @checked($sale->is_published)><label class="form-check-label">Published</label></div></div>
                                         <div class="col-6"><div class="form-check"><input class="form-check-input" type="checkbox" name="is_active" value="1" @checked($sale->is_active)><label class="form-check-label">Enabled</label></div></div>
                                     </div>
