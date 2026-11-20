@@ -111,3 +111,10 @@ This newer exact-head snapshot supersedes the older rows above only for the PR h
 ## Merge and release controls
 
 Every candidate above remains Draft unless a later formal status explicitly says otherwise. No PR was merged or deployed by this update. The repository LMS ruleset is still disabled with zero required approvals/status checks, so the intended approval/CI gate is not enforced by GitHub settings. Exact-head green checks are necessary but not sufficient: independent review, no-double-merge ownership, human accessibility validation, official provider sandbox evidence, cPanel rollback/restore rehearsal and authorized 300+ participant live-class validation remain external or maintainer gates.
+
+
+## 2026-11-20 Student Management identity remediation
+
+| Finding | Candidate | Exact head / evidence | Remaining gate |
+|---|---|---|---|
+| Email case variants and generated student-code collision handling | [#352](../pull/352) | `0d456b8629463cc246c6be627040e894096b6f79`; normalizes store/update fields before validation, checks case-insensitive legacy rows, handles unique-index races, retries generated codes; regression tests added. Exact-head SQLite/MySQL/Browser/Composer checks are queued. | Full exact-head CI and independent review; keep Draft. |
