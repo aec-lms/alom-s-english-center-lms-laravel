@@ -79,6 +79,33 @@ class E2EExamFixtureSeeder extends Seeder
             'submitted_at' => null,
         ]);
 
+        $corruptExam = Exam::query()->create([
+            'title' => 'E2E Corrupt Snapshot Exam',
+            'duration_minutes' => 20,
+            'max_attempts' => 2,
+            'pass_marks' => 5,
+            'is_published' => true,
+        ]);
+        ExamQuestion::query()->create([
+            'exam_id' => $corruptExam->id,
+            'prompt' => 'Corrupt snapshot question must not be reconstructed',
+            'options' => ['Unsafe option A', 'Unsafe option B'],
+            'correct_option_index' => 1,
+            'marks' => 10,
+            'negative_marks' => 0,
+        ]);
+        $corruptAttempt = ExamAttempt::query()->create([
+            'exam_id' => $corruptExam->id,
+            'user_id' => $student->id,
+            'started_at' => now(),
+            'submitted_answers' => ['1' => 0],
+            'exam_snapshot' => ['version' => 999, 'questions' => []],
+            'score_obtained' => 3.25,
+            'total_marks' => 10,
+            'passed' => false,
+            'submitted_at' => null,
+        ]);
+
         $directory = storage_path('framework/testing');
         if (!is_dir($directory)) {
             mkdir($directory, 0775, true);
@@ -89,6 +116,8 @@ class E2EExamFixtureSeeder extends Seeder
             'question_id' => $question->id,
             'legacy_exam_id' => $legacyExam->id,
             'legacy_attempt_id' => $legacyAttempt->id,
+            'corrupt_exam_id' => $corruptExam->id,
+            'corrupt_attempt_id' => $corruptAttempt->id,
         ], JSON_THROW_ON_ERROR));
     }
 }
