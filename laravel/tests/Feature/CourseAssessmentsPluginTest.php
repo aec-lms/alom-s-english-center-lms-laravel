@@ -351,8 +351,8 @@ class CourseAssessmentsPluginTest extends TestCase
         $this->actingAs($teacherUser)
             ->get(route('plugins.course-assessments.grading.index'))
             ->assertOk()
-            ->assertSee('Branch A Assessment')
-            ->assertDontSee('Branch B Assessment');
+            ->assertSee('Attempt #' . $attemptA)
+            ->assertDontSee('Attempt #' . $attemptB);
 
         $this->actingAs($teacherUser)
             ->patch(route('plugins.course-assessments.grading.update', $attemptB), [
