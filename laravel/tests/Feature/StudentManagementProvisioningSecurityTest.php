@@ -6,9 +6,9 @@ namespace Tests\Feature;
 
 use App\Models\Role;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Plugins\Modules\StudentManagement\Models\Student;
-use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class StudentManagementProvisioningSecurityTest extends TestCase
