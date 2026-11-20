@@ -63,9 +63,12 @@ class InvoicePaymentSessionReservationService
 
                 if ($existingForKey) {
                     $storedFingerprint = (string) ($existingForKey->metadata['request_fingerprint'] ?? '');
+                    // A replay must still match the invoice's current payable balance.
+                    // Never substitute the amount of the old reservation: paid balance,
+                    // credits or invoice adjustments may have changed since the first request.
                     $replayFingerprint = $this->requestFingerprint(
                         $gatewaySlug,
-                        (float) $existingForKey->amount,
+                        $remaining,
                         strtoupper((string) $lockedInvoice->currency),
                         $metadata,
                     );
@@ -134,7 +137,11 @@ class InvoicePaymentSessionReservationService
             'gateway' => $gatewaySlug,
             'amount' => number_format($amount, 2, '.', ''),
             'currency' => strtoupper($currency),
-            'provider_parameters' => $this->normalizeFingerprintParameters($metadata),
+            'provider_parameters' => $this->normalizeFingerprintParameters(
+                is_array($metadata['fingerprint_parameters'] ?? null)
+                    ? $metadata['fingerprint_parameters']
+                    : $metadata,
+            ),
         ]);
 
         return hash('sha256', json_encode($normalized, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
@@ -179,6 +186,12 @@ class InvoicePaymentSessionReservationService
     private function safeReservationMetadata(array $metadata): array
     {
         foreach (array_keys($metadata) as $key) {
+            // Fingerprint projections may contain payer or invoice request fields.
+            // They are used only to derive the one-way request fingerprint.
+            if ((string) $key === 'fingerprint_parameters') {
+                unset($metadata[$key]);
+                continue;
+            }
             if (in_array(strtolower((string) $key), [
                 'payment_method_id', 'payment_token', 'token', 'client_secret',
                 'secret', 'password', 'authorization', 'card_number', 'cvc',
