@@ -247,4 +247,134 @@ class CourseAssessmentsPluginTest extends TestCase
             ->assertForbidden();
     }
 
+
+    public function test_teacher_branch_scope_blocks_stale_cross_branch_assignment_but_allows_same_branch_grading(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'course-management', 'course-assessments']);
+        $admin = $this->createUserWithRole('admin');
+
+        $branchA = DB::table('branches')->insertGetId([
+            'code' => 'ASSESS-GRADE-A-' . uniqid(), 'name' => 'Grading Branch A',
+            'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $branchB = DB::table('branches')->insertGetId([
+            'code' => 'ASSESS-GRADE-B-' . uniqid(), 'name' => 'Grading Branch B',
+            'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $teacher = $this->createUserWithRole('teacher', (int) $branchA);
+        $student = $this->createUserWithRole('student');
+
+        $courseA = DB::table('courses')->insertGetId([
+            'branch_id' => $branchA, 'code' => 'GRADE-A-' . strtoupper(uniqid()),
+            'title' => 'Branch A Course', 'slug' => 'grade-a-' . strtolower(uniqid()),
+            'description' => 'Same-branch course.', 'price' => 0, 'status' => 'published',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $courseB = DB::table('courses')->insertGetId([
+            'branch_id' => $branchB, 'code' => 'GRADE-B-' . strtoupper(uniqid()),
+            'title' => 'Branch B Course', 'slug' => 'grade-b-' . strtolower(uniqid()),
+            'description' => 'Cross-branch course.', 'price' => 0, 'status' => 'published',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        // Deliberately seed a stale/corrupt cross-branch assignment for the
+        // Branch A teacher; branch scope must still deny Branch B grading.
+        DB::table('course_teacher_assignments')->insert([
+            ['course_id' => $courseA, 'teacher_user_id' => $teacher->id, 'assigned_by' => $admin->id, 'created_at' => now(), 'updated_at' => now()],
+            ['course_id' => $courseB, 'teacher_user_id' => $teacher->id, 'assigned_by' => $admin->id, 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        $sameBranchSet = $this->createSet([
+            'title' => 'Same Branch Assessment', 'course_id' => $courseA, 'branch_id' => $branchA,
+        ]);
+        $crossBranchSet = $this->createSet([
+            'title' => 'Cross Branch Assessment', 'course_id' => $courseB, 'branch_id' => $branchB,
+        ]);
+
+        $createPendingAttempt = function (int $setId, int $courseId) use ($student): array {
+            $attemptId = DB::table('course_assessment_attempts')->insertGetId([
+                'assessment_set_id' => $setId, 'course_id' => $courseId,
+                'student_id' => $student->id, 'attempt_number' => 1,
+                'status' => 'pending_review', 'started_at' => now()->subHour(),
+                'submitted_at' => now(), 'auto_score' => 0, 'manual_score' => 0,
+                'max_score' => 5, 'final_score' => null,
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+            $questionId = DB::table('course_assessment_attempt_questions')->insertGetId([
+                'attempt_id' => $attemptId, 'type' => 'short_answer',
+                'question' => 'Explain the rule.', 'marks' => 5, 'position' => 10,
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+
+            return [$attemptId, $questionId];
+        };
+
+        [$sameAttempt, $sameQuestion] = $createPendingAttempt($sameBranchSet, $courseA);
+        [$crossAttempt, $crossQuestion] = $createPendingAttempt($crossBranchSet, $courseB);
+
+        $this->actingAs($teacher)->get(route('plugins.course-assessments.grading.index'))
+            ->assertOk()
+            ->assertSee('Same Branch Assessment')
+            ->assertDontSee('Cross Branch Assessment');
+
+        $this->actingAs($teacher)->patch(route('plugins.course-assessments.grading.update', $crossAttempt), [
+            'scores' => [$crossQuestion => 3],
+        ])->assertForbidden();
+
+        $this->actingAs($teacher)->patch(route('plugins.course-assessments.grading.update', $sameAttempt), [
+            'scores' => [$sameQuestion => 3],
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('course_assessment_attempts', [
+            'id' => $crossAttempt, 'status' => 'pending_review', 'manual_score' => 0,
+        ]);
+        $this->assertDatabaseHas('course_assessment_attempts', [
+            'id' => $sameAttempt, 'status' => 'graded', 'manual_score' => 3,
+        ]);
+    }
+
+    public function test_unassigned_teacher_is_limited_to_global_course_assessments(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management', 'course-assessments']);
+        $teacher = $this->createUserWithRole('teacher');
+        $student = $this->createUserWithRole('student');
+
+        $globalCourse = DB::table('courses')->insertGetId([
+            'branch_id' => null, 'code' => 'GLOBAL-GRADE-' . strtoupper(uniqid()),
+            'title' => 'Global Course', 'slug' => 'global-grade-' . strtolower(uniqid()),
+            'description' => 'Global course.', 'price' => 0, 'status' => 'published',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('course_teacher_assignments')->insert([
+            'course_id' => $globalCourse, 'teacher_user_id' => $teacher->id,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $globalSet = $this->createSet([
+            'title' => 'Global Course Assessment', 'course_id' => $globalCourse, 'branch_id' => null,
+        ]);
+
+        $attemptId = DB::table('course_assessment_attempts')->insertGetId([
+            'assessment_set_id' => $globalSet, 'course_id' => $globalCourse,
+            'student_id' => $student->id, 'attempt_number' => 1,
+            'status' => 'pending_review', 'started_at' => now()->subHour(),
+            'submitted_at' => now(), 'auto_score' => 0, 'manual_score' => 0,
+            'max_score' => 5, 'final_score' => null,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $questionId = DB::table('course_assessment_attempt_questions')->insertGetId([
+            'attempt_id' => $attemptId, 'type' => 'short_answer',
+            'question' => 'Explain the rule.', 'marks' => 5, 'position' => 10,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->actingAs($teacher)->get(route('plugins.course-assessments.grading.index'))
+            ->assertOk()->assertSee('Global Course Assessment');
+        $this->actingAs($teacher)->patch(route('plugins.course-assessments.grading.update', $attemptId), [
+            'scores' => [$questionId => 2],
+        ])->assertRedirect()->assertSessionHasNoErrors();
+    }
+
+
 }
