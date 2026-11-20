@@ -199,7 +199,7 @@ final class ReferralPayoutConcurrencyTest extends TestCase
                 1000,
                 'BDT'
             );
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             DB::setDefaultConnection($primaryName);
             if ($primary->transactionLevel() > 0) {
                 $primary->rollBack();
@@ -287,7 +287,7 @@ final class ReferralPayoutConcurrencyTest extends TestCase
                 600,
                 'BDT'
             );
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             DB::setDefaultConnection($primaryName);
             if ($primary->transactionLevel() > 0) {
                 $primary->rollBack();
