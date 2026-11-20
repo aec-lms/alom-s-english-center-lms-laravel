@@ -76,6 +76,13 @@ class TeacherController extends Controller
             : ($validated['photo_url'] ?? null);
 
         $teacher = DB::transaction(function () use ($validated, $request, $photoPath): Teacher {
+            $teacherRole = Role::query()->where('slug', 'teacher')->first();
+            if (!$teacherRole) {
+                throw ValidationException::withMessages([
+                    'role' => 'The required teacher role is not configured. Run the role/permission setup before creating teacher accounts.',
+                ]);
+            }
+
             $user = User::query()->create([
                 'name' => $validated['name'],
                 'email' => strtolower($validated['email']),
@@ -83,11 +90,7 @@ class TeacherController extends Controller
                 'branch_id' => $validated['branch_id'] ?? null,
                 'is_active' => $request->boolean('is_active', true),
             ]);
-
-            $teacherRole = Role::query()->where('slug', 'teacher')->first();
-            if ($teacherRole) {
-                $user->roles()->syncWithoutDetaching([$teacherRole->id]);
-            }
+            $user->roles()->syncWithoutDetaching([$teacherRole->id]);
 
             return Teacher::query()->create([
                 'user_id' => $user->id,
@@ -231,30 +234,62 @@ class TeacherController extends Controller
 
     public function destroy(Request $request, Teacher $teacher): RedirectResponse
     {
-        $actor = $request->user();
-        $this->ensureAssignedBranch($actor);
-        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $teacher->branch_id) {
-            abort(403, 'Branch isolation violation.');
-        }
+        $actorId = (int) $request->user()->getKey();
+        $teacherId = (int) $teacher->getKey();
 
-        $code = $teacher->employee_code;
-        $id = (string) $teacher->id;
-        $user = $teacher->user;
+        $deleted = DB::transaction(function () use ($actorId, $teacherId): array {
+            // Match update/restore lock order: account rows by ascending ID,
+            // then the Teacher profile. This avoids user/profile lock inversion.
+            $snapshot = Teacher::query()->whereKey($teacherId)->firstOrFail();
+            $linkedUserId = (int) $snapshot->user_id;
+            abort_unless($linkedUserId > 0, 409, 'The linked teacher account is missing; no changes were applied.');
 
-        DB::transaction(function () use ($teacher, $user): void {
+            $userIds = array_values(array_unique([$actorId, $linkedUserId]));
+            sort($userIds, SORT_NUMERIC);
+
+            $lockedUsers = [];
+            foreach ($userIds as $userId) {
+                $lockedUsers[$userId] = User::query()->whereKey($userId)->lockForUpdate()->first();
+                abort_unless($lockedUsers[$userId], $userId === $linkedUserId ? 409 : 404,
+                    $userId === $linkedUserId
+                        ? 'The linked teacher account is missing; no changes were applied.'
+                        : 'The acting account is unavailable.');
+            }
+
+            $actor = $lockedUsers[$actorId];
+            $user = $lockedUsers[$linkedUserId];
+            $lockedTeacher = Teacher::query()->whereKey($teacherId)->lockForUpdate()->firstOrFail();
+            abort_unless(
+                (int) $lockedTeacher->user_id === $linkedUserId,
+                409,
+                'The linked teacher account changed during this operation; please retry.'
+            );
+
+            $this->ensureAssignedBranch($actor);
+            if ($actor->hasRole('branch_manager')) {
+                abort_unless((int) $actor->branch_id === (int) $lockedTeacher->branch_id, 403, 'Branch isolation violation.');
+            }
+
+            $userWasActive = (bool) $user->is_active;
             if (Schema::hasColumn('teachers', 'deleted_user_was_active')) {
-                $teacher->deleted_user_was_active = (bool) ($user?->is_active ?? false);
-                $teacher->save();
+                $lockedTeacher->deleted_user_was_active = $userWasActive;
+                $lockedTeacher->save();
             }
-            $teacher->delete();
-            if ($user) {
-                $user->update(['is_active' => false]);
-            }
+
+            $code = (string) $lockedTeacher->employee_code;
+            $id = (string) $lockedTeacher->getKey();
+            $lockedTeacher->delete();
+            $user->update(['is_active' => false]);
+
+            $this->audit->log('teacher.deleted', 'teacher', $id, [
+                'code' => $code,
+                'user_was_active' => $userWasActive,
+            ], $actorId);
+
+            return ['code' => $code, 'id' => $id];
         });
 
-        $this->audit->log('teacher.deleted', 'teacher', $id, ['code' => $code]);
-
-        return back()->with('status', "Instructor '{$code}' removed without affecting shared LMS courses.");
+        return back()->with('status', "Instructor '{$deleted['code']}' removed without affecting shared LMS courses.");
     }
 
     private function storePhoto(UploadedFile $file): string
