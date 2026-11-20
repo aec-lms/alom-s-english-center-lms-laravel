@@ -630,20 +630,20 @@ final class ReferralIncomeRedTeamHardeningTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-        $duplicateRefundId = DB::table('payment_refunds')->insertGetId([
-            'payment_transaction_id' => $duplicateRefundTransaction,
-            'amount' => 200,
-            'reason' => 'Duplicate provider reference regression.',
-            'provider_refund_reference' => 'PROVIDER-REF-COURSE-001',
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
         try {
-            $service->reverseSettledPurchase($buyer, 'course_cart_order', $orderId, $duplicateRefundId, 200, 'BDT');
-            $this->fail('A provider refund reference must not be applied to a second refund row.');
-        } catch (\RuntimeException $exception) {
-            $this->assertStringContainsString('already been applied', $exception->getMessage());
+            DB::table('payment_refunds')->insertGetId([
+                'payment_transaction_id' => $duplicateRefundTransaction,
+                'amount' => 200,
+                'reason' => 'Duplicate provider reference regression.',
+                'provider_refund_reference' => 'PROVIDER-REF-COURSE-001',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            $this->fail('A provider refund reference must be unique across refund rows.');
+        } catch (\\Illuminate\\Database\\QueryException $exception) {
+            $this->assertStringContainsString('UNIQUE', strtoupper($exception->getMessage()));
         }
+        $this->assertDatabaseCount('payment_refunds', 1);
         $this->assertDatabaseCount('referral_commission_reversals', 1);
 
         $refundTwoTransaction = DB::table('payment_transactions')->insertGetId([
