@@ -116,15 +116,11 @@ class StudentManagementProvisioningSecurityTest extends TestCase
             'status' => 'active',
         ]);
 
-        $sequence = ['AAAAAAAAAA', 'BBBBBBBBBB'];
-        Str::createRandomStringsUsing(function (int $length) use (&$sequence): string {
-            foreach (debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 12) as $frame) {
-                if (($frame['function'] ?? null) === 'createStudentWithUniqueCode') {
-                    return array_shift($sequence) ?? str_repeat('C', $length);
-                }
-            }
+        $attempt = 0;
+        Str::createRandomStringsUsing(function (int $length) use (&$attempt): string {
+            $attempt++;
 
-            return str_repeat('C', $length);
+            return str_repeat($attempt === 1 ? 'A' : 'B', $length);
         });
 
         try {
