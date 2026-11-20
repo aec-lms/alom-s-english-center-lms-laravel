@@ -44,17 +44,31 @@ class InvoicePaymentSessionReservationService
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            if ($idempotencyKey !== null && trim($idempotencyKey) !== '') {
+            $remaining = round((float) $lockedInvoice->net_amount - (float) $lockedInvoice->paid_amount, 2);
+            $normalizedKey = $idempotencyKey !== null ? trim($idempotencyKey) : '';
+            $requestFingerprint = $this->requestFingerprint(
+                $gatewaySlug,
+                $remaining,
+                strtoupper((string) $lockedInvoice->currency),
+                $metadata,
+            );
+
+            if ($normalizedKey !== '') {
                 $existingForKey = PaymentTransaction::query()
                     ->where('invoice_id', $lockedInvoice->id)
                     ->where('gateway_slug', $gatewaySlug)
-                    ->where('metadata->idempotency_key', $idempotencyKey)
+                    ->where('metadata->idempotency_key', $normalizedKey)
                     ->lockForUpdate()
                     ->first();
 
                 if ($existingForKey) {
-                    // A repeated idempotency key always resolves to the original
-                    // transaction, including settled/failed terminal outcomes.
+                    $storedFingerprint = (string) ($existingForKey->metadata['request_fingerprint'] ?? '');
+                    abort_unless(
+                        $storedFingerprint !== '' && hash_equals($storedFingerprint, $requestFingerprint),
+                        409,
+                        'This idempotency key was already used with different or unverifiable payment parameters. Start a new checkout only after reconciling the existing reservation.',
+                    );
+
                     return [
                         'invoice' => $lockedInvoice,
                         'transaction' => $existingForKey,
@@ -63,8 +77,6 @@ class InvoicePaymentSessionReservationService
                     ];
                 }
             }
-
-            $remaining = round((float) $lockedInvoice->net_amount - (float) $lockedInvoice->paid_amount, 2);
             if ($remaining <= 0 || in_array($lockedInvoice->status, ['paid', 'cancelled', 'void'], true)) {
                 throw new RuntimeException('Invoice has no payable balance.');
             }
@@ -90,8 +102,9 @@ class InvoicePaymentSessionReservationService
                 'amount' => $remaining,
                 'currency' => strtoupper((string) $lockedInvoice->currency),
                 'status' => 'initiated',
-                'metadata' => array_merge($metadata, [
-                    'idempotency_key' => $idempotencyKey,
+                'metadata' => array_merge($this->safeReservationMetadata($metadata), [
+                    'idempotency_key' => $normalizedKey !== '' ? $normalizedKey : null,
+                    'request_fingerprint' => $normalizedKey !== '' ? $requestFingerprint : null,
                     'session_outcome' => 'reserved',
                 ]),
             ]);
@@ -103,6 +116,57 @@ class InvoicePaymentSessionReservationService
                 'reused' => false,
             ];
         }, 3);
+    }
+
+    /**
+     * Bind an idempotency key to the complete normalized request without
+     * persisting provider credentials or opaque payment-method tokens.
+     */
+    private function requestFingerprint(string $gatewaySlug, float $amount, string $currency, array $metadata): string
+    {
+        $normalized = $this->sortRecursively([
+            'gateway' => $gatewaySlug,
+            'amount' => number_format($amount, 2, '.', ''),
+            'currency' => strtoupper($currency),
+            'provider_parameters' => $metadata,
+        ]);
+
+        return hash('sha256', json_encode($normalized, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
+    }
+
+    /** @param array<string, mixed> $metadata
+     *  @return array<string, mixed>
+     */
+    private function safeReservationMetadata(array $metadata): array
+    {
+        foreach (array_keys($metadata) as $key) {
+            if (in_array(strtolower((string) $key), [
+                'payment_method_id', 'payment_token', 'token', 'client_secret',
+                'secret', 'password', 'authorization', 'card_number', 'cvc',
+            ], true)) {
+                unset($metadata[$key]);
+                continue;
+            }
+            if (is_array($metadata[$key])) {
+                $metadata[$key] = $this->safeReservationMetadata($metadata[$key]);
+            }
+        }
+
+        return $metadata;
+    }
+
+    private function sortRecursively(array $value): array
+    {
+        foreach ($value as $key => $item) {
+            if (is_array($item)) {
+                $value[$key] = $this->sortRecursively($item);
+            }
+        }
+        if (!array_is_list($value)) {
+            ksort($value);
+        }
+
+        return $value;
     }
 
     public function markCreated(
