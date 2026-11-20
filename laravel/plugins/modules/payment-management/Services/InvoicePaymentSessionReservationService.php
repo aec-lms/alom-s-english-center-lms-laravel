@@ -58,10 +58,8 @@ class InvoicePaymentSessionReservationService
                     ->first();
 
                 if ($existingForKey) {
-                    if (!in_array($existingForKey->status, self::ACTIVE_STATUSES, true)) {
-                        throw new RuntimeException('This idempotency key is already bound to a terminal payment transaction. Use a new key for a new attempt.');
-                    }
-
+                    // A repeated idempotency key always resolves to the original
+                    // transaction, including settled/failed terminal outcomes.
                     return [
                         'invoice' => $lockedInvoice,
                         'transaction' => $existingForKey,
