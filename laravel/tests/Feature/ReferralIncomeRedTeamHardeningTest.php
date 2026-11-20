@@ -443,4 +443,25 @@ final class ReferralIncomeRedTeamHardeningTest extends TestCase
     }
 
 
+    public function test_attribution_is_rejected_after_a_paid_commerce_order(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['referral-income', 'student-management', 'fees-management', 'commerce-cart']);
+
+        $referrer = $this->createUserWithRole('student');
+        $buyer = $this->createUserWithRole('student');
+        $this->createPaidCommerceOrder($buyer, 1000, 'BDT');
+        $service = app(ReferralIncomeService::class);
+
+        try {
+            $service->applyCode($buyer, $service->createOrGetCode($referrer));
+            $this->fail('A paid commerce order must make the buyer ineligible for referral attribution.');
+        } catch (\\Illuminate\\Validation\\ValidationException $exception) {
+            $this->assertStringContainsString('before the first paid order', $exception->errors()['referral_code'][0] ?? '');
+        }
+
+        $this->assertDatabaseCount('referral_attributions', 0);
+    }
+
+
 }
