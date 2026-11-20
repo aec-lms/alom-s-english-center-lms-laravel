@@ -199,4 +199,36 @@ final class ReferralIncomeRedTeamHardeningTest extends TestCase
         $this->assertSame($admin->id, (int) $recoveryLog->user_id);
         $this->assertSame('Finance approved waiver after documented reconciliation.', json_decode($recoveryLog->metadata, true)['reason'] ?? null);
     }
+    public function test_attribution_is_rejected_after_a_paid_course_cart_order(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['referral-income', 'student-management', 'course-management']);
+
+        if (!Schema::hasTable('course_cart_orders')) {
+            Schema::create('course_cart_orders', function (Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('user_id');
+                $table->string('status', 20);
+            });
+        }
+
+        $referrer = $this->createUserWithRole('student');
+        $buyer = $this->createUserWithRole('student');
+        DB::table('course_cart_orders')->insert([
+            'user_id' => $buyer->id,
+            'status' => 'paid',
+        ]);
+
+        $service = app(ReferralIncomeService::class);
+        try {
+            $service->applyCode($buyer, $service->createOrGetCode($referrer));
+            $this->fail('A paid course-cart order must make the buyer ineligible for a new referral attribution.');
+        } catch (\\Illuminate\\Validation\\ValidationException $exception) {
+            $this->assertStringContainsString('before the first paid order', $exception->errors()['referral_code'][0] ?? '');
+        }
+
+        $this->assertDatabaseCount('referral_attributions', 0);
+    }
+
+
 }
