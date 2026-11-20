@@ -145,6 +145,53 @@ class InvoicePaymentSessionReservationTest extends TestCase
         );
     }
 
+    public function test_provider_idempotency_keys_are_scoped_to_the_invoice_and_gateway(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'gateway-paypal']);
+        app(PluginManager::class)->saveSettings('gateway-paypal', [
+            'client_id' => 'paypal-cross-invoice-client',
+            'client_secret' => 'paypal-cross-invoice-secret',
+            'sandbox_mode' => '1',
+        ], ['client_secret']);
+
+        $providerKeys = [];
+        $orderNumber = 0;
+        Http::fake(function (ClientRequest $request) use (&$providerKeys, &$orderNumber) {
+            $path = (string) parse_url($request->url(), PHP_URL_PATH);
+            if (str_ends_with($path, '/v1/oauth2/token')) {
+                return Http::response(['access_token' => 'paypal-cross-invoice-token', 'token_type' => 'Bearer', 'expires_in' => 300], 200);
+            }
+            if (str_ends_with($path, '/v2/checkout/orders')) {
+                $providerKeys[] = (string) ($request->header('PayPal-Request-Id')[0] ?? '');
+                $orderNumber++;
+                return Http::response([
+                    'id' => 'ORDER-CROSS-INVOICE-' . $orderNumber,
+                    'status' => 'CREATED',
+                    'links' => [[
+                        'rel' => 'approve',
+                        'href' => 'https://www.sandbox.paypal.com/checkoutnow?token=ORDER-CROSS-INVOICE-' . $orderNumber,
+                    ]],
+                ], 201);
+            }
+
+            return Http::response(['message' => 'Unexpected PayPal request'], 500);
+        });
+
+        $firstInvoice = $this->createInvoice();
+        $secondInvoice = $this->createInvoice();
+        $service = app(PaypalGatewayService::class);
+        $first = $service->createOrder($firstInvoice, 'reused-client-key-across-invoices');
+        $second = $service->createOrder($secondInvoice, 'reused-client-key-across-invoices');
+
+        $this->assertNotSame($first['paypal_order_id'], $second['paypal_order_id']);
+        $this->assertCount(2, $providerKeys);
+        $this->assertNotSame($providerKeys[0], $providerKeys[1]);
+        $this->assertMatchesRegularExpression('/^[a-f0-9]{32}$/', $providerKeys[0]);
+        $this->assertMatchesRegularExpression('/^[a-f0-9]{32}$/', $providerKeys[1]);
+        $this->assertSame(2, DB::table('payment_transactions')->count());
+    }
+
     public function test_ambiguous_provider_outcome_keeps_invoice_reserved_until_explicit_rejection_or_reconciliation(): void
     {
         $this->markSystemInstalled();
