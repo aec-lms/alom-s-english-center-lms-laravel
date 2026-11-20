@@ -141,10 +141,11 @@ class StudentAssessmentController extends Controller
         ]);
     }
 
-    public function take(Request $request,AssessmentAttempt $attempt): View
+    public function take(Request $request, AssessmentAttempt $attempt): View
     {
-        $student=$request->user();
-        abort_unless($attempt->student_id===$student->id,404);
+        $student = $request->user();
+        abort_unless($student && $student->hasRole('student'), 403);
+        abort_unless((int) $attempt->student_id === (int) $student->id, 404);
         abort_if($attempt->status!=='in_progress',403,'This attempt has already been submitted.');
         if($attempt->deadline_at && now()->greaterThanOrEqualTo($attempt->deadline_at)){
             $this->submitAttempt($attempt);
@@ -189,16 +190,21 @@ class StudentAssessmentController extends Controller
         return response()->json(['saved' => true, 'saved_at' => now()->toIso8601String()]);
     }
 
-    public function submit(Request $request,AssessmentAttempt $attempt): RedirectResponse
+    public function submit(Request $request, AssessmentAttempt $attempt): RedirectResponse
     {
-        abort_unless($attempt->student_id===$request->user()->id,404);
+        $student = $request->user();
+        abort_unless($student && $student->hasRole('student'), 403);
+        abort_unless((int) $attempt->student_id === (int) $student->id, 404);
         $this->submitAttempt($attempt);
         return redirect()->route('plugins.course-assessments.student.history')->with('status','Assessment submitted.');
     }
 
     public function history(Request $request): View
     {
-        $attempts=AssessmentAttempt::query()->with('questions')->where('student_id',$request->user()->id)->latest()->paginate(20);
+        $student = $request->user();
+        abort_unless($student && $student->hasRole('student'), 403);
+
+        $attempts = AssessmentAttempt::query()->with('questions')->where('student_id', $student->id)->latest()->paginate(20);
         return view('course-assessments::history',compact('attempts'));
     }
 
