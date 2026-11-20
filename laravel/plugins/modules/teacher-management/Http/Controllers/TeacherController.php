@@ -94,25 +94,26 @@ class TeacherController extends Controller
             'is_active' => ['nullable', 'boolean'],
         ]);
 
-        $actor = $request->user();
-        $this->ensureAssignedBranch($actor);
-        if ($actor && $actor->hasRole('branch_manager')) {
-            if (isset($validated['branch_id']) && (int) $validated['branch_id'] !== (int) $actor->branch_id) {
-                abort(403, 'Branch isolation violation.');
-            }
-            $validated['branch_id'] = $actor->branch_id;
-        }
-
+        $actorId = (int) $request->user()->getKey();
         $photoPath = $request->hasFile('photo')
             ? $this->storePhoto($request->file('photo'))
             : ($validated['photo_url'] ?? null);
 
-        $teacher = DB::transaction(function () use ($validated, $request, $photoPath): Teacher {
+        $teacher = DB::transaction(function () use ($validated, $request, $photoPath, $actorId): Teacher {
+            $actor = User::query()->lockForUpdate()->findOrFail($actorId);
+            $this->ensureAssignedBranch($actor);
+
+            $branchId = $validated['branch_id'] ?? null;
+            if ($actor->hasRole('branch_manager')) {
+                abort_unless($branchId === null || (int) $branchId === (int) $actor->branch_id, 403, 'Branch isolation violation.');
+                $branchId = $actor->branch_id;
+            }
+
             $user = User::query()->create([
                 'name' => $validated['name'],
                 'email' => strtolower($validated['email']),
                 'password' => Hash::make($validated['password']),
-                'branch_id' => $validated['branch_id'] ?? null,
+                'branch_id' => $branchId,
                 'is_active' => $request->boolean('is_active', true),
             ]);
 
