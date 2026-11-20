@@ -474,7 +474,6 @@ class LiveClassCapacityTest extends TestCase
         }
 
         [$student, $liveClass, $participant] = $this->createLiveClassConcurrencyFixture();
-        $student->load('roles');
         // Preserve a stale authenticated role relation to model the request
         // that passed middleware before the administrator revoked the pivot.
         $student->load('roles');
@@ -487,11 +486,6 @@ class LiveClassCapacityTest extends TestCase
         $primary->table('live_class_participants')
             ->where('id', $participant->id)
             ->update(['last_seen_at' => now()->subSeconds(15)]);
-        $heartbeatEventsBefore = $primary->table('student_activity_events')
-            ->where('user_id', $student->id)
-            ->where('event_type', 'live_class_heartbeat')
-            ->where('subject_id', (string) $liveClass->id)
-            ->count();
         $primary->beginTransaction();
 
         try {
@@ -500,6 +494,11 @@ class LiveClassCapacityTest extends TestCase
             $this->actingAs($student)
                 ->postJson('/live-classes/' . $liveClass->id . '/heartbeat')
                 ->assertOk();
+            $heartbeatEventsBefore = $primary->table('student_activity_events')
+                ->where('user_id', $student->id)
+                ->where('event_type', 'live_class_heartbeat')
+                ->where('subject_id', (string) $liveClass->id)
+                ->count();
             $lastSeenAfterHeartbeat = $primary->table('live_class_participants')
                 ->where('id', $participant->id)
                 ->value('last_seen_at');
