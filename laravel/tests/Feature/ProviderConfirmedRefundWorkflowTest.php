@@ -14,6 +14,7 @@ use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
 use Plugins\Modules\StudentManagement\Models\Student;
 use Plugins\Modules\BranchManagement\Models\Branch;
 use Plugins\Modules\PaymentManagement\Services\RefundOrchestrationService;
+use Plugins\Modules\PaymentManagement\Services\RefundSettlementService;
 use Plugins\Modules\GatewayPaypal\Services\PaypalGatewayService;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
@@ -234,6 +235,12 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
         $this->assertSame(750.0, (float) $invoice->fresh()->paid_amount);
         $this->assertSame('partial', $invoice->fresh()->status);
         $this->assertSame('settled', $transaction->fresh()->status);
+
+        // A duplicate provider confirmation must not apply the ledger twice.
+        $replayed = app(RefundSettlementService::class)->applyProviderConfirmedRefund($confirmed);
+        $this->assertSame($confirmed->id, $replayed->id);
+        $this->assertSame(750.0, (float) $invoice->fresh()->paid_amount);
+
         $this->assertDatabaseHas('payment_refunds', [
             'id' => $refund->id,
             'status' => 'succeeded',
