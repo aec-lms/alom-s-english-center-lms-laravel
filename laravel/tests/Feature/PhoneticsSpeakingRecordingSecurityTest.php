@@ -457,6 +457,9 @@ final class PhoneticsSpeakingRecordingSecurityTest extends TestCase
                 json_encode(array_keys($response->getSession()->all()), JSON_UNESCAPED_SLASHES),
                 substr(trim(strip_tags($response->getContent())), 0, 600)
             );
+            // Emit the diagnostic immediately so a later suite timeout cannot
+            // hide the original authorization/session response from CI logs.
+            fwrite(STDERR, $responseDetails . PHP_EOL);
             $this->assertSame(302, $response->getStatusCode(), $responseDetails);
             $this->assertArrayHasKey('status', $response->getSession()->all(), $responseDetails);
 
