@@ -1,0 +1,662 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Feature;
+
+use App\Core\Plugins\PluginManager;
+use Illuminate\Http\Client\Request as ClientRequest;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Plugins\Modules\FeesManagement\Models\FeeInvoice;
+use Plugins\Modules\PaymentManagement\Models\PaymentRefund;
+use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
+use Plugins\Modules\StudentManagement\Models\Student;
+use Plugins\Modules\BranchManagement\Models\Branch;
+use Plugins\Modules\PaymentManagement\Services\RefundOrchestrationService;
+use Plugins\Modules\GatewayPaypal\Services\PaypalGatewayService;
+use Symfony\Component\HttpKernel\Exception\HttpException;
+use Tests\TestCase;
+
+class ProviderConfirmedRefundWorkflowTest extends TestCase
+{
+    public function test_refund_request_rejects_commerce_buyer_mismatch_with_invoice_student(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'gateway-stripe', 'student-management', 'commerce-cart']);
+
+        app(PluginManager::class)->saveSettings('gateway-stripe', [
+            'secret_key' => 'sk_test_buyer_mismatch_123456',
+            'refunds_enabled' => '1',
+        ], ['secret_key']);
+
+        [$invoice, $transaction] = $this->createSettledPayment('gateway-stripe', 'pi_buyer_mismatch_001');
+        $invoiceStudent = $this->createUserWithRole('student');
+        $differentBuyer = $this->createUserWithRole('student');
+        $studentProfile = Student::query()->create([
+            'user_id' => $invoiceStudent->id,
+            'branch_id' => null,
+            'student_code' => 'REFUND-BUYER-' . strtoupper(bin2hex(random_bytes(4))),
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+        ]);
+        $invoice->update(['student_id' => $studentProfile->id]);
+
+        DB::table('commerce_orders')->insert([
+            'order_number' => 'BUYER-MISMATCH-' . strtoupper(bin2hex(random_bytes(3))),
+            'user_id' => $differentBuyer->id,
+            'invoice_id' => $invoice->id,
+            'branch_id' => null,
+            'currency' => 'BDT',
+            'subtotal' => 1000,
+            'discount_total' => 0,
+            'grand_total' => 1000,
+            'status' => 'completed',
+            'payment_status' => 'paid',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $admin = $this->createUserWithRole('admin');
+        Http::fake();
+
+        try {
+            app(RefundOrchestrationService::class)->requestOnlineRefund(
+                $transaction,
+                100,
+                'Buyer mismatch must block refund',
+                (int) $admin->id,
+                'stripe-buyer-mismatch-001',
+            );
+            $this->fail('A commerce order buyer that differs from the invoice student must be rejected.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('buyer does not match', strtolower($exception->getMessage()));
+        }
+
+        $this->assertDatabaseCount('payment_refunds', 0);
+        Http::assertNothingSent();
+    }
+
+    public function test_refund_request_rejects_invoice_and_transaction_branch_mismatch(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'gateway-stripe', 'branch-management']);
+
+        app(PluginManager::class)->saveSettings('gateway-stripe', [
+            'secret_key' => 'sk_test_branch_mismatch_123456',
+            'refunds_enabled' => '1',
+        ], ['secret_key']);
+
+        $branchA = Branch::query()->create([
+            'code' => 'REFUND-A-' . strtoupper(bin2hex(random_bytes(3))),
+            'name' => 'Refund Branch A',
+            'is_active' => true,
+        ]);
+        $branchB = Branch::query()->create([
+            'code' => 'REFUND-B-' . strtoupper(bin2hex(random_bytes(3))),
+            'name' => 'Refund Branch B',
+            'is_active' => true,
+        ]);
+        [$invoice, $transaction] = $this->createSettledPayment('gateway-stripe', 'pi_branch_mismatch_001');
+        $invoice->update(['branch_id' => $branchA->id]);
+        $transaction->update(['branch_id' => $branchB->id]);
+
+        $admin = $this->createUserWithRole('admin');
+        Http::fake();
+
+        try {
+            app(RefundOrchestrationService::class)->requestOnlineRefund(
+                $transaction,
+                100,
+                'Branch mismatch must block refund',
+                (int) $admin->id,
+                'stripe-branch-mismatch-001',
+            );
+            $this->fail('A payment transaction outside its invoice branch must be rejected.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('branch does not match', strtolower($exception->getMessage()));
+        }
+
+        $this->assertDatabaseCount('payment_refunds', 0);
+        Http::assertNothingSent();
+    }
+
+    public function test_refund_request_can_be_rejected_by_a_different_authorized_user_without_provider_call(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'gateway-stripe']);
+
+        app(PluginManager::class)->saveSettings('gateway-stripe', [
+            'secret_key' => 'sk_test_refund_reject_123456',
+            'refunds_enabled' => '1',
+        ], ['secret_key']);
+
+        [$invoice, $transaction] = $this->createSettledPayment('gateway-stripe', 'pi_refund_reject_001');
+        $requester = $this->createUserWithRole('admin');
+        $rejecter = $this->createUserWithRole('admin');
+        $service = app(RefundOrchestrationService::class);
+        Http::fake();
+
+        $refund = $service->requestOnlineRefund(
+            $transaction,
+            200,
+            'Reject test request',
+            (int) $requester->id,
+            'stripe-refund-reject-001',
+        );
+
+        try {
+            $service->rejectRequest($refund, (int) $requester->id);
+            $this->fail('The requester must not reject their own refund request.');
+        } catch (HttpException $exception) {
+            $this->assertSame(403, $exception->getStatusCode());
+        }
+
+        $rejected = $service->rejectRequest($refund, (int) $rejecter->id);
+        $this->assertSame('rejected', $rejected->status);
+        $this->assertSame((int) $rejecter->id, (int) $rejected->rejected_by);
+        $this->assertNotNull($rejected->rejected_at);
+        $this->assertSame(1000.0, (float) $invoice->fresh()->paid_amount);
+        Http::assertNothingSent();
+    }
+
+    public function test_stripe_refund_requires_a_second_approver_and_only_provider_success_changes_the_ledger(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'gateway-stripe']);
+
+        app(PluginManager::class)->saveSettings('gateway-stripe', [
+            'secret_key' => 'sk_test_refund_workflow_123456',
+            'refunds_enabled' => '1',
+        ], ['secret_key']);
+
+        [$invoice, $transaction] = $this->createSettledPayment('gateway-stripe', 'pi_refund_workflow_001');
+        $requester = $this->createUserWithRole('admin');
+        $approver = $this->createUserWithRole('admin');
+        $service = app(RefundOrchestrationService::class);
+
+        Http::fake([
+            'https://api.stripe.com/v1/refunds' => Http::response([
+                'id' => 're_refund_workflow_001',
+                'payment_intent' => 'pi_refund_workflow_001',
+                'amount' => 25000,
+                'currency' => 'bdt',
+                'status' => 'succeeded',
+            ], 200),
+        ]);
+
+        $refund = $service->requestOnlineRefund(
+            $transaction,
+            250,
+            'Approved partial fee refund',
+            (int) $requester->id,
+            'stripe-refund-idem-001',
+        );
+        $replay = $service->requestOnlineRefund(
+            $transaction,
+            250,
+            'Approved partial fee refund',
+            (int) $requester->id,
+            'stripe-refund-idem-001',
+        );
+        $this->assertSame($refund->id, $replay->id);
+        $this->assertSame('requested', $refund->status);
+        $this->assertSame(1000.0, (float) $invoice->fresh()->paid_amount);
+        Http::assertNothingSent();
+
+        try {
+            $service->approveAndSubmit($refund, (int) $requester->id);
+            $this->fail('The requester must not approve their own refund.');
+        } catch (HttpException $exception) {
+            $this->assertSame(403, $exception->getStatusCode());
+        }
+        Http::assertNothingSent();
+
+        try {
+            $service->requestOnlineRefund(
+                $transaction,
+                251,
+                'Different amount using same key',
+                (int) $requester->id,
+                'stripe-refund-idem-001',
+            );
+            $this->fail('A changed request must not reuse the same local idempotency key.');
+        } catch (HttpException $exception) {
+            $this->assertSame(409, $exception->getStatusCode());
+        }
+
+        $confirmed = $service->approveAndSubmit($refund, (int) $approver->id);
+
+        $this->assertSame('succeeded', $confirmed->status);
+        $this->assertSame('re_refund_workflow_001', $confirmed->provider_refund_reference);
+        $this->assertSame((int) $approver->id, (int) $confirmed->approved_by);
+        $this->assertNotNull($confirmed->ledger_applied_at);
+        $this->assertSame(750.0, (float) $invoice->fresh()->paid_amount);
+        $this->assertSame('partial', $invoice->fresh()->status);
+        $this->assertSame('settled', $transaction->fresh()->status);
+        $this->assertDatabaseHas('payment_refunds', [
+            'id' => $refund->id,
+            'status' => 'succeeded',
+            'provider_refund_reference' => 're_refund_workflow_001',
+        ]);
+        Http::assertSentCount(1);
+    }
+
+    public function test_pending_stripe_refund_keeps_invoice_unchanged_and_reserves_amount_until_provider_query_confirms_success(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'gateway-stripe']);
+
+        app(PluginManager::class)->saveSettings('gateway-stripe', [
+            'secret_key' => 'sk_test_refund_pending_123456',
+            'refunds_enabled' => '1',
+        ], ['secret_key']);
+
+        [$invoice, $transaction] = $this->createSettledPayment('gateway-stripe', 'pi_refund_pending_001');
+        $requester = $this->createUserWithRole('admin');
+        $approver = $this->createUserWithRole('admin');
+        $service = app(RefundOrchestrationService::class);
+
+        Http::fake(function (ClientRequest $request) {
+            if ($request->method() === 'POST') {
+                return Http::response([
+                    'id' => 're_refund_pending_001',
+                    'payment_intent' => 'pi_refund_pending_001',
+                    'amount' => 40000,
+                    'currency' => 'bdt',
+                    'status' => 'pending',
+                ], 200);
+            }
+
+            return Http::response([
+                'id' => 're_refund_pending_001',
+                'payment_intent' => 'pi_refund_pending_001',
+                'amount' => 40000,
+                'currency' => 'bdt',
+                'status' => 'succeeded',
+            ], 200);
+        });
+
+        $refund = $service->requestOnlineRefund(
+            $transaction,
+            400,
+            'Pending bank refund',
+            (int) $requester->id,
+            'stripe-refund-pending-001',
+        );
+        $pending = $service->approveAndSubmit($refund, (int) $approver->id);
+
+        $this->assertSame('pending', $pending->status);
+        $this->assertNull($pending->ledger_applied_at);
+        $this->assertSame(1000.0, (float) $invoice->fresh()->paid_amount);
+        $this->assertSame('settled', $transaction->fresh()->status);
+
+        try {
+            $service->requestOnlineRefund(
+                $transaction,
+                700,
+                'Would exceed reserved refundable balance',
+                (int) $requester->id,
+                'stripe-refund-pending-002',
+            );
+            $this->fail('Pending provider refunds must reserve their amount against over-refund.');
+        } catch (HttpException $exception) {
+            $this->assertSame(422, $exception->getStatusCode());
+        }
+
+        // Disabling new refunds must not strand an already-submitted refund.
+        app(PluginManager::class)->saveSettings('gateway-stripe', [
+            'secret_key' => 'sk_test_refund_pending_123456',
+            'refunds_enabled' => '0',
+        ], ['secret_key']);
+
+        $confirmed = $service->reconcile($pending, (int) $approver->id);
+        $this->assertSame('succeeded', $confirmed->status);
+        $this->assertNotNull($confirmed->ledger_applied_at);
+        $this->assertSame(600.0, (float) $invoice->fresh()->paid_amount);
+        $this->assertSame('partial', $invoice->fresh()->status);
+        $this->assertSame('settled', $transaction->fresh()->status);
+        $this->assertNotNull($confirmed->reconciled_at);
+        Http::assertSentCount(2);
+    }
+
+    public function test_sslcommerz_refund_is_pending_until_refund_query_reports_refunded(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'gateway-sslcommerz']);
+
+        app(PluginManager::class)->saveSettings('gateway-sslcommerz', [
+            'store_id' => 'aec-refund-sandbox',
+            'store_password' => 'ssl-refund-sandbox-secret',
+            'sandbox_mode' => '1',
+            'refunds_enabled' => '1',
+        ], ['store_password']);
+
+        [$invoice, $transaction] = $this->createSettledPayment(
+            'gateway-sslcommerz',
+            'SSL-VALIDATION-REF-001',
+            ['bank_transaction_id' => 'BANK-REFUND-001'],
+        );
+        $requester = $this->createUserWithRole('admin');
+        $approver = $this->createUserWithRole('admin');
+        $service = app(RefundOrchestrationService::class);
+
+        Http::fake(function (ClientRequest $request) use ($transaction) {
+            $data = $request->data();
+            if (isset($data['refund_trans_id'])) {
+                return Http::response([
+                    'APIConnect' => 'DONE',
+                    'bank_tran_id' => 'BANK-REFUND-001',
+                    'trans_id' => 'SSL-TRAN-REF-001',
+                    'refund_ref_id' => 'SSL-REFUND-REF-001',
+                    'status' => 'success',
+                    'errorReason' => '',
+                ], 200);
+            }
+
+            return Http::response([
+                'APIConnect' => 'DONE',
+                'bank_tran_id' => 'BANK-REFUND-001',
+                'tran_id' => $transaction->transaction_ref,
+                'refund_ref_id' => 'SSL-REFUND-REF-001',
+                'status' => 'refunded',
+            ], 200);
+        });
+
+        $refund = $service->requestOnlineRefund(
+            $transaction,
+            100,
+            'SSLCOMMERZ refund request',
+            (int) $requester->id,
+            'ssl-refund-idem-001',
+        );
+        $pending = $service->approveAndSubmit($refund, (int) $approver->id);
+
+        $this->assertSame('pending', $pending->status);
+        $this->assertSame('SSL-REFUND-REF-001', $pending->provider_refund_reference);
+        $this->assertSame(1000.0, (float) $invoice->fresh()->paid_amount);
+
+        $confirmed = $service->reconcile($pending, (int) $approver->id);
+        $this->assertSame('succeeded', $confirmed->status);
+        $this->assertNotNull($confirmed->ledger_applied_at);
+        $this->assertSame(900.0, (float) $invoice->fresh()->paid_amount);
+        $this->assertSame('partial', $invoice->fresh()->status);
+        Http::assertSentCount(2);
+    }
+
+    public function test_paypal_multi_capture_order_is_rejected_instead_of_settling_only_the_first_capture(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'gateway-paypal']);
+
+        app(PluginManager::class)->saveSettings('gateway-paypal', [
+            'client_id' => 'paypal-multi-capture-client',
+            'client_secret' => 'paypal-multi-capture-secret',
+            'sandbox_mode' => '1',
+        ], ['client_secret']);
+
+        [$invoice, $transaction] = $this->createSettledPayment('gateway-paypal', 'ORDER-MULTI-CAPTURE-001');
+        $invoice->update(['paid_amount' => 0, 'status' => 'unpaid']);
+        $transaction->update([
+            'status' => 'initiated',
+            'external_reference' => 'ORDER-MULTI-CAPTURE-001',
+            'metadata' => ['paypal_order_id' => 'ORDER-MULTI-CAPTURE-001'],
+        ]);
+
+        Http::fake(function (ClientRequest $request) {
+            if (str_ends_with((string) parse_url($request->url(), PHP_URL_PATH), '/v1/oauth2/token')) {
+                return Http::response(['access_token' => 'paypal-multi-capture-token'], 200);
+            }
+
+            return Http::response([
+                'id' => 'ORDER-MULTI-CAPTURE-001',
+                'status' => 'COMPLETED',
+                'purchase_units' => [[
+                    'payments' => [
+                        'captures' => [
+                            ['id' => 'CAPTURE-MULTI-001', 'status' => 'COMPLETED', 'amount' => ['value' => '500.00', 'currency_code' => 'BDT']],
+                            ['id' => 'CAPTURE-MULTI-002', 'status' => 'COMPLETED', 'amount' => ['value' => '500.00', 'currency_code' => 'BDT']],
+                        ],
+                    ],
+                ]],
+            ], 201);
+        });
+
+        try {
+            app(PaypalGatewayService::class)->captureOrder((string) $transaction->transaction_ref);
+            $this->fail('Multi-capture PayPal orders must not settle against only the first capture.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('multi-capture', strtolower($exception->getMessage()));
+        }
+
+        $this->assertSame('initiated', $transaction->fresh()->status);
+        $this->assertSame(0.0, (float) $invoice->fresh()->paid_amount);
+        Http::assertSentCount(2);
+    }
+
+    public function test_paypal_refund_is_bound_to_the_original_capture_and_confirmed_before_ledger_update(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'gateway-paypal']);
+
+        app(PluginManager::class)->saveSettings('gateway-paypal', [
+            'client_id' => 'paypal-refund-client',
+            'client_secret' => 'paypal-refund-secret',
+            'sandbox_mode' => '1',
+            'refunds_enabled' => '1',
+        ], ['client_secret']);
+
+        [$invoice, $transaction] = $this->createSettledPayment(
+            'gateway-paypal',
+            'CAPTURE-REFUND-001',
+            ['paypal_order_id' => 'ORDER-REFUND-001'],
+        );
+        $requester = $this->createUserWithRole('admin');
+        $approver = $this->createUserWithRole('admin');
+        $service = app(RefundOrchestrationService::class);
+
+        Http::fake(function (ClientRequest $request) {
+            if (str_ends_with((string) parse_url($request->url(), PHP_URL_PATH), '/v1/oauth2/token')) {
+                return Http::response([
+                    'access_token' => 'paypal-refund-access-token',
+                    'token_type' => 'Bearer',
+                    'expires_in' => 300,
+                ], 200);
+            }
+
+            return Http::response([
+                'id' => 'PAYPAL-REFUND-001',
+                'status' => 'COMPLETED',
+                'amount' => ['value' => '300.00', 'currency_code' => 'BDT'],
+                'links' => [
+                    [
+                        'rel' => 'up',
+                        'href' => 'https://api-m.sandbox.paypal.com/v2/payments/captures/CAPTURE-REFUND-001',
+                    ],
+                ],
+            ], 201);
+        });
+
+        $refund = $service->requestOnlineRefund(
+            $transaction,
+            300,
+            'PayPal partial refund',
+            (int) $requester->id,
+            'paypal-refund-idem-001',
+        );
+        $confirmed = $service->approveAndSubmit($refund, (int) $approver->id);
+
+        $this->assertSame('succeeded', $confirmed->status);
+        $this->assertSame('PAYPAL-REFUND-001', $confirmed->provider_refund_reference);
+        $this->assertSame(700.0, (float) $invoice->fresh()->paid_amount);
+        $this->assertSame('partial', $invoice->fresh()->status);
+        $this->assertNotNull($confirmed->ledger_applied_at);
+        Http::assertSentCount(2);
+    }
+
+    public function test_applied_refunds_reduce_invoice_capacity_without_being_reserved_twice(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'gateway-stripe']);
+
+        app(PluginManager::class)->saveSettings('gateway-stripe', [
+            'secret_key' => 'sk_test_invoice_refund_capacity_123456',
+            'refunds_enabled' => '1',
+        ], ['secret_key']);
+
+        [$invoice, $firstTransaction] = $this->createSettledPayment('gateway-stripe', 'pi_invoice_refund_001');
+        $secondTransaction = PaymentTransaction::query()->create([
+            'transaction_ref' => 'REFUND-TXN-' . strtoupper(bin2hex(random_bytes(5))),
+            'invoice_id' => $invoice->id,
+            'branch_id' => null,
+            'gateway_slug' => 'gateway-stripe',
+            'amount' => 1000,
+            'currency' => 'BDT',
+            'status' => 'settled',
+            'external_reference' => 'pi_invoice_refund_002',
+            'metadata' => [],
+            'settled_at' => now(),
+        ]);
+        $requester = $this->createUserWithRole('admin');
+        $firstApprover = $this->createUserWithRole('admin');
+        $secondApprover = $this->createUserWithRole('admin');
+        $service = app(RefundOrchestrationService::class);
+
+        Http::fakeSequence()
+            ->push([
+                'id' => 're_invoice_refund_001',
+                'payment_intent' => 'pi_invoice_refund_001',
+                'amount' => 30000,
+                'currency' => 'bdt',
+                'status' => 'succeeded',
+            ], 200)
+            ->push([
+                'id' => 're_invoice_refund_002',
+                'payment_intent' => 'pi_invoice_refund_002',
+                'amount' => 70000,
+                'currency' => 'bdt',
+                'status' => 'succeeded',
+            ], 200);
+
+        $first = $service->requestOnlineRefund(
+            $firstTransaction,
+            300,
+            'First partial invoice refund',
+            (int) $requester->id,
+            'invoice-refund-cap-001',
+        );
+        $service->approveAndSubmit($first, (int) $firstApprover->id);
+        $this->assertSame(700.0, (float) $invoice->fresh()->paid_amount);
+
+        // The first refund is already applied to paid_amount; it must not be
+        // subtracted again from the remaining invoice refund capacity.
+        $second = $service->requestOnlineRefund(
+            $secondTransaction,
+            700,
+            'Second transaction refund',
+            (int) $requester->id,
+            'invoice-refund-cap-002',
+        );
+        $confirmed = $service->approveAndSubmit($second, (int) $secondApprover->id);
+
+        $this->assertSame('succeeded', $confirmed->status);
+        $this->assertSame(0.0, (float) $invoice->fresh()->paid_amount);
+        $this->assertSame('unpaid', $invoice->fresh()->status);
+        $this->assertSame('settled', $firstTransaction->fresh()->status);
+        $this->assertSame('settled', $secondTransaction->fresh()->status);
+        $this->assertSame(2, PaymentRefund::query()->where('status', 'succeeded')->count());
+    }
+
+    public function test_online_refund_for_gift_order_is_blocked_before_provider_submission(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'gateway-stripe', 'commerce-cart']);
+
+        app(PluginManager::class)->saveSettings('gateway-stripe', [
+            'secret_key' => 'sk_test_gift_refund_123456',
+            'refunds_enabled' => '1',
+        ], ['secret_key']);
+
+        [$invoice, $transaction] = $this->createSettledPayment('gateway-stripe', 'pi_gift_refund_001');
+        $buyer = $this->createUserWithRole('student');
+        $orderId = DB::table('commerce_orders')->insertGetId([
+            'order_number' => 'GIFT-ONLINE-REFUND-' . strtoupper(bin2hex(random_bytes(3))),
+            'user_id' => $buyer->id,
+            'invoice_id' => $invoice->id,
+            'branch_id' => null,
+            'currency' => 'BDT',
+            'subtotal' => 1000,
+            'discount_total' => 0,
+            'grand_total' => 1000,
+            'status' => 'completed',
+            'payment_status' => 'paid',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('commerce_order_items')->insert([
+            'order_id' => $orderId,
+            'item_type' => 'gift_voucher',
+            'item_id' => 987654,
+            'title_snapshot' => 'Gift Voucher',
+            'quantity' => 1,
+            'unit_price' => 1000,
+            'line_total' => 1000,
+            'metadata' => json_encode(['course_gift_voucher_id' => 987654], JSON_THROW_ON_ERROR),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $admin = $this->createUserWithRole('admin');
+        Http::fake();
+
+        try {
+            app(RefundOrchestrationService::class)->requestOnlineRefund(
+                $transaction,
+                100,
+                'Gift refund must remain blocked',
+                (int) $admin->id,
+                'stripe-gift-refund-001',
+            );
+            $this->fail('Online refunds for gift orders must fail closed before provider submission.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('gift vouchers', strtolower($exception->getMessage()));
+        }
+
+        $this->assertDatabaseCount('payment_refunds', 0);
+        $this->assertSame(1000.0, (float) $invoice->fresh()->paid_amount);
+        Http::assertNothingSent();
+    }
+
+    private function createSettledPayment(
+        string $gateway,
+        string $externalReference,
+        array $metadata = [],
+    ): array {
+        $invoice = FeeInvoice::query()->create([
+            'invoice_number' => 'REFUND-' . strtoupper(bin2hex(random_bytes(5))),
+            'payer_name' => 'Refund Workflow Buyer',
+            'payer_email' => 'refund-buyer-' . strtolower(bin2hex(random_bytes(3))) . '@aec.test',
+            'subtotal_amount' => 1000,
+            'discount_amount' => 0,
+            'net_amount' => 1000,
+            'paid_amount' => 1000,
+            'currency' => 'BDT',
+            'status' => 'paid',
+        ]);
+
+        $transaction = PaymentTransaction::query()->create([
+            'transaction_ref' => 'REFUND-TXN-' . strtoupper(bin2hex(random_bytes(5))),
+            'invoice_id' => $invoice->id,
+            'branch_id' => null,
+            'gateway_slug' => $gateway,
+            'amount' => 1000,
+            'currency' => 'BDT',
+            'status' => 'settled',
+            'external_reference' => $externalReference,
+            'metadata' => $metadata,
+            'settled_at' => now(),
+        ]);
+
+        return [$invoice, $transaction];
+    }
+}
