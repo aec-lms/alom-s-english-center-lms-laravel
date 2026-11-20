@@ -342,6 +342,12 @@ class LiveClassCapacityTest extends TestCase
         }
 
         foreach ([$accountBStudent, $accountAStudent] as $student) {
+            $eventsBefore = DB::table('student_activity_events')
+                ->where('user_id', $student->id)
+                ->where('subject_id', (string) $liveClass->id)
+                ->whereIn('event_type', ['live_class_joined', 'live_class_heartbeat'])
+                ->count();
+
             $this->actingAs($student)
                 ->post('/live-classes/' . $liveClass->id . '/join')
                 ->assertForbidden();
@@ -360,16 +366,12 @@ class LiveClassCapacityTest extends TestCase
                 'A denied join/heartbeat must not refresh or release the existing participant seat.'
             );
 
-            $this->assertDatabaseMissing('student_activity_events', [
-                'user_id' => $student->id,
-                'event_type' => 'live_class_joined',
-                'subject_id' => (string) $liveClass->id,
-            ]);
-            $this->assertDatabaseMissing('student_activity_events', [
-                'user_id' => $student->id,
-                'event_type' => 'live_class_heartbeat',
-                'subject_id' => (string) $liveClass->id,
-            ]);
+            $eventsAfter = DB::table('student_activity_events')
+                ->where('user_id', $student->id)
+                ->where('subject_id', (string) $liveClass->id)
+                ->whereIn('event_type', ['live_class_joined', 'live_class_heartbeat'])
+                ->count();
+            $this->assertSame($eventsBefore, $eventsAfter, 'A denied join/heartbeat must not emit a new activity event.');
         }
 
         $this->assertSame(2, LiveClassParticipant::query()
@@ -485,6 +487,11 @@ class LiveClassCapacityTest extends TestCase
         $primary->table('live_class_participants')
             ->where('id', $participant->id)
             ->update(['last_seen_at' => now()->subSeconds(15)]);
+        $heartbeatEventsBefore = $primary->table('student_activity_events')
+            ->where('user_id', $student->id)
+            ->where('event_type', 'live_class_heartbeat')
+            ->where('subject_id', (string) $liveClass->id)
+            ->count();
         $primary->beginTransaction();
 
         try {
@@ -532,11 +539,12 @@ class LiveClassCapacityTest extends TestCase
                 (string) $unchanged->last_seen_at,
                 'A heartbeat denied after role revocation must not refresh or release the existing seat.'
             );
-            $this->assertDatabaseMissing('student_activity_events', [
-                'user_id' => $student->id,
-                'event_type' => 'live_class_heartbeat',
-                'subject_id' => (string) $liveClass->id,
-            ]);
+            $heartbeatEventsAfter = $secondary->table('student_activity_events')
+                ->where('user_id', $student->id)
+                ->where('event_type', 'live_class_heartbeat')
+                ->where('subject_id', (string) $liveClass->id)
+                ->count();
+            $this->assertSame($heartbeatEventsBefore, $heartbeatEventsAfter);
 
             DB::setDefaultConnection($primaryName);
             DB::purge($secondaryName);
@@ -566,6 +574,11 @@ class LiveClassCapacityTest extends TestCase
         $primary->table('live_class_participants')
             ->where('id', $participant->id)
             ->update(['last_seen_at' => now()->subSeconds(15)]);
+        $heartbeatEventsBefore = $primary->table('student_activity_events')
+            ->where('user_id', $student->id)
+            ->where('event_type', 'live_class_heartbeat')
+            ->where('subject_id', (string) $liveClass->id)
+            ->count();
         $expectedLastSeen = $primary->table('live_class_participants')
             ->where('id', $participant->id)
             ->value('last_seen_at');
@@ -607,11 +620,12 @@ class LiveClassCapacityTest extends TestCase
             $this->assertNull($unchanged->left_at);
             $this->assertSame((string) $expectedLastSeen, (string) $unchanged->last_seen_at);
             $this->assertSame('cancelled', $secondary->table('enrollments')->where('id', $enrollment->id)->value('status'));
-            $this->assertDatabaseMissing('student_activity_events', [
-                'user_id' => $student->id,
-                'event_type' => 'live_class_heartbeat',
-                'subject_id' => (string) $liveClass->id,
-            ]);
+            $heartbeatEventsAfter = $secondary->table('student_activity_events')
+                ->where('user_id', $student->id)
+                ->where('event_type', 'live_class_heartbeat')
+                ->where('subject_id', (string) $liveClass->id)
+                ->count();
+            $this->assertSame($heartbeatEventsBefore, $heartbeatEventsAfter);
 
             DB::setDefaultConnection($primaryName);
             DB::purge($secondaryName);
