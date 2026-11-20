@@ -256,7 +256,7 @@ class StudentController extends Controller
         return function (string $attribute, mixed $value, callable $fail) use ($exceptUserId): void {
             $query = User::query()->whereRaw('LOWER(email) = ?', [Str::lower(trim((string) $value))]);
             if ($exceptUserId !== null) {
-                $query->whereKeyNot($exceptUserId);
+                $query->where('id', '<>', $exceptUserId);
             }
 
             if ($query->exists()) {
