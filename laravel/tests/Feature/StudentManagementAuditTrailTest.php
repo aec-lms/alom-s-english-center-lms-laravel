@@ -123,4 +123,56 @@ final class StudentManagementAuditTrailTest extends TestCase
         $this->assertSame((string) $branchId, (string) $student->fresh()->branch_id);
     }
 
+    public function test_explicit_null_branch_id_clears_student_and_linked_user_branch(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'student-management']);
+        $admin = $this->createUserWithRole('admin');
+
+        $branchId = DB::table('branches')->insertGetId([
+            'code' => 'CLEAR-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'name' => 'Branch To Clear',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($admin)->post('/admin/students', [
+            'name' => 'Clear Branch Learner',
+            'email' => 'clear.branch@aec.test',
+            'password' => 'InitialPassword123!',
+            'student_code' => 'CLEAR-BRANCH-001',
+            'branch_id' => $branchId,
+            'status' => 'active',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $student = Student::query()->where('student_code', 'CLEAR-BRANCH-001')->firstOrFail();
+
+        $this->actingAs($admin)->put('/admin/students/' . $student->id, [
+            'name' => 'Clear Branch Learner',
+            'email' => 'clear.branch@aec.test',
+            'student_code' => 'CLEAR-BRANCH-001',
+            'branch_id' => null,
+            'status' => 'active',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $student->refresh()->load('user');
+        $this->assertNull($student->branch_id);
+        $this->assertNull($student->user->branch_id);
+
+        $log = DB::table('audit_logs')
+            ->where('action', 'student.updated')
+            ->where('entity_type', 'student')
+            ->where('entity_id', (string) $student->id)
+            ->latest('id')
+            ->first();
+
+        $this->assertNotNull($log);
+        $metadata = json_decode((string) $log->metadata, true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame(
+            ['from' => (string) $branchId, 'to' => null],
+            $metadata['changes']['branch_id']
+        );
+    }
+
 }
