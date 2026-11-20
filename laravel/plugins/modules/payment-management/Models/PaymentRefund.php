@@ -20,6 +20,7 @@ class PaymentRefund extends Model
         'requested_by',
         'approved_by',
         'rejected_by',
+        'rejected_at',
         'idempotency_key',
         'provider_idempotency_key',
         'provider_status',
