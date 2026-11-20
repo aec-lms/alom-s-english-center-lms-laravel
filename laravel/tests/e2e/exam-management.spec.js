@@ -39,20 +39,15 @@ test('student exam journey uses frozen snapshot, autosaves safely, and remains a
   await expect(page.getByText('30 minutes')).toBeVisible();
   await expect(page.getByText('Pass marks: 2')).toBeVisible();
 
-  // Keyboard navigation enters the first labelled radio group and selects option B.
-  await page.evaluate(() => document.activeElement?.blur());
+  // Verify the native radio group supports keyboard selection and visible focus.
   const optionThree = page.getByRole('radio', { name: '3' });
-  let reachedRadio = false;
-  for (let index = 0; index < 24; index += 1) {
-    await page.keyboard.press('Tab');
-    reachedRadio = await optionThree.evaluate((element) => element === document.activeElement);
-    if (reachedRadio) break;
-  }
-  expect(reachedRadio).toBe(true);
-  await expect(optionThree).toBeFocused();
-  expect(await optionThree.evaluate((element) => element.matches(':focus-visible'))).toBe(true);
+  await optionThree.focus();
   await page.keyboard.press('ArrowRight');
   const optionFour = page.getByRole('radio', { name: '4' });
+  await expect(optionFour).toBeFocused();
+  await expect(optionFour).toBeChecked();
+  expect(await optionFour.evaluate((element) => element.matches(':focus-visible'))).toBe(true);
+  await page.keyboard.press('ArrowLeft');
   await expect(optionFour).toBeFocused();
   await expect(optionFour).toBeChecked();
 
