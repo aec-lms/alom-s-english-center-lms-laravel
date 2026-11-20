@@ -399,7 +399,7 @@ final class ReferralIncomeRedTeamHardeningTest extends TestCase
             'payer_name' => $buyer->name,
             'payer_contact' => '01700000000',
             'item_title' => 'Course Cart Order #' . $orderId,
-            'gateway' => 'offline',
+            'gateway' => 'sslcommerz',
             'currency' => 'BDT',
             'amount' => 1000,
             'external_trx_id' => 'REF-COURSE-CART-VERIFIED-' . $orderId,
