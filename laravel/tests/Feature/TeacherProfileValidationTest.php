@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Core\Security\AuditLogger;
+use App\Models\AuditLog;
 use App\Models\Role;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -112,26 +112,6 @@ final class TeacherProfileValidationTest extends TestCase
         $this->assertFalse((bool) $teacher->fresh()->is_active);
         $this->assertFalse((bool) $teacher->fresh()->user->is_active);
 
-        $this->mock(AuditLogger::class, function ($mock) use ($teacher, $userId, $admin): void {
-            $mock->shouldReceive('log')->once()->with(
-                'teacher.account_status_changed',
-                'user',
-                (string) $userId,
-                [
-                    'teacher_id' => (int) $teacher->id,
-                    'before' => false,
-                    'after' => true,
-                ],
-                (int) $admin->id
-            );
-            $mock->shouldReceive('log')->once()->with(
-                'teacher.updated',
-                'teacher',
-                (string) $teacher->id,
-                ['code' => 'EXPLICIT-ACTIVATION-001']
-            );
-        });
-
         $this->actingAs($admin)->put('/admin/teachers/' . $teacher->id, [
             'name' => 'Explicit Activation Teacher',
             'employee_code' => 'EXPLICIT-ACTIVATION-001',
@@ -142,6 +122,19 @@ final class TeacherProfileValidationTest extends TestCase
 
         $this->assertTrue((bool) $teacher->fresh()->is_active);
         $this->assertTrue((bool) $teacher->fresh()->user->is_active);
+
+        $statusEvent = AuditLog::query()
+            ->where('action', 'teacher.account_status_changed')
+            ->where('entity_type', 'user')
+            ->where('entity_id', (string) $userId)
+            ->latest('id')
+            ->firstOrFail();
+        $this->assertSame((int) $admin->id, (int) $statusEvent->user_id);
+        $this->assertSame([
+            'teacher_id' => (int) $teacher->id,
+            'before' => false,
+            'after' => true,
+        ], $statusEvent->metadata);
     }
 
     public function test_mysql_teacher_reactivation_holds_admin_role_until_commit(): void
