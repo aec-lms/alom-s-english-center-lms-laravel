@@ -133,7 +133,9 @@ class LearningInteractionTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $student = $this->createUserWithRole('student', (int) $branchB);
+        // Start with a consistent account/profile assignment. After the profile
+        // moves to branch B below, the stale account assignment must fail closed.
+        $student = $this->createUserWithRole('student', (int) $branchA);
         DB::table('students')->insert([
             'user_id' => $student->id,
             'branch_id' => $branchA,
