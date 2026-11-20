@@ -46,10 +46,10 @@ final class ReferralPayoutConcurrencyTest extends TestCase
             'payer_name' => $buyer->name,
             'payer_email' => $buyer->email,
             'payer_phone' => '01700000000',
-            'subtotal_amount' => 1000,
+            'subtotal_amount' => 6000,
             'discount_amount' => 0,
-            'net_amount' => 1000,
-            'paid_amount' => 1000,
+            'net_amount' => 6000,
+            'paid_amount' => 6000,
             'currency' => 'BDT',
             'status' => 'paid',
             'due_date' => now()->toDateString(),
@@ -60,9 +60,9 @@ final class ReferralPayoutConcurrencyTest extends TestCase
             'invoice_id' => $invoice->id,
             'branch_id' => null,
             'currency' => 'BDT',
-            'subtotal' => 1000,
+            'subtotal' => 6000,
             'discount_total' => 0,
-            'grand_total' => 1000,
+            'grand_total' => 6000,
             'status' => 'completed',
             'payment_status' => 'paid',
             'billing_snapshot' => json_encode(['name' => $buyer->name, 'email' => $buyer->email]),
@@ -71,7 +71,7 @@ final class ReferralPayoutConcurrencyTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $commissionId = $service->recordSettledPurchase($buyer, 'commerce_order', (string) $orderId, 1000, 'BDT');
+        $commissionId = $service->recordSettledPurchase($buyer, 'commerce_order', (string) $orderId, 6000, 'BDT');
         $this->assertNotNull($commissionId);
         DB::table('referral_commissions')->where('id', $commissionId)->update([
             'status' => 'approved',
@@ -131,7 +131,7 @@ final class ReferralPayoutConcurrencyTest extends TestCase
         }
 
         $this->assertSame(1, DB::table('referral_payout_requests')->where('user_id', $owner->id)->count());
-        $this->assertSame(500.0, (float) DB::table('referral_payout_requests')->where('id', $firstPayoutId)->value('amount'));
+        $this->assertSame(600.0, (float) DB::table('referral_payout_requests')->where('id', $firstPayoutId)->value('amount'));
         $this->assertDatabaseHas('referral_commissions', [
             'id' => $commissionId,
             'status' => 'payout_requested',
