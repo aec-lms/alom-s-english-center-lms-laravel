@@ -514,8 +514,8 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
         try {
             $service->requestOnlineRefund(
                 $transaction,
-                700,
-                'Would exceed reserved refundable balance',
+                600.01,
+                'Would exceed reserved refundable balance by one cent',
                 (int) $requester->id,
                 'stripe-refund-pending-002',
             );
