@@ -23,6 +23,9 @@ class ExamAttemptSnapshotTest extends TestCase
             ->assertOk()
             ->assertSee('Original question text')
             ->assertSee('Original option B')
+            ->assertSee('<fieldset', false)
+            ->assertSee('aria-labelledby="exam-question-' . $question->id . '"', false)
+            ->assertSee('focus-visible:outline', false)
             ->assertDontSee('correct_option_index');
 
         preg_match('/name="attempt_id" value="([0-9]+)"/', $page->getContent(), $match);
