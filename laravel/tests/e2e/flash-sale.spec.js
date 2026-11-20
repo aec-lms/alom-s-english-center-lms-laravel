@@ -45,6 +45,7 @@ test('public Flash Sale storefront shows the server-calculated offer and fits mo
 });
 
 test('administrator can inspect Flash Sale Studio and its integration boundary', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1100 });
   await signInAsAdmin(page);
 
   const response = await page.goto('/admin/flash-sales');
@@ -83,7 +84,7 @@ test('administrator can inspect Flash Sale Studio and its integration boundary',
   }));
   expect(desktopEditor.position).toBe('fixed');
   expect(desktopEditor.width).toBeLessThan(desktopEditor.viewportWidth);
-  await page.screenshot({ path: 'test-results/flash-sale-admin-desktop.png', fullPage: true });
+  await page.screenshot({ path: 'test-results/flash-sale-admin-desktop.png' });
 
   await page.setViewportSize({ width: 375, height: 812 });
   const mobileColumns = await page.locator('.fs-metrics').evaluate((node) =>
@@ -97,7 +98,9 @@ test('administrator can inspect Flash Sale Studio and its integration boundary',
   expect(mobileLayout.documentWidth).toBeLessThanOrEqual(mobileLayout.viewportWidth + 1);
   const mobileEditorWidth = await editForm.evaluate((node) => node.getBoundingClientRect().width);
   expect(mobileEditorWidth).toBeLessThan(375);
-  await page.screenshot({ path: 'test-results/flash-sale-admin-mobile.png', fullPage: true });
-  await page.getByText('Edit campaign', { exact: true }).click();
+  await expect(editForm.getByRole('button', { name: 'Close editor' })).toBeVisible();
+  await page.screenshot({ path: 'test-results/flash-sale-admin-mobile.png' });
+  await editForm.getByRole('button', { name: 'Close editor' }).click();
   await expect(editForm).toBeHidden();
+  await page.screenshot({ path: 'test-results/flash-sale-admin-mobile-overview.png', fullPage: true });
 });
