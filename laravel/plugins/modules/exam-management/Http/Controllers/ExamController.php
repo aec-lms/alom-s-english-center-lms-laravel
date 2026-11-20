@@ -676,7 +676,7 @@ class ExamController extends Controller
             'questions' => $questions->map(static fn (ExamQuestion $question): array => [
                 'id' => (int) $question->id,
                 'prompt' => (string) $question->prompt,
-                'options' => array_values((array) $question->options),
+                'options' => $question->options,
                 'correct_option_index' => (int) $question->correct_option_index,
                 'marks' => (float) $question->marks,
                 'negative_marks' => (float) ($question->negative_marks ?? 0),
