@@ -450,18 +450,19 @@ final class PhoneticsSpeakingRecordingSecurityTest extends TestCase
                     'feedback' => 'Review completed while the permission pivot was locked.',
                 ]);
 
+            $sessionData = app('session.store')->all();
             $responseDetails = sprintf(
                 'Review response diagnostics: HTTP %d; Location=%s; Session keys=%s; Body=%s',
                 $response->getStatusCode(),
                 (string) $response->headers->get('Location', ''),
-                json_encode(array_keys($response->getSession()->all()), JSON_UNESCAPED_SLASHES),
+                json_encode(array_keys($sessionData), JSON_UNESCAPED_SLASHES),
                 substr(trim(strip_tags($response->getContent())), 0, 600)
             );
             // Emit the diagnostic immediately so a later suite timeout cannot
             // hide the original authorization/session response from CI logs.
             fwrite(STDERR, $responseDetails . PHP_EOL);
             $this->assertSame(302, $response->getStatusCode(), $responseDetails);
-            $this->assertArrayHasKey('status', $response->getSession()->all(), $responseDetails);
+            $this->assertArrayHasKey('status', $sessionData, $responseDetails);
 
             $this->assertTrue($revocationAttempted, 'The second connection must attempt revocation after the final permission lock.');
             $this->assertTrue($revocationBlocked, 'Concurrent permission revocation must wait for the review transaction.');
