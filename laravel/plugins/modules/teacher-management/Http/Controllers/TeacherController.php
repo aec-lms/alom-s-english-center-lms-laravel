@@ -69,6 +69,8 @@ class TeacherController extends Controller
 
         $teacher = DB::transaction(function () use ($validated, $request, $photoPath, $actorId): Teacher {
             $actor = User::query()->whereKey($actorId)->lockForUpdate()->firstOrFail();
+            abort_unless($actor->is_active, 403, 'Inactive accounts cannot manage teacher records.');
+            $this->lockActorRoleAssignments($actorId);
             $this->ensureAssignedBranch($actor);
 
             $branchId = $validated['branch_id'] ?? null;
@@ -157,6 +159,8 @@ class TeacherController extends Controller
             }
 
             $actor = $lockedUsers[$actorId];
+            abort_unless($actor->is_active, 403, 'Inactive accounts cannot manage teacher records.');
+            $this->lockActorRoleAssignments($actorId);
             $linkedUser = $lockedUsers[$linkedUserId];
             $lockedTeacher = Teacher::query()->whereKey($teacher->getKey())->lockForUpdate()->firstOrFail();
             abort_unless(
@@ -258,6 +262,8 @@ class TeacherController extends Controller
             }
 
             $actor = $lockedUsers[$actorId];
+            abort_unless($actor->is_active, 403, 'Inactive accounts cannot manage teacher records.');
+            $this->lockActorRoleAssignments($actorId);
             $user = $lockedUsers[$linkedUserId];
             $lockedTeacher = Teacher::query()->whereKey($teacherId)->lockForUpdate()->firstOrFail();
             abort_unless(
@@ -291,6 +297,15 @@ class TeacherController extends Controller
         });
 
         return back()->with('status', "Instructor '{$deleted['code']}' removed without affecting shared LMS courses.");
+    }
+
+    private function lockActorRoleAssignments(int $actorId): void
+    {
+        DB::table('role_user')
+            ->where('user_id', $actorId)
+            ->orderBy('role_id')
+            ->lockForUpdate()
+            ->get(['role_id']);
     }
 
     private function storePhoto(UploadedFile $file): string
