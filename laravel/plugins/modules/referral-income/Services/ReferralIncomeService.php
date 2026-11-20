@@ -395,12 +395,27 @@ class ReferralIncomeService
 
             $gateway = strtolower(trim((string) $refundTransaction->gateway_slug));
             if ($gateway === 'offline') {
-                if (empty($refundRecord->approved_by)) {
-                    throw new RuntimeException('Offline refund requires an approving administrator before commission reversal.');
+                $approver = empty($refundRecord->approved_by)
+                    ? null
+                    : User::query()->whereKey((int) $refundRecord->approved_by)->first();
+                if (!$approver || !$approver->hasRole('admin')) {
+                    throw new RuntimeException('Offline refund requires an admin-approved refund record before commission reversal.');
                 }
-            } elseif (!Schema::hasColumn('payment_refunds', 'provider_refund_reference')
-                || trim((string) ($refundRecord->provider_refund_reference ?? '')) === '') {
-                throw new RuntimeException('Provider refund reference is required before commission reversal.');
+            } else {
+                $providerReference = trim((string) ($refundRecord->provider_refund_reference ?? ''));
+                if (!Schema::hasColumn('payment_refunds', 'provider_refund_reference') || $providerReference === '') {
+                    throw new RuntimeException('Provider refund reference is required before commission reversal.');
+                }
+
+                $duplicateProviderReference = DB::table('payment_refunds as existing_refund')
+                    ->join('payment_transactions as existing_transaction', 'existing_transaction.id', '=', 'existing_refund.payment_transaction_id')
+                    ->where('existing_refund.provider_refund_reference', $providerReference)
+                    ->where('existing_transaction.gateway_slug', $refundTransaction->gateway_slug)
+                    ->where('existing_refund.id', '!=', $paymentRefundId)
+                    ->exists();
+                if ($duplicateProviderReference) {
+                    throw new RuntimeException('Provider refund reference has already been reconciled.');
+                }
             }
 
             $existing = DB::table('referral_commission_reversals')
