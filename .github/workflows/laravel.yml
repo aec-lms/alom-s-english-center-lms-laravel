@@ -184,8 +184,6 @@ jobs:
       DB_DATABASE: aec_lms_test
       DB_USERNAME: aec_lms
       DB_PASSWORD: aec_lms_test_password
-      MYSQL_MONITOR_USERNAME: root
-      MYSQL_MONITOR_PASSWORD: root
       CACHE_STORE: array
       SESSION_DRIVER: array
       QUEUE_CONNECTION: sync
