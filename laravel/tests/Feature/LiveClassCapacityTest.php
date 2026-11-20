@@ -465,6 +465,217 @@ class LiveClassCapacityTest extends TestCase
         );
     }
 
+    public function test_mysql_role_revocation_waits_for_heartbeat_lock_and_next_heartbeat_keeps_seat_unchanged(): void
+    {
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            $this->markTestSkipped('This role-pivot row-lock regression requires MySQL 8.');
+        }
+
+        [$student, $liveClass, $participant] = $this->createLiveClassConcurrencyFixture();
+        // Preserve a stale authenticated role relation to model the request
+        // that passed middleware before the administrator revoked the pivot.
+        $student->load('roles');
+
+        $primaryName = DB::getDefaultConnection();
+        $primary = DB::connection($primaryName);
+        $roleId = DB::table('roles')->where('slug', 'student')->value('id');
+        $this->assertNotNull($roleId);
+
+        $primary->table('live_class_participants')
+            ->where('id', $participant->id)
+            ->update(['last_seen_at' => now()->subSeconds(15)]);
+        $primary->beginTransaction();
+
+        try {
+            // The protected heartbeat owns User -> role pivot -> profile and
+            // participant locks until the outer transaction commits.
+            $this->actingAs($student)
+                ->postJson('/live-classes/' . $liveClass->id . '/heartbeat')
+                ->assertOk();
+            $lastSeenAfterHeartbeat = $primary->table('live_class_participants')
+                ->where('id', $participant->id)
+                ->value('last_seen_at');
+
+            $secondaryName = $this->createSecondaryMysqlConnection($primaryName);
+            $secondary = DB::connection($secondaryName);
+            $secondary->statement('SET SESSION innodb_lock_wait_timeout = 1');
+
+            DB::setDefaultConnection($secondaryName);
+            try {
+                $secondary->table('role_user')
+                    ->where('user_id', $student->id)
+                    ->where('role_id', $roleId)
+                    ->delete();
+                $this->fail('Role revocation must wait for the protected heartbeat transaction.');
+            } catch (\Illuminate\Database\QueryException $exception) {
+                $this->assertContains((int) ($exception->errorInfo[1] ?? 0), [1205, 1213], $exception->getMessage());
+            }
+
+            DB::setDefaultConnection($primaryName);
+            $primary->commit();
+
+            DB::setDefaultConnection($secondaryName);
+            $secondary->table('role_user')
+                ->where('user_id', $student->id)
+                ->where('role_id', $roleId)
+                ->delete();
+
+            $this->actingAs($student)
+                ->postJson('/live-classes/' . $liveClass->id . '/heartbeat')
+                ->assertForbidden();
+
+            $unchanged = $secondary->table('live_class_participants')->where('id', $participant->id)->first();
+            $this->assertNull($unchanged->left_at);
+            $this->assertSame(
+                (string) $lastSeenAfterHeartbeat,
+                (string) $unchanged->last_seen_at,
+                'A heartbeat denied after role revocation must not refresh or release the existing seat.'
+            );
+            $this->assertDatabaseMissing('student_activity_events', [
+                'user_id' => $student->id,
+                'event_type' => 'live_class_heartbeat',
+                'subject_id' => (string) $liveClass->id,
+            ]);
+
+            DB::setDefaultConnection($primaryName);
+            DB::purge($secondaryName);
+        } catch (\Throwable $exception) {
+            DB::setDefaultConnection($primaryName);
+            if ($primary->transactionLevel() > 0) {
+                $primary->rollBack();
+            }
+            throw $exception;
+        }
+    }
+
+    public function test_mysql_heartbeat_waits_for_enrollment_revocation_then_denies_without_refreshing_seat(): void
+    {
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            $this->markTestSkipped('This entitlement row-lock regression requires MySQL 8.');
+        }
+
+        [$student, $liveClass, $participant] = $this->createLiveClassConcurrencyFixture();
+        $primaryName = DB::getDefaultConnection();
+        $primary = DB::connection($primaryName);
+        $enrollment = Enrollment::query()
+            ->where('user_id', $student->id)
+            ->where('course_id', $liveClass->course_id)
+            ->firstOrFail();
+
+        $primary->table('live_class_participants')
+            ->where('id', $participant->id)
+            ->update(['last_seen_at' => now()->subSeconds(15)]);
+        $expectedLastSeen = $primary->table('live_class_participants')
+            ->where('id', $participant->id)
+            ->value('last_seen_at');
+
+        $secondaryName = $this->createSecondaryMysqlConnection($primaryName);
+        $secondary = DB::connection($secondaryName);
+        $secondary->statement('SET SESSION innodb_lock_wait_timeout = 1');
+
+        $primary->beginTransaction();
+        try {
+            // Lock the same lifecycle chain before cancelling enrollment.
+            $primary->table('users')->where('id', $student->id)->lockForUpdate()->first();
+            $primary->table('role_user')->where('user_id', $student->id)->lockForUpdate()->get();
+            $primary->table('students')->where('user_id', $student->id)->lockForUpdate()->first();
+            $primary->table('enrollments')->where('id', $enrollment->id)->lockForUpdate()->first();
+            $primary->table('enrollments')->where('id', $enrollment->id)->update([
+                'status' => 'cancelled',
+                'updated_at' => now(),
+            ]);
+
+            DB::setDefaultConnection($secondaryName);
+            try {
+                $this->actingAs($student)
+                    ->postJson('/live-classes/' . $liveClass->id . '/heartbeat');
+                $this->fail('Heartbeat must wait for the in-progress enrollment revocation.');
+            } catch (\Illuminate\Database\QueryException $exception) {
+                $this->assertContains((int) ($exception->errorInfo[1] ?? 0), [1205, 1213], $exception->getMessage());
+            }
+
+            DB::setDefaultConnection($primaryName);
+            $primary->commit();
+
+            DB::setDefaultConnection($secondaryName);
+            $this->actingAs($student)
+                ->postJson('/live-classes/' . $liveClass->id . '/heartbeat')
+                ->assertForbidden();
+
+            $unchanged = $secondary->table('live_class_participants')->where('id', $participant->id)->first();
+            $this->assertNull($unchanged->left_at);
+            $this->assertSame((string) $expectedLastSeen, (string) $unchanged->last_seen_at);
+            $this->assertSame('cancelled', $secondary->table('enrollments')->where('id', $enrollment->id)->value('status'));
+
+            DB::setDefaultConnection($primaryName);
+            DB::purge($secondaryName);
+        } catch (\Throwable $exception) {
+            DB::setDefaultConnection($primaryName);
+            if ($primary->transactionLevel() > 0) {
+                $primary->rollBack();
+            }
+            throw $exception;
+        }
+    }
+
+    private function createLiveClassConcurrencyFixture(): array
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management', 'student-management', 'student-tracking']);
+
+        $course = Course::query()->create([
+            'code' => 'LIVE-RACE-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'title' => 'Live Class Concurrency Course',
+            'slug' => 'live-race-' . strtolower(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'price' => 0,
+            'status' => 'published',
+        ]);
+        $liveClass = LiveClass::query()->create([
+            'course_id' => $course->id,
+            'title' => 'Live Class Concurrency Session',
+            'platform' => 'zoom',
+            'meeting_url' => 'https://zoom.us/j/123456789',
+            'starts_at' => now()->subMinute(),
+            'status' => 'live',
+            'capacity' => 300,
+        ]);
+        $student = $this->createUserWithRole('student');
+        DB::table('students')->insert([
+            'user_id' => $student->id,
+            'branch_id' => null,
+            'student_code' => 'LIVE-RACE-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        Enrollment::query()->create([
+            'user_id' => $student->id,
+            'course_id' => $course->id,
+            'status' => 'active',
+        ]);
+        $this->actingAs($student)->post('/live-classes/' . $liveClass->id . '/join')->assertOk();
+        $participant = LiveClassParticipant::query()
+            ->where('live_class_id', $liveClass->id)
+            ->where('user_id', $student->id)
+            ->firstOrFail();
+
+        return [$student, $liveClass, $participant];
+    }
+
+    private function createSecondaryMysqlConnection(string $primaryName): string
+    {
+        $primary = DB::connection($primaryName);
+        $secondaryName = 'mysql_live_class_' . bin2hex(random_bytes(3));
+        $config = config('database.connections.' . $primaryName);
+        $config['database'] = $primary->getDatabaseName();
+        config(['database.connections.' . $secondaryName => $config]);
+        DB::purge($secondaryName);
+        DB::connection($secondaryName);
+
+        return $secondaryName;
+    }
+
     public function test_mysql_join_waits_for_account_revocation_then_denies_after_commit(): void
     {
         if (DB::connection()->getDriverName() !== 'mysql') {
