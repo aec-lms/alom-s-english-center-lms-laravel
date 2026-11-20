@@ -237,6 +237,8 @@ class ExamAttemptSnapshotTest extends TestCase
         $negativeMarks['questions'][0]['marks'] = -1;
         $nonFiniteNegativeMarks = $validSnapshot;
         $nonFiniteNegativeMarks['questions'][0]['negative_marks'] = 'INF';
+        $nonFiniteMarks = $validSnapshot;
+        $nonFiniteMarks['questions'][0]['marks'] = 'INF';
         $missingNegativeMarks = $validSnapshot;
         unset($missingNegativeMarks['questions'][0]['negative_marks']);
         $invalidPassMarks = $validSnapshot;
@@ -257,6 +259,7 @@ class ExamAttemptSnapshotTest extends TestCase
             'out-of-range correct option' => $invalidCorrectIndex,
             'negative marks' => $negativeMarks,
             'non-finite negative marks' => $nonFiniteNegativeMarks,
+            'non-finite question marks' => $nonFiniteMarks,
             'missing negative marks' => $missingNegativeMarks,
             'non-finite pass marks' => $invalidPassMarks,
             'zero duration' => $invalidDuration,
@@ -286,7 +289,7 @@ class ExamAttemptSnapshotTest extends TestCase
                 ->postJson("/api/v1/my/exams/{$exam->id}/attempts")
                 ->assertStatus(409)
                 ->assertJsonPath('error.code', 'legacy_attempt_snapshot_unavailable')
-                ->assertJsonPath('error.message', fn ($message) => str_contains($message, 'saved question and scoring data is missing or invalid'));
+                ->assertJsonPath('error.message', 'This existing exam attempt cannot be resumed safely because its saved question and scoring data is missing or invalid. Your attempt has not been submitted and your score has not changed. Please contact your instructor or school administrator for help.');
 
             $unchanged = $attempt->fresh();
             $this->assertNull($unchanged->submitted_at, "Malformed snapshot case '{$case}' must remain pending.");
