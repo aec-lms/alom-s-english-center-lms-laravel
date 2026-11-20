@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Plugins\Modules\CourseAssessments\Models\AssessmentAttempt;
+use Plugins\Modules\CourseAssessments\Models\AssessmentSet;
 
 class AssessmentGradingController extends Controller
 {
