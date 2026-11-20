@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Http;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
 use Plugins\Modules\PaymentManagement\Services\PaymentSettlementService;
+use Plugins\Modules\PaymentManagement\Services\InvoicePaymentSessionReservationService;
 use RuntimeException;
 
 class PaypalGatewayService
@@ -16,6 +17,7 @@ class PaypalGatewayService
     public function __construct(
         private readonly PluginManager $plugins,
         private readonly PaymentSettlementService $settlement,
+        private readonly InvoicePaymentSessionReservationService $reservations,
     ) {}
 
     private function apiBase(): string
@@ -44,35 +46,31 @@ class PaypalGatewayService
 
     public function createOrder(FeeInvoice $invoice, ?string $idempotencyKey = null): array
     {
-        if ($idempotencyKey) {
-            $existing = PaymentTransaction::query()
-                ->where('invoice_id', $invoice->id)
-                ->where('gateway_slug', 'gateway-paypal')
-                ->where('metadata->idempotency_key', $idempotencyKey)
-                ->first();
-            if ($existing) {
-                return [
-                    'transaction' => $existing,
-                    'paypal_order_id' => (string) ($existing->metadata['paypal_order_id'] ?? ''),
-                    'approval_url' => (string) ($existing->metadata['approval_url'] ?? ''),
-                ];
+        $reservation = $this->reservations->reserve(
+            $invoice,
+            'gateway-paypal',
+            'PYPL',
+            [],
+            $idempotencyKey,
+        );
+        $invoice = $reservation['invoice'];
+        $tx = $reservation['transaction'];
+        $remaining = $reservation['remaining'];
+
+        if ($reservation['reused']) {
+            $approvalUrl = (string) ($tx->metadata['approval_url'] ?? '');
+            if ($approvalUrl === '') {
+                throw new RuntimeException('A PayPal order is already reserved but its approval URL is unavailable; reconciliation is required.');
             }
+
+            return [
+                'transaction' => $tx,
+                'paypal_order_id' => (string) ($tx->metadata['paypal_order_id'] ?? ''),
+                'approval_url' => $approvalUrl,
+            ];
         }
 
-        $remaining = round((float) $invoice->net_amount - (float) $invoice->paid_amount, 2);
-        if ($remaining <= 0) throw new RuntimeException('Invoice is already fully settled.');
-
-        $tx = PaymentTransaction::query()->create([
-            'transaction_ref' => 'PYPL-' . strtoupper(bin2hex(random_bytes(6))),
-            'invoice_id' => $invoice->id,
-            'branch_id' => $invoice->branch_id,
-            'gateway_slug' => 'gateway-paypal',
-            'amount' => $remaining,
-            'currency' => strtoupper($invoice->currency),
-            'status' => 'initiated',
-            'metadata' => ['idempotency_key' => $idempotencyKey],
-        ]);
-
+        $response = null;
         try {
             $token = $this->accessToken();
             $response = Http::withToken($token)
@@ -99,29 +97,36 @@ class PaypalGatewayService
                 ]);
 
             if (!$response->successful()) {
+                if ($response->clientError()) {
+                    $this->reservations->markRejected($tx, 'provider_http_4xx');
+                } else {
+                    $this->reservations->markUnknown($tx, 'provider_http_5xx');
+                }
                 throw new RuntimeException((string) $response->json('message', 'PayPal Orders API request failed.'));
             }
 
             $order = $response->json();
             $approvalUrl = collect($order['links'] ?? [])->firstWhere('rel', 'approve')['href'] ?? null;
             if (empty($order['id']) || !$approvalUrl || !str_starts_with((string) $approvalUrl, 'https://')) {
-                throw new RuntimeException('PayPal did not return a valid order ID and approval URL.');
+                $this->reservations->markUnknown($tx, 'invalid_success_response');
+                throw new RuntimeException('PayPal did not return a valid order ID and approval URL; reservation remains held for reconciliation.');
             }
 
-            $tx->update([
-                'external_reference' => (string) $order['id'],
-                'metadata' => array_merge($tx->metadata ?? [], [
-                    'paypal_order_id' => (string) $order['id'],
-                    'approval_url' => (string) $approvalUrl,
-                    'paypal_status' => (string) ($order['status'] ?? 'CREATED'),
-                ]),
-            ]);
+            $tx = $this->reservations->markCreated($tx, [
+                'paypal_order_id' => (string) $order['id'],
+                'approval_url' => (string) $approvalUrl,
+                'paypal_status' => (string) ($order['status'] ?? 'CREATED'),
+            ], 'initiated', (string) $order['id']);
 
-            return ['transaction' => $tx->fresh(), 'paypal_order_id' => (string) $order['id'], 'approval_url' => (string) $approvalUrl];
+            return ['transaction' => $tx, 'paypal_order_id' => (string) $order['id'], 'approval_url' => (string) $approvalUrl];
         } catch (\Throwable $e) {
-            $tx->update(['status' => 'failed']);
+            if ($response === null) {
+                $this->reservations->markUnknown($tx, 'transport_or_timeout');
+            } elseif ($response->serverError()) {
+                $this->reservations->markUnknown($tx, 'provider_http_5xx');
+            }
             if ($e instanceof RuntimeException) throw $e;
-            throw new RuntimeException('Unable to create PayPal checkout order.', 0, $e);
+            throw new RuntimeException('Unable to create PayPal checkout order; reservation remains held for reconciliation.', 0, $e);
         }
     }
 
