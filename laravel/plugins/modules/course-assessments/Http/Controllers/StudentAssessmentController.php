@@ -19,8 +19,7 @@ class StudentAssessmentController extends Controller
 {
     public function index(Request $request): View
     {
-        $student = $request->user();
-        abort_unless($student && $student->hasRole('student'), 403);
+        $student = $this->requireActiveStudent($request);
         $sets = $this->visibleSetsQuery($student)->latest()->paginate(20);
 
         return view('course-assessments::student-index', compact('sets'));
@@ -29,7 +28,7 @@ class StudentAssessmentController extends Controller
     public function apiIndex(Request $request): JsonResponse
     {
         $student = $request->user();
-        abort_unless($student && $student->hasRole('student'), 403);
+        abort_unless($student && $student->hasRole('student') && (bool) $student->is_active, 403);
         $sets = $this->visibleSetsQuery($student)->latest()->paginate(20);
 
         return response()->json([
@@ -74,8 +73,7 @@ class StudentAssessmentController extends Controller
 
     public function apiTake(Request $request, AssessmentAttempt $attempt): JsonResponse
     {
-        $student = $request->user();
-        abort_unless($student && $student->hasRole('student'), 403);
+        $student = $this->requireActiveStudent($request);
         abort_unless((int) $attempt->student_id === (int) $student->id, 404);
 
         if ($attempt->status === 'in_progress' && $attempt->deadline_at && now()->greaterThanOrEqualTo($attempt->deadline_at)) {
@@ -143,8 +141,8 @@ class StudentAssessmentController extends Controller
 
     public function take(Request $request,AssessmentAttempt $attempt): View
     {
-        $student=$request->user();
-        abort_unless($attempt->student_id===$student->id,404);
+        $student = $this->requireActiveStudent($request);
+        abort_unless((int) $attempt->student_id === (int) $student->id, 404);
         abort_if($attempt->status!=='in_progress',403,'This attempt has already been submitted.');
         if($attempt->deadline_at && now()->greaterThanOrEqualTo($attempt->deadline_at)){
             $this->submitAttempt($attempt);
@@ -160,8 +158,8 @@ class StudentAssessmentController extends Controller
 
     public function answer(Request $request, AssessmentAttempt $attempt, int $question): JsonResponse
     {
-        $student = $request->user();
-        abort_unless($student && $student->hasRole('student') && (int) $attempt->student_id === (int) $student->id, 404);
+        $student = $this->requireActiveStudent($request);
+        abort_unless((int) $attempt->student_id === (int) $student->id, 404);
         $data = $request->validate([
             'selected_option' => ['nullable', 'integer', 'min:0', 'max:7'],
             'answer_text' => ['nullable', 'string', 'max:20000'],
@@ -191,15 +189,29 @@ class StudentAssessmentController extends Controller
 
     public function submit(Request $request,AssessmentAttempt $attempt): RedirectResponse
     {
-        abort_unless($attempt->student_id===$request->user()->id,404);
+        $student = $this->requireActiveStudent($request);
+        abort_unless((int) $attempt->student_id === (int) $student->id, 404);
         $this->submitAttempt($attempt);
         return redirect()->route('plugins.course-assessments.student.history')->with('status','Assessment submitted.');
     }
 
     public function history(Request $request): View
     {
-        $attempts=AssessmentAttempt::query()->with('questions')->where('student_id',$request->user()->id)->latest()->paginate(20);
+        $student = $this->requireActiveStudent($request);
+        $attempts=AssessmentAttempt::query()->with('questions')->where('student_id',$student->id)->latest()->paginate(20);
         return view('course-assessments::history',compact('attempts'));
+    }
+
+    /**
+     * Student authorization is re-evaluated on every request so role or
+     * account deactivation takes effect for existing attempts immediately.
+     */
+    private function requireActiveStudent(Request $request)
+    {
+        $student = $request->user();
+        abort_unless($student && $student->hasRole('student') && (bool) $student->is_active, 403);
+
+        return $student;
     }
 
     private function visibleSetsQuery($student)
