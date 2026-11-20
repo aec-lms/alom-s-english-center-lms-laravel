@@ -253,7 +253,9 @@ class ReferralIncomeService
                 ->first();
             $originalNotes = $originalPayment ? json_decode((string) $originalPayment->notes, true) : null;
             if (!$originalPayment
-                || ($originalPayment->invoice_id !== null && (int) $originalPayment->invoice_id !== (int) $order->invoice_id)
+                || (Schema::hasColumn('universal_payment_transactions', 'fee_invoice_id')
+                    && $originalPayment->fee_invoice_id !== null
+                    && (int) $originalPayment->fee_invoice_id !== (int) $order->invoice_id)
                 || !in_array((string) $originalPayment->status, ['pending', 'risk_review', 'verified'], true)
                 || !is_array($originalNotes)
                 || ($originalNotes['purpose'] ?? null) !== 'course_cart'
@@ -344,7 +346,9 @@ class ReferralIncomeService
                     ->first();
                 $originalNotes = $originalPayment ? json_decode((string) $originalPayment->notes, true) : null;
                 if (!$originalPayment
-                    || ($originalPayment->invoice_id !== null && (int) $originalPayment->invoice_id !== (int) $orderSnapshot->invoice_id)
+                    || (Schema::hasColumn('universal_payment_transactions', 'fee_invoice_id')
+                        && $originalPayment->fee_invoice_id !== null
+                        && (int) $originalPayment->fee_invoice_id !== (int) $orderSnapshot->invoice_id)
                     || $originalPayment->status !== 'verified'
                     || !is_array($originalNotes)
                     || ($originalNotes['purpose'] ?? null) !== 'course_cart'
@@ -366,9 +370,11 @@ class ReferralIncomeService
             }
 
             $orderCurrency = strtoupper(trim((string) $order->currency));
-            if ($orderCurrency !== strtoupper(trim($currency))
-                || !in_array((string) $invoice->status, ['paid', 'partially_refunded', 'refunded'], true)) {
-                throw new RuntimeException('Referral reversal currency or invoice settlement state does not match the source order.');
+            if ($orderCurrency !== strtoupper(trim($currency))) {
+                throw new RuntimeException('Referral reversal currency does not match the source order.');
+            }
+            if (!in_array((string) $invoice->status, ['paid', 'partially_refunded', 'refunded'], true)) {
+                throw new RuntimeException('Referral reversal invoice settlement state does not match the source order.');
             }
 
             $orderAmount = $sourceType === 'commerce_order'
