@@ -171,9 +171,9 @@ class LiveClassAccessController extends Controller
 
     private function assertEligibleStudent(object $student, int $courseId, ?int $courseBranchId, ?int $liveClassId = null): void
     {
-        // Lock the linked user first. Student profile edits serialize on this
-        // user row; read the profile without locking it because recycle-bin
-        // deletion locks the profile before deactivating the linked user.
+        // Lock order: live class -> course -> User -> role pivot -> Student
+        // profile -> enrollment -> entitlement -> participant. Lifecycle writers
+        // must serialize account, role and profile changes on the User row first.
         $user = DB::table('users')
             ->where('id', $student->id)
             ->lockForUpdate()
