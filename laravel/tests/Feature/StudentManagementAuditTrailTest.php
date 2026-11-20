@@ -76,6 +76,14 @@ final class StudentManagementAuditTrailTest extends TestCase
             'branch_id' => ['from' => (string) $branchA, 'to' => (string) $branchB],
             'status' => ['from' => 'active', 'to' => 'inactive'],
         ];
+        foreach ($actualChanges as &$change) {
+            ksort($change);
+        }
+        unset($change);
+        foreach ($expectedChanges as &$change) {
+            ksort($change);
+        }
+        unset($change);
         ksort($actualChanges);
         ksort($expectedChanges);
         $this->assertSame($expectedChanges, $actualChanges);
@@ -169,9 +177,11 @@ final class StudentManagementAuditTrailTest extends TestCase
 
         $this->assertNotNull($log);
         $metadata = json_decode((string) $log->metadata, true, 512, JSON_THROW_ON_ERROR);
+        $branchChange = $metadata['changes']['branch_id'];
+        ksort($branchChange);
         $this->assertSame(
             ['from' => (string) $branchId, 'to' => null],
-            $metadata['changes']['branch_id']
+            $branchChange
         );
     }
 
