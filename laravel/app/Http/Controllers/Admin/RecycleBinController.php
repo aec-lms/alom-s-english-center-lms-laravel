@@ -173,28 +173,26 @@ class RecycleBinController extends Controller
             $teacher = Teacher::withTrashed()->lockForUpdate()->findOrFail($teacherId);
             abort_unless($teacher->trashed(), 409, 'This instructor is not in the Recycle Bin.');
 
-            // Match teacher lifecycle locking: lock the profile first, then its login account.
-            $user = $teacher->user()->lockForUpdate()->first();
-            abort_unless($user, 409, 'The linked teacher account is missing; the profile was not restored.');
-
-            $wasActive = Schema::hasColumn('teachers', 'deleted_user_was_active')
-                ? (bool) $teacher->deleted_user_was_active
-                : false; // Fail closed if an older installation lacks the recycle-state migration.
+            // Keep the profile lock first, then lock its account row. Profile
+            // restoration must not silently reverse a later security decision.
+            $user = $teacher->user_id
+                ? User::query()->lockForUpdate()->find($teacher->user_id)
+                : null;
 
             $teacher->restore();
-            if (Schema::hasColumn('teachers', 'deleted_user_was_active')) {
-                $teacher->deleted_user_was_active = null;
-                $teacher->save();
-            }
+            $teacher->save();
 
-            $user->update(['is_active' => $wasActive]);
+            if ($user && $user->is_active) {
+                $user->forceFill(['is_active' => false])->save();
+            }
 
             $this->audit->log('recycle_bin.teacher_restored', 'teacher', (string) $teacher->id, [
                 'employee_code' => $teacher->employee_code,
+                'account_reactivated' => false,
             ], $request->user()->id);
         });
 
-        return redirect()->route('admin.recycle-bin.index')->with('status', 'Instructor restored successfully.');
+        return redirect()->route('admin.recycle-bin.index')->with('status', 'Instructor profile restored. Account access remains disabled; an administrator must explicitly reactivate it after a fresh security check.');
     }
 
     public function restoreCourse(Request $request, int $recordId): RedirectResponse
