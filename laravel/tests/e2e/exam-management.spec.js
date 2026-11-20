@@ -41,12 +41,15 @@ test('student exam journey uses frozen snapshot, autosaves safely, and remains a
 
   // Verify the native radio group supports keyboard selection and visible focus.
   const optionThree = page.getByRole('radio', { name: '3' });
+  const optionFour = page.getByRole('radio', { name: '4' });
+  await optionThree.check();
+  await expect(page.getByRole('status')).toHaveText('All selected answers saved.');
   await optionThree.focus();
   await page.keyboard.press('ArrowRight');
-  const optionFour = page.getByRole('radio', { name: '4' });
   await expect(optionFour).toBeFocused();
   await expect(optionFour).toBeChecked();
   expect(await optionFour.evaluate((element) => element.matches(':focus-visible'))).toBe(true);
+  await expect(page.getByRole('status')).toHaveText('All selected answers saved.');
   const optionLabel = optionFour.locator('xpath=ancestor::label');
   const touchTargetHeight = await optionLabel.evaluate((element) => element.getBoundingClientRect().height);
   expect(touchTargetHeight).toBeGreaterThanOrEqual(48);
@@ -118,7 +121,8 @@ test('student exam journey uses frozen snapshot, autosaves safely, and remains a
   await page.getByRole('button', { name: /submit exam/i }).click();
   expect(submitPayload).toContain('attempt_id');
   expect(submitPayload).not.toMatch(/correct_option_index|correct_answer|answer_key/i);
-  await page.waitForURL(/\/portal/);
+  await page.waitForURL((url) => url.pathname !== takeUrl);
+  await expect(page.getByRole('link', { name: 'My Dashboard' })).toBeVisible();
 
   await page.goto(`/exams/${fixture.exam_id}/attempts`);
   await expect(page.getByText('2.00 / 2.00')).toBeVisible();
