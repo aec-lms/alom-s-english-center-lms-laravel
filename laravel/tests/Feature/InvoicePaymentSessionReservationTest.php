@@ -14,6 +14,7 @@ use App\Core\Plugins\PluginManager;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\PaymentManagement\Services\InvoicePaymentSessionReservationService;
 use RuntimeException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
 class InvoicePaymentSessionReservationTest extends TestCase
@@ -41,11 +42,25 @@ class InvoicePaymentSessionReservationTest extends TestCase
 
         $invoice = $this->createInvoice();
         $service = app(InvoicePaymentSessionReservationService::class);
-        $first = $service->reserve($invoice, 'gateway-stripe', 'STRP', [], 'stripe-request-001');
+        $first = $service->reserve(
+            $invoice,
+            'gateway-stripe',
+            'STRP',
+            ['payment_method_id' => 'pm_original_test_method'],
+            'stripe-request-001',
+        );
 
-        $sameRequest = $service->reserve($invoice, 'gateway-stripe', 'STRP', [], 'stripe-request-001');
+        $sameRequest = $service->reserve(
+            $invoice,
+            'gateway-stripe',
+            'STRP',
+            ['payment_method_id' => 'pm_original_test_method'],
+            'stripe-request-001',
+        );
         $this->assertTrue($sameRequest['reused']);
         $this->assertSame($first['transaction']->id, $sameRequest['transaction']->id);
+        $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $first['transaction']->metadata['request_fingerprint']);
+        $this->assertArrayNotHasKey('payment_method_id', $first['transaction']->metadata);
 
         try {
             $service->reserve($invoice, 'gateway-paypal', 'PYPL', [], 'paypal-request-001');
@@ -55,6 +70,45 @@ class InvoicePaymentSessionReservationTest extends TestCase
         }
 
         $this->assertSame(1, DB::table('payment_transactions')->where('invoice_id', $invoice->id)->count());
+    }
+
+    public function test_same_idempotency_key_with_different_provider_parameters_returns_conflict(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management']);
+
+        $invoice = $this->createInvoice();
+        $service = app(InvoicePaymentSessionReservationService::class);
+        $original = $service->reserve(
+            $invoice,
+            'gateway-stripe',
+            'STRP',
+            ['payment_method_id' => 'pm_original_test_method'],
+            'stripe-immutable-key',
+        );
+
+        try {
+            $service->reserve(
+                $invoice,
+                'gateway-stripe',
+                'STRP',
+                ['payment_method_id' => 'pm_different_test_method'],
+                'stripe-immutable-key',
+            );
+            $this->fail('A reused idempotency key with a different payment method must return HTTP 409.');
+        } catch (HttpException $exception) {
+            $this->assertSame(409, $exception->getStatusCode());
+        }
+
+        $this->assertSame(
+            1,
+            DB::table('payment_transactions')->where('invoice_id', $invoice->id)->count(),
+            'A conflicting replay must not create another payment transaction.',
+        );
+        $this->assertSame(
+            $original['transaction']->id,
+            DB::table('payment_transactions')->where('invoice_id', $invoice->id)->value('id'),
+        );
     }
 
     public function test_ambiguous_provider_outcome_keeps_invoice_reserved_until_explicit_rejection_or_reconciliation(): void
