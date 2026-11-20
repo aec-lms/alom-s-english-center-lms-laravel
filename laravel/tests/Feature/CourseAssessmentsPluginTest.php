@@ -247,4 +247,67 @@ class CourseAssessmentsPluginTest extends TestCase
             ->assertForbidden();
     }
 
+
+    public function test_revoked_student_role_loses_existing_web_attempt_and_history_access(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-assessments']);
+        $student = $this->createUserWithRole('student');
+        $set = $this->createSet(['title' => 'Role Revocation Assessment']);
+        $this->createQuestion($set);
+
+        $start = $this->actingAs($student)->post(route('plugins.course-assessments.student.start', $set));
+        $start->assertRedirect();
+        $attemptId = (int) basename(parse_url($start->headers->get('Location'), PHP_URL_PATH));
+        $this->assertDatabaseHas('course_assessment_attempts', [
+            'id' => $attemptId,
+            'student_id' => $student->id,
+            'status' => 'in_progress',
+        ]);
+
+        // Simulate an administrator revoking the student role after attempt creation.
+        $student->roles()->detach();
+
+        $this->actingAs($student)->get(route('plugins.course-assessments.student.take', $attemptId))
+            ->assertForbidden();
+        $this->actingAs($student)->post(route('plugins.course-assessments.student.submit', $attemptId))
+            ->assertForbidden();
+        $this->actingAs($student)->get(route('plugins.course-assessments.student.history'))
+            ->assertForbidden();
+        $this->actingAs($student)->post(route('plugins.course-assessments.student.start', $set))
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('course_assessment_attempts', [
+            'id' => $attemptId,
+            'student_id' => $student->id,
+            'status' => 'in_progress',
+        ]);
+    }
+
+    public function test_inactive_account_cannot_access_existing_assessment_attempt(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-assessments']);
+        $student = $this->createUserWithRole('student');
+        $set = $this->createSet(['title' => 'Inactive Account Assessment']);
+        $this->createQuestion($set);
+
+        $start = $this->actingAs($student)->post(route('plugins.course-assessments.student.start', $set));
+        $attemptId = (int) basename(parse_url($start->headers->get('Location'), PHP_URL_PATH));
+
+        $student->forceFill(['is_active' => false])->save();
+
+        $this->actingAs($student)->get(route('plugins.course-assessments.student.take', $attemptId))
+            ->assertForbidden();
+        $this->actingAs($student)->get(route('plugins.course-assessments.student.history'))
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('course_assessment_attempts', [
+            'id' => $attemptId,
+            'student_id' => $student->id,
+            'status' => 'in_progress',
+        ]);
+    }
+
+
 }
