@@ -39,6 +39,10 @@
 .flash-page .mb-4{margin-bottom:1.5rem}
 .flash-page .mb-5{margin-bottom:3rem}
 .flash-page .p-4{padding:1.5rem}
+.flash-page .p-3{padding:1rem}
+.flash-page .mb-0{margin-bottom:0}
+.flash-page .mt-2{margin-top:.5rem}
+.flash-page .fw-semibold{font-weight:650}
 .flash-page .py-4{padding-top:1.5rem;padding-bottom:1.5rem}
 .flash-page .fs-5{font-size:1.2rem;line-height:1.6}
 .flash-page .fw-bold{font-weight:750}
