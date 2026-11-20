@@ -20,10 +20,9 @@ return new class extends Migration {
 
     public function down(): void
     {
-        if (Schema::hasTable('visitor_popups') && Schema::hasColumn('visitor_popups', 'deleted_at')) {
-            Schema::table('visitor_popups', function (Blueprint $table): void {
-                $table->dropSoftDeletes();
-            });
-        }
+        // Intentionally non-destructive: these conditional additive columns may
+        // pre-date this migration on customer installations. Without durable
+        // per-install ownership evidence, dropping them could destroy customer
+        // schema or soft-delete history. Retain the nullable columns on rollback.
     }
 };
