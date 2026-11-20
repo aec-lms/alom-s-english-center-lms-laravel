@@ -199,10 +199,10 @@ class LiveClassAccessController extends Controller
             if (Schema::hasColumn('students', 'deleted_at')) {
                 $profileQuery->whereNull('deleted_at');
             }
-            // Do not lock this row: StudentController::destroy and Recycle Bin
-            // restore may lock profile -> user, while this flow locks user first.
-            // The user-row lock serializes normal profile updates and avoids a cycle.
-            $profile = $profileQuery->first();
+            // Lock the profile after the linked user row. Student lifecycle
+            // writers must use the same user -> profile order so a committed
+            // deactivation/branch move cannot race a new participant grant.
+            $profile = $profileQuery->lockForUpdate()->first();
             abort_unless($profile, 403, 'An active student profile is required to access this live class.');
             if (Schema::hasColumn('students', 'status')) {
                 abort_unless($profile->status === 'active', 403, 'This student profile is inactive.');
