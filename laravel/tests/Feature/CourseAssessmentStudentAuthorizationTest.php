@@ -99,6 +99,12 @@ class CourseAssessmentStudentAuthorizationTest extends TestCase
         $this->actingAs($student)
             ->post('/my-learning/assessments/' . $set->id . '/start')
             ->assertForbidden();
+        $this->actingAs($student, 'sanctum')
+            ->getJson('/api/v1/my-learning/assessments')
+            ->assertForbidden();
+        $this->actingAs($student, 'sanctum')
+            ->postJson('/api/v1/my-learning/assessments/' . $set->id . '/start')
+            ->assertForbidden();
     }
 
     public function test_student_cannot_open_another_students_assessment_attempt(): void
