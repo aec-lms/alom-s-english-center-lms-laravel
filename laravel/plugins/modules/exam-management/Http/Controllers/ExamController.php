@@ -62,7 +62,7 @@ class ExamController extends Controller
             'title' => ['required', 'string', 'max:180'],
             'duration_minutes' => ['required', 'integer', 'min:5', 'max:360'],
             'max_attempts' => ['nullable', 'integer', 'min:1', 'max:20'],
-            'pass_marks' => ['required', 'numeric', 'min:0'],
+            'pass_marks' => ['required', 'numeric', 'min:0', 'max:100000'],
             'is_published' => ['nullable', 'boolean'],
         ]);
 
@@ -107,7 +107,7 @@ class ExamController extends Controller
             'title' => ['required', 'string', 'max:180'],
             'duration_minutes' => ['required', 'integer', 'min:5', 'max:360'],
             'max_attempts' => ['nullable', 'integer', 'min:1', 'max:20'],
-            'pass_marks' => ['required', 'numeric', 'min:0'],
+            'pass_marks' => ['required', 'numeric', 'min:0', 'max:100000'],
             'is_published' => ['nullable', 'boolean'],
         ]);
 
@@ -166,8 +166,8 @@ class ExamController extends Controller
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
         $validated = $request->validate([
-            'prompt' => ['required', 'string'],
-            'options' => ['required', 'array', 'min:2'],
+            'prompt' => ['required', 'string', 'max:10000'],
+            'options' => ['required', 'array', 'min:2', 'max:20'],
             'options.*' => ['required', 'string', 'max:300'],
             'correct_option_index' => ['required', 'integer', 'min:0'],
             'marks' => ['required', 'numeric', 'gt:0', 'max:1000'],
@@ -184,6 +184,13 @@ class ExamController extends Controller
             if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $lockedExam->branch_id) {
                 abort(403, 'Branch isolation violation.');
             }
+
+            $questionCount = ExamQuestion::query()->where('exam_id', $lockedExam->id)->count();
+            abort_if(
+                $questionCount >= self::MAX_SNAPSHOT_QUESTIONS,
+                422,
+                'An exam can contain at most ' . self::MAX_SNAPSHOT_QUESTIONS . ' questions.'
+            );
 
             ExamQuestion::query()->create([
                 'exam_id' => $lockedExam->id,
