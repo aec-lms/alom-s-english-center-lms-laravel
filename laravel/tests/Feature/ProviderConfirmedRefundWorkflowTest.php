@@ -600,10 +600,10 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
         $approver = $this->createUserWithRole('admin');
         $service = app(RefundOrchestrationService::class);
 
-        Http::fake(function (ClientRequest $request) {
+        Http::fake(function (ClientRequest $request) use ($transaction) {
             $data = $request->data();
             $metadata = [
-                'transaction_ref' => $data['metadata[transaction_ref]'] ?? 'REFUND-TXN-PENDING-001',
+                'transaction_ref' => $data['metadata[transaction_ref]'] ?? (string) $transaction->transaction_ref,
                 'refund_id' => $data['metadata[refund_id]'] ?? (string) PaymentRefund::query()->where('provider_idempotency_key', 'stripe-refund-pending-001')->value('id'),
             ];
 
