@@ -1,6 +1,6 @@
 # Red-Team open-issue inventory and remediation tracker
 
-**Scope:** repository-visible open GitHub issues reviewed on 2026-11-20.  
+**Scope:** repository-visible open GitHub issues and canonical implementation PRs reviewed on 2026-11-20.  
 **Purpose:** single auditable inventory; this is not a claim that the listed defects are fixed or that the LMS is production-ready.
 
 ## Status semantics
@@ -41,6 +41,26 @@
 - Exam #311 implements #308; do not reimplement its snapshot logic in a parallel branch.
 - Course Assessment #304/#305 should use bounded controller/test ownership and not alter shared enrollment/payment modules.
 - Referral #301 and payment reservation/refund #302/#303 must coordinate with the payment settlement owner.
+- Recycle Bin restore #317 is merged; its migration follow-up remains tracked separately in #322. Do not reopen or duplicate the completed restore implementation.
+
+## Canonical PR and exact-head CI snapshot (2026-11-20)
+
+This is a point-in-time snapshot, not a merge approval. The workflow names below are the repository's Laravel, Browser E2E and Composer Security Audit checks.
+
+| Workstream / PR | Exact head (short SHA) | Current state | Exact-head workflow result / remaining gate |
+|---|---|---|---|
+| #317 Recycle Bin restore | `adfcce0a4784` | Merged | Closed as merged; preserve its implementation and regression history. |
+| #325 Referral finance | `1b9aa1baeaf` | Open, Draft | Laravel, Browser E2E and Composer Security Audit passed. Still requires independent finance review and combined settlement/attribution MySQL concurrency proof with #275; provider refund approval/payout remains blocked on #303 evidence. |
+| #319 Teacher grading branch isolation | `ffe20fdf6e78` | Open, Draft | Laravel, Browser E2E and Composer Security Audit passed. Independent review/approval remains required. |
+| #318 Assessment student role | `fecd51baaf5e` | Open, not Draft | Browser E2E and Composer Security Audit passed; Laravel workflow was cancelled. Review feedback says `requireStudent()` is not yet consistently applied across all web/API endpoints and inactive-account policy needs resolution. Do not merge until fixed, rerun and independently reviewed. |
+| #322 Recycle Bin migration rollback | `7b7f42cff120` | Open, not Draft | Laravel, Browser E2E and Composer Security Audit passed on this head. Independent review and ownership/merge gates remain. |
+| #320 Plugin acceptance matrix | `4cf27ceda217` | Open, Draft | Laravel, Browser E2E and Composer Security Audit passed on this head. Confirm the matrix is generated from the exact target manifest set and independently reviewed. |
+| #311 Exam attempt snapshot | `6f5a48cf5ce8` | Open, Draft | Laravel and Composer Security Audit passed; Browser E2E failed. Review feedback also requires an exam-taking browser journey and accessibility evidence, not merely the Attendance journey. |
+| #292 Phonetics recordings | `1ed2dc6034a5` | Open, Draft | Browser E2E and Composer Security Audit passed; Laravel failed. Known MySQL failure: `PhoneticsSpeakingRecordingSecurityTest` permission-revocation/concurrency case did not retain the expected session status. Fix the authorization/locking path and rerun the complete matrix. |
+| #312 Live Class entitlement | `896c9a25ec87` | Open, Draft | Browser E2E and Composer Security Audit passed; Laravel failed on SQLite and MySQL because `Tests\\Feature\\DB` was not found in the concurrency test. Add the correct DB facade import/reference and rerun both database suites. |
+| #275 Gift Commerce | `faa48d13621c` | Open, Draft | Laravel, Browser E2E and Composer Security Audit passed. Combined MySQL concurrency proof with #325 and ownership coordination on shared settlement paths remain required. |
+
+**Interpretation:** green workflows are necessary but not sufficient. Draft state, unresolved review feedback, missing feature-specific browser/accessibility evidence, independent review, exact-head rechecks and external provider gates still block merge/release where listed. Recheck every head before acting because branch updates invalidate this snapshot.
 
 ## Release decision
 
