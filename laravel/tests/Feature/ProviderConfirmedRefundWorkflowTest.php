@@ -22,6 +22,36 @@ use Tests\TestCase;
 
 class ProviderConfirmedRefundWorkflowTest extends TestCase
 {
+    public function test_refund_provider_registry_resolves_each_gateway_and_keeps_refunds_disabled_by_default(): void
+    {
+        $this->markSystemInstalled();
+        $gateways = [
+            'gateway-stripe' => \\Plugins\\Modules\\GatewayStripe\\Services\\StripeRefundAdapter::class,
+            'gateway-paypal' => \\Plugins\\Modules\\GatewayPaypal\\Services\\PaypalRefundAdapter::class,
+            'gateway-sslcommerz' => \\Plugins\\Modules\\GatewaySslcommerz\\Services\\SslcommerzRefundAdapter::class,
+        ];
+        $this->activatePlugins(array_merge(['fees-management', 'payment-management'], array_keys($gateways)));
+        $plugins = app(PluginManager::class);
+        $registry = app(\\Plugins\\Modules\\PaymentManagement\\Services\\RefundProviderRegistry::class);
+
+        foreach ($gateways as $gateway => $adapterClass) {
+            [, $transaction] = $this->createSettledPayment(
+                $gateway,
+                'REGISTRY-' . strtoupper(str_replace('-', '', $gateway)),
+            );
+
+            try {
+                $registry->forTransaction($transaction);
+                $this->fail("New {$gateway} refunds must remain disabled by default.");
+            } catch (\\RuntimeException $exception) {
+                $this->assertStringContainsString('disabled', strtolower($exception->getMessage()));
+            }
+
+            $plugins->saveSettings($gateway, ['refunds_enabled' => '1']);
+            $this->assertInstanceOf($adapterClass, $registry->forTransaction($transaction));
+        }
+    }
+
     public function test_payment_settlement_rejects_invoice_with_multiple_commerce_buyers(): void
     {
         $this->markSystemInstalled();
