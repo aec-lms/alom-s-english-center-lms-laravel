@@ -205,7 +205,7 @@ class PluginCriticalRegressionTest extends TestCase
         $this->assertIsString($paymentController);
         $refundRegistry = file_get_contents(base_path('plugins/modules/payment-management/Services/RefundProviderRegistry.php'));
         $this->assertIsString($refundRegistry);
-        $this->assertStringContainsString("getSetting($gateway, 'refunds_enabled', '0') !== '1'", $refundRegistry);
+        $this->assertStringContainsString('getSetting($gateway, \'refunds_enabled\', \'0\') !== \'1\'', $refundRegistry);
         $this->assertStringContainsString('Provider refunds are disabled until merchant sandbox and refund capability are verified.', $refundRegistry);
         $this->assertStringNotContainsString('refundOnline', $paymentController);
         $this->assertIsString($migration);
