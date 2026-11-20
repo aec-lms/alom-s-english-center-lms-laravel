@@ -27,7 +27,9 @@ class FlashSaleController extends Controller
 
             if ($request->user()?->hasRole('branch_manager')) {
                 $branchId = (int) ($request->user()->branch_id ?? 0);
-                $salesQuery->where('courses.branch_id', $branchId ?: -1);
+                $salesQuery
+                    ->where('courses.branch_id', $branchId ?: -1)
+                    ->where('flash_sales.branch_id', $branchId ?: -1);
             }
         } else {
             $salesQuery->select('flash_sales.*');
@@ -162,15 +164,26 @@ class FlashSaleController extends Controller
 
         $viewerBranchId = null;
         if ($request->user()) {
+            $accountBranchId = Schema::hasColumn('users', 'branch_id') && $request->user()->branch_id !== null
+                ? (int) $request->user()->branch_id
+                : null;
+            $profileBranchId = null;
+
             if (app(PluginManager::class)->isEnabled('student-management')
                 && Schema::hasTable('students') && Schema::hasColumn('students', 'branch_id')) {
-                $profileBranchId = DB::table('students')
+                $profileValue = DB::table('students')
                     ->where('user_id', $request->user()->getAuthIdentifier())
                     ->value('branch_id');
-                if ($profileBranchId !== null) $viewerBranchId = (int) $profileBranchId;
+                $profileBranchId = $profileValue !== null ? (int) $profileValue : null;
             }
-            if ($viewerBranchId === null && Schema::hasColumn('users', 'branch_id') && $request->user()->branch_id !== null) {
-                $viewerBranchId = (int) $request->user()->branch_id;
+
+            // Conflicting account/profile assignments must never grant access to
+            // either branch's targeted campaigns. Global campaigns remain public.
+            if ($accountBranchId !== null && $profileBranchId !== null
+                && $accountBranchId !== $profileBranchId) {
+                $viewerBranchId = -1;
+            } else {
+                $viewerBranchId = $profileBranchId ?? $accountBranchId;
             }
         }
 
@@ -251,11 +264,18 @@ class FlashSaleController extends Controller
         $actor = $request->user();
         if ($actor?->hasRole('branch_manager')) {
             $branchId = (int) ($actor->branch_id ?? 0);
-            abort_unless($branchId > 0 && DB::table('flash_sales')
-                ->join('courses', 'courses.id', '=', 'flash_sales.course_id')
-                ->where('flash_sales.id', $saleId)
-                ->where('courses.branch_id', $branchId)
-                ->exists(), 403);
+            abort_unless(
+                $branchId > 0
+                    && Schema::hasColumn('flash_sales', 'branch_id')
+                    && DB::table('flash_sales')
+                        ->join('courses', 'courses.id', '=', 'flash_sales.course_id')
+                        ->where('flash_sales.id', $saleId)
+                        ->where('flash_sales.branch_id', $branchId)
+                        ->where('courses.branch_id', $branchId)
+                        ->exists(),
+                403,
+                'Branch managers may only manage campaigns explicitly assigned to their branch and courses in that branch.'
+            );
         }
     }
 
