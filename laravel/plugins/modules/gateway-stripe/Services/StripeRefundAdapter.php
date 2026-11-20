@@ -81,6 +81,8 @@ class StripeRefundAdapter implements RefundProviderAdapter
         if (!is_array($payload)
             || !str_starts_with((string) ($payload['id'] ?? ''), 're_')
             || (string) ($payload['payment_intent'] ?? '') !== (string) $transaction->external_reference
+            || (string) data_get($payload, 'metadata.transaction_ref', '') !== (string) $transaction->transaction_ref
+            || (string) data_get($payload, 'metadata.refund_id', '') !== (string) $refund->id
             || (int) ($payload['amount'] ?? 0) !== $this->toMinorUnits((float) $refund->amount, (string) $transaction->currency)
             || strtolower((string) ($payload['currency'] ?? '')) !== strtolower((string) $transaction->currency)) {
             return new RefundProviderResult(
