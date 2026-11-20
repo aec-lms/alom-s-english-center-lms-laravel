@@ -64,15 +64,8 @@ class CourseTeacherAssignmentController extends Controller
                 ->lockForUpdate()
                 ->get();
 
-            // BranchAccess reads the actor's role relation. Rebuild it from
-            // the locked pivot rows rather than trusting an authenticated
-            // model relation that may have gone stale before this transaction.
-            $actorRoleIds = $lockedRolePivots
-                ->where('user_id', $actorId)
-                ->pluck('role_id')
-                ->all();
-            $actor->setRelation('roles', Role::query()->whereIn('id', $actorRoleIds)->get());
-
+            // BranchAccess::assignedBranchId re-queries the actor's role
+            // pivot; those rows are already locked by this transaction.
             $branchId = $this->branches->assignedBranchId($actor);
             $teacherRoleId = Role::query()->where('slug', 'teacher')->value('id');
             $hasTeacherRole = $teacherRoleId !== null && $lockedRolePivots->contains(
