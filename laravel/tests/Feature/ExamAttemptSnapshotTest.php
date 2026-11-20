@@ -463,6 +463,30 @@ class ExamAttemptSnapshotTest extends TestCase
         $this->assertSame(5.0, (float) $attempt->score_obtained);
         $this->assertSame(5.0, (float) $attempt->total_marks);
         $this->assertTrue($attempt->passed);
+
+        // The same student gets an independent submit bucket for another exam.
+        [$otherExam, $otherQuestion] = $this->createSnapshotFixture();
+        $this->actingAs($student)->get("/exams/{$otherExam->id}/take")->assertOk();
+        $otherAttempt = ExamAttempt::query()
+            ->where('exam_id', $otherExam->id)
+            ->where('user_id', $student->id)
+            ->firstOrFail();
+        $this->actingAs($student)->post("/exams/{$otherExam->id}/attempt", [
+            'attempt_id' => $otherAttempt->id,
+            'answers' => [(string) $otherQuestion->id => 1],
+        ])->assertRedirect(route('portal.dashboard'));
+
+        // A different student also receives an independent bucket for the original exam.
+        $otherStudent = $this->createUserWithRole('student');
+        $this->actingAs($otherStudent)->get("/exams/{$exam->id}/take")->assertOk();
+        $otherStudentAttempt = ExamAttempt::query()
+            ->where('exam_id', $exam->id)
+            ->where('user_id', $otherStudent->id)
+            ->firstOrFail();
+        $this->actingAs($otherStudent)->post("/exams/{$exam->id}/attempt", [
+            'attempt_id' => $otherStudentAttempt->id,
+            'answers' => [(string) $question->id => 1],
+        ])->assertRedirect(route('portal.dashboard'));
     }
 
     public function test_snapshot_validator_accepts_documented_upper_bounds_without_overflow(): void
