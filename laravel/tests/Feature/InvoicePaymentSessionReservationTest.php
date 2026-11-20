@@ -72,6 +72,40 @@ class InvoicePaymentSessionReservationTest extends TestCase
         $this->assertSame(1, DB::table('payment_transactions')->where('invoice_id', $invoice->id)->count());
     }
 
+    public function test_idempotency_fingerprint_normalizes_parameter_order_and_whitespace(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management']);
+
+        $invoice = $this->createInvoice();
+        $service = app(InvoicePaymentSessionReservationService::class);
+        $first = $service->reserve(
+            $invoice,
+            'gateway-stripe',
+            'STRP',
+            [
+                'payment_method_id' => 'pm_normalized_method',
+                'options' => ['channel' => ' hosted ', 'locale' => ' en '],
+            ],
+            'stripe-normalized-key',
+        );
+
+        $replay = $service->reserve(
+            $invoice,
+            'gateway-stripe',
+            'STRP',
+            [
+                'options' => ['locale' => 'en', 'channel' => 'hosted'],
+                'payment_method_id' => 'pm_normalized_method',
+            ],
+            'stripe-normalized-key',
+        );
+
+        $this->assertTrue($replay['reused']);
+        $this->assertSame($first['transaction']->id, $replay['transaction']->id);
+        $this->assertSame(1, DB::table('payment_transactions')->where('invoice_id', $invoice->id)->count());
+    }
+
     public function test_same_idempotency_key_with_different_provider_parameters_returns_conflict(): void
     {
         $this->markSystemInstalled();
