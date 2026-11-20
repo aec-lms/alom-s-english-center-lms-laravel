@@ -111,7 +111,7 @@ class PaypalGatewayService
             $orderRequestStarted = true;
             $response = Http::withToken($token)
                 ->acceptJson()
-                ->withHeaders($idempotencyKey ? ['PayPal-Request-Id' => $idempotencyKey] : [])
+                ->withHeaders(!empty($reservation['provider_idempotency_key']) ? ['PayPal-Request-Id' => $reservation['provider_idempotency_key']] : [])
                 ->timeout(25)
                 ->post($apiBase . '/v2/checkout/orders', [
                     'intent' => 'CAPTURE',
