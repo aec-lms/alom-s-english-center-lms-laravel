@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
+use Plugins\Modules\TeacherManagement\Models\Teacher;
+use Plugins\Modules\CourseManagement\Models\Course;
+use App\Models\Permission;
 use Tests\TestCase;
 
 class CourseAssessmentsPluginTest extends TestCase
@@ -246,5 +249,129 @@ class CourseAssessmentsPluginTest extends TestCase
         $this->actingAs($student)->post(route('plugins.course-assessments.student.start', $accountSet))
             ->assertForbidden();
     }
+
+
+    public function test_teacher_grading_queue_and_write_enforce_assessment_and_course_branch_under_lock(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'course-management', 'teacher-management', 'course-assessments']);
+
+        $branchA = DB::table('branches')->insertGetId([
+            'code' => 'ASSESS-A',
+            'name' => 'Assessment Branch A',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $branchB = DB::table('branches')->insertGetId([
+            'code' => 'ASSESS-B',
+            'name' => 'Assessment Branch B',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $teacherUser = $this->createUserWithRole('teacher', $branchA);
+        Teacher::query()->create([
+            'user_id' => $teacherUser->id,
+            'branch_id' => $branchA,
+            'employee_code' => 'ASSESS-TEACHER-A',
+            'specialization' => 'English',
+            'is_active' => true,
+        ]);
+        $gradePermissionId = Permission::query()->where('slug', 'course_assessments.grade')->value('id');
+        $this->assertNotNull($gradePermissionId);
+        $teacherUser->roles()->first()->permissions()->syncWithoutDetaching([$gradePermissionId]);
+
+        $student = $this->createUserWithRole('student');
+        $courseA = Course::query()->create([
+            'branch_id' => $branchA,
+            'code' => 'ASSESS-COURSE-A',
+            'title' => 'Branch A Course',
+            'slug' => 'assess-course-a',
+            'price' => 0,
+            'description' => 'Same-branch grading fixture.',
+            'status' => 'published',
+        ]);
+        $courseB = Course::query()->create([
+            'branch_id' => $branchB,
+            'code' => 'ASSESS-COURSE-B',
+            'title' => 'Branch B Course',
+            'slug' => 'assess-course-b',
+            'price' => 0,
+            'description' => 'Cross-branch grading fixture.',
+            'status' => 'published',
+        ]);
+        DB::table('course_teacher_assignments')->insert([
+            ['course_id' => $courseA->id, 'teacher_user_id' => $teacherUser->id, 'assigned_by' => $teacherUser->id, 'created_at' => now(), 'updated_at' => now()],
+            ['course_id' => $courseB->id, 'teacher_user_id' => $teacherUser->id, 'assigned_by' => $teacherUser->id, 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        $setA = $this->createSet(['course_id' => $courseA->id, 'branch_id' => $branchA, 'title' => 'Branch A Assessment']);
+        $setB = $this->createSet(['course_id' => $courseB->id, 'branch_id' => $branchB, 'title' => 'Branch B Assessment']);
+        $attemptA = DB::table('course_assessment_attempts')->insertGetId([
+            'assessment_set_id' => $setA,
+            'course_id' => $courseA->id,
+            'student_id' => $student->id,
+            'attempt_number' => 1,
+            'status' => 'pending_review',
+            'started_at' => now(),
+            'max_score' => 2,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $attemptB = DB::table('course_assessment_attempts')->insertGetId([
+            'assessment_set_id' => $setB,
+            'course_id' => $courseB->id,
+            'student_id' => $student->id,
+            'attempt_number' => 1,
+            'status' => 'pending_review',
+            'started_at' => now(),
+            'max_score' => 2,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $questionA = DB::table('course_assessment_attempt_questions')->insertGetId([
+            'attempt_id' => $attemptA,
+            'type' => 'written',
+            'question' => 'Write a sentence.',
+            'marks' => 2,
+            'position' => 10,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $questionB = DB::table('course_assessment_attempt_questions')->insertGetId([
+            'attempt_id' => $attemptB,
+            'type' => 'written',
+            'question' => 'Write a sentence.',
+            'marks' => 2,
+            'position' => 10,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($teacherUser)
+            ->get(route('plugins.course-assessments.grading.index'))
+            ->assertOk()
+            ->assertSee('Branch A Assessment')
+            ->assertDontSee('Branch B Assessment');
+
+        $this->actingAs($teacherUser)
+            ->patch(route('plugins.course-assessments.grading.update', $attemptB), [
+                'scores' => [$questionB => 2],
+            ])
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('course_assessment_attempts', ['id' => $attemptB, 'status' => 'pending_review']);
+        $this->assertDatabaseHas('course_assessment_attempt_questions', ['id' => $questionB, 'marks_awarded' => 0]);
+
+        $this->actingAs($teacherUser)
+            ->patch(route('plugins.course-assessments.grading.update', $attemptA), [
+                'scores' => [$questionA => 2],
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('course_assessment_attempts', ['id' => $attemptA, 'status' => 'graded']);
+        $this->assertDatabaseHas('course_assessment_attempt_questions', ['id' => $questionA, 'marks_awarded' => 2]);
+    }
+
 
 }
