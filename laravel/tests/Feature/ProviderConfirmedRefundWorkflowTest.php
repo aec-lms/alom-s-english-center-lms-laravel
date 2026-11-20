@@ -1199,3 +1199,24 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
             'subtotal_amount' => 1000,
             'discount_amount' => 0,
             'net_amount' => 1000,
+            'paid_amount' => 1000,
+            'currency' => 'BDT',
+            'status' => 'paid',
+        ]);
+
+        $transaction = PaymentTransaction::query()->create([
+            'transaction_ref' => 'REFUND-TXN-' . strtoupper(bin2hex(random_bytes(5))),
+            'invoice_id' => $invoice->id,
+            'branch_id' => null,
+            'gateway_slug' => $gateway,
+            'amount' => 1000,
+            'currency' => 'BDT',
+            'status' => 'settled',
+            'external_reference' => $externalReference,
+            'metadata' => $metadata,
+            'settled_at' => now(),
+        ]);
+
+        return [$invoice, $transaction];
+    }
+}
