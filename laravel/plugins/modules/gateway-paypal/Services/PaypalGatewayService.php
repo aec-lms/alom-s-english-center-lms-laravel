@@ -27,7 +27,7 @@ class PaypalGatewayService
             : 'https://api-m.paypal.com';
     }
 
-    private function accessToken(): string
+    private function accessToken(string $apiBase): string
     {
         $clientId = (string) $this->plugins->getSetting('gateway-paypal', 'client_id', '');
         $secret = (string) $this->plugins->getSetting('gateway-paypal', 'client_secret', '');
@@ -36,7 +36,7 @@ class PaypalGatewayService
         }
 
         $response = Http::asForm()->withBasicAuth($clientId, $secret)
-            ->timeout(20)->post($this->apiBase() . '/v1/oauth2/token', ['grant_type' => 'client_credentials']);
+            ->timeout(20)->post($apiBase . '/v1/oauth2/token', ['grant_type' => 'client_credentials']);
 
         if (!$response->successful() || !$response->json('access_token')) {
             throw new RuntimeException('PayPal OAuth authentication failed. Check Client ID, Secret and Sandbox/Live mode.');
@@ -46,11 +46,31 @@ class PaypalGatewayService
 
     public function createOrder(FeeInvoice $invoice, ?string $idempotencyKey = null): array
     {
+        $sandbox = $this->plugins->getSetting('gateway-paypal', 'sandbox_mode', '1') === '1';
+        $apiBase = $this->apiBase();
+        $invoiceNumber = (string) $invoice->invoice_number;
+        $description = 'AEC LMS invoice ' . $invoiceNumber;
+        $brandName = "Alom's English Center";
+        $userAction = 'PAY_NOW';
+        $returnUrl = url('/payments/paypal/return');
+        $cancelUrl = url('/payments/paypal/cancel');
+
         $reservation = $this->reservations->reserve(
             $invoice,
             'gateway-paypal',
             'PYPL',
-            [],
+            [
+                'fingerprint_parameters' => [
+                    'provider_api_base' => $apiBase,
+                    'intent' => 'CAPTURE',
+                    'reference_id' => $invoiceNumber,
+                    'description' => $description,
+                    'brand_name' => $brandName,
+                    'user_action' => $userAction,
+                    'return_url' => $returnUrl,
+                    'cancel_url' => $cancelUrl,
+                ],
+            ],
             $idempotencyKey,
         );
         $invoice = $reservation['invoice'];
@@ -68,7 +88,6 @@ class PaypalGatewayService
 
             $approvalUrl = (string) ($tx->metadata['approval_url'] ?? '');
             $approvalHost = strtolower((string) parse_url($approvalUrl, PHP_URL_HOST));
-            $sandbox = $this->plugins->getSetting('gateway-paypal', 'sandbox_mode', '1') === '1';
             $allowedApprovalHosts = $sandbox
                 ? ['www.sandbox.paypal.com', 'sandbox.paypal.com']
                 : ['www.paypal.com', 'paypal.com'];
@@ -88,28 +107,28 @@ class PaypalGatewayService
         $response = null;
         $orderRequestStarted = false;
         try {
-            $token = $this->accessToken();
+            $token = $this->accessToken($apiBase);
             $orderRequestStarted = true;
             $response = Http::withToken($token)
                 ->acceptJson()
                 ->withHeaders($idempotencyKey ? ['PayPal-Request-Id' => $idempotencyKey] : [])
                 ->timeout(25)
-                ->post($this->apiBase() . '/v2/checkout/orders', [
+                ->post($apiBase . '/v2/checkout/orders', [
                     'intent' => 'CAPTURE',
                     'purchase_units' => [[
-                        'reference_id' => (string) $invoice->invoice_number,
+                        'reference_id' => $invoiceNumber,
                         'custom_id' => $tx->transaction_ref,
-                        'description' => 'AEC LMS invoice ' . $invoice->invoice_number,
+                        'description' => $description,
                         'amount' => [
                             'currency_code' => strtoupper($invoice->currency),
                             'value' => number_format($remaining, 2, '.', ''),
                         ],
                     ]],
                     'application_context' => [
-                        'brand_name' => "Alom's English Center",
-                        'user_action' => 'PAY_NOW',
-                        'return_url' => url('/payments/paypal/return'),
-                        'cancel_url' => url('/payments/paypal/cancel'),
+                        'brand_name' => $brandName,
+                        'user_action' => $userAction,
+                        'return_url' => $returnUrl,
+                        'cancel_url' => $cancelUrl,
                     ],
                 ]);
 
