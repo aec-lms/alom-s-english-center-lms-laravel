@@ -48,6 +48,19 @@ class PaymentSettlementService
 
             $invoice = FeeInvoice::query()->where('id', $lockedTx->invoice_id)->lockForUpdate()->firstOrFail();
 
+            // Referral attribution and first-paid-order settlement serialize on
+            // the buyer account row. Resolve the order owner without locking the
+            // order, then acquire the shared buyer lock before any paid-state
+            // mutation or order-row lock later in this transaction.
+            if (Schema::hasTable('commerce_orders')) {
+                $commerceBuyerId = DB::table('commerce_orders')
+                    ->where('invoice_id', $invoice->id)
+                    ->value('user_id');
+                if ($commerceBuyerId !== null) {
+                    User::query()->whereKey((int) $commerceBuyerId)->lockForUpdate()->firstOrFail();
+                }
+            }
+
             // A provider callback cannot settle an invoice in a different
             // currency, even when the numeric amount happens to fit.
             $transactionCurrency = strtoupper(trim((string) $lockedTx->currency));
