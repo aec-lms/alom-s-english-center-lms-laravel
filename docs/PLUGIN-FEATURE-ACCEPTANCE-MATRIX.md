@@ -76,6 +76,8 @@ Shared lifecycle/security regressions are also covered by \`PluginLifecycleTest\
 
 The following rows close the missing-slug gap identified in issue #300. They document existing named tests and their limited scope; they do not certify complete acceptance.
 
+| Plugin | Focused feature-test evidence | Coverage / limitation |
+|---|---|---|
 | al-branding-loader | `AlBrandingLoaderProductionHardeningTest`, `AlomBrandingLoaderPhoneticsPluginTest` (loader-specific cases) | Partial: navigation loader timeout, route exclusions, safe logo paths, settings and plugin independence |
 | assignment-management | `AssignmentManagementPluginTest` | Targeted: standalone install, submit/grade, enrollment, branch isolation, private attachments and mobile API |
 | board-question-solver | `BoardQuestionSolverPluginTest` | Targeted: private history, in-memory image handling, daily limits, disabled-provider behavior and admin controls |
