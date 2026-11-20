@@ -187,46 +187,50 @@ class FlashSaleController extends Controller
             }
         }
 
-        $sales = DB::table('flash_sales')
-            ->join('courses', 'courses.id', '=', 'flash_sales.course_id')
-            ->where('flash_sales.is_published', true)
-            ->where('flash_sales.is_active', true)
-            ->where('flash_sales.starts_at', '<=', now())
-            ->where('flash_sales.ends_at', '>', now())
+        $eligibleCourses = DB::table('courses')
             ->where('courses.status', 'published')
-            ->where(function ($scope): void {
-                $scope->whereNull('flash_sales.branch_id')
-                    ->orWhereNull('courses.branch_id')
-                    ->orWhereColumn('flash_sales.branch_id', 'courses.branch_id');
+            ->whereExists(function ($campaigns) use ($viewerBranchId): void {
+                $campaigns->selectRaw('1')
+                    ->from('flash_sales')
+                    ->whereColumn('flash_sales.course_id', 'courses.id')
+                    ->where('flash_sales.is_published', true)
+                    ->where('flash_sales.is_active', true)
+                    ->where('flash_sales.starts_at', '<=', now())
+                    ->where('flash_sales.ends_at', '>', now())
+                    ->where(function ($scope) use ($viewerBranchId): void {
+                        $scope->whereNull('flash_sales.branch_id');
+                        if ($viewerBranchId !== null) {
+                            $scope->orWhere('flash_sales.branch_id', $viewerBranchId);
+                        }
+                    })
+                    ->where(function ($scope): void {
+                        $scope->whereNull('flash_sales.branch_id')
+                            ->orWhereNull('courses.branch_id')
+                            ->orWhereColumn('flash_sales.branch_id', 'courses.branch_id');
+                    });
             })
-            ->where(function ($scope) use ($viewerBranchId): void {
-                $scope->whereNull('flash_sales.branch_id');
-                if ($viewerBranchId !== null) $scope->orWhere('flash_sales.branch_id', $viewerBranchId);
-            })
-            ->select(
-                'flash_sales.*',
-                'courses.title as course_title',
-                'courses.slug as course_slug',
-                'courses.price as course_price'
-            )
-            ->orderByRaw('CASE WHEN flash_sales.branch_id IS NULL THEN 0 ELSE 1 END DESC')
-            ->orderByDesc('flash_sales.priority')
-            ->orderBy('flash_sales.ends_at')
-            ->orderByDesc('flash_sales.id')
-            ->get()
-            ->unique('course_id')
-            ->values()
-            ->map(function (object $sale): object {
-                $price = (float) $sale->course_price;
-                $discount = $sale->discount_type === 'percent'
-                    ? $price * (float) $sale->discount_value / 100
-                    : (float) $sale->discount_value;
-                $sale->sale_price = round(max(0, $price - min($price, $discount)), 2);
-                $sale->discount_amount = round(min($price, max(0, $discount)), 2);
-                $sale->discount_percent = $price > 0 ? round(($sale->discount_amount / $price) * 100, 1) : 0.0;
+            ->select('courses.id', 'courses.title', 'courses.slug')
+            ->get();
 
-                return $sale;
-            });
+        $pricing = app(\\Plugins\\Modules\\FlashSale\\Services\\FlashSalePricingService::class);
+        $sales = $eligibleCourses->map(function (object $course) use ($pricing, $viewerBranchId): ?object {
+            $quote = $pricing->quote((int) $course->id, $viewerBranchId);
+            if (!$quote['sale']) {
+                return null;
+            }
+
+            $sale = $quote['sale'];
+            $sale->course_title = $course->title;
+            $sale->course_slug = $course->slug;
+            $sale->course_price = $quote['subtotal'];
+            $sale->sale_price = $quote['total'];
+            $sale->discount_amount = $quote['discount'];
+            $sale->discount_percent = $quote['subtotal'] > 0
+                ? round(($quote['discount'] / $quote['subtotal']) * 100, 1)
+                : 0.0;
+
+            return $sale;
+        })->filter()->values();
 
         return view('flash-sale::public', [
             'settings' => $settings,
