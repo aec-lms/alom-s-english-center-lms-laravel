@@ -102,6 +102,30 @@ class TeacherStandaloneTest extends TestCase
         $this->assertDatabaseHas('users', ['id' => $teacher->user_id, 'is_active' => false]);
     }
 
+    public function test_teacher_creation_rolls_back_when_audit_persistence_fails(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['teacher-management']);
+        $admin = $this->createUserWithRole('admin');
+
+        $audit = \Mockery::mock(AuditLogger::class);
+        $audit->shouldReceive('log')->once()->andThrow(new \RuntimeException('Audit storage unavailable.'));
+        $this->app->instance(AuditLogger::class, $audit);
+
+        $response = $this->actingAs($admin)->post('/admin/teachers', [
+            'name' => 'Audit Rollback Teacher',
+            'email' => 'audit.rollback@aec.test',
+            'employee_code' => 'AUDIT-ROLLBACK-001',
+            'specialization' => 'English Grammar',
+            'password' => 'AecTeacher!2026Strong',
+            'is_active' => '1',
+        ]);
+
+        $response->assertStatus(500);
+        $this->assertDatabaseMissing('users', ['email' => 'audit.rollback@aec.test']);
+        $this->assertDatabaseMissing('teachers', ['employee_code' => 'AUDIT-ROLLBACK-001']);
+    }
+
     public function test_teacher_photo_upload_uses_server_detected_extension(): void
     {
         $this->markSystemInstalled();
