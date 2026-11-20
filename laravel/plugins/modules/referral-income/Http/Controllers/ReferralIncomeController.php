@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Plugins\Modules\ReferralIncome\Http\Controllers;
 
+use App\Core\Security\AuditLogger;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
