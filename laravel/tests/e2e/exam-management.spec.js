@@ -25,7 +25,7 @@ async function signInAsExamStudent(page) {
 test('student exam journey uses frozen snapshot, autosaves safely, and remains accessible on desktop/mobile', async ({ page }) => {
   // Playwright retries reuse the seeded database. Reset this fixture before each attempt
   // so a failed run after source mutation cannot poison its retry.
-  runPhp('reset-exam-source.php', fixture.exam_id);
+  runPhp('reset-exam-source.php', fixture.exam_id, fixture.question_id);
   await signInAsExamStudent(page);
 
   const takeUrl = `/exams/${fixture.exam_id}/take`;
