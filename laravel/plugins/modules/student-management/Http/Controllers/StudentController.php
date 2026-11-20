@@ -129,7 +129,9 @@ class StudentController extends Controller
             $user = User::query()->whereKey($lockedStudent->user_id)->lockForUpdate()->first();
             abort_unless($user, 409, 'The linked student account is missing; no changes were applied.');
 
-            $branchId = $validated['branch_id'] ?? null;
+            $branchId = array_key_exists('branch_id', $validated)
+                ? $validated['branch_id']
+                : $lockedStudent->branch_id;
             if ($actor->hasRole('branch_manager')) {
                 $branchId = $actor->branch_id;
             }
