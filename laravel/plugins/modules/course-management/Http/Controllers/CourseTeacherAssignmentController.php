@@ -52,7 +52,7 @@ class CourseTeacherAssignmentController extends Controller
                 ->where('user_id', $teacher->id)
                 ->where('role_id', $teacherRoleId)
                 ->lockForUpdate()
-                ->exists();
+                ->first();
             abort_unless((bool) $teacher->is_active && $hasTeacherRole, 422, 'Select an active teacher account.');
 
             $course = DB::table('courses')->where('id', $data['course_id'])->whereNull('deleted_at')
