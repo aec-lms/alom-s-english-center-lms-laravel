@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-use Plugins\\Modules\\ExamManagement\\Models\\Exam;
-use Plugins\\Modules\\ExamManagement\\Models\\ExamAttempt;
-use Plugins\\Modules\\ExamManagement\\Models\\ExamQuestion;
+use Plugins\Modules\ExamManagement\Models\Exam;
+use Plugins\Modules\ExamManagement\Models\ExamAttempt;
+use Plugins\Modules\ExamManagement\Models\ExamQuestion;
 
 require __DIR__ . '/../../vendor/autoload.php';
 $app = require __DIR__ . '/../../bootstrap/app.php';
-$app->make(Illuminate\\Contracts\\Console\\Kernel::class)->bootstrap();
+$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 
 $examId = (int) ($argv[1] ?? 0);
 $questionId = (int) ($argv[2] ?? 0);
@@ -41,4 +41,4 @@ $question->update([
     'negative_marks' => 1,
 ]);
 
-echo "E2E exam fixture reset.\\n";
+echo "E2E exam fixture reset.\n";
