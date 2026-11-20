@@ -127,6 +127,46 @@ class TeacherStandaloneTest extends TestCase
         $this->assertDatabaseMissing('teachers', ['employee_code' => 'AUDIT-ROLLBACK-001']);
     }
 
+    public function test_teacher_update_rolls_back_profile_and_account_when_audit_fails(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['teacher-management']);
+        $admin = $this->createUserWithRole('admin');
+
+        $this->actingAs($admin)->post('/admin/teachers', [
+            'name' => 'Audit Update Original',
+            'email' => 'audit.update@aec.test',
+            'employee_code' => 'AUDIT-UPDATE-001',
+            'specialization' => 'Original Specialization',
+            'password' => 'AecTeacher!2026Strong',
+            'is_active' => '1',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $teacher = Teacher::query()->where('employee_code', 'AUDIT-UPDATE-001')->firstOrFail();
+        $userId = (int) $teacher->user_id;
+
+        $audit = \Mockery::mock(AuditLogger::class);
+        $audit->shouldReceive('log')->once()->andThrow(new \RuntimeException('Audit storage unavailable.'));
+        $this->app->instance(AuditLogger::class, $audit);
+
+        $response = $this->actingAs($admin)->put('/admin/teachers/' . $teacher->id, [
+            'name' => 'Audit Update Changed',
+            'employee_code' => 'AUDIT-UPDATE-001',
+            'specialization' => 'Changed Specialization',
+            'is_active' => '1',
+        ]);
+
+        $response->assertStatus(500);
+        $this->assertDatabaseHas('teachers', [
+            'id' => $teacher->id,
+            'specialization' => 'Original Specialization',
+        ]);
+        $this->assertDatabaseHas('users', [
+            'id' => $userId,
+            'name' => 'Audit Update Original',
+        ]);
+    }
+
     public function test_teacher_photo_upload_uses_server_detected_extension(): void
     {
         $this->markSystemInstalled();
