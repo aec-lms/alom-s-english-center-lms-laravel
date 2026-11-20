@@ -78,6 +78,23 @@ class FlashSaleEnrollmentTest extends TestCase
         $this->assertEquals(750.00, (float) $invoice->net_amount);
     }
 
+    public function test_missing_storefront_settings_keep_admin_publish_switch_off(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'course-management', 'flash-sale']);
+
+        $admin = $this->createUserWithRole('admin');
+        $response = $this->actingAs($admin)->get('/admin/flash-sales')
+            ->assertOk()
+            ->assertSee('Hidden');
+
+        $this->assertSame(
+            0,
+            preg_match('/<input[^>]*\\bid="page_enabled"[^>]*\\bchecked\\b/i', $response->getContent()),
+            'The storefront publish switch must default to off when no settings row exists.'
+        );
+    }
+
     public function test_admin_can_view_edit_toggle_and_delete_flash_sale_campaigns(): void
     {
         $this->markSystemInstalled();
