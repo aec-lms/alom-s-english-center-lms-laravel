@@ -54,7 +54,8 @@ class SslcommerzRefundAdapter implements RefundProviderAdapter
         $payload = $response->json();
         if (!is_array($payload)
             || strtoupper((string) ($payload['APIConnect'] ?? '')) !== 'DONE'
-            || !hash_equals($bankTransactionId, (string) ($payload['bank_tran_id'] ?? ''))) {
+            || !hash_equals($bankTransactionId, (string) ($payload['bank_tran_id'] ?? ''))
+            || !hash_equals((string) $transaction->transaction_ref, (string) ($payload['trans_id'] ?? ''))) {
             return new RefundProviderResult(
                 RefundProviderResult::REQUIRES_REVIEW,
                 null,
