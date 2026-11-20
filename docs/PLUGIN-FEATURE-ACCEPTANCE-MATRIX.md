@@ -72,6 +72,23 @@ Shared lifecycle/security regressions are also covered by \`PluginLifecycleTest\
 | universal-payment | \`UniversalPaymentProofTest\`, \`FinanceAndPaymentGatewayTest\`, \`PluginCriticalRegressionTest\` |
 | visitor-popup-ads | \`VisitorPopupSecurityTest\`, \`PluginCriticalRegressionTest\` |
 
+| al-branding-loader | `AlBrandingLoaderProductionHardeningTest`, `AlomBrandingLoaderPhoneticsPluginTest` (loader timeout, navigation exclusions, upload-path validation, enabled/disabled rendering) — targeted, not full browser acceptance |
+| assignment-management | `AssignmentManagementPluginTest` (standalone install, assignment submission/grading, enrollment and branch guards, private attachment ownership, mobile API) — targeted |
+| board-question-solver | `BoardQuestionSolverPluginTest` (provider disabled/budget, in-memory image handling, exam-safe behavior, platform-admin settings/history) — targeted |
+| commerce-cart | `UnifiedCommerceCartTest`, `CourseGiftCommerceTest`, `CourseCommercePaymentSettlementTest`, `StorefrontPaymentCheckoutTest` (cart, gifts, checkout and settlement paths) — partial; invoice reservation/refund reconciliation remain open |
+| course-assessments | `CourseAssessmentsPluginTest`, `CourseAssessmentsMobileApiTest` (assessment creation/import, immutable attempts, grading, deadlines, enrollment, branch and answer-key privacy) — targeted; #304/#305 fixes are pending PR review |
+| course-bundles | `CourseBundlesPluginTest` (standalone install, free/paid purchase, branch visibility, immutable course snapshot and archive history) — targeted |
+| course-content-studio | `CourseContentStudioPluginTest` (content post, safe video, lesson authoring/progress, enrollment gating and private files) — targeted |
+| course-wishlist | `CourseWishlistPluginTest` (student ownership/privacy, published-course and branch checks, standalone install and mobile API) — targeted |
+| expense-management | `ExpenseManagementPluginTest` (expense records, private receipts, approved totals, recycle-bin restore and branch/export isolation) — targeted |
+| guardian-portal | `GuardianPortalPluginTest`, `GuardianStudentTrackingAuthorizationTest` (verified child links, read-only summaries, non-guardian denial and cross-branch denial) — targeted |
+| phonetics | `AlomBrandingLoaderPhoneticsPluginTest` (dedicated course access and integration) — partial; speaking recording/review work is in open PR #292 and is not current-main evidence |
+| push-notifications | `PushNotificationDeliveryTest`, `MobilePushTokenLifecycleTest` (dispatch behavior and per-device token lifecycle) — targeted; live provider delivery not proven |
+| question-bank | `QuestionBankPluginTest`, `LearnAndEarnQuestionBankTest` (question types/categories, immutable paper snapshots, soft-delete and random paper generation) — targeted |
+| quiz-contest | `QuizContestPluginTest` (standalone contest lifecycle, branch scope, submission validation, answer-key timing and result publication locks) — targeted |
+| referral-income | `ReferralIncomePluginTest`, `ReferralIncomeCommerceSettlementTest` (attribution, settlement, partial/full refund reversal, payout and branch restrictions) — partial; financial red-team issue #301 remains open |
+| support-center | `SupportCenterPluginTest` (standalone install, ticket ownership, replies, close state and mobile API) — targeted |
+
 ## Verification boundaries
 
 - Automated tests exercise application behavior and simulated/stubbed provider contracts. They do **not** prove that live bKash/Nagad/card/PayPal/Stripe/SSLCommerz, SMTP, SMS, Google, Meta, or other third-party accounts are approved, configured, reachable, or able to settle/send real transactions. Those require the owner's credentials and each provider's sandbox/live acceptance.
