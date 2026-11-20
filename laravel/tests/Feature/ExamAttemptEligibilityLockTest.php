@@ -202,6 +202,68 @@ class ExamAttemptEligibilityLockTest extends TestCase
         $this->assertSame(0.0, (float) $unchanged->total_marks);
     }
 
+    public function test_conflicting_account_and_student_profile_branches_fail_closed_for_exam_attempts(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'student-management', 'exam-management']);
+
+        $branchA = Branch::query()->create([
+            'code' => 'BRANCH-MISMATCH-A-' . strtoupper(bin2hex(random_bytes(3))),
+            'name' => 'Mismatch Branch A',
+            'is_active' => true,
+        ]);
+        $branchB = Branch::query()->create([
+            'code' => 'BRANCH-MISMATCH-B-' . strtoupper(bin2hex(random_bytes(3))),
+            'name' => 'Mismatch Branch B',
+            'is_active' => true,
+        ]);
+
+        $student = $this->createUserWithRole('student', (int) $branchA->id);
+        Student::query()->create([
+            'user_id' => $student->id,
+            'branch_id' => $branchA->id,
+            'student_code' => 'BRANCH-MISMATCH-' . strtoupper(bin2hex(random_bytes(4))),
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+        ]);
+
+        [$exam, $question] = $this->createSnapshotFixture();
+        DB::table('exams')->where('id', $exam->id)->update(['branch_id' => $branchA->id]);
+
+        $this->actingAs($student)->get('/exams/' . $exam->id . '/take')->assertOk();
+        $attempt = ExamAttempt::query()
+            ->where('exam_id', $exam->id)
+            ->where('user_id', $student->id)
+            ->firstOrFail();
+
+        // Keep the Student profile on A but move the linked account to B.
+        DB::table('users')->where('id', $student->id)->update([
+            'branch_id' => $branchB->id,
+        ]);
+
+        $this->assertControllerAbort(
+            403,
+            fn () => app(ExamController::class)->apiSubmitAttempt(
+                $this->studentRequest(
+                    'POST',
+                    '/api/v1/my/exams/' . $exam->id . '/attempts/' . $attempt->id . '/submit',
+                    $student,
+                    ['answers' => [(string) $question->id => 1]],
+                    true
+                ),
+                $exam->fresh(),
+                (int) $attempt->id
+            )
+        );
+
+        $unchanged = $attempt->fresh();
+        $this->assertNull($unchanged->submitted_at);
+        $this->assertNull($unchanged->submitted_answers);
+        $this->assertSame(0.0, (float) $unchanged->score_obtained);
+        $this->assertSame(0.0, (float) $unchanged->total_marks);
+        $this->assertFalse($unchanged->passed);
+    }
+
     public function test_revoked_paid_exam_entitlement_blocks_web_and_api_start_autosave_and_submit(): void
     {
         $this->markSystemInstalled();
