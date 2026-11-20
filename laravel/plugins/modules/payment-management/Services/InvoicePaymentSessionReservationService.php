@@ -63,8 +63,14 @@ class InvoicePaymentSessionReservationService
 
                 if ($existingForKey) {
                     $storedFingerprint = (string) ($existingForKey->metadata['request_fingerprint'] ?? '');
+                    $replayFingerprint = $this->requestFingerprint(
+                        $gatewaySlug,
+                        (float) $existingForKey->amount,
+                        strtoupper((string) $lockedInvoice->currency),
+                        $metadata,
+                    );
                     abort_unless(
-                        $storedFingerprint !== '' && hash_equals($storedFingerprint, $requestFingerprint),
+                        $storedFingerprint !== '' && hash_equals($storedFingerprint, $replayFingerprint),
                         409,
                         'This idempotency key was already used with different or unverifiable payment parameters. Start a new checkout only after reconciling the existing reservation.',
                     );
