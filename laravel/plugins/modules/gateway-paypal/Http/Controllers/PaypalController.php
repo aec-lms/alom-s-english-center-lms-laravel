@@ -49,6 +49,7 @@ class PaypalController extends Controller
             'paypal_order_id' => $result['paypal_order_id'],
             'approval_url' => $result['approval_url'],
             'status' => $result['transaction']->status,
+            'session_outcome' => $result['transaction']->metadata['session_outcome'] ?? null,
         ]);
     }
 
