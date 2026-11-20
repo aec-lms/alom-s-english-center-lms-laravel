@@ -231,7 +231,7 @@ try {
 
     $kernel = $app->make(\Illuminate\Contracts\Http\Kernel::class);
     $response = $kernel->handle($request);
-    echo "RESULT:" . $response->getStatusCode() . PHP_EOL;
+    echo "RESULT:" . $response->getStatusCode() . ':' . substr(preg_replace('/\\s+/', ' ', (string) $response->getContent()), 0, 1000) . PHP_EOL;
     flush();
 
     if ($payload['hold_outer_transaction']) {
@@ -471,7 +471,7 @@ PHP;
             $this->assertStringStartsWith('READY:', $ready);
 
             $result = $this->readMysqlWorkerLine($worker);
-            $this->assertSame('RESULT:200', $result, $worker['stderr']);
+            $this->assertStringStartsWith('RESULT:200:', $result, $worker['stderr']);
 
             $this->assertMysqlLockTimeout(
                 fn () => $writer->table('role_user')
@@ -548,7 +548,7 @@ PHP;
             $this->waitForMysqlLockWait($writer, $threadId);
 
             $writer->commit();
-            $this->assertSame('RESULT:403', $this->readMysqlWorkerLine($worker));
+            $this->assertStringStartsWith('RESULT:403:', $this->readMysqlWorkerLine($worker));
             $this->assertSame('DONE', $this->readMysqlWorkerLine($worker));
         } finally {
             if ($writer->transactionLevel() > 0) {
