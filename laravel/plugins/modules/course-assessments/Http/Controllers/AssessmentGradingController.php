@@ -28,6 +28,7 @@ class AssessmentGradingController extends Controller
             ->when($actor->hasRole('teacher'), function ($q) use ($actor): void {
                 $profile = $this->teacherProfile($actor, false);
                 abort_unless($profile && (bool) $profile->is_active, 403, 'An active teacher profile is required.');
+                $this->assertTeacherBranchConsistency($actor, $profile);
                 abort_unless(Schema::hasTable('course_teacher_assignments') && Schema::hasTable('courses'), 403, 'Teacher course assignments are required.');
 
                 $branchId = $profile->branch_id === null ? null : (int) $profile->branch_id;
@@ -129,6 +130,7 @@ class AssessmentGradingController extends Controller
         abort_unless($actor->hasRole('teacher'), 403);
         $profile = $this->teacherProfile($actor, true);
         abort_unless($profile && (bool) $profile->is_active, 403, 'An active teacher profile is required.');
+        $this->assertTeacherBranchConsistency($actor, $profile);
 
         $branchId = $profile->branch_id === null ? null : (int) $profile->branch_id;
         abort_unless($set->branch_id === null
@@ -148,6 +150,14 @@ class AssessmentGradingController extends Controller
             ->lockForUpdate()
             ->first();
         abort_unless($set->course_id !== null && $assignment, 403, 'You are not assigned to this course.');
+    }
+
+    private function assertTeacherBranchConsistency($actor, object $profile): void
+    {
+        if (Schema::hasColumn('users', 'branch_id') && $actor->branch_id !== null) {
+            abort_unless($profile->branch_id !== null
+                && (int) $profile->branch_id === (int) $actor->branch_id, 403, 'Teacher account and profile branch assignments do not match.');
+        }
     }
 
     private function teacherProfile($actor, bool $lock): ?object
