@@ -206,14 +206,30 @@ class InvoicePaymentSessionReservationTest extends TestCase
         }
 
         $stripe = app(\Plugins\Modules\GatewayStripe\Services\StripeGatewayService::class);
-        $stripeFirst = $stripe->initiateTokenizedCheckout($this->createInvoice(), 'pm_cross_invoice_first', 'reused-client-key-across-invoices');
-        $stripeSecond = $stripe->initiateTokenizedCheckout($this->createInvoice(), 'pm_cross_invoice_second', 'reused-client-key-across-invoices');
+        $stripeFirstInvoice = $this->createInvoice();
+        $stripeSecondInvoice = $this->createInvoice();
+        $stripeFirst = $stripe->initiateTokenizedCheckout($stripeFirstInvoice, 'pm_cross_invoice_first', 'reused-client-key-across-invoices');
+        $stripeSecond = $stripe->initiateTokenizedCheckout($stripeSecondInvoice, 'pm_cross_invoice_second', 'reused-client-key-across-invoices');
         $this->assertNotSame($stripeFirst['payment_intent_id'], $stripeSecond['payment_intent_id']);
         $this->assertCount(2, $stripeProviderKeys);
         $this->assertNotSame($stripeProviderKeys[0], $stripeProviderKeys[1]);
         foreach ($stripeProviderKeys as $key) {
             $this->assertMatchesRegularExpression('/^[a-f0-9]{32}$/', $key);
         }
+
+        $paypalTransactions = PaymentTransaction::query()
+            ->whereIn('invoice_id', [$firstInvoice->id, $secondInvoice->id])
+            ->orderBy('id')
+            ->get();
+        $this->assertSame($paypalProviderKeys[0], $paypalTransactions[0]->metadata['provider_idempotency_key']);
+        $this->assertSame($paypalProviderKeys[1], $paypalTransactions[1]->metadata['provider_idempotency_key']);
+
+        $stripeTransactions = PaymentTransaction::query()
+            ->whereIn('invoice_id', [$stripeFirstInvoice->id, $stripeSecondInvoice->id])
+            ->orderBy('id')
+            ->get();
+        $this->assertSame($stripeProviderKeys[0], $stripeTransactions[0]->metadata['provider_idempotency_key']);
+        $this->assertSame($stripeProviderKeys[1], $stripeTransactions[1]->metadata['provider_idempotency_key']);
 
         $this->assertSame(4, DB::table('payment_transactions')->count());
     }
