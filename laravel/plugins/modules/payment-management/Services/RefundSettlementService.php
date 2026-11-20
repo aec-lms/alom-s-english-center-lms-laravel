@@ -139,7 +139,7 @@ class RefundSettlementService
         );
     }
 
-    private function assertRefundAmountAvailable(
+    public function assertRefundAmountAvailable(
         PaymentTransaction $transaction,
         float $amount,
         ?int $excludeRefundId = null,
