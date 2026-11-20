@@ -299,6 +299,112 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
         Http::assertSentCount(1);
     }
 
+    public function test_stripe_refund_rejects_a_different_local_refund_identity_without_ledger_mutation(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'gateway-stripe']);
+
+        app(PluginManager::class)->saveSettings('gateway-stripe', [
+            'secret_key' => 'sk_test_refund_identity_123456',
+            'refunds_enabled' => '1',
+        ], ['secret_key']);
+
+        [$invoice, $transaction] = $this->createSettledPayment('gateway-stripe', 'pi_refund_identity_001');
+        $requester = $this->createUserWithRole('admin');
+        $approver = $this->createUserWithRole('admin');
+        $service = app(RefundOrchestrationService::class);
+
+        Http::fake(function (ClientRequest $request) {
+            $data = $request->data();
+
+            return Http::response([
+                'id' => 're_refund_identity_mismatch',
+                'payment_intent' => 'pi_refund_identity_001',
+                'amount' => 10000,
+                'currency' => 'bdt',
+                'metadata' => [
+                    'transaction_ref' => 'SOME-OTHER-TRANSACTION',
+                    'refund_id' => $data['metadata[refund_id]'] ?? '',
+                ],
+                'status' => 'succeeded',
+            ], 200);
+        });
+
+        $refund = $service->requestOnlineRefund(
+            $transaction,
+            100,
+            'Stripe identity mismatch',
+            (int) $requester->id,
+            'stripe-refund-identity-mismatch',
+        );
+        $review = $service->approveAndSubmit($refund, (int) $approver->id);
+
+        $this->assertSame('requires_review', $review->status);
+        $this->assertSame('provider_response_mismatch', $review->provider_status);
+        $this->assertNull($review->ledger_applied_at);
+        $this->assertSame(1000.0, (float) $invoice->fresh()->paid_amount);
+        $this->assertSame('paid', $invoice->fresh()->status);
+        $this->assertSame('settled', $transaction->fresh()->status);
+        Http::assertSentCount(1);
+    }
+
+    public function test_paypal_refund_rejects_a_different_local_refund_identity_without_ledger_mutation(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'gateway-paypal']);
+
+        app(PluginManager::class)->saveSettings('gateway-paypal', [
+            'client_id' => 'paypal-refund-identity-client',
+            'client_secret' => 'paypal-refund-identity-secret',
+            'sandbox_mode' => '1',
+            'refunds_enabled' => '1',
+        ], ['client_secret']);
+
+        [$invoice, $transaction] = $this->createSettledPayment(
+            'gateway-paypal',
+            'CAPTURE-REFUND-IDENTITY-001',
+            ['paypal_order_id' => 'ORDER-REFUND-IDENTITY-001'],
+        );
+        $requester = $this->createUserWithRole('admin');
+        $approver = $this->createUserWithRole('admin');
+        $service = app(RefundOrchestrationService::class);
+
+        Http::fake(function (ClientRequest $request) {
+            if (str_ends_with((string) parse_url($request->url(), PHP_URL_PATH), '/v1/oauth2/token')) {
+                return Http::response(['access_token' => 'paypal-refund-identity-token'], 200);
+            }
+
+            return Http::response([
+                'id' => 'PAYPAL-REFUND-IDENTITY-MISMATCH',
+                'invoice_id' => 'REFUND-OTHER-TRANSACTION',
+                'custom_id' => 'refund-999999',
+                'status' => 'COMPLETED',
+                'amount' => ['value' => '100.00', 'currency_code' => 'BDT'],
+                'links' => [[
+                    'rel' => 'up',
+                    'href' => 'https://api-m.sandbox.paypal.com/v2/payments/captures/CAPTURE-REFUND-IDENTITY-001',
+                ]],
+            ], 201);
+        });
+
+        $refund = $service->requestOnlineRefund(
+            $transaction,
+            100,
+            'PayPal identity mismatch',
+            (int) $requester->id,
+            'paypal-refund-identity-mismatch',
+        );
+        $review = $service->approveAndSubmit($refund, (int) $approver->id);
+
+        $this->assertSame('requires_review', $review->status);
+        $this->assertSame('provider_response_mismatch', $review->provider_status);
+        $this->assertNull($review->ledger_applied_at);
+        $this->assertSame(1000.0, (float) $invoice->fresh()->paid_amount);
+        $this->assertSame('paid', $invoice->fresh()->status);
+        $this->assertSame('settled', $transaction->fresh()->status);
+        Http::assertSentCount(2);
+    }
+
     public function test_online_refunds_are_disabled_by_default(): void
     {
         $this->markSystemInstalled();
