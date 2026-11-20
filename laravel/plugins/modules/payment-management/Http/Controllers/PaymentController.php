@@ -193,6 +193,7 @@ class PaymentController extends Controller
 
         $orders = DB::table('commerce_orders')
             ->where('invoice_id', $invoice->id)
+            ->orderBy('id')
             ->lockForUpdate()
             ->get();
         if ($orders->isEmpty()) {
@@ -203,6 +204,96 @@ class PaymentController extends Controller
             ->where('invoice_id', $invoice->id)
             ->pluck('id');
 
+        // Lock all commerce items, then every affected Exam row in ascending
+        // order before touching User, Student, or Learn & Earn access rows.
+        $itemsByOrder = DB::table('commerce_order_items')
+            ->whereIn('order_id', $orders->pluck('id')->all())
+            ->orderBy('item_id')
+            ->orderBy('order_id')
+            ->lockForUpdate()
+            ->get()
+            ->groupBy('order_id');
+        $mockTestItems = $itemsByOrder
+            ->flatten(1)
+            ->filter(static fn ($item): bool => $item->item_type === 'mock_test' && !empty($item->item_id))
+            ->values();
+
+        $lockedExams = collect();
+        $lockedUsers = collect();
+        $lockedProfiles = collect();
+
+        if ($mockTestItems->isNotEmpty()
+            && Schema::hasTable('learn_earn_exam_access')
+            && Schema::hasColumn('learn_earn_exam_access', 'payment_reference')) {
+            $examIds = $mockTestItems->pluck('item_id')
+                ->map(static fn ($id): int => (int) $id)
+                ->filter(static fn (int $id): bool => $id > 0)
+                ->unique()
+                ->sort()
+                ->values()
+                ->all();
+
+            $lockedExams = DB::table('exams')
+                ->whereIn('id', $examIds)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
+
+            $ordersById = $orders->keyBy('id');
+            $userIds = $mockTestItems
+                ->map(static fn ($item): int => (int) ($ordersById->get((int) $item->order_id)->user_id ?? 0))
+                ->filter(static fn (int $id): bool => $id > 0)
+                ->unique()
+                ->sort()
+                ->values()
+                ->all();
+
+            $lockedUsers = DB::table('users')
+                ->whereIn('id', $userIds)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
+
+            if (app(PluginManager::class)->isEnabled('student-management')
+                && Schema::hasTable('students')
+                && Schema::hasColumn('students', 'branch_id')) {
+                $profileQuery = DB::table('students')->whereIn('user_id', $userIds);
+                if (Schema::hasColumn('students', 'deleted_at')) {
+                    $profileQuery->whereNull('deleted_at');
+                }
+                $lockedProfiles = $profileQuery
+                    ->orderBy('user_id')
+                    ->lockForUpdate()
+                    ->get()
+                    ->keyBy('user_id');
+            }
+
+            // Entitlement rows are always last in the exam -> user -> profile
+            // -> access order used by exam start/autosave/submit.
+            foreach ($mockTestItems as $item) {
+                $order = $ordersById->get((int) $item->order_id);
+                if (!$order) {
+                    continue;
+                }
+
+                $lockedAccess = DB::table('learn_earn_exam_access')
+                    ->where('exam_id', (int) $item->item_id)
+                    ->where('user_id', (int) $order->user_id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($lockedAccess
+                    && $lockedAccess->status === 'granted'
+                    && (string) ($lockedAccess->payment_reference ?? '') === (string) $order->order_number) {
+                    DB::table('learn_earn_exam_access')
+                        ->where('id', $lockedAccess->id)
+                        ->update(['status' => 'revoked', 'updated_at' => now()]);
+                }
+            }
+        }
+
         foreach ($orders as $order) {
             DB::table('commerce_orders')->where('id', $order->id)->update([
                 'status' => $newPaid <= 0.01 ? 'refunded' : 'partially_refunded',
@@ -210,7 +301,7 @@ class PaymentController extends Controller
                 'updated_at' => now(),
             ]);
 
-            $items = DB::table('commerce_order_items')->where('order_id', $order->id)->get();
+            $items = $itemsByOrder->get($order->id, collect());
             $itemIds = $items->pluck('id');
             if (Schema::hasTable('commerce_entitlements') && $itemIds->isNotEmpty()) {
                 DB::table('commerce_entitlements')
@@ -221,17 +312,6 @@ class PaymentController extends Controller
             }
 
             foreach ($items as $item) {
-                if ($item->item_type === 'mock_test' && $item->item_id
-                    && Schema::hasTable('learn_earn_exam_access')
-                    && Schema::hasColumn('learn_earn_exam_access', 'payment_reference')) {
-                    DB::table('learn_earn_exam_access')
-                        ->where('exam_id', $item->item_id)
-                        ->where('user_id', $order->user_id)
-                        ->where('payment_reference', $order->order_number)
-                        ->where('status', 'granted')
-                        ->update(['status' => 'revoked', 'updated_at' => now()]);
-                }
-
                 if ($item->item_type === 'ebook' && $item->item_id
                     && $paymentIds->isNotEmpty()
                     && Schema::hasTable('storefront_item_access')
