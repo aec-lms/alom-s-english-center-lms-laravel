@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\ExamManagement\\Providers;
+namespace Plugins\Modules\ExamManagement\Providers;
 
-use App\\Core\\Plugins\\BasePluginServiceProvider;
-use Illuminate\\Cache\\RateLimiting\\Limit;
-use Illuminate\\Http\\Request;
-use Illuminate\\Support\\Facades\\RateLimiter;
+use App\Core\Plugins\BasePluginServiceProvider;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 
 class ExamManagementServiceProvider extends BasePluginServiceProvider
 {
