@@ -33,20 +33,9 @@ return new class extends Migration {
 
     public function down(): void
     {
-        if (!Schema::hasTable('courses') || !Schema::hasColumn('courses', 'deleted_at')) {
-            return;
-        }
-
-        Schema::table('courses', function (Blueprint $table): void {
-            $table->dropSoftDeletes();
-        });
-
-        foreach (['course_categories', 'live_classes'] as $tableName) {
-            if (Schema::hasTable($tableName) && Schema::hasColumn($tableName, 'deleted_at')) {
-                Schema::table($tableName, function (Blueprint $table): void {
-                    $table->dropSoftDeletes();
-                });
-            }
-        }
+        // Intentionally retain additive recycle-bin columns during rollback.
+        // These columns may predate this migration on customized installations,
+        // and may contain deletion history created after the migration ran.
+        // Dropping them would risk destroying host-owned schema or recovery data.
     }
 };
