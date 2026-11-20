@@ -22,6 +22,13 @@ final class CourseAssessmentGradingBranchIsolationTest extends TestCase
             'role_id' => $roleId,
             'permission_id' => $permissionId,
         ]);
+        $branchManagerRoleId = DB::table('roles')->where('slug', 'branch_manager')->value('id');
+        if ($branchManagerRoleId) {
+            DB::table('permission_role')->insertOrIgnore([
+                'role_id' => $branchManagerRoleId,
+                'permission_id' => $permissionId,
+            ]);
+        }
     }
 
     private function createBranch(string $suffix): int
@@ -372,6 +379,34 @@ final class CourseAssessmentGradingBranchIsolationTest extends TestCase
         } finally {
             DB::purge($secondaryName);
         }
+    }
+
+    public function test_branch_manager_queue_excludes_course_linked_assessment_with_conflicting_course_branch(): void
+    {
+        $this->setupAssessmentPlugins();
+        $branchA = $this->createBranch('MANAGER-A');
+        $branchB = $this->createBranch('MANAGER-B');
+        $manager = $this->createUserWithRole('branch_manager', $branchA);
+
+        $courseA = $this->createCourse($branchA);
+        $courseB = $this->createCourse($branchB);
+        $visibleAttempt = $this->createPendingAttempt($courseA, $branchA, 'Branch A Queue Assessment');
+        $hiddenAttempt = $this->createPendingAttempt($courseB, $branchA, 'Conflicting Branch Course Assessment');
+
+        $this->actingAs($manager)
+            ->get(route('plugins.course-assessments.grading.index'))
+            ->assertOk()
+            ->assertSee('Branch A Queue Assessment')
+            ->assertDontSee('Conflicting Branch Course Assessment');
+
+        $this->assertDatabaseHas('course_assessment_attempts', [
+            'id' => $visibleAttempt,
+            'status' => 'pending_review',
+        ]);
+        $this->assertDatabaseHas('course_assessment_attempts', [
+            'id' => $hiddenAttempt,
+            'status' => 'pending_review',
+        ]);
     }
 
     public function test_same_branch_teacher_can_grade_but_unassigned_teacher_is_denied(): void
