@@ -25,7 +25,9 @@ class AssessmentGradingController extends Controller
         $this->ensureBranchAccess($actor);
         $attempts = AssessmentAttempt::query()->with(['questions', 'assessmentSet'])
             ->whereIn('status', ['pending_review', 'graded'])
-            ->when($actor->hasRole('branch_manager'), fn ($q) => $q->whereHas('assessmentSet', fn ($s) => $s->where('branch_id', (int) $actor->branch_id)))
+            ->when($actor->hasRole('branch_manager'), function ($q) use ($actor): void {
+                $this->applyBranchManagerAssessmentScope($q, $actor);
+            })
             ->when($actor->hasRole('teacher'), function ($q) use ($actor): void {
                 $this->applyTeacherAssessmentScope($q, $actor);
             })
@@ -56,6 +58,9 @@ class AssessmentGradingController extends Controller
             $locked = AssessmentAttempt::query()->whereKey($attempt->id)->lockForUpdate()->firstOrFail();
             abort_unless(in_array($locked->status, ['pending_review', 'graded'], true), 409, 'Attempt is not awaiting manual grading.');
             $set = AssessmentSet::query()->whereKey($locked->assessment_set_id)->lockForUpdate()->firstOrFail();
+            if ($set->course_id !== null) {
+                abort_unless(Schema::hasTable('courses'), 403, 'Course branch scope cannot be verified.');
+            }
             $course = $set->course_id !== null
                 ? DB::table('courses')->where('id', $set->course_id)->lockForUpdate()->first()
                 : null;
@@ -121,6 +126,49 @@ class AssessmentGradingController extends Controller
         });
     }
 
+    private function applyBranchManagerAssessmentScope($query, User $manager): void
+    {
+        abort_unless(
+            Schema::hasColumn('course_assessment_sets', 'branch_id'),
+            403,
+            'Assessment branch scope cannot be verified.'
+        );
+
+        $branchId = (int) $manager->branch_id;
+        $query->whereIn('assessment_set_id', function ($sets) use ($branchId): void {
+            $sets->select('sets.id')
+                ->from('course_assessment_sets as sets')
+                ->where(function ($scope) use ($branchId): void {
+                    $scope->where('sets.branch_id', $branchId)
+                        ->orWhere(function ($inherited) use ($branchId): void {
+                            $inherited->whereNull('sets.branch_id')
+                                ->whereExists(function ($course) use ($branchId): void {
+                                    $course->selectRaw('1')
+                                        ->from('courses')
+                                        ->whereColumn('courses.id', 'sets.course_id')
+                                        ->where('courses.branch_id', $branchId);
+                                });
+                        });
+                })
+                ->where(function ($scope): void {
+                    $scope->whereNull('sets.course_id')
+                        ->orWhereExists(function ($course): void {
+                            $course->selectRaw('1')
+                                ->from('courses')
+                                ->whereColumn('courses.id', 'sets.course_id')
+                                ->whereColumn('courses.branch_id', 'sets.branch_id');
+                        })
+                        ->orWhereExists(function ($course) use ($branchId): void {
+                            $course->selectRaw('1')
+                                ->from('courses')
+                                ->whereColumn('courses.id', 'sets.course_id')
+                                ->where('courses.branch_id', $branchId)
+                                ->whereNull('sets.branch_id');
+                        });
+                });
+        });
+    }
+
     private function authorizeGrading(User $reviewer, AssessmentSet $set, ?object $course): void
     {
         if ($set->course_id !== null) {
@@ -138,8 +186,10 @@ class AssessmentGradingController extends Controller
 
         if ($reviewer->hasRole('branch_manager')) {
             $this->ensureBranchAccess($reviewer);
+            $effectiveBranchId = $set->branch_id ?? $course?->branch_id;
             abort_unless(
-                (int) $set->branch_id === (int) $reviewer->branch_id
+                $effectiveBranchId !== null
+                    && (int) $effectiveBranchId === (int) $reviewer->branch_id
                     && ($course === null || (int) $course->branch_id === (int) $reviewer->branch_id),
                 403,
                 'Branch isolation violation.'
@@ -170,12 +220,12 @@ class AssessmentGradingController extends Controller
         }
 
         abort_unless($set->course_id !== null && Schema::hasTable('course_teacher_assignments'), 403);
-        $assigned = DB::table('course_teacher_assignments')
+        $assignment = DB::table('course_teacher_assignments')
             ->where('course_id', $set->course_id)
             ->where('teacher_user_id', $reviewer->id)
             ->lockForUpdate()
-            ->exists();
-        abort_unless($assigned, 403, 'You are not assigned to this course.');
+            ->first();
+        abort_unless($assignment, 403, 'You are not assigned to this course.');
     }
 
     private function ensureBranchAccess($actor): void
