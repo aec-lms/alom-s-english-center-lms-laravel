@@ -403,6 +403,43 @@ final class ReferralIncomeRedTeamHardeningTest extends TestCase
             'currency' => 'BDT',
         ]);
         $this->assertNull($service->recordSettledPurchase($buyer, 'course_cart_order', $orderId, 999, 'BDT'));
+
+        $admin = $this->createUserWithRole('admin');
+        $roleId = DB::table('roles')->where('slug', 'admin')->value('id');
+        $permissionId = DB::table('permissions')->where('slug', 'referral_income.manage')->value('id');
+        DB::table('permission_role')->insertOrIgnore(['role_id' => $roleId, 'permission_id' => $permissionId]);
+
+        $this->actingAs($admin)->get('/admin/referral-income')
+            ->assertOk()
+            ->assertSee('Approval held until verified Universal Payment refund support is available.')
+            ->assertDontSee('value="approved"');
+
+        $this->actingAs($admin)->post('/admin/referral-income/commissions/' . $commissionId . '/review', [
+            'status' => 'approved',
+        ])->assertStatus(409);
+        $this->assertDatabaseHas('referral_commissions', ['id' => $commissionId, 'status' => 'pending']);
+
+        $payoutId = DB::table('referral_payout_requests')->insertGetId([
+            'user_id' => $referrer->id,
+            'owner_type' => 'student',
+            'amount' => 50,
+            'currency' => 'BDT',
+            'method' => 'bkash',
+            'account_details_encrypted' => Crypt::encryptString('01700000000'),
+            'status' => 'pending',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('referral_commissions')->where('id', $commissionId)->update([
+            'status' => 'payout_requested',
+            'payout_request_id' => $payoutId,
+            'updated_at' => now(),
+        ]);
+        $this->actingAs($admin)->post('/admin/referral-income/payouts/' . $payoutId . '/review', [
+            'status' => 'approved',
+            'admin_note' => 'Attempted payout before refund adapter.',
+        ])->assertStatus(422);
+        $this->assertDatabaseHas('referral_payout_requests', ['id' => $payoutId, 'status' => 'pending']);
     }
 
 
