@@ -72,6 +72,23 @@ Shared lifecycle/security regressions are also covered by \`PluginLifecycleTest\
 | universal-payment | \`UniversalPaymentProofTest\`, \`FinanceAndPaymentGatewayTest\`, \`PluginCriticalRegressionTest\` |
 | visitor-popup-ads | \`VisitorPopupSecurityTest\`, \`PluginCriticalRegressionTest\` |
 
+## Additional 16 current-main plugins (2026-11-20)\n\nThe following rows close the missing-slug gap identified in issue #300. They document existing named tests and their limited scope; they do not certify complete acceptance.\n\n| al-branding-loader | `AlBrandingLoaderProductionHardeningTest`, `AlomBrandingLoaderPhoneticsPluginTest` (loader-specific cases) | Partial: navigation loader timeout, route exclusions, safe logo paths, settings and plugin independence |
+| assignment-management | `AssignmentManagementPluginTest` | Targeted: standalone install, submit/grade, enrollment, branch isolation, private attachments and mobile API |
+| board-question-solver | `BoardQuestionSolverPluginTest` | Targeted: private history, in-memory image handling, daily limits, disabled-provider behavior and admin controls |
+| commerce-cart | `UnifiedCommerceCartTest`, `CourseGiftCommerceTest`, `CourseCommercePaymentSettlementTest` | Targeted: cart ownership, branch checks, gift/voucher redemption and settlement; cross-gateway concurrency/refund gates remain open |
+| course-assessments | `CourseAssessmentsPluginTest`, `CourseAssessmentsMobileApiTest` | Targeted: standalone sets, immutable question snapshots, student autosave/grading, branch checks and mobile API; teacher branch and current-role gaps tracked separately |
+| course-bundles | `CourseBundlesPluginTest` | Targeted: standalone install, free/paid bundle purchase, branch visibility, invoice snapshot and archive history |
+| course-content-studio | `CourseContentStudioPluginTest` | Targeted: standalone content, safe media, lesson progress, enrollment protection and private files |
+| course-wishlist | `CourseWishlistPluginTest` | Targeted: student ownership, unpublished/branch restrictions, standalone install and mobile API |
+| expense-management | `ExpenseManagementPluginTest`, `ExpenseFinanceReportTest` | Targeted: standalone expense, private receipts, approved totals, branch isolation and finance reports |
+| guardian-portal | `GuardianPortalPluginTest` | Targeted: standalone install, verified child links, read-only summaries and cross-branch denial |
+| phonetics | `AlomBrandingLoaderPhoneticsPluginTest` | Targeted: enrollment and branch gates, server-side grading, safe media, independent lifecycle and fail-closed host mappings; recording review race remains separately tracked |
+| push-notifications | `PushNotificationDeliveryTest`, `MobilePushTokenLifecycleTest` | Targeted: FCM HTTP v1 delivery, retry idempotency, invalid-device deactivation, token registration and logout revocation |
+| question-bank | `QuestionBankPluginTest`, `LearnAndEarnQuestionBankTest` | Targeted: independent categories/types, immutable paper snapshots, soft deletion and random paper constraints |
+| quiz-contest | `QuizContestPluginTest` | Targeted: standalone contest, one submission, answer-key privacy, branch isolation, ranking and lifecycle locking |
+| referral-income | `ReferralIncomePluginTest`, `ReferralIncomeCommerceSettlementTest` | Targeted: attribution/commission idempotency, partial refund reversals, payout controls and branch isolation; first-paid-order race remains open |
+| support-center | `SupportCenterPluginTest` | Targeted: standalone install, ticket ownership, student replies, closed-ticket protection and admin workflow |
+
 ## Verification boundaries
 
 - Automated tests exercise application behavior and simulated/stubbed provider contracts. They do **not** prove that live bKash/Nagad/card/PayPal/Stripe/SSLCommerz, SMTP, SMS, Google, Meta, or other third-party accounts are approved, configured, reachable, or able to settle/send real transactions. Those require the owner's credentials and each provider's sandbox/live acceptance.
