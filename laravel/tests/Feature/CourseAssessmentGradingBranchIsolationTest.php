@@ -364,7 +364,7 @@ final class CourseAssessmentGradingBranchIsolationTest extends TestCase
                 'manual_feedback' => 'Graded before reassignment.',
                 'graded_by' => $teacher->id,
             ]);
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             if ($primary->transactionLevel() > 0) {
                 $primary->rollBack();
             }
