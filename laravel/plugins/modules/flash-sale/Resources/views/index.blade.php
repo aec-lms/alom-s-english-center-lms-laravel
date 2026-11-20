@@ -116,6 +116,10 @@
   box-shadow:0 28px 90px rgba(15,23,42,.32);
 }
 .flash-studio .fs-edit-details[open]>form .row{row-gap:.9rem}
+.flash-studio .fs-edit-modal-bar{
+  display:flex;align-items:center;justify-content:space-between;gap:1rem;
+  padding-bottom:.85rem;margin-bottom:1rem;border-bottom:1px solid var(--fs-line);
+}
 .flash-studio details>summary{display:inline-flex;align-items:center;justify-content:center}
 .flash-studio details[open]>summary{margin-bottom:.5rem}
 .flash-studio .fs-card details form{background:#f8fafc}
@@ -212,6 +216,10 @@
                             <details class="text-start fs-edit-details">
                                 <summary class="btn btn-sm btn-outline-primary">Edit campaign</summary>
                                 <form class="border rounded-3 p-3 mt-2 bg-light" role="dialog" aria-modal="true" aria-label="Edit campaign {{ $sale->title }}" method="post" action="{{ url('/admin/flash-sales/'.$sale->id) }}">@csrf @method('PUT')
+                                    <div class="fs-edit-modal-bar">
+                                        <strong>Edit campaign</strong>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" aria-label="Close editor" onclick="this.closest('details').querySelector('summary').click()">Close editor</button>
+                                    </div>
                                     <div class="row g-2">
                                         <div class="col-12"><label class="form-label" for="edit-title-{{ $sale->id }}">Campaign name</label><input id="edit-title-{{ $sale->id }}" class="form-control" name="title" value="{{ $sale->title }}" required maxlength="160"></div>
                                         <div class="col-12"><label class="form-label" for="edit-course-{{ $sale->id }}">Course</label><select id="edit-course-{{ $sale->id }}" class="form-select" name="course_id" required>@foreach($courses as $course)<option value="{{ $course->id }}" @selected((int)$course->id === (int)$sale->course_id)>{{ $course->title }}</option>@endforeach</select></div>
