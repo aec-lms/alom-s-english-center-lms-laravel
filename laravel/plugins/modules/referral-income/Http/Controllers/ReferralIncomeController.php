@@ -161,6 +161,11 @@ class ReferralIncomeController extends Controller
             $this->assertAuditAvailable();
             $record = DB::table('referral_commissions')->where('id', $commission)->lockForUpdate()->first();
             abort_unless($record !== null && $record->status === 'pending', 422, 'Only pending commissions can be reviewed.');
+            abort_unless(
+                $data['status'] !== 'approved' || $record->source_type !== 'course_cart_order',
+                409,
+                'Course-cart commissions cannot be approved until a verified Universal Payment refund adapter is available.'
+            );
 
             DB::table('referral_commissions')->where('id', $commission)->update([
                 'status' => $data['status'],
@@ -227,7 +232,11 @@ class ReferralIncomeController extends Controller
 
             $commissions = DB::table('referral_commissions')
                 ->where('payout_request_id', $payout)
-                ->lockForUpdate()->get(['id']);
+                ->lockForUpdate()->get(['id', 'source_type']);
+            if (in_array($data['status'], ['approved', 'paid'], true)
+                && $commissions->contains(fn ($commission): bool => $commission->source_type === 'course_cart_order')) {
+                abort(422, 'This payout contains course-cart commissions awaiting a verified Universal Payment refund adapter.');
+            }
             if (in_array($data['status'], ['approved', 'paid'], true)
                 && Schema::hasTable('referral_commission_reversals')
                 && DB::table('referral_commission_reversals')
