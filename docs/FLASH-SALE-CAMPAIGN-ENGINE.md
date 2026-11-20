@@ -57,6 +57,19 @@ Before release, run:
 - Package build/install verification.
 - Responsive and accessibility checks for public storefront and admin editor.
 
+## Responsive and keyboard accessibility evidence
+
+The Flash Sale Playwright suite captures and checks the public storefront and Admin Studio at these CSS viewport sizes:
+
+| Surface | Desktop | Tablet | Mobile |
+|---|---:|---:|---:|
+| Public storefront | 1440 × 1000 | 768 × 1024 | 375 × 812 |
+| Admin Studio | 1440 × 1100 | 768 × 1024 | 375 × 812 |
+
+The browser checks assert the public offer grid uses three, two and one columns respectively; the Admin Studio metrics use four, two and one columns; and neither surface creates horizontal document overflow at the tested widths. The E2E run saves desktop/tablet/mobile PNG evidence under `laravel/test-results/` and uploads it as the `aec-lms-browser-e2e-report` workflow artifact.
+
+Keyboard checks move from the offer-terms disclosure to the public course CTA and assert visible `:focus-visible` styling. Admin checks Tab navigation from the campaign-name control to the course control in both create and edit forms, assert visible keyboard focus, verify accessible labels for the campaign fields and status controls, and verify the edit dialog exposes a labelled Close editor action. These are automated browser checks; they do not replace a human screen-reader audit.
+
 ## Explicit limitations
 
 This release does not implement redemption quotas, per-student caps, automated recurring schedules, A/B testing, impression/conversion analytics, gift pricing, or unified cart Flash Sale pricing. Those require separate scoped work, atomic reservation/release handling where relevant, and payment/refund reconciliation.
