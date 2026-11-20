@@ -71,3 +71,21 @@ This is a point-in-time snapshot, not a merge approval. The workflow names below
 ## Audit limitation
 
 This tracker records the repository-visible open issue set and known findings. It does not replace a full source audit of every controller, route, API, migration, plugin manifest, export, background job or provider callback. New findings discovered during those reviews must be added with reproducible evidence and a non-overlapping owner.
+
+## Maintainer addendum — current coordinated PR state (2026-11-20)
+
+The historical snapshot above is retained for audit history. The following is the newer exact-head view and supersedes older rows for these workstreams. Recheck before any merge because CI and branch heads can move.
+
+| PR / issue | Current exact head | State | Current gate / ownership |
+|---|---|---|---|
+| #311 / #308 Exam attempt snapshots | 2247159a16880b611d1f6e41828867252cf82096 | Open, Draft; latest formal review approves this SHA | Laravel SQLite + MySQL 8, Browser E2E and Composer Audit pass. Older CHANGES_REQUESTED reviews need reviewer reconciliation on this exact head; migration rollback is intentionally non-destructive/forward-only and needs explicit independent-review acknowledgement. Shared Browser E2E workflow is coordinated with #334. |
+| #312 / #309 Live Class entitlement | 428e764f8cc240e7cd9c929dac280566f351fa5c | Open, Draft | CI was green on this head, but independent review requests fail-closed rejection when locked account and active Student-profile branch IDs conflict, with both-direction join/heartbeat regressions. Branch owner: mdlalchandakand-cell; do not duplicate edits without handoff. |
+| #332 Referral commission payment proof | 448eb973e9aa9909f43d57ec3239d1d3e3f2d008 | Open, Draft | CI was green on this head, but review requires locking/re-reading the linked verified payment transaction and exact invoice/buyer/order/currency/gateway-payable amount binding (including wallet-credit accounting), plus negative and replay regressions. Branch owner: mdlalchandakand-cell; coordinate rather than duplicate. |
+| #334 / #335 Flash Sale campaign engine | 520ef902ac0f8e7359c3ab50408f9d7f045bbb92 | Open, Draft | Current source/spec correct the false modal semantics: native non-modal disclosure, labelled form, no dialog/aria-modal, keyboard close and focus return. Composer Audit passed; Laravel SQLite/MySQL and Browser E2E were still running at snapshot time. Human NVDA/Firefox or NVDA/Chrome screen-reader smoke test and fresh independent review remain mandatory. Direct-enrollment/Unified Commerce quote integration is separate issue #335; no discounted checkout claim. |
+| #338 / #313 Lesson media authorization | e79f97d7fa6df8dd43652b2ccbb47e98e7fbf1c0 | Open, Draft; approved on exact SHA | Laravel SQLite + MySQL 8, Browser E2E and Composer Audit pass. Author/maintainer still needs to complete ready/merge and ownership-register gates. |
+| #342 / #303 Provider-confirmed online refunds | 8369178648948bdac445086a595cbec3af82a6ea | Open, Draft | Browser E2E passed; Laravel and Composer Audit were still running/pending at snapshot time. PayPal multi-capture is explicitly rejected pending capture-level ledger design. Provider refunds remain Disabled by default; merchant sandbox and independent finance/security review are external gates. |
+
+**Coordination:** #311 and #334 share .github/workflows/browser-e2e.yml; Alomsenglishcenter is the single integration owner and both PRs must retain compatible optional fixture seeding. Do not merge one and assume the combined post-merge Browser E2E is proven; run the combined workflow on main after both are integrated.
+
+**Merge discipline:** a green workflow is necessary, not sufficient. Keep Draft while a current-head Request Changes, missing human acceptance evidence, missing independent approval, stale ownership state or external financial/provider gate remains. Never dismiss another reviewer's request on their behalf.
+
