@@ -37,6 +37,12 @@ class CourseCommercePaymentSettlementService
                 throw new RuntimeException('Course commerce payment is not linked to a valid student and gateway.');
             }
 
+            // Use the same buyer-row serialization key as referral-code
+            // attribution. Acquire it before locking or mutating course-cart,
+            // gift or voucher orders so a referral cannot be applied after the
+            // buyer's first paid commerce settlement has committed.
+            User::query()->whereKey((int) $locked->user_id)->lockForUpdate()->firstOrFail();
+
             $notes = json_decode((string) $locked->notes, true);
             if (!is_array($notes)) {
                 throw new RuntimeException('Course commerce payment context is missing.');
