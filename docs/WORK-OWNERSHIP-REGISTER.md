@@ -163,3 +163,40 @@ Before recommending merge, the primary owner must verify and record all of the f
 6. PR body, tests, docs and this register accurately reflect the final scope, owner, dependencies and verification evidence.
 
 **Notification flow:** when all gates pass, the primary owner posts a concise completion note on the PR with exact head SHA, CI links/results, independent reviewer, screenshots/evidence and any accepted non-blocking follow-ups; then notifies the project owner that the PR is ready to merge. The project owner/authorized maintainer performs or explicitly authorizes the merge using repository policy (required approvals, branch protection and merge queue if enabled). If any gate is unmet, keep the PR Draft/open and report the specific blocker—never claim complete or recommend merge.
+
+
+---
+
+## 2026-11-20 current-mainline pull-request reconciliation
+
+**Checkpoint main:** `0f3aad9cc469d1abff7fcb7efcd6610ba3fbfc30` (merged commit for PR #331).  
+**Purpose:** supersede stale PR/head observations above. All statuses below are point-in-time observations and must be refreshed against the exact SHA before merge.
+
+### Canonical PRs and supersession
+
+| Workstream | Canonical candidate | Legacy / duplicate PR | Current exact-head status and remaining gate |
+|---|---|---|---|
+| Course Assessment student role/account authorization | [#346](../pull/346), owner `Alomsenglishcenter`; branch `security/course-assessment-student-role-mainline` | [#318](../pull/318), 461 commits behind main | #346 is 2 ahead / 0 behind current main and changes only `StudentAssessmentController.php` plus its focused authorization test. Browser E2E and Composer Audit passed at the last check; Laravel SQLite/MySQL still running. Three MySQL-only two-session tests cover mutation-first, role-revocation-first and account-deactivation-first. Fresh CI and independent review required. Do not merge legacy #318 and #346 together. |
+| Flash Sale premium campaign engine | [#347](../pull/347), owner `Alomsenglishcenter`; branch `feat/flash-sale-premium-campaign-mainline-v2` | [#334](../pull/334), 18 commits behind current main | #347 is 12 ahead / 0 behind; all 12 paths are bounded Flash Sale module/docs/E2E files and the shared Browser E2E workflow retains both optional Exam and Flash Sale seeders. Browser E2E and Composer Audit passed at last check; Laravel SQLite/MySQL are still running. Requires fresh independent review, human NVDA/Firefox or NVDA/Chrome smoke test, and repository ruleset enablement. Shared direct-enrollment/Unified Commerce pricing remains separately owned under #335/#275. Do not merge #334 and #347 together. |
+| Red-Team open-issue inventory | [#349](../pull/349), owner `Alomsenglishcenter`; branch `docs/red-team-open-issues-mainline` | [#315](../pull/315), 461 commits behind main | #349 is 1 ahead / 0 behind and adds one documentation file. Browser E2E and Composer Audit passed at last check; Laravel job is still running. The inventory does not implement or close its findings. Fresh independent review required. Do not merge #315 and #349 together. |
+| 60-plugin acceptance matrix | [#350](../pull/350), owner `Alomsenglishcenter`; branch `docs/plugin-acceptance-matrix-60-mainline` | [#320](../pull/320), 461 commits behind main | #350 is 2 ahead / 0 behind and changes only the two matrix documents. The corrected snapshot table has 60 unique plugin slugs and 636 Git blob files; directory tree objects are excluded. Browser E2E and Composer Audit passed at last check; Laravel job is still running. This is inventory/evidence documentation, not functional certification. Fresh independent review required. Do not merge #320 and #350 together. |
+| Exam Management immutable attempt snapshot / eligibility | [#343](../pull/343), owner `mdlalchandakand-cell`; branch `security/exam-attempt-snapshot-mainline` | [#311](../pull/311), 461 commits behind main | #343 is 6 ahead / 18 behind current main. Current source rechecks locked User active state and Student role pivot, but reviewer still requires deterministic MySQL two-session account-deactivation and Student-role-revocation races after authentication. Laravel MySQL is still running; fresh review on current SHA and current-main synchronization remain pending. #311 is superseded; do not merge both. |
+| Invoice-wide gateway payment-session reservations | [#341](../pull/341), owner `mdlalchandakand-cell`; branch `security/invoice-payment-session-reservation-mainline` | [#326](../pull/326), 461 commits behind main | #341 is 1 ahead / 18 behind current main. Its recorded SQLite/MySQL/Browser/Security workflows passed, but it has no fresh independent formal approval on this candidate SHA and requires current-main synchronization plus new exact-head CI. #326 is superseded; do not merge both. |
+
+### Legacy Flash Sale integration boundary
+
+- [#335](../issues/335) remains the separate direct-enrollment, legacy-cart and Unified Commerce quote integration workstream. #334/#347 do not edit #275-owned shared commerce files and do not claim discounted checkout integration.
+- The #334 prior head `5d524e2228b714bfbcced0994b616f84d967ea10` passed SQLite **740/7,387**, MySQL 8 **742/7,413**, Browser E2E **6/6**, Composer Security Audit, PHP lint/metadata/Blade/backup checks and 6,764-file cPanel package verification. These are historical results for #334's old base, not evidence for new #347.
+
+### Repository branch-protection blocker
+
+GitHub repository ruleset **LMS** (ID `27607063`) was rechecked on 2026-11-20:
+- `enforcement: disabled`
+- `required_approving_review_count: 0`
+- `required_status_checks: []`
+
+Therefore review/CI are not currently enforced by this ruleset. An authorized repository administrator must enable the ruleset and configure the intended approval and required CI checks before any PR is treated as merge-ready. This integration cannot change the ruleset; a 403 was previously returned for branch-protection administration. No PR should be merged by bypassing this gate.
+
+### PR #331 reconciliation
+
+PR #331 was merged into main as commit `0f3aad9cc469d1abff7fcb7efcd6610ba3fbfc30` on 2026-11-20. This current-main addendum replaces the earlier point-in-time status entries above; no historical CI/review result is carried forward to a different head.
