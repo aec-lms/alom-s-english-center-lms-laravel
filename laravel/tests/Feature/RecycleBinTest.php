@@ -46,7 +46,7 @@ class RecycleBinTest extends TestCase
             ->assertRedirect()
             ->assertSessionHasNoErrors();
 
-        $this->assertDatabaseHas('students', ['id' => $student->id, 'deleted_at' => null]);
+        $this->assertDatabaseHas('students', ['id' => $student->id, 'deleted_at' => null, 'deleted_user_was_active' => true]);
         $this->assertDatabaseHas('users', ['id' => $learner->id, 'is_active' => false]);
 
         $permanentLearner = $this->createUserWithRole('student');
@@ -96,7 +96,7 @@ class RecycleBinTest extends TestCase
             ->assertSessionHasNoErrors()
             ->assertSessionHas('status', 'Instructor profile restored. Account access remains disabled; an administrator must explicitly reactivate it after a fresh security check.');
 
-        $this->assertDatabaseHas('teachers', ['id' => $teacher->id, 'deleted_at' => null]);
+        $this->assertDatabaseHas('teachers', ['id' => $teacher->id, 'deleted_at' => null, 'deleted_user_was_active' => true]);
         $this->assertDatabaseHas('users', ['id' => $instructor->id, 'is_active' => false]);
         $this->assertDatabaseHas('audit_logs', [
             'action' => 'recycle_bin.teacher_restored',
