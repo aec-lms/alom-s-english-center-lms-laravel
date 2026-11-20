@@ -343,4 +343,68 @@ final class ReferralIncomeRedTeamHardeningTest extends TestCase
     }
 
 
+    public function test_course_cart_order_commission_uses_paid_invoice_and_order_snapshot(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['referral-income', 'student-management', 'course-management', 'fees-management']);
+
+        $referrer = $this->createUserWithRole('student');
+        $buyer = $this->createUserWithRole('student');
+        $service = app(ReferralIncomeService::class);
+        $service->applyCode($buyer, $service->createOrGetCode($referrer));
+
+        $invoice = FeeInvoice::query()->create([
+            'invoice_number' => 'REF-COURSE-CART-' . strtoupper(bin2hex(random_bytes(4))),
+            'payer_name' => $buyer->name,
+            'payer_email' => $buyer->email,
+            'payer_phone' => '01700000000',
+            'subtotal_amount' => 1200,
+            'discount_amount' => 200,
+            'net_amount' => 1000,
+            'paid_amount' => 1000,
+            'currency' => 'BDT',
+            'status' => 'paid',
+            'due_date' => now()->toDateString(),
+        ]);
+        $cartId = DB::table('course_carts')->insertGetId([
+            'user_id' => $buyer->id,
+            'status' => 'completed',
+            'currency' => 'BDT',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $orderId = DB::table('course_cart_orders')->insertGetId([
+            'cart_id' => $cartId,
+            'user_id' => $buyer->id,
+            'branch_id' => null,
+            'invoice_id' => $invoice->id,
+            'payment_transaction_id' => null,
+            'coupon_id' => null,
+            'coupon_code' => null,
+            'coupon_reservation_key' => null,
+            'subtotal_amount' => 1200,
+            'discount_amount' => 200,
+            'net_amount' => 1000,
+            'currency' => 'BDT',
+            'status' => 'paid',
+            'paid_at' => now(),
+            'expires_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $commissionId = $service->recordSettledPurchase($buyer, 'course_cart_order', $orderId, 1000, 'BDT');
+        $this->assertNotNull($commissionId);
+        $this->assertDatabaseHas('referral_commissions', [
+            'id' => $commissionId,
+            'source_type' => 'course_cart_order',
+            'source_id' => (string) $orderId,
+            'eligible_amount' => 1000,
+            'commission_amount' => 50,
+            'currency' => 'BDT',
+        ]);
+        $this->assertNull($service->recordSettledPurchase($buyer, 'course_cart_order', $orderId, 999, 'BDT'));
+    }
+
+
 }
