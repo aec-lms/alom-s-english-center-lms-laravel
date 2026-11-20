@@ -67,10 +67,29 @@ class PaymentSettlementStateMachineTest extends TestCase
             'status' => 'initiated',
         ]);
 
+        $lockSequence = [];
+        DB::listen(function ($query) use (&$lockSequence): void {
+            $sql = strtolower(preg_replace('/\\s+/', ' ', $query->sql));
+            if (str_contains($sql, 'users') && str_contains($sql, 'for update')) {
+                $lockSequence[] = 'buyer';
+            }
+            if (str_contains($sql, 'commerce_orders') && str_contains($sql, 'for update')) {
+                $lockSequence[] = 'order';
+            }
+        });
+
         $settled = app(PaymentSettlementService::class)->settleTransaction(
             $transaction,
             'NO-REFERRAL-PROVIDER-' . $buyer->id,
         );
+
+        if (DB::connection()->getDriverName() === 'mysql') {
+            $buyerLock = array_search('buyer', $lockSequence, true);
+            $orderLock = array_search('order', $lockSequence, true);
+            $this->assertNotFalse($buyerLock, 'Invoice commerce settlement must lock the buyer account.');
+            $this->assertNotFalse($orderLock, 'Invoice commerce settlement must lock the commerce order.');
+            $this->assertLessThan($orderLock, $buyerLock, 'Buyer lock must precede the paid order lock.');
+        }
 
         $this->assertSame('settled', $settled->fresh()->status);
         $this->assertDatabaseHas('commerce_orders', [
