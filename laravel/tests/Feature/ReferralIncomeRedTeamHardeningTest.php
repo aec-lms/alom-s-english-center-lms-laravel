@@ -7,7 +7,9 @@ namespace Tests\Feature;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
+use Plugins\Modules\CourseManagement\Services\CourseCommercePaymentSettlementService;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
+use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
 use Plugins\Modules\ReferralIncome\Services\ReferralIncomeService;
 
 final class ReferralIncomeRedTeamHardeningTest extends TestCase
@@ -461,6 +463,169 @@ final class ReferralIncomeRedTeamHardeningTest extends TestCase
         }
 
         $this->assertDatabaseCount('referral_attributions', 0);
+    }
+
+
+    public function test_course_cart_partial_and_full_refunds_reverse_commission_idempotently(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins([
+            'referral-income',
+            'student-management',
+            'course-management',
+            'fees-management',
+            'marketing-management',
+            'universal-payment',
+            'payment-management',
+        ]);
+
+        $referrer = $this->createUserWithRole('student');
+        $buyer = $this->createUserWithRole('student');
+        $service = app(ReferralIncomeService::class);
+        $service->applyCode($buyer, $service->createOrGetCode($referrer));
+
+        $courseId = DB::table('courses')->insertGetId([
+            'code' => 'REF-COURSE-REFUND-001',
+            'title' => 'Referral Refund Course',
+            'slug' => 'referral-refund-course',
+            'price' => 1000,
+            'status' => 'published',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $cartId = DB::table('course_carts')->insertGetId([
+            'user_id' => $buyer->id,
+            'status' => 'checkout_pending',
+            'currency' => 'BDT',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $orderId = DB::table('course_cart_orders')->insertGetId([
+            'cart_id' => $cartId,
+            'user_id' => $buyer->id,
+            'branch_id' => null,
+            'invoice_id' => null,
+            'payment_transaction_id' => null,
+            'coupon_id' => null,
+            'coupon_code' => null,
+            'coupon_reservation_key' => null,
+            'subtotal_amount' => 1000,
+            'discount_amount' => 0,
+            'net_amount' => 1000,
+            'currency' => 'BDT',
+            'status' => 'awaiting_payment',
+            'paid_at' => null,
+            'expires_at' => now()->addMinutes(30),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('course_cart_order_items')->insert([
+            'order_id' => $orderId,
+            'course_id' => $courseId,
+            'course_title' => 'Referral Refund Course',
+            'unit_price' => 1000,
+            'position' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $transaction = UniversalPaymentTransaction::query()->create([
+            'reference' => 'REF-COURSE-TX-' . strtoupper(bin2hex(random_bytes(5))),
+            'payer_name' => $buyer->name,
+            'payer_contact' => '01700000000',
+            'item_title' => 'Referral Refund Course',
+            'gateway' => 'sslcommerz',
+            'currency' => 'BDT',
+            'amount' => 1000,
+            'external_trx_id' => null,
+            'status' => 'pending',
+            'notes' => json_encode(['purpose' => 'course_cart', 'course_cart_order_id' => $orderId], JSON_THROW_ON_ERROR),
+            'user_id' => $buyer->id,
+            'branch_id' => null,
+        ]);
+        DB::table('course_cart_orders')->where('id', $orderId)->update(['payment_transaction_id' => $transaction->id]);
+
+        $settled = app(CourseCommercePaymentSettlementService::class)->settle(
+            $transaction,
+            'BANK-REF-COURSE-001',
+            ['validation_status' => 'VALID']
+        );
+        $order = DB::table('course_cart_orders')->where('id', $orderId)->first();
+        $this->assertSame('paid', $order->status);
+        $this->assertNotNull($order->invoice_id);
+        $this->assertSame('verified', $settled->fresh()->status);
+
+        $commissionId = DB::table('referral_commissions')
+            ->where('source_type', 'course_cart_order')
+            ->where('source_id', (string) $orderId)
+            ->value('id');
+        $this->assertNotNull($commissionId);
+        $this->assertDatabaseHas('referral_commissions', [
+            'id' => $commissionId,
+            'eligible_amount' => 1000,
+            'commission_amount' => 50,
+            'status' => 'pending',
+        ]);
+
+        $refundOneTransaction = DB::table('payment_transactions')->insertGetId([
+            'transaction_ref' => 'REF-COURSE-RFD-001-' . strtoupper(bin2hex(random_bytes(3))),
+            'invoice_id' => $order->invoice_id,
+            'branch_id' => null,
+            'gateway_slug' => 'gateway-sslcommerz',
+            'amount' => 200,
+            'currency' => 'BDT',
+            'status' => 'refunded',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $refundOneId = DB::table('payment_refunds')->insertGetId([
+            'payment_transaction_id' => $refundOneTransaction,
+            'amount' => 200,
+            'reason' => 'Provider-confirmed partial course-cart refund.',
+            'provider_refund_reference' => 'PROVIDER-REF-COURSE-001',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $firstReversal = $service->reverseSettledPurchase($buyer, 'course_cart_order', $orderId, $refundOneId, 200, 'BDT');
+        $firstRetry = $service->reverseSettledPurchase($buyer, 'course_cart_order', $orderId, $refundOneId, 200, 'BDT');
+        $this->assertSame((int) $firstReversal, (int) $firstRetry);
+        $this->assertDatabaseHas('referral_commissions', [
+            'id' => $commissionId,
+            'commission_amount' => 40,
+            'status' => 'pending',
+        ]);
+
+        $refundTwoTransaction = DB::table('payment_transactions')->insertGetId([
+            'transaction_ref' => 'REF-COURSE-RFD-002-' . strtoupper(bin2hex(random_bytes(3))),
+            'invoice_id' => $order->invoice_id,
+            'branch_id' => null,
+            'gateway_slug' => 'gateway-sslcommerz',
+            'amount' => 800,
+            'currency' => 'BDT',
+            'status' => 'refunded',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $refundTwoId = DB::table('payment_refunds')->insertGetId([
+            'payment_transaction_id' => $refundTwoTransaction,
+            'amount' => 800,
+            'reason' => 'Provider-confirmed final course-cart refund.',
+            'provider_refund_reference' => 'PROVIDER-REF-COURSE-002',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $service->reverseSettledPurchase($buyer, 'course_cart_order', $orderId, $refundTwoId, 800, 'BDT');
+        $this->assertDatabaseHas('referral_commissions', [
+            'id' => $commissionId,
+            'commission_amount' => 0,
+            'status' => 'reversed',
+        ]);
+        $this->assertDatabaseCount('referral_commission_reversals', 2);
+        $this->assertSame(50.0, (float) DB::table('referral_commission_reversals')
+            ->where('referral_commission_id', $commissionId)
+            ->sum('commission_reversal_amount'));
     }
 
 
