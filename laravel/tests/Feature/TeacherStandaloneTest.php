@@ -101,4 +101,61 @@ class TeacherStandaloneTest extends TestCase
         @unlink($storedPath);
     }
 
+
+    public function test_teacher_update_without_is_active_preserves_existing_state(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['teacher-management']);
+        $admin = $this->createUserWithRole('admin');
+
+        $this->actingAs($admin)->post('/admin/teachers', [
+            'name' => 'Preserve Active Teacher',
+            'email' => 'preserve.active@aec.test',
+            'employee_code' => 'PRESERVE-ACTIVE-001',
+            'specialization' => 'English Grammar',
+            'password' => 'AecTeacher!2026Strong',
+            'is_active' => '1',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $teacher = Teacher::query()->where('employee_code', 'PRESERVE-ACTIVE-001')->firstOrFail();
+
+        $this->actingAs($admin)->put('/admin/teachers/' . $teacher->id, [
+            'name' => 'Preserve Active Teacher Updated',
+            'employee_code' => 'PRESERVE-ACTIVE-001',
+            'specialization' => 'English Grammar',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('teachers', ['id' => $teacher->id, 'is_active' => true]);
+        $this->assertDatabaseHas('users', ['id' => $teacher->user_id, 'is_active' => true]);
+    }
+
+    public function test_teacher_update_with_explicit_zero_deactivates_teacher_and_linked_user(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['teacher-management']);
+        $admin = $this->createUserWithRole('admin');
+
+        $this->actingAs($admin)->post('/admin/teachers', [
+            'name' => 'Explicit Deactivate Teacher',
+            'email' => 'explicit.deactivate@aec.test',
+            'employee_code' => 'EXPLICIT-DEACTIVATE-001',
+            'specialization' => 'English Grammar',
+            'password' => 'AecTeacher!2026Strong',
+            'is_active' => '1',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $teacher = Teacher::query()->where('employee_code', 'EXPLICIT-DEACTIVATE-001')->firstOrFail();
+
+        $this->actingAs($admin)->put('/admin/teachers/' . $teacher->id, [
+            'name' => 'Explicit Deactivate Teacher',
+            'employee_code' => 'EXPLICIT-DEACTIVATE-001',
+            'specialization' => 'English Grammar',
+            'is_active' => '0',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('teachers', ['id' => $teacher->id, 'is_active' => false]);
+        $this->assertDatabaseHas('users', ['id' => $teacher->user_id, 'is_active' => false]);
+    }
+
+
 }
