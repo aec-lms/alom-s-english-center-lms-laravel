@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Core\Security\AuditLogger;
+use App\Models\Role;
+use Illuminate\Support\Facades\DB;
 use Plugins\Modules\TeacherManagement\Models\Teacher;
 use Tests\TestCase;
 
@@ -36,6 +39,126 @@ final class TeacherProfileValidationTest extends TestCase
         ])->assertSessionHasErrors('email');
 
         $this->assertSame('validation.teacher@aec.test', $teacher->fresh()->user->email);
+    }
+
+    public function test_teacher_profile_update_cannot_reactivate_a_separately_disabled_user_account(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['teacher-management']);
+        $admin = $this->createUserWithRole('admin');
+
+        $this->actingAs($admin)->post('/admin/teachers', [
+            'name' => 'Security Disabled Teacher',
+            'email' => 'security.disabled@aec.test',
+            'employee_code' => 'SECURITY-DISABLED-001',
+            'specialization' => 'English Grammar',
+            'is_active' => '1',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $teacher = Teacher::query()->where('employee_code', 'SECURITY-DISABLED-001')->firstOrFail();
+        $teacher->user->forceFill(['is_active' => false])->save();
+
+        $this->actingAs($admin)->put('/admin/teachers/' . $teacher->id, [
+            'name' => 'Security Disabled Teacher Updated',
+            'employee_code' => 'SECURITY-DISABLED-001',
+            'specialization' => 'English Grammar',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertFalse((bool) $teacher->fresh()->is_active);
+        $this->assertFalse((bool) $teacher->fresh()->user->is_active);
+    }
+
+    public function test_only_admin_can_explicitly_reactivate_a_disabled_teacher_account_and_audits_actor(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['teacher-management', 'branch-management']);
+        $admin = $this->createUserWithRole('admin');
+        $branchId = DB::table('branches')->insertGetId([
+            'code' => 'TEACHER-SECURITY-01',
+            'name' => 'Teacher Security Branch',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($admin)->post('/admin/teachers', [
+            'name' => 'Explicit Activation Teacher',
+            'email' => 'explicit.activation@aec.test',
+            'employee_code' => 'EXPLICIT-ACTIVATION-001',
+            'specialization' => 'English Grammar',
+            'branch_id' => $branchId,
+            'is_active' => '0',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $teacher = Teacher::query()->where('employee_code', 'EXPLICIT-ACTIVATION-001')->firstOrFail();
+        $userId = (int) $teacher->user_id;
+
+        $manager = $this->createUserWithRole('branch_manager');
+        $manager->forceFill(['branch_id' => $branchId])->save();
+        $managerRole = Role::query()->where('slug', 'branch_manager')->firstOrFail();
+        $teacherManagePermissionId = DB::table('permissions')->where('slug', 'teachers.manage')->value('id');
+        $this->assertNotNull($teacherManagePermissionId);
+        $managerRole->permissions()->syncWithoutDetaching([(int) $teacherManagePermissionId]);
+
+        $this->actingAs($manager)->put('/admin/teachers/' . $teacher->id, [
+            'name' => 'Explicit Activation Teacher',
+            'employee_code' => 'EXPLICIT-ACTIVATION-001',
+            'specialization' => 'English Grammar',
+            'branch_id' => $branchId,
+            'is_active' => '1',
+        ])->assertForbidden();
+
+        $this->assertFalse((bool) $teacher->fresh()->is_active);
+        $this->assertFalse((bool) $teacher->fresh()->user->is_active);
+
+        $this->mock(AuditLogger::class, function ($mock) use ($teacher, $userId, $admin): void {
+            $mock->shouldReceive('log')->once()->with(
+                'teacher.account_status_changed',
+                'user',
+                (string) $userId,
+                [
+                    'teacher_id' => (int) $teacher->id,
+                    'before' => false,
+                    'after' => true,
+                ],
+                (int) $admin->id
+            );
+            $mock->shouldReceive('log')->once()->with(
+                'teacher.updated',
+                'teacher',
+                (string) $teacher->id,
+                ['code' => 'EXPLICIT-ACTIVATION-001']
+            );
+        });
+
+        $this->actingAs($admin)->put('/admin/teachers/' . $teacher->id, [
+            'name' => 'Explicit Activation Teacher',
+            'employee_code' => 'EXPLICIT-ACTIVATION-001',
+            'specialization' => 'English Grammar',
+            'branch_id' => $branchId,
+            'is_active' => '1',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertTrue((bool) $teacher->fresh()->is_active);
+        $this->assertTrue((bool) $teacher->fresh()->user->is_active);
+    }
+
+    public function test_teacher_creation_fails_closed_when_teacher_role_is_missing(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['teacher-management']);
+        $admin = $this->createUserWithRole('admin');
+        Role::query()->where('slug', 'teacher')->delete();
+
+        $this->actingAs($admin)->post('/admin/teachers', [
+            'name' => 'Role Missing Teacher',
+            'email' => 'role.missing.teacher@aec.test',
+            'employee_code' => 'ROLE-MISSING-TEACH-001',
+            'specialization' => 'English Grammar',
+        ])->assertSessionHasErrors('role');
+
+        $this->assertDatabaseMissing('users', ['email' => 'role.missing.teacher@aec.test']);
+        $this->assertDatabaseMissing('teachers', ['employee_code' => 'ROLE-MISSING-TEACH-001']);
     }
 
     public function test_teacher_social_links_must_be_valid_urls(): void
