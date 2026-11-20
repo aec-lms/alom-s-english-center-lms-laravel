@@ -19,10 +19,6 @@ if (!$app->environment('testing') || !$isolatedE2eDatabase) {
     fwrite(STDERR, "Refusing to modify E2E fixtures outside the isolated APP_ENV=testing SQLite database (database/e2e.sqlite).\n");
     exit(1);
 }
-if (!$app->environment('testing')) {
-    fwrite(STDERR, "Refusing to reset E2E exam fixtures outside APP_ENV=testing.\n");
-    exit(1);
-}
 
 $examId = (int) ($argv[1] ?? 0);
 $questionId = (int) ($argv[2] ?? 0);
