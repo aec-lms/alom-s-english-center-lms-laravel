@@ -62,7 +62,7 @@ class StudentAssessmentController extends Controller
 
     public function apiStart(Request $request, AssessmentSet $set): JsonResponse
     {
-        $attempt = $this->createOrResumeAttempt($request->user(), $set);
+        $attempt = $this->createOrResumeAttempt($request, $set);
         $attempt->load('questions');
 
         return response()->json([
