@@ -182,4 +182,53 @@ class InvoicePaymentSessionReservationTest extends TestCase
     }
 
 
+
+    public function test_late_provider_response_cannot_regress_a_settled_or_failed_transaction(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management']);
+
+        $invoice = $this->createInvoice();
+        $service = app(InvoicePaymentSessionReservationService::class);
+        $reservation = $service->reserve($invoice, 'gateway-stripe', 'STRP', [], 'late-callback-key');
+        $transaction = $reservation['transaction'];
+
+        // Model the webhook/capture callback winning before the synchronous
+        // checkout response handler persists its provider response.
+        $transaction->update([
+            'status' => 'settled',
+            'external_reference' => 'provider-capture-already-settled',
+            'settled_at' => now(),
+        ]);
+
+        $created = $service->markCreated(
+            $transaction,
+            ['provider_session_id' => 'late-session-response'],
+            'initiated',
+            'late-external-reference'
+        );
+        $this->assertSame('settled', $created->status);
+        $this->assertSame('provider-capture-already-settled', $created->external_reference);
+
+        $unknown = $service->markUnknown($created, 'late_timeout');
+        $this->assertSame('settled', $unknown->status);
+        $this->assertSame('provider-capture-already-settled', $unknown->external_reference);
+
+        $rejected = $service->markRejected($unknown, 'late_provider_4xx');
+        $this->assertSame('settled', $rejected->status);
+        $this->assertSame('provider-capture-already-settled', $rejected->external_reference);
+
+        $this->assertDatabaseHas('payment_transactions', [
+            'id' => $transaction->id,
+            'status' => 'settled',
+            'external_reference' => 'provider-capture-already-settled',
+        ]);
+
+        $failedReservation = $service->reserve($this->createInvoice(), 'gateway-paypal', 'PYPL');
+        $failedReservation['transaction']->update(['status' => 'failed']);
+        $lateCreate = $service->markCreated($failedReservation['transaction'], ['paypal_order_id' => 'late-order'], 'initiated');
+        $this->assertSame('failed', $lateCreate->status);
+    }
+
+
 }
