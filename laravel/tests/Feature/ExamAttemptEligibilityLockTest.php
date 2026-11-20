@@ -264,6 +264,92 @@ class ExamAttemptEligibilityLockTest extends TestCase
         $this->assertFalse($unchanged->passed);
     }
 
+    public function test_inactive_or_soft_deleted_student_profile_cannot_submit_an_existing_attempt(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['student-management', 'exam-management']);
+
+        $inactiveStudent = $this->createUserWithRole('student');
+        DB::table('students')->insert([
+            'user_id' => $inactiveStudent->id,
+            'branch_id' => null,
+            'student_code' => 'EXAM-INACTIVE-' . strtoupper(bin2hex(random_bytes(4))),
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        [$inactiveExam, $inactiveQuestion] = $this->createSnapshotFixture();
+
+        $this->actingAs($inactiveStudent)->get('/exams/' . $inactiveExam->id . '/take')->assertOk();
+        $inactiveAttempt = ExamAttempt::query()
+            ->where('exam_id', $inactiveExam->id)
+            ->where('user_id', $inactiveStudent->id)
+            ->firstOrFail();
+
+        DB::table('students')->where('user_id', $inactiveStudent->id)->update([
+            'status' => 'inactive',
+            'updated_at' => now(),
+        ]);
+
+        $this->assertControllerAbort(
+            403,
+            fn () => app(ExamController::class)->apiSubmitAttempt(
+                $this->studentRequest(
+                    'POST',
+                    '/api/v1/my/exams/' . $inactiveExam->id . '/attempts/' . $inactiveAttempt->id . '/submit',
+                    $inactiveStudent,
+                    ['answers' => [(string) $inactiveQuestion->id => 1]],
+                    true
+                ),
+                $inactiveExam->fresh(),
+                (int) $inactiveAttempt->id
+            )
+        );
+
+        $this->assertAttemptStillPending($inactiveAttempt);
+
+        $deletedStudent = $this->createUserWithRole('student');
+        DB::table('students')->insert([
+            'user_id' => $deletedStudent->id,
+            'branch_id' => null,
+            'student_code' => 'EXAM-DELETED-' . strtoupper(bin2hex(random_bytes(4))),
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        [$deletedExam, $deletedQuestion] = $this->createSnapshotFixture();
+
+        $this->actingAs($deletedStudent)->get('/exams/' . $deletedExam->id . '/take')->assertOk();
+        $deletedAttempt = ExamAttempt::query()
+            ->where('exam_id', $deletedExam->id)
+            ->where('user_id', $deletedStudent->id)
+            ->firstOrFail();
+
+        DB::table('students')->where('user_id', $deletedStudent->id)->update([
+            'deleted_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->assertControllerAbort(
+            403,
+            fn () => app(ExamController::class)->apiSubmitAttempt(
+                $this->studentRequest(
+                    'POST',
+                    '/api/v1/my/exams/' . $deletedExam->id . '/attempts/' . $deletedAttempt->id . '/submit',
+                    $deletedStudent,
+                    ['answers' => [(string) $deletedQuestion->id => 1]],
+                    true
+                ),
+                $deletedExam->fresh(),
+                (int) $deletedAttempt->id
+            )
+        );
+
+        $this->assertAttemptStillPending($deletedAttempt);
+    }
+
     public function test_revoked_paid_exam_entitlement_blocks_web_and_api_start_autosave_and_submit(): void
     {
         $this->markSystemInstalled();
