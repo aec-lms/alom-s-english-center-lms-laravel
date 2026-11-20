@@ -68,8 +68,26 @@ class CourseCommercePaymentSettlementTest extends TestCase
         ]);
         DB::table('course_cart_orders')->where('id', $orderId)->update(['payment_transaction_id' => $transaction->id]);
 
+        $lockSequence = [];
+        DB::listen(function ($query) use (&$lockSequence): void {
+            $sql = strtolower(preg_replace('/\\s+/', ' ', $query->sql));
+            if (str_contains($sql, 'users') && str_contains($sql, 'for update')) {
+                $lockSequence[] = 'buyer';
+            }
+            if (str_contains($sql, 'course_cart_orders') && str_contains($sql, 'for update')) {
+                $lockSequence[] = 'order';
+            }
+        });
+
         $service = app(CourseCommercePaymentSettlementService::class);
         $settled = $service->settle($transaction, 'BANK-CART-SETTLE-001', ['validation_status' => 'VALID']);
+        if (DB::connection()->getDriverName() === 'mysql') {
+            $buyerLock = array_search('buyer', $lockSequence, true);
+            $orderLock = array_search('order', $lockSequence, true);
+            $this->assertNotFalse($buyerLock, 'Course commerce settlement must lock the buyer account.');
+            $this->assertNotFalse($orderLock, 'Course commerce settlement must lock the order.');
+            $this->assertLessThan($orderLock, $buyerLock, 'Buyer lock must precede the paid order lock.');
+        }
         $service->settle($settled, 'BANK-CART-SETTLE-001', ['validation_status' => 'VALID']);
 
         $this->assertSame('verified', $settled->fresh()->status);
