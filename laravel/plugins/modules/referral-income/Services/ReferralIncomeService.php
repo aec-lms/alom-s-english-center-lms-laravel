@@ -247,16 +247,29 @@ class ReferralIncomeService
                 return null;
             }
 
+            // The provider transaction is part of the financial source of
+            // truth. Re-read it under lock so a status, buyer, invoice, amount or
+            // currency change cannot race referral commission insertion.
             $originalPayment = DB::table('universal_payment_transactions')
                 ->where('id', (int) $order->payment_transaction_id)
                 ->where('user_id', $buyer->id)
+                ->lockForUpdate()
                 ->first();
             $originalNotes = $originalPayment ? json_decode((string) $originalPayment->notes, true) : null;
+            $walletCredit = Schema::hasColumn($table, 'wallet_credit_amount')
+                ? round((float) ($order->wallet_credit_amount ?? 0), 2)
+                : 0.0;
+            $gatewayPayable = round((float) $orderAmount - $walletCredit, 2);
+
             if (!$originalPayment
+                || $walletCredit < 0
+                || $gatewayPayable <= 0
                 || (Schema::hasColumn('universal_payment_transactions', 'fee_invoice_id')
-                    && $originalPayment->fee_invoice_id !== null
-                    && (int) $originalPayment->fee_invoice_id !== (int) $order->invoice_id)
+                    && (int) ($originalPayment->fee_invoice_id ?? 0) !== (int) $order->invoice_id)
+                || strtoupper(trim((string) $originalPayment->currency)) !== strtoupper(trim((string) $order->currency))
+                || abs($gatewayPayable - (float) $originalPayment->amount) > 0.01
                 || $originalPayment->status !== 'verified'
+                || strtolower((string) $originalPayment->gateway) !== 'sslcommerz'
                 || !is_array($originalNotes)
                 || ($originalNotes['purpose'] ?? null) !== 'course_cart'
                 || (int) ($originalNotes['course_cart_order_id'] ?? 0) !== (int) $order->id) {
