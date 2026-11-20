@@ -21,7 +21,7 @@ class ReferralIncomePluginTest extends TestCase
     public function test_student_referral_attribution_and_settled_purchase_commission_are_idempotent(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['referral-income']);
+        $this->activatePlugins(['referral-income', 'fees-management', 'commerce-cart']);
 
         $admin = $this->createUserWithRole('admin');
         $this->actingAs($admin)->get('/admin/referral-income')->assertOk()->assertSee('Referral Income');
@@ -40,16 +40,17 @@ class ReferralIncomePluginTest extends TestCase
             'status' => 'active',
         ]);
 
-        $first = $service->recordSettledPurchase($buyer, 'course_order', 'ORDER-1001', 10000, 'BDT');
-        $retry = $service->recordSettledPurchase($buyer, 'course_order', 'ORDER-1001', 10000, 'BDT');
+        $orderId = $this->createPaidCommerceOrder($buyer, 10000, 'BDT');
+        $first = $service->recordSettledPurchase($buyer, 'commerce_order', $orderId, 10000, 'BDT');
+        $retry = $service->recordSettledPurchase($buyer, 'commerce_order', $orderId, 10000, 'BDT');
 
         $this->assertSame($first, $retry);
         $this->assertDatabaseCount('referral_attributions', 1);
         $this->assertDatabaseHas('referral_commissions', [
             'referrer_user_id' => $studentReferrer->id,
             'referred_user_id' => $buyer->id,
-            'source_type' => 'course_order',
-            'source_id' => 'ORDER-1001',
+            'source_type' => 'commerce_order',
+            'source_id' => (string) $orderId,
             'commission_amount' => 500,
             'commission_percent' => 5,
             'status' => 'pending',
@@ -60,7 +61,7 @@ class ReferralIncomePluginTest extends TestCase
     public function test_teacher_referral_uses_teacher_rate_and_rejects_self_or_second_attribution(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['referral-income']);
+        $this->activatePlugins(['referral-income', 'fees-management', 'commerce-cart']);
 
         $teacher = $this->createUserWithRole('teacher');
         $buyer = $this->createUserWithRole('student');
@@ -75,7 +76,8 @@ class ReferralIncomePluginTest extends TestCase
         $this->actingAs($buyer)->post('/my-referrals/apply', ['referral_code' => $code])
             ->assertSessionHasErrors('referral_code');
 
-        $service->recordSettledPurchase($buyer, 'ebook_order', 'EBOOK-1001', 2000, 'BDT');
+        $orderId = $this->createPaidCommerceOrder($buyer, 2000, 'BDT');
+        $service->recordSettledPurchase($buyer, 'commerce_order', $orderId, 2000, 'BDT');
         $this->assertDatabaseHas('referral_commissions', [
             'referrer_user_id' => $teacher->id,
             'commission_amount' => 200,
@@ -251,7 +253,7 @@ class ReferralIncomePluginTest extends TestCase
     public function test_approved_commission_can_be_requested_and_paid_once_with_encrypted_payout_destination(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['referral-income']);
+        $this->activatePlugins(['referral-income', 'fees-management', 'commerce-cart']);
 
         $teacher = $this->createUserWithRole('teacher');
         $buyer = $this->createUserWithRole('student');
@@ -259,7 +261,8 @@ class ReferralIncomePluginTest extends TestCase
         $service = app(ReferralIncomeService::class);
         $code = $service->createOrGetCode($teacher);
         $service->applyCode($buyer, $code);
-        $commissionId = $service->recordSettledPurchase($buyer, 'subscription_order', 'SUB-1001', 5000, 'BDT');
+        $orderId = $this->createPaidCommerceOrder($buyer, 5000, 'BDT');
+        $commissionId = $service->recordSettledPurchase($buyer, 'commerce_order', $orderId, 5000, 'BDT');
 
         $this->actingAs($admin)->post('/admin/referral-income/commissions/' . $commissionId . '/review', [
             'status' => 'approved',
@@ -276,6 +279,7 @@ class ReferralIncomePluginTest extends TestCase
 
         $this->actingAs($admin)->post('/admin/referral-income/payouts/' . $payout->id . '/review', [
             'status' => 'paid',
+            'admin_note' => 'Premature payout must be rejected.',
         ])->assertStatus(422);
         $this->assertDatabaseHas('referral_payout_requests', ['id' => $payout->id, 'status' => 'pending']);
 
@@ -294,13 +298,14 @@ class ReferralIncomePluginTest extends TestCase
     public function test_foreign_currency_commissions_are_not_mixed_into_local_bdt_payouts(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['referral-income']);
+        $this->activatePlugins(['referral-income', 'fees-management', 'commerce-cart']);
 
         $teacher = $this->createUserWithRole('teacher');
         $buyer = $this->createUserWithRole('student');
         $service = app(ReferralIncomeService::class);
         $service->applyCode($buyer, $service->createOrGetCode($teacher));
-        $commissionId = $service->recordSettledPurchase($buyer, 'international_order', 'USD-ORDER-1', 100000, 'USD');
+        $orderId = $this->createPaidCommerceOrder($buyer, 100000, 'USD');
+        $commissionId = $service->recordSettledPurchase($buyer, 'commerce_order', $orderId, 100000, 'USD');
 
         DB::table('referral_commissions')->where('id', $commissionId)->update(['status' => 'approved']);
 
@@ -337,5 +342,40 @@ class ReferralIncomePluginTest extends TestCase
 
         $this->actingAs($manager)->get('/admin/referral-income')->assertForbidden();
     }
+
+    private function createPaidCommerceOrder(object $buyer, float $amount, string $currency): int
+    {
+        $invoice = FeeInvoice::query()->create([
+            'invoice_number' => 'REF-PLUGIN-' . strtoupper(bin2hex(random_bytes(5))),
+            'payer_name' => $buyer->name,
+            'payer_email' => $buyer->email,
+            'payer_phone' => '01700000000',
+            'subtotal_amount' => $amount,
+            'discount_amount' => 0,
+            'net_amount' => $amount,
+            'paid_amount' => $amount,
+            'currency' => strtoupper($currency),
+            'status' => 'paid',
+            'due_date' => now()->toDateString(),
+        ]);
+
+        return (int) DB::table('commerce_orders')->insertGetId([
+            'order_number' => 'REF-PLUGIN-ORDER-' . strtoupper(bin2hex(random_bytes(4))),
+            'user_id' => $buyer->id,
+            'invoice_id' => $invoice->id,
+            'branch_id' => null,
+            'currency' => strtoupper($currency),
+            'subtotal' => $amount,
+            'discount_total' => 0,
+            'grand_total' => $amount,
+            'status' => 'completed',
+            'payment_status' => 'paid',
+            'billing_snapshot' => json_encode(['name' => $buyer->name, 'email' => $buyer->email]),
+            'paid_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
 
 }

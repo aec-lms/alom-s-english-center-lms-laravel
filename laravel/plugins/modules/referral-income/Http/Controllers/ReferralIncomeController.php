@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Plugins\Modules\ReferralIncome\Http\Controllers;
 
+use App\Core\Security\AuditLogger;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -15,7 +16,7 @@ use Plugins\Modules\ReferralIncome\Services\ReferralIncomeService;
 
 class ReferralIncomeController extends Controller
 {
-    public function __construct(private readonly ReferralIncomeService $referrals) {}
+    public function __construct(private readonly ReferralIncomeService $referrals, private readonly AuditLogger $audit) {}
 
     public function track(string $code): RedirectResponse
     {
@@ -100,6 +101,11 @@ class ReferralIncomeController extends Controller
         return view('referral-income::admin', compact('commissions', 'payouts', 'rules', 'recoveries'));
     }
 
+    private function assertAuditAvailable(): void
+    {
+        abort_unless(Schema::hasTable('audit_logs'), 503, 'Audit logging is unavailable; no referral finance changes were applied.');
+    }
+
     public function updateRules(Request $request): RedirectResponse
     {
         $data = $request->validate([
@@ -108,22 +114,73 @@ class ReferralIncomeController extends Controller
             'student_minimum_payout' => ['required', 'numeric', 'min:1', 'max:10000000'],
             'teacher_minimum_payout' => ['required', 'numeric', 'min:1', 'max:10000000'],
         ]);
-        foreach (['student', 'teacher'] as $type) {
-            DB::table('referral_income_rules')->where('referrer_type', $type)->update([
-                'commission_percent' => $data[$type . '_commission_percent'],
-                'minimum_payout' => $data[$type . '_minimum_payout'],
-                'updated_at' => now(),
-            ]);
-        }
+
+        DB::transaction(function () use ($request, $data): void {
+            $this->assertAuditAvailable();
+
+            foreach (['student', 'teacher'] as $type) {
+                $rule = DB::table('referral_income_rules')
+                    ->where('referrer_type', $type)
+                    ->lockForUpdate()
+                    ->first();
+                abort_unless($rule, 503, 'Referral commission rules are unavailable; no changes were applied.');
+
+                $before = [
+                    'commission_percent' => (string) $rule->commission_percent,
+                    'minimum_payout' => (string) $rule->minimum_payout,
+                ];
+                $after = [
+                    'commission_percent' => (string) $data[$type . '_commission_percent'],
+                    'minimum_payout' => (string) $data[$type . '_minimum_payout'],
+                ];
+
+                DB::table('referral_income_rules')->where('referrer_type', $type)->update([
+                    'commission_percent' => $data[$type . '_commission_percent'],
+                    'minimum_payout' => $data[$type . '_minimum_payout'],
+                    'updated_at' => now(),
+                ]);
+
+                $this->audit->log('referral_income.rules_updated', 'referral_income_rule', $type, [
+                    'before' => $before,
+                    'after' => $after,
+                ], (int) $request->user()->id);
+            }
+        });
+
         return back()->with('status', 'Referral commission rules updated.');
     }
 
     public function reviewCommission(Request $request, int $commission): RedirectResponse
     {
-        $data = $request->validate(['status' => ['required', 'in:approved,rejected,reversed']]);
-        DB::table('referral_commissions')->where('id', $commission)->where('status', 'pending')->update([
-            'status' => $data['status'], 'reviewed_by' => $request->user()->id, 'reviewed_at' => now(), 'updated_at' => now(),
+        $data = $request->validate([
+            'status' => ['required', 'in:approved,rejected'],
+            'admin_note' => ['required_if:status,rejected', 'nullable', 'string', 'max:1000'],
         ]);
+
+        DB::transaction(function () use ($request, $commission, $data): void {
+            $this->assertAuditAvailable();
+            $record = DB::table('referral_commissions')->where('id', $commission)->lockForUpdate()->first();
+            abort_unless($record !== null && $record->status === 'pending', 422, 'Only pending commissions can be reviewed.');
+            abort_unless(
+                $data['status'] !== 'approved' || $record->source_type !== 'course_cart_order',
+                409,
+                'Course-cart commissions cannot be approved until a verified Universal Payment refund adapter is available.'
+            );
+
+            DB::table('referral_commissions')->where('id', $commission)->update([
+                'status' => $data['status'],
+                'reviewed_by' => $request->user()->id,
+                'reviewed_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $this->audit->log('referral_income.commission_reviewed', 'referral_commission', (string) $commission, [
+                'from' => 'pending',
+                'to' => $data['status'],
+                'reason' => isset($data['admin_note']) ? trim($data['admin_note']) : null,
+            ], (int) $request->user()->id);
+        });
+
         return back()->with('status', 'Commission review saved.');
     }
 
@@ -131,10 +188,11 @@ class ReferralIncomeController extends Controller
     {
         $data = $request->validate([
             'status' => ['required', 'in:recovered,waived'],
-            'admin_note' => ['required_if:status,waived', 'nullable', 'string', 'max:1000'],
+            'admin_note' => ['required', 'string', 'max:1000'],
         ]);
 
         DB::transaction(function () use ($request, $reversal, $data): void {
+            $this->assertAuditAvailable();
             $record = DB::table('referral_commission_reversals')
                 ->where('id', $reversal)
                 ->lockForUpdate()
@@ -150,6 +208,12 @@ class ReferralIncomeController extends Controller
                 'reviewed_at' => now(),
                 'updated_at' => now(),
             ]);
+
+            $this->audit->log('referral_income.recovery_reviewed', 'referral_commission_reversal', (string) $reversal, [
+                'from' => 'recovery_due',
+                'to' => $data['status'],
+                'reason' => isset($data['admin_note']) ? trim($data['admin_note']) : null,
+            ], (int) $request->user()->id);
         });
 
         return back()->with('status', 'Referral recovery reconciliation saved.');
@@ -157,8 +221,9 @@ class ReferralIncomeController extends Controller
 
     public function reviewPayout(Request $request, int $payout): RedirectResponse
     {
-        $data = $request->validate(['status' => ['required', 'in:approved,rejected,paid'], 'admin_note' => ['nullable', 'string', 'max:1000']]);
+        $data = $request->validate(['status' => ['required', 'in:approved,rejected,paid'], 'admin_note' => ['required_if:status,rejected,paid', 'nullable', 'string', 'max:1000']]);
         DB::transaction(function () use ($request, $payout, $data): void {
+            $this->assertAuditAvailable();
             $record = DB::table('referral_payout_requests')->where('id', $payout)->lockForUpdate()->first();
             $validTransition = $record !== null
                 && (($record->status === 'pending' && in_array($data['status'], ['approved', 'rejected'], true))
@@ -167,7 +232,11 @@ class ReferralIncomeController extends Controller
 
             $commissions = DB::table('referral_commissions')
                 ->where('payout_request_id', $payout)
-                ->lockForUpdate()->get(['id']);
+                ->lockForUpdate()->get(['id', 'source_type']);
+            if (in_array($data['status'], ['approved', 'paid'], true)
+                && $commissions->contains(fn ($commission): bool => $commission->source_type === 'course_cart_order')) {
+                abort(422, 'This payout contains course-cart commissions awaiting a verified Universal Payment refund adapter.');
+            }
             if (in_array($data['status'], ['approved', 'paid'], true)
                 && Schema::hasTable('referral_commission_reversals')
                 && DB::table('referral_commission_reversals')
@@ -191,6 +260,14 @@ class ReferralIncomeController extends Controller
                 DB::table('referral_commissions')->where('payout_request_id', $payout)->where('status', 'payout_requested')
                     ->update(['status' => 'payout_approved', 'updated_at' => now()]);
             }
+
+            $this->audit->log('referral_income.payout_reviewed', 'referral_payout_request', (string) $payout, [
+                'from' => $record->status,
+                'to' => $data['status'],
+                'amount' => (string) $record->amount,
+                'currency' => (string) $record->currency,
+                'reason' => isset($data['admin_note']) ? trim($data['admin_note']) : null,
+            ], (int) $request->user()->id);
         });
         return back()->with('status', 'Payout review saved.');
     }
