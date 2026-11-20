@@ -381,6 +381,197 @@ final class CourseAssessmentGradingBranchIsolationTest extends TestCase
         }
     }
 
+    public function test_mysql_account_deactivation_waits_for_grading_then_blocks_the_next_grade(): void
+    {
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            $this->markTestSkipped('Account-row grading serialization requires MySQL 8.');
+        }
+
+        [$teacher, $attemptId, $questionId] = $this->createMysqlTeacherGradingFixture('ACCOUNT');
+        $primaryName = DB::getDefaultConnection();
+        $primary = DB::connection($primaryName);
+        $secondaryName = $this->createSecondaryMysqlConnection($primaryName, 'assessment_account_race');
+        $secondary = DB::connection($secondaryName);
+        $secondary->statement('SET SESSION innodb_lock_wait_timeout = 1');
+        $primary->beginTransaction();
+
+        try {
+            // The real grading endpoint acquires Teacher -> User -> teacher role
+            // locks and writes a grade while the outer transaction retains them.
+            $this->gradeAttempt($teacher, $attemptId, $questionId, 4, 'Before account deactivation.');
+            $auditCount = $this->gradeAuditCount($attemptId);
+
+            $secondary->beginTransaction();
+            try {
+                $secondary->table('users')->where('id', $teacher->id)->update([
+                    'is_active' => false,
+                    'updated_at' => now(),
+                ]);
+                $this->fail('Account deactivation must wait while the grading transaction holds the linked User row.');
+            } catch (QueryException $exception) {
+                $this->assertSame(1205, (int) ($exception->errorInfo[1] ?? 0), $exception->getMessage());
+            } finally {
+                if ($secondary->transactionLevel() > 0) {
+                    $secondary->rollBack();
+                }
+            }
+
+            $primary->commit();
+
+            $secondary->table('users')->where('id', $teacher->id)->update([
+                'is_active' => false,
+                'updated_at' => now(),
+            ]);
+
+            $this->actingAs($teacher)->patch(route('plugins.course-assessments.grading.update', $attemptId), [
+                'scores' => [$questionId => 1],
+                'feedback' => [$questionId => 'Must not overwrite after account deactivation.'],
+                'teacher_feedback' => 'Must remain unchanged.',
+            ])->assertForbidden();
+
+            $this->assertGradingUnchanged($attemptId, $questionId, $teacher->id, 4, 'Before account deactivation.');
+            $this->assertSame($auditCount, $this->gradeAuditCount($attemptId));
+        } catch (\\Throwable $exception) {
+            if ($primary->transactionLevel() > 0) {
+                $primary->rollBack();
+            }
+            throw $exception;
+        } finally {
+            DB::purge($secondaryName);
+        }
+    }
+
+    public function test_mysql_teacher_role_revocation_waits_for_grading_then_blocks_the_next_grade(): void
+    {
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            $this->markTestSkipped('Teacher role-pivot grading serialization requires MySQL 8.');
+        }
+
+        [$teacher, $attemptId, $questionId] = $this->createMysqlTeacherGradingFixture('ROLE');
+        $teacher->load('roles');
+        $roleId = DB::table('roles')->where('slug', 'teacher')->value('id');
+        $this->assertNotNull($roleId);
+
+        $primaryName = DB::getDefaultConnection();
+        $primary = DB::connection($primaryName);
+        $secondaryName = $this->createSecondaryMysqlConnection($primaryName, 'assessment_role_race');
+        $secondary = DB::connection($secondaryName);
+        $secondary->statement('SET SESSION innodb_lock_wait_timeout = 1');
+        $primary->beginTransaction();
+
+        try {
+            $this->gradeAttempt($teacher, $attemptId, $questionId, 4, 'Before role revocation.');
+            $auditCount = $this->gradeAuditCount($attemptId);
+
+            $secondary->beginTransaction();
+            try {
+                $secondary->table('role_user')
+                    ->where('user_id', $teacher->id)
+                    ->where('role_id', $roleId)
+                    ->delete();
+                $this->fail('Teacher role revocation must wait while the grading transaction holds the teacher role pivot.');
+            } catch (QueryException $exception) {
+                $this->assertSame(1205, (int) ($exception->errorInfo[1] ?? 0), $exception->getMessage());
+            } finally {
+                if ($secondary->transactionLevel() > 0) {
+                    $secondary->rollBack();
+                }
+            }
+
+            $primary->commit();
+
+            $secondary->table('role_user')
+                ->where('user_id', $teacher->id)
+                ->where('role_id', $roleId)
+                ->delete();
+
+            $this->actingAs($teacher)->patch(route('plugins.course-assessments.grading.update', $attemptId), [
+                'scores' => [$questionId => 1],
+                'feedback' => [$questionId => 'Must not overwrite after role revocation.'],
+                'teacher_feedback' => 'Must remain unchanged.',
+            ])->assertForbidden();
+
+            $this->assertGradingUnchanged($attemptId, $questionId, $teacher->id, 4, 'Before role revocation.');
+            $this->assertSame($auditCount, $this->gradeAuditCount($attemptId));
+        } catch (\\Throwable $exception) {
+            if ($primary->transactionLevel() > 0) {
+                $primary->rollBack();
+            }
+            throw $exception;
+        } finally {
+            DB::purge($secondaryName);
+        }
+    }
+
+    private function createMysqlTeacherGradingFixture(string $suffix): array
+    {
+        $this->setupAssessmentPlugins();
+        $branch = $this->createBranch('MYSQL-' . $suffix);
+        $teacher = $this->createTeacher($branch, $branch);
+        $courseId = $this->createCourse($branch);
+        $attemptId = $this->createPendingAttempt($courseId, $branch, 'MySQL ' . $suffix . ' Grading Race');
+        $this->assignTeacher((int) $teacher->id, $courseId);
+        $questionId = (int) DB::table('course_assessment_attempt_questions')
+            ->where('attempt_id', $attemptId)
+            ->value('id');
+
+        return [$teacher, $attemptId, $questionId];
+    }
+
+    private function createSecondaryMysqlConnection(string $primaryName, string $prefix): string
+    {
+        $primary = DB::connection($primaryName);
+        $secondaryName = $prefix . '_' . bin2hex(random_bytes(3));
+        $config = config('database.connections.' . $primaryName);
+        $config['database'] = $primary->getDatabaseName();
+        config(['database.connections.' . $secondaryName => $config]);
+        DB::purge($secondaryName);
+        DB::connection($secondaryName);
+
+        return $secondaryName;
+    }
+
+    private function gradeAttempt(object $teacher, int $attemptId, int $questionId, float $score, string $feedback): void
+    {
+        $this->actingAs($teacher)->patch(route('plugins.course-assessments.grading.update', $attemptId), [
+            'scores' => [$questionId => $score],
+            'feedback' => [$questionId => $feedback],
+            'teacher_feedback' => $feedback,
+        ])->assertRedirect()->assertSessionHasNoErrors();
+    }
+
+    private function gradeAuditCount(int $attemptId): int
+    {
+        return (int) DB::table('audit_logs')
+            ->where('action', 'course_assessment.graded')
+            ->where('entity_type', 'course_assessment_attempt')
+            ->where('entity_id', (string) $attemptId)
+            ->count();
+    }
+
+    private function assertGradingUnchanged(
+        int $attemptId,
+        int $questionId,
+        int $teacherId,
+        float $score,
+        string $feedback
+    ): void {
+        $this->assertDatabaseHas('course_assessment_attempts', [
+            'id' => $attemptId,
+            'status' => 'graded',
+            'manual_score' => $score,
+            'final_score' => $score,
+            'graded_by' => $teacherId,
+            'teacher_feedback' => $feedback,
+        ]);
+        $this->assertDatabaseHas('course_assessment_attempt_questions', [
+            'id' => $questionId,
+            'marks_awarded' => $score,
+            'manual_feedback' => $feedback,
+            'graded_by' => $teacherId,
+        ]);
+    }
+
     public function test_branch_manager_queue_excludes_course_linked_assessment_with_conflicting_course_branch(): void
     {
         $this->setupAssessmentPlugins();
@@ -396,8 +587,12 @@ final class CourseAssessmentGradingBranchIsolationTest extends TestCase
         $this->actingAs($manager)
             ->get(route('plugins.course-assessments.grading.index'))
             ->assertOk()
-            ->assertSee('Branch A Queue Assessment')
-            ->assertDontSee('Conflicting Branch Course Assessment');
+            ->assertViewHas('attempts', function ($attempts) use ($visibleAttempt, $hiddenAttempt): bool {
+                $visibleIds = $attempts->getCollection()->modelKeys();
+
+                return in_array($visibleAttempt, $visibleIds, true)
+                    && !in_array($hiddenAttempt, $visibleIds, true);
+            });
 
         $this->assertDatabaseHas('course_assessment_attempts', [
             'id' => $visibleAttempt,
