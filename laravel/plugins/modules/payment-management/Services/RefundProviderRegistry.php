@@ -21,7 +21,10 @@ class RefundProviderRegistry
     public function forTransaction(PaymentTransaction $transaction, bool $reconciliation = false): RefundProviderAdapter
     {
         $gateway = (string) $transaction->gateway_slug;
-        $adapterClass = self::ADAPTERS[$gateway] ?? null;
+        $adapterDefinition = self::ADAPTERS[$gateway] ?? null;
+        $adapterClass = $adapterDefinition === null
+            ? null
+            : 'Plugins\\Modules\\' . $adapterDefinition['module'] . '\\Services\\' . $adapterDefinition['adapter'];
         if ($adapterClass === null || !class_exists($adapterClass)) {
             throw new RuntimeException('No verified refund adapter is installed for this payment gateway.');
         }
