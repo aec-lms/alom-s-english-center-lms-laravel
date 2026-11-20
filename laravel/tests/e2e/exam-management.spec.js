@@ -42,6 +42,18 @@ test('student exam journey uses frozen snapshot, autosaves safely, and remains a
   // Verify the native radio group supports keyboard selection and visible focus.
   const optionThree = page.getByRole('radio', { name: '3' });
   const optionFour = page.getByRole('radio', { name: '4' });
+  const autosaveStatuses = [];
+  let submitStatus = null;
+  page.on('response', (response) => {
+    const request = response.request();
+    if (request.method() !== 'POST') return;
+    if (request.url().includes(`/exams/${fixture.exam_id}/attempt/autosave`)) {
+      autosaveStatuses.push(response.status());
+    }
+    if (request.url().endsWith(`/exams/${fixture.exam_id}/attempt`)) {
+      submitStatus = response.status();
+    }
+  });
   await optionThree.check();
   await expect(page.getByRole('status')).toHaveText('All selected answers saved.');
   await optionThree.focus();
@@ -134,6 +146,9 @@ test('student exam journey uses frozen snapshot, autosaves safely, and remains a
   // following page.goto() cancel submission, leaving the attempt in progress.
   const dashboardPath = new URL(dashboardUrl, page.url()).pathname;
   await page.waitForURL((url) => url.pathname === dashboardPath);
+  expect(autosaveStatuses.length).toBeGreaterThanOrEqual(4);
+  expect(autosaveStatuses.every((status) => status === 200)).toBe(true);
+  expect(submitStatus).toBe(302);
 
   await page.goto(historyUrl);
   await expect(page.getByText('2.00 / 2.00')).toBeVisible();
