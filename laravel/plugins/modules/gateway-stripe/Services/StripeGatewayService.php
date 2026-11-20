@@ -75,7 +75,7 @@ class StripeGatewayService
             $amountMinor = (int) round($remaining * 100);
             $response = Http::asForm()
                 ->withBasicAuth($secretKey, '')
-                ->withHeaders($idempotencyKey ? ['Idempotency-Key' => $idempotencyKey] : [])
+                ->withHeaders(!empty($reservation['provider_idempotency_key']) ? ['Idempotency-Key' => $reservation['provider_idempotency_key']] : [])
                 ->timeout(25)
                 ->post('https://api.stripe.com/v1/payment_intents', [
                     'amount' => $amountMinor,
