@@ -193,6 +193,63 @@ final class PhoneticsSpeakingRecordingSecurityTest extends TestCase
             'status' => 'pending',
             'score' => null,
         ]);
+
+        // Permission revocation after the request-time gate and after the
+        // recording lock must be observed by the final transactional check.
+        $permissionRaceRecording = PhoneticSpeakingRecording::query()->create([
+            'lms_driver' => 'aec',
+            'user_id' => (string) $student->getAuthIdentifier(),
+            'entry_id' => $entry->id,
+            'course_ref' => (string) $courseId,
+            'storage_path' => 'students/test/permission-revocation-race.webm',
+            'mime_type' => 'audio/webm',
+            'size_bytes' => 128,
+            'reported_duration_seconds' => 8,
+            'status' => 'pending',
+        ]);
+        $managerE = $this->createUserWithRole('branch_manager', (int) $branchB);
+        $reviewRole = $managerE->roles()->firstOrFail();
+        $reviewRole->permissions()->syncWithoutDetaching([$permissionId]);
+        $permissionRevoked = false;
+        DB::listen(function ($query) use (&$permissionRevoked, $reviewRole, $permissionId): void {
+            $sql = strtolower($query->sql);
+            if (
+                !$permissionRevoked
+                && str_contains($sql, 'phonetic_speaking_recordings')
+                && str_contains($sql, 'for update')
+            ) {
+                DB::table('permission_role')
+                    ->where('role_id', $reviewRole->getKey())
+                    ->where('permission_id', $permissionId)
+                    ->delete();
+                $permissionRevoked = true;
+            }
+        });
+        $auditCountBefore = DB::table('phonetic_audit_events')
+            ->where('entity_type', 'speaking_recording')
+            ->where('entity_id', (string) $permissionRaceRecording->id)
+            ->count();
+        $this->actingAs($managerE)
+            ->patch('/admin/phonetics/learning/recordings/' . $permissionRaceRecording->id . '/review', [
+                'score' => 4,
+                'feedback' => 'This write must fail after permission revocation.',
+            ])
+            ->assertForbidden();
+        $this->assertTrue($permissionRevoked, 'Permission revocation must occur after the recording lock.');
+        $this->assertDatabaseHas('phonetic_speaking_recordings', [
+            'id' => $permissionRaceRecording->id,
+            'status' => 'pending',
+            'score' => null,
+            'feedback' => null,
+        ]);
+        $this->assertSame(
+            $auditCountBefore,
+            DB::table('phonetic_audit_events')
+                ->where('entity_type', 'speaking_recording')
+                ->where('entity_id', (string) $permissionRaceRecording->id)
+                ->count(),
+            'A denied review must not create an audit event.'
+        );
     }
     public function test_branch_review_queue_hides_same_branch_student_recordings_for_other_branch_courses(): void
     {
