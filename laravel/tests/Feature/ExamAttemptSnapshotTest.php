@@ -201,6 +201,9 @@ class ExamAttemptSnapshotTest extends TestCase
 
     public function test_malformed_attempt_snapshots_fail_closed_without_changing_attempt_data(): void
     {
+        // This matrix intentionally makes more requests than the production
+        // per-student take limit; test the production throttle separately below.
+        $this->withoutMiddleware(\\Illuminate\\Routing\\Middleware\\ThrottleRequests::class);
         $this->markSystemInstalled();
         $this->activatePlugins(['exam-management']);
         $student = $this->createUserWithRole('student');
@@ -393,6 +396,17 @@ class ExamAttemptSnapshotTest extends TestCase
             $this->assertSame(5.0, (float) $unchanged->total_marks, "Malformed snapshot case '{$case}' must preserve total marks.");
             $this->assertTrue($unchanged->passed, "Malformed snapshot case '{$case}' must preserve its pass state.");
         }
+    }
+
+    public function test_student_exam_take_route_retains_its_production_rate_limit(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['exam-management']);
+
+        $route = app('router')->getRoutes()->getByName('plugins.exams.take');
+
+        $this->assertNotNull($route);
+        $this->assertContains('throttle:20,1', (array) $route->getAction('middleware'));
     }
 
     public function test_snapshot_validator_accepts_documented_upper_bounds_without_overflow(): void
