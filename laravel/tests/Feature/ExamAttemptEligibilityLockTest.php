@@ -561,6 +561,55 @@ class ExamAttemptEligibilityLockTest extends TestCase
         DB::purge($secondaryName);
     }
 
+    public function test_conflicting_user_and_student_profile_branches_fail_closed_on_attempt_start(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'student-management', 'exam-management']);
+
+        $branchA = Branch::query()->create([
+            'code' => 'EXAM-MISMATCH-A-' . strtoupper(bin2hex(random_bytes(3))),
+            'name' => 'Exam Mismatch Branch A',
+            'is_active' => true,
+        ]);
+        $branchB = Branch::query()->create([
+            'code' => 'EXAM-MISMATCH-B-' . strtoupper(bin2hex(random_bytes(3))),
+            'name' => 'Exam Mismatch Branch B',
+            'is_active' => true,
+        ]);
+
+        $student = $this->createUserWithRole('student', (int) $branchA->id);
+        Student::query()->create([
+            'user_id' => $student->id,
+            'branch_id' => $branchB->id,
+            'student_code' => 'EXAM-MISMATCH-' . strtoupper(bin2hex(random_bytes(4))),
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+        ]);
+        [$exam] = $this->createSnapshotFixture();
+        DB::table('exams')->where('id', $exam->id)->update(['branch_id' => $branchA->id]);
+
+        $controller = app(ExamController::class);
+        $request = fn () => $this->studentRequest(
+            'GET',
+            '/exams/' . $exam->id . '/take',
+            $student
+        );
+
+        // Account=A, profile=B must not silently prefer either identity.
+        $this->assertControllerAbort(403, fn () => $controller->take($request(), $exam->fresh()));
+
+        // The inverse mismatch must fail identically.
+        DB::table('users')->where('id', $student->id)->update(['branch_id' => $branchB->id]);
+        DB::table('students')->where('user_id', $student->id)->update(['branch_id' => $branchA->id]);
+        $this->assertControllerAbort(403, fn () => $controller->take($request(), $exam->fresh()));
+
+        $this->assertSame(
+            0,
+            ExamAttempt::query()->where('exam_id', $exam->id)->where('user_id', $student->id)->count(),
+            'Conflicting account/profile branch identities must never create an exam attempt.'
+        );
+    }
+
     private function createPaidExamRefundFixture(): array
     {
         $this->markSystemInstalled();
