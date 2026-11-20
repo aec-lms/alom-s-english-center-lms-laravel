@@ -80,6 +80,10 @@ test('student exam journey uses frozen snapshot, autosaves safely, and remains a
 
   const attemptId = Number(await page.locator('form[data-attempt-id]').getAttribute('data-attempt-id'));
   expect(attemptId).toBeGreaterThan(0);
+  // Use the application's named history route rather than assuming a URL
+  // shape; this keeps the browser journey aligned with the actual route map.
+  const historyUrl = await page.getByRole('link', { name: 'My attempt history' }).getAttribute('href');
+  expect(historyUrl).toBeTruthy();
 
   // Simulate an instructor changing the source question and scoring rules while
   // the student still has an active attempt. The browser must continue using its
@@ -123,7 +127,7 @@ test('student exam journey uses frozen snapshot, autosaves safely, and remains a
   expect(submitPayload).not.toMatch(/correct_option_index|correct_answer|answer_key/i);
   await page.waitForURL((url) => url.pathname !== takeUrl);
 
-  await page.goto(`/exams/${fixture.exam_id}/attempts`);
+  await page.goto(historyUrl);
   await expect(page.getByText('2.00 / 2.00')).toBeVisible();
   await expect(page.getByText('Passed')).toBeVisible();
 });
