@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use App\Core\Security\AuditLogger;
 use App\Models\Role;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Plugins\Modules\TeacherManagement\Models\Teacher;
 use Tests\TestCase;
@@ -141,6 +142,89 @@ final class TeacherProfileValidationTest extends TestCase
 
         $this->assertTrue((bool) $teacher->fresh()->is_active);
         $this->assertTrue((bool) $teacher->fresh()->user->is_active);
+    }
+
+    public function test_mysql_teacher_reactivation_holds_admin_role_until_commit(): void
+    {
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            $this->markTestSkipped('Teacher account reactivation role-lock proof requires MySQL 8.');
+        }
+
+        $this->markSystemInstalled();
+        $this->activatePlugins(['teacher-management']);
+        $admin = $this->createUserWithRole('admin');
+
+        $this->actingAs($admin)->post('/admin/teachers', [
+            'name' => 'Role Lock Teacher',
+            'email' => 'role.lock.teacher@aec.test',
+            'employee_code' => 'ROLE-LOCK-TEACH-001',
+            'specialization' => 'English Grammar',
+            'is_active' => '0',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $teacher = Teacher::query()->where('employee_code', 'ROLE-LOCK-TEACH-001')->firstOrFail();
+        $adminRoleId = (int) DB::table('roles')->where('slug', 'admin')->value('id');
+        $this->assertGreaterThan(0, $adminRoleId);
+
+        $primary = DB::connection();
+        $secondaryName = 'teacher_admin_role_revoke';
+        config(['database.connections.' . $secondaryName => config('database.connections.' . DB::getDefaultConnection())]);
+        DB::purge($secondaryName);
+        $secondary = DB::connection($secondaryName);
+        $secondary->statement('SET SESSION innodb_lock_wait_timeout = 1');
+
+        $primary->beginTransaction();
+        try {
+            $this->actingAs($admin)->put('/admin/teachers/' . $teacher->id, [
+                'name' => 'Role Lock Teacher',
+                'employee_code' => 'ROLE-LOCK-TEACH-001',
+                'specialization' => 'English Grammar',
+                'is_active' => '1',
+            ])->assertRedirect()->assertSessionHasNoErrors();
+
+            $this->assertTrue((bool) $teacher->fresh()->is_active);
+            $this->assertTrue((bool) $teacher->fresh()->user->is_active);
+
+            $secondary->beginTransaction();
+            try {
+                $secondary->table('role_user')
+                    ->where('user_id', $admin->id)
+                    ->where('role_id', $adminRoleId)
+                    ->delete();
+                $this->fail('Admin role revocation must wait while the teacher reactivation transaction holds the role pivot.');
+            } catch (QueryException $exception) {
+                $this->assertSame(1205, (int) ($exception->errorInfo[1] ?? 0), $exception->getMessage());
+            } finally {
+                if ($secondary->transactionLevel() > 0) {
+                    $secondary->rollBack();
+                }
+            }
+
+            $primary->commit();
+
+            $secondary->table('role_user')
+                ->where('user_id', $admin->id)
+                ->where('role_id', $adminRoleId)
+                ->delete();
+
+            $this->actingAs($admin)->put('/admin/teachers/' . $teacher->id, [
+                'name' => 'Must Not Update After Role Revocation',
+                'employee_code' => 'ROLE-LOCK-TEACH-001',
+                'specialization' => 'English Grammar',
+                'is_active' => '1',
+            ])->assertForbidden();
+
+            $this->assertSame('Role Lock Teacher', $teacher->fresh()->user->name);
+            $this->assertTrue((bool) $teacher->fresh()->is_active);
+            $this->assertTrue((bool) $teacher->fresh()->user->is_active);
+        } catch (\Throwable $exception) {
+            if ($primary->transactionLevel() > 0) {
+                $primary->rollBack();
+            }
+            throw $exception;
+        } finally {
+            DB::purge($secondaryName);
+        }
     }
 
     public function test_teacher_creation_fails_closed_when_teacher_role_is_missing(): void
