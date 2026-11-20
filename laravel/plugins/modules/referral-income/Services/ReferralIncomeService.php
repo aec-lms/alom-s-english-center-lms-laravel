@@ -312,6 +312,7 @@ class ReferralIncomeService
                 : (float) $order->net_amount;
             $invoice = DB::table('fee_invoices')->where('id', $order->invoice_id)->lockForUpdate()->first();
             if (!$invoice
+                || !in_array((string) $invoice->status, ['paid', 'partially_refunded', 'refunded'], true)
                 || abs($orderAmount - (float) $invoice->net_amount) > 0.01
                 || strtoupper(trim((string) $invoice->currency)) !== $orderCurrency) {
                 throw new RuntimeException('Referral reversal source order does not match its authoritative invoice amount and currency.');
