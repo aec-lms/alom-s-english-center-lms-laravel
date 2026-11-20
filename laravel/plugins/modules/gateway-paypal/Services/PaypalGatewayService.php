@@ -67,8 +67,15 @@ class PaypalGatewayService
             }
 
             $approvalUrl = (string) ($tx->metadata['approval_url'] ?? '');
-            if ($approvalUrl === '') {
-                throw new RuntimeException('A PayPal order is already reserved but its approval URL is unavailable; reconciliation is required.');
+            $approvalHost = strtolower((string) parse_url($approvalUrl, PHP_URL_HOST));
+            $sandbox = $this->plugins->getSetting('gateway-paypal', 'sandbox_mode', '1') === '1';
+            $allowedApprovalHosts = $sandbox
+                ? ['www.sandbox.paypal.com', 'sandbox.paypal.com']
+                : ['www.paypal.com', 'paypal.com'];
+            if ($approvalUrl === ''
+                || strtolower((string) parse_url($approvalUrl, PHP_URL_SCHEME)) !== 'https'
+                || !in_array($approvalHost, $allowedApprovalHosts, true)) {
+                throw new RuntimeException('A PayPal order is already reserved but its trusted approval URL is unavailable; reconciliation is required.');
             }
 
             return [
