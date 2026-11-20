@@ -24,6 +24,7 @@ class RecycleBinMigrationRollbackSafetyTest extends TestCase
             'plugins/modules/page-builder/Database/Migrations/2026_11_16_000026_add_builder_page_recycle_bin_fields.php' => ['cms_pages'],
             'plugins/modules/slider-builder/Database/Migrations/2026_11_16_000027_add_hero_slider_recycle_bin_fields.php' => ['cms_sliders'],
             'plugins/modules/sms-gateway/Database/Migrations/2026_11_16_000028_add_sms_campaign_recycle_bin_fields.php' => ['sms_campaigns'],
+            'plugins/modules/exam-management/Database/Migrations/2026_11_17_000003_make_exam_course_optional_and_add_recycle_bin.php' => ['exams'],
             'plugins/modules/student-management/Database/Migrations/2026_11_16_000016_add_student_recycle_bin_fields.php' => ['students'],
             'plugins/modules/teacher-management/Database/Migrations/2026_11_16_000017_add_teacher_recycle_bin_fields.php' => ['teachers'],
             'plugins/modules/visitor-popup-ads/Database/Migrations/2026_11_16_000029_add_visitor_popup_recycle_bin_fields.php' => ['visitor_popups'],
