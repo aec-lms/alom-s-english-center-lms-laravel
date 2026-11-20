@@ -43,6 +43,41 @@ class StudentManagementProvisioningSecurityTest extends TestCase
         $this->assertSame('UPDATED-CODE-002', $student->student_code);
     }
 
+    public function test_student_update_rejects_case_insensitive_legacy_email_and_code_collisions(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['student-management']);
+        $admin = $this->createUserWithRole('admin');
+
+        $this->actingAs($admin)->post('/admin/students', [
+            'name' => 'Update Collision Target',
+            'email' => 'update.target@aec.test',
+            'password' => 'StrongPassword123!',
+            'student_code' => 'UPDATE-TARGET-001',
+            'status' => 'active',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $target = Student::query()->where('student_code', 'UPDATE-TARGET-001')->firstOrFail();
+
+        $legacyUser = User::factory()->create(['email' => 'Legacy.Update@aec.test']);
+        Student::query()->create([
+            'user_id' => $legacyUser->id,
+            'student_code' => 'legacy-update-001',
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($admin)->put('/admin/students/' . $target->id, [
+            'name' => 'Update Collision Target',
+            'email' => 'legacy.update@aec.test',
+            'student_code' => ' LEGACY-UPDATE-001 ',
+            'status' => 'active',
+        ])->assertSessionHasErrors(['email', 'student_code']);
+
+        $target->refresh()->load('user');
+        $this->assertSame('update.target@aec.test', $target->user->email);
+        $this->assertSame('UPDATE-TARGET-001', $target->student_code);
+    }
+
     public function test_student_creation_rejects_case_insensitive_legacy_email_and_code_collisions(): void
     {
         $this->markSystemInstalled();
@@ -96,8 +131,12 @@ class StudentManagementProvisioningSecurityTest extends TestCase
             Str::createRandomStringsNormally();
         }
 
-        $this->assertDatabaseHas('students', ['student_code' => 'STU-BBBBBBBBBB']);
-        $this->assertDatabaseMissing('students', ['student_code' => 'STU-AAAAAAAAAA', 'user_id' => User::query()->where('email', 'generated.retry@aec.test')->value('id')]);
+        $newUserId = User::query()->where('email', 'generated.retry@aec.test')->value('id');
+        $this->assertSame(
+            'STU-BBBBBBBBBB',
+            Student::query()->where('user_id', $newUserId)->value('student_code')
+        );
+        $this->assertDatabaseHas('students', ['student_code' => 'STU-AAAAAAAAAA', 'user_id' => $existingUser->id]);
     }
 
     public function test_student_account_is_not_created_when_canonical_student_role_is_missing(): void
