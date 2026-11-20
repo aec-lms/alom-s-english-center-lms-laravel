@@ -585,6 +585,53 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
         Http::assertSentCount(3);
     }
 
+    public function test_stripe_refund_rejects_provider_metadata_for_another_local_refund(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'gateway-stripe']);
+
+        app(PluginManager::class)->saveSettings('gateway-stripe', [
+            'secret_key' => 'sk_test_refund_identity_123456',
+            'refunds_enabled' => '1',
+        ], ['secret_key']);
+
+        [$invoice, $transaction] = $this->createSettledPayment('gateway-stripe', 'pi_refund_identity_001');
+        $requester = $this->createUserWithRole('admin');
+        $approver = $this->createUserWithRole('admin');
+        Http::fake(function (ClientRequest $request) {
+            return Http::response([
+                'id' => 're_refund_identity_wrong_local_row',
+                'payment_intent' => 'pi_refund_identity_001',
+                'amount' => 10000,
+                'currency' => 'bdt',
+                'metadata' => [
+                    'transaction_ref' => 'A-DIFFERENT-TRANSACTION',
+                    'refund_id' => '999999',
+                ],
+                'status' => 'succeeded',
+            ], 200);
+        });
+
+        $service = app(RefundOrchestrationService::class);
+        $refund = $service->requestOnlineRefund(
+            $transaction,
+            100,
+            'Provider returned another refund identity',
+            (int) $requester->id,
+            'stripe-refund-identity-mismatch-001',
+        );
+        $review = $service->approveAndSubmit($refund, (int) $approver->id);
+
+        $this->assertSame('requires_review', $review->status);
+        $this->assertSame('provider_response_mismatch', $review->provider_status);
+        $this->assertSame('re_refund_identity_wrong_local_row', $review->provider_refund_reference);
+        $this->assertNull($review->ledger_applied_at);
+        $this->assertSame(1000.0, (float) $invoice->fresh()->paid_amount);
+        $this->assertSame('paid', $invoice->fresh()->status);
+        $this->assertSame('settled', $transaction->fresh()->status);
+        Http::assertSentCount(1);
+    }
+
     public function test_pending_stripe_refund_keeps_invoice_unchanged_and_reserves_amount_until_provider_query_confirms_success(): void
     {
         $this->markSystemInstalled();
@@ -1098,24 +1145,3 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
             'subtotal_amount' => 1000,
             'discount_amount' => 0,
             'net_amount' => 1000,
-            'paid_amount' => 1000,
-            'currency' => 'BDT',
-            'status' => 'paid',
-        ]);
-
-        $transaction = PaymentTransaction::query()->create([
-            'transaction_ref' => 'REFUND-TXN-' . strtoupper(bin2hex(random_bytes(5))),
-            'invoice_id' => $invoice->id,
-            'branch_id' => null,
-            'gateway_slug' => $gateway,
-            'amount' => 1000,
-            'currency' => 'BDT',
-            'status' => 'settled',
-            'external_reference' => $externalReference,
-            'metadata' => $metadata,
-            'settled_at' => now(),
-        ]);
-
-        return [$invoice, $transaction];
-    }
-}
