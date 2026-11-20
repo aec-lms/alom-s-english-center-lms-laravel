@@ -7,7 +7,12 @@ use Plugins\Modules\ExamManagement\Models\ExamQuestion;
 
 require __DIR__ . '/../../vendor/autoload.php';
 $app = require __DIR__ . '/../../bootstrap/app.php';
-$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+$app->make(Illuminate\\Contracts\\Console\\Kernel::class)->bootstrap();
+
+if (!$app->environment('testing')) {
+    fwrite(STDERR, "Refusing to mutate E2E exam fixture source outside APP_ENV=testing.\\n");
+    exit(1);
+}
 
 $examId = (int) ($argv[1] ?? 0);
 $exam = Exam::query()->with('questions')->findOrFail($examId);
