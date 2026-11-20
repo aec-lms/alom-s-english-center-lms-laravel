@@ -299,4 +299,35 @@ final class ReferralIncomeRedTeamHardeningTest extends TestCase
     }
 
 
+    public function test_commission_recording_rejects_unknown_sources_wrong_buyers_and_untrusted_amounts(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['referral-income', 'student-management', 'fees-management', 'commerce-cart']);
+
+        $referrer = $this->createUserWithRole('student');
+        $buyer = $this->createUserWithRole('student');
+        $otherBuyer = $this->createUserWithRole('student');
+        $service = app(ReferralIncomeService::class);
+        $service->applyCode($buyer, $service->createOrGetCode($referrer));
+        $service->applyCode($otherBuyer, $service->createOrGetCode($referrer));
+        $orderId = $this->createPaidCommerceOrder($buyer, 1000, 'BDT');
+
+        $this->assertNull($service->recordSettledPurchase($buyer, 'arbitrary_order', $orderId, 1000, 'BDT'));
+        $this->assertNull($service->recordSettledPurchase($buyer, 'commerce_order', $orderId, 999, 'BDT'));
+        $this->assertNull($service->recordSettledPurchase($buyer, 'commerce_order', $orderId, 1000, 'USD'));
+        $this->assertNull($service->recordSettledPurchase($otherBuyer, 'commerce_order', $orderId, 1000, 'BDT'));
+        $this->assertDatabaseCount('referral_commissions', 0);
+
+        $commissionId = $service->recordSettledPurchase($buyer, 'commerce_order', $orderId, 1000, 'BDT');
+        $this->assertNotNull($commissionId);
+        $this->assertDatabaseHas('referral_commissions', [
+            'id' => $commissionId,
+            'source_type' => 'commerce_order',
+            'source_id' => (string) $orderId,
+            'eligible_amount' => 1000,
+            'currency' => 'BDT',
+        ]);
+    }
+
+
 }
