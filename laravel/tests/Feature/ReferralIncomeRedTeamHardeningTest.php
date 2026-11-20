@@ -268,7 +268,7 @@ final class ReferralIncomeRedTeamHardeningTest extends TestCase
         try {
             $service->applyCode($buyer, $service->createOrGetCode($referrer));
             $this->fail('A paid course-cart order must make the buyer ineligible for a new referral attribution.');
-        } catch (\\Illuminate\\Validation\\ValidationException $exception) {
+        } catch (\Illuminate\Validation\ValidationException $exception) {
             $this->assertStringContainsString('before the first paid order', $exception->errors()['referral_code'][0] ?? '');
         }
 
@@ -456,7 +456,7 @@ final class ReferralIncomeRedTeamHardeningTest extends TestCase
         try {
             $service->applyCode($buyer, $service->createOrGetCode($referrer));
             $this->fail('A paid commerce order must make the buyer ineligible for referral attribution.');
-        } catch (\\Illuminate\\Validation\\ValidationException $exception) {
+        } catch (\Illuminate\Validation\ValidationException $exception) {
             $this->assertStringContainsString('before the first paid order', $exception->errors()['referral_code'][0] ?? '');
         }
 
