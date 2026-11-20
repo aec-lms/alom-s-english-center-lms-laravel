@@ -199,6 +199,104 @@ class ExamAttemptSnapshotTest extends TestCase
         $this->assertFalse($unchanged->passed);
     }
 
+    public function test_malformed_attempt_snapshots_fail_closed_without_changing_attempt_data(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['exam-management']);
+        $student = $this->createUserWithRole('student');
+        [$exam, $question] = $this->createSnapshotFixture();
+        $token = $student->createToken('malformed-exam-snapshot-mobile')->plainTextToken;
+
+        $validSnapshot = [
+            'version' => 1,
+            'duration_minutes' => 30,
+            'pass_marks' => 5.0,
+            'questions' => [[
+                'id' => (int) $question->id,
+                'prompt' => 'Original question text',
+                'options' => ['Original option A', 'Original option B'],
+                'correct_option_index' => 1,
+                'marks' => 5.0,
+                'negative_marks' => 1.0,
+            ]],
+        ];
+
+        $missingQuestionId = $validSnapshot;
+        unset($missingQuestionId['questions'][0]['id']);
+        $duplicateQuestionId = $validSnapshot;
+        $duplicateQuestionId['questions'][] = $duplicateQuestionId['questions'][0];
+        $associativeOptions = $validSnapshot;
+        $associativeOptions['questions'][0]['options'] = [1 => 'Only one option'];
+        $tooFewOptions = $validSnapshot;
+        $tooFewOptions['questions'][0]['options'] = ['Only one option'];
+        $invalidOptionValue = $validSnapshot;
+        $invalidOptionValue['questions'][0]['options'][1] = 42;
+        $invalidCorrectIndex = $validSnapshot;
+        $invalidCorrectIndex['questions'][0]['correct_option_index'] = 2;
+        $negativeMarks = $validSnapshot;
+        $negativeMarks['questions'][0]['marks'] = -1;
+        $nonFiniteNegativeMarks = $validSnapshot;
+        $nonFiniteNegativeMarks['questions'][0]['negative_marks'] = 'INF';
+        $missingNegativeMarks = $validSnapshot;
+        unset($missingNegativeMarks['questions'][0]['negative_marks']);
+        $invalidPassMarks = $validSnapshot;
+        $invalidPassMarks['pass_marks'] = 'NAN';
+        $invalidDuration = $validSnapshot;
+        $invalidDuration['duration_minutes'] = 0;
+        $unsupportedVersion = $validSnapshot;
+        $unsupportedVersion['version'] = 2;
+        $invalidPrompt = $validSnapshot;
+        $invalidPrompt['questions'][0]['prompt'] = 123;
+
+        $malformedSnapshots = [
+            'missing question ID' => $missingQuestionId,
+            'duplicate question IDs' => $duplicateQuestionId,
+            'associative options' => $associativeOptions,
+            'fewer than two options' => $tooFewOptions,
+            'non-string option' => $invalidOptionValue,
+            'out-of-range correct option' => $invalidCorrectIndex,
+            'negative marks' => $negativeMarks,
+            'non-finite negative marks' => $nonFiniteNegativeMarks,
+            'missing negative marks' => $missingNegativeMarks,
+            'non-finite pass marks' => $invalidPassMarks,
+            'zero duration' => $invalidDuration,
+            'unsupported version' => $unsupportedVersion,
+            'non-string prompt' => $invalidPrompt,
+        ];
+
+        foreach ($malformedSnapshots as $case => $snapshot) {
+            $savedAnswers = [(string) $question->id => 0];
+            $attempt = ExamAttempt::query()->create([
+                'exam_id' => $exam->id,
+                'user_id' => $student->id,
+                'started_at' => now(),
+                'submitted_answers' => $savedAnswers,
+                'exam_snapshot' => $snapshot,
+                'score_obtained' => 2.5,
+                'total_marks' => 5,
+                'passed' => true,
+                'submitted_at' => null,
+            ]);
+
+            $this->actingAs($student)->get("/exams/{$exam->id}/take")
+                ->assertStatus(409)
+                ->assertSee('saved question and scoring data is missing or invalid');
+
+            $this->withHeader('Authorization', 'Bearer ' . $token)
+                ->postJson("/api/v1/my/exams/{$exam->id}/attempts")
+                ->assertStatus(409)
+                ->assertJsonPath('error.code', 'legacy_attempt_snapshot_unavailable')
+                ->assertJsonPath('error.message', fn ($message) => str_contains($message, 'saved question and scoring data is missing or invalid'));
+
+            $unchanged = $attempt->fresh();
+            $this->assertNull($unchanged->submitted_at, "Malformed snapshot case '{$case}' must remain pending.");
+            $this->assertSame($savedAnswers, $unchanged->submitted_answers, "Malformed snapshot case '{$case}' must preserve saved answers.");
+            $this->assertSame(2.5, (float) $unchanged->score_obtained, "Malformed snapshot case '{$case}' must preserve its score.");
+            $this->assertSame(5.0, (float) $unchanged->total_marks, "Malformed snapshot case '{$case}' must preserve total marks.");
+            $this->assertTrue($unchanged->passed, "Malformed snapshot case '{$case}' must preserve its pass state.");
+        }
+    }
+
     private function createSnapshotFixture(): array
     {
         $exam = Exam::query()->create([
