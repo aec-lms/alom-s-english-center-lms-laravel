@@ -344,4 +344,165 @@ final class PhoneticsSpeakingRecordingSecurityTest extends TestCase
         ]);
     }
 
+
+    public function test_mysql_permission_pivot_lock_blocks_concurrent_revocation_until_review_commits(): void
+    {
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            $this->markTestSkipped('Permission-pivot contention requires MySQL 8 row locks.');
+        }
+
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'course-management', 'phonetics']);
+
+        $branch = DB::table('branches')->insertGetId([
+            'code' => 'PHON-PIVOT-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'name' => 'Permission Pivot Lock Branch',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $student = $this->createUserWithRole('student', (int) $branch);
+        $reviewer = $this->createUserWithRole('branch_manager', (int) $branch);
+
+        $courseId = DB::table('courses')->insertGetId([
+            'code' => 'PHON-PIVOT-COURSE-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'title' => 'Permission Pivot Lock Course',
+            'slug' => 'phonetics-pivot-' . strtolower(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'description' => 'MySQL authorization pivot lock test',
+            'price' => 0,
+            'status' => 'published',
+            'branch_id' => $branch,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        PhoneticSetting::query()->firstOrCreate(['id' => 1], [
+            'enabled' => true,
+            'course_slug' => 'british-american-phonetics',
+            'course_title' => 'British & American Phonetics',
+        ]);
+        PhoneticSetting::query()->whereKey(1)->update(['enabled' => true, 'course_slug' => 'british-american-phonetics']);
+        Cache::forget('phonetics.settings');
+
+        $entry = PhoneticEntry::query()->create([
+            'word' => 'pivot-lock-test-word',
+            'category' => 'rhoticity',
+            'uk_ipa' => '/test/',
+            'us_ipa' => '/test/',
+            'is_active' => true,
+            'sort_order' => 1,
+        ]);
+        $recording = PhoneticSpeakingRecording::query()->create([
+            'lms_driver' => 'aec',
+            'user_id' => (string) $student->id,
+            'entry_id' => $entry->id,
+            'course_ref' => (string) $courseId,
+            'storage_path' => 'students/test/permission-pivot-lock.webm',
+            'mime_type' => 'audio/webm',
+            'size_bytes' => 128,
+            'reported_duration_seconds' => 8,
+            'status' => 'pending',
+        ]);
+
+        $permissionId = DB::table('permissions')->where('slug', 'phonetics.manage')->value('id');
+        $this->assertNotNull($permissionId);
+        $reviewRole = $reviewer->roles()->firstOrFail();
+        $reviewRole->permissions()->syncWithoutDetaching([$permissionId]);
+
+        $secondName = 'mysql_phonetics_permission_revoke';
+        config(['database.connections.' . $secondName => config('database.connections.mysql')]);
+        DB::purge($secondName);
+        $secondConnection = DB::connection($secondName);
+        $secondConnection->statement('SET SESSION innodb_lock_wait_timeout = 1');
+
+        $revocationBlocked = false;
+        $revocationAttempted = false;
+        DB::listen(function ($query) use (&$revocationBlocked, &$revocationAttempted, $secondConnection, $reviewRole, $permissionId): void {
+            $sql = strtolower($query->sql);
+            if (
+                $revocationAttempted
+                || !str_contains($sql, 'permission_role')
+                || !str_contains($sql, 'for update')
+            ) {
+                return;
+            }
+
+            // This callback runs after the review transaction has acquired the
+            // permission_role row lock. A second DB connection now attempts the
+            // exact revoke operation and must be blocked until review commits.
+            $revocationAttempted = true;
+            try {
+                $secondConnection->table('permission_role')
+                    ->where('role_id', $reviewRole->getKey())
+                    ->where('permission_id', $permissionId)
+                    ->delete();
+            } catch (\Illuminate\Database\QueryException $exception) {
+                $revocationBlocked = str_contains(strtolower($exception->getMessage()), 'lock wait timeout');
+                if (!$revocationBlocked) {
+                    throw $exception;
+                }
+            }
+        });
+
+        try {
+            $this->actingAs($reviewer)
+                ->patch('/admin/phonetics/learning/recordings/' . $recording->id . '/review', [
+                    'score' => 5,
+                    'feedback' => 'Review completed while the permission pivot was locked.',
+                ])
+                ->assertSessionHas('status');
+
+            $this->assertTrue($revocationAttempted, 'The second connection must attempt revocation after the final permission lock.');
+            $this->assertTrue($revocationBlocked, 'Concurrent permission revocation must wait for the review transaction.');
+            $this->assertDatabaseHas('phonetic_speaking_recordings', [
+                'id' => $recording->id,
+                'status' => 'reviewed',
+                'score' => 5,
+            ]);
+
+            // Once the review commits, the waiting revoke is now allowed.
+            $deleted = $secondConnection->table('permission_role')
+                ->where('role_id', $reviewRole->getKey())
+                ->where('permission_id', $permissionId)
+                ->delete();
+            $this->assertSame(1, $deleted);
+
+            $nextRecording = PhoneticSpeakingRecording::query()->create([
+                'lms_driver' => 'aec',
+                'user_id' => (string) $student->id,
+                'entry_id' => $entry->id,
+                'course_ref' => (string) $courseId,
+                'storage_path' => 'students/test/permission-revoked-after-lock.webm',
+                'mime_type' => 'audio/webm',
+                'size_bytes' => 128,
+                'reported_duration_seconds' => 8,
+                'status' => 'pending',
+            ]);
+            $auditBefore = DB::table('phonetic_audit_events')
+                ->where('entity_type', 'speaking_recording')
+                ->where('entity_id', (string) $nextRecording->id)
+                ->count();
+
+            $this->actingAs($reviewer)
+                ->patch('/admin/phonetics/learning/recordings/' . $nextRecording->id . '/review', [
+                    'score' => 4,
+                    'feedback' => 'Must be denied after the permission revoke commits.',
+                ])
+                ->assertForbidden();
+
+            $this->assertDatabaseHas('phonetic_speaking_recordings', [
+                'id' => $nextRecording->id,
+                'status' => 'pending',
+                'score' => null,
+                'feedback' => null,
+            ]);
+            $this->assertSame($auditBefore, DB::table('phonetic_audit_events')
+                ->where('entity_type', 'speaking_recording')
+                ->where('entity_id', (string) $nextRecording->id)
+                ->count());
+        } finally {
+            DB::purge($secondName);
+        }
+    }
+
+
 }
