@@ -1,33 +1,34 @@
 {
-  "slug": "payment-management",
-  "name": "Payment Ledger & Reconciliation",
-  "version": "2.0.5",
-  "author": "Alom's English Center",
-  "category": "finance",
-  "description": "Unified payment ledger, settlement, offline receipts, partial refunds and provider-reference reconciliation with branch isolation.",
-  "core_compatibility": "^2.0",
-  "dependencies": [],
-  "provider": "Plugins\\Modules\\PaymentManagement\\Providers\\PaymentManagementServiceProvider",
-  "permissions": [
-    {
-      "slug": "payments.manage",
-      "name": "Manage Payments, Refunds & Ledger"
-    }
-  ],
-  "settings_schema": [],
-  "optional_dependencies": [
-    "fees-management",
-    "referral-income",
-    "student-management",
-    "marketing-management"
-  ],
-  "admin_menu": [
-    {
-      "group": "Finance & Gateways",
-      "label": "Payments & Ledger",
-      "route": "plugins.payments.index",
-      "order": 100,
-      "permission": "payments.manage"
-    }
-  ]
+    "slug": "payment-management",
+    "name": "Payment Ledger & Reconciliation",
+    "version": "2.0.5",
+    "author": "Alom's English Center",
+    "category": "finance",
+    "description": "Unified payment ledger, settlement, offline receipts, partial refunds and provider-reference reconciliation with branch isolation.",
+    "core_compatibility": "^2.0",
+    "dependencies": [],
+    "provider": "Plugins\\Modules\\PaymentManagement\\Providers\\PaymentManagementServiceProvider",
+    "permissions": [
+        {
+            "slug": "payments.manage",
+            "name": "Manage Payments, Refunds & Ledger"
+        }
+    ],
+    "settings_schema": [],
+    "optional_dependencies": [
+        "fees-management",
+        "referral-income",
+        "student-management",
+        "marketing-management",
+        "course-management"
+    ],
+    "admin_menu": [
+        {
+            "group": "Finance & Gateways",
+            "label": "Payments & Ledger",
+            "route": "plugins.payments.index",
+            "order": 100,
+            "permission": "payments.manage"
+        }
+    ]
 }

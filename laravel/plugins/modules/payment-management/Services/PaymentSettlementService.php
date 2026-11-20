@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
+use Plugins\Modules\CourseManagement\Jobs\SendGiftRecipientEmailJob;
 use App\Core\Plugins\PluginManager;
 use App\Models\User;
 use Plugins\Modules\ReferralIncome\Services\ReferralIncomeService;
@@ -46,6 +47,19 @@ class PaymentSettlementService
             }
 
             $invoice = FeeInvoice::query()->where('id', $lockedTx->invoice_id)->lockForUpdate()->firstOrFail();
+
+            // Referral attribution and first-paid-order settlement serialize on
+            // the buyer account row. Resolve the order owner without locking the
+            // order, then acquire the shared buyer lock before any paid-state
+            // mutation or order-row lock later in this transaction.
+            if (Schema::hasTable('commerce_orders')) {
+                $commerceBuyerId = DB::table('commerce_orders')
+                    ->where('invoice_id', $invoice->id)
+                    ->value('user_id');
+                if ($commerceBuyerId !== null) {
+                    User::query()->whereKey((int) $commerceBuyerId)->lockForUpdate()->firstOrFail();
+                }
+            }
 
             // A provider callback cannot settle an invoice in a different
             // currency, even when the numeric amount happens to fit.
@@ -151,6 +165,28 @@ class PaymentSettlementService
                             throw new RuntimeException('An empty commerce order cannot be settled.');
                         }
                         foreach ($settlementItems as $settlementItem) {
+                            // Gift purchases carry a recipient, redemption token and
+                            // independent fulfillment lifecycle. They must never pass
+                            // through the buyer-entitlement path below. Keep the
+                            // generic settlement allow-list explicit until dedicated
+                            // recipient fulfillment is linked to these order items.
+                            $genericFulfillmentTypes = [
+                                'course',
+                                'ebook',
+                                'mock_test',
+                                'exam',
+                                'subscription',
+                                'live_class',
+                                'other',
+                            ];
+                            if (in_array((string) $settlementItem->item_type, ['gift_course', 'gift_voucher'], true)) {
+                                $this->assertGiftOrderItemReady($settlementItem, $preflightOrder, $lockedTx, $invoice);
+                            } elseif (!in_array((string) $settlementItem->item_type, $genericFulfillmentTypes, true)) {
+                                throw new RuntimeException(
+                                    'Gift and voucher items require dedicated recipient fulfillment and cannot use buyer entitlements.'
+                                );
+                            }
+
                             $quantity = (int) $settlementItem->quantity;
                             $unitPrice = round((float) $settlementItem->unit_price, 2);
                             $lineTotal = round((float) $settlementItem->line_total, 2);
@@ -213,6 +249,15 @@ class PaymentSettlementService
                     if (!Schema::hasTable('commerce_order_items') || !Schema::hasTable('commerce_entitlements')) continue;
                     $orderItems = DB::table('commerce_order_items')->where('order_id', $order->id)->get();
                     foreach ($orderItems as $orderItem) {
+                        if ($orderItem->item_type === 'gift_course') {
+                            $this->fulfillUnifiedCourseGift($orderItem, $order, $invoice, $lockedTx);
+                            continue;
+                        }
+                        if ($orderItem->item_type === 'gift_voucher') {
+                            $this->fulfillUnifiedGiftVoucher($orderItem, $order, $invoice, $lockedTx);
+                            continue;
+                        }
+
                         $itemDetails = json_decode((string) ($orderItem->metadata ?? '{}'), true) ?: [];
                         $entitlementDetails = $itemDetails['entitlement'] ?? $itemDetails;
                         $durationDays = isset($entitlementDetails['duration_days'])
@@ -291,6 +336,167 @@ class PaymentSettlementService
 
             return $lockedTx->fresh();
         });
+    }
+
+    /**
+     * Validate a gift draft against its immutable cart/order item before the
+     * invoice can be considered settled. Gifts never use buyer entitlements.
+     */
+    private function assertGiftOrderItemReady(
+        object $item,
+        object $order,
+        PaymentTransaction $transaction,
+        FeeInvoice $invoice
+    ): void {
+        $unsupported = 'Gift and voucher items require dedicated recipient fulfillment and cannot use buyer entitlements.';
+        $itemType = (string) $item->item_type;
+        $table = $itemType === 'gift_course' ? 'course_gifts' : 'course_gift_vouchers';
+        if (!Schema::hasTable($table)
+            || !Schema::hasColumn($table, 'commerce_order_item_id')
+            || !Schema::hasColumn($table, 'unified_payment_transaction_id')) {
+            throw new RuntimeException($unsupported);
+        }
+
+        $draft = DB::table($table)->where('id', (int) $item->item_id)->lockForUpdate()->first();
+        if (!$draft
+            || (int) $draft->sender_user_id !== (int) $order->user_id
+            || (int) ($draft->commerce_order_item_id ?? 0) !== (int) $item->id
+            || $draft->status !== 'awaiting_payment'
+            || $draft->invoice_id !== null
+            || $draft->payment_transaction_id !== null
+            || $draft->unified_payment_transaction_id !== null) {
+            throw new RuntimeException($unsupported);
+        }
+        if ($draft->expires_at && now()->greaterThan($draft->expires_at)) {
+            throw new RuntimeException('Gift draft expired before payment settlement; manual reconciliation is required.');
+        }
+
+        $recipientEmail = strtolower(trim((string) $draft->recipient_email));
+        $senderEmail = strtolower(trim((string) DB::table('users')->where('id', $order->user_id)->value('email')));
+        if ($recipientEmail === '' || $recipientEmail === $senderEmail) {
+            throw new RuntimeException('Gift recipient must be different from the sender and have a valid email address.');
+        }
+        if (Schema::hasColumn($table, 'recipient_user_id') && $draft->recipient_user_id !== null) {
+            $recipient = DB::table('users')->where('id', $draft->recipient_user_id)->first();
+            if (!$recipient || strtolower(trim((string) $recipient->email)) !== $recipientEmail) {
+                throw new RuntimeException('Gift recipient account no longer matches the verified recipient email.');
+            }
+        }
+
+        $lineTotal = round((float) $item->line_total, 2);
+        $amount = round((float) $draft->amount, 2);
+        $currency = strtoupper(trim((string) $draft->currency));
+        if ((int) $item->quantity !== 1 || $lineTotal <= 0
+            || abs($amount - $lineTotal) > 0.01
+            || $currency === ''
+            || $currency !== strtoupper((string) $invoice->currency)
+            || $currency !== strtoupper((string) $transaction->currency)
+            || (int) $order->branch_id !== (int) $invoice->branch_id
+            || (int) $order->branch_id !== (int) $transaction->branch_id) {
+            throw new RuntimeException('Gift draft amount, currency, quantity, or branch snapshot does not match the settled order.');
+        }
+
+        if ($itemType === 'gift_course') {
+            if (!Schema::hasTable('courses') || !Schema::hasColumn('course_gifts', 'course_id')
+                || !Schema::hasColumn('course_gifts', 'redeem_token_hash')
+                || !Schema::hasColumn('course_gifts', 'redeem_token_encrypted')
+                || !Schema::hasColumn('course_gifts', 'subtotal_amount')
+                || !Schema::hasColumn('course_gifts', 'discount_amount')) {
+                throw new RuntimeException($unsupported);
+            }
+            $giftSubtotal = round((float) $draft->subtotal_amount, 2);
+            $giftDiscount = round((float) $draft->discount_amount, 2);
+            if ($giftSubtotal <= 0 || $giftDiscount < 0 || $giftDiscount > $giftSubtotal
+                || abs(round($giftSubtotal - $giftDiscount, 2) - $amount) > 0.01
+                || !filled($draft->redeem_token_hash)
+                || !filled($draft->redeem_token_encrypted)) {
+                throw new RuntimeException('Course gift amount, discount, or redemption token does not reconcile.');
+            }
+            $course = DB::table('courses')->where('id', (int) $draft->course_id)
+                ->where('status', 'published')->first();
+            if (!$course) {
+                throw new RuntimeException('The gifted course is no longer published; manual reconciliation is required.');
+            }
+            $courseBranchId = Schema::hasColumn('courses', 'branch_id') && $course->branch_id !== null
+                ? (int) $course->branch_id
+                : null;
+            $orderBranchId = $order->branch_id !== null ? (int) $order->branch_id : null;
+            if ($courseBranchId !== null && $courseBranchId !== $orderBranchId) {
+                throw new RuntimeException('Gifted course branch no longer matches the sender branch; manual reconciliation is required.');
+            }
+            if (Schema::hasColumn('course_gifts', 'recipient_user_id') && $draft->recipient_user_id !== null) {
+                $recipient = User::query()->find((int) $draft->recipient_user_id);
+                if (!$recipient || strtolower(trim((string) $recipient->email)) !== $recipientEmail) {
+                    throw new RuntimeException('The known gift recipient account no longer matches the recipient email.');
+                }
+                if ($courseBranchId !== null && $this->assignedBranchId($recipient) !== $courseBranchId) {
+                    throw new RuntimeException('The known gift recipient is not assigned to the course branch; manual reconciliation is required.');
+                }
+            }
+        } else {
+            foreach (['course_gift_wallets', 'course_gift_wallet_transactions', 'course_gift_voucher_redemptions'] as $requiredTable) {
+                if (!Schema::hasTable($requiredTable)) {
+                    throw new RuntimeException('Gift voucher wallet and redemption storage is not installed.');
+                }
+            }
+            if (!filled($draft->redeem_token_hash) || !filled($draft->redeem_token_encrypted)
+                || abs(round((float) $draft->remaining_amount, 2) - $amount) > 0.01
+                || ($draft->expires_at && now()->greaterThan($draft->expires_at))) {
+                throw new RuntimeException('Gift voucher balance or expiry does not match the payable draft.');
+            }
+        }
+    }
+
+    private function fulfillUnifiedCourseGift(
+        object $item,
+        object $order,
+        FeeInvoice $invoice,
+        PaymentTransaction $transaction
+    ): void {
+        $updated = DB::table('course_gifts')->where('id', (int) $item->item_id)
+            ->where('sender_user_id', (int) $order->user_id)
+            ->where('commerce_order_item_id', (int) $item->id)
+            ->where('status', 'awaiting_payment')
+            ->whereNull('invoice_id')
+            ->whereNull('unified_payment_transaction_id')
+            ->update([
+                'invoice_id' => $invoice->id,
+                'unified_payment_transaction_id' => $transaction->id,
+                'status' => 'paid',
+                'paid_at' => now(),
+                'updated_at' => now(),
+            ]);
+        if ($updated !== 1) {
+            throw new RuntimeException('Course gift could not be issued exactly once after verified settlement.');
+        }
+
+        SendGiftRecipientEmailJob::dispatch('gift_course', (int) $item->item_id)->afterCommit();
+    }
+
+    private function fulfillUnifiedGiftVoucher(
+        object $item,
+        object $order,
+        FeeInvoice $invoice,
+        PaymentTransaction $transaction
+    ): void {
+        $updated = DB::table('course_gift_vouchers')->where('id', (int) $item->item_id)
+            ->where('sender_user_id', (int) $order->user_id)
+            ->where('commerce_order_item_id', (int) $item->id)
+            ->where('status', 'awaiting_payment')
+            ->whereNull('invoice_id')
+            ->whereNull('unified_payment_transaction_id')
+            ->update([
+                'invoice_id' => $invoice->id,
+                'unified_payment_transaction_id' => $transaction->id,
+                'status' => 'paid',
+                'paid_at' => now(),
+                'updated_at' => now(),
+            ]);
+        if ($updated !== 1) {
+            throw new RuntimeException('Gift voucher could not be issued exactly once after verified settlement.');
+        }
+
+        SendGiftRecipientEmailJob::dispatch('gift_voucher', (int) $item->item_id)->afterCommit();
     }
 
     private function assignedBranchId(User $user): ?int

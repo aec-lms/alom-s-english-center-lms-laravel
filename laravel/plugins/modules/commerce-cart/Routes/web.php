@@ -23,6 +23,9 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:commerce-cart'])
     ->name('plugins.commerce_cart.')
     ->group(function (): void {
         Route::get('/', [CommerceCartController::class, 'index'])->name('index');
+        Route::get('/gifts', [CommerceCartController::class, 'giftForm'])->name('gifts');
+        Route::post('/gifts/course', [CommerceCartController::class, 'createCourseGiftDraft'])->middleware('throttle:10,1')->name('gifts.course');
+        Route::post('/gifts/voucher', [CommerceCartController::class, 'createVoucherDraft'])->middleware('throttle:10,1')->name('gifts.voucher');
         Route::post('/checkout', [CommerceCartController::class, 'checkout'])->middleware('throttle:5,1')->name('checkout');
         Route::post('/items', [CommerceCartController::class, 'add'])->middleware('throttle:30,1')->name('add');
         Route::patch('/items/{item}', [CommerceCartController::class, 'update'])->name('update');

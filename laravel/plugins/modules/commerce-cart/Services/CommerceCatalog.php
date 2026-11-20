@@ -26,6 +26,8 @@ class CommerceCatalog
             'ebook' => $this->ebook($id, $user),
             'mock_test', 'exam' => $this->exam($id, $user),
             'subscription', 'live_class', 'other' => $this->sellable($type, $id, $user),
+            'gift_course' => $this->giftCourse($id, $user),
+            'gift_voucher' => $this->giftVoucher($id, $user),
             default => throw ValidationException::withMessages(['item' => 'This item type is not available in the unified store.']),
         };
     }
@@ -137,6 +139,112 @@ class CommerceCatalog
             'price' => round((float) $item->price, 2),
             'currency' => strtoupper((string) $item->currency),
             'metadata' => ['sellable_id' => $id, 'resource_id' => $item->resource_id ? (int) $item->resource_id : null, 'entitlement' => json_decode((string) ($item->entitlement ?? '{}'), true) ?: []],
+        ];
+    }
+
+    private function giftCourse(int $id, ?Authenticatable $user): array
+    {
+        $this->requireTable('course_gifts');
+        if (!$user || !method_exists($user, 'getAuthIdentifier')) {
+            throw ValidationException::withMessages(['item' => 'Sign in before adding a gift to your cart.']);
+        }
+        $gift = DB::table('course_gifts')->where('id', $id)->first();
+        if (!$gift || (int) $gift->sender_user_id !== (int) $user->getAuthIdentifier()
+            || $gift->status !== 'awaiting_payment'
+            || ($gift->invoice_id ?? null) !== null
+            || ($gift->payment_transaction_id ?? null) !== null
+            || (Schema::hasColumn('course_gifts', 'commerce_order_item_id') && $gift->commerce_order_item_id !== null)
+            || (Schema::hasColumn('course_gifts', 'unified_payment_transaction_id') && $gift->unified_payment_transaction_id !== null)
+            || ($gift->expires_at && now()->greaterThan($gift->expires_at))
+            || filled($gift->coupon_reservation_key ?? null)) {
+            throw ValidationException::withMessages(['item' => 'This course gift draft is no longer available to add to your cart.']);
+        }
+        $recipientEmail = strtolower(trim((string) $gift->recipient_email));
+        $senderEmail = strtolower(trim((string) ($user->getAttribute('email') ?? '')));
+        if ($recipientEmail === '' || $recipientEmail === $senderEmail) {
+            throw ValidationException::withMessages(['item' => 'A course gift must have a different, valid recipient email address.']);
+        }
+
+        $this->requireTable('courses');
+        $course = DB::table('courses')->where('id', $gift->course_id)->where('status', 'published')->first();
+        if (!$course) {
+            throw ValidationException::withMessages(['item' => 'The gifted course is no longer published.']);
+        }
+        $courseBranchId = Schema::hasColumn('courses', 'branch_id') ? ($course->branch_id ?? null) : null;
+        $this->assertBranchAccess($user, $courseBranchId);
+        if ($courseBranchId !== null
+            && Schema::hasColumn('course_gifts', 'recipient_user_id')
+            && $gift->recipient_user_id !== null) {
+            $recipientBranchId = null;
+            if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('student-management')
+                && Schema::hasTable('students')
+                && Schema::hasColumn('students', 'branch_id')) {
+                $recipientBranchId = DB::table('students')
+                    ->where('user_id', (int) $gift->recipient_user_id)->value('branch_id');
+            }
+            if ($recipientBranchId === null && Schema::hasColumn('users', 'branch_id')) {
+                $recipientBranchId = DB::table('users')
+                    ->where('id', (int) $gift->recipient_user_id)->value('branch_id');
+            }
+            if ($recipientBranchId === null || (int) $recipientBranchId !== (int) $courseBranchId) {
+                throw ValidationException::withMessages([
+                    'item' => 'The selected recipient is not assigned to the branch that owns this course.',
+                ]);
+            }
+        }
+        if (Schema::hasTable('batches') && Schema::hasColumn('batches', 'status') && Schema::hasColumn('batches', 'course_id')
+            && DB::table('batches')->where('course_id', $course->id)->where('status', 'open')->exists()) {
+            throw ValidationException::withMessages(['item' => 'This course has an open batch. Contact admissions before gifting it.']);
+        }
+
+        $price = round((float) $gift->amount, 2);
+        $subtotal = round((float) ($gift->subtotal_amount ?? $gift->amount), 2);
+        $discount = round((float) ($gift->discount_amount ?? 0), 2);
+        if ($price <= 0 || $subtotal <= 0 || $discount < 0 || $discount > $subtotal
+            || abs(round($subtotal - $discount, 2) - $price) > 0.01
+            || !filled($gift->redeem_token_hash) || !filled($gift->redeem_token_encrypted)
+            || strtoupper((string) $gift->currency) !== strtoupper((string) config('lms.default_currency', 'BDT'))) {
+            throw ValidationException::withMessages(['item' => 'The course gift amount, discount, token or currency is invalid for this store.']);
+        }
+
+        return $this->snapshot('gift_course', $id, 'Gift: ' . (string) $course->title, $price, [
+            'course_gift_id' => $id,
+            'course_id' => (int) $gift->course_id,
+            'recipient_email' => $recipientEmail,
+        ]);
+    }
+
+    private function giftVoucher(int $id, ?Authenticatable $user): array
+    {
+        $this->requireTable('course_gift_vouchers');
+        if (!$user || !method_exists($user, 'getAuthIdentifier')) {
+            throw ValidationException::withMessages(['item' => 'Sign in before adding a gift voucher to your cart.']);
+        }
+        $voucher = DB::table('course_gift_vouchers')->where('id', $id)->first();
+        if (!$voucher || (int) $voucher->sender_user_id !== (int) $user->getAuthIdentifier()
+            || $voucher->status !== 'awaiting_payment'
+            || ($voucher->invoice_id ?? null) !== null
+            || ($voucher->payment_transaction_id ?? null) !== null
+            || (Schema::hasColumn('course_gift_vouchers', 'commerce_order_item_id') && $voucher->commerce_order_item_id !== null)
+            || (Schema::hasColumn('course_gift_vouchers', 'unified_payment_transaction_id') && $voucher->unified_payment_transaction_id !== null)
+            || ($voucher->expires_at && now()->greaterThan($voucher->expires_at))) {
+            throw ValidationException::withMessages(['item' => 'This gift voucher draft is no longer available to add to your cart.']);
+        }
+        $recipientEmail = strtolower(trim((string) $voucher->recipient_email));
+        $senderEmail = strtolower(trim((string) ($user->getAttribute('email') ?? '')));
+        $price = round((float) $voucher->amount, 2);
+        if ($recipientEmail === '' || $recipientEmail === $senderEmail || $price <= 0
+            || abs(round((float) $voucher->remaining_amount, 2) - $price) > 0.01) {
+            throw ValidationException::withMessages(['item' => 'The voucher recipient or amount is invalid.']);
+        }
+
+        return [
+            'type' => 'gift_voucher',
+            'id' => $id,
+            'title' => 'Gift Voucher for ' . $recipientEmail,
+            'price' => $price,
+            'currency' => strtoupper((string) $voucher->currency),
+            'metadata' => ['course_gift_voucher_id' => $id, 'recipient_email' => $recipientEmail],
         ];
     }
 

@@ -6,9 +6,16 @@ namespace Tests\Feature;
 
 use App\Models\Permission;
 use App\Models\Role;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
+use Plugins\Modules\CourseManagement\Jobs\SendGiftRecipientEmailJob;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use Plugins\Modules\CommerceCart\Services\CommerceCatalog;
+use Plugins\Modules\CourseManagement\Models\Course;
+use Plugins\Modules\BranchManagement\Models\Branch;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\MarketingManagement\Models\PromoCoupon;
 use Plugins\Modules\UniversalPayment\Services\UniversalPaymentOrchestrator;
@@ -18,6 +25,246 @@ use Tests\TestCase;
 
 final class UnifiedCommerceCartTest extends TestCase
 {
+    public function test_sender_can_view_secure_gift_link_and_retry_only_their_failed_delivery(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['commerce-cart', 'course-management', 'email-notifications']);
+        $sender = $this->createUserWithRole('student');
+        $otherStudent = $this->createUserWithRole('student');
+        $course = Course::query()->create([
+            'code' => 'GIFT-DELIVERY-CENTER-' . $sender->id,
+            'title' => 'Gift Delivery Center Course',
+            'slug' => 'gift-delivery-center-course-' . $sender->id,
+            'price' => 1400,
+            'status' => 'published',
+            'branch_id' => null,
+        ]);
+        $token = str_repeat('G', 64);
+        $giftId = DB::table('course_gifts')->insertGetId([
+            'sender_user_id' => $sender->id,
+            'recipient_user_id' => null,
+            'recipient_email' => 'delivery.center.recipient@example.test',
+            'recipient_name' => 'Delivery Recipient',
+            'course_id' => $course->id,
+            'invoice_id' => null,
+            'redeem_token_hash' => hash('sha256', $token),
+            'redeem_token_encrypted' => encrypt($token),
+            'status' => 'paid',
+            'currency' => 'BDT',
+            'amount' => 1400,
+            'paid_at' => now(),
+            'expires_at' => now()->addDays(30),
+            'notification_delivery_status' => 'failed',
+            'notification_attempt_count' => 5,
+            'notification_last_error' => 'SMTP temporarily unavailable.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($sender)->get('/student/course-commerce/gifts/sent')
+            ->assertOk()
+            ->assertSee('delivery.center.recipient@example.test')
+            ->assertSee('/student/course-commerce/gifts/redeem/' . $token)
+            ->assertSee('Retry email delivery');
+
+        $this->actingAs($otherStudent)->get('/student/course-commerce/gifts/sent')
+            ->assertOk()
+            ->assertDontSee($token)
+            ->assertDontSee('delivery.center.recipient@example.test');
+
+        // This test verifies the sender-authorized retry dispatch, not SMTP delivery.
+        Queue::fake();
+
+        $this->actingAs($sender)->post('/student/course-commerce/gifts/' . $giftId . '/resend')
+            ->assertRedirect();
+        Queue::assertPushed(SendGiftRecipientEmailJob::class);
+
+        $this->assertDatabaseHas('course_gifts', [
+            'id' => $giftId,
+            'sender_user_id' => $sender->id,
+            'status' => 'paid',
+            'notification_delivery_status' => 'pending',
+            'notification_last_error' => null,
+        ]);
+        Queue::assertPushed(SendGiftRecipientEmailJob::class, fn (SendGiftRecipientEmailJob $job): bool =>
+            $job->giftType === 'gift_course' && $job->giftId === $giftId
+        );
+    }
+
+    public function test_recipient_specific_gift_drafts_can_be_added_to_the_unified_cart(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['commerce-cart', 'course-management']);
+        $student = $this->createUserWithRole('student');
+        $course = Course::query()->create([
+            'code' => 'UNIFIED-GIFT-CATALOG-01',
+            'title' => 'Giftable IELTS Course',
+            'slug' => 'giftable-ielts-course',
+            'price' => 1200,
+            'status' => 'published',
+            'branch_id' => null,
+        ]);
+
+        $giftId = DB::table('course_gifts')->insertGetId([
+            'sender_user_id' => $student->id,
+            'recipient_user_id' => null,
+            'recipient_email' => 'course.recipient@example.test',
+            'course_id' => $course->id,
+            'invoice_id' => null,
+            'redeem_token_hash' => hash('sha256', 'course-gift-token'),
+            'redeem_token_encrypted' => encrypt('course-gift-token'),
+            'status' => 'awaiting_payment',
+            'currency' => 'BDT',
+            'amount' => 1200,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $voucherId = DB::table('course_gift_vouchers')->insertGetId([
+            'sender_user_id' => $student->id,
+            'recipient_email' => 'voucher.recipient@example.test',
+            'redeem_token_hash' => hash('sha256', 'voucher-gift-token'),
+            'redeem_token_encrypted' => encrypt('voucher-gift-token'),
+            'currency' => 'BDT',
+            'amount' => 1500,
+            'remaining_amount' => 1500,
+            'status' => 'awaiting_payment',
+            'expires_at' => now()->addDays(30),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($student)->post('/cart/items', [
+            'item_type' => 'gift_course', 'item_id' => $giftId, 'quantity' => 1,
+        ])->assertRedirect('/cart');
+        $this->actingAs($student)->post('/cart/items', [
+            'item_type' => 'gift_voucher', 'item_id' => $voucherId, 'quantity' => 1,
+        ])->assertRedirect('/cart');
+
+        $this->assertDatabaseHas('commerce_cart_items', [
+            'item_type' => 'gift_course', 'item_id' => $giftId, 'quantity' => 1, 'unit_price' => 1200,
+        ]);
+        $this->assertDatabaseHas('commerce_cart_items', [
+            'item_type' => 'gift_voucher', 'item_id' => $voucherId, 'quantity' => 1, 'unit_price' => 1500,
+        ]);
+        $this->assertDatabaseCount('commerce_cart_items', 2);
+        $this->assertDatabaseHas('course_gifts', ['id' => $giftId, 'status' => 'awaiting_payment', 'invoice_id' => null]);
+        $this->assertDatabaseHas('course_gift_vouchers', ['id' => $voucherId, 'status' => 'awaiting_payment', 'invoice_id' => null]);
+    }
+
+    public function test_student_can_create_course_gift_and_voucher_drafts_directly_in_unified_cart(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['commerce-cart', 'course-management', 'fees-management', 'universal-payment', 'payment-management']);
+        $student = $this->createUserWithRole('student');
+        $course = Course::query()->create([
+            'code' => 'UNIFIED-GIFT-DRAFT-01',
+            'title' => 'Course Gift Draft Course',
+            'slug' => 'course-gift-draft-course',
+            'price' => 1800,
+            'status' => 'published',
+            'branch_id' => null,
+        ]);
+
+        $this->actingAs($student)->post('/cart/gifts/course', [
+            'course_id' => $course->id,
+            'recipient_email' => 'gift.draft.recipient@example.test',
+            'recipient_name' => 'Gift Recipient',
+            'message' => 'Enjoy learning!',
+        ])->assertRedirect('/cart');
+
+        $gift = DB::table('course_gifts')->where('sender_user_id', $student->id)->first();
+        $this->assertNotNull($gift);
+        $this->assertSame('awaiting_payment', $gift->status);
+        $this->assertSame('gift_course', DB::table('commerce_cart_items')->where('item_type', 'gift_course')->where('item_id', $gift->id)->value('item_type'));
+        $this->assertSame('gift.draft.recipient@example.test', $gift->recipient_email);
+
+        $this->actingAs($student)->post('/cart/gifts/voucher', [
+            'recipient_email' => 'voucher.draft.recipient@example.test',
+            'recipient_name' => 'Voucher Recipient',
+            'amount' => 2500,
+            'message' => 'For your next course!',
+        ])->assertRedirect('/cart');
+
+        $voucher = DB::table('course_gift_vouchers')->where('sender_user_id', $student->id)->first();
+        $this->assertNotNull($voucher);
+        $this->assertSame('awaiting_payment', $voucher->status);
+        $this->assertSame(2500.0, (float) $voucher->amount);
+        $this->assertSame('gift_voucher', DB::table('commerce_cart_items')->where('item_type', 'gift_voucher')->where('item_id', $voucher->id)->value('item_type'));
+        $this->assertDatabaseCount('commerce_cart_items', 2);
+
+        $payments = \Mockery::mock(UniversalPaymentOrchestrator::class);
+        $payments->shouldReceive('assertGatewayReady')->once()->with('gateway-sslcommerz');
+        $payments->shouldReceive('initiate')->once()->andReturn(['redirect_url' => 'https://gateway.example.test/gift-checkout']);
+        $this->app->instance(UniversalPaymentOrchestrator::class, $payments);
+
+        $this->actingAs($student)->post('/cart/checkout', [
+            'gateway' => 'gateway-sslcommerz',
+            'payer_name' => $student->name,
+            'payer_email' => $student->email,
+            'payer_phone' => '01700000000',
+        ])->assertRedirect('https://gateway.example.test/gift-checkout');
+
+        $order = DB::table('commerce_orders')->where('user_id', $student->id)->first();
+        $this->assertNotNull($order);
+        $courseGiftOrderItem = DB::table('commerce_order_items')->where('order_id', $order->id)->where('item_type', 'gift_course')->first();
+        $voucherOrderItem = DB::table('commerce_order_items')->where('order_id', $order->id)->where('item_type', 'gift_voucher')->first();
+        $this->assertNotNull($courseGiftOrderItem);
+        $this->assertNotNull($voucherOrderItem);
+        $this->assertDatabaseHas('course_gifts', [
+            'id' => $gift->id,
+            'commerce_order_item_id' => $courseGiftOrderItem->id,
+            'status' => 'awaiting_payment',
+            'invoice_id' => null,
+        ]);
+        $this->assertDatabaseHas('course_gift_vouchers', [
+            'id' => $voucher->id,
+            'commerce_order_item_id' => $voucherOrderItem->id,
+            'status' => 'awaiting_payment',
+            'invoice_id' => null,
+        ]);
+    }
+
+    public function test_course_gift_draft_endpoint_rejects_courses_from_another_branch(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['commerce-cart', 'course-management', 'branch-management']);
+        $student = $this->createUserWithRole('student');
+        $senderBranch = Branch::query()->create([
+            'code' => 'GIFT-SENDER-' . $student->id,
+            'name' => 'Gift Sender Branch',
+            'is_active' => true,
+        ]);
+        $otherBranch = Branch::query()->create([
+            'code' => 'GIFT-OTHER-' . $student->id,
+            'name' => 'Other Gift Branch',
+            'is_active' => true,
+        ]);
+
+        if (Schema::hasColumn('users', 'branch_id')) {
+            $student->forceFill(['branch_id' => $senderBranch->id])->save();
+        }
+
+        $course = Course::query()->create([
+            'code' => 'CROSS-BRANCH-GIFT-' . $student->id,
+            'title' => 'Other Branch Gift Course',
+            'slug' => 'other-branch-gift-course-' . $student->id,
+            'price' => 1800,
+            'status' => 'published',
+            'branch_id' => $otherBranch->id,
+        ]);
+
+        $this->actingAs($student)->post('/cart/gifts/course', [
+            'course_id' => $course->id,
+            'recipient_email' => 'cross.branch.recipient@example.test',
+        ])->assertSessionHasErrors('course_id');
+
+        $this->assertDatabaseMissing('course_gifts', [
+            'sender_user_id' => $student->id,
+            'course_id' => $course->id,
+        ]);
+        $this->assertDatabaseMissing('commerce_cart_items', ['item_type' => 'gift_course']);
+    }
+
     public function test_checkout_rejects_catalogue_price_currency_or_title_changes_after_add_to_cart(): void
     {
         $catalog = app(CommerceCatalog::class);
@@ -785,5 +1032,171 @@ final class UnifiedCommerceCartTest extends TestCase
             'id' => $order->id, 'payment_status' => 'paid', 'discount_total' => 200, 'grand_total' => 1000,
         ]);
     }
+
+    public function test_unified_cart_supports_manual_bank_cash_payment_and_staff_verification(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['commerce-cart', 'course-management', 'fees-management', 'universal-payment', 'payment-management']);
+        app(\App\Core\Plugins\PluginManager::class)->saveSettings('universal-payment', [
+            'enabled_gateways' => 'bank_cash',
+            'allow_offline_payments' => '1',
+            'default_currency' => 'BDT',
+        ]);
+
+        $student = $this->createUserWithRole('student');
+        $course = Course::query()->create([
+            'code' => 'MANUAL-CART-' . strtoupper(bin2hex(random_bytes(3))),
+            'title' => 'Manual Checkout Course',
+            'slug' => 'manual-checkout-' . strtolower(bin2hex(random_bytes(3))),
+            'price' => 900,
+            'status' => 'published',
+            'branch_id' => null,
+        ]);
+
+        $this->actingAs($student)->post('/cart/items', [
+            'item_type' => 'course',
+            'item_id' => $course->id,
+            'quantity' => 1,
+        ])->assertRedirect('/cart');
+
+        $this->actingAs($student)->get('/cart')
+            ->assertOk()
+            ->assertSee('Bank Transfer / Cash (Manual Verification)');
+
+        $this->actingAs($student)->post('/cart/checkout', [
+            'gateway' => 'bank_cash',
+            'payer_name' => $student->name,
+            'payer_email' => $student->email,
+            'payer_phone' => '01700000000',
+            'external_trx_id' => 'AEC-MANUAL-REF-' . strtoupper(bin2hex(random_bytes(3))),
+            'proof_file' => UploadedFile::fake()->create('bank-receipt.pdf', 100, 'application/pdf'),
+        ])->assertRedirect('/cart')->assertSessionHas('status');
+
+        $order = DB::table('commerce_orders')->where('user_id', $student->id)->first();
+        $this->assertNotNull($order);
+        $manual = DB::table('universal_payment_transactions')->where('fee_invoice_id', $order->invoice_id)->first();
+        $this->assertNotNull($manual);
+        $this->assertSame('pending', $manual->status);
+        $this->assertSame('bank_cash', $manual->gateway);
+        $this->assertNotNull($manual->proof_path);
+        Storage::disk('local')->assertExists($manual->proof_path);
+        $this->assertSame('pending', $order->payment_status);
+        $this->assertDatabaseHas('fee_invoices', ['id' => $order->invoice_id, 'status' => 'unpaid', 'paid_amount' => 0]);
+
+        $admin = $this->createUserWithRole('admin');
+        $this->actingAs($admin)->get('/plugins/universal-payment')
+            ->assertOk()
+            ->assertSee('name="payment_reference"', false)
+            ->assertSee('View receipt')
+            ->assertSee($manual->external_trx_id);
+        $this->actingAs($admin)->get('/plugins/universal-payment/transactions/' . $manual->id . '/proof')->assertOk();
+        $this->actingAs($admin)->post('/plugins/universal-payment/transactions/' . $manual->id . '/status', [
+            'status' => 'verified',
+            'payment_reference' => $manual->external_trx_id,
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('universal_payment_transactions', ['id' => $manual->id, 'status' => 'verified']);
+        $this->assertDatabaseHas('commerce_orders', ['id' => $order->id, 'status' => 'completed', 'payment_status' => 'paid']);
+        $this->assertDatabaseHas('fee_invoices', ['id' => $order->invoice_id, 'status' => 'paid', 'paid_amount' => 900]);
+        $this->assertDatabaseHas('enrollments', ['user_id' => $student->id, 'course_id' => $course->id, 'status' => 'active']);
+        $this->assertDatabaseHas('payment_transactions', ['invoice_id' => $order->invoice_id, 'status' => 'settled']);
+    }
+
+
+    public function test_unassigned_student_cannot_create_a_gift_for_a_branch_restricted_course(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['commerce-cart', 'course-management', 'branch-management']);
+        $student = $this->createUserWithRole('student');
+        $branch = Branch::query()->create([
+            'code' => 'GIFT-UNASSIGNED-' . $student->id,
+            'name' => 'Restricted Gift Branch',
+            'is_active' => true,
+        ]);
+
+        $course = Course::query()->create([
+            'code' => 'UNASSIGNED-BRANCH-GIFT-' . $student->id,
+            'title' => 'Restricted Branch Gift Course',
+            'slug' => 'restricted-branch-gift-course-' . $student->id,
+            'price' => 1200,
+            'status' => 'published',
+            'branch_id' => $branch->id,
+        ]);
+
+        $this->actingAs($student)->post('/cart/gifts/course', [
+            'course_id' => $course->id,
+            'recipient_email' => 'unassigned.branch.recipient@example.test',
+        ])->assertSessionHasErrors('course_id');
+
+        $this->assertDatabaseMissing('course_gifts', [
+            'sender_user_id' => $student->id,
+            'course_id' => $course->id,
+        ]);
+        $this->assertDatabaseMissing('commerce_cart_items', [
+            'item_type' => 'gift_course',
+        ]);
+    }
+
+
+    public function test_definitive_gateway_failure_releases_gift_drafts_for_a_safe_retry(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['commerce-cart', 'course-management', 'fees-management', 'universal-payment', 'payment-management']);
+        $student = $this->createUserWithRole('student');
+        $course = Course::query()->create([
+            'code' => 'UNIFIED-GIFT-RETRY-' . $student->id,
+            'title' => 'Retryable Gift Course',
+            'slug' => 'retryable-gift-course-' . $student->id,
+            'price' => 1600,
+            'status' => 'published',
+            'branch_id' => null,
+        ]);
+
+        $this->actingAs($student)->post('/cart/gifts/course', [
+            'course_id' => $course->id,
+            'recipient_email' => 'retry.recipient@example.test',
+        ])->assertRedirect('/cart');
+
+        $gift = DB::table('course_gifts')->where('sender_user_id', $student->id)->first();
+        $this->assertNotNull($gift);
+
+        $payments = \Mockery::mock(UniversalPaymentOrchestrator::class);
+        $payments->shouldReceive('assertGatewayReady')->once()->with('gateway-sslcommerz');
+        $payments->shouldReceive('initiate')->once()->andThrow(new \RuntimeException('Provider definitively rejected checkout.'));
+        $this->app->instance(UniversalPaymentOrchestrator::class, $payments);
+
+        $this->actingAs($student)->post('/cart/checkout', [
+            'gateway' => 'gateway-sslcommerz',
+            'payer_name' => $student->name,
+            'payer_email' => $student->email,
+            'payer_phone' => '01700000000',
+        ])->assertSessionHasErrors('gateway');
+
+        $order = DB::table('commerce_orders')->where('user_id', $student->id)->first();
+        $orderItem = DB::table('commerce_order_items')->where('order_id', $order->id)->where('item_type', 'gift_course')->first();
+
+        $this->assertSame('failed', $order->status);
+        $this->assertNotNull($orderItem);
+        $this->assertDatabaseHas('course_gifts', [
+            'id' => $gift->id,
+            'status' => 'awaiting_payment',
+            'invoice_id' => null,
+            'commerce_order_item_id' => null,
+            'unified_payment_transaction_id' => null,
+        ]);
+
+        $this->actingAs($student)->post('/cart/gifts/course', [
+            'course_id' => $course->id,
+            'recipient_email' => 'retry-again.recipient@example.test',
+        ])->assertRedirect('/cart');
+
+        $this->assertDatabaseHas('course_gifts', [
+            'sender_user_id' => $student->id,
+            'recipient_email' => 'retry-again.recipient@example.test',
+            'status' => 'awaiting_payment',
+            'commerce_order_item_id' => null,
+        ]);
+    }
+
 
 }

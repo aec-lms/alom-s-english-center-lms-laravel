@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
+use Plugins\Modules\CourseManagement\Jobs\SendGiftRecipientEmailJob;
 use Plugins\Modules\MarketingManagement\Services\CourseCouponService;
 use Plugins\Modules\ReferralIncome\Services\ReferralIncomeService;
 use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
@@ -151,6 +152,17 @@ class CourseCommerceController extends Controller
 
         $couponService = app(CourseCouponService::class);
         $created = DB::transaction(function () use ($student, $course, $validated, $couponService): array {
+            // If the recipient already has an account, do not sell a branch-
+            // restricted gift that the recipient would be unable to redeem.
+            // Settlement repeats this check in case the account's branch changes.
+            $recipient = User::query()
+                ->whereRaw('LOWER(email) = ?', [strtolower(trim($validated['recipient_email']))])
+                ->lockForUpdate()
+                ->first();
+            if ($recipient) {
+                $this->assertCourseBranch($recipient, $course);
+            }
+
             $coupon = filled($validated['coupon_code'] ?? null)
                 ? $couponService->reserve((string) $validated['coupon_code'], (int) $student->id, [(int) $course->id], (float) $course->price, true)
                 : null;
@@ -160,7 +172,7 @@ class CourseCommerceController extends Controller
             $token = Str::random(64);
             $giftId = DB::table('course_gifts')->insertGetId([
                 'sender_user_id' => $student->id,
-                'recipient_user_id' => DB::table('users')->whereRaw('LOWER(email) = ?', [strtolower(trim($validated['recipient_email']))])->value('id'),
+                'recipient_user_id' => $recipient?->id,
                 'recipient_email' => strtolower(trim($validated['recipient_email'])),
                 'recipient_name' => $validated['recipient_name'] ?? null,
                 'message' => $validated['message'] ?? null,
@@ -267,26 +279,43 @@ class CourseCommerceController extends Controller
         abort_if($gift->sender_user_id === $student->id, 403, 'The sender cannot redeem their own gift.');
 
         return DB::transaction(function () use ($gift, $student): RedirectResponse {
+            // Serialize all gift claims for this account. This prevents duplicate
+            // enrollments when two distinct gifts for the same course are claimed
+            // concurrently and keeps the recipient email stable during redemption.
+            $lockedStudent = DB::table('users')->where('id', $student->id)->lockForUpdate()->first();
+            abort_unless($lockedStudent, 404, 'The recipient account is no longer available.');
+            $recipient = \App\Models\User::query()->findOrFail($student->id);
+            // Lock the authoritative student-profile branch assignment as well
+            // as the user row before evaluating course access.
+            if ($this->plugins->isEnabled('student-management') && Schema::hasTable('students')) {
+                DB::table('students')->where('user_id', $recipient->id)->lockForUpdate()->first();
+            }
             $locked = DB::table('course_gifts')->where('id', $gift->id)->lockForUpdate()->first();
             abort_unless($locked && $locked->status === 'paid', 409, 'This gift has already been redeemed or is no longer available.');
-            $this->assertGiftInvoiceFullyPaid($locked->invoice_id ?? null, $locked->payment_transaction_id ?? null, (float) $locked->amount, (string) $locked->currency);
+            // Re-check authorization and expiry after acquiring the row lock to
+            // prevent a request queued before expiry from redeeming it afterward.
+            abort_if($locked->expires_at && now()->greaterThan($locked->expires_at), 410, 'This gift has expired.');
+            abort_unless(hash_equals(strtolower((string) $locked->recipient_email), strtolower((string) $lockedStudent->email)),
+                403, 'Sign in with the email address that received this gift.');
+            abort_if((int) $locked->sender_user_id === (int) $student->id, 403, 'The sender cannot redeem their own gift.');
+            $this->assertGiftInvoiceFullyPaid($locked->invoice_id ?? null, $locked->payment_transaction_id ?? null, (float) $locked->amount, (string) $locked->currency, $locked->unified_payment_transaction_id ?? null);
             $course = DB::table('courses')->where('id', $locked->course_id)->where('status', 'published')->first();
             abort_unless($course, 409, 'The gifted course is currently unavailable. Please contact support.');
-            $this->assertCourseBranch($student, $course);
-            abort_if(DB::table('enrollments')->where('user_id', $student->id)->where('course_id', $course->id)
+            $this->assertCourseBranch($recipient, $course);
+            abort_if(DB::table('enrollments')->where('user_id', $recipient->id)->where('course_id', $course->id)
                 ->whereIn('status', ['pending', 'active', 'completed'])->exists(), 409, 'You already have access to this course.');
 
             DB::table('enrollments')->insert([
-                'user_id' => $student->id,
+                'user_id' => $recipient->id,
                 'course_id' => $course->id,
-                'branch_id' => $course->branch_id ?? $this->assignedBranchId($student),
+                'branch_id' => $course->branch_id ?? $this->assignedBranchId($recipient),
                 'invoice_id' => $locked->invoice_id,
                 'status' => 'active',
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
             DB::table('course_gifts')->where('id', $locked->id)->update([
-                'recipient_user_id' => $student->id,
+                'recipient_user_id' => $recipient->id,
                 'status' => 'redeemed',
                 'redeemed_at' => now(),
                 'updated_at' => now(),
@@ -294,6 +323,140 @@ class CourseCommerceController extends Controller
 
             return redirect()->route('plugins.enrollments.my')->with('status', 'Gift redeemed. The course is now available in your learning area.');
         }, 3);
+    }
+
+    public function sentGifts(Request $request): View
+    {
+        $sender = $this->student($request);
+        foreach (['course_gifts', 'course_gift_vouchers'] as $table) {
+            abort_unless(Schema::hasTable($table)
+                && Schema::hasColumn($table, 'notification_delivery_status')
+                && Schema::hasColumn($table, 'notification_sent_at'), 503,
+                'Gift delivery tracking is not installed.');
+        }
+
+        $courseGifts = DB::table('course_gifts')
+            ->leftJoin('courses', 'courses.id', '=', 'course_gifts.course_id')
+            ->where('course_gifts.sender_user_id', $sender->id)
+            ->orderByDesc('course_gifts.id')
+            ->limit(100)
+            ->get(['course_gifts.*', 'courses.title as course_title'])
+            ->map(function ($gift): array {
+                $redeemUrl = null;
+                if ($gift->status === 'paid' && (!$gift->expires_at || now()->lessThanOrEqualTo($gift->expires_at))) {
+                    try {
+                        $token = decrypt((string) $gift->redeem_token_encrypted);
+                        if (is_string($token) && preg_match('/^[A-Za-z0-9]{40,80}$/', $token) === 1
+                            && hash_equals((string) $gift->redeem_token_hash, hash('sha256', $token))) {
+                            $redeemUrl = route('course-commerce.gifts.redeem-form', ['token' => $token]);
+                        }
+                    } catch (\Throwable) {
+                        $redeemUrl = null;
+                    }
+                }
+
+                return [
+                    'id' => (int) $gift->id,
+                    'type' => 'Course gift',
+                    'title' => (string) ($gift->course_title ?? 'Course unavailable'),
+                    'recipient_name' => $gift->recipient_name,
+                    'recipient_email' => $gift->recipient_email,
+                    'amount' => (float) $gift->amount,
+                    'currency' => $gift->currency,
+                    'status' => $gift->status,
+                    'delivery_status' => $gift->notification_delivery_status,
+                    'delivery_error' => $gift->notification_last_error ?? null,
+                    'sent_at' => $gift->notification_sent_at,
+                    'expires_at' => $gift->expires_at,
+                    'redeem_url' => $redeemUrl,
+                    'resend_url' => route('course-commerce.gifts.resend', ['gift' => $gift->id]),
+                ];
+            });
+
+        $vouchers = DB::table('course_gift_vouchers')
+            ->where('sender_user_id', $sender->id)
+            ->orderByDesc('id')
+            ->limit(100)
+            ->get()
+            ->map(function ($gift): array {
+                $redeemUrl = null;
+                if ($gift->status === 'paid' && (!$gift->expires_at || now()->lessThanOrEqualTo($gift->expires_at))) {
+                    try {
+                        $token = decrypt((string) $gift->redeem_token_encrypted);
+                        if (is_string($token) && preg_match('/^[A-Za-z0-9]{40,80}$/', $token) === 1
+                            && hash_equals((string) $gift->redeem_token_hash, hash('sha256', $token))) {
+                            $redeemUrl = route('course-commerce.vouchers.redeem-form', ['token' => $token]);
+                        }
+                    } catch (\Throwable) {
+                        $redeemUrl = null;
+                    }
+                }
+
+                return [
+                    'id' => (int) $gift->id,
+                    'type' => 'Gift voucher',
+                    'title' => 'Gift voucher',
+                    'recipient_name' => $gift->recipient_name,
+                    'recipient_email' => $gift->recipient_email,
+                    'amount' => (float) $gift->amount,
+                    'currency' => $gift->currency,
+                    'status' => $gift->status,
+                    'delivery_status' => $gift->notification_delivery_status,
+                    'delivery_error' => $gift->notification_last_error ?? null,
+                    'sent_at' => $gift->notification_sent_at,
+                    'expires_at' => $gift->expires_at,
+                    'redeem_url' => $redeemUrl,
+                    'resend_url' => route('course-commerce.vouchers.resend', ['voucher' => $gift->id]),
+                ];
+            });
+
+        $gifts = $courseGifts->concat($vouchers)->sortByDesc('id')->values();
+
+        $emailDeliveryEnabled = $this->plugins->isEnabled('email-notifications');
+
+        return view('course-management::commerce.gifts-sent', compact('gifts', 'emailDeliveryEnabled'));
+    }
+
+    public function resendCourseGiftEmail(Request $request, int $giftId): RedirectResponse
+    {
+        return $this->resendGiftEmail($request, 'gift_course', $giftId);
+    }
+
+    public function resendGiftVoucherEmail(Request $request, int $voucherId): RedirectResponse
+    {
+        return $this->resendGiftEmail($request, 'gift_voucher', $voucherId);
+    }
+
+    private function resendGiftEmail(Request $request, string $giftType, int $giftId): RedirectResponse
+    {
+        $sender = $this->student($request);
+        abort_unless($this->plugins->isEnabled('email-notifications'), 503,
+            'Enable the Email Notifications plugin before retrying gift delivery.');
+        $table = $giftType === 'gift_course' ? 'course_gifts' : 'course_gift_vouchers';
+        abort_unless(Schema::hasTable($table)
+            && Schema::hasColumn($table, 'notification_delivery_status')
+            && Schema::hasColumn($table, 'notification_sent_at'), 503,
+            'Gift delivery tracking is not installed.');
+
+        DB::transaction(function () use ($sender, $table, $giftType, $giftId): void {
+            $gift = DB::table($table)->where('id', $giftId)->lockForUpdate()->first();
+            abort_unless($gift && (int) $gift->sender_user_id === (int) $sender->id, 404);
+            abort_unless($gift->status === 'paid', 409, 'Only paid gifts can be delivered.');
+            abort_if($gift->notification_sent_at !== null, 409, 'This gift has already been emailed.');
+            abort_if($gift->expires_at && now()->greaterThan($gift->expires_at), 410, 'This gift has expired.');
+            abort_unless($gift->notification_delivery_status === 'failed', 409,
+                'Only a failed gift email can be manually retried.');
+
+            DB::table($table)->where('id', $giftId)->update([
+                'notification_delivery_status' => 'pending',
+                'notification_last_error' => null,
+                'updated_at' => now(),
+            ]);
+
+            SendGiftRecipientEmailJob::dispatch($giftType, $giftId)->afterCommit();
+        });
+
+        return back()->with('status', 'Gift email retry has been queued. Delivery status will update after the mail server accepts it.');
     }
 
     public function voucherForm(Request $request): View
@@ -401,6 +564,7 @@ class CourseCommerceController extends Controller
             ->where('status', 'paid')->first();
         abort_unless($voucher, 404, 'This gift voucher is not available.');
         abort_if($voucher->expires_at && now()->greaterThan($voucher->expires_at), 410, 'This gift voucher has expired.');
+        abort_if((int) $voucher->sender_user_id === (int) $student->id, 403, 'The sender cannot redeem their own voucher.');
         abort_unless(hash_equals(strtolower((string) $voucher->recipient_email), strtolower((string) $student->email)),
             403, 'Sign in with the email address that received this voucher.');
         return view('course-management::commerce.voucher-redeem', compact('voucher', 'token'));
@@ -412,12 +576,20 @@ class CourseCommerceController extends Controller
         abort_unless(preg_match('/^[A-Za-z0-9]{40,80}$/', $token) === 1, 404);
 
         DB::transaction(function () use ($student, $token): void {
+            // Lock the recipient first so concurrent voucher claims cannot race
+            // wallet creation or credit against a stale account email.
+            $lockedStudent = DB::table('users')->where('id', $student->id)->lockForUpdate()->first();
+            abort_unless($lockedStudent, 404, 'The recipient account is no longer available.');
             $voucher = DB::table('course_gift_vouchers')->where('redeem_token_hash', hash('sha256', $token))
                 ->lockForUpdate()->first();
             abort_unless($voucher && $voucher->status === 'paid', 409, 'This gift voucher has already been claimed or is unavailable.');
-            $this->assertGiftInvoiceFullyPaid($voucher->invoice_id ?? null, $voucher->payment_transaction_id ?? null, (float) $voucher->amount, (string) $voucher->currency);
+            abort_if((int) $voucher->sender_user_id === (int) $student->id, 403, 'The sender cannot redeem their own voucher.');
+            $remainingAmount = round((float) $voucher->remaining_amount, 2);
+            $voucherAmount = round((float) $voucher->amount, 2);
+            abort_if($remainingAmount <= 0 || $remainingAmount > $voucherAmount + 0.01, 409, 'Gift voucher remaining balance is invalid; contact support.');
+            $this->assertGiftInvoiceFullyPaid($voucher->invoice_id ?? null, $voucher->payment_transaction_id ?? null, (float) $voucher->amount, (string) $voucher->currency, $voucher->unified_payment_transaction_id ?? null);
             abort_if($voucher->expires_at && now()->greaterThan($voucher->expires_at), 410, 'This gift voucher has expired.');
-            abort_unless(hash_equals(strtolower((string) $voucher->recipient_email), strtolower((string) $student->email)),
+            abort_unless(hash_equals(strtolower((string) $voucher->recipient_email), strtolower((string) $lockedStudent->email)),
                 403, 'Sign in with the email address that received this voucher.');
 
             $currency = strtoupper((string) $voucher->currency);
@@ -434,7 +606,7 @@ class CourseCommerceController extends Controller
             abort_if(DB::table('course_gift_wallet_transactions')->where('reference', $reference)->exists(), 409,
                 'This voucher has already been credited to a wallet.');
             DB::table('course_gift_wallets')->where('id', $wallet->id)->update([
-                'balance' => round((float) $wallet->balance + (float) $voucher->remaining_amount, 2),
+                'balance' => round((float) $wallet->balance + $remainingAmount, 2),
                 'updated_at' => now(),
             ]);
             DB::table('course_gift_wallet_transactions')->insert([
@@ -444,7 +616,7 @@ class CourseCommerceController extends Controller
                 'type' => 'credit',
                 'status' => 'completed',
                 'reference' => $reference,
-                'amount' => $voucher->remaining_amount,
+                'amount' => $remainingAmount,
                 'metadata' => json_encode(['source' => 'gift_voucher_claim'], JSON_THROW_ON_ERROR),
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -454,7 +626,7 @@ class CourseCommerceController extends Controller
                 'user_id' => $student->id,
                 'course_id' => null,
                 'invoice_id' => null,
-                'amount' => $voucher->remaining_amount,
+                'amount' => $remainingAmount,
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
@@ -767,12 +939,31 @@ class CourseCommerceController extends Controller
      * intentionally checked under the caller's redemption transaction lock.
      * Legacy records without an invoice remain supported for backward compatibility.
      */
-    private function assertGiftInvoiceFullyPaid($invoiceId, $paymentTransactionId = null, ?float $expectedAmount = null, ?string $expectedCurrency = null): void
+    private function assertGiftInvoiceFullyPaid($invoiceId, $paymentTransactionId = null, ?float $expectedAmount = null, ?string $expectedCurrency = null, $unifiedPaymentTransactionId = null): void
     {
         // New gift/voucher purchases must be backed by the exact verified
         // universal-payment transaction that created them. Keep the nullable
         // transaction fallback only for historical records created before this
         // linkage existed.
+        abort_unless($paymentTransactionId === null || $unifiedPaymentTransactionId === null, 409,
+            'Gift payment linkage is ambiguous and requires manual reconciliation.');
+
+        if ($unifiedPaymentTransactionId !== null) {
+            abort_unless(Schema::hasTable('payment_transactions'), 503, 'Unified payment transaction storage is unavailable.');
+            $payment = DB::table('payment_transactions')
+                ->where('id', $unifiedPaymentTransactionId)
+                ->lockForUpdate()
+                ->first();
+
+            abort_unless($payment !== null
+                && (string) $payment->status === 'settled'
+                && (int) $payment->invoice_id === (int) $invoiceId
+                && ($expectedCurrency === null || strtoupper((string) $payment->currency) === strtoupper($expectedCurrency)),
+                409,
+                'This gift or voucher unified payment has not been settled or no longer matches its purchase.'
+            );
+        }
+
         if ($paymentTransactionId !== null) {
             abort_unless(Schema::hasTable('universal_payment_transactions'), 503, 'Gift payment transaction storage is unavailable.');
             $payment = DB::table('universal_payment_transactions')
@@ -799,9 +990,11 @@ class CourseCommerceController extends Controller
         $invoice = DB::table('fee_invoices')->where('id', $invoiceId)->lockForUpdate()->first();
         abort_unless($invoice !== null
             && (string) $invoice->status === 'paid'
-            && (float) $invoice->paid_amount + 0.01 >= (float) $invoice->net_amount,
+            && (float) $invoice->paid_amount + 0.01 >= (float) $invoice->net_amount
+            && ($expectedAmount === null || abs(round((float) $invoice->net_amount, 2) - round($expectedAmount, 2)) <= 0.01)
+            && ($expectedCurrency === null || strtoupper((string) $invoice->currency) === strtoupper($expectedCurrency)),
             409,
-            'This gift or voucher payment has been refunded or adjusted and is no longer redeemable.'
+            'This gift or voucher invoice is not fully paid or no longer matches the original amount and currency.'
         );
     }
 
