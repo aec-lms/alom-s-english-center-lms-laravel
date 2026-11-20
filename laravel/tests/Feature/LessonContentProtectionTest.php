@@ -60,6 +60,68 @@ class LessonContentProtectionTest extends TestCase
             ->assertHeader('Cache-Control');
     }
 
+    public function test_revoked_student_role_cannot_issue_or_stream_protected_media(): void
+    {
+        [$student, $lessonId] = $this->createProtectedLesson('active');
+        $url = $this->actingAs($student)
+            ->getJson(route('plugins.lesson-media.access', $lessonId))
+            ->assertOk()
+            ->json('url');
+
+        $student->roles()->detach();
+
+        $this->actingAs($student)
+            ->getJson(route('plugins.lesson-media.access', $lessonId))
+            ->assertForbidden();
+        $this->get($url)->assertForbidden();
+    }
+
+    public function test_deactivated_user_cannot_access_protected_lesson_media_with_active_enrollment(): void
+    {
+        [$student, $lessonId] = $this->createProtectedLesson('active');
+        DB::table('users')->where('id', $student->id)->update(['is_active' => false]);
+
+        $this->actingAs($student)
+            ->getJson(route('plugins.lesson-media.access', $lessonId))
+            ->assertForbidden();
+    }
+
+    public function test_inactive_or_soft_deleted_student_profile_cannot_access_protected_media(): void
+    {
+        $this->activatePlugins(['student-management']);
+
+        [$inactiveStudent, $inactiveLessonId] = $this->createProtectedLesson('active');
+        DB::table('students')->insert([
+            'user_id' => $inactiveStudent->id,
+            'branch_id' => null,
+            'student_code' => 'STU-INACTIVE-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'admission_date' => now()->toDateString(),
+            'status' => 'inactive',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($inactiveStudent)
+            ->getJson(route('plugins.lesson-media.access', $inactiveLessonId))
+            ->assertForbidden();
+
+        [$deletedStudent, $deletedLessonId] = $this->createProtectedLesson('active');
+        DB::table('students')->insert([
+            'user_id' => $deletedStudent->id,
+            'branch_id' => null,
+            'student_code' => 'STU-DELETED-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+            'deleted_at' => now(),
+        ]);
+
+        $this->actingAs($deletedStudent)
+            ->getJson(route('plugins.lesson-media.access', $deletedLessonId))
+            ->assertForbidden();
+    }
+
     public function test_unpublished_course_media_is_denied_even_when_enrollment_is_active(): void
     {
         [$student, $lessonId] = $this->createProtectedLesson('active');

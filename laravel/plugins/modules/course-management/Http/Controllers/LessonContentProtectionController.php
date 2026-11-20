@@ -264,9 +264,17 @@ class LessonContentProtectionController extends Controller
 
     private function assertStudentCourseAccess(Request $request, ?int $courseBranchId, ?object $enrollment): void
     {
+        $student = $request->user();
+        abort_unless($student && $student->hasRole('student'), 403, 'An active student account is required to view this course.');
         abort_unless($enrollment, 403, 'An active enrollment is required to view this course.');
 
-        $studentBranchId = $this->studentBranchId($request);
+        $account = DB::table('users')->where('id', $student->id)->first();
+        abort_unless($account, 403, 'Student account is unavailable.');
+        if (Schema::hasColumn('users', 'is_active')) {
+            abort_unless((bool) $account->is_active, 403, 'This student account is inactive.');
+        }
+
+        $studentBranchId = $this->studentBranchId($student, $account);
         if ($courseBranchId !== null) {
             abort_unless(
                 $studentBranchId !== null && $studentBranchId === $courseBranchId,
@@ -284,20 +292,28 @@ class LessonContentProtectionController extends Controller
         }
     }
 
-    private function studentBranchId(Request $request): ?int
+    private function studentBranchId(object $student, object $account): ?int
     {
-        $student = $request->user();
         if (app(PluginManager::class)->isEnabled('student-management')
             && Schema::hasTable('students')
-            && Schema::hasColumn('students', 'user_id')
-            && Schema::hasColumn('students', 'branch_id')) {
-            $profileBranchId = DB::table('students')->where('user_id', $student->id)->value('branch_id');
-            if ($profileBranchId !== null) {
-                return (int) $profileBranchId;
+            && Schema::hasColumn('students', 'user_id')) {
+            $profileQuery = DB::table('students')->where('user_id', $student->id);
+            if (Schema::hasColumn('students', 'deleted_at')) {
+                $profileQuery->whereNull('deleted_at');
+            }
+            $profile = $profileQuery->first();
+            abort_unless($profile, 403, 'An active student profile is required to view this course.');
+            if (Schema::hasColumn('students', 'status')) {
+                abort_unless($profile->status === 'active', 403, 'This student profile is inactive.');
+            }
+            if (Schema::hasColumn('students', 'branch_id') && $profile->branch_id !== null) {
+                return (int) $profile->branch_id;
             }
         }
 
-        return $student->branch_id !== null ? (int) $student->branch_id : null;
+        return Schema::hasColumn('users', 'branch_id') && $account->branch_id !== null
+            ? (int) $account->branch_id
+            : null;
     }
 
     private function privateRoot(): string
