@@ -26,13 +26,13 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
     {
         $this->markSystemInstalled();
         $gateways = [
-            'gateway-stripe' => \\Plugins\\Modules\\GatewayStripe\\Services\\StripeRefundAdapter::class,
-            'gateway-paypal' => \\Plugins\\Modules\\GatewayPaypal\\Services\\PaypalRefundAdapter::class,
-            'gateway-sslcommerz' => \\Plugins\\Modules\\GatewaySslcommerz\\Services\\SslcommerzRefundAdapter::class,
+            'gateway-stripe' => \Plugins\Modules\GatewayStripe\Services\StripeRefundAdapter::class,
+            'gateway-paypal' => \Plugins\Modules\GatewayPaypal\Services\PaypalRefundAdapter::class,
+            'gateway-sslcommerz' => \Plugins\Modules\GatewaySslcommerz\Services\SslcommerzRefundAdapter::class,
         ];
         $this->activatePlugins(array_merge(['fees-management', 'payment-management'], array_keys($gateways)));
         $plugins = app(PluginManager::class);
-        $registry = app(\\Plugins\\Modules\\PaymentManagement\\Services\\RefundProviderRegistry::class);
+        $registry = app(\Plugins\Modules\PaymentManagement\Services\RefundProviderRegistry::class);
 
         foreach ($gateways as $gateway => $adapterClass) {
             [, $transaction] = $this->createSettledPayment(
@@ -43,7 +43,7 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
             try {
                 $registry->forTransaction($transaction);
                 $this->fail("New {$gateway} refunds must remain disabled by default.");
-            } catch (\\RuntimeException $exception) {
+            } catch (\RuntimeException $exception) {
                 $this->assertStringContainsString('disabled', strtolower($exception->getMessage()));
             }
 
