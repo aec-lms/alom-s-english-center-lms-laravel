@@ -105,8 +105,7 @@ class StudentAssessmentController extends Controller
 
     public function apiHistory(Request $request): JsonResponse
     {
-        $student = $request->user();
-        abort_unless($student && $student->hasRole('student') && (bool) $student->is_active, 403);
+        $student = $this->requireActiveStudent($request);
         $attempts = AssessmentAttempt::query()
             ->with('assessmentSet')
             ->where('student_id', $student->id)
@@ -241,7 +240,7 @@ class StudentAssessmentController extends Controller
 
     private function createOrResumeAttempt($student, AssessmentSet $set): AssessmentAttempt
     {
-        abort_unless($student && $student->hasRole('student'), 403);
+        abort_unless($student && $student->hasRole('student') && (bool) $student->is_active, 403);
 
         return DB::transaction(function () use ($set, $student): AssessmentAttempt {
             $lockedSet = AssessmentSet::query()->whereKey($set->id)->lockForUpdate()->firstOrFail();
