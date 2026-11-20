@@ -63,6 +63,16 @@ final class ReferralIncomeRedTeamHardeningTest extends TestCase
             ->from('/admin/referral-income')
             ->post('/admin/referral-income/commissions/' . $commissionId . '/review', [
                 'status' => 'rejected',
+            ])
+            ->assertRedirect('/admin/referral-income')
+            ->assertSessionHasErrors('admin_note');
+
+        $this->assertDatabaseHas('referral_commissions', ['id' => $commissionId, 'status' => 'pending']);
+
+        $this->actingAs($admin)
+            ->from('/admin/referral-income')
+            ->post('/admin/referral-income/commissions/' . $commissionId . '/review', [
+                'status' => 'rejected',
                 'admin_note' => 'Referral evidence did not meet policy.',
             ])
             ->assertRedirect('/admin/referral-income');
@@ -138,6 +148,11 @@ final class ReferralIncomeRedTeamHardeningTest extends TestCase
             'status' => 'approved',
             'admin_note' => 'Approved after finance verification.',
         ])->assertRedirect();
+        $this->actingAs($admin)->post('/admin/referral-income/payouts/' . $payoutId . '/review', [
+            'status' => 'paid',
+        ])->assertRedirect()->assertSessionHasErrors('admin_note');
+        $this->assertDatabaseHas('referral_payout_requests', ['id' => $payoutId, 'status' => 'approved']);
+
         $this->actingAs($admin)->post('/admin/referral-income/payouts/' . $payoutId . '/review', [
             'status' => 'paid',
             'admin_note' => 'Bank transfer reference PAY-REDTEAM-001.',
