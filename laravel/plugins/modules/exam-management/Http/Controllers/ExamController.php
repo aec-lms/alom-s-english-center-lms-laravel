@@ -19,6 +19,14 @@ use Plugins\Modules\ExamManagement\Models\ExamQuestion;
 
 class ExamController extends Controller
 {
+    private const MAX_SNAPSHOT_QUESTIONS = 500;
+    private const MAX_SNAPSHOT_OPTIONS = 20;
+    private const MAX_QUESTION_PROMPT_LENGTH = 10000;
+    private const MAX_QUESTION_OPTION_LENGTH = 300;
+    private const MAX_QUESTION_MARKS = 1000.0;
+    private const MAX_TOTAL_MARKS = 100000.0;
+    private const MAX_DURATION_MINUTES = 360;
+
     public function __construct(private readonly AuditLogger $audit) {}
 
     public function index(Request $request): View
@@ -654,7 +662,7 @@ class ExamController extends Controller
         $questions = $exam->questions()->orderBy('id')->lockForUpdate()->get();
         abort_if($questions->isEmpty(), 404, 'This exam has no questions yet.');
 
-        return [
+        $snapshot = [
             'version' => 1,
             'duration_minutes' => (int) $exam->duration_minutes,
             'pass_marks' => (float) $exam->pass_marks,
@@ -667,64 +675,97 @@ class ExamController extends Controller
                 'negative_marks' => (float) ($question->negative_marks ?? 0),
             ])->values()->all(),
         ];
+
+        abort_unless(
+            $this->isValidExamSnapshot($snapshot),
+            422,
+            'This exam exceeds the supported question, option or scoring limits. Please review the exam content and scoring settings.'
+        );
+
+        return $snapshot;
     }
 
     /**
-     * Historical attempts remain untouched. Legacy pending attempts without a
-     * start-time snapshot are blocked rather than being silently regraded.
+     * Validate the immutable contract and bound all work and score arithmetic.
+     *
+     * @param mixed $snapshot
+     */
+    private function isValidExamSnapshot(mixed $snapshot): bool
+    {
+        $isFiniteNonNegativeNumber = static fn (mixed $value): bool => is_numeric($value)
+            && is_finite((float) $value)
+            && (float) $value >= 0
+            && (float) $value <= self::MAX_QUESTION_MARKS;
+
+        if (!is_array($snapshot)
+            || ($snapshot['version'] ?? null) !== 1
+            || !is_int($snapshot['duration_minutes'] ?? null)
+            || $snapshot['duration_minutes'] < 1
+            || $snapshot['duration_minutes'] > self::MAX_DURATION_MINUTES
+            || !is_numeric($snapshot['pass_marks'] ?? null)
+            || !is_finite((float) $snapshot['pass_marks'])
+            || (float) $snapshot['pass_marks'] < 0
+            || (float) $snapshot['pass_marks'] > self::MAX_TOTAL_MARKS
+            || !is_array($snapshot['questions'] ?? null)
+            || !array_is_list($snapshot['questions'])
+            || count($snapshot['questions']) < 1
+            || count($snapshot['questions']) > self::MAX_SNAPSHOT_QUESTIONS) {
+            return false;
+        }
+
+        $seenQuestionIds = [];
+        $totalMarks = 0.0;
+
+        foreach ($snapshot['questions'] as $question) {
+            if (!is_array($question)
+                || !is_int($question['id'] ?? null)
+                || $question['id'] < 1
+                || isset($seenQuestionIds[$question['id']])
+                || !is_string($question['prompt'] ?? null)
+                || trim($question['prompt']) === ''
+                || mb_strlen($question['prompt']) > self::MAX_QUESTION_PROMPT_LENGTH
+                || !is_array($question['options'] ?? null)
+                || !array_is_list($question['options'])
+                || count($question['options']) < 2
+                || count($question['options']) > self::MAX_SNAPSHOT_OPTIONS
+                || !is_int($question['correct_option_index'] ?? null)
+                || $question['correct_option_index'] < 0
+                || $question['correct_option_index'] >= count($question['options'])
+                || !$isFiniteNonNegativeNumber($question['marks'] ?? null)
+                || !$isFiniteNonNegativeNumber($question['negative_marks'] ?? null)) {
+                return false;
+            }
+
+            foreach ($question['options'] as $option) {
+                if (!is_string($option)
+                    || trim($option) === ''
+                    || mb_strlen($option) > self::MAX_QUESTION_OPTION_LENGTH) {
+                    return false;
+                }
+            }
+
+            $totalMarks += (float) $question['marks'];
+            if (!is_finite($totalMarks) || $totalMarks > self::MAX_TOTAL_MARKS) {
+                return false;
+            }
+
+            $seenQuestionIds[$question['id']] = true;
+        }
+
+        return true;
+    }
+
+    /**
+     * Historical attempts remain untouched. Legacy or corrupted snapshots fail
+     * closed rather than being silently regraded against mutable exam content.
      *
      * @return array<string, mixed>
      */
     private function validatedAttemptSnapshot(ExamAttempt $attempt, Request $request): array
     {
         $snapshot = $attempt->exam_snapshot;
-        $isFiniteNonNegativeNumber = static fn (mixed $value): bool => is_numeric($value)
-            && is_finite((float) $value)
-            && (float) $value >= 0;
 
-        $isValid = is_array($snapshot)
-            && ($snapshot['version'] ?? null) === 1
-            && is_int($snapshot['duration_minutes'] ?? null)
-            && $snapshot['duration_minutes'] > 0
-            && $isFiniteNonNegativeNumber($snapshot['pass_marks'] ?? null)
-            && is_array($snapshot['questions'] ?? null)
-            && array_is_list($snapshot['questions'])
-            && count($snapshot['questions']) > 0;
-
-        if ($isValid) {
-            $seenQuestionIds = [];
-
-            foreach ($snapshot['questions'] as $question) {
-                if (!is_array($question)
-                    || !is_int($question['id'] ?? null)
-                    || $question['id'] < 1
-                    || isset($seenQuestionIds[$question['id']])
-                    || !is_string($question['prompt'] ?? null)
-                    || trim($question['prompt']) === ''
-                    || !is_array($question['options'] ?? null)
-                    || !array_is_list($question['options'])
-                    || count($question['options']) < 2
-                    || !is_int($question['correct_option_index'] ?? null)
-                    || $question['correct_option_index'] < 0
-                    || $question['correct_option_index'] >= count($question['options'])
-                    || !$isFiniteNonNegativeNumber($question['marks'] ?? null)
-                    || !$isFiniteNonNegativeNumber($question['negative_marks'] ?? null)) {
-                    $isValid = false;
-                    break;
-                }
-
-                foreach ($question['options'] as $option) {
-                    if (!is_string($option) || trim($option) === '') {
-                        $isValid = false;
-                        break 2;
-                    }
-                }
-
-                $seenQuestionIds[$question['id']] = true;
-            }
-        }
-
-        if (!$isValid) {
+        if (!$this->isValidExamSnapshot($snapshot)) {
             $message = 'This existing exam attempt cannot be resumed safely because its saved question and scoring data is missing or invalid. Your attempt has not been submitted and your score has not changed. Please contact your instructor or school administrator for help.';
 
             if ($request->is('api/*') || $request->expectsJson()) {
