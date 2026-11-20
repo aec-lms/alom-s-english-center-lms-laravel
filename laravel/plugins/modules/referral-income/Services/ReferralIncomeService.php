@@ -251,9 +251,13 @@ class ReferralIncomeService
                 ->where('id', (int) $order->payment_transaction_id)
                 ->where('user_id', $buyer->id)
                 ->first();
+            $originalNotes = $originalPayment ? json_decode((string) $originalPayment->notes, true) : null;
             if (!$originalPayment
-                || (int) $originalPayment->invoice_id !== (int) $order->invoice_id
-                || $originalPayment->status !== 'verified') {
+                || ($originalPayment->invoice_id !== null && (int) $originalPayment->invoice_id !== (int) $order->invoice_id)
+                || $originalPayment->status !== 'verified'
+                || !is_array($originalNotes)
+                || ($originalNotes['purpose'] ?? null) !== 'course_cart'
+                || (int) ($originalNotes['course_cart_order_id'] ?? 0) !== (int) $order->id) {
                 return null;
             }
         }
@@ -338,9 +342,13 @@ class ReferralIncomeService
                     ->where('user_id', $buyer->id)
                     ->lockForUpdate()
                     ->first();
+                $originalNotes = $originalPayment ? json_decode((string) $originalPayment->notes, true) : null;
                 if (!$originalPayment
-                    || (int) $originalPayment->invoice_id !== (int) $orderSnapshot->invoice_id
-                    || $originalPayment->status !== 'verified') {
+                    || ($originalPayment->invoice_id !== null && (int) $originalPayment->invoice_id !== (int) $orderSnapshot->invoice_id)
+                    || $originalPayment->status !== 'verified'
+                    || !is_array($originalNotes)
+                    || ($originalNotes['purpose'] ?? null) !== 'course_cart'
+                    || (int) ($originalNotes['course_cart_order_id'] ?? 0) !== (int) $sourceId) {
                     throw new RuntimeException('Course-cart order is not bound to a verified Universal Payment transaction.');
                 }
 
