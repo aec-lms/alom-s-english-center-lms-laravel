@@ -34,7 +34,7 @@ final class CourseAssessmentGradingBranchIsolationTest extends TestCase
     private function createBranch(string $suffix): int
     {
         return (int) DB::table('branches')->insertGetId([
-            'code' => 'ASSESS-GRADE-' . $suffix . '-' . strtoupper(bin2hex(random_bytes(3))),
+            'code' => 'AG-' . strtoupper(bin2hex(random_bytes(5))),
             'name' => 'Assessment Grading ' . $suffix,
             'is_active' => true,
             'created_at' => now(),
