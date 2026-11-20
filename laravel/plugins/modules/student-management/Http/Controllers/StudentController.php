@@ -43,8 +43,7 @@ class StudentController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $actor = $request->user();
-        $this->ensureAssignedBranch($actor);
+        $actorId = (int) $request->user()->getKey();
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:120'],
             'email' => ['required', 'email', 'unique:users,email'],
@@ -55,51 +54,53 @@ class StudentController extends Controller
             'status' => ['nullable', 'in:active,inactive,graduated'],
         ]);
 
-        if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null) {
-            if (isset($validated['branch_id']) && (int) $validated['branch_id'] !== (int) $actor->branch_id) {
-                abort(403, 'Branch isolation violation.');
-            }
-            $validated['branch_id'] = $actor->branch_id;
-        }
-
         $code = !empty($validated['student_code'])
             ? trim($validated['student_code'])
             : 'STU-' . strtoupper(Str::random(6));
 
-        $student = DB::transaction(function () use ($validated, $code): Student {
+        $student = DB::transaction(function () use ($validated, $code, $actorId): Student {
+            $this->assertAuditAvailable();
+            $actor = User::query()->lockForUpdate()->findOrFail($actorId);
+            $this->ensureAssignedBranch($actor);
+
+            $branchId = $validated['branch_id'] ?? null;
+            if ($actor->hasRole('branch_manager')) {
+                abort_unless($branchId === null || (int) $branchId === (int) $actor->branch_id, 403, 'Branch isolation violation.');
+                $branchId = $actor->branch_id;
+            }
+
+            $studentRole = Role::query()->where('slug', 'student')->lockForUpdate()->first();
+            abort_unless($studentRole, 503, 'Student role is not configured. Contact an administrator.');
+
             $user = User::query()->create([
                 'name' => $validated['name'],
                 'email' => strtolower($validated['email']),
                 'phone' => $validated['phone'] ?? null,
                 'password' => Hash::make($validated['password']),
-                'branch_id' => $validated['branch_id'] ?? null,
+                'branch_id' => $branchId,
                 'is_active' => ($validated['status'] ?? 'active') === 'active',
             ]);
-            if ($role = Role::query()->where('slug', 'student')->first()) {
-                $user->roles()->sync([$role->id]);
-            }
-            return Student::query()->create([
+            $user->roles()->sync([$studentRole->id]);
+
+            $student = Student::query()->create([
                 'user_id' => $user->id,
-                'branch_id' => $validated['branch_id'] ?? null,
+                'branch_id' => $branchId,
                 'student_code' => $code,
                 'admission_date' => now()->toDateString(),
                 'status' => $validated['status'] ?? 'active',
             ]);
-        });
 
-        $this->audit->log('student.created', 'student', (string) $student->id, ['branch_id' => $student->branch_id]);
+            $this->audit->log('student.created', 'student', (string) $student->id, ['branch_id' => $student->branch_id]);
+
+            return $student;
+        });
 
         return back()->with('status', "Student '{$validated['name']}' ({$student->student_code}) added manually.");
     }
 
     public function update(Request $request, Student $student): RedirectResponse
     {
-        $actor = $request->user();
-        $this->ensureAssignedBranch($actor);
-        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $student->branch_id) {
-            abort(403, 'Branch isolation violation.');
-        }
-
+        $actorId = (int) $request->user()->getKey();
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:120'],
             'email' => ['required', 'email', 'unique:users,email,' . $student->user_id],
@@ -110,70 +111,143 @@ class StudentController extends Controller
             'password' => ['nullable', 'string', 'min:8'],
         ]);
 
-        if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null) {
-            if (isset($validated['branch_id']) && (int) $validated['branch_id'] !== (int) $actor->branch_id) {
-                abort(403, 'Branch isolation violation.');
-            }
-            $validated['branch_id'] = $actor->branch_id;
-        }
+        DB::transaction(function () use ($validated, $student, $actorId): void {
+            $this->assertAuditAvailable();
+            [$actor, $user, $lockedStudent] = $this->lockActorAndLinkedStudent($actorId, (int) $student->getKey());
+            $this->ensureAssignedBranch($actor);
 
-        DB::transaction(function () use ($validated, $student): void {
-            if ($student->user) {
-                $userPayload = [
-                    'name' => $validated['name'],
-                    'email' => strtolower($validated['email']),
-                    'phone' => $validated['phone'] ?? null,
-                    'branch_id' => $validated['branch_id'] ?? null,
-                    'is_active' => $validated['status'] === 'active',
-                ];
-                if (!empty($validated['password'])) {
-                    $userPayload['password'] = Hash::make($validated['password']);
-                }
-                $student->user->update($userPayload);
+            if ($actor->hasRole('branch_manager')) {
+                abort_unless((int) $actor->branch_id === (int) $lockedStudent->branch_id, 403, 'Branch isolation violation.');
+                abort_unless(
+                    !isset($validated['branch_id']) || (int) $validated['branch_id'] === (int) $actor->branch_id,
+                    403,
+                    'Branch isolation violation.'
+                );
             }
 
-            $student->update([
+            $branchId = array_key_exists('branch_id', $validated)
+                ? $validated['branch_id']
+                : $lockedStudent->branch_id;
+            if ($actor->hasRole('branch_manager')) {
+                $branchId = $actor->branch_id;
+            }
+
+            $before = [
+                'student_code' => $lockedStudent->student_code,
+                'branch_id' => $lockedStudent->branch_id === null ? null : (string) $lockedStudent->branch_id,
+                'status' => $lockedStudent->status,
+            ];
+
+            $userPayload = [
+                'name' => $validated['name'],
+                'email' => strtolower($validated['email']),
+                'phone' => $validated['phone'] ?? null,
+                'branch_id' => $branchId,
+                'is_active' => $validated['status'] === 'active',
+            ];
+            if (!empty($validated['password'])) {
+                $userPayload['password'] = Hash::make($validated['password']);
+            }
+            $user->update($userPayload);
+
+            $lockedStudent->update([
                 'student_code' => $validated['student_code'],
-                'branch_id' => $validated['branch_id'] ?? null,
+                'branch_id' => $branchId,
                 'status' => $validated['status'],
             ]);
-        });
 
-        $this->audit->log('student.updated', 'student', (string) $student->id);
+            $after = [
+                'student_code' => $lockedStudent->student_code,
+                'branch_id' => $lockedStudent->branch_id === null ? null : (string) $lockedStudent->branch_id,
+                'status' => $lockedStudent->status,
+            ];
+            $changes = [];
+            foreach (['student_code', 'branch_id', 'status'] as $field) {
+                if ($before[$field] !== $after[$field]) {
+                    $changes[$field] = ['from' => $before[$field], 'to' => $after[$field]];
+                }
+            }
+
+            $this->audit->log('student.updated', 'student', (string) $lockedStudent->id, ['changes' => $changes]);
+        });
 
         return back()->with('status', "Student '{$validated['name']}' updated.");
     }
 
     public function destroy(Request $request, Student $student): RedirectResponse
     {
-        $actor = $request->user();
-        $this->ensureAssignedBranch($actor);
-        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $student->branch_id) {
-            abort(403, 'Branch isolation violation.');
-        }
-
+        $actorId = (int) $request->user()->getKey();
         $code = $student->student_code;
-        $id = (string) $student->id;
-        DB::transaction(function () use ($student): void {
-            $user = $student->user;
-            if (Schema::hasColumn('students', 'deleted_user_was_active')) {
-                $student->deleted_user_was_active = (bool) ($user?->is_active ?? false);
-                $student->save();
-            }
-            $student->delete();
-            if ($user) {
-                $user->update(['is_active' => false]);
-            }
-        });
+        $id = (string) $student->getKey();
 
-        $this->audit->log('student.deleted', 'student', $id, ['code' => $code]);
+        DB::transaction(function () use ($student, $actorId, $id, &$code): void {
+            $this->assertAuditAvailable();
+            [$actor, $user, $lockedStudent] = $this->lockActorAndLinkedStudent($actorId, (int) $student->getKey());
+            $this->ensureAssignedBranch($actor);
+
+            if ($actor->hasRole('branch_manager')) {
+                abort_unless((int) $actor->branch_id === (int) $lockedStudent->branch_id, 403, 'Branch isolation violation.');
+            }
+
+            $code = $lockedStudent->student_code;
+            if (Schema::hasColumn('students', 'deleted_user_was_active')) {
+                $lockedStudent->deleted_user_was_active = (bool) $user->is_active;
+                $lockedStudent->save();
+            }
+            $lockedStudent->delete();
+            $user->update(['is_active' => false]);
+
+            $this->audit->log('student.deleted', 'student', $id, ['code' => $code]);
+        });
 
         return back()->with('status', "Student '{$code}' removed from active enrollment directory.");
     }
 
-    private function ensureAssignedBranch($actor): void
+    /**
+     * Lock all participating account rows in deterministic ID order before the
+     * student profile. Recycle Bin restore uses the same account-before-profile
+     * order, preventing the update/delete versus restore deadlock cycle.
+     *
+     * @return array{0: User, 1: User, 2: Student}
+     */
+    private function lockActorAndLinkedStudent(int $actorId, int $studentId): array
     {
-        if ($actor && $actor->hasRole('branch_manager')) {
+        // Read only the relationship first; never hold a profile lock while
+        // acquiring an account lock.
+        $snapshot = Student::query()->whereKey($studentId)->firstOrFail();
+        $linkedUserId = (int) $snapshot->user_id;
+        abort_unless($linkedUserId > 0, 409, 'The linked student account is missing; no changes were applied.');
+
+        $userIds = array_values(array_unique([$actorId, $linkedUserId]));
+        sort($userIds, SORT_NUMERIC);
+
+        $lockedUsers = [];
+        foreach ($userIds as $userId) {
+            $lockedUsers[$userId] = User::query()->whereKey($userId)->lockForUpdate()->first();
+            abort_unless($lockedUsers[$userId], $userId === $linkedUserId ? 409 : 404,
+                $userId === $linkedUserId
+                    ? 'The linked student account is missing; no changes were applied.'
+                    : 'The acting account is unavailable.');
+        }
+
+        $lockedStudent = Student::query()->whereKey($studentId)->lockForUpdate()->firstOrFail();
+        abort_unless(
+            (int) $lockedStudent->user_id === $linkedUserId,
+            409,
+            'The linked student account changed during this operation; please retry.'
+        );
+
+        return [$lockedUsers[$actorId], $lockedUsers[$linkedUserId], $lockedStudent];
+    }
+
+    private function assertAuditAvailable(): void
+    {
+        abort_unless(Schema::hasTable('audit_logs'), 503, 'Audit logging is unavailable; no student changes were applied.');
+    }
+
+    private function ensureAssignedBranch(User $actor): void
+    {
+        if ($actor->hasRole('branch_manager')) {
             $branchAvailable = $actor->branch_id !== null
                 && app(PluginManager::class)->isEnabled('branch-management')
                 && Schema::hasTable('branches')
