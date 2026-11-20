@@ -211,6 +211,42 @@ class LessonContentProtectionTest extends TestCase
         $this->get($downloadUrl)->assertForbidden();
     }
 
+    public function test_revoked_student_role_cannot_use_previously_issued_stream_or_download_urls(): void
+    {
+        [$student, $lessonId] = $this->createProtectedLesson('active');
+        DB::table('course_lessons')->where('id', $lessonId)->update(['is_downloadable' => true]);
+
+        $access = $this->actingAs($student)
+            ->getJson(route('plugins.lesson-media.access', $lessonId))
+            ->assertOk();
+        $streamUrl = $access->json('url');
+        $downloadUrl = $access->json('download_url');
+        $this->assertNotEmpty($downloadUrl);
+
+        $student->roles()->detach();
+
+        $this->get($streamUrl)->assertForbidden();
+        $this->get($downloadUrl)->assertForbidden();
+    }
+
+    public function test_download_policy_revocation_invalidates_issued_download_but_keeps_stream_access(): void
+    {
+        [$student, $lessonId] = $this->createProtectedLesson('active');
+        DB::table('course_lessons')->where('id', $lessonId)->update(['is_downloadable' => true]);
+
+        $access = $this->actingAs($student)
+            ->getJson(route('plugins.lesson-media.access', $lessonId))
+            ->assertOk();
+        $streamUrl = $access->json('url');
+        $downloadUrl = $access->json('download_url');
+        $this->assertNotEmpty($downloadUrl);
+
+        DB::table('course_lessons')->where('id', $lessonId)->update(['is_downloadable' => false]);
+
+        $this->get($downloadUrl)->assertForbidden();
+        $this->get($streamUrl)->assertOk()->assertHeader('Content-Type', 'video/mp4');
+    }
+
     public function test_unpublished_course_media_is_denied_even_when_enrollment_is_active(): void
     {
         [$student, $lessonId] = $this->createProtectedLesson('active');
