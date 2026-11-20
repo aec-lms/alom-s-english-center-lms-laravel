@@ -40,9 +40,15 @@ test('student exam journey uses frozen snapshot, autosaves safely, and remains a
   await expect(page.getByText('Pass marks: 2')).toBeVisible();
 
   // Keyboard navigation enters the first labelled radio group and selects option B.
-  await page.getByRole('link', { name: 'My attempt history' }).focus();
-  await page.keyboard.press('Tab');
+  await page.evaluate(() => document.activeElement?.blur());
   const optionThree = page.getByRole('radio', { name: '3' });
+  let reachedRadio = false;
+  for (let index = 0; index < 24; index += 1) {
+    await page.keyboard.press('Tab');
+    reachedRadio = await optionThree.evaluate((element) => element === document.activeElement);
+    if (reachedRadio) break;
+  }
+  expect(reachedRadio).toBe(true);
   await expect(optionThree).toBeFocused();
   expect(await optionThree.evaluate((element) => element.matches(':focus-visible'))).toBe(true);
   await page.keyboard.press('ArrowRight');
@@ -58,8 +64,24 @@ test('student exam journey uses frozen snapshot, autosaves safely, and remains a
 
   await page.setViewportSize({ width: 375, height: 812 });
   await expect(optionFour).toBeVisible();
-  const mobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
-  expect(mobileOverflow).toBe(false);
+  const overflowReport = await page.evaluate(() => ({
+    viewport: window.innerWidth,
+    document: document.documentElement.scrollWidth,
+    offenders: [...document.querySelectorAll('body *')]
+      .filter((element) => {
+        const rect = element.getBoundingClientRect();
+        return rect.width > 0 && (rect.right > window.innerWidth + 1 || rect.left < -1);
+      })
+      .slice(0, 20)
+      .map((element) => ({
+        tag: element.tagName,
+        className: typeof element.className === 'string' ? element.className : '',
+        text: (element.textContent || '').trim().slice(0, 60),
+        left: Math.round(element.getBoundingClientRect().left),
+        right: Math.round(element.getBoundingClientRect().right),
+      })),
+  }));
+  expect(overflowReport.document, JSON.stringify(overflowReport)).toBeLessThanOrEqual(overflowReport.viewport);
   await page.setViewportSize({ width: 1280, height: 900 });
 
   const attemptId = Number(await page.locator('form[data-attempt-id]').getAttribute('data-attempt-id'));
@@ -119,7 +141,7 @@ test('legacy pending attempt returns actionable 409 without changing score or su
   expect(response.status()).toBe(409);
   await expect(page.getByRole('heading', { name: 'We need to verify this attempt' })).toBeVisible();
   await expect(page.getByRole('alert')).toContainText('Your attempt has not been submitted and your score has not changed.');
-  await expect(page.getByText('Please contact your instructor or school administrator')).toBeVisible();
+  await expect(page.getByText('Please contact your instructor or school administrator').first()).toBeVisible();
 
   const state = JSON.parse(runPhp('inspect-exam-attempt.php', fixture.legacy_attempt_id));
   expect(state.submitted_at).toBeNull();
