@@ -21,14 +21,19 @@ class AssessmentGradingController extends Controller
     public function index(Request $request)
     {
         $actor = $request->user();
+        abort_unless(
+            $actor && ($actor->hasRole('admin') || $actor->hasRole('branch_manager') || $actor->hasRole('teacher')),
+            403
+        );
         $this->ensureBranchAccess($actor);
         $attempts = AssessmentAttempt::query()->with(['questions', 'assessmentSet'])
             ->whereIn('status', ['pending_review', 'graded'])
             ->when($actor->hasRole('branch_manager'), function ($q) use ($actor): void {
                 $branchId = (int) ($actor->branch_id ?? 0);
                 $q->whereHas('assessmentSet', function ($setQuery) use ($branchId): void {
-                    $setQuery->where('branch_id', $branchId)
-                        ->where(function ($courseScope) use ($branchId): void {
+                    $setQuery->where('branch_id', $branchId);
+                    if (Schema::hasTable('courses')) {
+                        $setQuery->where(function ($courseScope) use ($branchId): void {
                             $courseScope->whereNull('course_id')
                                 ->orWhereIn('course_id', function ($courseQuery) use ($branchId): void {
                                     $courseQuery->select('id')
@@ -36,6 +41,9 @@ class AssessmentGradingController extends Controller
                                         ->where('branch_id', $branchId);
                                 });
                         });
+                    } else {
+                        $setQuery->whereNull('course_id');
+                    }
                 });
             })
             ->when($actor->hasRole('teacher'), function ($q) use ($actor): void {
