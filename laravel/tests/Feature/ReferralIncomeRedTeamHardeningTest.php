@@ -618,7 +618,7 @@ final class ReferralIncomeRedTeamHardeningTest extends TestCase
         try {
             $service->reverseSettledPurchase($buyer, 'course_cart_order', $orderId, $duplicateRefundId, 200, 'BDT');
             $this->fail('A provider refund reference must not be applied to a second refund row.');
-        } catch (\\RuntimeException $exception) {
+        } catch (\RuntimeException $exception) {
             $this->assertStringContainsString('already been applied', $exception->getMessage());
         }
         $this->assertDatabaseCount('referral_commission_reversals', 1);
