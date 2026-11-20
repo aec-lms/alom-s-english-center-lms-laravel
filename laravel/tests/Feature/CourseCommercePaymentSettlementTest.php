@@ -9,6 +9,7 @@ use Plugins\Modules\CourseManagement\Services\CourseCommercePaymentSettlementSer
 use Plugins\Modules\MarketingManagement\Models\PromoCoupon;
 use Plugins\Modules\MarketingManagement\Services\CourseCouponService;
 use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
+use Plugins\Modules\ReferralIncome\Services\ReferralIncomeService;
 use Tests\TestCase;
 
 class CourseCommercePaymentSettlementTest extends TestCase
@@ -17,12 +18,15 @@ class CourseCommercePaymentSettlementTest extends TestCase
     {
         parent::setUp();
         $this->markSystemInstalled();
-        $this->activatePlugins(['course-management', 'fees-management', 'marketing-management', 'universal-payment']);
+        $this->activatePlugins(['course-management', 'fees-management', 'marketing-management', 'universal-payment', 'referral-income', 'student-management']);
     }
 
     public function test_verified_course_cart_payment_activates_enrollment_and_is_idempotent(): void
     {
         $student = $this->createUserWithRole('student');
+        $referrer = $this->createUserWithRole('student');
+        $referral = app(ReferralIncomeService::class);
+        $referral->applyCode($student, $referral->createOrGetCode($referrer));
         $courseId = DB::table('courses')->insertGetId([
             'code' => 'SETTLE-001',
             'title' => 'Settlement Test Course',
@@ -96,6 +100,14 @@ class CourseCommercePaymentSettlementTest extends TestCase
         $this->assertDatabaseHas('enrollments', ['user_id' => $student->id, 'course_id' => $courseId, 'status' => 'active']);
         $this->assertSame(1, DB::table('enrollments')->where('user_id', $student->id)->where('course_id', $courseId)->count());
         $this->assertSame(1, DB::table('fee_invoices')->where('payer_email', $student->email)->count());
+        $this->assertDatabaseHas('referral_commissions', [
+            'referred_user_id' => $student->id,
+            'referrer_user_id' => $referrer->id,
+            'source_type' => 'course_cart_order',
+            'source_id' => (string) $orderId,
+            'status' => 'pending',
+        ]);
+        $this->assertSame('verified', DB::table('universal_payment_transactions')->where('id', $transaction->id)->value('status'));
     }
 
     public function test_verified_course_gift_payment_creates_invoice_and_marks_gift_paid_once(): void
