@@ -637,10 +637,128 @@ class LiveClassCapacityTest extends TestCase
         }
     }
 
-    private function createLiveClassConcurrencyFixture(): array
+    public function test_mysql_heartbeat_waits_for_paid_live_class_entitlement_revocation_then_denies_without_refreshing_seat(): void
+    {
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            $this->markTestSkipped('Paid live-class entitlement row-lock contention requires MySQL 8.');
+        }
+
+        [$student, $liveClass, $participant] = $this->createLiveClassConcurrencyFixture(true);
+        $primaryName = DB::getDefaultConnection();
+        $primary = DB::connection($primaryName);
+        $secondaryName = $this->createSecondaryMysqlConnection($primaryName);
+        $secondary = DB::connection($secondaryName);
+        $secondary->statement('SET SESSION innodb_lock_wait_timeout = 1');
+
+        $orderId = DB::table('commerce_orders')->insertGetId([
+            'order_number' => 'LIVE-PASS-' . strtoupper(bin2hex(random_bytes(4))),
+            'user_id' => $student->id,
+            'currency' => 'BDT',
+            'subtotal' => 100,
+            'discount_total' => 0,
+            'grand_total' => 100,
+            'status' => 'completed',
+            'payment_status' => 'paid',
+            'paid_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $itemId = DB::table('commerce_order_items')->insertGetId([
+            'order_id' => $orderId,
+            'item_type' => 'live_class',
+            'item_id' => $liveClass->id,
+            'title_snapshot' => 'Paid live class pass',
+            'quantity' => 1,
+            'unit_price' => 100,
+            'line_total' => 100,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $entitlementId = DB::table('commerce_entitlements')->insertGetId([
+            'user_id' => $student->id,
+            'order_item_id' => $itemId,
+            'entitlement_type' => 'live_class',
+            'resource_id' => $liveClass->id,
+            'details' => json_encode(['source' => 'test'], JSON_THROW_ON_ERROR),
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $primary->table('enrollments')
+            ->where('user_id', $student->id)
+            ->where('course_id', $liveClass->course_id)
+            ->update(['status' => 'cancelled', 'updated_at' => now()]);
+        $primary->table('live_class_participants')
+            ->where('id', $participant->id)
+            ->update(['last_seen_at' => now()->subSeconds(15)]);
+        $expectedLastSeen = $primary->table('live_class_participants')
+            ->where('id', $participant->id)
+            ->value('last_seen_at');
+        $eventsBefore = $primary->table('student_activity_events')
+            ->where('user_id', $student->id)
+            ->where('event_type', 'live_class_heartbeat')
+            ->where('subject_id', (string) $liveClass->id)
+            ->count();
+
+        $primary->beginTransaction();
+        try {
+            // Hold the real paid-pass row while revoking it. The heartbeat must
+            // serialize on this exact commerce entitlement, not enrollment.
+            $primary->table('users')->where('id', $student->id)->lockForUpdate()->first();
+            $primary->table('role_user')->where('user_id', $student->id)->lockForUpdate()->get();
+            $primary->table('students')->where('user_id', $student->id)->lockForUpdate()->first();
+            $primary->table('commerce_entitlements')->where('id', $entitlementId)->lockForUpdate()->first();
+            $primary->table('commerce_entitlements')->where('id', $entitlementId)->update([
+                'status' => 'revoked',
+                'updated_at' => now(),
+            ]);
+
+            DB::setDefaultConnection($secondaryName);
+            try {
+                $this->actingAs($student)
+                    ->postJson('/live-classes/' . $liveClass->id . '/heartbeat');
+                $this->fail('Heartbeat must wait for the paid commerce entitlement revocation.');
+            } catch (\Illuminate\Database\QueryException $exception) {
+                $this->assertContains((int) ($exception->errorInfo[1] ?? 0), [1205, 1213], $exception->getMessage());
+            }
+
+            DB::setDefaultConnection($primaryName);
+            $primary->commit();
+
+            DB::setDefaultConnection($secondaryName);
+            $this->actingAs($student)
+                ->postJson('/live-classes/' . $liveClass->id . '/heartbeat')
+                ->assertForbidden();
+
+            $unchanged = $secondary->table('live_class_participants')->where('id', $participant->id)->first();
+            $this->assertNull($unchanged->left_at);
+            $this->assertSame((string) $expectedLastSeen, (string) $unchanged->last_seen_at);
+            $this->assertSame('revoked', $secondary->table('commerce_entitlements')->where('id', $entitlementId)->value('status'));
+            $eventsAfter = $secondary->table('student_activity_events')
+                ->where('user_id', $student->id)
+                ->where('event_type', 'live_class_heartbeat')
+                ->where('subject_id', (string) $liveClass->id)
+                ->count();
+            $this->assertSame($eventsBefore, $eventsAfter);
+        } finally {
+            DB::setDefaultConnection($primaryName);
+            if ($primary->transactionLevel() > 0) {
+                $primary->rollBack();
+            }
+            DB::setDefaultConnection($primaryName);
+            DB::purge($secondaryName);
+        }
+    }
+
+    private function createLiveClassConcurrencyFixture(bool $withCommerceEntitlements = false): array
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['course-management', 'student-management', 'student-tracking']);
+        $plugins = ['course-management', 'student-management', 'student-tracking'];
+        if ($withCommerceEntitlements) {
+            $plugins[] = 'commerce-cart';
+        }
+        $this->activatePlugins($plugins);
 
         $course = Course::query()->create([
             'code' => 'LIVE-RACE-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
