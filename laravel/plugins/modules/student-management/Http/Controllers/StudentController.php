@@ -47,8 +47,10 @@ class StudentController extends Controller
     {
         $actorId = (int) $request->user()->getKey();
         $request->merge([
-            'email' => Str::lower(trim((string) $request->input('email'))),
-            'student_code' => ($studentCode = trim((string) $request->input('student_code', ''))) !== '' ? $studentCode : null,
+            'email' => Str::lower(trim((string) $request->input('email', ''))),
+            'student_code' => $request->filled('student_code')
+                ? Str::upper(trim((string) $request->input('student_code')))
+                : null,
         ]);
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:120'],
@@ -56,11 +58,23 @@ class StudentController extends Controller
             'phone' => ['nullable', 'string', 'max:32'],
             'password' => ['required', 'string', 'min:8'],
             'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
-            'student_code' => ['nullable', 'string', 'max:40', 'unique:students,student_code'],
+            'student_code' => [
+                'nullable',
+                'string',
+                'max:40',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if ($value === null || trim((string) $value) === '') {
+                        return;
+                    }
+                    if (Student::query()->whereRaw('UPPER(student_code) = ?', [Str::upper(trim((string) $value))])->exists()) {
+                        $fail('The student code has already been taken.');
+                    }
+                },
+            ],
             'status' => ['nullable', 'in:active,inactive,graduated'],
         ]);
 
-        $code = $validated['student_code'] ?? null;
+        $code = isset($validated['student_code']) && $validated['student_code'] !== '' ? $validated['student_code'] : null;
 
         $student = DB::transaction(function () use ($validated, $code, $actorId): Student {
             $this->assertAuditAvailable();
@@ -76,14 +90,21 @@ class StudentController extends Controller
             $studentRole = Role::query()->where('slug', 'student')->lockForUpdate()->first();
             abort_unless($studentRole, 503, 'Student role is not configured. Contact an administrator.');
 
-            $user = User::query()->create([
-                'name' => $validated['name'],
-                'email' => strtolower($validated['email']),
-                'phone' => $validated['phone'] ?? null,
-                'password' => Hash::make($validated['password']),
-                'branch_id' => $branchId,
-                'is_active' => ($validated['status'] ?? 'active') === 'active',
-            ]);
+            try {
+                $user = User::query()->create([
+                    'name' => $validated['name'],
+                    'email' => $validated['email'],
+                    'phone' => $validated['phone'] ?? null,
+                    'password' => Hash::make($validated['password']),
+                    'branch_id' => $branchId,
+                    'is_active' => ($validated['status'] ?? 'active') === 'active',
+                ]);
+            } catch (QueryException $exception) {
+                if ($this->isStudentIdentityUniqueViolation($exception, 'email')) {
+                    throw ValidationException::withMessages(['email' => 'The email has already been taken.']);
+                }
+                throw $exception;
+            }
             $user->roles()->sync([$studentRole->id]);
 
             $studentAttributes = [
@@ -107,13 +128,30 @@ class StudentController extends Controller
     public function update(Request $request, Student $student): RedirectResponse
     {
         $actorId = (int) $request->user()->getKey();
-        $request->merge(['email' => Str::lower(trim((string) $request->input('email')))]);
+        $request->merge([
+            'email' => Str::lower(trim((string) $request->input('email', ''))),
+            'student_code' => $request->filled('student_code')
+                ? Str::upper(trim((string) $request->input('student_code')))
+                : null,
+        ]);
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:120'],
             'email' => ['required', 'email', $this->uniqueEmailRule((int) $student->user_id)],
             'phone' => ['nullable', 'string', 'max:32'],
             'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
-            'student_code' => ['required', 'string', 'max:40', 'unique:students,student_code,' . $student->id],
+            'student_code' => [
+                'required',
+                'string',
+                'max:40',
+                function (string $attribute, mixed $value, \Closure $fail) use ($student): void {
+                    if (Student::query()
+                        ->whereRaw('UPPER(student_code) = ?', [Str::upper(trim((string) $value))])
+                        ->where('id', '<>', $student->id)
+                        ->exists()) {
+                        $fail('The student code has already been taken.');
+                    }
+                },
+            ],
             'status' => ['required', 'in:active,inactive,graduated'],
             'password' => ['nullable', 'string', 'min:8'],
         ]);
@@ -155,13 +193,22 @@ class StudentController extends Controller
             if (!empty($validated['password'])) {
                 $userPayload['password'] = Hash::make($validated['password']);
             }
-            $user->update($userPayload);
-
-            $lockedStudent->update([
-                'student_code' => $validated['student_code'],
-                'branch_id' => $branchId,
-                'status' => $validated['status'],
-            ]);
+            try {
+                $user->update($userPayload);
+                $lockedStudent->update([
+                    'student_code' => $validated['student_code'],
+                    'branch_id' => $branchId,
+                    'status' => $validated['status'],
+                ]);
+            } catch (QueryException $exception) {
+                if ($this->isStudentIdentityUniqueViolation($exception, 'email')) {
+                    throw ValidationException::withMessages(['email' => 'The email has already been taken.']);
+                }
+                if ($this->isStudentIdentityUniqueViolation($exception, 'student_code')) {
+                    throw ValidationException::withMessages(['student_code' => 'The student code has already been taken.']);
+                }
+                throw $exception;
+            }
 
             $after = [
                 'student_code' => $lockedStudent->student_code,
@@ -274,8 +321,11 @@ class StudentController extends Controller
      */
     private function createStudentWithGeneratedCode(array $attributes): Student
     {
-        for ($attempt = 0; $attempt < 5; $attempt++) {
-            $candidate = 'STU-' . strtoupper(Str::random(6));
+        for ($attempt = 0; $attempt < 10; $attempt++) {
+            $candidate = 'STU-' . Str::upper(Str::random(10));
+            if (Student::query()->whereRaw('UPPER(student_code) = ?', [$candidate])->exists()) {
+                continue;
+            }
 
             try {
                 return DB::transaction(
@@ -293,14 +343,20 @@ class StudentController extends Controller
         ]);
     }
 
-    private function isStudentCodeUniqueViolation(QueryException $exception): bool
+    private function isStudentIdentityUniqueViolation(QueryException $exception, string $column): bool
     {
         $sqlState = (string) ($exception->errorInfo[0] ?? $exception->getCode());
         $driverCode = (int) ($exception->errorInfo[1] ?? 0);
         $message = strtolower($exception->getMessage());
-        $uniqueViolation = $sqlState === '23505' || in_array($driverCode, [19, 1062], true);
+        $uniqueViolation = in_array($sqlState, ['23000', '23505'], true)
+            && in_array($driverCode, [19, 1062], true);
 
-        return $uniqueViolation && str_contains($message, 'student_code');
+        return $uniqueViolation && str_contains($message, strtolower($column));
+    }
+
+    private function isStudentCodeUniqueViolation(QueryException $exception): bool
+    {
+        return $this->isStudentIdentityUniqueViolation($exception, 'student_code');
     }
 
     private function assertAuditAvailable(): void
