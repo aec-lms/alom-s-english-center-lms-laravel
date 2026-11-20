@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Models\Role;
+use App\Models\User;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
+use Plugins\Modules\StudentManagement\Models\Student;
 use Tests\TestCase;
 
 class StudentManagementProvisioningSecurityTest extends TestCase
