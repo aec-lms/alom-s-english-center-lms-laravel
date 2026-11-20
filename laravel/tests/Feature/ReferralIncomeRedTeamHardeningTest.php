@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use Illuminate\Support\Facades\Crypt;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -237,19 +236,33 @@ final class ReferralIncomeRedTeamHardeningTest extends TestCase
         $this->markSystemInstalled();
         $this->activatePlugins(['referral-income', 'student-management', 'course-management']);
 
-        if (!Schema::hasTable('course_cart_orders')) {
-            Schema::create('course_cart_orders', function (Blueprint $table): void {
-                $table->id();
-                $table->unsignedBigInteger('user_id');
-                $table->string('status', 20);
-            });
-        }
-
         $referrer = $this->createUserWithRole('student');
         $buyer = $this->createUserWithRole('student');
-        DB::table('course_cart_orders')->insert([
+        $cartId = DB::table('course_carts')->insertGetId([
             'user_id' => $buyer->id,
+            'status' => 'completed',
+            'currency' => 'BDT',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('course_cart_orders')->insert([
+            'cart_id' => $cartId,
+            'user_id' => $buyer->id,
+            'branch_id' => null,
+            'invoice_id' => null,
+            'payment_transaction_id' => null,
+            'coupon_id' => null,
+            'coupon_code' => null,
+            'coupon_reservation_key' => null,
+            'subtotal_amount' => 1000,
+            'discount_amount' => 0,
+            'net_amount' => 1000,
+            'currency' => 'BDT',
             'status' => 'paid',
+            'paid_at' => now(),
+            'expires_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
 
         $service = app(ReferralIncomeService::class);
