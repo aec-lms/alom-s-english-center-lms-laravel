@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Core\Security\AuditLogger;
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use App\Core\Plugins\PluginManager;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -143,21 +144,27 @@ class RecycleBinController extends Controller
             $student = Student::withTrashed()->lockForUpdate()->findOrFail($studentId);
             abort_unless($student->trashed(), 409, 'This student is not in the Recycle Bin.');
 
-            $wasActive = (bool) $student->deleted_user_was_active;
+            // Keep the profile lock first, then lock its account row. Restore is
+            // deliberately not an account-reactivation operation: a later
+            // security deactivation must never be undone by stale delete-time state.
+            $user = $student->user_id
+                ? User::query()->lockForUpdate()->find($student->user_id)
+                : null;
+
             $student->restore();
-            $student->deleted_user_was_active = null;
             $student->save();
 
-            if ($student->user) {
-                $student->user->update(['is_active' => $wasActive]);
+            if ($user && $user->is_active) {
+                $user->forceFill(['is_active' => false])->save();
             }
 
             $this->audit->log('recycle_bin.student_restored', 'student', (string) $student->id, [
                 'student_code' => $student->student_code,
+                'account_reactivated' => false,
             ], $request->user()->id);
         });
 
-        return redirect()->route('admin.recycle-bin.index')->with('status', 'Student restored successfully. Account access was returned to its previous active state.');
+        return redirect()->route('admin.recycle-bin.index')->with('status', 'Student profile restored. Account access remains disabled; an administrator must explicitly reactivate it after a fresh security check.');
     }
     public function restoreTeacher(Request $request, int $teacherId): RedirectResponse
     {
