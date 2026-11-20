@@ -173,9 +173,13 @@ class RefundSettlementService
      */
     private function lockCommerceOrders(?int $invoiceId): array
     {
-        if ($invoiceId === null
-            || !Schema::hasTable('commerce_orders')
-            || !Schema::hasColumn('commerce_orders', 'user_id')) {
+        if ($invoiceId === null || !Schema::hasTable('commerce_orders')) {
+            return [];
+        }
+        if (!Schema::hasColumn('commerce_orders', 'user_id')) {
+            if (DB::table('commerce_orders')->where('invoice_id', $invoiceId)->exists()) {
+                throw new RuntimeException('Commerce order buyer identity cannot be verified for this refund.');
+            }
             return [];
         }
 
