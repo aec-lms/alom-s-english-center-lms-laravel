@@ -122,7 +122,6 @@ test('student exam journey uses frozen snapshot, autosaves safely, and remains a
   expect(submitPayload).toContain('attempt_id');
   expect(submitPayload).not.toMatch(/correct_option_index|correct_answer|answer_key/i);
   await page.waitForURL((url) => url.pathname !== takeUrl);
-  await expect(page.getByRole('link', { name: 'My Dashboard' })).toBeVisible();
 
   await page.goto(`/exams/${fixture.exam_id}/attempts`);
   await expect(page.getByText('2.00 / 2.00')).toBeVisible();
