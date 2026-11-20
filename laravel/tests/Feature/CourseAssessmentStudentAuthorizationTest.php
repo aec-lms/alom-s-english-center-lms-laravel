@@ -429,23 +429,6 @@ PHP;
         return DB::connection($name);
     }
 
-    private function mysqlConcurrencyMonitorConnection(string $name): object
-    {
-        $default = DB::getDefaultConnection();
-        $connection = config('database.connections.' . $default);
-        $connection['username'] = (string) env('MYSQL_MONITOR_USERNAME', '');
-        $connection['password'] = (string) env('MYSQL_MONITOR_PASSWORD', '');
-
-        if ($connection['username'] === '' || $connection['password'] === '') {
-            $this->fail('MySQL lock-wait monitoring credentials are required by the MySQL 8 concurrency workflow.');
-        }
-
-        config(['database.connections.' . $name => $connection]);
-        DB::purge($name);
-
-        return DB::connection($name);
-    }
-
     private function waitForMysqlLockWait(object $monitor, int $threadId): void
     {
         $deadline = microtime(true) + 12;
@@ -571,8 +554,7 @@ PHP;
             $ready = $this->readMysqlWorkerLine($worker);
             $this->assertStringStartsWith('READY:', $ready);
             $threadId = (int) substr($ready, strlen('READY:'));
-            $monitor = $this->mysqlConcurrencyMonitorConnection('assessment_student_monitor_role_first');
-            $this->waitForMysqlLockWait($monitor, $threadId);
+            $this->waitForMysqlLockWait($writer, $threadId);
 
             $writer->commit();
             $this->assertStringStartsWith('RESULT:403:', $this->readMysqlWorkerLine($worker));
@@ -617,8 +599,7 @@ PHP;
             $ready = $this->readMysqlWorkerLine($worker);
             $this->assertStringStartsWith('READY:', $ready);
             $threadId = (int) substr($ready, strlen('READY:'));
-            $monitor = $this->mysqlConcurrencyMonitorConnection('assessment_student_monitor_inactive_first');
-            $this->waitForMysqlLockWait($monitor, $threadId);
+            $this->waitForMysqlLockWait($writer, $threadId);
 
             $writer->commit();
             $this->assertStringStartsWith('RESULT:403:', $this->readMysqlWorkerLine($worker));
