@@ -184,10 +184,136 @@ class InvoicePaymentSessionReservationTest extends TestCase
         $service->markRejected($reservation['transaction'], 'provider_definitive_4xx');
         $invoice->update(['paid_amount' => 1200, 'status' => 'paid']);
 
-        $replay = $service->reserve($invoice, 'gateway-paypal', 'PYPL', [], 'paypal-terminal-key');
-        $this->assertTrue($replay['reused']);
-        $this->assertSame($reservation['transaction']->id, $replay['transaction']->id);
-        $this->assertSame('failed', $replay['transaction']->status);
+        try {
+            $service->reserve($invoice, 'gateway-paypal', 'PYPL', [], 'paypal-terminal-key');
+            $this->fail('A replay after the invoice balance reaches zero must return HTTP 409.');
+        } catch (HttpException $exception) {
+            $this->assertSame(409, $exception->getStatusCode());
+        }
+
+        $this->assertSame('failed', $reservation['transaction']->fresh()->status);
+        $this->assertSame(1, DB::table('payment_transactions')->where('invoice_id', $invoice->id)->count());
+    }
+
+    public function test_same_idempotency_key_with_changed_payable_balance_returns_conflict(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management']);
+
+        $invoice = $this->createInvoice();
+        $service = app(InvoicePaymentSessionReservationService::class);
+        $metadata = ['fingerprint_parameters' => ['channel' => 'hosted']];
+        $original = $service->reserve($invoice, 'gateway-paypal', 'PYPL', $metadata, 'paypal-balance-key');
+
+        $invoice->update(['paid_amount' => 300]);
+
+        try {
+            $service->reserve($invoice->fresh(), 'gateway-paypal', 'PYPL', $metadata, 'paypal-balance-key');
+            $this->fail('A replay after the payable amount changes from 1,200 to 900 must return HTTP 409.');
+        } catch (HttpException $exception) {
+            $this->assertSame(409, $exception->getStatusCode());
+        }
+
+        $this->assertSame(1, DB::table('payment_transactions')->where('invoice_id', $invoice->id)->count());
+        $this->assertSame(
+            $original['transaction']->id,
+            DB::table('payment_transactions')->where('invoice_id', $invoice->id)->value('id'),
+        );
+        $this->assertSame(1200.00, (float) $original['transaction']->fresh()->amount);
+    }
+
+    public function test_paypal_same_key_rejects_changed_invoice_reference_before_second_order_request(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'gateway-paypal']);
+
+        app(PluginManager::class)->saveSettings('gateway-paypal', [
+            'client_id' => 'paypal-reservation-client',
+            'client_secret' => 'paypal-reservation-secret',
+            'sandbox_mode' => '1',
+        ], ['client_secret']);
+
+        Http::fake(function (ClientRequest $request) {
+            $path = (string) parse_url($request->url(), PHP_URL_PATH);
+            if (str_ends_with($path, '/v1/oauth2/token')) {
+                return Http::response(['access_token' => 'paypal-fingerprint-access-token', 'token_type' => 'Bearer', 'expires_in' => 300], 200);
+            }
+            if (str_ends_with($path, '/v2/checkout/orders')) {
+                return Http::response([
+                    'id' => 'ORDER-FINGERPRINT-001',
+                    'status' => 'CREATED',
+                    'links' => [[
+                        'rel' => 'approve',
+                        'href' => 'https://www.sandbox.paypal.com/checkoutnow?token=ORDER-FINGERPRINT-001',
+                    ]],
+                ], 201);
+            }
+
+            return Http::response(['message' => 'Unexpected PayPal request'], 500);
+        });
+
+        $invoice = $this->createInvoice();
+        $service = app(PaypalGatewayService::class);
+        $service->createOrder($invoice, 'paypal-request-fingerprint-001');
+
+        DB::table('fee_invoices')->where('id', $invoice->id)->update([
+            'invoice_number' => 'RESERVE-CHANGED-' . strtoupper(bin2hex(random_bytes(3))),
+        ]);
+
+        try {
+            $service->createOrder($invoice->fresh(), 'paypal-request-fingerprint-001');
+            $this->fail('A same-key replay with a changed PayPal invoice reference must return HTTP 409.');
+        } catch (HttpException $exception) {
+            $this->assertSame(409, $exception->getStatusCode());
+        }
+
+        $orderRequests = Http::recorded()->filter(
+            fn (array $record): bool => str_ends_with((string) parse_url($record[0]->url(), PHP_URL_PATH), '/v2/checkout/orders')
+        )->count();
+        $this->assertSame(1, $orderRequests);
+        $this->assertSame(1, DB::table('payment_transactions')->where('invoice_id', $invoice->id)->count());
+    }
+
+    public function test_sslcommerz_same_key_rejects_changed_payer_before_second_session_request(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'gateway-sslcommerz']);
+
+        app(PluginManager::class)->saveSettings('gateway-sslcommerz', [
+            'store_id' => 'aec_fingerprint_store',
+            'store_password' => 'ssl_fingerprint_secret',
+            'sandbox_mode' => '1',
+        ], ['store_password']);
+
+        Http::fake(function (ClientRequest $request) {
+            if (str_ends_with((string) parse_url($request->url(), PHP_URL_PATH), '/gwprocess/v4/api.php')) {
+                return Http::response([
+                    'status' => 'SUCCESS',
+                    'sessionkey' => 'SSL-FINGERPRINT-SESSION',
+                    'GatewayPageURL' => 'https://sandbox.sslcommerz.com/gwprocess/v4/gw.php?SESSIONKEY=SSL-FINGERPRINT-SESSION',
+                ], 200);
+            }
+
+            return Http::response(['message' => 'Unexpected SSLCOMMERZ request'], 500);
+        });
+
+        $invoice = $this->createInvoice();
+        $service = app(SslcommerzGatewayService::class);
+        $service->initiateHostedCheckout($invoice, 'ssl-payer-fingerprint-001');
+
+        $invoice->update(['payer_email' => 'changed-payer@aec.test']);
+
+        try {
+            $service->initiateHostedCheckout($invoice->fresh(), 'ssl-payer-fingerprint-001');
+            $this->fail('A same-key replay with changed payer details must return HTTP 409.');
+        } catch (HttpException $exception) {
+            $this->assertSame(409, $exception->getStatusCode());
+        }
+
+        $sessionRequests = Http::recorded()->filter(
+            fn (array $record): bool => str_ends_with((string) parse_url($record[0]->url(), PHP_URL_PATH), '/gwprocess/v4/api.php')
+        )->count();
+        $this->assertSame(1, $sessionRequests);
         $this->assertSame(1, DB::table('payment_transactions')->where('invoice_id', $invoice->id)->count());
     }
 
