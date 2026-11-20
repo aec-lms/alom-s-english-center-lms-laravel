@@ -51,7 +51,7 @@ final class CourseAssessmentGradingBranchIsolationTest extends TestCase
         return $teacher;
     }
 
-    private function createCourse(int $branchId): int
+    private function createCourse(?int $branchId): int
     {
         return (int) DB::table('courses')->insertGetId([
             'branch_id' => $branchId,
@@ -65,7 +65,7 @@ final class CourseAssessmentGradingBranchIsolationTest extends TestCase
         ]);
     }
 
-    private function createPendingAttempt(int $courseId, int $branchId, string $title): int
+    private function createPendingAttempt(int $courseId, ?int $branchId, string $title): int
     {
         $setId = (int) DB::table('course_assessment_sets')->insertGetId([
             'course_id' => $courseId,
@@ -190,10 +190,8 @@ final class CourseAssessmentGradingBranchIsolationTest extends TestCase
         ]);
 
         $globalTeacher = $this->createTeacher(null, null);
-        $globalCourse = $this->createCourse(0);
-        DB::table('courses')->where('id', $globalCourse)->update(['branch_id' => null]);
-        $globalAttempt = $this->createPendingAttempt($globalCourse, 0, 'Global Assessment');
-        DB::table('course_assessment_sets')->where('id', DB::table('course_assessment_attempts')->where('id', $globalAttempt)->value('assessment_set_id'))->update(['branch_id' => null]);
+        $globalCourse = $this->createCourse(null);
+        $globalAttempt = $this->createPendingAttempt($globalCourse, null, 'Global Assessment');
         $this->assignTeacher((int) $globalTeacher->id, $globalCourse);
 
         $this->actingAs($globalTeacher)
