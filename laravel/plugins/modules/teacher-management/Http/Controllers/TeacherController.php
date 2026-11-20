@@ -188,10 +188,19 @@ class TeacherController extends Controller
             $linkedUser = User::query()->whereKey($lockedTeacher->user_id)->lockForUpdate()->first();
             abort_unless($linkedUser, 409, 'The linked teacher account is missing; no changes were applied.');
 
-            // Omitted is_active means preserve the persisted state. An explicit 0 means deactivate.
-            $isActive = array_key_exists('is_active', $validated)
+            // An omitted status must never undo a separate security disablement.
+            // The effective state is active only when both persisted records are active.
+            $accountWasActive = (bool) $linkedUser->is_active;
+            $profileWasActive = (bool) $lockedTeacher->is_active;
+            $isActiveWasExplicit = array_key_exists('is_active', $validated);
+            $isActive = $isActiveWasExplicit
                 ? $request->boolean('is_active')
-                : (bool) $lockedTeacher->is_active;
+                : ($profileWasActive && $accountWasActive);
+
+            // Only an administrator may explicitly reactivate a disabled login.
+            if ($isActiveWasExplicit && $isActive && !$accountWasActive) {
+                abort_unless($actor->hasRole('admin'), 403, 'Only an administrator may reactivate a disabled teacher account.');
+            }
 
             $photoPath = $lockedTeacher->photo_path;
             if ($request->hasFile('photo')) {
@@ -223,6 +232,14 @@ class TeacherController extends Controller
             $linkedUser->update($userUpdates);
 
             $updatedTeacher = $lockedTeacher->fresh();
+            if ($accountWasActive !== $isActive) {
+                $this->audit->log('teacher.account_status_changed', 'user', (string) $linkedUser->id, [
+                    'teacher_id' => (int) $updatedTeacher->id,
+                    'before' => $accountWasActive,
+                    'after' => $isActive,
+                ], $actorId);
+            }
+
             $this->audit->log('teacher.updated', 'teacher', (string) $updatedTeacher->id, ['code' => $updatedTeacher->employee_code]);
 
             return $updatedTeacher;
