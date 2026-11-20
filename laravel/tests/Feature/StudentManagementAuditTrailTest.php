@@ -185,4 +185,102 @@ final class StudentManagementAuditTrailTest extends TestCase
         );
     }
 
+    public function test_update_locks_all_user_rows_before_student_profile_on_mysql(): void
+    {
+        if (DB::getDriverName() !== 'mysql') {
+            $this->markTestSkipped('MySQL row-lock ordering is verified by the MySQL 8 workflow.');
+        }
+
+        $this->markSystemInstalled();
+        $this->activatePlugins(['student-management']);
+        $admin = $this->createUserWithRole('admin');
+        $email = 'lock.update.' . bin2hex(random_bytes(4)) . '@aec.test';
+
+        $this->actingAs($admin)->post('/admin/students', [
+            'name' => 'Lock Order Learner',
+            'email' => $email,
+            'password' => 'InitialPassword123!',
+            'student_code' => 'LOCK-UP-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'status' => 'active',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $student = Student::query()->whereHas('user', fn ($query) => $query->where('email', $email))->firstOrFail();
+        $statements = [];
+        DB::listen(function ($query) use (&$statements): void {
+            $sql = strtolower($query->sql);
+            if (str_contains($sql, 'for update')) {
+                $statements[] = $sql;
+            }
+        });
+
+        $this->actingAs($admin)->put('/admin/students/' . $student->id, [
+            'name' => 'Lock Order Learner Updated',
+            'email' => $email,
+            'student_code' => $student->student_code,
+            'status' => 'active',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $userLockIndexes = [];
+        $studentLockIndexes = [];
+        foreach ($statements as $index => $sql) {
+            if (preg_match('/from\\s+[`"]?users\\b/', $sql)) {
+                $userLockIndexes[] = $index;
+            }
+            if (preg_match('/from\\s+[`"]?students\\b/', $sql)) {
+                $studentLockIndexes[] = $index;
+            }
+        }
+
+        $this->assertNotEmpty($userLockIndexes, 'Expected actor and linked-user row locks.');
+        $this->assertNotEmpty($studentLockIndexes, 'Expected the student profile row lock.');
+        $this->assertGreaterThan(max($userLockIndexes), min($studentLockIndexes), 'Every User row must be locked before the Student profile.');
+    }
+
+    public function test_delete_locks_all_user_rows_before_student_profile_on_mysql(): void
+    {
+        if (DB::getDriverName() !== 'mysql') {
+            $this->markTestSkipped('MySQL row-lock ordering is verified by the MySQL 8 workflow.');
+        }
+
+        $this->markSystemInstalled();
+        $this->activatePlugins(['student-management']);
+        $admin = $this->createUserWithRole('admin');
+        $email = 'lock.delete.' . bin2hex(random_bytes(4)) . '@aec.test';
+
+        $this->actingAs($admin)->post('/admin/students', [
+            'name' => 'Lock Order Delete Learner',
+            'email' => $email,
+            'password' => 'InitialPassword123!',
+            'student_code' => 'LOCK-DEL-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'status' => 'active',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $student = Student::query()->whereHas('user', fn ($query) => $query->where('email', $email))->firstOrFail();
+        $statements = [];
+        DB::listen(function ($query) use (&$statements): void {
+            $sql = strtolower($query->sql);
+            if (str_contains($sql, 'for update')) {
+                $statements[] = $sql;
+            }
+        });
+
+        $this->actingAs($admin)->delete('/admin/students/' . $student->id)
+            ->assertRedirect()->assertSessionHasNoErrors();
+
+        $userLockIndexes = [];
+        $studentLockIndexes = [];
+        foreach ($statements as $index => $sql) {
+            if (preg_match('/from\\s+[`"]?users\\b/', $sql)) {
+                $userLockIndexes[] = $index;
+            }
+            if (preg_match('/from\\s+[`"]?students\\b/', $sql)) {
+                $studentLockIndexes[] = $index;
+            }
+        }
+
+        $this->assertNotEmpty($userLockIndexes, 'Expected actor and linked-user row locks.');
+        $this->assertNotEmpty($studentLockIndexes, 'Expected the student profile row lock.');
+        $this->assertGreaterThan(max($userLockIndexes), min($studentLockIndexes), 'Every User row must be locked before the Student profile.');
+    }
+
 }
