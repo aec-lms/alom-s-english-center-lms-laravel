@@ -245,8 +245,9 @@ class TeacherController extends Controller
             $user = User::query()->whereKey($lockedTeacher->user_id)->lockForUpdate()->first();
             abort_unless($user, 409, 'The linked teacher account is missing; no changes were applied.');
 
+            $userWasActive = (bool) $user->is_active;
             if (Schema::hasColumn('teachers', 'deleted_user_was_active')) {
-                $lockedTeacher->deleted_user_was_active = (bool) $user->is_active;
+                $lockedTeacher->deleted_user_was_active = $userWasActive;
                 $lockedTeacher->save();
             }
 
@@ -258,7 +259,7 @@ class TeacherController extends Controller
             // Keep the audit event atomic with the lifecycle mutation.
             $this->audit->log('teacher.deleted', 'teacher', $id, [
                 'code' => $code,
-                'user_was_active' => (bool) $user->is_active,
+                'user_was_active' => $userWasActive,
             ]);
 
             return ['code' => $code, 'id' => $id];
