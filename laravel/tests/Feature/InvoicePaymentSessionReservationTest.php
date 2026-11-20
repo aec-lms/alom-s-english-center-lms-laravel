@@ -231,4 +231,68 @@ class InvoicePaymentSessionReservationTest extends TestCase
     }
 
 
+
+    public function test_mysql_second_connection_waits_for_invoice_reservation_then_observes_the_first_session(): void
+    {
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            $this->markTestSkipped('This row-lock contention regression requires MySQL 8.');
+        }
+
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management']);
+        $invoice = $this->createInvoice();
+
+        $firstConnection = DB::connection('mysql');
+        $secondName = 'mysql_red_team_concurrency';
+        config(['database.connections.' . $secondName => config('database.connections.mysql')]);
+        DB::purge($secondName);
+        $secondConnection = DB::connection($secondName);
+        $secondConnection->statement('SET SESSION innodb_lock_wait_timeout = 1');
+
+        $defaultConnection = DB::getDefaultConnection();
+        $service = app(InvoicePaymentSessionReservationService::class);
+        $firstConnection->beginTransaction();
+
+        try {
+            DB::setDefaultConnection('mysql');
+            $firstReservation = $service->reserve($invoice, 'gateway-sslcommerz', 'SSL', [], 'first-connection-key');
+
+            // The first connection still owns the outer transaction and invoice
+            // row lock after reserve() commits its nested transaction.
+            DB::setDefaultConnection($secondName);
+            try {
+                $service->reserve($invoice, 'gateway-paypal', 'PYPL', [], 'second-connection-key');
+                $this->fail('A second connection must wait on the shared invoice lock.');
+            } catch (\Illuminate\Database\QueryException $exception) {
+                $this->assertStringContainsString('lock wait timeout', strtolower($exception->getMessage()));
+            }
+
+            DB::setDefaultConnection('mysql');
+            $firstConnection->commit();
+
+            DB::setDefaultConnection($secondName);
+            try {
+                $service->reserve($invoice, 'gateway-paypal', 'PYPL', [], 'second-connection-key');
+                $this->fail('After the first commit, the second connection must observe the active reservation.');
+            } catch (RuntimeException $exception) {
+                $this->assertStringContainsString('active or ambiguous payment session', $exception->getMessage());
+            }
+
+            $this->assertSame(
+                1,
+                $secondConnection->table('payment_transactions')->where('invoice_id', $invoice->id)->count()
+            );
+            $this->assertSame($firstReservation['transaction']->id,
+                $secondConnection->table('payment_transactions')->where('invoice_id', $invoice->id)->value('id'));
+        } finally {
+            DB::setDefaultConnection('mysql');
+            if ($firstConnection->transactionLevel() > 0) {
+                $firstConnection->rollBack();
+            }
+            DB::setDefaultConnection($defaultConnection);
+            DB::purge($secondName);
+        }
+    }
+
+
 }
