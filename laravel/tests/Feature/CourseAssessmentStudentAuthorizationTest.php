@@ -205,6 +205,7 @@ chdir($basePath);
 require $basePath . '/vendor/autoload.php';
 $app = require $basePath . '/bootstrap/app.php';
 $app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+config(['lms.install_lock_path' => $payload['install_lock_path']]);
 
 $pluginManager = $app->make(\App\Core\Plugins\PluginManager::class);
 $courseAssessmentManifest = $pluginManager->discoverManifests()['course-assessments'] ?? null;
@@ -280,6 +281,7 @@ PHP;
 
         $payload = base64_encode((string) json_encode([
             'base_path' => base_path(),
+            'install_lock_path' => (string) config('lms.install_lock_path'),
             'student_id' => $studentId,
             'uri' => '/api/v1/my-learning/assessments/attempts/' . $attemptId . '/questions/' . $questionId,
             'hold_outer_transaction' => $holdOuterTransaction,
