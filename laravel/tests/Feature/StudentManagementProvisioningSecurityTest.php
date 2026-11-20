@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Plugins\Modules\StudentManagement\Models\Student;
 use Tests\TestCase;
@@ -58,7 +59,7 @@ class StudentManagementProvisioningSecurityTest extends TestCase
         ])->assertRedirect()->assertSessionHasNoErrors();
         $target = Student::query()->where('student_code', 'UPDATE-TARGET-001')->firstOrFail();
 
-        $legacyUser = User::factory()->create(['email' => 'Legacy.Update@aec.test']);
+        $legacyUser = $this->createLegacyUser('Legacy.Update@aec.test');
         Student::query()->create([
             'user_id' => $legacyUser->id,
             'student_code' => 'legacy-update-001',
@@ -83,7 +84,7 @@ class StudentManagementProvisioningSecurityTest extends TestCase
         $this->markSystemInstalled();
         $this->activatePlugins(['student-management']);
         $admin = $this->createUserWithRole('admin');
-        $existingUser = User::factory()->create(['email' => 'Legacy.Case@aec.test']);
+        $existingUser = $this->createLegacyUser('Legacy.Case@aec.test');
         Student::query()->create([
             'user_id' => $existingUser->id,
             'student_code' => 'legacy-code-001',
@@ -107,7 +108,7 @@ class StudentManagementProvisioningSecurityTest extends TestCase
         $this->markSystemInstalled();
         $this->activatePlugins(['student-management']);
         $admin = $this->createUserWithRole('admin');
-        $existingUser = User::factory()->create(['email' => 'existing.code@aec.test']);
+        $existingUser = $this->createLegacyUser('existing.code@aec.test');
         Student::query()->create([
             'user_id' => $existingUser->id,
             'student_code' => 'STU-AAAAAAAAAA',
@@ -181,6 +182,17 @@ class StudentManagementProvisioningSecurityTest extends TestCase
 
         $this->assertDatabaseMissing('users', ['email' => 'audit.unavailable@aec.test']);
         $this->assertDatabaseMissing('students', ['student_code' => 'AUDIT-UNAVAILABLE-001']);
+    }
+
+
+    private function createLegacyUser(string $email): User
+    {
+        return User::query()->create([
+            'name' => 'Legacy Student',
+            'email' => $email,
+            'password' => Hash::make('StrongPassword123!'),
+            'is_active' => true,
+        ]);
     }
 
 }
