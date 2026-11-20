@@ -44,26 +44,39 @@ class ReferralIncomeService
     {
         $this->ownerType($referred);
         $code = strtoupper(trim($code));
-        $record = DB::table('referral_codes')->where('code', $code)->where('is_active', true)->first();
-        if (!$record) {
-            throw ValidationException::withMessages(['referral_code' => 'Referral code is invalid or inactive.']);
-        }
-        if ((int) $record->owner_user_id === (int) $referred->id) {
-            throw ValidationException::withMessages(['referral_code' => 'You cannot use your own referral code.']);
-        }
 
-        if (Schema::hasTable('commerce_orders') && DB::table('commerce_orders')->where('user_id', $referred->id)->whereIn('status', ['paid', 'settled', 'completed'])->exists()) {
-            throw ValidationException::withMessages(['referral_code' => 'Referral codes must be applied before the first paid order.']);
-        }
+        DB::transaction(function () use ($referred, $code): void {
+            // The buyer row is the serialization point shared with checkout
+            // settlement. Settlement paths must lock this row before marking
+            // any purchase source paid.
+            $buyer = User::query()->whereKey($referred->id)->lockForUpdate()->firstOrFail();
+            $record = DB::table('referral_codes')
+                ->where('code', $code)
+                ->lockForUpdate()
+                ->first();
 
-        DB::transaction(function () use ($referred, $record): void {
-            $existing = DB::table('referral_attributions')->where('referred_user_id', $referred->id)->lockForUpdate()->exists();
+            if (!$record || !$record->is_active) {
+                throw ValidationException::withMessages(['referral_code' => 'Referral code is invalid or inactive.']);
+            }
+            if ((int) $record->owner_user_id === (int) $buyer->id) {
+                throw ValidationException::withMessages(['referral_code' => 'You cannot use your own referral code.']);
+            }
+
+            if ($this->hasPriorPaidPurchase((int) $buyer->id)) {
+                throw ValidationException::withMessages(['referral_code' => 'Referral codes must be applied before the first paid order.']);
+            }
+
+            $existing = DB::table('referral_attributions')
+                ->where('referred_user_id', $buyer->id)
+                ->lockForUpdate()
+                ->exists();
             if ($existing) {
                 throw ValidationException::withMessages(['referral_code' => 'A referral has already been assigned to this account.']);
             }
+
             DB::table('referral_attributions')->insert([
                 'referrer_user_id' => $record->owner_user_id,
-                'referred_user_id' => $referred->id,
+                'referred_user_id' => $buyer->id,
                 'referral_code_id' => $record->id,
                 'referrer_type' => $record->owner_type,
                 'status' => 'active',
@@ -72,6 +85,31 @@ class ReferralIncomeService
                 'updated_at' => now(),
             ]);
         });
+    }
+
+    private function hasPriorPaidPurchase(int $buyerId): bool
+    {
+        foreach (['commerce_orders', 'course_cart_orders'] as $table) {
+            if (!Schema::hasTable($table)
+                || !Schema::hasColumn($table, 'user_id')
+                || !Schema::hasColumn($table, 'status')) {
+                continue;
+            }
+
+            if (DB::table($table)
+                ->where('user_id', $buyerId)
+                ->whereIn('status', ['paid', 'settled', 'completed'])
+                ->exists()) {
+                return true;
+            }
+
+            if (Schema::hasColumn($table, 'payment_status')
+                && DB::table($table)->where('user_id', $buyerId)->whereIn('payment_status', ['paid', 'settled', 'completed'])->exists()) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
