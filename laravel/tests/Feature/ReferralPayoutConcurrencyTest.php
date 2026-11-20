@@ -309,6 +309,237 @@ final class ReferralPayoutConcurrencyTest extends TestCase
         ]);
     }
 
+    public function test_course_cart_refund_rejects_over_refund_wrong_buyer_invoice_mismatch_and_currency(): void
+    {
+        [$service, $buyer, $otherBuyer, $admin, $orderId, $commissionId, $invoiceId] =
+            $this->createCourseCartRefundFixture();
+
+        $overRefundPaymentId = DB::table('payment_transactions')->insertGetId([
+            'transaction_ref' => 'COURSE-OVER-REFUND-' . strtoupper(bin2hex(random_bytes(4))),
+            'invoice_id' => $invoiceId,
+            'branch_id' => null,
+            'gateway_slug' => 'offline',
+            'amount' => 1001,
+            'currency' => 'BDT',
+            'status' => 'settled',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $overRefundId = DB::table('payment_refunds')->insertGetId([
+            'payment_transaction_id' => $overRefundPaymentId,
+            'approved_by' => $admin->id,
+            'amount' => 1001,
+            'reason' => 'Course-cart over-refund rejection',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        try {
+            $service->reverseSettledPurchase($buyer, 'course_cart_order', (string) $orderId, $overRefundId, 1001, 'BDT');
+            $this->fail('A course-cart refund must not exceed the remaining eligible purchase amount.');
+        } catch (\\RuntimeException $exception) {
+            $this->assertStringContainsString('exceeds the remaining eligible purchase amount', $exception->getMessage());
+        }
+
+        $wrongBuyerPaymentId = DB::table('payment_transactions')->insertGetId([
+            'transaction_ref' => 'COURSE-WRONG-BUYER-' . strtoupper(bin2hex(random_bytes(4))),
+            'invoice_id' => $invoiceId,
+            'branch_id' => null,
+            'gateway_slug' => 'offline',
+            'amount' => 100,
+            'currency' => 'BDT',
+            'status' => 'settled',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $wrongBuyerRefundId = DB::table('payment_refunds')->insertGetId([
+            'payment_transaction_id' => $wrongBuyerPaymentId,
+            'approved_by' => $admin->id,
+            'amount' => 100,
+            'reason' => 'Course-cart wrong buyer rejection',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        try {
+            $service->reverseSettledPurchase($otherBuyer, 'course_cart_order', (string) $orderId, $wrongBuyerRefundId, 100, 'BDT');
+            $this->fail('A course-cart refund cannot be applied by a different buyer.');
+        } catch (\\RuntimeException $exception) {
+            $this->assertStringContainsString('does not belong to this buyer', $exception->getMessage());
+        }
+
+        $otherInvoice = FeeInvoice::query()->create([
+            'invoice_number' => 'COURSE-OTHER-INVOICE-' . strtoupper(bin2hex(random_bytes(4))),
+            'payer_name' => $buyer->name,
+            'payer_email' => $buyer->email,
+            'payer_phone' => '01700000000',
+            'subtotal_amount' => 1000,
+            'discount_amount' => 0,
+            'net_amount' => 1000,
+            'paid_amount' => 1000,
+            'currency' => 'BDT',
+            'status' => 'paid',
+            'due_date' => now()->toDateString(),
+        ]);
+        $wrongInvoicePaymentId = DB::table('payment_transactions')->insertGetId([
+            'transaction_ref' => 'COURSE-WRONG-INVOICE-' . strtoupper(bin2hex(random_bytes(4))),
+            'invoice_id' => $otherInvoice->id,
+            'branch_id' => null,
+            'gateway_slug' => 'offline',
+            'amount' => 100,
+            'currency' => 'BDT',
+            'status' => 'settled',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $wrongInvoiceRefundId = DB::table('payment_refunds')->insertGetId([
+            'payment_transaction_id' => $wrongInvoicePaymentId,
+            'approved_by' => $admin->id,
+            'amount' => 100,
+            'reason' => 'Course-cart wrong invoice rejection',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        try {
+            $service->reverseSettledPurchase($buyer, 'course_cart_order', (string) $orderId, $wrongInvoiceRefundId, 100, 'BDT');
+            $this->fail('A course-cart refund from another invoice must not reverse this commission.');
+        } catch (\\RuntimeException $exception) {
+            $this->assertStringContainsString('does not belong to the source order invoice', $exception->getMessage());
+        }
+
+        $currencyPaymentId = DB::table('payment_transactions')->insertGetId([
+            'transaction_ref' => 'COURSE-WRONG-CURRENCY-' . strtoupper(bin2hex(random_bytes(4))),
+            'invoice_id' => $invoiceId,
+            'branch_id' => null,
+            'gateway_slug' => 'offline',
+            'amount' => 100,
+            'currency' => 'BDT',
+            'status' => 'settled',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $currencyRefundId = DB::table('payment_refunds')->insertGetId([
+            'payment_transaction_id' => $currencyPaymentId,
+            'approved_by' => $admin->id,
+            'amount' => 100,
+            'reason' => 'Course-cart wrong currency rejection',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        try {
+            $service->reverseSettledPurchase($buyer, 'course_cart_order', (string) $orderId, $currencyRefundId, 100, 'USD');
+            $this->fail('A course-cart refund currency must match the authoritative order currency.');
+        } catch (\\RuntimeException $exception) {
+            $this->assertStringContainsString('currency does not match the source order', $exception->getMessage());
+        }
+
+        $this->assertSame(0, DB::table('referral_commission_reversals')->where('referral_commission_id', $commissionId)->count());
+        $this->assertDatabaseHas('referral_commissions', [
+            'id' => $commissionId,
+            'commission_amount' => 100,
+            'status' => 'pending',
+        ]);
+    }
+
+    private function createCourseCartRefundFixture(): array
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins([
+            'referral-income',
+            'student-management',
+            'course-management',
+            'fees-management',
+            'universal-payment',
+            'payment-management',
+            'commerce-cart',
+        ]);
+
+        $referrer = $this->createUserWithRole('student');
+        $buyer = $this->createUserWithRole('student');
+        $otherBuyer = $this->createUserWithRole('student');
+        $admin = $this->createUserWithRole('admin');
+        $service = app(ReferralIncomeService::class);
+
+        DB::table('referral_income_rules')->where('referrer_type', 'student')->update([
+            'commission_percent' => 10,
+            'minimum_payout' => 500,
+            'is_active' => true,
+            'updated_at' => now(),
+        ]);
+        $service->applyCode($buyer, $service->createOrGetCode($referrer));
+
+        $invoice = FeeInvoice::query()->create([
+            'invoice_number' => 'COURSE-CART-REFUND-' . strtoupper(bin2hex(random_bytes(5))),
+            'payer_name' => $buyer->name,
+            'payer_email' => $buyer->email,
+            'payer_phone' => '01700000000',
+            'subtotal_amount' => 1000,
+            'discount_amount' => 0,
+            'net_amount' => 1000,
+            'paid_amount' => 1000,
+            'currency' => 'BDT',
+            'status' => 'paid',
+            'due_date' => now()->toDateString(),
+        ]);
+
+        $cartId = DB::table('course_carts')->insertGetId([
+            'user_id' => $buyer->id,
+            'status' => 'completed',
+            'currency' => 'BDT',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $originalPaymentId = DB::table('universal_payment_transactions')->insertGetId([
+            'reference' => 'COURSE-CART-ORIGINAL-' . strtoupper(bin2hex(random_bytes(4))),
+            'payer_name' => $buyer->name,
+            'payer_contact' => '01700000000',
+            'item_title' => 'Referral Course Cart Order',
+            'gateway' => 'offline',
+            'currency' => 'BDT',
+            'amount' => 1000,
+            'external_trx_id' => 'COURSE-CART-VERIFIED-' . strtoupper(bin2hex(random_bytes(4))),
+            'status' => 'verified',
+            'notes' => json_encode(['purpose' => 'course_cart'], JSON_THROW_ON_ERROR),
+            'user_id' => $buyer->id,
+            'fee_invoice_id' => $invoice->id,
+            'verified_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $orderId = DB::table('course_cart_orders')->insertGetId([
+            'cart_id' => $cartId,
+            'user_id' => $buyer->id,
+            'branch_id' => null,
+            'invoice_id' => $invoice->id,
+            'payment_transaction_id' => $originalPaymentId,
+            'coupon_id' => null,
+            'coupon_code' => null,
+            'coupon_reservation_key' => null,
+            'subtotal_amount' => 1000,
+            'discount_amount' => 0,
+            'net_amount' => 1000,
+            'currency' => 'BDT',
+            'status' => 'paid',
+            'paid_at' => now(),
+            'expires_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('universal_payment_transactions')->where('id', $originalPaymentId)->update([
+            'notes' => json_encode([
+                'purpose' => 'course_cart',
+                'course_cart_order_id' => $orderId,
+            ], JSON_THROW_ON_ERROR),
+        ]);
+
+        $commissionId = $service->recordSettledPurchase($buyer, 'course_cart_order', (string) $orderId, 1000, 'BDT');
+        $this->assertNotNull($commissionId);
+
+        return [$service, $buyer, $otherBuyer, $admin, (int) $orderId, (int) $commissionId, (int) $invoice->id];
+    }
+
     private function createRefundFixture(): array
     {
         $this->markSystemInstalled();
