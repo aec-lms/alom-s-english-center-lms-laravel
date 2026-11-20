@@ -245,6 +245,53 @@ final class TeacherProfileValidationTest extends TestCase
         $this->assertDatabaseMissing('teachers', ['employee_code' => 'ROLE-MISSING-TEACH-001']);
     }
 
+    public function test_teacher_emails_are_normalized_and_case_variant_legacy_rows_are_rejected(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['teacher-management']);
+        $admin = $this->createUserWithRole('admin');
+
+        $this->actingAs($admin)->post('/admin/teachers', [
+            'name' => 'Case Normalized Teacher',
+            'email' => 'Case.Normalized@AEC.TEST',
+            'employee_code' => 'CASE-NORMALIZED-001',
+            'specialization' => 'English Grammar',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $existing = Teacher::query()->where('employee_code', 'CASE-NORMALIZED-001')->firstOrFail();
+        $this->assertDatabaseHas('users', [
+            'id' => $existing->user_id,
+            'email' => 'case.normalized@aec.test',
+        ]);
+        DB::table('users')->where('id', $existing->user_id)->update(['email' => 'CASE.NORMALIZED@AEC.TEST']);
+
+        $this->actingAs($admin)->post('/admin/teachers', [
+            'name' => 'Case Variant Duplicate Teacher',
+            'email' => 'case.normalized@aec.test',
+            'employee_code' => 'CASE-NORMALIZED-DUPLICATE',
+            'specialization' => 'English Grammar',
+        ])->assertSessionHasErrors('email');
+
+        $this->assertDatabaseMissing('teachers', ['employee_code' => 'CASE-NORMALIZED-DUPLICATE']);
+
+        $this->actingAs($admin)->post('/admin/teachers', [
+            'name' => 'Second Case Teacher',
+            'email' => 'second.case.teacher@aec.test',
+            'employee_code' => 'SECOND-CASE-TEACH-001',
+            'specialization' => 'English Grammar',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $second = Teacher::query()->where('employee_code', 'SECOND-CASE-TEACH-001')->firstOrFail();
+        $this->actingAs($admin)->put('/admin/teachers/' . $second->id, [
+            'name' => 'Second Case Teacher',
+            'email' => 'CASE.NORMALIZED@AEC.TEST',
+            'employee_code' => 'SECOND-CASE-TEACH-001',
+            'specialization' => 'English Grammar',
+        ])->assertSessionHasErrors('email');
+
+        $this->assertSame('second.case.teacher@aec.test', $second->fresh()->user->email);
+    }
+
     public function test_teacher_social_links_must_be_valid_urls(): void
     {
         $this->markSystemInstalled();
