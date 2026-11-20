@@ -291,6 +291,24 @@ class ExamAttemptSnapshotTest extends TestCase
                 ->assertJsonPath('error.code', 'legacy_attempt_snapshot_unavailable')
                 ->assertJsonPath('error.message', 'This existing exam attempt cannot be resumed safely because its saved question and scoring data is missing or invalid. Your attempt has not been submitted and your score has not changed. Please contact your instructor or school administrator for help.');
 
+            $this->actingAs($student)->postJson("/exams/{$exam->id}/attempt/autosave", [
+                'attempt_id' => $attempt->id,
+                'answers' => [(string) $question->id => 1],
+            ])->assertStatus(409)
+                ->assertJsonPath('error.code', 'legacy_attempt_snapshot_unavailable');
+
+            $this->actingAs($student)->post("/exams/{$exam->id}/attempt", [
+                'attempt_id' => $attempt->id,
+                'answers' => [(string) $question->id => 1],
+            ])->assertStatus(409)
+                ->assertSee('saved question and scoring data is missing or invalid');
+
+            $this->withHeader('Authorization', 'Bearer ' . $token)
+                ->postJson("/api/v1/my/exams/{$exam->id}/attempts/{$attempt->id}/submit", [
+                    'answers' => [(string) $question->id => 1],
+                ])->assertStatus(409)
+                ->assertJsonPath('error.code', 'legacy_attempt_snapshot_unavailable');
+
             $unchanged = $attempt->fresh();
             $this->assertNull($unchanged->submitted_at, "Malformed snapshot case '{$case}' must remain pending.");
             $this->assertSame($savedAnswers, $unchanged->submitted_answers, "Malformed snapshot case '{$case}' must preserve saved answers.");
