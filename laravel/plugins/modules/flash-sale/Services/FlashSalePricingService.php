@@ -37,6 +37,17 @@ final class FlashSalePricingService
                 $scope->whereNull('branch_id');
                 if ($branchId !== null) $scope->orWhere('branch_id', $branchId);
             });
+
+            // A branch-targeted campaign must also be compatible with the
+            // course's own branch. This keeps the quote resolver aligned with
+            // the storefront and prevents cross-branch campaign leakage.
+            if ($course->branch_id !== null) {
+                $query->where(function ($scope) use ($course): void {
+                    $scope->whereNull('branch_id')
+                        ->orWhere('branch_id', (int) $course->branch_id);
+                });
+            }
+
             $query->orderByRaw('CASE WHEN branch_id IS NULL THEN 0 ELSE 1 END DESC');
         }
 
