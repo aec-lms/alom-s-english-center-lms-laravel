@@ -40,7 +40,7 @@ class TeacherStandaloneTest extends TestCase
         ]);
     }
 
-    public function test_deleting_teacher_restores_profile_without_reactivating_login_account(): void
+    public function test_deleting_teacher_moves_it_to_recycle_bin_and_restore_keeps_account_inactive(): void
     {
         $this->markSystemInstalled();
         $this->activatePlugins(['teacher-management']);
