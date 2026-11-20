@@ -249,6 +249,30 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
         Http::assertSentCount(1);
     }
 
+    public function test_offline_refund_keeps_existing_ledger_behavior_and_is_audited_once(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management']);
+
+        [$invoice, $transaction] = $this->createSettledPayment('offline', 'OFFLINE-RECEIPT-001');
+        $admin = $this->createUserWithRole('admin');
+
+        $refund = app(RefundSettlementService::class)->recordOfflineRefund(
+            $transaction,
+            200,
+            'Cash refund with signed receipt',
+            (int) $admin->id,
+            'OFFLINE-RECEIPT-REFUND-001',
+        );
+
+        $this->assertSame('succeeded', $refund->status);
+        $this->assertSame('offline', $refund->gateway_slug);
+        $this->assertNotNull($refund->ledger_applied_at);
+        $this->assertSame(800.0, (float) $invoice->fresh()->paid_amount);
+        $this->assertSame('partial', $invoice->fresh()->status);
+        $this->assertSame('settled', $transaction->fresh()->status);
+    }
+
     public function test_full_refund_marks_transaction_refunded_only_after_provider_success(): void
     {
         $this->markSystemInstalled();
