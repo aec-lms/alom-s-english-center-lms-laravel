@@ -27,9 +27,11 @@
 .flash-studio .container-fluid{width:100%;max-width:none;margin:0;padding:0}
 .flash-studio .row{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:1rem;margin:0}
 .flash-studio .col-12{grid-column:span 12;min-width:0}
+.flash-studio .col-lg-3{grid-column:span 3;min-width:0}
 .flash-studio .col-lg-4{grid-column:span 4;min-width:0}
 .flash-studio .col-lg-6{grid-column:span 6;min-width:0}
 .flash-studio .col-md-4{grid-column:span 4;min-width:0}
+.flash-studio .col-6{grid-column:span 6;min-width:0}
 .flash-studio .d-flex{display:flex}
 .flash-studio .flex-wrap{flex-wrap:wrap}
 .flash-studio .d-inline-block{display:inline-block}
@@ -115,6 +117,7 @@
 }
 @media(max-width:767.98px){
   .flash-studio{padding:1rem}
+  .flash-studio .col-6{grid-column:span 12}
   .flash-studio .col-md-4{grid-column:span 12}
   .flash-studio .card-body{padding:1rem}
   .flash-studio .table{min-width:760px}
