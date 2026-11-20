@@ -259,10 +259,10 @@ class LiveClassCapacityTest extends TestCase
         $this->assertDatabaseCount('live_class_participants', 0);
     }
 
-    public function test_conflicting_account_and_student_profile_branches_cannot_join_live_class(): void
+    public function test_conflicting_account_and_student_profile_branches_deny_join_and_heartbeat_in_both_directions(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['branch-management', 'course-management', 'student-management']);
+        $this->activatePlugins(['branch-management', 'course-management', 'student-management', 'student-tracking']);
 
         $branchA = DB::table('branches')->insertGetId([
             'code' => 'LIVE-BRANCH-A-' . strtoupper(bin2hex(random_bytes(3))),
@@ -297,34 +297,85 @@ class LiveClassCapacityTest extends TestCase
             'capacity' => 300,
         ]);
 
-        // The account belongs to B while its current Student profile still says A.
-        $student = $this->createUserWithRole('student', (int) $branchB);
+        // Direction one: account B / Student profile A.
+        $accountBStudent = $this->createUserWithRole('student', (int) $branchB);
         DB::table('students')->insert([
-            'user_id' => $student->id,
+            'user_id' => $accountBStudent->id,
             'branch_id' => $branchA,
-            'student_code' => 'LIVE-BRANCH-MISMATCH-' . strtoupper(bin2hex(random_bytes(3))),
+            'student_code' => 'LIVE-BRANCH-BA-' . strtoupper(bin2hex(random_bytes(3))),
             'admission_date' => now()->toDateString(),
             'status' => 'active',
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-        Enrollment::query()->create([
-            'user_id' => $student->id,
-            'course_id' => $course->id,
-            'branch_id' => $branchA,
+
+        // Direction two: account A / Student profile B.
+        $accountAStudent = $this->createUserWithRole('student', (int) $branchA);
+        DB::table('students')->insert([
+            'user_id' => $accountAStudent->id,
+            'branch_id' => $branchB,
+            'student_code' => 'LIVE-BRANCH-AB-' . strtoupper(bin2hex(random_bytes(3))),
+            'admission_date' => now()->toDateString(),
             'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
 
-        $this->actingAs($student)
-            ->post('/live-classes/' . $liveClass->id . '/join')
-            ->assertForbidden();
+        foreach ([$accountBStudent, $accountAStudent] as $student) {
+            Enrollment::query()->create([
+                'user_id' => $student->id,
+                'course_id' => $course->id,
+                'branch_id' => $branchA,
+                'status' => 'active',
+            ]);
+        }
 
-        $this->assertDatabaseCount('live_class_participants', 0);
-        $this->assertDatabaseMissing('student_activity_events', [
-            'user_id' => $student->id,
-            'event_type' => 'live_class_joined',
-            'subject_id' => (string) $liveClass->id,
-        ]);
+        $lastSeen = now()->subSeconds(30);
+        foreach ([$accountBStudent, $accountAStudent] as $student) {
+            LiveClassParticipant::query()->create([
+                'live_class_id' => $liveClass->id,
+                'user_id' => $student->id,
+                'joined_at' => $lastSeen,
+                'last_seen_at' => $lastSeen,
+                'left_at' => null,
+            ]);
+        }
+
+        foreach ([$accountBStudent, $accountAStudent] as $student) {
+            $this->actingAs($student)
+                ->post('/live-classes/' . $liveClass->id . '/join')
+                ->assertForbidden();
+            $this->actingAs($student)
+                ->postJson('/live-classes/' . $liveClass->id . '/heartbeat')
+                ->assertForbidden();
+
+            $participant = LiveClassParticipant::query()
+                ->where('live_class_id', $liveClass->id)
+                ->where('user_id', $student->id)
+                ->firstOrFail();
+            $this->assertNull($participant->left_at);
+            $this->assertSame(
+                $lastSeen->toDateTimeString(),
+                $participant->last_seen_at->toDateTimeString(),
+                'A denied join/heartbeat must not refresh or release the existing participant seat.'
+            );
+
+            $this->assertDatabaseMissing('student_activity_events', [
+                'user_id' => $student->id,
+                'event_type' => 'live_class_joined',
+                'subject_id' => (string) $liveClass->id,
+            ]);
+            $this->assertDatabaseMissing('student_activity_events', [
+                'user_id' => $student->id,
+                'event_type' => 'live_class_heartbeat',
+                'subject_id' => (string) $liveClass->id,
+            ]);
+        }
+
+        $this->assertSame(2, LiveClassParticipant::query()
+            ->where('live_class_id', $liveClass->id)
+            ->whereNull('left_at')
+            ->count());
     }
 
     public function test_non_enrolled_student_and_non_student_role_cannot_join_live_class(): void
