@@ -83,7 +83,9 @@ test('student exam journey uses frozen snapshot, autosaves safely, and remains a
   // Use the application's named history route rather than assuming a URL
   // shape; this keeps the browser journey aligned with the actual route map.
   const historyUrl = await page.getByRole('link', { name: 'My attempt history' }).getAttribute('href');
+  const dashboardUrl = await page.getByRole('link', { name: 'My Dashboard' }).getAttribute('href');
   expect(historyUrl).toBeTruthy();
+  expect(dashboardUrl).toBeTruthy();
 
   // Simulate an instructor changing the source question and scoring rules while
   // the student still has an active attempt. The browser must continue using its
@@ -125,7 +127,11 @@ test('student exam journey uses frozen snapshot, autosaves safely, and remains a
   await page.getByRole('button', { name: /submit exam/i }).click();
   expect(submitPayload).toContain('attempt_id');
   expect(submitPayload).not.toMatch(/correct_option_index|correct_answer|answer_key/i);
-  await page.waitForURL((url) => url.pathname !== takeUrl);
+  // Wait for the controller's final redirect, not merely the POST action URL.
+  // The latter changes pathname before the request is processed and can let a
+  // following page.goto() cancel submission, leaving the attempt in progress.
+  const dashboardPath = new URL(dashboardUrl, page.url()).pathname;
+  await page.waitForURL((url) => url.pathname === dashboardPath);
 
   await page.goto(historyUrl);
   await expect(page.getByText('2.00 / 2.00')).toBeVisible();
