@@ -21,13 +21,8 @@ return new class extends Migration {
 
     public function down(): void
     {
-        Schema::table('teachers', function (Blueprint $table): void {
-            if (Schema::hasColumn('teachers', 'deleted_user_was_active')) {
-                $table->dropColumn('deleted_user_was_active');
-            }
-            if (Schema::hasColumn('teachers', 'deleted_at')) {
-                $table->dropSoftDeletes();
-            }
-        });
+        // This migration conditionally adds soft-delete fields but does not record
+        // ownership of pre-existing host columns. Retain the fields on rollback
+        // rather than risk deleting host schema or Recycle Bin history.
     }
 };
