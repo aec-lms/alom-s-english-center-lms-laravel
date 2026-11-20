@@ -24,11 +24,25 @@ class AssessmentGradingController extends Controller
         $this->ensureBranchAccess($actor);
         $attempts = AssessmentAttempt::query()->with(['questions', 'assessmentSet'])
             ->whereIn('status', ['pending_review', 'graded'])
-            ->when($actor->hasRole('branch_manager'), fn ($q) => $q->whereHas('assessmentSet', fn ($s) => $s->where('branch_id', (int) $actor->branch_id)))
+            ->when($actor->hasRole('branch_manager'), function ($q) use ($actor): void {
+                $branchId = (int) ($actor->branch_id ?? 0);
+                $q->whereHas('assessmentSet', function ($setQuery) use ($branchId): void {
+                    $setQuery->where('branch_id', $branchId)
+                        ->where(function ($courseScope) use ($branchId): void {
+                            $courseScope->whereNull('course_id')
+                                ->orWhereIn('course_id', function ($courseQuery) use ($branchId): void {
+                                    $courseQuery->select('id')
+                                        ->from('courses')
+                                        ->where('branch_id', $branchId);
+                                });
+                        });
+                });
+            })
             ->when($actor->hasRole('teacher'), function ($q) use ($actor): void {
+                $account = $this->teacherAccount($actor, false);
                 $profile = $this->teacherProfile($actor, false);
                 abort_unless($profile && (bool) $profile->is_active, 403, 'An active teacher profile is required.');
-                $this->assertTeacherBranchConsistency($actor, $profile);
+                $this->assertTeacherBranchConsistency($account, $profile);
                 abort_unless(Schema::hasTable('course_teacher_assignments') && Schema::hasTable('courses'), 403, 'Teacher course assignments are required.');
 
                 $branchId = $profile->branch_id === null ? null : (int) $profile->branch_id;
@@ -129,9 +143,12 @@ class AssessmentGradingController extends Controller
         }
 
         abort_unless($actor->hasRole('teacher'), 403);
+        // Teacher lifecycle writes update the profile before the linked user.
+        // Keep that lock order, then re-read the account and current role pivot.
         $profile = $this->teacherProfile($actor, true);
         abort_unless($profile && (bool) $profile->is_active, 403, 'An active teacher profile is required.');
-        $this->assertTeacherBranchConsistency($actor, $profile);
+        $account = $this->teacherAccount($actor, true);
+        $this->assertTeacherBranchConsistency($account, $profile);
 
         $branchId = $profile->branch_id === null ? null : (int) $profile->branch_id;
         abort_unless($branchId !== null, 403, 'Unassigned teachers cannot grade course assessments.');
@@ -150,12 +167,56 @@ class AssessmentGradingController extends Controller
         abort_unless($set->course_id !== null && $assignment, 403, 'You are not assigned to this course.');
     }
 
-    private function assertTeacherBranchConsistency($actor, object $profile): void
+    private function assertTeacherBranchConsistency(object $account, object $profile): void
     {
-        if (Schema::hasColumn('users', 'branch_id') && $actor->branch_id !== null) {
-            abort_unless($profile->branch_id !== null
-                && (int) $profile->branch_id === (int) $actor->branch_id, 403, 'Teacher account and profile branch assignments do not match.');
+        $accountBranchId = Schema::hasColumn('users', 'branch_id') && $account->branch_id !== null
+            ? (int) $account->branch_id
+            : null;
+        $profileBranchId = Schema::hasColumn('teachers', 'branch_id') && $profile->branch_id !== null
+            ? (int) $profile->branch_id
+            : null;
+
+        if ($accountBranchId !== null && $profileBranchId !== null) {
+            abort_unless(
+                $accountBranchId === $profileBranchId,
+                403,
+                'Teacher account and profile branch assignments do not match.'
+            );
         }
+    }
+
+    /**
+     * Re-read the persisted account and current role instead of trusting the
+     * potentially stale authenticated User instance. During grading, call only
+     * after the Teacher profile lock to match TeacherController's writer order.
+     */
+    private function teacherAccount($actor, bool $lock): object
+    {
+        $query = DB::table('users')->where('id', $actor->id);
+        if ($lock) {
+            $query->lockForUpdate();
+        }
+        $account = $query->first();
+        abort_unless($account !== null, 403, 'Teacher account is unavailable.');
+
+        if (Schema::hasColumn('users', 'is_active')) {
+            abort_unless((bool) $account->is_active, 403, 'This teacher account is inactive.');
+        }
+
+        if (Schema::hasTable('role_user') && Schema::hasTable('roles')) {
+            $roleQuery = DB::table('role_user')
+                ->join('roles', 'roles.id', '=', 'role_user.role_id')
+                ->where('role_user.user_id', $actor->id)
+                ->where('roles.slug', 'teacher');
+            if ($lock) {
+                $roleQuery->lockForUpdate();
+            }
+            abort_unless($roleQuery->exists(), 403, 'Only active teacher accounts can grade assessments.');
+        } else {
+            abort_unless($actor->hasRole('teacher'), 403, 'Only active teacher accounts can grade assessments.');
+        }
+
+        return $account;
     }
 
     private function teacherProfile($actor, bool $lock): ?object
