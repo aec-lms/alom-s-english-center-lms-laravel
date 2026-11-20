@@ -88,12 +88,11 @@ class InvoicePaymentSessionReservationTest extends TestCase
         $reservation = $service->reserve($invoice, 'gateway-paypal', 'PYPL', [], 'paypal-terminal-key');
         $service->markRejected($reservation['transaction'], 'provider_definitive_4xx');
 
-        try {
-            $service->reserve($invoice, 'gateway-paypal', 'PYPL', [], 'paypal-terminal-key');
-            $this->fail('A terminal transaction idempotency key must remain bound to its original attempt.');
-        } catch (RuntimeException $exception) {
-            $this->assertStringContainsString('terminal payment transaction', $exception->getMessage());
-        }
+        $replay = $service->reserve($invoice, 'gateway-paypal', 'PYPL', [], 'paypal-terminal-key');
+        $this->assertTrue($replay['reused']);
+        $this->assertSame($reservation['transaction']->id, $replay['transaction']->id);
+        $this->assertSame('failed', $replay['transaction']->status);
+        $this->assertSame(1, DB::table('payment_transactions')->where('invoice_id', $invoice->id)->count());
     }
 
     public function test_mysql_reservation_locks_invoice_before_checking_active_payment_transactions(): void
