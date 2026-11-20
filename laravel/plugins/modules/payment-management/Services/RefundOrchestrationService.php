@@ -139,6 +139,11 @@ class RefundOrchestrationService
                 (float) $lockedRefund->amount,
                 (int) $lockedRefund->id,
             );
+            $this->settlement->assertRefundAmountAvailable(
+                $transaction,
+                (float) $lockedRefund->amount,
+                (int) $lockedRefund->id,
+            );
 
             abort_unless($lockedRefund->status === 'requested', 409, 'Only a requested refund can be approved.');
             abort_unless((int) $lockedRefund->requested_by !== $actorId, 403, 'A refund requester cannot approve their own refund.');
