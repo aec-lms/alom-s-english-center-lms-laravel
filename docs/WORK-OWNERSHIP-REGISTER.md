@@ -265,3 +265,6 @@ All listed candidates remain Draft. No branch was merged or deployed. MySQL 8 re
 | Candidate | Exact head | Scope / status |
 |---|---|---|
 | [#352](../pull/352) Student Management identity normalization | `0d456b8629463cc246c6be627040e894096b6f79` | Clean-mainline Draft candidate. Normalizes email and student_code before store/update validation, checks legacy mixed-case collisions, maps unique-index races to field validation errors, and retries generated student-code collisions with a bounded loop. Regression tests cover store/update normalization, legacy duplicate rejection and deterministic generated-code retry. Exact-head SQLite/MySQL/Browser/Composer checks are queued; independent review is outstanding. |
+
+### Duplicate ownership notice
+PR #353 overlaps the Student Management identity files owned by #352. #352 is the canonical candidate because it includes case-insensitive legacy student-code handling and collation-safe MySQL assertions. Do not merge both; consolidate any missing retry-exhaustion coverage into #352, then close/supersede #353.
