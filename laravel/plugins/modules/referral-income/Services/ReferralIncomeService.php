@@ -279,18 +279,21 @@ class ReferralIncomeService
                 throw new RuntimeException('Referral reversal must match an existing recorded payment refund.');
             }
 
-            // A refund row is not sufficient proof that it belongs to the
-            // purchase whose commission is being reversed. Bind the refund's
-            // payment transaction to the exact commerce order invoice and buyer.
-            // This service currently records purchase commissions for commerce
-            // orders only; other source adapters must add their own ownership map.
-            if ($sourceType !== 'commerce_order'
-                || !Schema::hasTable('commerce_orders')
-                || !Schema::hasTable('payment_transactions')) {
-                throw new RuntimeException('Referral reversal source cannot be reconciled to an authoritative commerce order.');
+            // Bind the refund to an authoritative, buyer-owned source order and
+            // its paid invoice. The course-cart path also verifies the original
+            // Universal Payment transaction that settled that exact invoice.
+            if (!in_array($sourceType, ['commerce_order', 'course_cart_order'], true)
+                || !Schema::hasTable('payment_transactions')
+                || !Schema::hasTable('fee_invoices')) {
+                throw new RuntimeException('Referral reversal source cannot be reconciled to a supported paid order.');
             }
 
-            $order = DB::table('commerce_orders')
+            $sourceTable = $sourceType === 'commerce_order' ? 'commerce_orders' : 'course_cart_orders';
+            if (!Schema::hasTable($sourceTable)) {
+                throw new RuntimeException('Referral reversal source order table is unavailable.');
+            }
+
+            $order = DB::table($sourceTable)
                 ->where('id', (int) $sourceId)
                 ->where('user_id', $buyer->id)
                 ->lockForUpdate()
@@ -298,8 +301,45 @@ class ReferralIncomeService
             if (!$order || empty($order->invoice_id)) {
                 throw new RuntimeException('Referral reversal order does not belong to this buyer or has no invoice.');
             }
-            if (strtoupper(trim((string) $order->currency)) !== strtoupper(trim($currency))) {
-                throw new RuntimeException('Referral reversal currency does not match the commerce order currency.');
+
+            $orderCurrency = strtoupper(trim((string) $order->currency));
+            if ($orderCurrency !== strtoupper(trim($currency))) {
+                throw new RuntimeException('Referral reversal currency does not match the source order currency.');
+            }
+
+            $orderAmount = $sourceType === 'commerce_order'
+                ? (float) $order->grand_total
+                : (float) $order->net_amount;
+            $invoice = DB::table('fee_invoices')->where('id', $order->invoice_id)->lockForUpdate()->first();
+            if (!$invoice
+                || abs($orderAmount - (float) $invoice->net_amount) > 0.01
+                || strtoupper(trim((string) $invoice->currency)) !== $orderCurrency) {
+                throw new RuntimeException('Referral reversal source order does not match its authoritative invoice amount and currency.');
+            }
+
+            if ($sourceType === 'commerce_order') {
+                if (!in_array((string) $order->status, ['completed', 'paid', 'refunded'], true)
+                    || (Schema::hasColumn($sourceTable, 'payment_status')
+                        && !in_array((string) $order->payment_status, ['paid', 'settled', 'partially_refunded', 'refunded'], true))) {
+                    throw new RuntimeException('Referral reversal commerce order has no verified paid state.');
+                }
+            } else {
+                if (!in_array((string) $order->status, ['paid', 'refunded'], true)
+                    || empty($order->payment_transaction_id)
+                    || !Schema::hasTable('universal_payment_transactions')) {
+                    throw new RuntimeException('Referral reversal course-cart order has no verified original payment transaction.');
+                }
+
+                $originalPayment = DB::table('universal_payment_transactions')
+                    ->where('id', (int) $order->payment_transaction_id)
+                    ->where('user_id', $buyer->id)
+                    ->lockForUpdate()
+                    ->first();
+                if (!$originalPayment
+                    || (int) $originalPayment->invoice_id !== (int) $order->invoice_id
+                    || $originalPayment->status !== 'verified') {
+                    throw new RuntimeException('Course-cart order is not bound to a verified Universal Payment transaction.');
+                }
             }
 
             $refundTransaction = DB::table('payment_transactions')
@@ -308,8 +348,21 @@ class ReferralIncomeService
                 ->first();
             if (!$refundTransaction
                 || (int) $refundTransaction->invoice_id !== (int) $order->invoice_id
-                || strtoupper(trim((string) $refundTransaction->currency)) !== strtoupper(trim($currency))) {
-                throw new RuntimeException('Recorded payment refund does not belong to the commission order invoice and currency.');
+                || strtoupper(trim((string) $refundTransaction->currency)) !== $orderCurrency
+                || !in_array((string) $refundTransaction->status, ['settled', 'refunded'], true)
+                || (float) $refundTransaction->amount + 0.01 < (float) $refundRecord->amount
+                || trim((string) $refundRecord->reason) === '') {
+                throw new RuntimeException('Recorded payment refund does not belong to the source order invoice or is not settled.');
+            }
+
+            $gateway = strtolower(trim((string) $refundTransaction->gateway_slug));
+            if ($gateway === 'offline') {
+                if (empty($refundRecord->approved_by)) {
+                    throw new RuntimeException('Offline refund requires an approving administrator before commission reversal.');
+                }
+            } elseif (!Schema::hasColumn('payment_refunds', 'provider_refund_reference')
+                || trim((string) ($refundRecord->provider_refund_reference ?? '')) === '') {
+                throw new RuntimeException('Provider refund reference is required before commission reversal.');
             }
 
             $existing = DB::table('referral_commission_reversals')
