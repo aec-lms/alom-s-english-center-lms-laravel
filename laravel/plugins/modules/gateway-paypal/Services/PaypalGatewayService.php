@@ -190,7 +190,11 @@ class PaypalGatewayService
         if (!$response->successful()) {
             throw new RuntimeException((string) $response->json('message', 'PayPal order capture failed.'));
         }
-        $capture = collect($response->json('purchase_units.0.payments.captures', []))->first();
+        $captures = collect($response->json('purchase_units.0.payments.captures', []));
+        if ($captures->count() !== 1) {
+            throw new RuntimeException('PayPal multi-capture orders are blocked until each capture has its own payment ledger transaction.');
+        }
+        $capture = $captures->first();
         if (!$capture || ($capture['status'] ?? '') !== 'COMPLETED') {
             throw new RuntimeException('PayPal has not confirmed a completed capture.');
         }
@@ -242,6 +246,9 @@ class PaypalGatewayService
             ->where('gateway_slug', 'gateway-paypal')->firstOrFail();
         if ((string) ($capture['id'] ?? '') === '' || (string) ($capture['status'] ?? '') !== 'COMPLETED') {
             throw new RuntimeException('PayPal capture is not completed.');
+        }
+        if ($tx->status === 'settled' && (string) $tx->external_reference !== (string) $capture['id']) {
+            throw new RuntimeException('PayPal webhook capture does not match the already-settled capture reference.');
         }
         $amount = $capture['amount'] ?? [];
         if (abs((float) ($amount['value'] ?? 0) - (float) $tx->amount) > 0.01
