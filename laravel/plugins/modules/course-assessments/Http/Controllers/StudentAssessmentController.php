@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Plugins\Modules\CourseAssessments\Http\Controllers;
 
 use App\Core\Plugins\PluginManager;
+use App\Models\User;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -165,7 +166,8 @@ class StudentAssessmentController extends Controller
         ]);
 
         DB::transaction(function () use ($attempt, $question, $student, $data): void {
-            abort_unless($student->hasRole('student') && $student->is_active !== false, 403, 'An active student account is required.');
+            $lockedStudent = User::query()->whereKey($student->id)->lockForUpdate()->firstOrFail();
+            abort_unless($lockedStudent->hasRole('student') && $lockedStudent->is_active !== false, 403, 'An active student account is required.');
             $lockedAttempt = AssessmentAttempt::query()->whereKey($attempt->id)->lockForUpdate()->firstOrFail();
             abort_unless((int) $lockedAttempt->student_id === (int) $student->id, 404);
             abort_unless($lockedAttempt->status === 'in_progress', 409, 'Attempt is not active.');
@@ -249,7 +251,9 @@ class StudentAssessmentController extends Controller
         $student = $this->requireStudent($request);
 
         return DB::transaction(function () use ($set, $student): AssessmentAttempt {
-            abort_unless($student->hasRole('student') && $student->is_active !== false, 403, 'An active student account is required.');
+            $lockedStudent = User::query()->whereKey($student->id)->lockForUpdate()->firstOrFail();
+            abort_unless($lockedStudent->hasRole('student') && $lockedStudent->is_active !== false, 403, 'An active student account is required.');
+            $student = $lockedStudent;
             $lockedSet = AssessmentSet::query()->whereKey($set->id)->lockForUpdate()->firstOrFail();
             abort_unless($lockedSet->status === 'published', 404);
             abort_if($lockedSet->available_from && now()->lessThan($lockedSet->available_from), 403, 'Assessment is not available yet.');
