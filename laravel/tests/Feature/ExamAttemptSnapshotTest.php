@@ -223,6 +223,24 @@ class ExamAttemptSnapshotTest extends TestCase
 
         $missingQuestionId = $validSnapshot;
         unset($missingQuestionId['questions'][0]['id']);
+        $missingPrompt = $validSnapshot;
+        unset($missingPrompt['questions'][0]['prompt']);
+        $missingOptions = $validSnapshot;
+        unset($missingOptions['questions'][0]['options']);
+        $missingCorrectIndex = $validSnapshot;
+        unset($missingCorrectIndex['questions'][0]['correct_option_index']);
+        $missingMarks = $validSnapshot;
+        unset($missingMarks['questions'][0]['marks']);
+        $missingDuration = $validSnapshot;
+        unset($missingDuration['duration_minutes']);
+        $missingPassMarks = $validSnapshot;
+        unset($missingPassMarks['pass_marks']);
+        $missingQuestions = $validSnapshot;
+        unset($missingQuestions['questions']);
+        $associativeQuestions = $validSnapshot;
+        $associativeQuestions['questions'] = [1 => $associativeQuestions['questions'][0]];
+        $emptyQuestions = $validSnapshot;
+        $emptyQuestions['questions'] = [];
         $duplicateQuestionId = $validSnapshot;
         $duplicateQuestionId['questions'][] = $duplicateQuestionId['questions'][0];
         $associativeOptions = $validSnapshot;
@@ -235,6 +253,8 @@ class ExamAttemptSnapshotTest extends TestCase
         $invalidCorrectIndex['questions'][0]['correct_option_index'] = 2;
         $negativeMarks = $validSnapshot;
         $negativeMarks['questions'][0]['marks'] = -1;
+        $negativePenalty = $validSnapshot;
+        $negativePenalty['questions'][0]['negative_marks'] = -0.5;
         $nonFiniteNegativeMarks = $validSnapshot;
         $nonFiniteNegativeMarks['questions'][0]['negative_marks'] = 'INF';
         $nonFiniteMarks = $validSnapshot;
@@ -252,12 +272,22 @@ class ExamAttemptSnapshotTest extends TestCase
 
         $malformedSnapshots = [
             'missing question ID' => $missingQuestionId,
+            'missing prompt' => $missingPrompt,
+            'missing options' => $missingOptions,
+            'missing correct option index' => $missingCorrectIndex,
+            'missing marks' => $missingMarks,
+            'missing duration' => $missingDuration,
+            'missing pass marks' => $missingPassMarks,
+            'missing questions collection' => $missingQuestions,
+            'associative questions collection' => $associativeQuestions,
+            'empty questions collection' => $emptyQuestions,
             'duplicate question IDs' => $duplicateQuestionId,
             'associative options' => $associativeOptions,
             'fewer than two options' => $tooFewOptions,
             'non-string option' => $invalidOptionValue,
             'out-of-range correct option' => $invalidCorrectIndex,
             'negative marks' => $negativeMarks,
+            'negative penalty' => $negativePenalty,
             'non-finite negative marks' => $nonFiniteNegativeMarks,
             'non-finite question marks' => $nonFiniteMarks,
             'missing negative marks' => $missingNegativeMarks,
