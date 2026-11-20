@@ -27,8 +27,7 @@ class StudentAssessmentController extends Controller
 
     public function apiIndex(Request $request): JsonResponse
     {
-        $student = $request->user();
-        abort_unless($student && $student->hasRole('student') && (bool) $student->is_active, 403);
+        $student = $this->requireActiveStudent($request);
         $sets = $this->visibleSetsQuery($student)->latest()->paginate(20);
 
         return response()->json([
@@ -55,7 +54,8 @@ class StudentAssessmentController extends Controller
 
     public function start(Request $request, AssessmentSet $set): RedirectResponse
     {
-        $attempt = $this->createOrResumeAttempt($request->user(), $set);
+        $student = $this->requireActiveStudent($request);
+        $attempt = $this->createOrResumeAttempt($student, $set);
 
         return redirect()->route('plugins.course-assessments.student.take', $attempt);
     }
@@ -90,8 +90,7 @@ class StudentAssessmentController extends Controller
 
     public function apiSubmit(Request $request, AssessmentAttempt $attempt): JsonResponse
     {
-        $student = $request->user();
-        abort_unless($student && $student->hasRole('student'), 403);
+        $student = $this->requireActiveStudent($request);
         abort_unless((int) $attempt->student_id === (int) $student->id, 404);
 
         $this->submitAttempt($attempt);
@@ -106,7 +105,7 @@ class StudentAssessmentController extends Controller
     public function apiHistory(Request $request): JsonResponse
     {
         $student = $request->user();
-        abort_unless($student && $student->hasRole('student'), 403);
+        abort_unless($student && $student->hasRole('student') && (bool) $student->is_active, 403);
         $attempts = AssessmentAttempt::query()
             ->with('assessmentSet')
             ->where('student_id', $student->id)
