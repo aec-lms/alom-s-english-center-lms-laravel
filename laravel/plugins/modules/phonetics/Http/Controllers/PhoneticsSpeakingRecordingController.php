@@ -420,8 +420,39 @@ final class PhoneticsSpeakingRecordingController extends Controller
             );
             abort_unless($lockedReviewerRow && (bool) $lockedReviewerRow->is_active, 403, 'Reviewer account is inactive.');
 
-            // Re-resolve role/permission state after the account row lock. The
-            // route middleware is an early gate; this is the final-write gate.
+            // Serialize the final permission decision against role and permission
+            // revocation. hasPermission() uses EXISTS queries over these pivots;
+            // locking only the User row does not lock either pivot. A concurrent
+            // detach must therefore wait for this transaction (or finish before
+            // these locks are acquired), giving review and revocation a defined
+            // database order.
+            abort_unless(
+                Schema::hasTable('role_user')
+                    && Schema::hasColumn('role_user', 'user_id')
+                    && Schema::hasColumn('role_user', 'role_id')
+                    && Schema::hasTable('permission_role')
+                    && Schema::hasColumn('permission_role', 'role_id')
+                    && Schema::hasColumn('permission_role', 'permission_id'),
+                503,
+                'The connected LMS role-permission lock mapping is unavailable.'
+            );
+            $roleIds = DB::table('role_user')
+                ->where('user_id', $reviewer->getAuthIdentifier())
+                ->orderBy('role_id')
+                ->lockForUpdate()
+                ->pluck('role_id')
+                ->all();
+            if ($roleIds !== []) {
+                DB::table('permission_role')
+                    ->whereIn('role_id', $roleIds)
+                    ->orderBy('role_id')
+                    ->orderBy('permission_id')
+                    ->lockForUpdate()
+                    ->get(['role_id', 'permission_id']);
+            }
+
+            // Re-resolve role/permission state after locking account and both
+            // authorization pivots. The route middleware is only an early gate.
             $reviewer = $reviewer->newQuery()
                 ->whereKey($reviewer->getAuthIdentifier())
                 ->firstOrFail();
