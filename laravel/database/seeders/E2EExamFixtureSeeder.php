@@ -17,8 +17,13 @@ class E2EExamFixtureSeeder extends Seeder
 {
     public function run(): void
     {
-        if (!app()->environment('testing')) {
-            throw new \RuntimeException('E2E exam fixtures may only be seeded when APP_ENV=testing.');
+        $connection = \Illuminate\Support\Facades\DB::connection();
+        $databasePath = str_replace('\\', '/', $connection->getDatabaseName());
+        $isolatedE2eDatabase = $connection->getDriverName() === 'sqlite'
+            && preg_match('~(?:^|/)database/e2e\.sqlite$~', $databasePath) === 1;
+
+        if (!app()->environment('testing') || !$isolatedE2eDatabase) {
+            throw new \RuntimeException('E2E exam fixtures may only be seeded in the isolated APP_ENV=testing SQLite database (database/e2e.sqlite).');
         }
 
         $plugins = app(PluginManager::class);

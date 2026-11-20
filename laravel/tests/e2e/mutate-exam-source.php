@@ -9,6 +9,15 @@ require __DIR__ . '/../../vendor/autoload.php';
 $app = require __DIR__ . '/../../bootstrap/app.php';
 $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 
+$connection = \Illuminate\Support\Facades\DB::connection();
+$databasePath = str_replace('\\', '/', $connection->getDatabaseName());
+$isolatedE2eDatabase = $connection->getDriverName() === 'sqlite'
+    && preg_match('~(?:^|/)database/e2e\.sqlite$~', $databasePath) === 1;
+
+if (!$app->environment('testing') || !$isolatedE2eDatabase) {
+    fwrite(STDERR, "Refusing to modify E2E fixtures outside the isolated APP_ENV=testing SQLite database (database/e2e.sqlite).\n");
+    exit(1);
+}
 if (!$app->environment('testing')) {
     fwrite(STDERR, "Refusing to mutate E2E exam fixture source outside APP_ENV=testing.\n");
     exit(1);
