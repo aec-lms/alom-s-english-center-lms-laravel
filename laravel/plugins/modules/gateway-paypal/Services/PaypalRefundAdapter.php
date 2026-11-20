@@ -88,6 +88,8 @@ class PaypalRefundAdapter implements RefundProviderAdapter
             : 'api-m.paypal.com';
         if (!is_array($payload)
             || trim((string) ($payload['id'] ?? '')) === ''
+            || (string) ($payload['invoice_id'] ?? '') !== (string) $transaction->transaction_ref
+            || (string) ($payload['custom_id'] ?? '') !== 'refund-' . $refund->id
             || $upHost !== $expectedHost
             || $relatedCaptureId !== (string) $transaction->external_reference
             || round((float) ($amount['value'] ?? 0), 2) !== round((float) $refund->amount, 2)
