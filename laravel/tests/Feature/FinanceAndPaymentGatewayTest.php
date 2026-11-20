@@ -333,6 +333,9 @@ class FinanceAndPaymentGatewayTest extends TestCase
             'payment_token' => 'pm_card_visa_token',
             'idempotency_key' => 'idem-stripe-1',
         ])->assertOk()->json();
+        $stripeIntentRequestCount = Http::recorded()->filter(
+            fn (array $record): bool => str_contains($record[0]->url(), '/v1/payment_intents')
+        )->count();
 
         $stripeRes2 = $this->actingAs($admin)->postJson('/payments/stripe/checkout', [
             'invoice_id' => $stripeInvoice->id,
@@ -340,6 +343,9 @@ class FinanceAndPaymentGatewayTest extends TestCase
             'idempotency_key' => 'idem-stripe-1',
         ])->assertOk()->json();
         $this->assertSame($stripeRes1['transaction_ref'], $stripeRes2['transaction_ref']);
+        $this->assertSame($stripeIntentRequestCount, Http::recorded()->filter(
+            fn (array $record): bool => str_contains($record[0]->url(), '/v1/payment_intents')
+        )->count());
 
         $stripePayload = json_encode([
             'id' => 'evt_test_payment_intent_succeeded',
