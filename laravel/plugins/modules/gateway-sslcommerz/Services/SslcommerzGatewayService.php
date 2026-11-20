@@ -46,11 +46,47 @@ class SslcommerzGatewayService
             throw new RuntimeException('Add a valid customer phone number before starting SSLCOMMERZ checkout.');
         }
 
+        $sandbox = $this->plugins->getSetting('gateway-sslcommerz', 'sandbox_mode', '1') === '1';
+        $baseUrl = $sandbox ? 'https://sandbox.sslcommerz.com' : 'https://securepay.sslcommerz.com';
+        $endpoint = $baseUrl . '/gwprocess/v4/api.php';
+        $successUrl = url('/payments/sslcommerz/success');
+        $failUrl = url('/payments/sslcommerz/failed');
+        $cancelUrl = url('/payments/sslcommerz/cancelled');
+        $ipnUrl = url('/payments/sslcommerz/ipn');
+        $providerCustomerName = mb_substr($customerName, 0, 50);
+        $providerCustomerEmail = mb_substr($customerEmail, 0, 50);
+        $providerCustomerPhone = mb_substr($phone, 0, 20);
+        $productName = 'Course fee invoice ' . (string) $invoice->invoice_number;
+
+        // Fingerprint the same allowlisted, non-secret fields sent to the
+        // provider. The reservation service stores only their one-way hash.
+        $fingerprintParameters = [
+            'store_id' => $storeId,
+            'endpoint' => $endpoint,
+            'sandbox_mode' => $sandbox ? 'sandbox' : 'live',
+            'success_url' => $successUrl,
+            'fail_url' => $failUrl,
+            'cancel_url' => $cancelUrl,
+            'ipn_url' => $ipnUrl,
+            'cus_name' => $providerCustomerName,
+            'cus_email' => $providerCustomerEmail,
+            'cus_add1' => 'N/A',
+            'cus_city' => 'N/A',
+            'cus_postcode' => '0000',
+            'cus_country' => 'Bangladesh',
+            'cus_phone' => $providerCustomerPhone,
+            'shipping_method' => 'NO',
+            'num_of_item' => '1',
+            'product_name' => $productName,
+            'product_category' => 'Education',
+            'product_profile' => 'non-physical-goods',
+        ];
+
         $reservation = $this->reservations->reserve(
             $invoice,
             'gateway-sslcommerz',
             'SSL',
-            ['channel' => 'sslcommerz_hosted'],
+            ['fingerprint_parameters' => $fingerprintParameters],
             $idempotencyKey,
         );
         $invoice = $reservation['invoice'];
@@ -75,8 +111,7 @@ class SslcommerzGatewayService
             }
             $host = strtolower((string) parse_url($existingUrl, PHP_URL_HOST));
             $scheme = strtolower((string) parse_url($existingUrl, PHP_URL_SCHEME));
-            $sandboxMode = $this->plugins->getSetting('gateway-sslcommerz', 'sandbox_mode', '1') === '1';
-            $expectedHost = $sandboxMode ? 'sandbox.sslcommerz.com' : 'securepay.sslcommerz.com';
+            $expectedHost = $sandbox ? 'sandbox.sslcommerz.com' : 'securepay.sslcommerz.com';
             if ($scheme !== 'https' || $host !== $expectedHost || $existingUrl === '') {
                 throw new RuntimeException('An SSLCOMMERZ session is already reserved but its hosted URL is unavailable; reconciliation is required.');
             }
@@ -84,30 +119,26 @@ class SslcommerzGatewayService
             return ['transaction' => $tx, 'hosted_endpoint' => $existingUrl];
         }
 
-        $sandbox = $this->plugins->getSetting('gateway-sslcommerz', 'sandbox_mode', '1') === '1';
-        $baseUrl = $sandbox ? 'https://sandbox.sslcommerz.com' : 'https://securepay.sslcommerz.com';
-        $endpoint = $baseUrl . '/gwprocess/v4/api.php';
-
         $payload = [
             'store_id' => $storeId,
             'store_passwd' => $storePass,
             'total_amount' => number_format($remaining, 2, '.', ''),
             'currency' => strtoupper((string) $invoice->currency),
             'tran_id' => $tx->transaction_ref,
-            'success_url' => url('/payments/sslcommerz/success'),
-            'fail_url' => url('/payments/sslcommerz/failed'),
-            'cancel_url' => url('/payments/sslcommerz/cancelled'),
-            'ipn_url' => url('/payments/sslcommerz/ipn'),
-            'cus_name' => mb_substr($customerName, 0, 50),
-            'cus_email' => mb_substr($customerEmail, 0, 50),
+            'success_url' => $successUrl,
+            'fail_url' => $failUrl,
+            'cancel_url' => $cancelUrl,
+            'ipn_url' => $ipnUrl,
+            'cus_name' => $providerCustomerName,
+            'cus_email' => $providerCustomerEmail,
             'cus_add1' => 'N/A',
             'cus_city' => 'N/A',
             'cus_postcode' => '0000',
             'cus_country' => 'Bangladesh',
-            'cus_phone' => mb_substr($phone, 0, 20),
+            'cus_phone' => $providerCustomerPhone,
             'shipping_method' => 'NO',
             'num_of_item' => '1',
-            'product_name' => 'Course fee invoice ' . $invoice->invoice_number,
+            'product_name' => $productName,
             'product_category' => 'Education',
             'product_profile' => 'non-physical-goods',
         ];
