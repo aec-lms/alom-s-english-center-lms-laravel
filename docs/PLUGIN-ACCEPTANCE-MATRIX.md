@@ -177,6 +177,23 @@ The current main tree contains 59 plugin manifests; the PR #269 candidate contai
 | `universal-payment` | `UniversalPaymentGatewayToggleTest`, `UniversalPaymentInvoiceSettlementTest`, `UniversalPaymentProofTest`, `PluginCriticalRegressionTest` | Targeted payment/security/settlement coverage; live provider settlement still open |
 | `visitor-popup-ads` | `VisitorPopupSecurityTest`, `PluginCriticalRegressionTest` | Targeted CRUD/security coverage |
 
+| `al-branding-loader` | `AlBrandingLoaderProductionHardeningTest`, `AlomBrandingLoaderPhoneticsPluginTest` | Targeted loader timeout, navigation, path and integration coverage; full visual/browser acceptance remains partial |
+| `assignment-management` | `AssignmentManagementPluginTest` | Targeted standalone assignment, enrollment, branch, private attachment, ownership and mobile API coverage |
+| `board-question-solver` | `BoardQuestionSolverPluginTest` | Targeted provider-budget, private image, disabled-provider, exam-safety and admin authorization coverage |
+| `commerce-cart` | `UnifiedCommerceCartTest`, `CourseGiftCommerceTest`, `CourseCommercePaymentSettlementTest`, `StorefrontPaymentCheckoutTest` | Partial cart/gift/checkout coverage; shared invoice reservation and provider-confirmed refund reconciliation remain open (#302/#303) |
+| `course-assessments` | `CourseAssessmentsPluginTest`, `CourseAssessmentsMobileApiTest` | Targeted attempt, grading, enrollment, branch and answer-key privacy coverage; teacher branch and student role revocation follow-ups are in PRs #319/#316 |
+| `course-bundles` | `CourseBundlesPluginTest` | Targeted standalone, free/paid purchase, branch visibility, immutable snapshot and archive-history coverage |
+| `course-content-studio` | `CourseContentStudioPluginTest` | Targeted content authoring, safe video, lesson progress, enrollment and private-file authorization coverage |
+| `course-wishlist` | `CourseWishlistPluginTest` | Targeted owner privacy, student-role, published-course, branch and mobile API coverage |
+| `expense-management` | `ExpenseManagementPluginTest` | Targeted standalone expense, private receipt, approved summary, recycle-bin and branch/export isolation coverage |
+| `guardian-portal` | `GuardianPortalPluginTest`, `GuardianStudentTrackingAuthorizationTest` | Targeted verified-child linking, read-only summaries and cross-branch authorization coverage |
+| `phonetics` | `AlomBrandingLoaderPhoneticsPluginTest` | Targeted dedicated-course access and integration coverage; speaking recording/review workflow is not yet on main (PR #292) |
+| `push-notifications` | `PushNotificationDeliveryTest`, `MobilePushTokenLifecycleTest` | Targeted token lifecycle and delivery-dispatch coverage; live provider delivery remains externally unverified |
+| `question-bank` | `QuestionBankPluginTest`, `LearnAndEarnQuestionBankTest` | Targeted category/type, immutable paper snapshot, soft-delete and random-paper coverage |
+| `quiz-contest` | `QuizContestPluginTest` | Targeted contest lifecycle, branch-manager scope, submissions, answer-key visibility and results locking |
+| `referral-income` | `ReferralIncomePluginTest`, `ReferralIncomeCommerceSettlementTest` | Targeted attribution, settlement, refund-reversal and payout coverage; red-team financial findings remain open in #301 |
+| `support-center` | `SupportCenterPluginTest` | Targeted standalone ticket, owner privacy, reply/close and mobile API coverage |
+
 **Interpretation:** “Targeted” means a named automated feature test exists in the current test tree and passed as part of the current-main CI run. It does not mean exhaustive acceptance of every screen, edge case, permission, upgrade path, localization, or production integration. “Partial” and “shared” explicitly indicate narrower coverage.
 
 ### Remaining acceptance gaps
