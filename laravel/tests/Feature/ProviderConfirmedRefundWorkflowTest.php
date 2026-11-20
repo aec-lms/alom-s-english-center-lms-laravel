@@ -15,12 +15,56 @@ use Plugins\Modules\StudentManagement\Models\Student;
 use Plugins\Modules\BranchManagement\Models\Branch;
 use Plugins\Modules\PaymentManagement\Services\RefundOrchestrationService;
 use Plugins\Modules\PaymentManagement\Services\RefundSettlementService;
+use Plugins\Modules\PaymentManagement\Services\PaymentSettlementService;
 use Plugins\Modules\GatewayPaypal\Services\PaypalGatewayService;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
 class ProviderConfirmedRefundWorkflowTest extends TestCase
 {
+    public function test_payment_settlement_rejects_invoice_with_multiple_commerce_buyers(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'commerce-cart']);
+
+        [$invoice, $transaction] = $this->createSettledPayment('gateway-stripe', 'pi_multi_buyer_settlement_001');
+        $invoice->update(['paid_amount' => 0, 'status' => 'unpaid']);
+        $transaction->update(['status' => 'initiated', 'external_reference' => null]);
+        $buyerA = $this->createUserWithRole('student');
+        $buyerB = $this->createUserWithRole('student');
+
+        foreach ([$buyerA, $buyerB] as $index => $buyer) {
+            DB::table('commerce_orders')->insert([
+                'order_number' => 'MULTI-BUYER-' . $index . '-' . strtoupper(bin2hex(random_bytes(3))),
+                'user_id' => $buyer->id,
+                'invoice_id' => $invoice->id,
+                'branch_id' => null,
+                'currency' => 'BDT',
+                'subtotal' => 500,
+                'discount_total' => 0,
+                'grand_total' => 500,
+                'status' => 'pending',
+                'payment_status' => 'pending',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        try {
+            app(PaymentSettlementService::class)->settleTransaction(
+                $transaction,
+                'pi_multi_buyer_settlement_001',
+                ['provider' => 'test'],
+            );
+            $this->fail('An invoice tied to multiple commerce buyers must not settle.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('multiple buyers', strtolower($exception->getMessage()));
+        }
+
+        $this->assertSame('initiated', $transaction->fresh()->status);
+        $this->assertSame(0.0, (float) $invoice->fresh()->paid_amount);
+    }
+
     public function test_refund_request_rejects_commerce_buyer_mismatch_with_invoice_student(): void
     {
         $this->markSystemInstalled();
