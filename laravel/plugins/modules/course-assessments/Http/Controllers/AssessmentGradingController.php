@@ -211,7 +211,8 @@ class AssessmentGradingController extends Controller
             if ($lock) {
                 $roleQuery->lockForUpdate();
             }
-            abort_unless($roleQuery->exists(), 403, 'Only active teacher accounts can grade assessments.');
+            $role = $roleQuery->first();
+            abort_unless($role !== null, 403, 'Only active teacher accounts can grade assessments.');
         } else {
             abort_unless($actor->hasRole('teacher'), 403, 'Only active teacher accounts can grade assessments.');
         }
