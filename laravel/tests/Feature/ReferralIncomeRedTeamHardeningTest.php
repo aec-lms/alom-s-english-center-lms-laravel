@@ -6,7 +6,6 @@ namespace Tests\Feature;
 
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\ReferralIncome\Services\ReferralIncomeService;
@@ -115,8 +114,8 @@ final class ReferralIncomeRedTeamHardeningTest extends TestCase
         $this->assertNotNull($ruleLog);
         $this->assertSame($admin->id, (int) $ruleLog->user_id);
         $metadata = json_decode($ruleLog->metadata, true);
-        $this->assertSame('5.00', $metadata['before']['commission_percent'] ?? null);
-        $this->assertSame('6.5', $metadata['after']['commission_percent'] ?? null);
+        $this->assertEquals(5.0, (float) ($metadata['before']['commission_percent'] ?? 0));
+        $this->assertEquals(6.5, (float) ($metadata['after']['commission_percent'] ?? 0));
     }
 
     public function test_payout_and_recovery_review_transitions_write_actor_attributed_audit_events(): void
