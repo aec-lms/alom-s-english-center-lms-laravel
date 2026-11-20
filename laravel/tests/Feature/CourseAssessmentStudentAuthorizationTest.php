@@ -593,7 +593,7 @@ PHP;
             $this->waitForMysqlLockWait($writer, $threadId);
 
             $writer->commit();
-            $this->assertSame('RESULT:403', $this->readMysqlWorkerLine($worker));
+            $this->assertStringStartsWith('RESULT:403:', $this->readMysqlWorkerLine($worker));
             $this->assertSame('DONE', $this->readMysqlWorkerLine($worker));
         } finally {
             if ($writer->transactionLevel() > 0) {
