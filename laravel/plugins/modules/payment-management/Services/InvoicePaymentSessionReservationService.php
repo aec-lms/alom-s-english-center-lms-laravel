@@ -107,16 +107,27 @@ class InvoicePaymentSessionReservationService
         }, 3);
     }
 
-    public function markCreated(PaymentTransaction $transaction, array $providerMetadata = []): PaymentTransaction
-    {
-        return DB::transaction(function () use ($transaction, $providerMetadata): PaymentTransaction {
+    public function markCreated(
+        PaymentTransaction $transaction,
+        array $providerMetadata = [],
+        ?string $status = null,
+        ?string $externalReference = null,
+    ): PaymentTransaction {
+        return DB::transaction(function () use ($transaction, $providerMetadata, $status, $externalReference): PaymentTransaction {
             $locked = PaymentTransaction::query()->whereKey($transaction->id)->lockForUpdate()->firstOrFail();
-            $locked->update([
+            $payload = [
                 'metadata' => array_merge($locked->metadata ?? [], $providerMetadata, [
                     'session_outcome' => 'created',
                     'session_created_at' => now()->toIso8601String(),
                 ]),
-            ]);
+            ];
+            if ($status !== null) {
+                $payload['status'] = $status;
+            }
+            if ($externalReference !== null) {
+                $payload['external_reference'] = $externalReference;
+            }
+            $locked->update($payload);
 
             return $locked->fresh();
         }, 3);
