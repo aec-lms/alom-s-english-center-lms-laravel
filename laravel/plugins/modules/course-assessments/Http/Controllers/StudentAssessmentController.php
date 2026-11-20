@@ -28,8 +28,7 @@ class StudentAssessmentController extends Controller
 
     public function apiIndex(Request $request): JsonResponse
     {
-        $student = $request->user();
-        abort_unless($student && $student->hasRole('student'), 403);
+        $student = $this->requireStudent($request);
         $sets = $this->visibleSetsQuery($student)->latest()->paginate(20);
 
         return response()->json([
@@ -78,7 +77,7 @@ class StudentAssessmentController extends Controller
         abort_unless((int) $attempt->student_id === (int) $student->id, 404);
 
         if ($attempt->status === 'in_progress' && $attempt->deadline_at && now()->greaterThanOrEqualTo($attempt->deadline_at)) {
-            $this->submitAttempt($attempt);
+            $this->submitAttempt($attempt, $student);
         }
 
         $attempt->refresh()->load('questions');
@@ -91,11 +90,10 @@ class StudentAssessmentController extends Controller
 
     public function apiSubmit(Request $request, AssessmentAttempt $attempt): JsonResponse
     {
-        $student = $request->user();
-        abort_unless($student && $student->hasRole('student'), 403);
+        $student = $this->requireStudent($request);
         abort_unless((int) $attempt->student_id === (int) $student->id, 404);
 
-        $this->submitAttempt($attempt);
+        $this->submitAttempt($attempt, $student);
         $attempt->refresh();
 
         return response()->json([
@@ -145,7 +143,7 @@ class StudentAssessmentController extends Controller
         abort_unless((int) $attempt->student_id === (int) $student->id, 404);
         abort_if($attempt->status!=='in_progress',403,'This attempt has already been submitted.');
         if($attempt->deadline_at && now()->greaterThanOrEqualTo($attempt->deadline_at)){
-            $this->submitAttempt($attempt);
+            $this->submitAttempt($attempt, $student);
             return redirect()->route('plugins.course-assessments.student.history')->with('status','Time expired. Your answers were submitted.');
         }
         $attempt->load('questions');
@@ -193,7 +191,7 @@ class StudentAssessmentController extends Controller
     {
         $student = $this->requireStudent($request);
         abort_unless((int) $attempt->student_id === (int) $student->id, 404);
-        $this->submitAttempt($attempt);
+        $this->submitAttempt($attempt, $student);
         return redirect()->route('plugins.course-assessments.student.history')->with('status','Assessment submitted.');
     }
 
@@ -363,10 +361,17 @@ class StudentAssessmentController extends Controller
         ];
     }
 
-    private function submitAttempt(AssessmentAttempt $attempt): void
+    private function submitAttempt(AssessmentAttempt $attempt, User $student): void
     {
-        DB::transaction(function()use($attempt){
-            $locked=AssessmentAttempt::query()->whereKey($attempt->id)->lockForUpdate()->firstOrFail();
+        DB::transaction(function () use ($attempt, $student): void {
+            $lockedStudent = User::query()->whereKey($student->id)->lockForUpdate()->firstOrFail();
+            abort_unless(
+                $lockedStudent->hasRole('student') && $lockedStudent->is_active !== false,
+                403,
+                'An active student account is required.'
+            );
+            $locked = AssessmentAttempt::query()->whereKey($attempt->id)->lockForUpdate()->firstOrFail();
+            abort_unless((int) $locked->student_id === (int) $lockedStudent->id, 404);
             if($locked->status!=='in_progress')return;
             $auto=0.0;$manual=0.0;$hasManual=false;
             foreach($locked->questions as $q){
