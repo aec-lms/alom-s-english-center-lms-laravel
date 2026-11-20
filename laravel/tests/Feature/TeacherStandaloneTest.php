@@ -72,6 +72,37 @@ class TeacherStandaloneTest extends TestCase
         $this->assertDatabaseHas('users', ['id' => $teacher->user_id, 'is_active' => false]);
     }
 
+    public function test_teacher_photo_upload_uses_server_detected_extension(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['teacher-management']);
+        $admin = $this->createUserWithRole('admin');
+        $image = UploadedFile::fake()->image('teacher-photo.jpg');
+
+        $this->actingAs($admin)->post('/admin/teachers', [
+            'name' => 'Safe Upload Teacher',
+            'email' => 'safe.upload@aec.test',
+            'employee_code' => 'SAFE-UPLOAD-001',
+            'specialization' => 'English Grammar',
+            'password' => 'AecTeacher!2026Strong',
+            'is_active' => '1',
+            'photo' => $image,
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $teacher = Teacher::query()->where('employee_code', 'SAFE-UPLOAD-001')->firstOrFail();
+        $this->assertMatchesRegularExpression('/\\.(?:jpe?g|png|webp)$/i', (string) $teacher->photo_path);
+        $this->assertStringNotContainsString('.php', strtolower((string) $teacher->photo_path));
+        $controllerSource = file_get_contents(base_path('plugins/modules/teacher-management/Http/Controllers/TeacherController.php'));
+        $this->assertIsString($controllerSource);
+        $this->assertStringNotContainsString('getClientOriginalExtension()', $controllerSource);
+        $this->assertStringContainsString('guessExtension()', $controllerSource);
+        $storedPath = public_path(ltrim((string) $teacher->photo_path, '/'));
+        $this->assertFileExists($storedPath);
+
+        @unlink($storedPath);
+    }
+
+
     public function test_recycle_restore_keeps_a_previously_inactive_teacher_account_inactive(): void
     {
         $this->markSystemInstalled();
@@ -167,37 +198,6 @@ class TeacherStandaloneTest extends TestCase
         ]);
     }
 
-    public function test_teacher_photo_upload_uses_server_detected_extension(): void
-    {
-        $this->markSystemInstalled();
-        $this->activatePlugins(['teacher-management']);
-        $admin = $this->createUserWithRole('admin');
-        $image = UploadedFile::fake()->image('teacher-photo.jpg');
-
-        $this->actingAs($admin)->post('/admin/teachers', [
-            'name' => 'Safe Upload Teacher',
-            'email' => 'safe.upload@aec.test',
-            'employee_code' => 'SAFE-UPLOAD-001',
-            'specialization' => 'English Grammar',
-            'password' => 'AecTeacher!2026Strong',
-            'is_active' => '1',
-            'photo' => $image,
-        ])->assertRedirect()->assertSessionHasNoErrors();
-
-        $teacher = Teacher::query()->where('employee_code', 'SAFE-UPLOAD-001')->firstOrFail();
-        $this->assertMatchesRegularExpression('/\\.(?:jpe?g|png|webp)$/i', (string) $teacher->photo_path);
-        $this->assertStringNotContainsString('.php', strtolower((string) $teacher->photo_path));
-        $controllerSource = file_get_contents(base_path('plugins/modules/teacher-management/Http/Controllers/TeacherController.php'));
-        $this->assertIsString($controllerSource);
-        $this->assertStringNotContainsString('getClientOriginalExtension()', $controllerSource);
-        $this->assertStringContainsString('guessExtension()', $controllerSource);
-        $storedPath = public_path(ltrim((string) $teacher->photo_path, '/'));
-        $this->assertFileExists($storedPath);
-
-        @unlink($storedPath);
-    }
-
-
     public function test_teacher_update_without_is_active_preserves_existing_state(): void
     {
         $this->markSystemInstalled();
@@ -252,6 +252,5 @@ class TeacherStandaloneTest extends TestCase
         $this->assertDatabaseHas('teachers', ['id' => $teacher->id, 'is_active' => false]);
         $this->assertDatabaseHas('users', ['id' => $teacher->user_id, 'is_active' => false]);
     }
-
 
 }
