@@ -558,6 +558,141 @@ class ExamAttemptEligibilityLockTest extends TestCase
         $this->assertFalse($attempt->passed);
     }
 
+    public function test_mysql_authenticated_exam_request_holds_user_lock_against_account_deactivation_writer(): void
+    {
+        if (DB::getDriverName() !== 'mysql') {
+            $this->markTestSkipped('User-row authorization contention requires MySQL 8.');
+        }
+
+        $this->markSystemInstalled();
+        $this->activatePlugins(['exam-management']);
+        $student = $this->createUserWithRole('student');
+        [$exam, $question] = $this->createSnapshotFixture();
+        $primaryName = DB::getDefaultConnection();
+        $secondaryName = $this->createSecondaryMysqlConnection();
+        $secondary = DB::connection($secondaryName);
+        $secondary->statement('SET SESSION innodb_lock_wait_timeout = 1');
+        $writerWaited = false;
+
+        DB::listen(function ($query) use ($primaryName, $secondary, $student, &$writerWaited): void {
+            $sql = strtolower($query->sql);
+            if ($writerWaited || $query->connectionName !== $primaryName
+                || !str_contains($sql, 'from ' . chr(96) . 'users' . chr(96))
+                || !str_contains($sql, 'for update')) {
+                return;
+            }
+
+            try {
+                $secondary->table('users')->where('id', $student->id)->update([
+                    'is_active' => false,
+                    'updated_at' => now(),
+                ]);
+                $this->fail('Account deactivation must wait while the authenticated exam request owns the User row lock.');
+            } catch (QueryException $exception) {
+                $this->assertSame(1205, (int) ($exception->errorInfo[1] ?? 0), $exception->getMessage());
+                $writerWaited = true;
+            }
+        });
+
+        try {
+            app(ExamController::class)->take(
+                $this->studentRequest('GET', '/exams/' . $exam->id . '/take', $student),
+                $exam->fresh()
+            );
+            $this->assertTrue($writerWaited, 'The deactivation writer must contend with the User lock held by the protected exam request.');
+
+            $secondary->table('users')->where('id', $student->id)->update([
+                'is_active' => false,
+                'updated_at' => now(),
+            ]);
+            $attempt = ExamAttempt::query()
+                ->where('exam_id', $exam->id)
+                ->where('user_id', $student->id)
+                ->firstOrFail();
+
+            $this->assertControllerAbort(403, fn () => app(ExamController::class)->submitAttempt(
+                $this->studentRequest('POST', '/exams/' . $exam->id . '/attempt', $student, [
+                    'attempt_id' => $attempt->id,
+                    'answers' => [(string) $question->id => 1],
+                ]),
+                $exam->fresh()
+            ));
+            $this->assertAttemptStillPending($attempt);
+        } finally {
+            DB::setDefaultConnection($primaryName);
+            DB::purge($secondaryName);
+        }
+    }
+
+    public function test_mysql_authenticated_exam_request_holds_student_role_pivot_lock_against_revocation_writer(): void
+    {
+        if (DB::getDriverName() !== 'mysql') {
+            $this->markTestSkipped('Student-role pivot authorization contention requires MySQL 8.');
+        }
+
+        $this->markSystemInstalled();
+        $this->activatePlugins(['exam-management']);
+        $student = $this->createUserWithRole('student');
+        $student->load('roles');
+        [$exam, $question] = $this->createSnapshotFixture();
+        $roleId = DB::table('roles')->where('slug', 'student')->value('id');
+        $this->assertNotNull($roleId);
+        $primaryName = DB::getDefaultConnection();
+        $secondaryName = $this->createSecondaryMysqlConnection();
+        $secondary = DB::connection($secondaryName);
+        $secondary->statement('SET SESSION innodb_lock_wait_timeout = 1');
+        $writerWaited = false;
+
+        DB::listen(function ($query) use ($primaryName, $secondary, $student, $roleId, &$writerWaited): void {
+            $sql = strtolower($query->sql);
+            if ($writerWaited || $query->connectionName !== $primaryName
+                || !str_contains($sql, 'role_user')
+                || !str_contains($sql, 'for update')) {
+                return;
+            }
+
+            try {
+                $secondary->table('role_user')
+                    ->where('user_id', $student->id)
+                    ->where('role_id', $roleId)
+                    ->delete();
+                $this->fail('Role revocation must wait while the authenticated exam request owns the Student role pivot lock.');
+            } catch (QueryException $exception) {
+                $this->assertSame(1205, (int) ($exception->errorInfo[1] ?? 0), $exception->getMessage());
+                $writerWaited = true;
+            }
+        });
+
+        try {
+            app(ExamController::class)->take(
+                $this->studentRequest('GET', '/exams/' . $exam->id . '/take', $student),
+                $exam->fresh()
+            );
+            $this->assertTrue($writerWaited, 'The role-revocation writer must contend with the Student pivot lock held by the protected exam request.');
+
+            $secondary->table('role_user')
+                ->where('user_id', $student->id)
+                ->where('role_id', $roleId)
+                ->delete();
+            $attempt = ExamAttempt::query()
+                ->where('exam_id', $exam->id)
+                ->where('user_id', $student->id)
+                ->firstOrFail();
+
+            $this->assertControllerAbort(403, fn () => app(ExamController::class)->submitAttempt(
+                $this->studentRequest('POST', '/exams/' . $exam->id . '/attempt', $student, [
+                    'attempt_id' => $attempt->id,
+                    'answers' => [(string) $question->id => 1],
+                ]),
+                $exam->fresh()
+            ));
+            $this->assertAttemptStillPending($attempt);
+        } finally {
+            DB::setDefaultConnection($primaryName);
+            DB::purge($secondaryName);
+        }
+    }
+
     public function test_mysql_exam_lock_order_and_second_connection_nowait_contention(): void
     {
         if (DB::getDriverName() !== 'mysql') {
