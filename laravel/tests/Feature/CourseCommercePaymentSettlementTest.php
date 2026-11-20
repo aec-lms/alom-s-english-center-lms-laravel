@@ -18,7 +18,7 @@ class CourseCommercePaymentSettlementTest extends TestCase
     {
         parent::setUp();
         $this->markSystemInstalled();
-        $this->activatePlugins(['course-management', 'fees-management', 'marketing-management', 'universal-payment', 'referral-income', 'student-management']);
+        $this->activatePlugins(['course-management', 'fees-management', 'marketing-management', 'universal-payment', 'referral-income', 'student-management', 'payment-management', 'commerce-cart']);
     }
 
     public function test_verified_course_cart_payment_activates_enrollment_and_is_idempotent(): void
