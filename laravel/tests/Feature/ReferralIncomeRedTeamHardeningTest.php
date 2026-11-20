@@ -204,6 +204,14 @@ final class ReferralIncomeRedTeamHardeningTest extends TestCase
 
         $this->actingAs($admin)->post('/admin/referral-income/recoveries/' . $reversalId . '/review', [
             'status' => 'waived',
+        ])->assertRedirect()->assertSessionHasErrors('admin_note');
+        $this->assertDatabaseHas('referral_commission_reversals', [
+            'id' => $reversalId,
+            'status' => 'recovery_due',
+        ]);
+
+        $this->actingAs($admin)->post('/admin/referral-income/recoveries/' . $reversalId . '/review', [
+            'status' => 'waived',
             'admin_note' => 'Finance approved waiver after documented reconciliation.',
         ])->assertRedirect();
 
