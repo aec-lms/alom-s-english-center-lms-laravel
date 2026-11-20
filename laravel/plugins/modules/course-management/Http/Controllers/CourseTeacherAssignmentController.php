@@ -39,20 +39,46 @@ class CourseTeacherAssignmentController extends Controller
             'course_id' => ['required', 'integer', 'exists:courses,id'],
             'teacher_user_id' => ['required', 'integer', 'exists:users,id'],
         ]);
-        $branchId = $this->branches->assignedBranchId($request->user());
+        $actorId = (int) $request->user()->getKey();
+        $teacherId = (int) $data['teacher_user_id'];
 
-        DB::transaction(function () use ($request, $data, $branchId): void {
-            // Serialize assignment against teacher account deactivation and role
-            // revocation. The account row is the first lock in the shared
-            // teacher lifecycle order; then re-read the canonical role pivot.
-            $teacher = User::query()->whereKey($data['teacher_user_id'])->lockForUpdate()->firstOrFail();
-            $teacherRoleId = Role::query()->where('slug', 'teacher')->value('id');
-            abort_unless($teacherRoleId, 422, 'The teacher role is not configured.');
-            $hasTeacherRole = DB::table('role_user')
-                ->where('user_id', $teacher->id)
-                ->where('role_id', $teacherRoleId)
+        DB::transaction(function () use ($request, $data, $actorId, $teacherId): void {
+            // Shared account lifecycle order: lock both linked accounts in
+            // ascending ID order, then lock their canonical role pivots.
+            $userIds = collect([$actorId, $teacherId])->unique()->sort()->values()->all();
+            $lockedUsers = User::query()
+                ->whereIn('id', $userIds)
+                ->orderBy('id')
                 ->lockForUpdate()
-                ->first();
+                ->get()
+                ->keyBy('id');
+            $actor = $lockedUsers->get($actorId);
+            $teacher = $lockedUsers->get($teacherId);
+            abort_unless($actor && $actor->is_active, 403, 'Inactive accounts cannot assign course teachers.');
+            abort_unless($teacher, 404, 'Teacher account not found.');
+
+            $lockedRolePivots = DB::table('role_user')
+                ->whereIn('user_id', $userIds)
+                ->orderBy('user_id')
+                ->orderBy('role_id')
+                ->lockForUpdate()
+                ->get();
+
+            // BranchAccess reads the actor's role relation. Rebuild it from
+            // the locked pivot rows rather than trusting an authenticated
+            // model relation that may have gone stale before this transaction.
+            $actorRoleIds = $lockedRolePivots
+                ->where('user_id', $actorId)
+                ->pluck('role_id')
+                ->all();
+            $actor->setRelation('roles', Role::query()->whereIn('id', $actorRoleIds)->get());
+
+            $branchId = $this->branches->assignedBranchId($actor);
+            $teacherRoleId = Role::query()->where('slug', 'teacher')->value('id');
+            $hasTeacherRole = $teacherRoleId !== null && $lockedRolePivots->contains(
+                fn ($pivot): bool => (int) $pivot->user_id === $teacherId
+                    && (int) $pivot->role_id === (int) $teacherRoleId
+            );
             abort_unless((bool) $teacher->is_active && $hasTeacherRole, 422, 'Select an active teacher account.');
 
             $course = DB::table('courses')->where('id', $data['course_id'])->whereNull('deleted_at')
@@ -68,7 +94,7 @@ class CourseTeacherAssignmentController extends Controller
 
             DB::table('course_teacher_assignments')->updateOrInsert(
                 ['course_id' => $course->id, 'teacher_user_id' => $teacher->id],
-                ['assigned_by' => $request->user()->id, 'created_at' => now(), 'updated_at' => now()]
+                ['assigned_by' => $actorId, 'created_at' => now(), 'updated_at' => now()]
             );
         });
 
