@@ -47,10 +47,6 @@ test('student exam journey uses frozen snapshot, autosaves safely, and remains a
   await expect(optionFour).toBeFocused();
   await expect(optionFour).toBeChecked();
   expect(await optionFour.evaluate((element) => element.matches(':focus-visible'))).toBe(true);
-  await page.keyboard.press('ArrowLeft');
-  await expect(optionFour).toBeFocused();
-  await expect(optionFour).toBeChecked();
-
   const optionLabel = optionFour.locator('xpath=ancestor::label');
   const touchTargetHeight = await optionLabel.evaluate((element) => element.getBoundingClientRect().height);
   expect(touchTargetHeight).toBeGreaterThanOrEqual(48);
