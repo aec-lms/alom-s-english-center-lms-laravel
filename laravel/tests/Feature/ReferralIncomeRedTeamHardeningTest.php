@@ -596,6 +596,33 @@ final class ReferralIncomeRedTeamHardeningTest extends TestCase
             'status' => 'pending',
         ]);
 
+        $duplicateRefundTransaction = DB::table('payment_transactions')->insertGetId([
+            'transaction_ref' => 'REF-COURSE-RFD-DUP-' . strtoupper(bin2hex(random_bytes(3))),
+            'invoice_id' => $order->invoice_id,
+            'branch_id' => null,
+            'gateway_slug' => 'gateway-sslcommerz',
+            'amount' => 200,
+            'currency' => 'BDT',
+            'status' => 'refunded',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $duplicateRefundId = DB::table('payment_refunds')->insertGetId([
+            'payment_transaction_id' => $duplicateRefundTransaction,
+            'amount' => 200,
+            'reason' => 'Duplicate provider reference regression.',
+            'provider_refund_reference' => 'PROVIDER-REF-COURSE-001',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        try {
+            $service->reverseSettledPurchase($buyer, 'course_cart_order', $orderId, $duplicateRefundId, 200, 'BDT');
+            $this->fail('A provider refund reference must not be applied to a second refund row.');
+        } catch (\\RuntimeException $exception) {
+            $this->assertStringContainsString('already been applied', $exception->getMessage());
+        }
+        $this->assertDatabaseCount('referral_commission_reversals', 1);
+
         $refundTwoTransaction = DB::table('payment_transactions')->insertGetId([
             'transaction_ref' => 'REF-COURSE-RFD-002-' . strtoupper(bin2hex(random_bytes(3))),
             'invoice_id' => $order->invoice_id,
