@@ -134,6 +134,8 @@ class PaypalGatewayService
                 $this->reservations->markRejected($tx, 'oauth_token_request_failed');
             } elseif ($response === null || $response->serverError()) {
                 $this->reservations->markUnknown($tx, 'provider_http_5xx');
+            } elseif ($response->successful()) {
+                $this->reservations->markUnknown($tx, 'post_provider_processing_error');
             }
             if ($e instanceof RuntimeException) throw $e;
             throw new RuntimeException('Unable to create PayPal checkout order; reservation remains held for reconciliation.', 0, $e);
