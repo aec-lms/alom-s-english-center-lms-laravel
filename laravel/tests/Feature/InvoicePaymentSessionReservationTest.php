@@ -94,6 +94,7 @@ class InvoicePaymentSessionReservationTest extends TestCase
         $service = app(InvoicePaymentSessionReservationService::class);
         $reservation = $service->reserve($invoice, 'gateway-paypal', 'PYPL', [], 'paypal-terminal-key');
         $service->markRejected($reservation['transaction'], 'provider_definitive_4xx');
+        $invoice->update(['paid_amount' => 1200, 'status' => 'paid']);
 
         $replay = $service->reserve($invoice, 'gateway-paypal', 'PYPL', [], 'paypal-terminal-key');
         $this->assertTrue($replay['reused']);
