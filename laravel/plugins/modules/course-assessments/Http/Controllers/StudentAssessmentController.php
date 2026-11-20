@@ -165,7 +165,8 @@ class StudentAssessmentController extends Controller
 
         DB::transaction(function () use ($attempt, $question, $student, $data): void {
             $lockedStudent = User::query()->whereKey($student->id)->lockForUpdate()->firstOrFail();
-            abort_unless($lockedStudent->hasRole('student') && (!Schema::hasColumn('users', 'is_active') || (bool) $lockedStudent->is_active), 403, 'An active student account is required.');
+            $this->assertStudentRoleLocked($lockedStudent);
+            abort_unless(!Schema::hasColumn('users', 'is_active') || (bool) $lockedStudent->is_active, 403, 'An active student account is required.');
             $lockedAttempt = AssessmentAttempt::query()->whereKey($attempt->id)->lockForUpdate()->firstOrFail();
             abort_unless((int) $lockedAttempt->student_id === (int) $student->id, 404);
             abort_unless($lockedAttempt->status === 'in_progress', 409, 'Attempt is not active.');
@@ -219,6 +220,30 @@ class StudentAssessmentController extends Controller
         return $student;
     }
 
+    /**
+     * Lock the actual role pivot as well as the account row. A User-row lock
+     * alone does not serialize a concurrent DELETE from role_user.
+     */
+    private function assertStudentRoleLocked(User $student): void
+    {
+        abort_unless(
+            Schema::hasTable('roles') && Schema::hasTable('role_user'),
+            503,
+            'Student role authorization storage is unavailable.'
+        );
+
+        $roleId = DB::table('roles')->where('slug', 'student')->value('id');
+        abort_unless($roleId !== null, 503, 'The student role is not configured.');
+
+        $assignment = DB::table('role_user')
+            ->where('user_id', $student->id)
+            ->where('role_id', $roleId)
+            ->lockForUpdate()
+            ->first();
+
+        abort_unless($assignment, 403, 'An active student role is required.');
+    }
+
     private function visibleSetsQuery($student)
     {
         $courseIntegration = app(PluginManager::class)->isEnabled('course-management')
@@ -250,7 +275,8 @@ class StudentAssessmentController extends Controller
 
         return DB::transaction(function () use ($set, $student): AssessmentAttempt {
             $lockedStudent = User::query()->whereKey($student->id)->lockForUpdate()->firstOrFail();
-            abort_unless($lockedStudent->hasRole('student') && (!Schema::hasColumn('users', 'is_active') || (bool) $lockedStudent->is_active), 403, 'An active student account is required.');
+            $this->assertStudentRoleLocked($lockedStudent);
+            abort_unless(!Schema::hasColumn('users', 'is_active') || (bool) $lockedStudent->is_active, 403, 'An active student account is required.');
             $student = $lockedStudent;
             $lockedSet = AssessmentSet::query()->whereKey($set->id)->lockForUpdate()->firstOrFail();
             abort_unless($lockedSet->status === 'published', 404);
@@ -365,8 +391,9 @@ class StudentAssessmentController extends Controller
     {
         DB::transaction(function () use ($attempt, $student): void {
             $lockedStudent = User::query()->whereKey($student->id)->lockForUpdate()->firstOrFail();
+            $this->assertStudentRoleLocked($lockedStudent);
             abort_unless(
-                $lockedStudent->hasRole('student') && (!Schema::hasColumn('users', 'is_active') || (bool) $lockedStudent->is_active),
+                !Schema::hasColumn('users', 'is_active') || (bool) $lockedStudent->is_active,
                 403,
                 'An active student account is required.'
             );
