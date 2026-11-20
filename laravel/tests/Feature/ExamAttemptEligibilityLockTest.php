@@ -393,7 +393,7 @@ class ExamAttemptEligibilityLockTest extends TestCase
         $this->assertControllerAbort(403, fn () => $controller->apiSubmitAttempt(
             $this->studentRequest('POST', '/api/v1/my/exams/' . $exam->id . '/attempts/' . $attempt->id . '/submit', $student, [
                 'answers' => [(string) $question->id => 1,
-            ], true),
+            ]], true),
             $staleExam,
             (int) $attempt->id
         ));
@@ -448,7 +448,7 @@ class ExamAttemptEligibilityLockTest extends TestCase
         $this->assertControllerAbort(403, fn () => $controller->apiSubmitAttempt(
             $this->studentRequest('POST', '/api/v1/my/exams/' . $exam->id . '/attempts/' . $attempt->id . '/submit', $student, [
                 'answers' => [(string) $question->id => 1,
-            ], true),
+            ]], true),
             $staleExam,
             (int) $attempt->id
         ));
