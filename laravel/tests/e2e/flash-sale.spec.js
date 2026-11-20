@@ -71,9 +71,18 @@ test('administrator can inspect Flash Sale Studio and its integration boundary',
 
   await page.getByText('Edit campaign', { exact: true }).click();
   const editForm = page.locator('form[action$="/admin/flash-sales/1"]');
+  await expect(editForm).toHaveAttribute('role', 'dialog');
+  await expect(editForm).toHaveAttribute('aria-modal', 'true');
   await expect(editForm.getByLabel('Campaign name')).toBeVisible();
   await expect(editForm.getByLabel('Published')).toBeVisible();
   await expect(editForm.getByLabel('Enabled')).toBeVisible();
+  const desktopEditor = await editForm.evaluate((node) => ({
+    position: getComputedStyle(node).position,
+    width: node.getBoundingClientRect().width,
+    viewportWidth: window.innerWidth,
+  }));
+  expect(desktopEditor.position).toBe('fixed');
+  expect(desktopEditor.width).toBeLessThan(desktopEditor.viewportWidth);
   await page.screenshot({ path: 'test-results/flash-sale-admin-desktop.png', fullPage: true });
 
   await page.setViewportSize({ width: 375, height: 812 });
@@ -86,5 +95,9 @@ test('administrator can inspect Flash Sale Studio and its integration boundary',
     documentWidth: document.documentElement.scrollWidth,
   }));
   expect(mobileLayout.documentWidth).toBeLessThanOrEqual(mobileLayout.viewportWidth + 1);
+  const mobileEditorWidth = await editForm.evaluate((node) => node.getBoundingClientRect().width);
+  expect(mobileEditorWidth).toBeLessThan(375);
   await page.screenshot({ path: 'test-results/flash-sale-admin-mobile.png', fullPage: true });
+  await page.getByText('Edit campaign', { exact: true }).click();
+  await expect(editForm).toBeHidden();
 });
