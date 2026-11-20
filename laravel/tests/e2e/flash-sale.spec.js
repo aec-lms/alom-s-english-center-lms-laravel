@@ -70,7 +70,7 @@ test('administrator can inspect Flash Sale Studio and its integration boundary',
   expect(desktopColumns).toBe(4);
 
   await page.getByText('Edit campaign', { exact: true }).click();
-  const editForm = page.locator('form[action$="/admin/flash-sales/1"]');
+  const editForm = page.getByRole('dialog', { name: 'Edit campaign E2E Winter Offer' });
   await expect(editForm).toHaveAttribute('role', 'dialog');
   await expect(editForm).toHaveAttribute('aria-modal', 'true');
   await expect(editForm.getByLabel('Campaign name')).toBeVisible();
