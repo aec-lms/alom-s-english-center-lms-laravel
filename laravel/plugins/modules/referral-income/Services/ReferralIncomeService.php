@@ -242,6 +242,22 @@ class ReferralIncomeService
             return null;
         }
 
+        if ($sourceType === 'course_cart_order') {
+            if (empty($order->payment_transaction_id) || !Schema::hasTable('universal_payment_transactions')) {
+                return null;
+            }
+
+            $originalPayment = DB::table('universal_payment_transactions')
+                ->where('id', (int) $order->payment_transaction_id)
+                ->where('user_id', $buyer->id)
+                ->first();
+            if (!$originalPayment
+                || (int) $originalPayment->invoice_id !== (int) $order->invoice_id
+                || $originalPayment->status !== 'verified') {
+                return null;
+            }
+        }
+
         return [
             'eligible_amount' => round((float) $invoice->net_amount, 2),
             'currency' => strtoupper((string) $invoice->currency),
