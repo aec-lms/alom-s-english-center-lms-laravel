@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Core\Security\AuditLogger;
 use Plugins\Modules\TeacherManagement\Models\Teacher;
 use Tests\TestCase;
 
@@ -115,5 +116,83 @@ final class TeacherProfileValidationTest extends TestCase
     }
 
 
+
+
+    public function test_teacher_profile_update_cannot_reactivate_a_separately_disabled_user_account(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['teacher-management']);
+        $admin = $this->createUserWithRole('admin');
+
+        $this->actingAs($admin)->post('/admin/teachers', [
+            'name' => 'Security Disabled Teacher',
+            'email' => 'security.disabled@aec.test',
+            'employee_code' => 'VALIDATE-TEACH-005',
+            'specialization' => 'English Grammar',
+            'password' => 'AecTeacher!2026Strong',
+            'is_active' => '1',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $teacher = Teacher::query()->where('employee_code', 'VALIDATE-TEACH-005')->firstOrFail();
+        $teacher->user->forceFill(['is_active' => false])->save();
+
+        $this->actingAs($admin)->put('/admin/teachers/' . $teacher->id, [
+            'name' => 'Security Disabled Teacher Updated',
+            'employee_code' => 'VALIDATE-TEACH-005',
+            'specialization' => 'English Grammar',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertFalse((bool) $teacher->fresh()->is_active);
+        $this->assertFalse((bool) $teacher->fresh()->user->is_active);
+    }
+
+    public function test_only_admin_explicit_activation_reenables_teacher_account_and_audits_actor(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['teacher-management']);
+        $admin = $this->createUserWithRole('admin');
+
+        $this->actingAs($admin)->post('/admin/teachers', [
+            'name' => 'Explicit Activation Teacher',
+            'email' => 'explicit.activation@aec.test',
+            'employee_code' => 'VALIDATE-TEACH-006',
+            'specialization' => 'English Grammar',
+            'password' => 'AecTeacher!2026Strong',
+            'is_active' => '0',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $teacher = Teacher::query()->where('employee_code', 'VALIDATE-TEACH-006')->firstOrFail();
+        $userId = (int) $teacher->user_id;
+
+        $this->mock(AuditLogger::class, function ($mock) use ($teacher, $userId, $admin): void {
+            $mock->shouldReceive('log')->once()->with(
+                'teacher.account_status_changed',
+                'user',
+                (string) $userId,
+                [
+                    'teacher_id' => (int) $teacher->id,
+                    'before' => false,
+                    'after' => true,
+                ],
+                (int) $admin->id
+            );
+            $mock->shouldReceive('log')->once()->with(
+                'teacher.updated',
+                'teacher',
+                (string) $teacher->id,
+                ['code' => 'VALIDATE-TEACH-006']
+            );
+        });
+
+        $this->actingAs($admin)->put('/admin/teachers/' . $teacher->id, [
+            'name' => 'Explicit Activation Teacher',
+            'employee_code' => 'VALIDATE-TEACH-006',
+            'specialization' => 'English Grammar',
+            'is_active' => '1',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertTrue((bool) $teacher->fresh()->is_active);
+        $this->assertTrue((bool) $teacher->fresh()->user->is_active);
+    }
 
 }
