@@ -158,6 +158,18 @@ class CourseCommercePaymentSettlementService
             'CART'
         );
 
+        // Bind the provider transaction to the invoice generated from this
+        // paid order. Referral reconciliation requires this exact association.
+        if (Schema::hasColumn('universal_payment_transactions', 'fee_invoice_id')) {
+            DB::table('universal_payment_transactions')
+                ->where('id', $transaction->id)
+                ->where('user_id', $transaction->user_id)
+                ->update([
+                    'fee_invoice_id' => $invoice->id,
+                    'updated_at' => now(),
+                ]);
+        }
+
         foreach ($items as $item) {
             $existing = DB::table('enrollments')->where('user_id', $transaction->user_id)
                 ->where('course_id', $item->course_id)->whereIn('status', ['pending', 'active', 'completed'])->exists();
