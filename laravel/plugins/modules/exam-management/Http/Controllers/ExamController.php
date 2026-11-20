@@ -760,8 +760,9 @@ class ExamController extends Controller
 
     /**
      * Revalidate current eligibility after locking the exam and before reading
-     * or writing an attempt. Lock order: exam -> user -> student profile ->
-     * paid entitlement -> attempt. Student lifecycle writers use user -> profile.
+     * or writing an attempt. Lock order: exam -> user -> student role pivot ->
+     * student profile -> paid entitlement -> attempt. Student lifecycle writers
+     * serialize account, role and profile changes after the User lock.
      */
     private function assertLockedStudentExamEligibility(
         Exam $lockedExam,
@@ -810,6 +811,28 @@ class ExamController extends Controller
         $userId = (int) $student->id;
         $user = DB::table('users')->where('id', $userId)->lockForUpdate()->first();
         abort_unless($user !== null, 403, 'Student account is no longer available.');
+        abort_unless(
+            !Schema::hasColumn('users', 'is_active') || (bool) $user->is_active,
+            403,
+            'An active student account is required.'
+        );
+
+        // Lock and re-read the canonical Student role assignment after the
+        // User row. A role check performed before the exam transaction can
+        // become stale while the request waits for the exam mutex.
+        abort_unless(
+            Schema::hasTable('roles') && Schema::hasTable('role_user'),
+            503,
+            'Student role authorization storage is unavailable.'
+        );
+        $studentRoleId = DB::table('roles')->where('slug', 'student')->value('id');
+        abort_unless($studentRoleId !== null, 503, 'The student role is not configured.');
+        $studentRole = DB::table('role_user')
+            ->where('user_id', $userId)
+            ->where('role_id', $studentRoleId)
+            ->lockForUpdate()
+            ->first();
+        abort_unless($studentRole !== null, 403, 'An active student role is required.');
 
         $userBranchId = Schema::hasColumn('users', 'branch_id')
             ? ($user->branch_id !== null ? (int) $user->branch_id : null)
