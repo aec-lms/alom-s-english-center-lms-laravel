@@ -647,7 +647,8 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
             $transaction,
             100,
             'Provider returned another refund identity',
-            (int) $requester->id,            'stripe-refund-identity-mismatch-001',
+            (int) $requester->id,
+            'stripe-refund-identity-mismatch-001',
         );
         $review = $service->approveAndSubmit($refund, (int) $approver->id);
 
