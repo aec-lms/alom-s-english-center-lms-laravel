@@ -310,4 +310,49 @@ class RecycleBinTest extends TestCase
     }
 
 
+
+    public function test_teacher_restore_locks_linked_user_before_teacher_profile(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['teacher-management']);
+        $admin = $this->createUserWithRole('admin');
+        $instructor = $this->createUserWithRole('teacher');
+        $teacher = Teacher::query()->create([
+            'user_id' => $instructor->id,
+            'employee_code' => 'RECYCLE-TEACHER-LOCK-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'specialization' => 'English',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($admin)->delete('/admin/teachers/' . $teacher->id)->assertRedirect();
+
+        $lockOrder = [];
+        DB::listen(function ($query) use (&$lockOrder): void {
+            $sql = strtolower($query->sql);
+            if (!str_contains($sql, 'for update')) {
+                return;
+            }
+            if (str_contains($sql, 'users')) {
+                $lockOrder[] = 'user';
+            } elseif (str_contains($sql, 'teachers')) {
+                $lockOrder[] = 'teacher';
+            }
+        });
+
+        $this->actingAs($admin)->post('/admin/recycle-bin/teachers/' . $teacher->id . '/restore')
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        if (DB::connection()->getDriverName() === 'mysql') {
+            $userLock = array_search('user', $lockOrder, true);
+            $profileLock = array_search('teacher', $lockOrder, true);
+            $this->assertNotFalse($userLock, 'Restore must lock the linked user row.');
+            $this->assertNotFalse($profileLock, 'Restore must lock the teacher profile row.');
+            $this->assertLessThan($profileLock, $userLock, 'User row must be locked before teacher profile to match Live Class access.');
+        }
+
+        $this->assertDatabaseHas('teachers', ['id' => $teacher->id, 'deleted_at' => null]);
+        $this->assertDatabaseHas('users', ['id' => $instructor->id, 'is_active' => false]);
+    }
+
 }
