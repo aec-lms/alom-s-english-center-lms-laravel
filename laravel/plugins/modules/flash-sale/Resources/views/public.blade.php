@@ -18,6 +18,64 @@
 .flash-page .fp-time strong{display:block;font-size:1.2rem;font-variant-numeric:tabular-nums}
 .flash-page .fp-time span{font-size:.62rem;text-transform:uppercase;opacity:.72;letter-spacing:.08em}
 .flash-page .fp-cta{border-radius:12px;padding:11px 18px;font-weight:750}
+
+/* This layout extends the Tailwind-only public shell; provide the small page-scoped
+   layout primitives used here instead of relying on an unloaded Bootstrap bundle. */
+.flash-page,.flash-page *,.flash-page *::before,.flash-page *::after{box-sizing:border-box}
+.flash-page{width:min(calc(100% - 2rem),1200px);max-width:1200px;margin:0 auto;padding:2rem 0 4rem}
+.flash-page .container{width:100%;max-width:none;margin:0;padding:0}
+.flash-page .row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;margin:0}
+.flash-page .col-md-6,.flash-page .col-xl-4{min-width:0;width:auto;padding:0}
+.flash-page .fp-hero{margin-bottom:3rem}
+.flash-page .d-flex{display:flex}
+.flash-page .flex-wrap{flex-wrap:wrap}
+.flash-page .justify-content-between{justify-content:space-between}
+.flash-page .align-items-center{align-items:center}
+.flash-page .align-items-end{align-items:flex-end}
+.flash-page .gap-2{gap:.5rem}
+.flash-page .gap-3{gap:1rem}
+.flash-page .mb-1{margin-bottom:.25rem}
+.flash-page .mb-3{margin-bottom:1rem}
+.flash-page .mb-4{margin-bottom:1.5rem}
+.flash-page .mb-5{margin-bottom:3rem}
+.flash-page .p-4{padding:1.5rem}
+.flash-page .py-4{padding-top:1.5rem;padding-bottom:1.5rem}
+.flash-page .fs-5{font-size:1.2rem;line-height:1.6}
+.flash-page .fw-bold{font-weight:750}
+.flash-page .small{font-size:.875rem}
+.flash-page .text-secondary{color:#64748b}
+.flash-page .text-danger{color:#be123c}
+.flash-page .text-success{color:#15803d}
+.flash-page .text-center{text-align:center}
+.flash-page .text-bg-light{background:#f8fafc;color:#475569}
+.flash-page .badge{display:inline-flex;align-items:center;font-size:.8rem;font-weight:700}
+.flash-page .rounded-pill{border-radius:999px}
+.flash-page .rounded-3{border-radius:14px}
+.flash-page .rounded-4{border-radius:20px}
+.flash-page .border{border:1px solid var(--fp-line)}
+.flash-page .px-3{padding-left:1rem;padding-right:1rem}
+.flash-page .py-2{padding-top:.5rem;padding-bottom:.5rem}
+.flash-page .bg-light{background:#f8fafc}
+.flash-page .display-5{font-size:2.8rem;line-height:1.1}
+.flash-page .h2{font-size:1.8rem;line-height:1.25}
+.flash-page .h3{font-size:1.5rem;line-height:1.3}
+.flash-page .h4{font-size:1.25rem;line-height:1.35}
+.flash-page .btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;border:0;cursor:pointer}
+.flash-page .btn-dark{background:#171b2e;color:#fff}
+.flash-page .w-100{width:100%}
+.flash-page .fp-hero .d-flex{row-gap:.75rem}
+.flash-page .fp-card .p-4{padding:1.5rem}
+.flash-page .fp-time{min-width:58px}
+.flash-page .fp-price-line{display:flex;align-items:baseline;flex-wrap:wrap;gap:.5rem}
+@media(max-width:991px){.flash-page .row{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:640px){
+  .flash-page{width:min(calc(100% - 1.25rem),1200px);padding-top:1rem}
+  .flash-page .row{grid-template-columns:1fr;gap:1rem}
+  .flash-page .fp-hero{margin-bottom:2rem;padding:1.5rem}
+  .flash-page .fp-title{font-size:clamp(2rem,10vw,3rem)}
+  .flash-page .p-4{padding:1.1rem}
+  .flash-page .fs-5{font-size:1rem}
+}
 @media(prefers-reduced-motion:reduce){.flash-page .fp-card{transition:none}.flash-page .fp-card:hover{transform:none}}
 </style>
 <div class="container py-4 py-lg-5 flash-page">
