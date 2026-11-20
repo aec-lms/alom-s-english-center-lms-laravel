@@ -306,14 +306,28 @@ class LessonContentProtectionController extends Controller
             if (Schema::hasColumn('students', 'status')) {
                 abort_unless($profile->status === 'active', 403, 'This student profile is inactive.');
             }
-            if (Schema::hasColumn('students', 'branch_id') && $profile->branch_id !== null) {
-                return (int) $profile->branch_id;
-            }
+            $profileBranchId = Schema::hasColumn('students', 'branch_id') && $profile->branch_id !== null
+                ? (int) $profile->branch_id
+                : null;
+        } else {
+            $profileBranchId = null;
         }
 
-        return Schema::hasColumn('users', 'branch_id') && $account->branch_id !== null
+        $accountBranchId = Schema::hasColumn('users', 'branch_id') && $account->branch_id !== null
             ? (int) $account->branch_id
             : null;
+
+        // A conflicting account/profile assignment is ambiguous. Never choose one
+        // identity opportunistically: branch-scoped course access must fail closed.
+        if ($profileBranchId !== null && $accountBranchId !== null) {
+            abort_unless(
+                $profileBranchId === $accountBranchId,
+                403,
+                'Your account and student profile branch assignments do not match.'
+            );
+        }
+
+        return $profileBranchId ?? $accountBranchId;
     }
 
     private function privateRoot(): string

@@ -122,6 +122,131 @@ class LessonContentProtectionTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_deactivated_account_cannot_use_previously_issued_stream_or_download_urls(): void
+    {
+        [$student, $lessonId] = $this->createProtectedLesson('active');
+        DB::table('course_lessons')->where('id', $lessonId)->update(['is_downloadable' => true]);
+
+        $access = $this->actingAs($student)
+            ->getJson(route('plugins.lesson-media.access', $lessonId))
+            ->assertOk();
+        $streamUrl = $access->json('url');
+        $downloadUrl = $access->json('download_url');
+        $this->assertNotEmpty($downloadUrl);
+
+        DB::table('users')->where('id', $student->id)->update(['is_active' => false]);
+
+        $this->get($streamUrl)->assertForbidden();
+        $this->get($downloadUrl)->assertForbidden();
+    }
+
+    public function test_inactive_or_deleted_profile_revokes_previously_issued_media_urls(): void
+    {
+        // Issue the first URLs before enabling Student Management, then create an
+        // inactive profile. The old signed URLs must be re-authorized at request time.
+        [$inactiveStudent, $inactiveLessonId] = $this->createProtectedLesson('active');
+        DB::table('course_lessons')->where('id', $inactiveLessonId)->update(['is_downloadable' => true]);
+        $inactiveAccess = $this->actingAs($inactiveStudent)
+            ->getJson(route('plugins.lesson-media.access', $inactiveLessonId))
+            ->assertOk();
+        $inactiveStreamUrl = $inactiveAccess->json('url');
+        $inactiveDownloadUrl = $inactiveAccess->json('download_url');
+
+        $this->activatePlugins(['student-management']);
+        DB::table('students')->insert([
+            'user_id' => $inactiveStudent->id,
+            'branch_id' => null,
+            'student_code' => 'STU-INACTIVE-URL-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'admission_date' => now()->toDateString(),
+            'status' => 'inactive',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->get($inactiveStreamUrl)->assertForbidden();
+        $this->get($inactiveDownloadUrl)->assertForbidden();
+
+        [$deletedStudent, $deletedLessonId] = $this->createProtectedLesson('active');
+        DB::table('students')->insert([
+            'user_id' => $deletedStudent->id,
+            'branch_id' => null,
+            'student_code' => 'STU-DELETED-URL-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('course_lessons')->where('id', $deletedLessonId)->update(['is_downloadable' => true]);
+        $deletedAccess = $this->actingAs($deletedStudent)
+            ->getJson(route('plugins.lesson-media.access', $deletedLessonId))
+            ->assertOk();
+        $deletedStreamUrl = $deletedAccess->json('url');
+        $deletedDownloadUrl = $deletedAccess->json('download_url');
+
+        DB::table('students')->where('user_id', $deletedStudent->id)->update(['deleted_at' => now()]);
+
+        $this->get($deletedStreamUrl)->assertForbidden();
+        $this->get($deletedDownloadUrl)->assertForbidden();
+    }
+
+    public function test_cancelled_enrollment_revokes_previously_issued_stream_and_download_urls(): void
+    {
+        [$student, $lessonId] = $this->createProtectedLesson('active');
+        DB::table('course_lessons')->where('id', $lessonId)->update(['is_downloadable' => true]);
+
+        $access = $this->actingAs($student)
+            ->getJson(route('plugins.lesson-media.access', $lessonId))
+            ->assertOk();
+        $streamUrl = $access->json('url');
+        $downloadUrl = $access->json('download_url');
+        $this->assertNotEmpty($downloadUrl);
+
+        $courseId = (int) DB::table('course_lessons')->where('id', $lessonId)->value('course_id');
+        DB::table('enrollments')
+            ->where('user_id', $student->id)
+            ->where('course_id', $courseId)
+            ->update(['status' => 'cancelled']);
+
+        $this->get($streamUrl)->assertForbidden();
+        $this->get($downloadUrl)->assertForbidden();
+    }
+
+    public function test_revoked_student_role_cannot_use_previously_issued_stream_or_download_urls(): void
+    {
+        [$student, $lessonId] = $this->createProtectedLesson('active');
+        DB::table('course_lessons')->where('id', $lessonId)->update(['is_downloadable' => true]);
+
+        $access = $this->actingAs($student)
+            ->getJson(route('plugins.lesson-media.access', $lessonId))
+            ->assertOk();
+        $streamUrl = $access->json('url');
+        $downloadUrl = $access->json('download_url');
+        $this->assertNotEmpty($downloadUrl);
+
+        $student->roles()->detach();
+
+        $this->get($streamUrl)->assertForbidden();
+        $this->get($downloadUrl)->assertForbidden();
+    }
+
+    public function test_download_policy_revocation_invalidates_issued_download_but_keeps_stream_access(): void
+    {
+        [$student, $lessonId] = $this->createProtectedLesson('active');
+        DB::table('course_lessons')->where('id', $lessonId)->update(['is_downloadable' => true]);
+
+        $access = $this->actingAs($student)
+            ->getJson(route('plugins.lesson-media.access', $lessonId))
+            ->assertOk();
+        $streamUrl = $access->json('url');
+        $downloadUrl = $access->json('download_url');
+        $this->assertNotEmpty($downloadUrl);
+
+        DB::table('course_lessons')->where('id', $lessonId)->update(['is_downloadable' => false]);
+
+        $this->get($downloadUrl)->assertForbidden();
+        $this->get($streamUrl)->assertOk()->assertHeader('Content-Type', 'video/mp4');
+    }
+
     public function test_unpublished_course_media_is_denied_even_when_enrollment_is_active(): void
     {
         [$student, $lessonId] = $this->createProtectedLesson('active');
