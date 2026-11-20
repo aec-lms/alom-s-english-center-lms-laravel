@@ -158,7 +158,22 @@ class FinanceAndPaymentGatewayTest extends TestCase
 
         $sslSession = $this->actingAs($studentUser)->postJson('/payments/sslcommerz/initiate', [
             'invoice_id' => $sslInvoice->id,
+            'idempotency_key' => 'idem-ssl-001',
         ])->assertOk()->json();
+        $sslRequestCount = Http::recorded()->filter(
+            fn (array $record): bool => str_ends_with((string) parse_url($record[0]->url(), PHP_URL_PATH), '/gwprocess/v4/api.php')
+                && ($record[0]->data()['tran_id'] ?? '') === $sslSession['transaction_ref']
+        )->count();
+        $sslReplay = $this->actingAs($studentUser)->postJson('/payments/sslcommerz/initiate', [
+            'invoice_id' => $sslInvoice->id,
+            'idempotency_key' => 'idem-ssl-001',
+        ])->assertOk()->json();
+        $this->assertSame($sslSession['transaction_ref'], $sslReplay['transaction_ref']);
+        $this->assertSame($sslSession['redirect_url'], $sslReplay['redirect_url']);
+        $this->assertSame($sslRequestCount, Http::recorded()->filter(
+            fn (array $record): bool => str_ends_with((string) parse_url($record[0]->url(), PHP_URL_PATH), '/gwprocess/v4/api.php')
+                && ($record[0]->data()['tran_id'] ?? '') === $sslSession['transaction_ref']
+        )->count());
 
         $sslTransaction = PaymentTransaction::query()
             ->where('transaction_ref', $sslSession['transaction_ref'])
@@ -389,6 +404,9 @@ class FinanceAndPaymentGatewayTest extends TestCase
             'payment_token' => 'pm_card_visa_token',
             'idempotency_key' => 'idem-stripe-1',
         ])->assertOk()->json();
+        $stripeIntentRequestCount = Http::recorded()->filter(
+            fn (array $record): bool => str_contains($record[0]->url(), '/v1/payment_intents')
+        )->count();
 
         $stripeRes2 = $this->actingAs($admin)->postJson('/payments/stripe/checkout', [
             'invoice_id' => $stripeInvoice->id,
@@ -396,6 +414,9 @@ class FinanceAndPaymentGatewayTest extends TestCase
             'idempotency_key' => 'idem-stripe-1',
         ])->assertOk()->json();
         $this->assertSame($stripeRes1['transaction_ref'], $stripeRes2['transaction_ref']);
+        $this->assertSame($stripeIntentRequestCount, Http::recorded()->filter(
+            fn (array $record): bool => str_contains($record[0]->url(), '/v1/payment_intents')
+        )->count());
 
         $stripePayload = json_encode([
             'id' => 'evt_test_payment_intent_succeeded',
@@ -452,6 +473,18 @@ class FinanceAndPaymentGatewayTest extends TestCase
             'invoice_id' => $paypalInvoice->id,
             'idempotency_key' => 'idem-paypal-1',
         ])->assertOk()->json();
+        $paypalOrderRequestCount = Http::recorded()->filter(
+            fn (array $record): bool => str_contains($record[0]->url(), '/v2/checkout/orders')
+        )->count();
+        $paypalReplay = $this->actingAs($admin)->postJson('/payments/paypal/create-order', [
+            'invoice_id' => $paypalInvoice->id,
+            'idempotency_key' => 'idem-paypal-1',
+        ])->assertOk()->json();
+        $this->assertSame($paypalRes['transaction_ref'], $paypalReplay['transaction_ref']);
+        $this->assertSame($paypalRes['approval_url'], $paypalReplay['approval_url']);
+        $this->assertSame($paypalOrderRequestCount, Http::recorded()->filter(
+            fn (array $record): bool => str_contains($record[0]->url(), '/v2/checkout/orders')
+        )->count());
 
         $paypalPayload = json_encode([
             'id' => 'WH-TEST-CAPTURE-001',
