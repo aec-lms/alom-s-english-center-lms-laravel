@@ -126,15 +126,53 @@ class PaymentController extends Controller
                     'approved_by' => $actor?->id,
                 ]);
 
+                $totalRefunded = round($alreadyRefunded + $refundAmount, 2);
+                if ($totalRefunded >= (float) $lockedTx->amount) {
+                    $lockedTx->update(['status' => 'refunded']);
+                }
+
+                // Match payment settlement's parent-row order: transaction,
+                // invoice, commerce order, item, exam, user/profile, entitlement.
+                // This prevents a partial refund and a separate invoice payment
+                // from holding invoice/order rows in opposite order.
+                $invoice = null;
+                $newPaid = null;
+                if ($this->invoiceIntegrationEnabled() && $lockedTx->invoice_id) {
+                    $invoice = FeeInvoice::query()
+                        ->where('id', $lockedTx->invoice_id)
+                        ->lockForUpdate()
+                        ->first();
+
+                    if ($invoice) {
+                        $newPaid = max(0.0, round((float) $invoice->paid_amount - $refundAmount, 2));
+                        $invoice->update([
+                            'paid_amount' => $newPaid,
+                            'status' => $newPaid <= 0 ? 'unpaid' : ($newPaid >= (float) $invoice->net_amount ? 'paid' : 'partial'),
+                        ]);
+
+                        if ($newPaid + 0.01 < (float) $invoice->net_amount
+                            && Schema::hasTable('enrollments')
+                            && Schema::hasColumn('enrollments', 'invoice_id')) {
+                            DB::table('enrollments')
+                                ->where('invoice_id', $invoice->id)
+                                ->where('status', 'active')
+                                ->update(['status' => 'pending', 'updated_at' => now()]);
+                        }
+                    }
+                }
+
                 // Financial reversals remain active even if the optional referral
                 // plugin has since been disabled; only its installed ledger tables matter.
+                // Invoice is locked before the order, matching settlement's lock order.
                 if ($lockedTx->invoice_id
                     && Schema::hasTable('commerce_orders')
                     && Schema::hasTable('referral_commissions')
                     && Schema::hasTable('referral_commission_reversals')) {
                     $order = DB::table('commerce_orders')
                         ->where('invoice_id', $lockedTx->invoice_id)
-                        ->lockForUpdate()->first();
+                        ->orderBy('id')
+                        ->lockForUpdate()
+                        ->first();
                     if ($order) {
                         $buyer = \App\Models\User::query()->find((int) $order->user_id);
                         if ($buyer) {
@@ -151,29 +189,10 @@ class PaymentController extends Controller
                     }
                 }
 
-                $totalRefunded = round($alreadyRefunded + $refundAmount, 2);
-                if ($totalRefunded >= (float) $lockedTx->amount) {
-                    $lockedTx->update(['status' => 'refunded']);
-                }
-
-                if ($this->invoiceIntegrationEnabled() && ($invoice = FeeInvoice::query()->where('id', $lockedTx->invoice_id)->lockForUpdate()->first())) {
-                    $newPaid = max(0.0, round((float) $invoice->paid_amount - $refundAmount, 2));
-                    $invoice->update([
-                        'paid_amount' => $newPaid,
-                        'status' => $newPaid <= 0 ? 'unpaid' : ($newPaid >= (float) $invoice->net_amount ? 'paid' : 'partial'),
-                    ]);
-
-                    if ($newPaid + 0.01 < (float) $invoice->net_amount
-                        && Schema::hasTable('enrollments')
-                        && Schema::hasColumn('enrollments', 'invoice_id')) {
-                        DB::table('enrollments')
-                            ->where('invoice_id', $invoice->id)
-                            ->where('status', 'active')
-                            ->update(['status' => 'pending', 'updated_at' => now()]);
-                    }
-
+                if ($invoice && $newPaid !== null) {
                     $this->suspendCommerceAccessAfterRefund($invoice, $newPaid);
                 }
+
             });
         } catch (\Throwable $e) {
             return back()->withErrors(['refund' => $e->getMessage()]);
