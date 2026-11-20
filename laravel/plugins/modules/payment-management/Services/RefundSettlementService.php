@@ -196,12 +196,24 @@ class RefundSettlementService
             User::query()->whereKey((int) $buyerIds->first())->lockForUpdate()->firstOrFail();
         }
 
-        return DB::table('commerce_orders')
+        $orders = DB::table('commerce_orders')
             ->where('invoice_id', $invoiceId)
             ->orderBy('id')
             ->lockForUpdate()
-            ->get()
-            ->all();
+            ->get();
+
+        $lockedBuyerIds = $orders->pluck('user_id')
+            ->filter(fn ($id) => $id !== null)
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->sort()
+            ->values();
+        $expectedBuyerIds = $buyerIds->map(fn ($id) => (int) $id)->unique()->sort()->values();
+        if ($lockedBuyerIds->all() !== $expectedBuyerIds->all()) {
+            throw new RuntimeException('Commerce order buyer changed during refund locking; retry the operation.');
+        }
+
+        return $orders->all();
     }
 
     public function assertActorBranchScope(?int $actorId, PaymentTransaction $transaction): void
