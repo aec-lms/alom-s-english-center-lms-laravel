@@ -33,20 +33,8 @@ return new class extends Migration {
 
     public function down(): void
     {
-        if (!Schema::hasTable('courses') || !Schema::hasColumn('courses', 'deleted_at')) {
-            return;
-        }
-
-        Schema::table('courses', function (Blueprint $table): void {
-            $table->dropSoftDeletes();
-        });
-
-        foreach (['course_categories', 'live_classes'] as $tableName) {
-            if (Schema::hasTable($tableName) && Schema::hasColumn($tableName, 'deleted_at')) {
-                Schema::table($tableName, function (Blueprint $table): void {
-                    $table->dropSoftDeletes();
-                });
-            }
-        }
+        // This migration conditionally adds soft-delete fields but does not record
+        // ownership of pre-existing host columns. Retain the fields on rollback
+        // rather than risk deleting host schema or Recycle Bin history.
     }
 };
