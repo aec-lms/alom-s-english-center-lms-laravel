@@ -183,7 +183,7 @@ class ReferralIncomeController extends Controller
     {
         $data = $request->validate([
             'status' => ['required', 'in:recovered,waived'],
-            'admin_note' => ['required_if:status,waived', 'nullable', 'string', 'max:1000'],
+            'admin_note' => ['required', 'string', 'max:1000'],
         ]);
 
         DB::transaction(function () use ($request, $reversal, $data): void {
@@ -216,7 +216,7 @@ class ReferralIncomeController extends Controller
 
     public function reviewPayout(Request $request, int $payout): RedirectResponse
     {
-        $data = $request->validate(['status' => ['required', 'in:approved,rejected,paid'], 'admin_note' => ['nullable', 'string', 'max:1000']]);
+        $data = $request->validate(['status' => ['required', 'in:approved,rejected,paid'], 'admin_note' => ['required_if:status,rejected,paid', 'nullable', 'string', 'max:1000']]);
         DB::transaction(function () use ($request, $payout, $data): void {
             $this->assertAuditAvailable();
             $record = DB::table('referral_payout_requests')->where('id', $payout)->lockForUpdate()->first();
