@@ -148,22 +148,27 @@ class InvoicePaymentSessionReservationTest extends TestCase
     public function test_provider_idempotency_keys_are_scoped_to_the_invoice_and_gateway(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['fees-management', 'payment-management', 'gateway-paypal']);
+        $this->activatePlugins(['fees-management', 'payment-management', 'gateway-paypal', 'gateway-stripe']);
+        app(PluginManager::class)->saveSettings('gateway-stripe', [
+            'secret_key' => 'sk_test_cross_invoice_idempotency_123456',
+        ], ['secret_key']);
         app(PluginManager::class)->saveSettings('gateway-paypal', [
             'client_id' => 'paypal-cross-invoice-client',
             'client_secret' => 'paypal-cross-invoice-secret',
             'sandbox_mode' => '1',
         ], ['client_secret']);
 
-        $providerKeys = [];
+        $paypalProviderKeys = [];
+        $stripeProviderKeys = [];
         $orderNumber = 0;
-        Http::fake(function (ClientRequest $request) use (&$providerKeys, &$orderNumber) {
+        $intentNumber = 0;
+        Http::fake(function (ClientRequest $request) use (&$paypalProviderKeys, &$stripeProviderKeys, &$orderNumber, &$intentNumber) {
             $path = (string) parse_url($request->url(), PHP_URL_PATH);
             if (str_ends_with($path, '/v1/oauth2/token')) {
                 return Http::response(['access_token' => 'paypal-cross-invoice-token', 'token_type' => 'Bearer', 'expires_in' => 300], 200);
             }
             if (str_ends_with($path, '/v2/checkout/orders')) {
-                $providerKeys[] = (string) ($request->header('PayPal-Request-Id')[0] ?? '');
+                $paypalProviderKeys[] = (string) ($request->header('PayPal-Request-Id')[0] ?? '');
                 $orderNumber++;
                 return Http::response([
                     'id' => 'ORDER-CROSS-INVOICE-' . $orderNumber,
@@ -174,8 +179,17 @@ class InvoicePaymentSessionReservationTest extends TestCase
                     ]],
                 ], 201);
             }
+            if (str_ends_with($path, '/v1/payment_intents')) {
+                $stripeProviderKeys[] = (string) ($request->header('Idempotency-Key')[0] ?? '');
+                $intentNumber++;
+                return Http::response([
+                    'id' => 'pi_cross_invoice_' . $intentNumber,
+                    'client_secret' => 'pi_cross_invoice_secret_' . $intentNumber,
+                    'status' => 'requires_action',
+                ], 200);
+            }
 
-            return Http::response(['message' => 'Unexpected PayPal request'], 500);
+            return Http::response(['message' => 'Unexpected provider request'], 500);
         });
 
         $firstInvoice = $this->createInvoice();
@@ -185,11 +199,23 @@ class InvoicePaymentSessionReservationTest extends TestCase
         $second = $service->createOrder($secondInvoice, 'reused-client-key-across-invoices');
 
         $this->assertNotSame($first['paypal_order_id'], $second['paypal_order_id']);
-        $this->assertCount(2, $providerKeys);
-        $this->assertNotSame($providerKeys[0], $providerKeys[1]);
-        $this->assertMatchesRegularExpression('/^[a-f0-9]{32}$/', $providerKeys[0]);
-        $this->assertMatchesRegularExpression('/^[a-f0-9]{32}$/', $providerKeys[1]);
-        $this->assertSame(2, DB::table('payment_transactions')->count());
+        $this->assertCount(2, $paypalProviderKeys);
+        $this->assertNotSame($paypalProviderKeys[0], $paypalProviderKeys[1]);
+        foreach ($paypalProviderKeys as $key) {
+            $this->assertMatchesRegularExpression('/^[a-f0-9]{32}$/', $key);
+        }
+
+        $stripe = app(\\Plugins\\Modules\\GatewayStripe\\Services\\StripeGatewayService::class);
+        $stripeFirst = $stripe->initiateTokenizedCheckout($this->createInvoice(), 'pm_cross_invoice_first', 'reused-client-key-across-invoices');
+        $stripeSecond = $stripe->initiateTokenizedCheckout($this->createInvoice(), 'pm_cross_invoice_second', 'reused-client-key-across-invoices');
+        $this->assertNotSame($stripeFirst['payment_intent_id'], $stripeSecond['payment_intent_id']);
+        $this->assertCount(2, $stripeProviderKeys);
+        $this->assertNotSame($stripeProviderKeys[0], $stripeProviderKeys[1]);
+        foreach ($stripeProviderKeys as $key) {
+            $this->assertMatchesRegularExpression('/^[a-f0-9]{32}$/', $key);
+        }
+
+        $this->assertSame(4, DB::table('payment_transactions')->count());
     }
 
     public function test_ambiguous_provider_outcome_keeps_invoice_reserved_until_explicit_rejection_or_reconciliation(): void
