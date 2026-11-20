@@ -102,10 +102,10 @@ test('student exam journey uses frozen snapshot, autosaves safely, and remains a
   expect(autosavePayload).not.toMatch(/correct_option_index|correct_answer|answer_key/i);
 
   page.once('dialog', (dialog) => dialog.accept());
-  await page.getByRole('button', { name: 'Submit Exam' }).click();
+  await page.getByRole('button', { name: /submit exam/i }).click();
   expect(submitPayload).toContain('attempt_id');
   expect(submitPayload).not.toMatch(/correct_option_index|correct_answer|answer_key/i);
-  await expect(page.getByText('Exam graded server-side: 2/2 marks.')).toBeVisible();
+  await page.waitForURL(/\\/portal/);
 
   await page.goto(`/exams/${fixture.exam_id}/attempts`);
   await expect(page.getByText('2.00 / 2.00')).toBeVisible();
