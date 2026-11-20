@@ -43,7 +43,7 @@ class StudentStandaloneTest extends TestCase
         ]);
     }
 
-    public function test_deleting_student_moves_it_to_recycle_bin_and_admin_can_restore_it(): void
+    public function test_deleting_student_moves_it_to_recycle_bin_and_restore_keeps_account_inactive(): void
     {
         $this->markSystemInstalled();
         $this->activatePlugins(['student-management']);
@@ -70,7 +70,7 @@ class StudentStandaloneTest extends TestCase
 
         $this->assertFalse(Student::query()->findOrFail($student->id)->trashed());
         $this->assertDatabaseHas('students', ['id' => $student->id, 'student_code' => 'SAFE-RET-001']);
-        $this->assertDatabaseHas('users', ['id' => $student->user_id, 'is_active' => true]);
+        $this->assertDatabaseHas('users', ['id' => $student->user_id, 'is_active' => false]);
     }
 
 }

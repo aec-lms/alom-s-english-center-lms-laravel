@@ -38,7 +38,7 @@ class TeacherStandaloneTest extends TestCase
         ]);
     }
 
-    public function test_deleting_teacher_moves_it_to_recycle_bin_and_admin_can_restore_it(): void
+    public function test_deleting_teacher_moves_it_to_recycle_bin_and_restore_keeps_account_inactive(): void
     {
         $this->markSystemInstalled();
         $this->activatePlugins(['teacher-management']);
@@ -66,7 +66,7 @@ class TeacherStandaloneTest extends TestCase
 
         $this->assertFalse(Teacher::query()->findOrFail($teacher->id)->trashed());
         $this->assertDatabaseHas('teachers', ['id' => $teacher->id, 'employee_code' => 'SAFE-TEACH-001']);
-        $this->assertDatabaseHas('users', ['id' => $teacher->user_id, 'is_active' => true]);
+        $this->assertDatabaseHas('users', ['id' => $teacher->user_id, 'is_active' => false]);
     }
 
     public function test_teacher_photo_upload_uses_server_detected_extension(): void

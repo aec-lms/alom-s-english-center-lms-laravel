@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use Plugins\Modules\StudentManagement\Models\Student;
+use Plugins\Modules\TeacherManagement\Models\Teacher;
 use Plugins\Modules\CourseManagement\Models\Course;
 use Plugins\Modules\CourseManagement\Models\CourseCategory;
 use Plugins\Modules\CourseManagement\Models\LiveClass;
@@ -15,7 +16,7 @@ use Tests\TestCase;
 
 class RecycleBinTest extends TestCase
 {
-    public function test_student_delete_preserves_history_and_admin_can_restore_previous_account_state(): void
+    public function test_student_delete_preserves_history_and_restore_keeps_account_inactive(): void
     {
         $this->markSystemInstalled();
         $this->activatePlugins(['student-management']);
@@ -45,8 +46,8 @@ class RecycleBinTest extends TestCase
             ->assertRedirect()
             ->assertSessionHasNoErrors();
 
-        $this->assertDatabaseHas('students', ['id' => $student->id, 'deleted_at' => null]);
-        $this->assertDatabaseHas('users', ['id' => $learner->id, 'is_active' => true]);
+        $this->assertDatabaseHas('students', ['id' => $student->id, 'deleted_at' => null, 'deleted_user_was_active' => true]);
+        $this->assertDatabaseHas('users', ['id' => $learner->id, 'is_active' => false]);
 
         $permanentLearner = $this->createUserWithRole('student');
         $permanentStudent = Student::query()->create([
@@ -65,6 +66,42 @@ class RecycleBinTest extends TestCase
             'action' => 'recycle_bin.permanently_deleted',
             'entity_type' => 'student',
             'entity_id' => (string) $permanentStudent->id,
+        ]);
+    }
+
+
+    public function test_teacher_restore_does_not_reactivate_account_after_later_security_deactivation(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['teacher-management']);
+        $admin = $this->createUserWithRole('admin');
+        $instructor = $this->createUserWithRole('teacher');
+
+        $teacher = Teacher::query()->create([
+            'user_id' => $instructor->id,
+            'employee_code' => 'RECYCLE-TEACHER-001',
+            'specialization' => 'English',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($admin)->delete('/admin/teachers/' . $teacher->id)->assertRedirect();
+        $this->assertDatabaseHas('users', ['id' => $instructor->id, 'is_active' => false]);
+
+        // A separate security action while the profile is trashed must remain
+        // authoritative after profile restoration.
+        $instructor->forceFill(['is_active' => false])->save();
+
+        $this->actingAs($admin)->post('/admin/recycle-bin/teachers/' . $teacher->id . '/restore')
+            ->assertRedirect()
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('status', 'Instructor profile restored. Account access remains disabled; an administrator must explicitly reactivate it after a fresh security check.');
+
+        $this->assertDatabaseHas('teachers', ['id' => $teacher->id, 'deleted_at' => null, 'deleted_user_was_active' => true]);
+        $this->assertDatabaseHas('users', ['id' => $instructor->id, 'is_active' => false]);
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'recycle_bin.teacher_restored',
+            'entity_type' => 'teacher',
+            'entity_id' => (string) $teacher->id,
         ]);
     }
 
