@@ -2,7 +2,7 @@
 
 Branch: \`main\`
 
-The current repository contains **44 plugin manifests** under \`laravel/plugins/modules\`. The data-provider suite \`AllPluginsIndependentAcceptanceTest\` discovers manifests dynamically, so new modules are included without maintaining a hard-coded slug list.
+The current repository contains **60 plugin manifests** under \`laravel/plugins/modules\`. The data-provider suite \`AllPluginsIndependentAcceptanceTest\` discovers manifests dynamically, so new modules are included without maintaining a hard-coded slug list.
 
 This matrix describes automated coverage that exists in the repository. It is a coverage map, not a claim that every third-party integration or production environment has been accepted.
 
