@@ -63,6 +63,10 @@ class SslcommerzGatewayService
         }
 
         if ($reservation['reused']) {
+            if (in_array($tx->status, ['failed', 'refunded', 'settled'], true)) {
+                return ['transaction' => $tx, 'hosted_endpoint' => ''];
+            }
+
             $existingUrl = '';
             try {
                 $existingUrl = (string) decrypt((string) ($tx->metadata['gateway_url_encrypted'] ?? ''));
