@@ -293,6 +293,37 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
         Http::assertSentCount(1);
     }
 
+    public function test_online_refunds_are_disabled_by_default(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'gateway-stripe']);
+
+        app(PluginManager::class)->saveSettings('gateway-stripe', [
+            'secret_key' => 'sk_test_refund_disabled_123456',
+        ], ['secret_key']);
+
+        [$invoice, $transaction] = $this->createSettledPayment('gateway-stripe', 'pi_refund_disabled_001');
+        $admin = $this->createUserWithRole('admin');
+        Http::fake();
+
+        try {
+            app(RefundOrchestrationService::class)->requestOnlineRefund(
+                $transaction,
+                100,
+                'Refunds should remain disabled by default',
+                (int) $admin->id,
+                'stripe-refund-disabled-001',
+            );
+            $this->fail('Online provider refunds must be disabled unless explicitly enabled after sandbox verification.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('disabled', strtolower($exception->getMessage()));
+        }
+
+        $this->assertDatabaseCount('payment_refunds', 0);
+        $this->assertSame(1000.0, (float) $invoice->fresh()->paid_amount);
+        Http::assertNothingSent();
+    }
+
     public function test_offline_refund_keeps_existing_ledger_behavior_and_is_audited_once(): void
     {
         $this->markSystemInstalled();
