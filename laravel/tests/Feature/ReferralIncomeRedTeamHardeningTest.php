@@ -9,6 +9,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
+use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\ReferralIncome\Services\ReferralIncomeService;
 
 final class ReferralIncomeRedTeamHardeningTest extends TestCase
@@ -16,7 +17,7 @@ final class ReferralIncomeRedTeamHardeningTest extends TestCase
     private function setupReferralAdmin(): object
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['referral-income', 'student-management', 'payment-management', 'fees-management']);
+        $this->activatePlugins(['referral-income', 'student-management', 'payment-management', 'fees-management', 'commerce-cart']);
         $admin = $this->createUserWithRole('admin');
 
         $roleId = DB::table('roles')->where('slug', 'admin')->value('id');
@@ -43,7 +44,8 @@ final class ReferralIncomeRedTeamHardeningTest extends TestCase
         $buyer = $this->createUserWithRole('student');
         $service = app(ReferralIncomeService::class);
         $service->applyCode($buyer, $service->createOrGetCode($referrer));
-        $commissionId = $service->recordSettledPurchase($buyer, 'commerce_order', 'REDTEAM-ORDER-001', 1000, 'BDT');
+        $orderId = $this->createPaidCommerceOrder($buyer, 1000, 'BDT');
+        $commissionId = $service->recordSettledPurchase($buyer, 'commerce_order', $orderId, 1000, 'BDT');
 
         $this->actingAs($admin)
             ->from('/admin/referral-income')
@@ -125,7 +127,8 @@ final class ReferralIncomeRedTeamHardeningTest extends TestCase
         $buyer = $this->createUserWithRole('student');
         $service = app(ReferralIncomeService::class);
         $service->applyCode($buyer, $service->createOrGetCode($referrer));
-        $commissionId = $service->recordSettledPurchase($buyer, 'commerce_order', 'REDTEAM-ORDER-002', 1000, 'BDT');
+        $orderId = $this->createPaidCommerceOrder($buyer, 1000, 'BDT');
+        $commissionId = $service->recordSettledPurchase($buyer, 'commerce_order', $orderId, 1000, 'BDT');
 
         $payoutId = DB::table('referral_payout_requests')->insertGetId([
             'user_id' => $referrer->id,
@@ -258,6 +261,41 @@ final class ReferralIncomeRedTeamHardeningTest extends TestCase
         }
 
         $this->assertDatabaseCount('referral_attributions', 0);
+    }
+
+
+    private function createPaidCommerceOrder(object $buyer, float $amount, string $currency): int
+    {
+        $invoice = FeeInvoice::query()->create([
+            'invoice_number' => 'REF-REDTEAM-' . strtoupper(bin2hex(random_bytes(5))),
+            'payer_name' => $buyer->name,
+            'payer_email' => $buyer->email,
+            'payer_phone' => '01700000000',
+            'subtotal_amount' => $amount,
+            'discount_amount' => 0,
+            'net_amount' => $amount,
+            'paid_amount' => $amount,
+            'currency' => strtoupper($currency),
+            'status' => 'paid',
+            'due_date' => now()->toDateString(),
+        ]);
+
+        return (int) DB::table('commerce_orders')->insertGetId([
+            'order_number' => 'REF-REDTEAM-' . strtoupper(bin2hex(random_bytes(4))),
+            'user_id' => $buyer->id,
+            'invoice_id' => $invoice->id,
+            'branch_id' => null,
+            'currency' => strtoupper($currency),
+            'subtotal' => $amount,
+            'discount_total' => 0,
+            'grand_total' => $amount,
+            'status' => 'completed',
+            'payment_status' => 'paid',
+            'billing_snapshot' => json_encode(['name' => $buyer->name, 'email' => $buyer->email]),
+            'paid_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 
 
