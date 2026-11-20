@@ -79,8 +79,10 @@ class PaypalGatewayService
         }
 
         $response = null;
+        $orderRequestStarted = false;
         try {
             $token = $this->accessToken();
+            $orderRequestStarted = true;
             $response = Http::withToken($token)
                 ->acceptJson()
                 ->withHeaders($idempotencyKey ? ['PayPal-Request-Id' => $idempotencyKey] : [])
@@ -128,9 +130,9 @@ class PaypalGatewayService
 
             return ['transaction' => $tx, 'paypal_order_id' => (string) $order['id'], 'approval_url' => (string) $approvalUrl];
         } catch (\Throwable $e) {
-            if ($response === null) {
-                $this->reservations->markUnknown($tx, 'transport_or_timeout');
-            } elseif ($response->serverError()) {
+            if ($response === null && !$orderRequestStarted) {
+                $this->reservations->markRejected($tx, 'oauth_token_request_failed');
+            } elseif ($response === null || $response->serverError()) {
                 $this->reservations->markUnknown($tx, 'provider_http_5xx');
             }
             if ($e instanceof RuntimeException) throw $e;
