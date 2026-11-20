@@ -118,44 +118,130 @@ class ReferralIncomeService
      */
     public function recordSettledPurchase(User $buyer, string $sourceType, string|int $sourceId, float $eligibleAmount, string $currency = 'BDT'): ?int
     {
-        if ($eligibleAmount <= 0 || strlen((string) $sourceId) > 80 || !preg_match('/^[a-z0-9_-]{2,40}$/i', $sourceType)) {
+        $sourceId = (string) $sourceId;
+        if (!in_array($sourceType, ['commerce_order', 'course_cart_order'], true)
+            || !ctype_digit($sourceId)
+            || (int) $sourceId < 1
+            || $eligibleAmount <= 0
+            || strlen($sourceId) > 80) {
             return null;
         }
 
         return DB::transaction(function () use ($buyer, $sourceType, $sourceId, $eligibleAmount, $currency): ?int {
             $attribution = DB::table('referral_attributions')
-                ->where('referred_user_id', $buyer->id)->where('status', 'active')->lockForUpdate()->first();
-            if (!$attribution) return null;
+                ->where('referred_user_id', $buyer->id)
+                ->where('status', 'active')
+                ->lockForUpdate()
+                ->first();
+            if (!$attribution) {
+                return null;
+            }
 
-            $rule = DB::table('referral_income_rules')->where('referrer_type', $attribution->referrer_type)
-                ->where('is_active', true)->lockForUpdate()->first();
-            if (!$rule || (float) $rule->commission_percent <= 0) return null;
+            $purchase = $this->resolveSettledPurchase($buyer, $sourceType, $sourceId);
+            if (!$purchase
+                || abs((float) $purchase['eligible_amount'] - $eligibleAmount) > 0.01
+                || strtoupper((string) $purchase['currency']) !== strtoupper(trim($currency))) {
+                return null;
+            }
 
-            $commission = round($eligibleAmount * ((float) $rule->commission_percent / 100), 2);
-            if ($commission <= 0) return null;
+            $rule = DB::table('referral_income_rules')
+                ->where('referrer_type', $attribution->referrer_type)
+                ->where('is_active', true)
+                ->lockForUpdate()
+                ->first();
+            if (!$rule || (float) $rule->commission_percent <= 0) {
+                return null;
+            }
+
+            $authoritativeAmount = (float) $purchase['eligible_amount'];
+            $authoritativeCurrency = strtoupper((string) $purchase['currency']);
+            $commission = round($authoritativeAmount * ((float) $rule->commission_percent / 100), 2);
+            if ($commission <= 0) {
+                return null;
+            }
 
             $inserted = DB::table('referral_commissions')->insertOrIgnore([
                 'attribution_id' => $attribution->id,
                 'referrer_user_id' => $attribution->referrer_user_id,
                 'referred_user_id' => $buyer->id,
                 'source_type' => $sourceType,
-                'source_id' => (string) $sourceId,
-                'eligible_amount' => round($eligibleAmount, 2),
+                'source_id' => $sourceId,
+                'eligible_amount' => round($authoritativeAmount, 2),
                 'commission_percent' => $rule->commission_percent,
                 'commission_amount' => $commission,
-                'currency' => strtoupper($currency),
+                'currency' => $authoritativeCurrency,
                 'status' => 'pending',
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
 
             if (!$inserted) {
-                return DB::table('referral_commissions')->where('referred_user_id', $buyer->id)
-                    ->where('source_type', $sourceType)->where('source_id', (string) $sourceId)->value('id');
+                return DB::table('referral_commissions')
+                    ->where('referred_user_id', $buyer->id)
+                    ->where('source_type', $sourceType)
+                    ->where('source_id', $sourceId)
+                    ->value('id');
             }
 
             return (int) DB::getPdo()->lastInsertId();
         });
+    }
+
+    /**
+     * Only persisted, fully paid order sources may create commissions. Caller
+     * supplied amounts/currency are assertions, never the source of truth.
+     *
+     * @return array{eligible_amount: float, currency: string}|null
+     */
+    private function resolveSettledPurchase(User $buyer, string $sourceType, string $sourceId): ?array
+    {
+        $table = $sourceType === 'commerce_order' ? 'commerce_orders' : 'course_cart_orders';
+        if (!Schema::hasTable($table)
+            || !Schema::hasColumn($table, 'user_id')
+            || !Schema::hasColumn($table, 'invoice_id')
+            || !Schema::hasColumn($table, 'currency')
+            || !Schema::hasColumn($table, 'status')) {
+            return null;
+        }
+
+        $order = DB::table($table)
+            ->where('id', (int) $sourceId)
+            ->where('user_id', $buyer->id)
+            ->lockForUpdate()
+            ->first();
+        if (!$order || !in_array((string) $order->status, ['paid', 'settled', 'completed'], true)) {
+            return null;
+        }
+
+        if (Schema::hasColumn($table, 'payment_status')
+            && !in_array((string) $order->payment_status, ['paid', 'settled'], true)) {
+            return null;
+        }
+
+        $orderAmount = null;
+        foreach (['net_amount', 'grand_total'] as $amountColumn) {
+            if (Schema::hasColumn($table, $amountColumn)) {
+                $orderAmount = (float) $order->{$amountColumn};
+                break;
+            }
+        }
+        if ($orderAmount === null || $orderAmount <= 0 || !$order->invoice_id || !Schema::hasTable('fee_invoices')) {
+            return null;
+        }
+
+        $invoice = DB::table('fee_invoices')->where('id', $order->invoice_id)->lockForUpdate()->first();
+        if (!$invoice
+            || $invoice->status !== 'paid'
+            || (float) $invoice->paid_amount + 0.01 < (float) $invoice->net_amount
+            || abs($orderAmount - (float) $invoice->net_amount) > 0.01
+            || strtoupper((string) $invoice->currency) !== strtoupper((string) $order->currency)) {
+            return null;
+        }
+
+        return [
+            'eligible_amount' => round((float) $invoice->net_amount, 2),
+            'currency' => strtoupper((string) $invoice->currency),
+        ];
     }
 
     /**
