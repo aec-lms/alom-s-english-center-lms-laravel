@@ -136,6 +136,7 @@
                             <input name="facebook_url" value="{{ $teacher->facebook_url }}" placeholder="Facebook URL" class="rounded-lg border border-slate-300 px-3 py-2 sm:col-span-2">
                             <div class="flex items-center justify-between gap-2">
                                 <label class="inline-flex items-center gap-2 font-semibold">
+                                    <input type="hidden" name="is_active" value="0">
                                     <input type="checkbox" name="is_active" value="1" @checked($teacher->is_active)> Active
                                 </label>
                                 <button type="submit" class="px-4 py-1.5 rounded-lg bg-slate-900 text-white font-bold">Update Instructor</button>
