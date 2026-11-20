@@ -212,7 +212,7 @@ class FlashSaleController extends Controller
             ->select('courses.id', 'courses.title', 'courses.slug')
             ->get();
 
-        $pricing = app(\\Plugins\\Modules\\FlashSale\\Services\\FlashSalePricingService::class);
+        $pricing = app(\Plugins\Modules\FlashSale\Services\FlashSalePricingService::class);
         $sales = $eligibleCourses->map(function (object $course) use ($pricing, $viewerBranchId): ?object {
             $quote = $pricing->quote((int) $course->id, $viewerBranchId);
             if (!$quote['sale']) {
