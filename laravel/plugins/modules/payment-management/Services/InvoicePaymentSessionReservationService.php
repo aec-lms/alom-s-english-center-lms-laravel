@@ -113,16 +113,24 @@ class InvoicePaymentSessionReservationService
     ): PaymentTransaction {
         return DB::transaction(function () use ($transaction, $providerMetadata, $status, $externalReference): PaymentTransaction {
             $locked = PaymentTransaction::query()->whereKey($transaction->id)->lockForUpdate()->firstOrFail();
+
+            // A fast provider callback may settle the transaction before the
+            // checkout HTTP response is persisted. Never let this late response
+            // move a terminal ledger state backwards to initiated/failed.
+            if (in_array($locked->status, ['settled', 'refunded', 'failed'], true)) {
+                return $locked;
+            }
+
             $payload = [
                 'metadata' => array_merge($locked->metadata ?? [], $providerMetadata, [
                     'session_outcome' => 'created',
                     'session_created_at' => now()->toIso8601String(),
                 ]),
             ];
-            if ($status !== null) {
+            if ($status !== null && $locked->status === 'initiated') {
                 $payload['status'] = $status;
             }
-            if ($externalReference !== null) {
+            if ($externalReference !== null && ($locked->external_reference === null || $locked->external_reference === '')) {
                 $payload['external_reference'] = $externalReference;
             }
             $locked->update($payload);
@@ -140,6 +148,10 @@ class InvoicePaymentSessionReservationService
     {
         return DB::transaction(function () use ($transaction, $reasonCode): PaymentTransaction {
             $locked = PaymentTransaction::query()->whereKey($transaction->id)->lockForUpdate()->firstOrFail();
+            if (in_array($locked->status, ['settled', 'refunded', 'failed'], true)) {
+                return $locked;
+            }
+
             $locked->update([
                 'metadata' => array_merge($locked->metadata ?? [], [
                     'session_outcome' => 'unknown',
@@ -160,6 +172,16 @@ class InvoicePaymentSessionReservationService
     {
         return DB::transaction(function () use ($transaction, $reasonCode): PaymentTransaction {
             $locked = PaymentTransaction::query()->whereKey($transaction->id)->lockForUpdate()->firstOrFail();
+
+            // Definitive rejection may release only a still-active reservation.
+            // A callback/refund that won the race is authoritative and immutable.
+            if (in_array($locked->status, ['settled', 'refunded'], true)) {
+                return $locked;
+            }
+            if ($locked->status !== 'initiated') {
+                return $locked;
+            }
+
             $locked->update([
                 'status' => 'failed',
                 'metadata' => array_merge($locked->metadata ?? [], [
