@@ -166,6 +166,17 @@ final class CourseAssessmentGradingBranchIsolationTest extends TestCase
             'manual_score' => 0,
             'graded_by' => null,
         ]);
+
+        $mismatchedTeacher = $this->createTeacher($branchA, $branchB);
+        $mismatchedAttempt = $this->createPendingAttempt($courseB, $branchB, 'Mismatched Teacher Profile Assessment');
+        $this->assignTeacher((int) $mismatchedTeacher->id, $courseB);
+        $this->actingAs($mismatchedTeacher)
+            ->get(route('plugins.course-assessments.grading.index'))
+            ->assertForbidden();
+        $mismatchedQuestion = (int) DB::table('course_assessment_attempt_questions')->where('attempt_id', $mismatchedAttempt)->value('id');
+        $this->actingAs($mismatchedTeacher)->patch(route('plugins.course-assessments.grading.update', $mismatchedAttempt), [
+            'scores' => [$mismatchedQuestion => 3],
+        ])->assertForbidden();
     }
 
     public function test_teacher_can_grade_same_branch_course_and_global_teacher_is_limited_to_global_course(): void
@@ -194,9 +205,17 @@ final class CourseAssessmentGradingBranchIsolationTest extends TestCase
         $globalAttempt = $this->createPendingAttempt($globalCourse, null, 'Global Assessment');
         $this->assignTeacher((int) $globalTeacher->id, $globalCourse);
 
+        $branchOnlyAttempt = $this->createPendingAttempt($courseA, $branchA, 'Branch-only Assessment');
+        $this->assignTeacher((int) $globalTeacher->id, $courseA);
         $this->actingAs($globalTeacher)
             ->get(route('plugins.course-assessments.grading.index'))
             ->assertOk()
-            ->assertSee('Global Assessment');
+            ->assertSee('Global Assessment')
+            ->assertDontSee('Branch-only Assessment');
+
+        $branchOnlyQuestion = (int) DB::table('course_assessment_attempt_questions')->where('attempt_id', $branchOnlyAttempt)->value('id');
+        $this->actingAs($globalTeacher)->patch(route('plugins.course-assessments.grading.update', $branchOnlyAttempt), [
+            'scores' => [$branchOnlyQuestion => 2],
+        ])->assertForbidden();
     }
 }
