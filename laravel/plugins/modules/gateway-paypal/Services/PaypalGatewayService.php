@@ -212,7 +212,7 @@ class PaypalGatewayService
         $webhookId = (string) $this->plugins->getSetting('gateway-paypal', 'webhook_id', '');
         if ($webhookId === '') throw new RuntimeException('PayPal Webhook ID is not configured.');
 
-        $verification = Http::withToken($this->accessToken())->acceptJson()->timeout(20)
+        $verification = Http::withToken($this->accessToken($this->apiBase()))->acceptJson()->timeout(20)
             ->post($this->apiBase() . '/v1/notifications/verify-webhook-signature', [
                 'auth_algo' => $headers['auth_algo'] ?? '',
                 'cert_url' => $headers['cert_url'] ?? '',
@@ -257,7 +257,7 @@ class PaypalGatewayService
 
     public function testCredentials(): array
     {
-        $token = $this->accessToken();
+        $token = $this->accessToken($this->apiBase());
         $response = Http::withToken($token)->acceptJson()->timeout(15)->get($this->apiBase() . '/v1/identity/oauth2/userinfo?schema=paypalv1.1');
         if (!$response->successful()) {
             // OAuth itself is the authoritative credential check; some accounts do not expose userinfo.
