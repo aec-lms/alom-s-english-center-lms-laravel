@@ -337,7 +337,7 @@ final class ReferralPayoutConcurrencyTest extends TestCase
         try {
             $service->reverseSettledPurchase($buyer, 'course_cart_order', (string) $orderId, $overRefundId, 1001, 'BDT');
             $this->fail('A course-cart refund must not exceed the remaining eligible purchase amount.');
-        } catch (\\RuntimeException $exception) {
+        } catch (\RuntimeException $exception) {
             $this->assertStringContainsString('exceeds the remaining eligible purchase amount', $exception->getMessage());
         }
 
@@ -364,7 +364,7 @@ final class ReferralPayoutConcurrencyTest extends TestCase
         try {
             $service->reverseSettledPurchase($otherBuyer, 'course_cart_order', (string) $orderId, $wrongBuyerRefundId, 100, 'BDT');
             $this->fail('A course-cart refund cannot be applied by a different buyer.');
-        } catch (\\RuntimeException $exception) {
+        } catch (\RuntimeException $exception) {
             $this->assertStringContainsString('does not belong to this buyer', $exception->getMessage());
         }
 
@@ -404,7 +404,7 @@ final class ReferralPayoutConcurrencyTest extends TestCase
         try {
             $service->reverseSettledPurchase($buyer, 'course_cart_order', (string) $orderId, $wrongInvoiceRefundId, 100, 'BDT');
             $this->fail('A course-cart refund from another invoice must not reverse this commission.');
-        } catch (\\RuntimeException $exception) {
+        } catch (\RuntimeException $exception) {
             $this->assertStringContainsString('does not belong to the source order invoice', $exception->getMessage());
         }
 
@@ -431,7 +431,7 @@ final class ReferralPayoutConcurrencyTest extends TestCase
         try {
             $service->reverseSettledPurchase($buyer, 'course_cart_order', (string) $orderId, $currencyRefundId, 100, 'USD');
             $this->fail('A course-cart refund currency must match the authoritative order currency.');
-        } catch (\\RuntimeException $exception) {
+        } catch (\RuntimeException $exception) {
             $this->assertStringContainsString('currency does not match the source order', $exception->getMessage());
         }
 
