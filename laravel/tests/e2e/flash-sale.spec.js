@@ -41,7 +41,7 @@ test('administrator can inspect Flash Sale Studio and its integration boundary',
 
   await expect(page.getByRole('heading', { name: 'Flash Sale Studio' })).toBeVisible();
   await expect(page.getByText('E2E Winter Offer')).toBeVisible();
-  await expect(page.getByText('E2E Premium English Course')).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'E2E Premium English Course' })).toBeVisible();
   const pricingCard = page.locator('.fs-stat').filter({ hasText: 'Pricing engine' });
   await expect(pricingCard).toContainText('Server-side quote');
   await expect(pricingCard).toContainText('Enrollment and cart integration tracked separately');
