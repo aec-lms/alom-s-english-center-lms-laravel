@@ -5,6 +5,12 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
+use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
+use Plugins\Modules\GatewayPaypal\Services\PaypalGatewayService;
+use Plugins\Modules\GatewaySslcommerz\Services\SslcommerzGatewayService;
+use Illuminate\Http\Client\Request as ClientRequest;
+use Illuminate\Support\Facades\Http;
+use App\Core\Plugins\PluginManager;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\PaymentManagement\Services\InvoicePaymentSessionReservationService;
 use RuntimeException;
@@ -122,4 +128,56 @@ class InvoicePaymentSessionReservationTest extends TestCase
             $this->assertLessThan($transactionLock, $invoiceLock, 'Invoice lock must precede active-session lookup.');
         }
     }
+
+    public function test_ambiguous_sslcommerz_response_blocks_a_second_paypal_session(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'gateway-sslcommerz', 'gateway-paypal']);
+
+        $plugins = app(PluginManager::class);
+        $plugins->saveSettings('gateway-sslcommerz', [
+            'store_id' => 'aec_reservation_store',
+            'store_password' => 'ssl_reservation_secret',
+            'sandbox_mode' => '1',
+        ], ['store_password']);
+        $plugins->saveSettings('gateway-paypal', [
+            'client_id' => 'paypal-reservation-client',
+            'client_secret' => 'paypal-reservation-secret',
+            'sandbox_mode' => '1',
+        ], ['client_secret']);
+
+        $invoice = $this->createInvoice();
+        Http::fake(function (ClientRequest $request) {
+            if (str_ends_with((string) parse_url($request->url(), PHP_URL_PATH), '/gwprocess/v4/api.php')) {
+                return Http::response(['message' => 'Provider temporarily unavailable'], 503);
+            }
+
+            return Http::response(['message' => 'Unexpected second provider request'], 500);
+        });
+
+        try {
+            app(SslcommerzGatewayService::class)->initiateHostedCheckout($invoice, 'ssl-ambiguous-001');
+            $this->fail('An unsuccessful ambiguous SSLCOMMERZ response must not be treated as a released reservation.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('unsuccessful HTTP response', $exception->getMessage());
+        }
+
+        $transaction = PaymentTransaction::query()->where('invoice_id', $invoice->id)->firstOrFail();
+        $this->assertSame('gateway-sslcommerz', $transaction->gateway_slug);
+        $this->assertSame('initiated', $transaction->status);
+        $this->assertSame('unknown', $transaction->metadata['session_outcome']);
+        $this->assertTrue((bool) $transaction->metadata['manual_reconciliation_required']);
+
+        try {
+            app(PaypalGatewayService::class)->createOrder($invoice, 'paypal-ambiguous-002');
+            $this->fail('PayPal must not create another chargeable session while SSLCOMMERZ outcome is ambiguous.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('active or ambiguous payment session', $exception->getMessage());
+        }
+
+        Http::assertSentCount(1);
+        $this->assertSame(1, DB::table('payment_transactions')->where('invoice_id', $invoice->id)->count());
+    }
+
+
 }
