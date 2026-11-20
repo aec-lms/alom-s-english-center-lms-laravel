@@ -12,7 +12,7 @@ All integrations remain optional plugin dependencies or runtime-guarded adapters
 - Fail closed if the canonical `teacher` role is missing instead of creating an account without the correct role.
 - Validate portrait URL inputs as HTTPS URLs or local absolute paths; reject javascript/data/protocol-relative inputs.
 - Preserve a teacher's existing branch when an update request omits `branch_id`.
-- Restore the linked login account to its pre-recycle active/inactive state when a teacher profile is restored (where the recycle-state migration is present).
+- Restore the teacher profile without reactivating its linked login account; account access remains disabled until a separate, audited administrator security decision.
 - Add branch-scoped directory search across name, email, employee code and specialization.
 - Add active/inactive filters, specialization filtering, pagination query retention, and branch-scoped total/active/inactive KPI cards.
 - Add regression coverage for password strength, duplicate email protection, unsafe social URLs branch retention, and teacher recycle/restore account-state consistency.
