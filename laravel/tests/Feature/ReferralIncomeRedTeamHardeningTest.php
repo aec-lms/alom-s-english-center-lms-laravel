@@ -347,7 +347,7 @@ final class ReferralIncomeRedTeamHardeningTest extends TestCase
     public function test_course_cart_order_commission_uses_paid_invoice_and_order_snapshot(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['referral-income', 'student-management', 'course-management', 'fees-management']);
+        $this->activatePlugins(['referral-income', 'student-management', 'course-management', 'fees-management', 'universal-payment']);
 
         $referrer = $this->createUserWithRole('student');
         $buyer = $this->createUserWithRole('student');
@@ -391,6 +391,29 @@ final class ReferralIncomeRedTeamHardeningTest extends TestCase
             'paid_at' => now(),
             'expires_at' => null,
             'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $payment = UniversalPaymentTransaction::query()->create([
+            'reference' => 'REF-COURSE-CART-' . strtoupper(bin2hex(random_bytes(4))),
+            'payer_name' => $buyer->name,
+            'payer_contact' => '01700000000',
+            'item_title' => 'Course Cart Order #' . $orderId,
+            'gateway' => 'offline',
+            'currency' => 'BDT',
+            'amount' => 1000,
+            'external_trx_id' => 'REF-COURSE-CART-VERIFIED-' . $orderId,
+            'status' => 'verified',
+            'notes' => json_encode([
+                'purpose' => 'course_cart',
+                'course_cart_order_id' => $orderId,
+            ], JSON_THROW_ON_ERROR),
+            'user_id' => $buyer->id,
+            'fee_invoice_id' => $invoice->id,
+            'verified_at' => now(),
+        ]);
+        DB::table('course_cart_orders')->where('id', $orderId)->update([
+            'payment_transaction_id' => $payment->id,
             'updated_at' => now(),
         ]);
 
