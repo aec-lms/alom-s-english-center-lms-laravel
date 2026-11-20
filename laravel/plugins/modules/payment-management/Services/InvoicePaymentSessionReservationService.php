@@ -46,6 +46,12 @@ class InvoicePaymentSessionReservationService
 
             $remaining = round((float) $lockedInvoice->net_amount - (float) $lockedInvoice->paid_amount, 2);
             $normalizedKey = $idempotencyKey !== null ? trim($idempotencyKey) : '';
+            // Provider idempotency namespaces are account-wide, not invoice-scoped.
+            // Derive a bounded opaque key from the invoice + gateway + client key
+            // so a caller cannot replay one invoice's provider request on another.
+            $providerIdempotencyKey = $normalizedKey !== ''
+                ? substr(hash('sha256', $gatewaySlug . '|' . $lockedInvoice->id . '|' . $normalizedKey), 0, 32)
+                : null;
             $requestFingerprint = $this->requestFingerprint(
                 $gatewaySlug,
                 $remaining,
@@ -81,6 +87,7 @@ class InvoicePaymentSessionReservationService
                     return [
                         'invoice' => $lockedInvoice,
                         'transaction' => $existingForKey,
+                        'provider_idempotency_key' => $existingForKey->metadata['provider_idempotency_key'] ?? $providerIdempotencyKey,
                         'remaining' => round((float) $existingForKey->amount, 2),
                         'reused' => true,
                     ];
@@ -113,6 +120,7 @@ class InvoicePaymentSessionReservationService
                 'status' => 'initiated',
                 'metadata' => array_merge($this->safeReservationMetadata($metadata), [
                     'idempotency_key' => $normalizedKey !== '' ? $normalizedKey : null,
+                    'provider_idempotency_key' => $providerIdempotencyKey,
                     'request_fingerprint' => $normalizedKey !== '' ? $requestFingerprint : null,
                     'session_outcome' => 'reserved',
                 ]),
@@ -121,6 +129,7 @@ class InvoicePaymentSessionReservationService
             return [
                 'invoice' => $lockedInvoice,
                 'transaction' => $transaction,
+                'provider_idempotency_key' => $providerIdempotencyKey,
                 'remaining' => $remaining,
                 'reused' => false,
             ];
