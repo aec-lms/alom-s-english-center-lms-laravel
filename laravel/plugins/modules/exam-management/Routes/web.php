@@ -22,7 +22,9 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:exam-management'])
             ->middleware('permission:exams.manage')
             ->name('destroy');
         // Backward-compatible endpoint; the controller enforces the student role.
-        Route::post('/{exam}/attempt', [ExamController::class, 'submitAttempt'])->name('attempt.admin');
+        Route::post('/{exam}/attempt', [ExamController::class, 'submitAttempt'])
+            ->middleware('throttle:exam-submit')
+            ->name('attempt.admin');
         Route::post('/{exam}/questions', [ExamController::class, 'addQuestion'])
             ->middleware('permission:exams.manage')
             ->name('questions.store');
@@ -31,11 +33,11 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:exam-management'])
 Route::middleware(['web', 'installed', 'auth', 'plugin:exam-management'])
     ->group(function (): void {
         Route::get('/exams/{exam}/take', [ExamController::class, 'take'])
-            ->name('plugins.exams.take')->middleware('throttle:20,1');
+            ->name('plugins.exams.take')->middleware('throttle:exam-take');
         Route::get('/exams/{exam}/attempts', [ExamController::class, 'history'])
-            ->name('plugins.exams.history')->middleware('throttle:30,1');
+            ->name('plugins.exams.history')->middleware('throttle:exam-history');
         Route::post('/exams/{exam}/attempt', [ExamController::class, 'submitAttempt'])
-            ->name('plugins.exams.attempt')->middleware('throttle:5,1');
+            ->name('plugins.exams.attempt')->middleware('throttle:exam-submit');
         Route::post('/exams/{exam}/attempt/autosave', [ExamController::class, 'saveAttemptAnswers'])
-            ->name('plugins.exams.autosave')->middleware('throttle:30,1');
+            ->name('plugins.exams.autosave')->middleware('throttle:exam-autosave');
     });
