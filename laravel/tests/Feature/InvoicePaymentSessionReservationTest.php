@@ -24,6 +24,7 @@ class InvoicePaymentSessionReservationTest extends TestCase
             'invoice_number' => 'RESERVE-' . strtoupper(bin2hex(random_bytes(4))),
             'payer_name' => 'Reservation Test Buyer',
             'payer_email' => 'reservation-buyer@aec.test',
+            'payer_phone' => '+8801712345678',
             'subtotal_amount' => 1200,
             'discount_amount' => 0,
             'net_amount' => 1200,
