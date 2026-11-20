@@ -214,5 +214,8 @@ jobs:
         run: php artisan key:generate
       - name: Verify backup runtime requirements
         run: php artisan lms:backup:requirements
+      - name: Grant PROCESS privilege for MySQL lock-wait diagnostics
+        run: |
+          php -r '$pdo = new PDO("mysql:host=127.0.0.1;port=3306", "root", "root"); $pdo->exec("GRANT PROCESS ON *.* TO `aec_lms`@`%`");'
       - name: Execute Laravel tests on MySQL 8.0
         run: php artisan test
