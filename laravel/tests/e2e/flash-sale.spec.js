@@ -20,6 +20,10 @@ test('public Flash Sale storefront shows the server-calculated offer and fits mo
   await expect(page.getByRole('link', { name: 'Explore course' }))
     .toHaveAttribute('href', /\/courses\/e2e-premium-english-course$/);
 
+  const desktopColumns = await page.locator('.flash-page .row').evaluate((node) =>
+    getComputedStyle(node).gridTemplateColumns.split(' ').length
+  );
+  expect(desktopColumns).toBe(3);
   await page.screenshot({ path: 'test-results/flash-sale-storefront-desktop.png', fullPage: true });
 
   await page.setViewportSize({ width: 375, height: 812 });
@@ -33,6 +37,10 @@ test('public Flash Sale storefront shows the server-calculated offer and fits mo
   }));
   expect(layout.documentWidth).toBeLessThanOrEqual(layout.viewportWidth + 1);
   expect(layout.cardWidth).toBeGreaterThan(0);
+  const mobileColumns = await page.locator('.flash-page .row').evaluate((node) =>
+    getComputedStyle(node).gridTemplateColumns.split(' ').length
+  );
+  expect(mobileColumns).toBe(1);
   await page.screenshot({ path: 'test-results/flash-sale-storefront-mobile.png', fullPage: true });
 });
 
