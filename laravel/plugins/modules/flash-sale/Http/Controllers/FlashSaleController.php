@@ -159,8 +159,7 @@ class FlashSaleController extends Controller
     {
         $this->ensureCourseIntegration();
         $settings = DB::table('flash_sale_settings')->first();
-        abort_unless((bool) ($settings->page_enabled ?? true), 404);
-        $settings ??= (object) ['page_title' => 'Flash Sale', 'page_enabled' => true];
+        abort_unless($settings && (bool) $settings->page_enabled, 404);
 
         $viewerBranchId = null;
         if ($request->user()) {
