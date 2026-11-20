@@ -20,10 +20,8 @@ return new class extends Migration {
 
     public function down(): void
     {
-        if (Schema::hasTable('cms_carousels') && Schema::hasColumn('cms_carousels', 'deleted_at')) {
-            Schema::table('cms_carousels', function (Blueprint $table): void {
-                $table->dropSoftDeletes();
-            });
-        }
+        // This migration conditionally adds soft-delete fields but does not record
+        // ownership of pre-existing host columns. Retain the fields on rollback
+        // rather than risk deleting host schema or Recycle Bin history.
     }
 };
