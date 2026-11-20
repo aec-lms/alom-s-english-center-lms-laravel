@@ -603,8 +603,8 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
         Http::fake(function (ClientRequest $request) use ($transaction) {
             $data = $request->data();
             $metadata = [
-                'transaction_ref' => data_get($data, 'metadata.transaction_ref', (string) $transaction->transaction_ref),
-                'refund_id' => data_get($data, 'metadata.refund_id', (string) PaymentRefund::query()->where('provider_idempotency_key', 'stripe-refund-pending-001')->value('id')),
+                'transaction_ref' => (string) ($data['metadata[transaction_ref]'] ?? data_get($data, 'metadata.transaction_ref', (string) $transaction->transaction_ref)),
+                'refund_id' => (string) ($data['metadata[refund_id]'] ?? data_get($data, 'metadata.refund_id', (string) PaymentRefund::query()->where('provider_idempotency_key', 'stripe-refund-pending-001')->value('id'))),
             ];
 
             return Http::response([
