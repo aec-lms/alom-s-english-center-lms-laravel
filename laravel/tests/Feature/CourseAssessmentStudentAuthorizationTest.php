@@ -206,6 +206,13 @@ require $basePath . '/vendor/autoload.php';
 $app = require $basePath . '/bootstrap/app.php';
 $app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 
+$pluginManager = $app->make(\App\Core\Plugins\PluginManager::class);
+$courseAssessmentManifest = $pluginManager->discoverManifests()['course-assessments'] ?? null;
+if (!$courseAssessmentManifest) {
+    throw new RuntimeException('Course Assessments plugin manifest is unavailable in the MySQL worker.');
+}
+$pluginManager->loadPluginRoutes($courseAssessmentManifest);
+
 $connection = null;
 try {
     $connection = \Illuminate\Support\Facades\DB::connection();
@@ -231,7 +238,9 @@ try {
 
     $kernel = $app->make(\Illuminate\Contracts\Http\Kernel::class);
     $response = $kernel->handle($request);
-    echo "RESULT:" . $response->getStatusCode() . ':' . substr(preg_replace('/\\s+/', ' ', (string) $response->getContent()), 0, 1000) . PHP_EOL;
+    $matchedRoute = $request->route();
+    $routeInfo = $matchedRoute ? ($matchedRoute->uri() . '|' . $matchedRoute->getActionName()) : 'unmatched';
+    echo "RESULT:" . $response->getStatusCode() . ':' . $routeInfo . ':' . substr(preg_replace('/\\s+/', ' ', (string) $response->getContent()), 0, 1000) . PHP_EOL;
     flush();
 
     if ($payload['hold_outer_transaction']) {
