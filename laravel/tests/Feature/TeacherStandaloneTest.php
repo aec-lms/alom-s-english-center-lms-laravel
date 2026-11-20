@@ -71,6 +71,37 @@ class TeacherStandaloneTest extends TestCase
         $this->assertDatabaseHas('users', ['id' => $teacher->user_id, 'is_active' => true]);
     }
 
+    public function test_recycle_restore_keeps_a_previously_inactive_teacher_account_inactive(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['teacher-management']);
+        $admin = $this->createUserWithRole('admin');
+
+        $this->actingAs($admin)->post('/admin/teachers', [
+            'name' => 'Inactive Retained Instructor',
+            'email' => 'inactive.retained@aec.test',
+            'employee_code' => 'SAFE-TEACH-INACTIVE-001',
+            'specialization' => 'English Grammar',
+            'password' => 'AecTeacher!2026Strong',
+            'is_active' => '0',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $teacher = Teacher::query()->where('employee_code', 'SAFE-TEACH-INACTIVE-001')->firstOrFail();
+        $this->assertFalse((bool) $teacher->user->is_active);
+
+        $this->actingAs($admin)->delete('/admin/teachers/' . $teacher->id)->assertRedirect();
+        $this->assertDatabaseHas('users', ['id' => $teacher->user_id, 'is_active' => false]);
+
+        $this->actingAs($admin)
+            ->post('/admin/recycle-bin/teachers/' . $teacher->id . '/restore')
+            ->assertRedirect('/admin/recycle-bin')
+            ->assertSessionHasNoErrors();
+
+        $this->assertFalse(Teacher::query()->findOrFail($teacher->id)->trashed());
+        $this->assertDatabaseHas('teachers', ['id' => $teacher->id, 'is_active' => false]);
+        $this->assertDatabaseHas('users', ['id' => $teacher->user_id, 'is_active' => false]);
+    }
+
     public function test_teacher_photo_upload_uses_server_detected_extension(): void
     {
         $this->markSystemInstalled();
