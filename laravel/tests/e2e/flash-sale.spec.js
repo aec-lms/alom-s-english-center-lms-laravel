@@ -46,4 +46,27 @@ test('administrator can inspect Flash Sale Studio and its integration boundary',
   await expect(pricingCard).toContainText('Server-side quote');
   await expect(pricingCard).toContainText('Enrollment and cart integration tracked separately');
   await expect(page.getByRole('heading', { name: 'Create a premium offer' })).toBeVisible();
+  await expect(page.locator('#page_enabled')).toBeChecked();
+
+  const createForm = page.locator('form[action$="/admin/flash-sales"]');
+  await expect(createForm.getByLabel('Campaign name')).toBeVisible();
+  await expect(createForm.getByLabel('Course')).toBeVisible();
+  await expect(createForm.getByLabel('Branch targeting')).toBeVisible();
+
+  const desktopColumns = await page.locator('.fs-metrics').evaluate((node) =>
+    getComputedStyle(node).gridTemplateColumns.split(' ').length
+  );
+  expect(desktopColumns).toBe(4);
+
+  await page.getByText('Edit campaign', { exact: true }).click();
+  const editForm = page.locator('form[action$="/admin/flash-sales/1"]');
+  await expect(editForm.getByLabel('Campaign name')).toBeVisible();
+  await expect(editForm.getByLabel('Published')).toBeVisible();
+  await expect(editForm.getByLabel('Enabled')).toBeVisible();
+
+  await page.setViewportSize({ width: 375, height: 812 });
+  const mobileColumns = await page.locator('.fs-metrics').evaluate((node) =>
+    getComputedStyle(node).gridTemplateColumns.split(' ').length
+  );
+  expect(mobileColumns).toBe(1);
 });
