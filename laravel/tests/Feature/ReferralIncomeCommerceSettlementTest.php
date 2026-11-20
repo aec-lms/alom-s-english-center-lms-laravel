@@ -30,6 +30,7 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
 
         $referrer = $this->createUserWithRole($referrerRole);
         $buyer = $this->createUserWithRole('student');
+        $refundApprover = $this->createUserWithRole('admin');
         $service = app(ReferralIncomeService::class);
 
         DB::table('referral_income_rules')->where('referrer_type', $referrerRole)->update([
@@ -75,6 +76,7 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
         ]);
         $firstRefundId = DB::table('payment_refunds')->insertGetId([
             'payment_transaction_id' => $paymentId,
+            'approved_by' => $refundApprover->id,
             'amount' => 500.00,
             'reason' => 'Partial refund test',
             'created_at' => now(),
@@ -91,6 +93,7 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
 
         $secondRefundId = DB::table('payment_refunds')->insertGetId([
             'payment_transaction_id' => $paymentId,
+            'approved_by' => $refundApprover->id,
             'amount' => 500.00,
             'reason' => 'Final refund test',
             'created_at' => now(),
@@ -121,6 +124,7 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
         ]);
         $paidRefundId = DB::table('payment_refunds')->insertGetId([
             'payment_transaction_id' => $paidPaymentId,
+            'approved_by' => $refundApprover->id,
             'amount' => 1000.00,
             'reason' => 'Refund after referral payout',
             'created_at' => now(),
@@ -146,6 +150,7 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
 
         $referrer = $this->createUserWithRole('student');
         $buyer = $this->createUserWithRole('student');
+        $refundApprover = $this->createUserWithRole('admin');
         $service = app(ReferralIncomeService::class);
         DB::table('referral_income_rules')->where('referrer_type', 'student')->update([
             'commission_percent' => 10.01,
@@ -172,6 +177,7 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
         foreach ([333.33, 333.33, 333.34] as $index => $amount) {
             $refundId = DB::table('payment_refunds')->insertGetId([
                 'payment_transaction_id' => $paymentId,
+                'approved_by' => $refundApprover->id,
                 'amount' => $amount,
                 'reason' => 'Rounding-safe partial refund ' . ($index + 1),
                 'created_at' => now(),
@@ -253,6 +259,7 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
 
         $referrer = $this->createUserWithRole('student');
         $buyer = $this->createUserWithRole('student');
+        $refundApprover = $this->createUserWithRole('admin');
         $service = app(ReferralIncomeService::class);
         $service->applyCode($buyer, $service->createOrGetCode($referrer));
         [$recoveryOrderId, $recoveryInvoiceId] = $this->createCommerceOrder($buyer, 1000.00);
@@ -277,6 +284,7 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
         ]);
         $refundId = DB::table('payment_refunds')->insertGetId([
             'payment_transaction_id' => $paymentId,
+            'approved_by' => $refundApprover->id,
             'amount' => 1000.00,
             'reason' => 'Post-payout refund',
             'created_at' => now(),
@@ -355,7 +363,7 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
             'created_at' => now(), 'updated_at' => now(),
         ]);
         $refundId = DB::table('payment_refunds')->insertGetId([
-            'payment_transaction_id' => $paymentId, 'amount' => 1000.00,
+            'payment_transaction_id' => $paymentId, 'approved_by' => $admin->id, 'amount' => 1000.00,
             'reason' => 'Paid referral commission recovery', 'created_at' => now(), 'updated_at' => now(),
         ]);
         $service->reverseSettledPurchase($buyer, 'commerce_order', $adminSourceId, $refundId, 1000.00, 'BDT');
