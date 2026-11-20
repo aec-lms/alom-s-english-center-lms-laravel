@@ -343,4 +343,98 @@ class LiveClassCapacityTest extends TestCase
                 ->count()
         );
     }
+
+    public function test_mysql_join_waits_for_account_revocation_then_denies_after_commit(): void
+    {
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            $this->markTestSkipped('This row-lock contention regression requires MySQL 8.');
+        }
+
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management', 'student-management']);
+
+        $course = Course::query()->create([
+            'code' => 'LIVE-MYSQL-REVOKE-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'title' => 'MySQL Revocation Race Course',
+            'slug' => 'live-mysql-revoke-' . strtolower(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'price' => 0,
+            'status' => 'published',
+        ]);
+        $liveClass = LiveClass::query()->create([
+            'course_id' => $course->id,
+            'title' => 'MySQL Revocation Race Session',
+            'platform' => 'zoom',
+            'meeting_url' => 'https://zoom.us/j/123456789',
+            'starts_at' => now()->subMinute(),
+            'status' => 'live',
+            'capacity' => 300,
+        ]);
+        $student = $this->createUserWithRole('student');
+        DB::table('students')->insert([
+            'user_id' => $student->id,
+            'branch_id' => null,
+            'student_code' => 'STU-LIVE-MYSQL-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        Enrollment::query()->create([
+            'user_id' => $student->id,
+            'course_id' => $course->id,
+            'status' => 'active',
+        ]);
+
+        $firstConnection = DB::connection('mysql');
+        $secondName = 'mysql_live_class_concurrency';
+        config(['database.connections.' . $secondName => config('database.connections.mysql')]);
+        DB::purge($secondName);
+        $secondConnection = DB::connection($secondName);
+        $secondConnection->statement('SET SESSION innodb_lock_wait_timeout = 1');
+
+        $defaultConnection = DB::getDefaultConnection();
+        $firstConnection->beginTransaction();
+
+        try {
+            // Simulate the lifecycle writer holding the common account sentinel
+            // while it commits a profile/account deactivation.
+            $firstConnection->table('users')->where('id', $student->id)->lockForUpdate()->first();
+            $firstConnection->table('users')->where('id', $student->id)->update(['is_active' => false]);
+            $firstConnection->table('students')->where('user_id', $student->id)->update(['status' => 'inactive']);
+
+            DB::setDefaultConnection($secondName);
+            try {
+                $this->withoutExceptionHandling();
+                $this->actingAs($student)->post('/live-classes/' . $liveClass->id . '/join');
+                $this->fail('Join must not pass the account row lock while revocation is in progress.');
+            } catch (\Illuminate\Database\QueryException $exception) {
+                $this->assertStringContainsString('lock wait timeout', strtolower($exception->getMessage()));
+            } finally {
+                $this->withExceptionHandling();
+            }
+
+            DB::setDefaultConnection('mysql');
+            $firstConnection->commit();
+
+            DB::setDefaultConnection($secondName);
+            $this->actingAs($student)
+                ->post('/live-classes/' . $liveClass->id . '/join')
+                ->assertForbidden();
+
+            $this->assertSame(0, $secondConnection->table('live_class_participants')
+                ->where('live_class_id', $liveClass->id)
+                ->where('user_id', $student->id)
+                ->whereNull('left_at')
+                ->count());
+        } finally {
+            DB::setDefaultConnection('mysql');
+            if ($firstConnection->transactionLevel() > 0) {
+                $firstConnection->rollBack();
+            }
+            DB::setDefaultConnection($defaultConnection);
+            DB::purge($secondName);
+        }
+    }
+
+
 }
