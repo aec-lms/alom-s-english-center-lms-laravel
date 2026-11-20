@@ -44,11 +44,6 @@ class InvoicePaymentSessionReservationService
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            $remaining = round((float) $lockedInvoice->net_amount - (float) $lockedInvoice->paid_amount, 2);
-            if ($remaining <= 0 || in_array($lockedInvoice->status, ['paid', 'cancelled', 'void'], true)) {
-                throw new RuntimeException('Invoice has no payable balance.');
-            }
-
             if ($idempotencyKey !== null && trim($idempotencyKey) !== '') {
                 $existingForKey = PaymentTransaction::query()
                     ->where('invoice_id', $lockedInvoice->id)
@@ -67,6 +62,11 @@ class InvoicePaymentSessionReservationService
                         'reused' => true,
                     ];
                 }
+            }
+
+            $remaining = round((float) $lockedInvoice->net_amount - (float) $lockedInvoice->paid_amount, 2);
+            if ($remaining <= 0 || in_array($lockedInvoice->status, ['paid', 'cancelled', 'void'], true)) {
+                throw new RuntimeException('Invoice has no payable balance.');
             }
 
             $active = PaymentTransaction::query()
