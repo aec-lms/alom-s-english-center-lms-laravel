@@ -165,7 +165,7 @@ class StudentAssessmentController extends Controller
 
         DB::transaction(function () use ($attempt, $question, $student, $data): void {
             $lockedStudent = User::query()->whereKey($student->id)->lockForUpdate()->firstOrFail();
-            abort_unless($lockedStudent->hasRole('student') && $lockedStudent->is_active !== false, 403, 'An active student account is required.');
+            abort_unless($lockedStudent->hasRole('student') && (!Schema::hasColumn('users', 'is_active') || (bool) $lockedStudent->is_active), 403, 'An active student account is required.');
             $lockedAttempt = AssessmentAttempt::query()->whereKey($attempt->id)->lockForUpdate()->firstOrFail();
             abort_unless((int) $lockedAttempt->student_id === (int) $student->id, 404);
             abort_unless($lockedAttempt->status === 'in_progress', 409, 'Attempt is not active.');
@@ -211,7 +211,7 @@ class StudentAssessmentController extends Controller
     {
         $student = $request->user();
         abort_unless(
-            $student && $student->hasRole('student') && $student->is_active !== false,
+            $student && $student->hasRole('student') && (!Schema::hasColumn('users', 'is_active') || (bool) $student->is_active),
             403,
             'An active student role and account are required.'
         );
@@ -250,7 +250,7 @@ class StudentAssessmentController extends Controller
 
         return DB::transaction(function () use ($set, $student): AssessmentAttempt {
             $lockedStudent = User::query()->whereKey($student->id)->lockForUpdate()->firstOrFail();
-            abort_unless($lockedStudent->hasRole('student') && $lockedStudent->is_active !== false, 403, 'An active student account is required.');
+            abort_unless($lockedStudent->hasRole('student') && (!Schema::hasColumn('users', 'is_active') || (bool) $lockedStudent->is_active), 403, 'An active student account is required.');
             $student = $lockedStudent;
             $lockedSet = AssessmentSet::query()->whereKey($set->id)->lockForUpdate()->firstOrFail();
             abort_unless($lockedSet->status === 'published', 404);
@@ -366,7 +366,7 @@ class StudentAssessmentController extends Controller
         DB::transaction(function () use ($attempt, $student): void {
             $lockedStudent = User::query()->whereKey($student->id)->lockForUpdate()->firstOrFail();
             abort_unless(
-                $lockedStudent->hasRole('student') && $lockedStudent->is_active !== false,
+                $lockedStudent->hasRole('student') && (!Schema::hasColumn('users', 'is_active') || (bool) $lockedStudent->is_active),
                 403,
                 'An active student account is required.'
             );
