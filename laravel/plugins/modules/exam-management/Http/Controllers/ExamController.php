@@ -815,7 +815,7 @@ class ExamController extends Controller
             ? ($user->branch_id !== null ? (int) $user->branch_id : null)
             : null;
 
-        if (app(\\App\\Core\\Plugins\\PluginManager::class)->isEnabled('student-management')
+        if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('student-management')
             && Schema::hasTable('students')
             && Schema::hasColumn('students', 'branch_id')) {
             $profileQuery = DB::table('students')->where('user_id', $userId);
