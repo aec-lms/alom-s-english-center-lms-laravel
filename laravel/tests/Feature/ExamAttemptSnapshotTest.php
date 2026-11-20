@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Schema;
 use Plugins\Modules\ExamManagement\Models\Exam;
 use Plugins\Modules\ExamManagement\Models\ExamAttempt;
@@ -418,6 +419,50 @@ class ExamAttemptSnapshotTest extends TestCase
             $this->assertNotNull($route, "Missing exam route [{$routeName}].");
             $this->assertContains($middleware, (array) $route->getAction('middleware'));
         }
+    }
+
+    public function test_primary_and_legacy_submit_routes_share_a_separate_abuse_limit_and_do_not_double_grade(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['exam-management']);
+        $student = $this->createUserWithRole('student');
+        [$exam, $question] = $this->createSnapshotFixture();
+
+        $this->actingAs($student)->get("/exams/{$exam->id}/take")->assertOk();
+        $attempt = ExamAttempt::query()
+            ->where('exam_id', $exam->id)
+            ->where('user_id', $student->id)
+            ->firstOrFail();
+
+        RateLimiter::clear('exam-submit:' . sha1((string) $student->getAuthIdentifier()));
+        $submitRoutes = [
+            "/exams/{$exam->id}/attempt",
+            "/admin/exams/{$exam->id}/attempt",
+        ];
+
+        for ($request = 0; $request < 5; $request++) {
+            $response = $this->actingAs($student)->post($submitRoutes[$request % 2], [
+                'attempt_id' => $attempt->id,
+                'answers' => [(string) $question->id => 1],
+            ]);
+
+            if ($request === 0) {
+                $response->assertRedirect(route('portal.dashboard'));
+            } else {
+                $response->assertStatus(409);
+            }
+        }
+
+        $this->actingAs($student)->post($submitRoutes[0], [
+            'attempt_id' => $attempt->id,
+            'answers' => [(string) $question->id => 1],
+        ])->assertStatus(429);
+
+        $attempt->refresh();
+        $this->assertNotNull($attempt->submitted_at);
+        $this->assertSame(5.0, (float) $attempt->score_obtained);
+        $this->assertSame(5.0, (float) $attempt->total_marks);
+        $this->assertTrue($attempt->passed);
     }
 
     public function test_snapshot_validator_accepts_documented_upper_bounds_without_overflow(): void
