@@ -55,6 +55,7 @@ test('student exam journey uses frozen snapshot, autosaves safely, and remains a
   expect(touchTargetHeight).toBeGreaterThanOrEqual(48);
 
   await expect(page.getByRole('status')).toHaveText('All selected answers saved.');
+  await page.screenshot({ path: 'test-results/exam-attempt-desktop.png', fullPage: true });
 
   await page.setViewportSize({ width: 375, height: 812 });
   await expect(optionFour).toBeVisible();
@@ -76,6 +77,7 @@ test('student exam journey uses frozen snapshot, autosaves safely, and remains a
       })),
   }));
   expect(overflowReport.document, JSON.stringify(overflowReport)).toBeLessThanOrEqual(overflowReport.viewport);
+  await page.screenshot({ path: 'test-results/exam-attempt-mobile.png', fullPage: true });
   await page.setViewportSize({ width: 1280, height: 900 });
 
   const attemptId = Number(await page.locator('form[data-attempt-id]').getAttribute('data-attempt-id'));
