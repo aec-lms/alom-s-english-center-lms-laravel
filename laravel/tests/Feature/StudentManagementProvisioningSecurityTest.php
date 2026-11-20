@@ -116,6 +116,35 @@ class StudentManagementProvisioningSecurityTest extends TestCase
         ]);
     }
 
+    public function test_generated_student_code_retry_exhaustion_rolls_back_account_creation(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['student-management']);
+        $admin = $this->createUserWithRole('admin');
+
+        $this->actingAs($admin)->post('/admin/students', [
+            'name' => 'Existing Collision Learner',
+            'email' => 'collision.existing@aec.test',
+            'password' => 'StrongPassword123!',
+            'student_code' => 'STU-COLLID',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        Str::createRandomStringsUsing(fn (int $length): string => 'COLLID');
+
+        try {
+            $this->actingAs($admin)->post('/admin/students', [
+                'name' => 'Exhausted Collision Learner',
+                'email' => 'collision.exhausted@aec.test',
+                'password' => 'StrongPassword123!',
+            ])->assertSessionHasErrors('student_code');
+        } finally {
+            Str::createRandomStringsNormally();
+        }
+
+        $this->assertDatabaseMissing('users', ['email' => 'collision.exhausted@aec.test']);
+        $this->assertDatabaseMissing('students', ['user_id' => DB::table('users')->where('email', 'collision.exhausted@aec.test')->value('id')]);
+    }
+
     public function test_student_account_is_not_created_when_audit_storage_is_unavailable(): void
     {
         $this->markSystemInstalled();
