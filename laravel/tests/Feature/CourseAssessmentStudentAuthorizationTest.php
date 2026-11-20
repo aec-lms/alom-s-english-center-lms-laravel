@@ -243,8 +243,13 @@ try {
     }
 
     $kernel->terminate($request, $response);
+    // Explicitly release the independent MySQL session before signalling the
+    // parent. This prevents PHP shutdown from keeping the child alive after
+    // the lock assertions have completed.
+    \Illuminate\Support\Facades\DB::disconnect();
     echo "DONE" . PHP_EOL;
     flush();
+    exit(0);
 } catch (\Throwable $exception) {
     if ($connection && $connection->transactionLevel() > 0) {
         try {
