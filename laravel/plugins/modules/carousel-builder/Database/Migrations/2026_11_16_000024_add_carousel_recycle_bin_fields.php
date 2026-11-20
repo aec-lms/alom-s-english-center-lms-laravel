@@ -20,10 +20,9 @@ return new class extends Migration {
 
     public function down(): void
     {
-        if (Schema::hasTable('cms_carousels') && Schema::hasColumn('cms_carousels', 'deleted_at')) {
-            Schema::table('cms_carousels', function (Blueprint $table): void {
-                $table->dropSoftDeletes();
-            });
-        }
+        // Intentionally non-destructive: these conditional additive columns may
+        // pre-date this migration on customer installations. Without durable
+        // per-install ownership evidence, dropping them could destroy customer
+        // schema or soft-delete history. Retain the nullable columns on rollback.
     }
 };
