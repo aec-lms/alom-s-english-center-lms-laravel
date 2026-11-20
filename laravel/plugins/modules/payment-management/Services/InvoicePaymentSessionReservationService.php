@@ -134,7 +134,7 @@ class InvoicePaymentSessionReservationService
             'gateway' => $gatewaySlug,
             'amount' => number_format($amount, 2, '.', ''),
             'currency' => strtoupper($currency),
-            'provider_parameters' => $metadata,
+            'provider_parameters' => $this->normalizeFingerprintParameters($metadata),
         ]);
 
         return hash('sha256', json_encode($normalized, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
@@ -143,6 +143,39 @@ class InvoicePaymentSessionReservationService
     /** @param array<string, mixed> $metadata
      *  @return array<string, mixed>
      */
+    /**
+     * Canonicalize provider parameters for idempotency comparison. A Stripe
+     * PaymentMethod ID remains in the fingerprint so a different method cannot
+     * reuse the key, while credentials, client secrets and raw tokens are
+     * excluded. Raw provider tokens are never persisted in transaction metadata.
+     *
+     * @param array<string, mixed> $parameters
+     * @return array<string, mixed>
+     */
+    private function normalizeFingerprintParameters(array $parameters): array
+    {
+        $sensitiveKeys = [
+            'token', 'payment_token', 'client_secret', 'secret', 'password',
+            'authorization', 'card_number', 'cvc', 'store_passwd', 'api_key',
+            'secret_key', 'access_token', 'refresh_token',
+        ];
+
+        foreach ($parameters as $key => $value) {
+            if (in_array(strtolower((string) $key), $sensitiveKeys, true)) {
+                unset($parameters[$key]);
+                continue;
+            }
+
+            if (is_array($value)) {
+                $parameters[$key] = $this->normalizeFingerprintParameters($value);
+            } elseif (is_string($value)) {
+                $parameters[$key] = trim($value);
+            }
+        }
+
+        return $this->sortRecursively($parameters);
+    }
+
     private function safeReservationMetadata(array $metadata): array
     {
         foreach (array_keys($metadata) as $key) {
