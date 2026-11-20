@@ -333,15 +333,77 @@ PHP;
 
     private function finishMysqlStudentAnswerWorker(array &$worker): void
     {
-        foreach ($worker['pipes'] as $pipe) {
-            if (is_resource($pipe)) {
-                fclose($pipe);
-            }
+        // Close only the input pipe first. Keep stdout/stderr open until the
+        // child has exited so its final flush/shutdown cannot hit a closed pipe.
+        if (is_resource($worker['pipes'][0])) {
+            fclose($worker['pipes'][0]);
         }
 
-        $exitCode = proc_close($worker['process']);
+        $exitCode = null;
+        $deadline = microtime(true) + 10;
+
+        do {
+            $status = proc_get_status($worker['process']);
+            if (! $status['running']) {
+                $exitCode = (int) $status['exitcode'];
+                break;
+            }
+
+            foreach ([1, 2] as $pipeIndex) {
+                if (! is_resource($worker['pipes'][$pipeIndex])) {
+                    continue;
+                }
+
+                $chunk = stream_get_contents($worker['pipes'][$pipeIndex]);
+                if ($chunk === false || $chunk === '') {
+                    continue;
+                }
+
+                if ($pipeIndex === 1) {
+                    $worker['buffer'] .= $chunk;
+                } else {
+                    $worker['stderr'] .= $chunk;
+                }
+            }
+
+            usleep(20_000);
+        } while (microtime(true) < $deadline);
+
+        if ($exitCode === null) {
+            proc_terminate($worker['process']);
+            $status = proc_get_status($worker['process']);
+            $exitCode = $status['running'] ? 255 : (int) $status['exitcode'];
+        }
+
+        foreach ([1, 2] as $pipeIndex) {
+            if (! is_resource($worker['pipes'][$pipeIndex])) {
+                continue;
+            }
+
+            $chunk = stream_get_contents($worker['pipes'][$pipeIndex]);
+            if ($chunk !== false && $chunk !== '') {
+                if ($pipeIndex === 1) {
+                    $worker['buffer'] .= $chunk;
+                } else {
+                    $worker['stderr'] .= $chunk;
+                }
+            }
+
+            fclose($worker['pipes'][$pipeIndex]);
+        }
+
+        $closeExitCode = proc_close($worker['process']);
+        if ($exitCode === -1 && $closeExitCode >= 0) {
+            $exitCode = $closeExitCode;
+        }
+
         @unlink($worker['script_path']);
-        $this->assertSame(0, $exitCode, 'MySQL worker failed: ' . $worker['stderr']);
+        $this->assertSame(
+            0,
+            $exitCode,
+            'MySQL worker failed (exit ' . $exitCode . '). stdout=' . $worker['buffer']
+            . '; stderr=' . $worker['stderr']
+        );
     }
 
     private function mysqlConcurrencyConnection(string $name): object
