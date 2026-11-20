@@ -70,11 +70,15 @@ final class StudentManagementAuditTrailTest extends TestCase
 
         $this->assertNotNull($log);
         $metadata = json_decode((string) $log->metadata, true, 512, JSON_THROW_ON_ERROR);
-        $this->assertSame([
+        $actualChanges = $metadata['changes'];
+        $expectedChanges = [
             'student_code' => ['from' => 'AUDIT-BEFORE-001', 'to' => 'AUDIT-AFTER-001'],
             'branch_id' => ['from' => (string) $branchA, 'to' => (string) $branchB],
             'status' => ['from' => 'active', 'to' => 'inactive'],
-        ], $metadata['changes']);
+        ];
+        ksort($actualChanges);
+        ksort($expectedChanges);
+        $this->assertSame($expectedChanges, $actualChanges);
 
         $serializedMetadata = (string) $log->metadata;
         $this->assertStringNotContainsString('ReplacementSecret987!', $serializedMetadata);
@@ -84,4 +88,39 @@ final class StudentManagementAuditTrailTest extends TestCase
         $this->assertStringNotContainsString('01711112222', $serializedMetadata);
         $this->assertStringNotContainsString('01733334444', $serializedMetadata);
     }
+    public function test_omitting_branch_id_preserves_the_existing_student_branch(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'student-management']);
+        $admin = $this->createUserWithRole('admin');
+
+        $branchId = DB::table('branches')->insertGetId([
+            'code' => 'KEEP-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'name' => 'Preserved Branch',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($admin)->post('/admin/students', [
+            'name' => 'Preserve Branch Learner',
+            'email' => 'preserve.branch@aec.test',
+            'password' => 'InitialPassword123!',
+            'student_code' => 'PRESERVE-BRANCH-001',
+            'branch_id' => $branchId,
+            'status' => 'active',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $student = Student::query()->where('student_code', 'PRESERVE-BRANCH-001')->firstOrFail();
+
+        $this->actingAs($admin)->put('/admin/students/' . $student->id, [
+            'name' => 'Preserve Branch Learner Updated',
+            'email' => 'preserve.branch.updated@aec.test',
+            'student_code' => 'PRESERVE-BRANCH-001',
+            'status' => 'active',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertSame((string) $branchId, (string) $student->fresh()->branch_id);
+    }
+
 }
