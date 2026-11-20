@@ -678,14 +678,54 @@ class ExamController extends Controller
     private function validatedAttemptSnapshot(ExamAttempt $attempt, Request $request): array
     {
         $snapshot = $attempt->exam_snapshot;
+        $isFiniteNonNegativeNumber = static fn (mixed $value): bool => is_numeric($value)
+            && is_finite((float) $value)
+            && (float) $value >= 0;
+
         $isValid = is_array($snapshot)
-            && (int) ($snapshot['version'] ?? 0) === 1
-            && (int) ($snapshot['duration_minutes'] ?? 0) > 0
+            && ($snapshot['version'] ?? null) === 1
+            && is_int($snapshot['duration_minutes'] ?? null)
+            && $snapshot['duration_minutes'] > 0
+            && $isFiniteNonNegativeNumber($snapshot['pass_marks'] ?? null)
             && is_array($snapshot['questions'] ?? null)
+            && array_is_list($snapshot['questions'])
             && count($snapshot['questions']) > 0;
 
+        if ($isValid) {
+            $seenQuestionIds = [];
+
+            foreach ($snapshot['questions'] as $question) {
+                if (!is_array($question)
+                    || !is_int($question['id'] ?? null)
+                    || $question['id'] < 1
+                    || isset($seenQuestionIds[$question['id']])
+                    || !is_string($question['prompt'] ?? null)
+                    || trim($question['prompt']) === ''
+                    || !is_array($question['options'] ?? null)
+                    || !array_is_list($question['options'])
+                    || count($question['options']) < 2
+                    || !is_int($question['correct_option_index'] ?? null)
+                    || $question['correct_option_index'] < 0
+                    || $question['correct_option_index'] >= count($question['options'])
+                    || !$isFiniteNonNegativeNumber($question['marks'] ?? null)
+                    || !$isFiniteNonNegativeNumber($question['negative_marks'] ?? null)) {
+                    $isValid = false;
+                    break;
+                }
+
+                foreach ($question['options'] as $option) {
+                    if (!is_string($option) || trim($option) === '') {
+                        $isValid = false;
+                        break 2;
+                    }
+                }
+
+                $seenQuestionIds[$question['id']] = true;
+            }
+        }
+
         if (!$isValid) {
-            $message = 'This existing exam attempt cannot be resumed safely because its original question set is unavailable. Your attempt has not been submitted and your score has not changed. Please contact your instructor or school administrator for help.';
+            $message = 'This existing exam attempt cannot be resumed safely because its saved question and scoring data is missing or invalid. Your attempt has not been submitted and your score has not changed. Please contact your instructor or school administrator for help.';
 
             if ($request->is('api/*') || $request->expectsJson()) {
                 throw new HttpResponseException(response()->json([
