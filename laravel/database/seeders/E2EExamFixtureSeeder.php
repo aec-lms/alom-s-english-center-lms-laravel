@@ -18,7 +18,7 @@ class E2EExamFixtureSeeder extends Seeder
     public function run(): void
     {
         if (!app()->environment('testing')) {
-            throw new \\RuntimeException('E2E exam fixtures may only be seeded when APP_ENV=testing.');
+            throw new \RuntimeException('E2E exam fixtures may only be seeded when APP_ENV=testing.');
         }
 
         $plugins = app(PluginManager::class);

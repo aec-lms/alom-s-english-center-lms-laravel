@@ -8,10 +8,10 @@ use Plugins\Modules\ExamManagement\Models\ExamQuestion;
 
 require __DIR__ . '/../../vendor/autoload.php';
 $app = require __DIR__ . '/../../bootstrap/app.php';
-$app->make(Illuminate\\Contracts\\Console\\Kernel::class)->bootstrap();
+$app->make(Illuminate\Contracts\\Console\\Kernel::class)->bootstrap();
 
 if (!$app->environment('testing')) {
-    fwrite(STDERR, "Refusing to reset E2E exam fixtures outside APP_ENV=testing.\\n");
+    fwrite(STDERR, "Refusing to reset E2E exam fixtures outside APP_ENV=testing.\n");
     exit(1);
 }
 
