@@ -884,6 +884,60 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
         Http::assertSentCount(2);
     }
 
+    public function test_paypal_refund_rejects_mismatched_invoice_and_custom_refund_ids(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'gateway-paypal']);
+
+        app(PluginManager::class)->saveSettings('gateway-paypal', [
+            'client_id' => 'paypal-refund-identity-client',
+            'client_secret' => 'paypal-refund-identity-secret',
+            'sandbox_mode' => '1',
+            'refunds_enabled' => '1',
+        ], ['client_secret']);
+
+        [$invoice, $transaction] = $this->createSettledPayment('gateway-paypal', 'CAPTURE-IDENTITY-001');
+        $requester = $this->createUserWithRole('admin');
+        $approver = $this->createUserWithRole('admin');
+
+        Http::fake(function (ClientRequest $request) {
+            if (str_ends_with((string) parse_url($request->url(), PHP_URL_PATH), '/v1/oauth2/token')) {
+                return Http::response(['access_token' => 'paypal-refund-identity-token'], 200);
+            }
+
+            return Http::response([
+                'id' => 'PAYPAL-REFUND-WRONG-LOCAL-IDENTITY',
+                'invoice_id' => 'ANOTHER-TRANSACTION',
+                'custom_id' => 'refund-999999',
+                'status' => 'COMPLETED',
+                'amount' => ['value' => '100.00', 'currency_code' => 'BDT'],
+                'links' => [[
+                    'rel' => 'up',
+                    'href' => 'https://api-m.sandbox.paypal.com/v2/payments/captures/CAPTURE-IDENTITY-001',
+                ]],
+            ], 201);
+        });
+
+        $service = app(RefundOrchestrationService::class);
+        $refund = $service->requestOnlineRefund(
+            $transaction,
+            100,
+            'PayPal refund identity mismatch',
+            (int) $requester->id,
+            'paypal-refund-identity-mismatch-001',
+        );
+        $review = $service->approveAndSubmit($refund, (int) $approver->id);
+
+        $this->assertSame('requires_review', $review->status);
+        $this->assertSame('provider_response_mismatch', $review->provider_status);
+        $this->assertSame('PAYPAL-REFUND-WRONG-LOCAL-IDENTITY', $review->provider_refund_reference);
+        $this->assertNull($review->ledger_applied_at);
+        $this->assertSame(1000.0, (float) $invoice->fresh()->paid_amount);
+        $this->assertSame('paid', $invoice->fresh()->status);
+        $this->assertSame('settled', $transaction->fresh()->status);
+        Http::assertSentCount(2);
+    }
+
     public function test_paypal_multi_capture_order_is_rejected_instead_of_settling_only_the_first_capture(): void
     {
         $this->markSystemInstalled();
