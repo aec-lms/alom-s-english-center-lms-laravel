@@ -18,11 +18,11 @@ Discounts do not stack. Percentage discounts are limited to 100%; fixed discount
 
 ## Pricing integration
 
-The shared `FlashSalePricingService` is integrated into direct course enrollment invoice generation in this change.
+The shared `FlashSalePricingService` is introduced as the canonical server-side quote resolver. This PR does not replace the existing direct-enrollment pricing path because that integration requires a coordinated optional-dependency declaration in the course-management manifest and an owner-approved handoff for the course-management controller. The current legacy direct-enrollment discount path remains in place and does not yet use branch-aware campaign precedence.
 
-**Unified Commerce / legacy course-cart integration is deliberately excluded from this PR** because the canonical owner of `CommerceCatalog.php`, `CourseCommerceController.php`, and the commerce/course-management manifests is PR #275. That owner must apply and test the bounded quote integration separately. Do not assume cart checkout is Flash Sale-aware until that follow-up is merged.
+**Unified Commerce / legacy course-cart integration is also excluded** because the canonical owner of `CommerceCatalog.php`, `CourseCommerceController.php`, and the commerce/course-management manifests is PR #275. That owner must apply and test the bounded quote integration separately. Do not assume cart checkout uses the new resolver until that follow-up is merged.
 
-If a course price or eligible campaign changes between cart addition and checkout, the commerce owner must revalidate the price snapshot before payment.
+Both integration follow-ups must revalidate price snapshots at checkout before payment.
 
 Gift-course purchase pricing is not included. Coupon eligibility and gift pricing remain controlled by their existing commerce services.
 
