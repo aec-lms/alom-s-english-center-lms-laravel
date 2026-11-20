@@ -128,7 +128,7 @@ The current-main CI checks for this exact commit have now all completed successf
 
 The current main tree contains 59 plugin manifests; the PR #269 candidate contains 60, including the new commerce-cart module. The parameterized `AllPluginsIndependentAcceptanceTest` discovers plugin slugs from the module directories at runtime, so its lifecycle scenarios include all 44 manifests on this candidate rather than a hard-coded historical list. Its common lifecycle assertions cover provider autoload, independent install/enable, ZIP update, disable/re-enable, uninstall/reinstall, settings reset, Recycle Bin restore, and permanent-delete recovery handling. This is lifecycle acceptance only, not proof that every plugin's complete business feature set is correct.
 
-### Current 44-plugin inventory and focused test references
+### Current 60-plugin inventory and focused test references
 
 | Plugin slug | Focused feature-test evidence in current test tree | Acceptance interpretation |
 |---|---|---|
@@ -176,7 +176,6 @@ The current main tree contains 59 plugin manifests; the PR #269 candidate contai
 | `teacher-management` | `TeacherStandaloneTest`, `StudentTeacherBranchOptionsTest` | Targeted workflow/branch-option coverage |
 | `universal-payment` | `UniversalPaymentGatewayToggleTest`, `UniversalPaymentInvoiceSettlementTest`, `UniversalPaymentProofTest`, `PluginCriticalRegressionTest` | Targeted payment/security/settlement coverage; live provider settlement still open |
 | `visitor-popup-ads` | `VisitorPopupSecurityTest`, `PluginCriticalRegressionTest` | Targeted CRUD/security coverage |
-
 | `al-branding-loader` | `AlBrandingLoaderProductionHardeningTest`, `AlomBrandingLoaderPhoneticsPluginTest` | Targeted loader timeout, navigation, path and integration coverage; full visual/browser acceptance remains partial |
 | `assignment-management` | `AssignmentManagementPluginTest` | Targeted standalone assignment, enrollment, branch, private attachment, ownership and mobile API coverage |
 | `board-question-solver` | `BoardQuestionSolverPluginTest` | Targeted provider-budget, private image, disabled-provider, exam-safety and admin authorization coverage |
