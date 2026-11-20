@@ -249,6 +249,47 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
         Http::assertSentCount(1);
     }
 
+    public function test_full_refund_marks_transaction_refunded_only_after_provider_success(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'gateway-stripe']);
+
+        app(PluginManager::class)->saveSettings('gateway-stripe', [
+            'secret_key' => 'sk_test_full_refund_123456',
+            'refunds_enabled' => '1',
+        ], ['secret_key']);
+
+        [$invoice, $transaction] = $this->createSettledPayment('gateway-stripe', 'pi_full_refund_001');
+        $requester = $this->createUserWithRole('admin');
+        $approver = $this->createUserWithRole('admin');
+        $service = app(RefundOrchestrationService::class);
+
+        Http::fake([
+            'https://api.stripe.com/v1/refunds' => Http::response([
+                'id' => 're_full_refund_001',
+                'payment_intent' => 'pi_full_refund_001',
+                'amount' => 100000,
+                'currency' => 'bdt',
+                'status' => 'succeeded',
+            ], 200),
+        ]);
+
+        $refund = $service->requestOnlineRefund(
+            $transaction,
+            1000,
+            'Full payment refund',
+            (int) $requester->id,
+            'stripe-full-refund-001',
+        );
+        $confirmed = $service->approveAndSubmit($refund, (int) $approver->id);
+
+        $this->assertSame('succeeded', $confirmed->status);
+        $this->assertSame('refunded', $transaction->fresh()->status);
+        $this->assertSame(0.0, (float) $invoice->fresh()->paid_amount);
+        $this->assertSame('unpaid', $invoice->fresh()->status);
+        $this->assertNotNull($confirmed->ledger_applied_at);
+    }
+
     public function test_failed_malformed_and_unknown_stripe_responses_never_mutate_invoice_ledger(): void
     {
         $this->markSystemInstalled();
