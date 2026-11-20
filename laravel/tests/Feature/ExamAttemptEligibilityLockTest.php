@@ -9,6 +9,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Plugins\Modules\BranchManagement\Models\Branch;
 use Plugins\Modules\ExamManagement\Http\Controllers\ExamController;
+use Plugins\Modules\FeesManagement\Models\FeeInvoice;
+use Plugins\Modules\PaymentManagement\Http\Controllers\PaymentController;
 use Plugins\Modules\ExamManagement\Models\Exam;
 use Plugins\Modules\ExamManagement\Models\ExamAttempt;
 use Plugins\Modules\ExamManagement\Models\ExamQuestion;
@@ -396,6 +398,283 @@ class ExamAttemptEligibilityLockTest extends TestCase
             }
             DB::purge($secondaryName);
         }
+    }
+
+    public function test_mysql_attempt_lock_first_blocks_the_real_refund_entitlement_revocation_writer(): void
+    {
+        if (DB::getDriverName() !== 'mysql') {
+            $this->markTestSkipped('The real refund-writer lock interleaving is verified by the MySQL 8 workflow.');
+        }
+
+        [$student, $exam, $attempt, $invoiceId, $orderNumber] = $this->createPaidExamRefundFixture();
+        $primary = DB::connection();
+        $secondaryName = $this->createSecondaryMysqlConnection();
+        $secondary = DB::connection($secondaryName);
+
+        $primary->beginTransaction();
+        try {
+            $primary->table('exams')->where('id', $exam->id)->lockForUpdate()->firstOrFail();
+            $primary->table('users')->where('id', $student->id)->lockForUpdate()->firstOrFail();
+            $primary->table('students')->where('user_id', $student->id)->lockForUpdate()->firstOrFail();
+            $primary->table('learn_earn_exam_access')
+                ->where('exam_id', $exam->id)
+                ->where('user_id', $student->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $primary->table('exam_attempts')->where('id', $attempt->id)->lockForUpdate()->firstOrFail();
+
+            $secondary->statement('SET SESSION innodb_lock_wait_timeout = 1');
+            $secondary->beginTransaction();
+            try {
+                $this->invokeRefundEntitlementRevocation($secondaryName, $invoiceId);
+                $this->fail('The existing refund writer must wait when the in-flight attempt already owns the paid-entitlement row lock.');
+            } catch (QueryException $exception) {
+                $this->assertSame(1205, (int) ($exception->errorInfo[1] ?? 0), $exception->getMessage());
+            } finally {
+                if ($secondary->transactionLevel() > 0) {
+                    $secondary->rollBack();
+                }
+            }
+
+            $this->assertSame(
+                'granted',
+                $primary->table('learn_earn_exam_access')
+                    ->where('exam_id', $exam->id)
+                    ->where('user_id', $student->id)
+                    ->value('status'),
+                'A timed-out refund transaction must not revoke access while the attempt holds its entitlement lock.'
+            );
+        } finally {
+            if ($primary->transactionLevel() > 0) {
+                $primary->rollBack();
+            }
+        }
+
+        $secondary->beginTransaction();
+        try {
+            $this->invokeRefundEntitlementRevocation($secondaryName, $invoiceId);
+            $secondary->commit();
+        } catch (\Throwable $exception) {
+            if ($secondary->transactionLevel() > 0) {
+                $secondary->rollBack();
+            }
+            throw $exception;
+        }
+
+        $this->assertDatabaseHas('learn_earn_exam_access', [
+            'exam_id' => $exam->id,
+            'user_id' => $student->id,
+            'payment_reference' => $orderNumber,
+            'status' => 'revoked',
+        ]);
+
+        $this->assertControllerAbort(
+            403,
+            fn () => app(ExamController::class)->apiSubmitAttempt(
+                $this->studentRequest(
+                    'POST',
+                    '/api/v1/my/exams/' . $exam->id . '/attempts/' . $attempt->id . '/submit',
+                    $student,
+                    ['answers' => [(string) $exam->questions()->firstOrFail()->id => 1]],
+                    true
+                ),
+                $exam->fresh(),
+                (int) $attempt->id
+            )
+        );
+
+        $this->assertAttemptStillPending($attempt);
+        DB::purge($secondaryName);
+    }
+
+    public function test_mysql_refund_writer_first_makes_waiting_submit_retry_fail_closed(): void
+    {
+        if (DB::getDriverName() !== 'mysql') {
+            $this->markTestSkipped('The refund-first lock interleaving is verified by the MySQL 8 workflow.');
+        }
+
+        [$student, $exam, $attempt, $invoiceId, $orderNumber] = $this->createPaidExamRefundFixture();
+        $primary = DB::connection();
+        $secondaryName = $this->createSecondaryMysqlConnection();
+        $secondary = DB::connection($secondaryName);
+
+        $secondary->beginTransaction();
+        try {
+            $this->invokeRefundEntitlementRevocation($secondaryName, $invoiceId);
+            $this->assertSame(
+                'revoked',
+                $secondary->table('learn_earn_exam_access')
+                    ->where('exam_id', $exam->id)
+                    ->where('user_id', $student->id)
+                    ->value('status')
+            );
+
+            $primary->statement('SET SESSION innodb_lock_wait_timeout = 1');
+            try {
+                app(ExamController::class)->apiSubmitAttempt(
+                    $this->studentRequest(
+                        'POST',
+                        '/api/v1/my/exams/' . $exam->id . '/attempts/' . $attempt->id . '/submit',
+                        $student,
+                        ['answers' => [(string) $exam->questions()->firstOrFail()->id => 1]],
+                        true
+                    ),
+                    $exam->fresh(),
+                    (int) $attempt->id
+                );
+                $this->fail('Submission must wait for the refund-owned entitlement row rather than bypassing its lock.');
+            } catch (QueryException $exception) {
+                $this->assertSame(1205, (int) ($exception->errorInfo[1] ?? 0), $exception->getMessage());
+            }
+
+            $secondary->commit();
+        } catch (\Throwable $exception) {
+            if ($secondary->transactionLevel() > 0) {
+                $secondary->rollBack();
+            }
+            throw $exception;
+        }
+
+        $this->assertDatabaseHas('learn_earn_exam_access', [
+            'exam_id' => $exam->id,
+            'user_id' => $student->id,
+            'payment_reference' => $orderNumber,
+            'status' => 'revoked',
+        ]);
+
+        $this->assertControllerAbort(
+            403,
+            fn () => app(ExamController::class)->apiSubmitAttempt(
+                $this->studentRequest(
+                    'POST',
+                    '/api/v1/my/exams/' . $exam->id . '/attempts/' . $attempt->id . '/submit',
+                    $student,
+                    ['answers' => [(string) $exam->questions()->firstOrFail()->id => 1]],
+                    true
+                ),
+                $exam->fresh(),
+                (int) $attempt->id
+            )
+        );
+
+        $this->assertAttemptStillPending($attempt);
+        DB::purge($secondaryName);
+    }
+
+    private function createPaidExamRefundFixture(): array
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins([
+            'exam-management',
+            'student-management',
+            'learn-and-earn',
+            'commerce-cart',
+            'payment-management',
+        ]);
+
+        $student = $this->createUserWithRole('student');
+        Student::query()->create([
+            'user_id' => $student->id,
+            'branch_id' => null,
+            'student_code' => 'REFUND-' . strtoupper(bin2hex(random_bytes(4))),
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+        ]);
+
+        [$exam] = $this->createSnapshotFixture();
+        $exam->update([
+            'learn_earn_type' => 'paid',
+            'access_price' => 10,
+        ]);
+
+        $invoiceId = random_int(10000000, 90000000);
+        $orderNumber = 'REFUND-' . strtoupper(bin2hex(random_bytes(5)));
+        $orderId = DB::table('commerce_orders')->insertGetId([
+            'order_number' => $orderNumber,
+            'user_id' => $student->id,
+            'invoice_id' => $invoiceId,
+            'currency' => 'BDT',
+            'subtotal' => 10,
+            'discount_total' => 0,
+            'grand_total' => 10,
+            'status' => 'paid',
+            'payment_status' => 'paid',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('commerce_order_items')->insert([
+            'order_id' => $orderId,
+            'item_type' => 'mock_test',
+            'item_id' => $exam->id,
+            'title_snapshot' => 'Paid mock test',
+            'quantity' => 1,
+            'unit_price' => 10,
+            'line_total' => 10,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('learn_earn_exam_access')->insert([
+            'exam_id' => $exam->id,
+            'user_id' => $student->id,
+            'status' => 'granted',
+            'payment_reference' => $orderNumber,
+            'granted_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($student)->get('/exams/' . $exam->id . '/take')->assertOk();
+        $attempt = ExamAttempt::query()
+            ->where('exam_id', $exam->id)
+            ->where('user_id', $student->id)
+            ->firstOrFail();
+
+        return [$student, $exam, $attempt, $invoiceId, $orderNumber];
+    }
+
+    private function createSecondaryMysqlConnection(): string
+    {
+        $primaryName = DB::getDefaultConnection();
+        $primary = DB::connection($primaryName);
+        $secondaryName = 'exam_refund_secondary_' . bin2hex(random_bytes(3));
+        $secondaryConfig = config('database.connections.' . $primaryName);
+        $secondaryConfig['database'] = $primary->getDatabaseName();
+        config(['database.connections.' . $secondaryName => $secondaryConfig]);
+        DB::purge($secondaryName);
+        $secondary = DB::connection($secondaryName);
+        $secondary->statement('SET SESSION innodb_lock_wait_timeout = 1');
+
+        return $secondaryName;
+    }
+
+    private function invokeRefundEntitlementRevocation(string $connectionName, int $invoiceId): void
+    {
+        $originalDefault = DB::getDefaultConnection();
+        DB::setDefaultConnection($connectionName);
+
+        try {
+            $controller = app(PaymentController::class);
+            $method = new \ReflectionMethod(PaymentController::class, 'suspendCommerceAccessAfterRefund');
+            $method->setAccessible(true);
+
+            $invoice = new FeeInvoice();
+            $invoice->setAttribute('id', $invoiceId);
+            $invoice->setAttribute('net_amount', 10.0);
+
+            $method->invoke($controller, $invoice, 0.0);
+        } finally {
+            DB::setDefaultConnection($originalDefault);
+        }
+    }
+
+    private function assertAttemptStillPending(ExamAttempt $attempt): void
+    {
+        $unchanged = $attempt->fresh();
+        $this->assertNull($unchanged->submitted_at);
+        $this->assertNull($unchanged->submitted_answers);
+        $this->assertSame(0.0, (float) $unchanged->score_obtained);
+        $this->assertSame(0.0, (float) $unchanged->total_marks);
+        $this->assertFalse($unchanged->passed);
     }
 
     private function studentRequest(
