@@ -522,22 +522,27 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
         $approver = $this->createUserWithRole('admin');
         $service = app(RefundOrchestrationService::class);
 
-        Http::fakeSequence()
-            ->push([
-                'id' => 're_refund_failed_001',
+        $stripeResponse = 0;
+        Http::fake(function (ClientRequest $request) use (&$stripeResponse) {
+            $data = $request->data();
+            $stripeResponse++;
+
+            if ($stripeResponse === 3) {
+                return Http::response(['error' => ['message' => 'temporary provider outage']], 500);
+            }
+
+            return Http::response([
+                'id' => $stripeResponse === 1 ? 're_refund_failed_001' : 're_refund_mismatch_001',
                 'payment_intent' => 'pi_refund_failure_001',
-                'amount' => 20000,
+                'amount' => $stripeResponse === 1 ? 20000 : 19999,
                 'currency' => 'bdt',
-                'status' => 'failed',
-            ], 200)
-            ->push([
-                'id' => 're_refund_mismatch_001',
-                'payment_intent' => 'pi_refund_failure_001',
-                'amount' => 19999,
-                'currency' => 'bdt',
-                'status' => 'succeeded',
-            ], 200)
-            ->push(['error' => ['message' => 'temporary provider outage']], 500);
+                'metadata' => [
+                    'transaction_ref' => $data['metadata[transaction_ref]'] ?? '',
+                    'refund_id' => $data['metadata[refund_id]'] ?? '',
+                ],
+                'status' => $stripeResponse === 1 ? 'failed' : 'succeeded',
+            ], 200);
+        });
 
         $failedRequest = $service->requestOnlineRefund(
             $transaction,
@@ -596,22 +601,19 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
         $service = app(RefundOrchestrationService::class);
 
         Http::fake(function (ClientRequest $request) {
-            if ($request->method() === 'POST') {
-                return Http::response([
-                    'id' => 're_refund_pending_001',
-                    'payment_intent' => 'pi_refund_pending_001',
-                    'amount' => 40000,
-                    'currency' => 'bdt',
-                    'status' => 'pending',
-                ], 200);
-            }
+            $data = $request->data();
+            $metadata = [
+                'transaction_ref' => $data['metadata[transaction_ref]'] ?? 'REFUND-TXN-PENDING-001',
+                'refund_id' => $data['metadata[refund_id]'] ?? (string) PaymentRefund::query()->where('provider_idempotency_key', 'stripe-refund-pending-001')->value('id'),
+            ];
 
             return Http::response([
                 'id' => 're_refund_pending_001',
                 'payment_intent' => 'pi_refund_pending_001',
                 'amount' => 40000,
                 'currency' => 'bdt',
-                'status' => 'succeeded',
+                'metadata' => $metadata,
+                'status' => $request->method() === 'POST' ? 'pending' : 'succeeded',
             ], 200);
         });
 
@@ -685,7 +687,7 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
                 return Http::response([
                     'APIConnect' => 'DONE',
                     'bank_tran_id' => 'BANK-REFUND-001',
-                    'trans_id' => 'SSL-TRAN-REF-001',
+                    'trans_id' => $transaction->transaction_ref,
                     'refund_ref_id' => 'SSL-REFUND-REF-001',
                     'status' => 'success',
                     'errorReason' => '',
@@ -973,21 +975,23 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
         $secondApprover = $this->createUserWithRole('admin');
         $service = app(RefundOrchestrationService::class);
 
-        Http::fakeSequence()
-            ->push([
-                'id' => 're_invoice_refund_001',
-                'payment_intent' => 'pi_invoice_refund_001',
-                'amount' => 30000,
+        $invoiceRefundResponse = 0;
+        Http::fake(function (ClientRequest $request) use (&$invoiceRefundResponse) {
+            $data = $request->data();
+            $invoiceRefundResponse++;
+
+            return Http::response([
+                'id' => $invoiceRefundResponse === 1 ? 're_invoice_refund_001' : 're_invoice_refund_002',
+                'payment_intent' => $invoiceRefundResponse === 1 ? 'pi_invoice_refund_001' : 'pi_invoice_refund_002',
+                'amount' => $invoiceRefundResponse === 1 ? 30000 : 70000,
                 'currency' => 'bdt',
-                'status' => 'succeeded',
-            ], 200)
-            ->push([
-                'id' => 're_invoice_refund_002',
-                'payment_intent' => 'pi_invoice_refund_002',
-                'amount' => 70000,
-                'currency' => 'bdt',
+                'metadata' => [
+                    'transaction_ref' => $data['metadata[transaction_ref]'] ?? '',
+                    'refund_id' => $data['metadata[refund_id]'] ?? '',
+                ],
                 'status' => 'succeeded',
             ], 200);
+        });
 
         $first = $service->requestOnlineRefund(
             $firstTransaction,
