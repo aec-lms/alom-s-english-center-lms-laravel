@@ -155,6 +155,8 @@ class SslcommerzGatewayService
                 $this->reservations->markUnknown($tx, 'transport_or_timeout');
             } elseif ($response->serverError()) {
                 $this->reservations->markUnknown($tx, 'provider_http_5xx');
+            } elseif ($response->successful()) {
+                $this->reservations->markUnknown($tx, 'post_provider_processing_error');
             }
 
             if ($exception instanceof RuntimeException) {
