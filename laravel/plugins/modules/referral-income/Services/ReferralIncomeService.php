@@ -426,6 +426,11 @@ class ReferralIncomeService
                 }
             }
 
+            if (!Schema::hasColumn('referral_commission_reversals', 'provider_gateway')
+                || !Schema::hasColumn('referral_commission_reversals', 'provider_refund_reference')) {
+                throw new RuntimeException('Provider refund identity migration is required before commission reversal.');
+            }
+
             $existing = DB::table('referral_commission_reversals')
                 ->where('payment_refund_id', $paymentRefundId)->lockForUpdate()->first();
             if ($existing) {
