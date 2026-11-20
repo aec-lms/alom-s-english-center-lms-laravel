@@ -193,13 +193,14 @@ final class ReferralIncomeCommerceSettlementTest extends TestCase
     public function test_commissions_with_unresolved_refund_recovery_cannot_be_paid_out(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['referral-income', 'student-management', 'payment-management']);
+        $this->activatePlugins(['referral-income', 'student-management', 'payment-management', 'fees-management', 'commerce-cart']);
 
         $referrer = $this->createUserWithRole('student');
         $buyer = $this->createUserWithRole('student');
         $service = app(ReferralIncomeService::class);
         $service->applyCode($buyer, $service->createOrGetCode($referrer));
-        $commissionId = $service->recordSettledPurchase($buyer, 'commerce_order', 'RECOVERY-ORDER-1', 1000.00, 'BDT');
+        [$recoveryOrderId] = $this->createCommerceOrder($buyer, 1000.00);
+        $commissionId = $service->recordSettledPurchase($buyer, 'commerce_order', (string) $recoveryOrderId, 1000.00, 'BDT');
 
         DB::table('referral_commissions')->where('id', $commissionId)->update([
             'status' => 'paid',
