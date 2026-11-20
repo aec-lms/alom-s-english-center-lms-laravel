@@ -19,6 +19,106 @@
 .flash-studio .table>:not(caption)>*>*{padding:1rem .85rem}
 .flash-studio .fs-pill{display:inline-flex;border-radius:999px;padding:.25rem .65rem;font-size:.72rem;font-weight:750;background:#eef2ff;color:#3730a3}
 .flash-studio .fs-help{color:var(--fs-muted);font-size:.8rem}
+
+/* The protected admin shell provides Tailwind utilities, not Bootstrap components.
+   Keep the Flash Sale Studio's grid, form and table styles self-contained. */
+.flash-studio,.flash-studio *,.flash-studio *::before,.flash-studio *::after{box-sizing:border-box}
+.flash-studio{width:100%;max-width:100%;margin:0 auto;padding:1.5rem;min-width:0}
+.flash-studio .container-fluid{width:100%;max-width:none;margin:0;padding:0}
+.flash-studio .row{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:1rem;margin:0}
+.flash-studio .col-12{grid-column:span 12;min-width:0}
+.flash-studio .col-lg-4{grid-column:span 4;min-width:0}
+.flash-studio .col-lg-6{grid-column:span 6;min-width:0}
+.flash-studio .col-md-4{grid-column:span 4;min-width:0}
+.flash-studio .d-flex{display:flex}
+.flash-studio .flex-wrap{flex-wrap:wrap}
+.flash-studio .d-inline-block{display:inline-block}
+.flash-studio .justify-content-between{justify-content:space-between}
+.flash-studio .justify-content-end{justify-content:flex-end}
+.flash-studio .align-items-center{align-items:center}
+.flash-studio .align-items-start{align-items:flex-start}
+.flash-studio .align-items-end{align-items:flex-end}
+.flash-studio .gap-2{gap:.5rem}
+.flash-studio .gap-3{gap:1rem}
+.flash-studio .mb-0{margin-bottom:0}
+.flash-studio .mb-1{margin-bottom:.25rem}
+.flash-studio .mb-2{margin-bottom:.5rem}
+.flash-studio .mb-3{margin-bottom:1rem}
+.flash-studio .mb-4{margin-bottom:1.5rem}
+.flash-studio .mt-1{margin-top:.25rem}
+.flash-studio .mt-2{margin-top:.5rem}
+.flash-studio .mt-3{margin-top:1rem}
+.flash-studio .p-0{padding:0}
+.flash-studio .p-3{padding:1rem}
+.flash-studio .p-4{padding:1.5rem}
+.flash-studio .py-4{padding-top:1.5rem;padding-bottom:1.5rem}
+.flash-studio .px-4{padding-left:1.5rem;padding-right:1.5rem}
+.flash-studio .w-100{width:100%}
+.flash-studio .text-start{text-align:left}
+.flash-studio .text-end{text-align:right}
+.flash-studio .text-center{text-align:center}
+.flash-studio .text-primary{color:#4338ca}
+.flash-studio .text-muted,.flash-studio .text-secondary{color:var(--fs-muted)}
+.flash-studio .fw-bold{font-weight:800}
+.flash-studio .fw-semibold{font-weight:700}
+.flash-studio .border-bottom{border-bottom:1px solid var(--fs-line)}
+.flash-studio .border-top{border-top:1px solid var(--fs-line)}
+.flash-studio .border{border:1px solid var(--fs-line)}
+.flash-studio .rounded-3{border-radius:12px}
+.flash-studio .bg-light{background:#f8fafc}
+.flash-studio .card-body{padding:1.5rem}
+.flash-studio .card-body.p-0{padding:0}
+.flash-studio .form-label{display:block;width:100%;margin:0 0 .4rem;font-size:.82rem;font-weight:700;color:#334155}
+.flash-studio .form-control,.flash-studio .form-select{
+  display:block;width:100%;min-width:0;min-height:44px;margin:0;padding:.65rem .75rem;
+  border:1px solid #cbd5e1;border-radius:10px;background:#fff;color:#172033;
+  font:inherit;font-size:.92rem;line-height:1.35;box-shadow:none;
+}
+.flash-studio textarea.form-control{min-height:74px;resize:vertical}
+.flash-studio .form-control:focus,.flash-studio .form-select:focus{
+  outline:3px solid rgba(99,102,241,.2);border-color:#6366f1;
+}
+.flash-studio .form-check{display:flex;align-items:center;gap:.55rem;min-height:28px}
+.flash-studio .form-check-input{width:1.15rem;height:1.15rem;flex:0 0 auto;margin:0;accent-color:#4338ca}
+.flash-studio .form-check-label{font-size:.9rem;font-weight:650;color:#334155;cursor:pointer}
+.flash-studio .btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:.4rem;min-height:40px;
+  padding:.6rem .9rem;border:1px solid transparent;border-radius:10px;
+  font:inherit;font-size:.88rem;font-weight:700;line-height:1.2;text-decoration:none;cursor:pointer;
+}
+.flash-studio .btn-sm{min-height:34px;padding:.45rem .65rem;font-size:.8rem}
+.flash-studio .btn-primary{background:#4338ca;color:#fff}
+.flash-studio .btn-primary:hover{background:#3730a3}
+.flash-studio .btn-dark{background:#172033;color:#fff}
+.flash-studio .btn-outline-primary{background:#fff;color:#4338ca;border-color:#a5b4fc}
+.flash-studio .btn-outline-secondary{background:#fff;color:#475569;border-color:#cbd5e1}
+.flash-studio .btn-outline-danger{background:#fff;color:#b91c1c;border-color:#fecaca}
+.flash-studio .btn:focus-visible{outline:3px solid #fbbf24;outline-offset:2px}
+.flash-studio .alert{padding:.85rem 1rem;margin-bottom:1rem;border-radius:10px}
+.flash-studio .alert-success{background:#ecfdf5;color:#065f46}
+.flash-studio .alert-danger{background:#fef2f2;color:#991b1b}
+.flash-studio .table-responsive{width:100%;overflow-x:auto}
+.flash-studio .table{width:100%;border-collapse:separate;border-spacing:0;text-align:left}
+.flash-studio .table th,.flash-studio .table td{padding:.9rem .75rem;border-bottom:1px solid var(--fs-line);vertical-align:middle}
+.flash-studio .table th{font-size:.75rem;font-weight:800;color:#475569;white-space:nowrap}
+.flash-studio .table td{font-size:.86rem;color:#263247}
+.flash-studio details>summary{display:inline-flex;align-items:center;justify-content:center}
+.flash-studio details[open]>summary{margin-bottom:.5rem}
+.flash-studio .fs-card details form{background:#f8fafc}
+.flash-studio .fs-stat{overflow-wrap:anywhere}
+.flash-studio .fs-metrics{width:100%}
+.flash-studio .fs-hero{margin-bottom:1.5rem}
+.flash-studio h1{font-size:clamp(1.9rem,3vw,2.6rem);line-height:1.12}
+.flash-studio h2{font-size:1.25rem;line-height:1.35}
+@media(max-width:991.98px){
+  .flash-studio .col-lg-4,.flash-studio .col-lg-6{grid-column:span 12}
+}
+@media(max-width:767.98px){
+  .flash-studio{padding:1rem}
+  .flash-studio .col-md-4{grid-column:span 12}
+  .flash-studio .card-body{padding:1rem}
+  .flash-studio .table{min-width:760px}
+}
 .flash-studio details>summary{cursor:pointer;list-style:none}
 .flash-studio details>summary::-webkit-details-marker{display:none}
 </style>
