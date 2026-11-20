@@ -1,6 +1,39 @@
 @extends('layouts.app')
 @section('title', $exam->title . ' — Exam')
 @section('content')
+<style>
+    @media (max-width: 639px) {
+        header[data-header-style] > div:first-child {
+            gap: .5rem;
+            padding-inline: .75rem;
+        }
+        header[data-header-style] > div:first-child > a:first-child {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+        header[data-header-style] > div:first-child > a:first-child > span {
+            min-width: 0;
+            max-width: 6.5rem;
+        }
+        header[data-header-style] > div:first-child > a:first-child > span > span:first-child {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        header[data-header-style] > div:first-child > a:first-child > span > span:last-child {
+            display: none;
+        }
+        header[data-header-style] > div:first-child > div:last-child {
+            gap: .25rem;
+        }
+        header[data-header-style] > div:first-child > div:last-child > a {
+            max-width: 5.5rem;
+            padding-inline: .5rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+    }
+</style>
 <div class="min-h-screen bg-slate-50">
     @include('public.partials.navbar')
     <main class="max-w-4xl mx-auto px-4 py-8 space-y-6">
