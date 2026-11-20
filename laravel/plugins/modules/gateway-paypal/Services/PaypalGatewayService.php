@@ -117,9 +117,16 @@ class PaypalGatewayService
 
             $order = $response->json();
             $approvalUrl = collect($order['links'] ?? [])->firstWhere('rel', 'approve')['href'] ?? null;
-            if (empty($order['id']) || !$approvalUrl || !str_starts_with((string) $approvalUrl, 'https://')) {
+            $approvalHost = strtolower((string) parse_url((string) $approvalUrl, PHP_URL_HOST));
+            $sandbox = $this->plugins->getSetting('gateway-paypal', 'sandbox_mode', '1') === '1';
+            $allowedApprovalHosts = $sandbox
+                ? ['www.sandbox.paypal.com', 'sandbox.paypal.com']
+                : ['www.paypal.com', 'paypal.com'];
+            if (empty($order['id']) || !$approvalUrl
+                || strtolower((string) parse_url((string) $approvalUrl, PHP_URL_SCHEME)) !== 'https'
+                || !in_array($approvalHost, $allowedApprovalHosts, true)) {
                 $this->reservations->markUnknown($tx, 'invalid_success_response');
-                throw new RuntimeException('PayPal did not return a valid order ID and approval URL; reservation remains held for reconciliation.');
+                throw new RuntimeException('PayPal did not return a valid trusted approval URL; reservation remains held for reconciliation.');
             }
 
             $tx = $this->reservations->markCreated($tx, [
