@@ -61,6 +61,7 @@ class SslcommerzController extends Controller
             'gateway' => 'gateway-sslcommerz',
             'transaction_ref' => $session['transaction']->transaction_ref,
             'redirect_url' => $session['hosted_endpoint'],
+            'status' => $session['transaction']->status,
         ]);
     }
 
