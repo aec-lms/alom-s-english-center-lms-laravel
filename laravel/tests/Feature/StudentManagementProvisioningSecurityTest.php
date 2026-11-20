@@ -100,7 +100,8 @@ class StudentManagementProvisioningSecurityTest extends TestCase
             'status' => 'active',
         ])->assertSessionHasErrors(['email', 'student_code']);
 
-        $this->assertDatabaseMissing('students', ['student_code' => 'LEGACY-CODE-001']);
+        $this->assertSame(1, Student::query()->whereRaw('UPPER(student_code) = ?', ['LEGACY-CODE-001'])->count());
+        $this->assertSame(1, User::query()->whereRaw('LOWER(email) = ?', ['legacy.case@aec.test'])->count());
     }
 
     public function test_generated_student_code_retries_after_a_collision(): void
