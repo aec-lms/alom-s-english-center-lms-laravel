@@ -7,6 +7,7 @@ namespace Plugins\Modules\UniversalPayment\Services;
 use App\Core\Plugins\PluginManager;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
 use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
 use Plugins\Modules\CourseManagement\Services\CourseCommercePaymentSettlementService;
 use RuntimeException;
@@ -179,16 +180,47 @@ class StorefrontPaymentGatewayService
                 throw new RuntimeException('This payment is not linked to a registered paid-exam student.');
             }
 
-            $exam = DB::table('exams')->where('id', $locked->learn_earn_exam_id)->where('is_published', true)->lockForUpdate()->first();
-            if (!$exam || ($exam->learn_earn_type ?? 'free') !== 'paid'
+            // Lock the exam first: attempt start/save/submit uses this same row
+            // as the mutex before it locks a student's paid entitlement.
+            $exam = DB::table('exams')
+                ->where('id', $locked->learn_earn_exam_id)
+                ->lockForUpdate()
+                ->first();
+            if (!$exam || !(bool) $exam->is_published || ($exam->learn_earn_type ?? 'free') !== 'paid'
                 || (float) $exam->access_price <= 0
                 || abs((float) $exam->access_price - (float) $locked->amount) > 0.01) {
                 throw new RuntimeException('The paid exam price changed or the exam is no longer available. Manual review is required.');
             }
 
+            // Keep the shared User -> Student profile order used by student
+            // lifecycle changes and the exam eligibility guard.
+            $user = DB::table('users')->where('id', $locked->user_id)->lockForUpdate()->first();
+            if (!$user) {
+                throw new RuntimeException('The paid-exam student account no longer exists.');
+            }
+
+            $studentProfile = null;
+            if ($this->plugins->isEnabled('student-management')
+                && Schema::hasTable('students')
+                && Schema::hasColumn('students', 'branch_id')) {
+                $profileQuery = DB::table('students')->where('user_id', $locked->user_id);
+                if (Schema::hasColumn('students', 'deleted_at')) {
+                    $profileQuery->whereNull('deleted_at');
+                }
+                $studentProfile = $profileQuery->lockForUpdate()->first();
+            }
+
+            $studentBranchId = $studentProfile && $studentProfile->branch_id !== null
+                ? (int) $studentProfile->branch_id
+                : ($user->branch_id !== null ? (int) $user->branch_id : null);
+            if ($exam->branch_id !== null && $studentBranchId !== (int) $exam->branch_id) {
+                throw new RuntimeException('The student branch assignment changed after checkout; manual payment reconciliation is required.');
+            }
+
             $existingAccess = DB::table('learn_earn_exam_access')
                 ->where('exam_id', $exam->id)
                 ->where('user_id', $locked->user_id)
+                ->lockForUpdate()
                 ->first();
 
             if ($existingAccess && $existingAccess->status === 'granted'
