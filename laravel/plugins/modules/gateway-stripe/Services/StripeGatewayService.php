@@ -87,7 +87,7 @@ class StripeGatewayService
             }
 
             $intent = $response->json();
-            if (!is_array($intent) || empty($intent['id']) || !str_starts_with((string) $intent['id'], 'pi_')) {
+            if (!is_array($intent) || empty($intent['id']) || !str_starts_with((string) $intent['id'], 'pi_') || empty($intent['client_secret'])) {
                 $this->reservations->markUnknown($tx, 'invalid_success_response');
                 throw new RuntimeException('Stripe returned an invalid PaymentIntent response; the reservation remains held for reconciliation.');
             }
