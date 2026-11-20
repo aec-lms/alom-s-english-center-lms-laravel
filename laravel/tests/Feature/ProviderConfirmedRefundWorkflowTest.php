@@ -229,8 +229,8 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
                 'amount' => 25000,
                 'currency' => 'bdt',
                 'metadata' => [
-                    'transaction_ref' => data_get($data, 'metadata.transaction_ref', ''),
-                    'refund_id' => data_get($data, 'metadata.refund_id', ''),
+                    'transaction_ref' => (string) ($data['metadata[transaction_ref]'] ?? data_get($data, 'metadata.transaction_ref', '')),
+                    'refund_id' => (string) ($data['metadata[refund_id]'] ?? data_get($data, 'metadata.refund_id', '')),
                 ],
                 'status' => 'succeeded',
             ], 200);
@@ -324,7 +324,7 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
                 'currency' => 'bdt',
                 'metadata' => [
                     'transaction_ref' => 'SOME-OTHER-TRANSACTION',
-                    'refund_id' => data_get($data, 'metadata.refund_id', ''),
+                    'refund_id' => (string) ($data['metadata[refund_id]'] ?? data_get($data, 'metadata.refund_id', '')),
                 ],
                 'status' => 'succeeded',
             ], 200);
@@ -484,8 +484,8 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
                 'amount' => 100000,
                 'currency' => 'bdt',
                 'metadata' => [
-                    'transaction_ref' => data_get($data, 'metadata.transaction_ref', ''),
-                    'refund_id' => data_get($data, 'metadata.refund_id', ''),
+                    'transaction_ref' => (string) ($data['metadata[transaction_ref]'] ?? data_get($data, 'metadata.transaction_ref', '')),
+                    'refund_id' => (string) ($data['metadata[refund_id]'] ?? data_get($data, 'metadata.refund_id', '')),
                 ],
                 'status' => 'succeeded',
             ], 200);
@@ -537,8 +537,8 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
                 'amount' => $stripeResponse === 1 ? 20000 : 19999,
                 'currency' => 'bdt',
                 'metadata' => [
-                    'transaction_ref' => data_get($data, 'metadata.transaction_ref', ''),
-                    'refund_id' => data_get($data, 'metadata.refund_id', ''),
+                    'transaction_ref' => (string) ($data['metadata[transaction_ref]'] ?? data_get($data, 'metadata.transaction_ref', '')),
+                    'refund_id' => (string) ($data['metadata[refund_id]'] ?? data_get($data, 'metadata.refund_id', '')),
                 ],
                 'status' => $stripeResponse === 1 ? 'failed' : 'succeeded',
             ], 200);
@@ -986,8 +986,8 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
                 'amount' => $invoiceRefundResponse === 1 ? 30000 : 70000,
                 'currency' => 'bdt',
                 'metadata' => [
-                    'transaction_ref' => data_get($data, 'metadata.transaction_ref', ''),
-                    'refund_id' => data_get($data, 'metadata.refund_id', ''),
+                    'transaction_ref' => (string) ($data['metadata[transaction_ref]'] ?? data_get($data, 'metadata.transaction_ref', '')),
+                    'refund_id' => (string) ($data['metadata[refund_id]'] ?? data_get($data, 'metadata.refund_id', '')),
                 ],
                 'status' => 'succeeded',
             ], 200);
