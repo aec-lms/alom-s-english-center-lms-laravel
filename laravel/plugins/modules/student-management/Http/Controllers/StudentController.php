@@ -11,10 +11,12 @@ use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Plugins\Modules\StudentManagement\Models\Student;
 
@@ -44,9 +46,13 @@ class StudentController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $actorId = (int) $request->user()->getKey();
+        $request->merge([
+            'email' => Str::lower(trim((string) $request->input('email'))),
+            'student_code' => ($studentCode = trim((string) $request->input('student_code', ''))) !== '' ? $studentCode : null,
+        ]);
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:120'],
-            'email' => ['required', 'email', 'unique:users,email'],
+            'email' => ['required', 'email', $this->uniqueEmailRule()],
             'phone' => ['nullable', 'string', 'max:32'],
             'password' => ['required', 'string', 'min:8'],
             'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
@@ -54,9 +60,7 @@ class StudentController extends Controller
             'status' => ['nullable', 'in:active,inactive,graduated'],
         ]);
 
-        $code = !empty($validated['student_code'])
-            ? trim($validated['student_code'])
-            : 'STU-' . strtoupper(Str::random(6));
+        $code = $validated['student_code'] ?? null;
 
         $student = DB::transaction(function () use ($validated, $code, $actorId): Student {
             $this->assertAuditAvailable();
@@ -82,13 +86,15 @@ class StudentController extends Controller
             ]);
             $user->roles()->sync([$studentRole->id]);
 
-            $student = Student::query()->create([
+            $studentAttributes = [
                 'user_id' => $user->id,
                 'branch_id' => $branchId,
-                'student_code' => $code,
                 'admission_date' => now()->toDateString(),
                 'status' => $validated['status'] ?? 'active',
-            ]);
+            ];
+            $student = $code !== null
+                ? Student::query()->create($studentAttributes + ['student_code' => $code])
+                : $this->createStudentWithGeneratedCode($studentAttributes);
 
             $this->audit->log('student.created', 'student', (string) $student->id, ['branch_id' => $student->branch_id]);
 
@@ -101,9 +107,10 @@ class StudentController extends Controller
     public function update(Request $request, Student $student): RedirectResponse
     {
         $actorId = (int) $request->user()->getKey();
+        $request->merge(['email' => Str::lower(trim((string) $request->input('email')))]);
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:120'],
-            'email' => ['required', 'email', 'unique:users,email,' . $student->user_id],
+            'email' => ['required', 'email', $this->uniqueEmailRule((int) $student->user_id)],
             'phone' => ['nullable', 'string', 'max:32'],
             'branch_id' => ['nullable', 'integer', 'exists:branches,id'],
             'student_code' => ['required', 'string', 'max:40', 'unique:students,student_code,' . $student->id],
@@ -238,6 +245,62 @@ class StudentController extends Controller
         );
 
         return [$lockedUsers[$actorId], $lockedUsers[$linkedUserId], $lockedStudent];
+    }
+
+    /**
+     * Compare normalized addresses so case-variant legacy rows are treated as
+     * duplicates consistently on SQLite and MySQL.
+     */
+    private function uniqueEmailRule(?int $exceptUserId = null): callable
+    {
+        return function (string $attribute, mixed $value, callable $fail) use ($exceptUserId): void {
+            $query = User::query()->whereRaw('LOWER(email) = ?', [Str::lower(trim((string) $value))]);
+            if ($exceptUserId !== null) {
+                $query->whereKeyNot($exceptUserId);
+            }
+
+            if ($query->exists()) {
+                $fail('The email has already been taken.');
+            }
+        };
+    }
+
+    /**
+     * Retry generated student codes only when the unique index reports a
+     * student_code collision. The database constraint remains the final arbiter
+     * for concurrent requests; each attempt is isolated by a savepoint.
+     *
+     * @param array<string, mixed> $attributes
+     */
+    private function createStudentWithGeneratedCode(array $attributes): Student
+    {
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $candidate = 'STU-' . strtoupper(Str::random(6));
+
+            try {
+                return DB::transaction(
+                    fn (): Student => Student::query()->create($attributes + ['student_code' => $candidate])
+                );
+            } catch (QueryException $exception) {
+                if (!$this->isStudentCodeUniqueViolation($exception)) {
+                    throw $exception;
+                }
+            }
+        }
+
+        throw ValidationException::withMessages([
+            'student_code' => 'A unique student code could not be generated. Please retry the request.',
+        ]);
+    }
+
+    private function isStudentCodeUniqueViolation(QueryException $exception): bool
+    {
+        $sqlState = (string) ($exception->errorInfo[0] ?? $exception->getCode());
+        $driverCode = (int) ($exception->errorInfo[1] ?? 0);
+        $message = strtolower($exception->getMessage());
+        $uniqueViolation = $sqlState === '23505' || in_array($driverCode, [19, 1062], true);
+
+        return $uniqueViolation && str_contains($message, 'student_code');
     }
 
     private function assertAuditAvailable(): void
