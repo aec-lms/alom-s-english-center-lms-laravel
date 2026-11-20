@@ -58,7 +58,7 @@ class StudentController extends Controller
             'email' => [
                 'required',
                 'email',
-                function (string $attribute, mixed $value, \\Closure $fail): void {
+                function (string $attribute, mixed $value, \Closure $fail): void {
                     $exists = DB::table('users')
                         ->whereRaw('LOWER(email) = ?', [Str::lower(trim((string) $value))])
                         ->exists();
@@ -74,7 +74,7 @@ class StudentController extends Controller
                 'nullable',
                 'string',
                 'max:40',
-                function (string $attribute, mixed $value, \\Closure $fail): void {
+                function (string $attribute, mixed $value, \Closure $fail): void {
                     if ($value === null || trim((string) $value) === '') {
                         return;
                     }
@@ -154,7 +154,7 @@ class StudentController extends Controller
             'email' => [
                 'required',
                 'email',
-                function (string $attribute, mixed $value, \\Closure $fail) use ($student): void {
+                function (string $attribute, mixed $value, \Closure $fail) use ($student): void {
                     $exists = DB::table('users')
                         ->whereRaw('LOWER(email) = ?', [Str::lower(trim((string) $value))])
                         ->where('id', '<>', $student->user_id)
@@ -170,7 +170,7 @@ class StudentController extends Controller
                 'required',
                 'string',
                 'max:40',
-                function (string $attribute, mixed $value, \\Closure $fail) use ($student): void {
+                function (string $attribute, mixed $value, \Closure $fail) use ($student): void {
                     $exists = Student::query()
                         ->whereRaw('UPPER(student_code) = ?', [Str::upper(trim((string) $value))])
                         ->where('id', '<>', $student->id)
