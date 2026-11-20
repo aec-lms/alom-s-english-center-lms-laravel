@@ -122,7 +122,7 @@ class TeacherController extends Controller
             }
             $user->roles()->syncWithoutDetaching([$teacherRole->id]);
 
-            return Teacher::query()->create([
+            $teacher = Teacher::query()->create([
                 'user_id' => $user->id,
                 'branch_id' => $validated['branch_id'] ?? null,
                 'employee_code' => strtoupper(trim($validated['employee_code'])),
@@ -134,9 +134,11 @@ class TeacherController extends Controller
                 'photo_path' => $photoPath,
                 'is_active' => $request->boolean('is_active', true),
             ]);
-        });
 
-        $this->audit->log('teacher.created', 'teacher', (string) $teacher->id, ['code' => $teacher->employee_code]);
+            $this->audit->log('teacher.created', 'teacher', (string) $teacher->id, ['code' => $teacher->employee_code]);
+
+            return $teacher;
+        });
 
         return back()->with('status', "Instructor '{$validated['name']}' added.");
     }
@@ -219,10 +221,11 @@ class TeacherController extends Controller
             }
             $linkedUser->update($userUpdates);
 
-            return $lockedTeacher->fresh();
-        });
+            $updatedTeacher = $lockedTeacher->fresh();
+            $this->audit->log('teacher.updated', 'teacher', (string) $updatedTeacher->id, ['code' => $updatedTeacher->employee_code]);
 
-        $this->audit->log('teacher.updated', 'teacher', (string) $updatedTeacher->id, ['code' => $updatedTeacher->employee_code]);
+            return $updatedTeacher;
+        });
 
         return back()->with('status', "Instructor '{$validated['name']}' updated.");
     }
