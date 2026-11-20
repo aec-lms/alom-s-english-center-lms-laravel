@@ -104,6 +104,18 @@
 .flash-studio .table th,.flash-studio .table td{padding:.9rem .75rem;border-bottom:1px solid var(--fs-line);vertical-align:middle}
 .flash-studio .table th{font-size:.75rem;font-weight:800;color:#475569;white-space:nowrap}
 .flash-studio .table td{font-size:.86rem;color:#263247}
+.flash-studio .fs-edit-details[open]::before{
+  content:"";position:fixed;inset:0;z-index:1000;background:rgba(15,23,42,.56);
+}
+.flash-studio .fs-edit-details[open]>summary{position:relative;z-index:1002}
+.flash-studio .fs-edit-details[open]>form{
+  position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:min(720px,calc(100vw - 2rem));max-height:calc(100vh - 2rem);
+  overflow-y:auto;margin:0;padding:1.35rem;background:#fff;
+  border:1px solid #cbd5e1;border-radius:18px;
+  box-shadow:0 28px 90px rgba(15,23,42,.32);
+}
+.flash-studio .fs-edit-details[open]>form .row{row-gap:.9rem}
 .flash-studio details>summary{display:inline-flex;align-items:center;justify-content:center}
 .flash-studio details[open]>summary{margin-bottom:.5rem}
 .flash-studio .fs-card details form{background:#f8fafc}
@@ -113,10 +125,11 @@
 .flash-studio h1{font-size:clamp(1.9rem,3vw,2.6rem);line-height:1.12}
 .flash-studio h2{font-size:1.25rem;line-height:1.35}
 @media(max-width:991.98px){
-  .flash-studio .col-lg-4,.flash-studio .col-lg-6{grid-column:span 12}
+  .flash-studio .col-lg-3,.flash-studio .col-lg-4,.flash-studio .col-lg-6{grid-column:span 12}
 }
 @media(max-width:767.98px){
   .flash-studio{padding:1rem}
+  .flash-studio .fs-edit-details[open]>form{width:calc(100vw - 1rem);max-height:calc(100vh - 1rem);padding:1rem}
   .flash-studio .col-6{grid-column:span 12}
   .flash-studio .col-md-4{grid-column:span 12}
   .flash-studio .card-body{padding:1rem}
@@ -196,9 +209,9 @@
                         <td><div>{{ \Illuminate\Support\Carbon::parse($sale->starts_at)->format('d M Y, H:i') }}</div><div class="fs-help">to {{ \Illuminate\Support\Carbon::parse($sale->ends_at)->format('d M Y, H:i') }}</div></td>
                         <td><span class="fs-pill">{{ $sale->is_published ? 'Published' : 'Draft' }}</span><div class="fs-help mt-1">{{ $sale->is_active ? 'Enabled' : 'Paused' }}</div></td>
                         <td class="text-end">
-                            <details class="text-start">
+                            <details class="text-start fs-edit-details">
                                 <summary class="btn btn-sm btn-outline-primary">Edit campaign</summary>
-                                <form class="border rounded-3 p-3 mt-2 bg-light" method="post" action="{{ url('/admin/flash-sales/'.$sale->id) }}">@csrf @method('PUT')
+                                <form class="border rounded-3 p-3 mt-2 bg-light" role="dialog" aria-modal="true" aria-label="Edit campaign {{ $sale->title }}" method="post" action="{{ url('/admin/flash-sales/'.$sale->id) }}">@csrf @method('PUT')
                                     <div class="row g-2">
                                         <div class="col-12"><label class="form-label" for="edit-title-{{ $sale->id }}">Campaign name</label><input id="edit-title-{{ $sale->id }}" class="form-control" name="title" value="{{ $sale->title }}" required maxlength="160"></div>
                                         <div class="col-12"><label class="form-label" for="edit-course-{{ $sale->id }}">Course</label><select id="edit-course-{{ $sale->id }}" class="form-select" name="course_id" required>@foreach($courses as $course)<option value="{{ $course->id }}" @selected((int)$course->id === (int)$sale->course_id)>{{ $course->title }}</option>@endforeach</select></div>
