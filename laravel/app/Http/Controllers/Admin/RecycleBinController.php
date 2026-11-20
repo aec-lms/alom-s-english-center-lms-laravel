@@ -141,15 +141,17 @@ class RecycleBinController extends Controller
         );
 
         DB::transaction(function () use ($studentId, $request): void {
-            $student = Student::withTrashed()->lockForUpdate()->findOrFail($studentId);
-            abort_unless($student->trashed(), 409, 'This student is not in the Recycle Bin.');
-
-            // Keep the profile lock first, then lock its account row. Restore is
-            // deliberately not an account-reactivation operation: a later
-            // security deactivation must never be undone by stale delete-time state.
-            $user = $student->user_id
-                ? User::query()->lockForUpdate()->find($student->user_id)
+            // Shared lifecycle lock order: linked account -> student profile.
+            // Read the immutable link first, then lock both rows in that order.
+            $snapshot = Student::withTrashed()->findOrFail($studentId);
+            $user = $snapshot->user_id
+                ? User::query()->whereKey($snapshot->user_id)->lockForUpdate()->first()
                 : null;
+            abort_unless($snapshot->user_id === null || $user, 409, 'The linked student account is unavailable.');
+
+            $student = Student::withTrashed()->whereKey($studentId)->lockForUpdate()->firstOrFail();
+            abort_unless((int) $student->user_id === (int) $snapshot->user_id, 409, 'The linked student account changed during restore.');
+            abort_unless($student->trashed(), 409, 'This student is not in the Recycle Bin.');
 
             $student->restore();
             $student->save();
@@ -177,14 +179,17 @@ class RecycleBinController extends Controller
         );
 
         DB::transaction(function () use ($teacherId, $request): void {
-            $teacher = Teacher::withTrashed()->lockForUpdate()->findOrFail($teacherId);
-            abort_unless($teacher->trashed(), 409, 'This instructor is not in the Recycle Bin.');
-
-            // Keep the profile lock first, then lock its account row. Profile
-            // restoration must not silently reverse a later security decision.
-            $user = $teacher->user_id
-                ? User::query()->lockForUpdate()->find($teacher->user_id)
+            // Match Student/Live Class lifecycle locking: linked account first,
+            // then the soft-deleted teacher profile.
+            $snapshot = Teacher::withTrashed()->findOrFail($teacherId);
+            $user = $snapshot->user_id
+                ? User::query()->whereKey($snapshot->user_id)->lockForUpdate()->first()
                 : null;
+            abort_unless($snapshot->user_id === null || $user, 409, 'The linked instructor account is unavailable.');
+
+            $teacher = Teacher::withTrashed()->whereKey($teacherId)->lockForUpdate()->firstOrFail();
+            abort_unless((int) $teacher->user_id === (int) $snapshot->user_id, 409, 'The linked instructor account changed during restore.');
+            abort_unless($teacher->trashed(), 409, 'This instructor is not in the Recycle Bin.');
 
             $teacher->restore();
             $teacher->save();
