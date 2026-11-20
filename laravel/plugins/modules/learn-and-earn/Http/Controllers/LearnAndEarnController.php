@@ -378,33 +378,92 @@ class LearnAndEarnController extends Controller
             'payment_reference' => ['required', 'string', 'max:190'],
         ]);
 
-        abort_unless(($exam->learn_earn_type ?? 'free') === 'paid', 422, 'This is not a paid exam.');
         $reference = trim($values['payment_reference']);
         abort_if($reference === '', 422, 'A verified payment or bank/cash receipt reference is required.');
-
-        $target = DB::table('users')->where('id', $values['user_id'])->firstOrFail();
-        $targetBranchId = $this->assignedBranchId($target);
         $actor = $request->user();
-        if ($actor?->hasRole('branch_manager')) {
-            $branchId = (int) ($actor->branch_id ?? 0);
-            abort_unless($branchId > 0
-                && (int) ($exam->branch_id ?? 0) === $branchId
-                && $targetBranchId === $branchId,
-                403,
-                'Access can only be granted inside your assigned branch.'
-            );
-        }
+        $targetUserId = (int) $values['user_id'];
 
-        DB::table('learn_earn_exam_access')->updateOrInsert(
-            ['exam_id' => $exam->id, 'user_id' => $values['user_id']],
-            [
+        DB::transaction(function () use ($examId, $targetUserId, $reference, $actor): void {
+            // Exam is the serialization mutex shared with attempt start/save/submit.
+            $lockedExam = Exam::query()->whereKey($examId)->lockForUpdate()->firstOrFail();
+            abort_unless(($lockedExam->learn_earn_type ?? 'free') === 'paid', 422, 'This is not a paid exam.');
+            abort_unless(Schema::hasTable('learn_earn_exam_access'), 503, 'Paid exam access storage is unavailable.');
+
+            $userIds = [$targetUserId];
+            if ($actor && $actor->hasRole('branch_manager')) {
+                $userIds[] = (int) $actor->id;
+            }
+            $userIds = array_values(array_unique($userIds));
+            sort($userIds, SORT_NUMERIC);
+
+            // Match StudentController's user-before-profile lock order.
+            $lockedUsers = DB::table('users')
+                ->whereIn('id', $userIds)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
+            $target = $lockedUsers->get($targetUserId);
+            abort_unless($target !== null, 404, 'The target student account no longer exists.');
+
+            $profiles = collect();
+            if (app(PluginManager::class)->isEnabled('student-management')
+                && Schema::hasTable('students')
+                && Schema::hasColumn('students', 'branch_id')) {
+                $profileQuery = DB::table('students')->whereIn('user_id', $userIds);
+                if (Schema::hasColumn('students', 'deleted_at')) {
+                    $profileQuery->whereNull('deleted_at');
+                }
+                $profiles = $profileQuery->orderBy('user_id')->lockForUpdate()->get()->keyBy('user_id');
+            }
+
+            $targetProfile = $profiles->get($targetUserId);
+            $targetBranchId = $targetProfile && $targetProfile->branch_id !== null
+                ? (int) $targetProfile->branch_id
+                : ($target->branch_id !== null ? (int) $target->branch_id : null);
+
+            if ($actor && $actor->hasRole('branch_manager')) {
+                $lockedActor = $lockedUsers->get((int) $actor->id);
+                $branchId = $lockedActor && $lockedActor->branch_id !== null
+                    ? (int) $lockedActor->branch_id
+                    : 0;
+                $branch = $branchId > 0 && Schema::hasTable('branches')
+                    ? DB::table('branches')->where('id', $branchId)->lockForUpdate()->first()
+                    : null;
+
+                abort_unless($branchId > 0
+                    && $branch !== null
+                    && (bool) $branch->is_active
+                    && (int) ($lockedExam->branch_id ?? 0) === $branchId
+                    && $targetBranchId === $branchId,
+                    403,
+                    'Access can only be granted inside your assigned branch.'
+                );
+            }
+
+            $existing = DB::table('learn_earn_exam_access')
+                ->where('exam_id', $lockedExam->id)
+                ->where('user_id', $targetUserId)
+                ->lockForUpdate()
+                ->first();
+
+            $payload = [
                 'status' => 'granted',
                 'payment_reference' => $reference,
                 'granted_at' => now(),
-                'created_at' => now(),
                 'updated_at' => now(),
-            ]
-        );
+            ];
+
+            if ($existing) {
+                DB::table('learn_earn_exam_access')->where('id', $existing->id)->update($payload);
+            } else {
+                DB::table('learn_earn_exam_access')->insert($payload + [
+                    'exam_id' => $lockedExam->id,
+                    'user_id' => $targetUserId,
+                    'created_at' => now(),
+                ]);
+            }
+        });
 
         app(AuditLogger::class)->log('learn_earn.exam_access_manually_granted', 'learn_earn_exam_access', (string) $exam->id, [
             'user_id' => (int) $values['user_id'],
