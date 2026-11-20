@@ -42,7 +42,6 @@ class ReferralIncomeService
 
     public function applyCode(User $referred, string $code): void
     {
-        $this->ownerType($referred);
         $code = strtoupper(trim($code));
 
         DB::transaction(function () use ($referred, $code): void {
@@ -50,6 +49,11 @@ class ReferralIncomeService
             // settlement. Settlement paths must lock this row before marking
             // any purchase source paid.
             $buyer = User::query()->whereKey($referred->id)->lockForUpdate()->firstOrFail();
+            if (Schema::hasTable('role_user')) {
+                DB::table('role_user')->where('user_id', $buyer->id)->lockForUpdate()->get();
+            }
+            $this->ownerType($buyer);
+
             $record = DB::table('referral_codes')
                 ->where('code', $code)
                 ->lockForUpdate()
