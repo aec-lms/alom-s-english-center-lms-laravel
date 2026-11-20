@@ -119,3 +119,6 @@ Every candidate above remains Draft unless a later formal status explicitly says
 | Finding | Candidate | Exact head / evidence | Remaining gate |
 |---|---|---|---|
 | Email case variants and generated student-code collision handling | [#352](../pull/352) | `0d456b8629463cc246c6be627040e894096b6f79`; normalizes store/update fields before validation, checks case-insensitive legacy rows, handles unique-index races, retries generated codes; regression tests added. Exact-head SQLite/MySQL/Browser/Composer checks are queued. | Full exact-head CI and independent review; keep Draft. |
+
+### Duplicate PR coordination
+PR #353 overlaps the same Student Management controller/tests as #352. Treat #352 as canonical; it adds broader case-insensitive student-code normalization and MySQL-collation-safe regression assertions. Do not merge both. Consolidate any unique retry-exhaustion coverage before closing/superseding #353.
