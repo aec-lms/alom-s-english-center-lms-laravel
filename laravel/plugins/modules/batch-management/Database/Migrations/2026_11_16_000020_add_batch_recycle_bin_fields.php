@@ -22,12 +22,9 @@ return new class extends Migration {
 
     public function down(): void
     {
-        if (!Schema::hasTable('study_batches') || !Schema::hasColumn('study_batches', 'deleted_at')) {
-            return;
-        }
-
-        Schema::table('study_batches', function (Blueprint $table): void {
-            $table->dropSoftDeletes();
-        });
+        // Intentionally retain additive recycle-bin columns during rollback.
+        // These columns may predate this migration on customized installations,
+        // and may contain deletion history created after the migration ran.
+        // Dropping them would risk destroying host-owned schema or recovery data.
     }
 };
