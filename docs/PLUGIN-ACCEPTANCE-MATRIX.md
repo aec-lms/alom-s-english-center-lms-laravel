@@ -227,3 +227,78 @@ A recursive Git tree scan of the exact PR #269 head `bf028e241a09579d30212135b74
 A manifest-by-manifest dependency review found one dangling optional dependency: commerce-cart declared subscription-management, but no subscription-management plugin manifest exists in this candidate. The stale optional dependency has been removed. PluginSiblingDependencyAuditTest now also rejects required or optional manifest dependencies that do not resolve to a plugin manifest, in addition to checking direct sibling namespace references.
 
 The candidate still requires the full dynamic manifest-discovery and lifecycle suite to pass on its exact head. A manifest resolving to another manifest is not evidence that the referenced plugin's workflows are complete.
+
+
+## Canonical current-main manifest inventory (2026-11-20)
+
+A recursive Git tree scan of **main** at exact commit `db493c6525f110cd4815024f7a8965c1da8baa22` found **60 plugin manifests**. The count below is reproducible from `laravel/plugins/modules/*/plugin.json`. “Tracked files” counts only recursive Git tree entries with `type=blob` under each plugin directory; directory entries with `type=tree` are excluded. These are blob/file counts at the cited snapshot, not functional-acceptance measures. This section supersedes older 39-, 44-, and 59-plugin snapshots above. It is an inventory, not functional certification.
+
+| Plugin slug | Tracked files | Evidence pointer | Functional acceptance |
+|---|---:|---|---|
+| `admin-boosting` | 10 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `admission-management` | 11 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `al-branding-loader` | 8 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `assignment-management` | 11 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `attendance-management` | 21 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `batch-management` | 8 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `board-question-solver` | 11 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `branch-management` | 8 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `carousel-builder` | 9 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `certificate-management` | 7 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `class-management` | 8 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `cms-website` | 14 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `commerce-cart` | 12 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `course-assessments` | 17 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `course-bundles` | 14 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `course-content-studio` | 14 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `course-management` | 44 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `course-wishlist` | 7 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `email-notifications` | 8 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `exam-management` | 17 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `expense-management` | 8 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `fees-management` | 10 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `flash-sale` | 7 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `gateway-card` | 5 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `gateway-paypal` | 6 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `gateway-sslcommerz` | 5 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `gateway-stripe` | 6 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `gmail-marketing` | 7 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `google-console` | 5 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `guardian-management` | 8 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `guardian-portal` | 5 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `hr-staff-management` | 10 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `learn-and-earn` | 11 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `library-management` | 8 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `marketing-management` | 11 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `media-library` | 10 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `meta-pixel` | 5 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `mobile-app-api` | 10 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `notice-board` | 8 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `notification-center` | 11 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `page-builder` | 10 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `payment-management` | 11 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `phonetics` | 32 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `push-notifications` | 5 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `question-bank` | 12 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `quiz-contest` | 14 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `referral-income` | 10 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `reports-analytics` | 5 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `role-ai-assistant` | 13 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `seo-manager` | 7 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `slider-builder` | 9 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `sms-gateway` | 8 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `storefront-catalog` | 9 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `student-management` | 10 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `student-tracing` | 8 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `student-tracking` | 12 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `support-center` | 12 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `teacher-management` | 10 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `universal-payment` | 16 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+| `visitor-popup-ads` | 8 | Manifest present; see the feature matrix for named tests | Not fully accepted; feature-specific and external gates remain |
+
+**Acceptance interpretation:** a named feature test is evidence of targeted coverage only. Full acceptance still requires the per-plugin CRUD/validation/role/branch/audit/failure matrix, browser workflow, SQLite and MySQL 8 CI, package checks, and external provider/staging gates where applicable. No plugin is declared production-certified by manifest presence or test-file presence.
+
+
+## Mainline delta since the 60-manifest inventory snapshot (2026-11-20)
+
+The 60-slug inventory was first scanned at `db493c6525f110cd4815024f7a8965c1da8baa22`. A Git comparison through current main commit `73722f154e5e3361de15320c9b3a9b3f68c71e7d` reports 443 commits ahead and 65 changed files. Of those changes, the only plugin manifest files are updates to `cms-website/plugin.json`, `course-management/plugin.json`, and `payment-management/plugin.json`; no plugin manifest path was added or removed. The slug count therefore remains 60 at this checkpoint. The per-plugin tracked-file counts in the preceding table remain the earlier `db493...` snapshot and must be regenerated against `73722...` before using them as current file counts.
