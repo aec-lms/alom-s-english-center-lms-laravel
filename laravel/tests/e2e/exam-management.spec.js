@@ -90,6 +90,16 @@ test('student exam journey uses frozen snapshot, autosaves safely, and remains a
   }));
   expect(overflowReport.document, JSON.stringify(overflowReport)).toBeLessThanOrEqual(overflowReport.viewport);
   await page.screenshot({ path: 'test-results/exam-attempt-mobile.png', fullPage: true });
+
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await expect(optionFour).toBeVisible();
+  const tabletWidth = await page.evaluate(() => ({
+    viewport: window.innerWidth,
+    document: document.documentElement.scrollWidth,
+  }));
+  expect(tabletWidth.document, JSON.stringify(tabletWidth)).toBeLessThanOrEqual(tabletWidth.viewport);
+  await page.screenshot({ path: 'test-results/exam-attempt-tablet.png', fullPage: true });
+
   await page.setViewportSize({ width: 1280, height: 900 });
 
   const attemptId = Number(await page.locator('form[data-attempt-id]').getAttribute('data-attempt-id'));
