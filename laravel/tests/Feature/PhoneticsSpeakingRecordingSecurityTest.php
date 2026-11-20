@@ -366,8 +366,8 @@ final class PhoneticsSpeakingRecordingSecurityTest extends TestCase
 
         $courseId = DB::table('courses')->insertGetId([
             'code' => 'PHON-PIVOT-COURSE-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
-            'title' => 'Permission Pivot Lock Course',
-            'slug' => 'phonetics-pivot-' . strtolower(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'title' => 'British & American Phonetics',
+            'slug' => 'british-american-phonetics',
             'description' => 'MySQL authorization pivot lock test',
             'price' => 0,
             'status' => 'published',
