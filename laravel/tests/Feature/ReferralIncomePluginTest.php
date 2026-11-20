@@ -279,6 +279,7 @@ class ReferralIncomePluginTest extends TestCase
 
         $this->actingAs($admin)->post('/admin/referral-income/payouts/' . $payout->id . '/review', [
             'status' => 'paid',
+            'admin_note' => 'Premature payout must be rejected.',
         ])->assertStatus(422);
         $this->assertDatabaseHas('referral_payout_requests', ['id' => $payout->id, 'status' => 'pending']);
 
