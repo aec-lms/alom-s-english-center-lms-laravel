@@ -640,7 +640,7 @@ final class ReferralIncomeRedTeamHardeningTest extends TestCase
                 'updated_at' => now(),
             ]);
             $this->fail('A provider refund reference must be unique across refund rows.');
-        } catch (\\Illuminate\\Database\\QueryException $exception) {
+        } catch (\Illuminate\Database\QueryException $exception) {
             $this->assertStringContainsString('UNIQUE', strtoupper($exception->getMessage()));
         }
         $this->assertDatabaseCount('payment_refunds', 1);
