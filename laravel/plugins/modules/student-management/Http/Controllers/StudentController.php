@@ -323,10 +323,6 @@ class StudentController extends Controller
     {
         for ($attempt = 0; $attempt < 10; $attempt++) {
             $candidate = 'STU-' . Str::upper(Str::random(10));
-            if (Student::query()->whereRaw('UPPER(student_code) = ?', [$candidate])->exists()) {
-                continue;
-            }
-
             try {
                 return DB::transaction(
                     fn (): Student => Student::query()->create($attributes + ['student_code' => $candidate])
