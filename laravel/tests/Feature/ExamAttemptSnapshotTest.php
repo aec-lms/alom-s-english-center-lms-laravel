@@ -204,7 +204,7 @@ class ExamAttemptSnapshotTest extends TestCase
     {
         // This matrix intentionally makes more requests than the production
         // per-student take limit; test the production throttle separately below.
-        $this->withoutMiddleware(\\Illuminate\\Routing\\Middleware\\ThrottleRequests::class);
+        $this->withoutMiddleware(ThrottleRequests::class);
         $this->markSystemInstalled();
         $this->activatePlugins(['exam-management']);
         $student = $this->createUserWithRole('student');
