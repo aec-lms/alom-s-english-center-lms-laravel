@@ -180,3 +180,21 @@ test('legacy pending attempt returns actionable 409 without changing score or su
   expect(state.total_marks).toBe(10);
   expect(state.exam_snapshot).toBeNull();
 });
+
+
+test('corrupt snapshot returns actionable 409 without changing historical attempt data', async ({ page }) => {
+  await signInAsExamStudent(page);
+
+  const response = await page.goto(`/exams/${fixture.corrupt_exam_id}/take`);
+  expect(response.status()).toBe(409);
+  await expect(page.getByRole('heading', { name: 'We need to verify this attempt' })).toBeVisible();
+  await expect(page.getByRole('alert')).toContainText('Your attempt has not been submitted and your score has not changed.');
+  await expect(page.getByText('Please contact your instructor or school administrator').first()).toBeVisible();
+
+  const state = JSON.parse(runPhp('inspect-exam-attempt.php', fixture.corrupt_attempt_id));
+  expect(state.submitted_at).toBeNull();
+  expect(state.score_obtained).toBe(3.25);
+  expect(state.total_marks).toBe(10);
+  expect(state.exam_snapshot.version).toBe(999);
+  expect(state.exam_snapshot.questions).toEqual([]);
+});
