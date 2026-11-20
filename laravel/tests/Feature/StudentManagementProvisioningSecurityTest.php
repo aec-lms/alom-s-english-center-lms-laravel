@@ -142,7 +142,7 @@ class StudentManagementProvisioningSecurityTest extends TestCase
         }
 
         $this->assertDatabaseMissing('users', ['email' => 'collision.exhausted@aec.test']);
-        $this->assertDatabaseMissing('students', ['user_id' => DB::table('users')->where('email', 'collision.exhausted@aec.test')->value('id')]);
+        $this->assertSame(1, Student::query()->count());
     }
 
     public function test_student_account_is_not_created_when_audit_storage_is_unavailable(): void
