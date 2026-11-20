@@ -259,6 +259,11 @@ class CourseAssessmentsPluginTest extends TestCase
         $start->assertRedirect();
         $attemptId = (int) basename(parse_url($start->headers->get('Location'), PHP_URL_PATH));
 
+        $otherStudent = $this->createUserWithRole('student');
+        $this->actingAs($otherStudent)
+            ->get(route('plugins.course-assessments.student.take', $attemptId))
+            ->assertNotFound();
+
         $student->roles()->detach();
 
         $this->actingAs($student)
