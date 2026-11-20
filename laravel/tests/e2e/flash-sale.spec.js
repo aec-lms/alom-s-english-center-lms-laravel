@@ -73,7 +73,8 @@ test('administrator can inspect Flash Sale Studio with responsive, labelled, key
   expect(response?.status()).toBe(200);
 
   await expect(page.getByRole('heading', { name: 'Flash Sale Studio' })).toBeVisible();
-  await expect(page.getByText('E2E Winter Offer')).toBeVisible();
+  const campaignRow = page.getByRole('row').filter({ hasText: 'E2E Winter Offer' }).first();
+  await expect(campaignRow).toBeVisible();
   await expect(page.getByRole('cell', { name: 'E2E Premium English Course' })).toBeVisible();
   const pricingCard = page.locator('.fs-stat').filter({ hasText: 'Pricing engine' });
   await expect(pricingCard).toContainText('Server-side quote');
