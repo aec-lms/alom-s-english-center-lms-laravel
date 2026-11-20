@@ -34,6 +34,11 @@ final class ReferralIncomeRedTeamHardeningTest extends TestCase
     public function test_manual_reversal_is_rejected_and_commission_review_and_rule_changes_are_audited(): void
     {
         $admin = $this->setupReferralAdmin();
+        $this->actingAs($admin)->get('/admin/referral-income')
+            ->assertOk()
+            ->assertDontSee('value="reversed"')
+            ->assertSee('Reason (required for rejection)');
+
         $referrer = $this->createUserWithRole('student');
         $buyer = $this->createUserWithRole('student');
         $service = app(ReferralIncomeService::class);
