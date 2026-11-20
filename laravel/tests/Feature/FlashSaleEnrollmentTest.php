@@ -477,7 +477,7 @@ class FlashSaleEnrollmentTest extends TestCase
         $migration->up();
         $migration->down();
 
-        $this->assertTrue(\\Illuminate\\Support\\Facades\\Schema::hasColumn('flash_sales', 'branch_id'));
+        $this->assertTrue(\Illuminate\Support\Facades\Schema::hasColumn('flash_sales', 'branch_id'));
         $this->assertDatabaseHas('flash_sales', [
             'id' => $saleId,
             'branch_id' => $branchId,
