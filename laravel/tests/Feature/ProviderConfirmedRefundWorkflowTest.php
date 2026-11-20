@@ -599,12 +599,15 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
         $requester = $this->createUserWithRole('admin');
         $approver = $this->createUserWithRole('admin');
         $service = app(RefundOrchestrationService::class);
+        $localRefundId = null;
 
-        Http::fake(function (ClientRequest $request) use ($transaction) {
+        Http::fake(function (ClientRequest $request) use ($transaction, &$localRefundId) {
             $data = $request->data();
+            $responseTransactionRef = (string) ($data['metadata[transaction_ref]'] ?? data_get($data, 'metadata.transaction_ref', ''));
+            $responseRefundId = (string) ($data['metadata[refund_id]'] ?? data_get($data, 'metadata.refund_id', ''));
             $metadata = [
-                'transaction_ref' => (string) ($data['metadata[transaction_ref]'] ?? data_get($data, 'metadata.transaction_ref', (string) $transaction->transaction_ref)),
-                'refund_id' => (string) ($data['metadata[refund_id]'] ?? data_get($data, 'metadata.refund_id', (string) PaymentRefund::query()->where('provider_idempotency_key', 'stripe-refund-pending-001')->value('id'))),
+                'transaction_ref' => $responseTransactionRef !== '' ? $responseTransactionRef : (string) $transaction->transaction_ref,
+                'refund_id' => $responseRefundId !== '' ? $responseRefundId : (string) ($localRefundId ?? ''),
             ];
 
             return Http::response([
@@ -624,6 +627,7 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
             (int) $requester->id,
             'stripe-refund-pending-001',
         );
+        $localRefundId = (string) $refund->id;
         $pending = $service->approveAndSubmit($refund, (int) $approver->id);
 
         $this->assertSame('pending', $pending->status);
