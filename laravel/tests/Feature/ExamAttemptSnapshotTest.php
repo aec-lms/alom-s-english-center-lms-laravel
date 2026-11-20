@@ -277,6 +277,8 @@ class ExamAttemptSnapshotTest extends TestCase
         $tooManyOptions['questions'][0]['options'] = array_fill(0, 21, 'Option');
         $perQuestionMarksOverLimit = $validSnapshot;
         $perQuestionMarksOverLimit['questions'][0]['marks'] = 1000.01;
+        $negativeMarksOverLimit = $validSnapshot;
+        $negativeMarksOverLimit['questions'][0]['negative_marks'] = 1000.01;
         $passMarksOverLimit = $validSnapshot;
         $passMarksOverLimit['pass_marks'] = 100001;
         $durationOverLimit = $validSnapshot;
@@ -335,6 +337,7 @@ class ExamAttemptSnapshotTest extends TestCase
             'overlong option' => $overlongOption,
             'too many options' => $tooManyOptions,
             'per-question marks over limit' => $perQuestionMarksOverLimit,
+            'negative marks over limit' => $negativeMarksOverLimit,
             'pass marks over limit' => $passMarksOverLimit,
             'duration over limit' => $durationOverLimit,
             'aggregate marks over limit' => $aggregateOverLimit,
@@ -390,6 +393,63 @@ class ExamAttemptSnapshotTest extends TestCase
             $this->assertSame(5.0, (float) $unchanged->total_marks, "Malformed snapshot case '{$case}' must preserve total marks.");
             $this->assertTrue($unchanged->passed, "Malformed snapshot case '{$case}' must preserve its pass state.");
         }
+    }
+
+    public function test_snapshot_validator_accepts_documented_upper_bounds_without_overflow(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['exam-management']);
+        $student = $this->createUserWithRole('student');
+        [$exam, $question] = $this->createSnapshotFixture();
+        $exam->update(['duration_minutes' => 360, 'pass_marks' => 100000]);
+
+        $questions = [];
+        for ($index = 0; $index < 500; $index++) {
+            $options = ['Boundary option A', 'Boundary option B'];
+            $prompt = 'Boundary question ' . ($index + 1);
+            if ($index === 0) {
+                $options = array_fill(0, 20, str_repeat('O', 300));
+                $prompt = str_repeat('Q', 10000);
+            }
+
+            $questions[] = [
+                'id' => $index === 0 ? (int) $question->id : 10000 + $index,
+                'prompt' => $prompt,
+                'options' => $options,
+                'correct_option_index' => 0,
+                'marks' => $index < 100 ? 1000.0 : 0.0,
+                'negative_marks' => 1000.0,
+            ];
+        }
+
+        $snapshot = [
+            'version' => 1,
+            'duration_minutes' => 360,
+            'pass_marks' => 100000.0,
+            'questions' => $questions,
+        ];
+
+        $attempt = ExamAttempt::query()->create([
+            'exam_id' => $exam->id,
+            'user_id' => $student->id,
+            'started_at' => now(),
+            'submitted_answers' => null,
+            'exam_snapshot' => $snapshot,
+            'score_obtained' => 0,
+            'total_marks' => 0,
+            'passed' => false,
+            'submitted_at' => null,
+        ]);
+
+        $this->actingAs($student)->get("/exams/{$exam->id}/take")
+            ->assertOk()
+            ->assertSee(str_repeat('Q', 10000))
+            ->assertSee('Boundary question 500');
+
+        $this->assertSame(500, count($attempt->fresh()->exam_snapshot['questions']));
+        $this->assertSame(100000.0, (float) collect($attempt->fresh()->exam_snapshot['questions'])->sum('marks'));
+        $this->assertSame(360, $attempt->fresh()->exam_snapshot['duration_minutes']);
+        $this->assertSame(100000.0, (float) $attempt->fresh()->exam_snapshot['pass_marks']);
     }
 
     private function createSnapshotFixture(): array
