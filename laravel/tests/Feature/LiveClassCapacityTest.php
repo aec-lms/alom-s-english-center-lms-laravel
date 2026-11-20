@@ -591,13 +591,7 @@ class LiveClassCapacityTest extends TestCase
 
             DB::setDefaultConnection($secondaryName);
             $this->assertSame($secondaryName, DB::connection()->getName());
-            try {
-                $response = $this->actingAs($student)
-                    ->postJson('/live-classes/' . $liveClass->id . '/heartbeat');
-                $this->fail('Heartbeat must wait for the in-progress account deactivation. Response status=' . $response->status() . ' body=' . substr((string) $response->getContent(), 0, 500));
-            } catch (\Illuminate\Database\QueryException $exception) {
-                $this->assertContains((int) ($exception->errorInfo[1] ?? 0), [1205, 1213], $exception->getMessage());
-            }
+            $this->assertHeartbeatWaitsForMysqlLock($student, $liveClass, 'account deactivation');
 
             DB::setDefaultConnection($primaryName);
             $primary->commit();
@@ -673,13 +667,7 @@ class LiveClassCapacityTest extends TestCase
 
             DB::setDefaultConnection($secondaryName);
             $this->assertSame($secondaryName, DB::connection()->getName());
-            try {
-                $response = $this->actingAs($student)
-                    ->postJson('/live-classes/' . $liveClass->id . '/heartbeat');
-                $this->fail('Heartbeat must wait for the in-progress enrollment revocation. Response status=' . $response->status() . ' body=' . substr((string) $response->getContent(), 0, 500));
-            } catch (\Illuminate\Database\QueryException $exception) {
-                $this->assertContains((int) ($exception->errorInfo[1] ?? 0), [1205, 1213], $exception->getMessage());
-            }
+            $this->assertHeartbeatWaitsForMysqlLock($student, $liveClass, 'enrollment revocation');
 
             DB::setDefaultConnection($primaryName);
             $primary->commit();
@@ -790,13 +778,7 @@ class LiveClassCapacityTest extends TestCase
 
             DB::setDefaultConnection($secondaryName);
             $this->assertSame($secondaryName, DB::connection()->getName());
-            try {
-                $response = $this->actingAs($student)
-                    ->postJson('/live-classes/' . $liveClass->id . '/heartbeat');
-                $this->fail('Heartbeat must wait for the paid commerce entitlement revocation. Response status=' . $response->status() . ' body=' . substr((string) $response->getContent(), 0, 500));
-            } catch (\Illuminate\Database\QueryException $exception) {
-                $this->assertContains((int) ($exception->errorInfo[1] ?? 0), [1205, 1213], $exception->getMessage());
-            }
+            $this->assertHeartbeatWaitsForMysqlLock($student, $liveClass, 'paid commerce entitlement revocation');
 
             DB::setDefaultConnection($primaryName);
             $primary->commit();
@@ -823,6 +805,26 @@ class LiveClassCapacityTest extends TestCase
             }
             DB::setDefaultConnection($primaryName);
             DB::purge($secondaryName);
+        }
+    }
+
+    private function assertHeartbeatWaitsForMysqlLock(User $student, LiveClass $liveClass, string $reason): void
+    {
+        // Laravel's HTTP test kernel normally renders a QueryException as a
+        // generic 500 response. Disable exception handling for this request so
+        // the test can assert the actual InnoDB lock-timeout/deadlock code.
+        $this->withoutExceptionHandling();
+
+        try {
+            $response = $this->actingAs($student)
+                ->postJson('/live-classes/' . $liveClass->id . '/heartbeat');
+
+            $this->fail('Heartbeat must wait for ' . $reason . '. Response status=' . $response->status()
+                . ' body=' . substr((string) $response->getContent(), 0, 500));
+        } catch (\Illuminate\Database\QueryException $exception) {
+            $this->assertContains((int) ($exception->errorInfo[1] ?? 0), [1205, 1213], $exception->getMessage());
+        } finally {
+            $this->withExceptionHandling();
         }
     }
 
