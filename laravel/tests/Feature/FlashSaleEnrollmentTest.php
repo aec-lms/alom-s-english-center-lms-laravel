@@ -303,7 +303,7 @@ class FlashSaleEnrollmentTest extends TestCase
         $this->assertEquals(850.00, $quote['total']);
     }
 
-    public function test_public_storefront_uses_safe_defaults_and_displays_active_offer(): void
+    public function test_public_storefront_uses_the_same_winning_offer_as_the_quote_resolver(): void
     {
         $this->markSystemInstalled();
         $this->activatePlugins(['branch-management', 'course-management', 'flash-sale']);
@@ -315,13 +315,66 @@ class FlashSaleEnrollmentTest extends TestCase
             'price' => 2000,
             'status' => 'published',
         ]);
+
+        foreach ([
+            ['title' => 'Lower Priority Public Offer', 'discount_value' => 20, 'priority' => 1],
+            ['title' => 'Winning Public Offer', 'discount_value' => 10, 'priority' => 50],
+        ] as $campaign) {
+            DB::table('flash_sales')->insert($campaign + [
+                'course_id' => $course->id,
+                'discount_type' => 'percent',
+                'starts_at' => now()->subMinute(),
+                'ends_at' => now()->addDay(),
+                'is_published' => true,
+                'is_active' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $quote = app(\Plugins\Modules\FlashSale\Services\FlashSalePricingService::class)
+            ->quote((int) $course->id);
+        $this->assertSame('Winning Public Offer', $quote['sale']->title);
+        $this->assertEquals(1800.00, $quote['total']);
+
+        $this->get('/flash-sale')
+            ->assertOk()
+            ->assertSee('Flash Sale')
+            ->assertSee('Winning Public Offer')
+            ->assertDontSee('Lower Priority Public Offer')
+            ->assertSee('Public Flash Sale Course')
+            ->assertSee('1,800.00');
+    }
+
+    public function test_pricing_resolver_rejects_campaign_branch_that_conflicts_with_course_branch(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'course-management', 'flash-sale']);
+
+        $makeBranch = static fn (string $suffix): int => DB::table('branches')->insertGetId([
+            'code' => 'FLASH-QUOTE-' . $suffix . '-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'name' => 'Flash Quote ' . $suffix,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $courseBranchId = $makeBranch('COURSE');
+        $campaignBranchId = $makeBranch('CAMPAIGN');
+        $course = Course::query()->create([
+            'branch_id' => $courseBranchId,
+            'code' => 'FLASH-QUOTE-MISMATCH-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'title' => 'Branch Mismatch Quote Course',
+            'slug' => 'branch-mismatch-quote-' . bin2hex(random_bytes(3)),
+            'price' => 700,
+            'status' => 'published',
+        ]);
         DB::table('flash_sales')->insert([
             'course_id' => $course->id,
-            'title' => 'Public Launch Offer',
-            'subtitle' => 'Learn more for less',
-            'badge_text' => '20% OFF',
+            'branch_id' => $campaignBranchId,
+            'title' => 'Incompatible Branch Offer',
             'discount_type' => 'percent',
-            'discount_value' => 20,
+            'discount_value' => 50,
+            'priority' => 100,
             'starts_at' => now()->subMinute(),
             'ends_at' => now()->addDay(),
             'is_published' => true,
@@ -330,12 +383,11 @@ class FlashSaleEnrollmentTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $this->get('/flash-sale')
-            ->assertOk()
-            ->assertSee('Flash Sale')
-            ->assertSee('Public Launch Offer')
-            ->assertSee('Public Flash Sale Course')
-            ->assertSee('1,600.00');
+        $quote = app(\Plugins\Modules\FlashSale\Services\FlashSalePricingService::class)
+            ->quote((int) $course->id, (int) $campaignBranchId);
+
+        $this->assertNull($quote['sale']);
+        $this->assertEquals(700.00, $quote['total']);
     }
 
     public function test_branch_manager_cannot_mutate_campaign_assigned_to_another_branch(): void
