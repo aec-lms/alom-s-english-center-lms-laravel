@@ -209,21 +209,11 @@ class ExamController extends Controller
         $actor = $request->user();
         abort_unless($actor && $actor->hasRole('student'), 403, 'Only student accounts can take exams.');
         abort_unless($exam->is_published, 404);
-        $this->assertStudentExamBranch($actor, $exam);
         if ($exam->starts_at && now()->lt($exam->starts_at)) {
             abort(403, 'This exam has not started yet.');
         }
         if ($exam->ends_at && now()->greaterThanOrEqualTo($exam->ends_at)) {
             abort(403, 'The exam submission window has closed.');
-        }
-        if (Schema::hasColumn('exams', 'learn_earn_type') && $exam->learn_earn_type === 'paid') {
-            abort_unless(
-                Schema::hasTable('learn_earn_exam_access')
-                && DB::table('learn_earn_exam_access')->where('exam_id', $exam->id)
-                    ->where('user_id', $actor->id)->where('status', 'granted')->exists(),
-                403,
-                'Payment is required before attempting this exam.'
-            );
         }
 
         $attempt = $this->startOrResumeAttempt($exam, $actor, $request);
@@ -270,12 +260,8 @@ class ExamController extends Controller
         $actor = $request->user();
         abort_unless($actor && $actor->hasRole('student'), 403, 'Only student accounts can save exam answers.');
         abort_unless($exam->is_published, 404);
-        $this->assertStudentExamBranch($actor, $exam);
         if ($exam->starts_at && now()->lt($exam->starts_at)) abort(403, 'This exam has not started yet.');
         if ($exam->ends_at && now()->greaterThanOrEqualTo($exam->ends_at)) abort(403, 'The exam submission window has closed.');
-        if (Schema::hasColumn('exams', 'learn_earn_type') && $exam->learn_earn_type === 'paid') {
-            abort_unless(Schema::hasTable('learn_earn_exam_access') && DB::table('learn_earn_exam_access')->where('exam_id', $exam->id)->where('user_id', $actor->id)->where('status', 'granted')->exists(), 403, 'Payment is required before saving this exam.');
-        }
 
         $validated = $request->validate([
             'attempt_id' => ['required', 'integer'],
@@ -285,6 +271,7 @@ class ExamController extends Controller
 
         $savedAt = DB::transaction(function () use ($exam, $actor, $validated, $request): string {
             $lockedExam = Exam::query()->whereKey($exam->id)->lockForUpdate()->firstOrFail();
+            $this->assertLockedStudentExamEligibility($lockedExam, $actor, 404, 'Payment is required before saving this exam.');
             $attempt = ExamAttempt::query()
                 ->whereKey((int) $validated['attempt_id'])
                 ->where('exam_id', $lockedExam->id)
@@ -333,10 +320,6 @@ class ExamController extends Controller
         abort_unless($exam->is_published, 403, 'Exam is not published for attempts.');
         $actor = $request->user();
         abort_unless($actor && $actor->hasRole('student'), 403, 'Only student accounts can submit exam attempts.');
-        if (Schema::hasColumn('exams', 'learn_earn_type') && $exam->learn_earn_type === 'paid') {
-            abort_unless(Schema::hasTable('learn_earn_exam_access') && DB::table('learn_earn_exam_access')->where('exam_id', $exam->id)->where('user_id', $actor->id)->where('status', 'granted')->exists(), 403, 'Payment is required before attempting this exam.');
-        }
-        $this->assertStudentExamBranch($actor, $exam);
         if ($exam->starts_at && now()->lt($exam->starts_at)) abort(403, 'This exam has not started yet.');
         if ($exam->ends_at && now()->greaterThanOrEqualTo($exam->ends_at)) abort(403, 'The exam submission window has closed.');
 
@@ -348,6 +331,7 @@ class ExamController extends Controller
 
         $result = DB::transaction(function () use ($exam, $actor, $validated, $request): array {
             $lockedExam = Exam::query()->whereKey($exam->id)->lockForUpdate()->firstOrFail();
+            $this->assertLockedStudentExamEligibility($lockedExam, $actor, 403);
             $attempt = ExamAttempt::query()
                 ->whereKey((int) $validated['attempt_id'])
                 ->where('exam_id', $lockedExam->id)
@@ -456,19 +440,8 @@ class ExamController extends Controller
         $actor = $request->user();
         abort_unless($actor && $actor->hasRole('student'), 403, 'Only student accounts can take exams.');
         abort_unless($exam->is_published, 404);
-        $this->assertStudentExamBranch($actor, $exam);
         abort_if($exam->starts_at && now()->lt($exam->starts_at), 403, 'This exam has not started yet.');
         abort_if($exam->ends_at && now()->greaterThanOrEqualTo($exam->ends_at), 403, 'The exam submission window has closed.');
-
-        if (Schema::hasColumn('exams', 'learn_earn_type') && $exam->learn_earn_type === 'paid') {
-            abort_unless(
-                Schema::hasTable('learn_earn_exam_access')
-                && DB::table('learn_earn_exam_access')->where('exam_id', $exam->id)
-                    ->where('user_id', $actor->id)->where('status', 'granted')->exists(),
-                403,
-                'Payment is required before attempting this exam.'
-            );
-        }
 
         $attempt = $this->startOrResumeAttempt($exam, $actor, $request);
         abort_if($attempt->submitted_at !== null, 403, 'Your exam time has expired or all attempts have been used.');
@@ -496,19 +469,8 @@ class ExamController extends Controller
         abort_unless($exam->is_published, 403, 'Exam is not published for attempts.');
         $actor = $request->user();
         abort_unless($actor && $actor->hasRole('student'), 403, 'Only student accounts can submit exam attempts.');
-        $this->assertStudentExamBranch($actor, $exam);
         abort_if($exam->starts_at && now()->lt($exam->starts_at), 403, 'This exam has not started yet.');
         abort_if($exam->ends_at && now()->greaterThanOrEqualTo($exam->ends_at), 403, 'The exam submission window has closed.');
-
-        if (Schema::hasColumn('exams', 'learn_earn_type') && $exam->learn_earn_type === 'paid') {
-            abort_unless(
-                Schema::hasTable('learn_earn_exam_access')
-                && DB::table('learn_earn_exam_access')->where('exam_id', $exam->id)
-                    ->where('user_id', $actor->id)->where('status', 'granted')->exists(),
-                403,
-                'Payment is required before attempting this exam.'
-            );
-        }
 
         $validated = $request->validate([
             'answers' => ['required', 'array'],
@@ -517,6 +479,7 @@ class ExamController extends Controller
 
         $result = DB::transaction(function () use ($exam, $actor, $attempt, $validated, $request): array {
             $lockedExam = Exam::query()->whereKey($exam->id)->lockForUpdate()->firstOrFail();
+            $this->assertLockedStudentExamEligibility($lockedExam, $actor, 403);
             $record = ExamAttempt::query()
                 ->whereKey($attempt)
                 ->where('exam_id', $lockedExam->id)
@@ -602,6 +565,7 @@ class ExamController extends Controller
     {
         return DB::transaction(function () use ($exam, $actor, $request): ExamAttempt {
             $lockedExam = Exam::query()->whereKey($exam->id)->lockForUpdate()->firstOrFail();
+            $this->assertLockedStudentExamEligibility($lockedExam, $actor, 404);
             $pending = ExamAttempt::query()
                 ->where('exam_id', $lockedExam->id)
                 ->where('user_id', $actor->id)
@@ -792,6 +756,80 @@ class ExamController extends Controller
         }
 
         return $snapshot;
+    }
+
+    /**
+     * Revalidate current eligibility after locking the exam and before reading
+     * or writing an attempt. Lock order: exam -> user -> student profile ->
+     * paid entitlement -> attempt. Student lifecycle writers use user -> profile.
+     */
+    private function assertLockedStudentExamEligibility(
+        Exam $lockedExam,
+        object $student,
+        int $unpublishedStatus,
+        string $paymentMessage = 'Payment is required before attempting this exam.'
+    ): void {
+        abort_unless((bool) $lockedExam->is_published, $unpublishedStatus, 'Exam is not published for attempts.');
+
+        if ($lockedExam->starts_at && now()->lt($lockedExam->starts_at)) {
+            abort(403, 'This exam has not started yet.');
+        }
+        if ($lockedExam->ends_at && now()->greaterThanOrEqualTo($lockedExam->ends_at)) {
+            abort(403, 'The exam submission window has closed.');
+        }
+
+        // Re-read the branch after the User lock and then Student profile lock.
+        $assignedBranchId = $this->lockStudentBranchContext($student);
+        if ($lockedExam->branch_id !== null) {
+            abort_unless(
+                $assignedBranchId !== null && $assignedBranchId === (int) $lockedExam->branch_id,
+                403,
+                'Exam is outside your assigned branch.'
+            );
+        }
+
+        if (Schema::hasColumn('exams', 'learn_earn_type') && $lockedExam->learn_earn_type === 'paid') {
+            abort_unless(Schema::hasTable('learn_earn_exam_access'), 403, $paymentMessage);
+
+            $access = DB::table('learn_earn_exam_access')
+                ->where('exam_id', $lockedExam->id)
+                ->where('user_id', $student->id)
+                ->lockForUpdate()
+                ->first();
+
+            abort_unless($access !== null && $access->status === 'granted', 403, $paymentMessage);
+        }
+    }
+
+    /**
+     * Always lock User before Student profile, matching the lifecycle writer's
+     * ordering. A missing profile falls back to the linked User branch value.
+     */
+    private function lockStudentBranchContext(object $student): ?int
+    {
+        $userId = (int) $student->id;
+        $user = DB::table('users')->where('id', $userId)->lockForUpdate()->first();
+        abort_unless($user !== null, 403, 'Student account is no longer available.');
+
+        $userBranchId = Schema::hasColumn('users', 'branch_id')
+            ? ($user->branch_id !== null ? (int) $user->branch_id : null)
+            : null;
+
+        if (app(\\App\\Core\\Plugins\\PluginManager::class)->isEnabled('student-management')
+            && Schema::hasTable('students')
+            && Schema::hasColumn('students', 'branch_id')) {
+            $profileQuery = DB::table('students')->where('user_id', $userId);
+            if (Schema::hasColumn('students', 'deleted_at')) {
+                $profileQuery->whereNull('deleted_at');
+            }
+            $profile = $profileQuery->lockForUpdate()->first();
+
+            if ($profile && $profile->branch_id !== null) {
+                return (int) $profile->branch_id;
+            }
+        }
+
+        return $userBranchId;
     }
 
     private function assertStudentExamBranch(object $student, Exam $exam): void
