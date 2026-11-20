@@ -604,6 +604,60 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
         Http::assertSentCount(2);
     }
 
+    public function test_paypal_refund_for_a_different_capture_is_rejected_without_ledger_mutation(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'gateway-paypal']);
+
+        app(PluginManager::class)->saveSettings('gateway-paypal', [
+            'client_id' => 'paypal-capture-mismatch-client',
+            'client_secret' => 'paypal-capture-mismatch-secret',
+            'sandbox_mode' => '1',
+            'refunds_enabled' => '1',
+        ], ['client_secret']);
+
+        [$invoice, $transaction] = $this->createSettledPayment(
+            'gateway-paypal',
+            'CAPTURE-ORIGINAL-001',
+        );
+        $requester = $this->createUserWithRole('admin');
+        $approver = $this->createUserWithRole('admin');
+        $service = app(RefundOrchestrationService::class);
+
+        Http::fake(function (ClientRequest $request) {
+            if (str_ends_with((string) parse_url($request->url(), PHP_URL_PATH), '/v1/oauth2/token')) {
+                return Http::response(['access_token' => 'paypal-capture-mismatch-token'], 200);
+            }
+
+            return Http::response([
+                'id' => 'PAYPAL-REFUND-WRONG-CAPTURE',
+                'status' => 'COMPLETED',
+                'amount' => ['value' => '100.00', 'currency_code' => 'BDT'],
+                'links' => [[
+                    'rel' => 'up',
+                    'href' => 'https://api-m.sandbox.paypal.com/v2/payments/captures/CAPTURE-OTHER-002',
+                ]],
+            ], 201);
+        });
+
+        $refund = $service->requestOnlineRefund(
+            $transaction,
+            100,
+            'Capture mismatch test',
+            (int) $requester->id,
+            'paypal-capture-mismatch-001',
+        );
+        $review = $service->approveAndSubmit($refund, (int) $approver->id);
+
+        $this->assertSame('requires_review', $review->status);
+        $this->assertSame('provider_response_mismatch', $review->provider_status);
+        $this->assertSame('PAYPAL-REFUND-WRONG-CAPTURE', $review->provider_refund_reference);
+        $this->assertNull($review->ledger_applied_at);
+        $this->assertSame(1000.0, (float) $invoice->fresh()->paid_amount);
+        $this->assertSame('settled', $transaction->fresh()->status);
+        Http::assertSentCount(2);
+    }
+
     public function test_paypal_multi_capture_order_is_rejected_instead_of_settling_only_the_first_capture(): void
     {
         $this->markSystemInstalled();
