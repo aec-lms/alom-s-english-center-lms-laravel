@@ -58,6 +58,14 @@ class PaypalGatewayService
         $remaining = $reservation['remaining'];
 
         if ($reservation['reused']) {
+            if (in_array($tx->status, ['failed', 'refunded', 'settled'], true)) {
+                return [
+                    'transaction' => $tx,
+                    'paypal_order_id' => (string) ($tx->metadata['paypal_order_id'] ?? ''),
+                    'approval_url' => '',
+                ];
+            }
+
             $approvalUrl = (string) ($tx->metadata['approval_url'] ?? '');
             if ($approvalUrl === '') {
                 throw new RuntimeException('A PayPal order is already reserved but its approval URL is unavailable; reconciliation is required.');
