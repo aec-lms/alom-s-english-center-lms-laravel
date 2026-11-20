@@ -409,6 +409,7 @@ class ExamAttemptSnapshotTest extends TestCase
             'plugins.exams.take' => 'throttle:20,1,exam-take:',
             'plugins.exams.history' => 'throttle:30,1,exam-history:',
             'plugins.exams.attempt' => 'throttle:5,1,exam-submit:',
+            'plugins.exams.attempt.admin' => 'throttle:5,1,exam-submit:',
             'plugins.exams.autosave' => 'throttle:30,1,exam-autosave:',
         ];
 
