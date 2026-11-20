@@ -135,6 +135,12 @@ class AssessmentGradingController extends Controller
         );
 
         $branchId = (int) $manager->branch_id;
+        if (!Schema::hasTable('courses')) {
+            $query->whereHas('assessmentSet', fn ($set) => $set->where('branch_id', $branchId)->whereNull('course_id'));
+
+            return;
+        }
+
         $query->whereIn('assessment_set_id', function ($sets) use ($branchId): void {
             $sets->select('sets.id')
                 ->from('course_assessment_sets as sets')
