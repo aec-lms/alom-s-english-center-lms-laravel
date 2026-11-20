@@ -22,12 +22,9 @@ return new class extends Migration {
 
     public function down(): void
     {
-        if (!Schema::hasTable('academic_classes') || !Schema::hasColumn('academic_classes', 'deleted_at')) {
-            return;
-        }
-
-        Schema::table('academic_classes', function (Blueprint $table): void {
-            $table->dropSoftDeletes();
-        });
+        // Intentionally non-destructive: these conditional additive columns may
+        // pre-date this migration on customer installations. Without durable
+        // per-install ownership evidence, dropping them could destroy customer
+        // schema or soft-delete history. Retain the nullable columns on rollback.
     }
 };
