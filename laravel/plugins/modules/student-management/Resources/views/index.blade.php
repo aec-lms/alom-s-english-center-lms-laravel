@@ -41,7 +41,7 @@
                     </form>
                 </div>
 
-                <form method="POST" action="/admin/students/{{ $student->id }}" class="grid sm:grid-cols-6 gap-2 pt-2 border-t border-slate-100">
+                <form method="POST" action="/admin/students/{{ $student->id }}" class="grid sm:grid-cols-2 lg:grid-cols-8 gap-2 pt-2 border-t border-slate-100">
                     @csrf @method('PUT')
                     <input name="student_code" value="{{ $student->student_code }}" required class="rounded-lg border border-slate-300 px-2.5 py-1.5 font-mono">
                     <input name="name" value="{{ $student->user?->name }}" required class="rounded-lg border border-slate-300 px-2.5 py-1.5">
@@ -52,7 +52,13 @@
                         <option value="inactive" {{ $student->status === 'inactive' ? 'selected' : '' }}>Inactive</option>
                         <option value="graduated" {{ $student->status === 'graduated' ? 'selected' : '' }}>Graduated</option>
                     </select>
-                    <input type="hidden" name="branch_id" value="{{ $student->branch_id }}">
+                    <select name="branch_id" class="rounded-lg border border-slate-300 px-2.5 py-1.5 bg-white">
+                        <option value="">No Specific Branch (Online / Global)</option>
+                        @foreach ($branches as $b)
+                            <option value="{{ $b->id }}" {{ (int) $student->branch_id === (int) $b->id ? 'selected' : '' }}>{{ $b->name }}</option>
+                        @endforeach
+                    </select>
+                    <input type="password" name="password" minlength="8" autocomplete="new-password" placeholder="New password (leave blank to keep)" class="rounded-lg border border-slate-300 px-2.5 py-1.5">
                     <button class="rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold px-3 py-1.5">Update</button>
                 </form>
             </div>
