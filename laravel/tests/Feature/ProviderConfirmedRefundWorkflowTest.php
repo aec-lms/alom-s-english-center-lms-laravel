@@ -220,15 +220,21 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
         $approver = $this->createUserWithRole('admin');
         $service = app(RefundOrchestrationService::class);
 
-        Http::fake([
-            'https://api.stripe.com/v1/refunds' => Http::response([
+        Http::fake(function (ClientRequest $request) {
+            $data = $request->data();
+
+            return Http::response([
                 'id' => 're_refund_workflow_001',
                 'payment_intent' => 'pi_refund_workflow_001',
                 'amount' => 25000,
                 'currency' => 'bdt',
+                'metadata' => [
+                    'transaction_ref' => $data['metadata[transaction_ref]'] ?? '',
+                    'refund_id' => $data['metadata[refund_id]'] ?? '',
+                ],
                 'status' => 'succeeded',
-            ], 200),
-        ]);
+            ], 200);
+        });
 
         $refund = $service->requestOnlineRefund(
             $transaction,
@@ -363,15 +369,21 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
         $approver = $this->createUserWithRole('admin');
         $service = app(RefundOrchestrationService::class);
 
-        Http::fake([
-            'https://api.stripe.com/v1/refunds' => Http::response([
+        Http::fake(function (ClientRequest $request) {
+            $data = $request->data();
+
+            return Http::response([
                 'id' => 're_full_refund_001',
                 'payment_intent' => 'pi_full_refund_001',
                 'amount' => 100000,
                 'currency' => 'bdt',
+                'metadata' => [
+                    'transaction_ref' => $data['metadata[transaction_ref]'] ?? '',
+                    'refund_id' => $data['metadata[refund_id]'] ?? '',
+                ],
                 'status' => 'succeeded',
-            ], 200),
-        ]);
+            ], 200);
+        });
 
         $refund = $service->requestOnlineRefund(
             $transaction,
@@ -679,7 +691,7 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
         $approver = $this->createUserWithRole('admin');
         $service = app(RefundOrchestrationService::class);
 
-        Http::fake(function (ClientRequest $request) {
+        Http::fake(function (ClientRequest $request) use ($transaction) {
             if (str_ends_with((string) parse_url($request->url(), PHP_URL_PATH), '/v1/oauth2/token')) {
                 return Http::response(['access_token' => 'paypal-capture-mismatch-token'], 200);
             }
@@ -793,8 +805,12 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
                 ], 200);
             }
 
+            $data = $request->data();
+
             return Http::response([
                 'id' => 'PAYPAL-REFUND-001',
+                'invoice_id' => $data['invoice_id'] ?? '',
+                'custom_id' => $data['custom_id'] ?? '',
                 'status' => 'COMPLETED',
                 'amount' => ['value' => '300.00', 'currency_code' => 'BDT'],
                 'links' => [
