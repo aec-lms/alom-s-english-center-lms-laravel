@@ -256,7 +256,7 @@ class ReferralIncomeService
                 || (Schema::hasColumn('universal_payment_transactions', 'fee_invoice_id')
                     && $originalPayment->fee_invoice_id !== null
                     && (int) $originalPayment->fee_invoice_id !== (int) $order->invoice_id)
-                || !in_array((string) $originalPayment->status, ['pending', 'risk_review', 'verified'], true)
+                || $originalPayment->status !== 'verified'
                 || !is_array($originalNotes)
                 || ($originalNotes['purpose'] ?? null) !== 'course_cart'
                 || (int) ($originalNotes['course_cart_order_id'] ?? 0) !== (int) $order->id) {
