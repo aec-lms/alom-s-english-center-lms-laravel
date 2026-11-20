@@ -46,9 +46,10 @@ class TeacherController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $request->merge(['email' => Str::lower(trim((string) $request->input('email')))]);
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:150'],
-            'email' => ['required', 'email', 'max:190', 'unique:users,email'],
+            'email' => ['required', 'email', 'max:190', $this->uniqueEmailRule()],
             'password' => ['nullable', 'string', 'min:6'],
             'branch_id' => array_merge(['nullable', 'integer'], Schema::hasTable('branches') ? [Rule::exists('branches', 'id')] : ['prohibited']),
             'employee_code' => ['required', 'string', 'max:60', 'unique:teachers,employee_code'],
@@ -117,9 +118,12 @@ class TeacherController extends Controller
     public function update(Request $request, Teacher $teacher): RedirectResponse
     {
         $actorId = (int) $request->user()->getKey();
+        if ($request->filled('email')) {
+            $request->merge(['email' => Str::lower(trim((string) $request->input('email')))]);
+        }
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:150'],
-            'email' => ['nullable', 'email', 'max:190', Rule::unique('users', 'email')->ignore($teacher->user_id)],
+            'email' => ['nullable', 'email', 'max:190', $this->uniqueEmailRule((int) $teacher->user_id)],
             'branch_id' => array_merge(['nullable', 'integer'], Schema::hasTable('branches') ? [Rule::exists('branches', 'id')] : ['prohibited']),
             'employee_code' => ['required', 'string', 'max:60', 'unique:teachers,employee_code,' . $teacher->id],
             'specialization' => ['required', 'string', 'max:160'],
@@ -297,6 +301,24 @@ class TeacherController extends Controller
         });
 
         return back()->with('status', "Instructor '{$deleted['code']}' removed without affecting shared LMS courses.");
+    }
+
+    /**
+     * Compare normalized addresses so case-variant legacy rows are duplicates
+     * consistently on SQLite and MySQL.
+     */
+    private function uniqueEmailRule(?int $exceptUserId = null): callable
+    {
+        return function (string $attribute, mixed $value, callable $fail) use ($exceptUserId): void {
+            $query = User::query()->whereRaw('LOWER(email) = ?', [Str::lower(trim((string) $value))]);
+            if ($exceptUserId !== null) {
+                $query->where('id', '<>', $exceptUserId);
+            }
+
+            if ($query->exists()) {
+                $fail('The email has already been taken.');
+            }
+        };
     }
 
     private function lockActorRoleAssignments(int $actorId): void
