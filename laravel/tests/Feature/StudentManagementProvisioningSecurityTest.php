@@ -126,7 +126,7 @@ class StudentManagementProvisioningSecurityTest extends TestCase
             'student_code' => 'LEGACY-CASE-DUPLICATE',
         ])->assertSessionHasErrors('email');
 
-        $this->assertDatabaseMissing('users', ['email' => 'legacy.case@aec.test']);
+        $this->assertSame(1, DB::table('users')->whereRaw('LOWER(email) = ?', ['legacy.case@aec.test'])->count());
         $this->assertDatabaseMissing('students', ['student_code' => 'LEGACY-CASE-DUPLICATE']);
 
         $this->actingAs($admin)->post('/admin/students', [
