@@ -35,6 +35,73 @@ class StudentManagementProvisioningSecurityTest extends TestCase
         $this->assertDatabaseMissing('students', ['student_code' => 'ROLE-MISSING-001']);
     }
 
+    public function test_student_store_and_update_normalize_email_and_student_code_before_validation(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['student-management']);
+        $admin = $this->createUserWithRole('admin');
+
+        $this->actingAs($admin)->post('/admin/students', [
+            'name' => 'Normalized Learner',
+            'email' => ' Mixed.Case@aec.test ',
+            'password' => 'StrongPassword123!',
+            'student_code' => ' mixed-code-001 ',
+            'status' => 'active',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $student = Student::query()->where('student_code', 'MIXED-CODE-001')->firstOrFail();
+        $student->load('user');
+        $this->assertSame('mixed.case@aec.test', $student->user->email);
+
+        $this->actingAs($admin)->put('/admin/students/' . $student->id, [
+            'name' => 'Normalized Learner Updated',
+            'email' => ' Updated.Case@aec.test ',
+            'student_code' => ' updated-code-002 ',
+            'status' => 'active',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $student->refresh()->load('user');
+        $this->assertSame('updated.case@aec.test', $student->user->email);
+        $this->assertSame('UPDATED-CODE-002', $student->student_code);
+    }
+
+    public function test_student_creation_and_update_reject_case_insensitive_legacy_code_collisions(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['student-management']);
+        $admin = $this->createUserWithRole('admin');
+
+        $this->actingAs($admin)->post('/admin/students', [
+            'name' => 'Collision Target',
+            'email' => 'collision.target@aec.test',
+            'password' => 'StrongPassword123!',
+            'student_code' => 'TARGET-CODE-01',
+            'status' => 'active',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $target = Student::query()->where('student_code', 'TARGET-CODE-01')->firstOrFail();
+
+        $legacy = $this->createLegacyStudentForIdentityTest('legacy.code@aec.test', 'legacy-code-001');
+
+        $this->actingAs($admin)->post('/admin/students', [
+            'name' => 'Duplicate Code Learner',
+            'email' => 'duplicate.code@aec.test',
+            'password' => 'StrongPassword123!',
+            'student_code' => ' LEGACY-CODE-001 ',
+            'status' => 'active',
+        ])->assertSessionHasErrors('student_code');
+
+        $this->actingAs($admin)->put('/admin/students/' . $target->id, [
+            'name' => 'Collision Target',
+            'email' => 'collision.target@aec.test',
+            'student_code' => ' LEGACY-CODE-001 ',
+            'status' => 'active',
+        ])->assertSessionHasErrors('student_code');
+
+        $this->assertSame('TARGET-CODE-01', $target->fresh()->student_code);
+        $this->assertSame(1, Student::query()->whereRaw('UPPER(student_code) = ?', ['LEGACY-CODE-001'])->count());
+        $this->assertDatabaseHas('students', ['id' => $legacy->id, 'student_code' => 'legacy-code-001']);
+    }
+
     public function test_email_uniqueness_is_case_insensitive_for_store_and_update(): void
     {
         $this->markSystemInstalled();
@@ -90,10 +157,10 @@ class StudentManagementProvisioningSecurityTest extends TestCase
             'name' => 'Existing Code Learner',
             'email' => 'existing.code@aec.test',
             'password' => 'StrongPassword123!',
-            'student_code' => 'STU-COLLID',
+            'student_code' => 'STU-COLLISION1',
         ])->assertRedirect()->assertSessionHasNoErrors();
 
-        $generated = ['COLLID', 'RETRY1'];
+        $generated = ['COLLISION1', 'RETRYCODE1'];
         Str::createRandomStringsUsing(function (int $length) use (&$generated): string {
             return array_shift($generated) ?? str_repeat('A', $length);
         });
@@ -109,7 +176,7 @@ class StudentManagementProvisioningSecurityTest extends TestCase
         }
 
         $this->assertDatabaseHas('students', [
-            'student_code' => 'STU-RETRY1',
+            'student_code' => 'STU-RETRYCODE1',
         ]);
         $this->assertDatabaseHas('users', [
             'email' => 'retried.code@aec.test',
@@ -129,7 +196,7 @@ class StudentManagementProvisioningSecurityTest extends TestCase
             'student_code' => 'STU-COLLID',
         ])->assertRedirect()->assertSessionHasNoErrors();
 
-        Str::createRandomStringsUsing(fn (int $length): string => 'COLLID');
+        Str::createRandomStringsUsing(fn (int $length): string => 'COLLISION1');
 
         try {
             $this->actingAs($admin)->post('/admin/students', [
@@ -165,6 +232,23 @@ class StudentManagementProvisioningSecurityTest extends TestCase
 
         $this->assertDatabaseMissing('users', ['email' => 'audit.unavailable@aec.test']);
         $this->assertDatabaseMissing('students', ['student_code' => 'AUDIT-UNAVAILABLE-001']);
+    }
+
+    private function createLegacyStudentForIdentityTest(string $email, string $studentCode): Student
+    {
+        $user = \App\Models\User::query()->create([
+            'name' => 'Legacy Student',
+            'email' => $email,
+            'password' => \Illuminate\Support\Facades\Hash::make('StrongPassword123!'),
+            'is_active' => true,
+        ]);
+
+        return Student::query()->create([
+            'user_id' => $user->id,
+            'student_code' => $studentCode,
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+        ]);
     }
 
 }
