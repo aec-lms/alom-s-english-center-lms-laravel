@@ -125,7 +125,7 @@ class TeacherController extends Controller
 
             $teacher = Teacher::query()->create([
                 'user_id' => $user->id,
-                'branch_id' => $validated['branch_id'] ?? null,
+                'branch_id' => $branchId,
                 'employee_code' => strtoupper(trim($validated['employee_code'])),
                 'specialization' => $validated['specialization'],
                 'credentials' => $validated['credentials'] ?? null,
