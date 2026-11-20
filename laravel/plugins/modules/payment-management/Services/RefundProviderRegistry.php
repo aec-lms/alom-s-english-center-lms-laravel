@@ -24,7 +24,7 @@ class RefundProviderRegistry
         $adapterDefinition = self::ADAPTERS[$gateway] ?? null;
         $adapterClass = $adapterDefinition === null
             ? null
-            : 'Plugins\\Modules\\' . $adapterDefinition['module'] . '\\Services\\' . $adapterDefinition['adapter'];
+            : implode(chr(92), ['Plugins', 'Modules', $adapterDefinition['module'], 'Services', $adapterDefinition['adapter']]);
         if ($adapterClass === null || !class_exists($adapterClass)) {
             throw new RuntimeException('No verified refund adapter is installed for this payment gateway.');
         }
