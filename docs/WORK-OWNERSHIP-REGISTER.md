@@ -257,3 +257,10 @@ This addendum supersedes earlier status rows only for the exact heads below. It 
 | [#332](../pull/332) verified course-cart referral payment | `345c0aa1d843d94bbca1bf4d36733b537feecc9d` | Laravel SQLite, MySQL 8, Browser E2E and Composer Security Audit are all green. | Formal CHANGES_REQUESTED review remains; obtain fresh independent review of locked invoice/buyer/amount/currency/payment binding before merge. |
 
 All listed candidates remain Draft. No branch was merged or deployed. MySQL 8 results are explicitly pending where shown; a green SQLite run is not a substitute for row-lock proof. Repository LMS ruleset remains disabled with zero required approvals/status checks, so authorized repository administration is still required before any merge gate is considered enforced.
+
+
+### 2026-11-20 student identity follow-up
+
+| Candidate | Exact head | Scope / status |
+|---|---|---|
+| [#352](../pull/352) Student Management identity normalization | `0d456b8629463cc246c6be627040e894096b6f79` | Clean-mainline Draft candidate. Normalizes email and student_code before store/update validation, checks legacy mixed-case collisions, maps unique-index races to field validation errors, and retries generated student-code collisions with a bounded loop. Regression tests cover store/update normalization, legacy duplicate rejection and deterministic generated-code retry. Exact-head SQLite/MySQL/Browser/Composer checks are queued; independent review is outstanding. |
