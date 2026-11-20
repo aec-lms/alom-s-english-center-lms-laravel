@@ -508,6 +508,11 @@ class FlashSaleEnrollmentTest extends TestCase
         $insertOffer('PROFILE', $profileBranchId);
         $insertOffer('GLOBAL', null);
 
+        DB::table('flash_sale_settings')->updateOrInsert(
+            ['id' => 1],
+            ['page_enabled' => true, 'page_title' => 'Flash Sale', 'created_at' => now(), 'updated_at' => now()]
+        );
+
         $this->actingAs($studentUser)->get('/flash-sale')
             ->assertOk()
             ->assertSee('Visible GLOBAL Offer')
