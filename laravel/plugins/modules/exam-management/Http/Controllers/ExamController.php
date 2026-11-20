@@ -818,11 +818,27 @@ class ExamController extends Controller
         if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('student-management')
             && Schema::hasTable('students')
             && Schema::hasColumn('students', 'branch_id')) {
-            $profileQuery = DB::table('students')->where('user_id', $userId);
-            if (Schema::hasColumn('students', 'deleted_at')) {
-                $profileQuery->whereNull('deleted_at');
+            // Lock the persisted profile itself, including soft-deleted rows,
+            // so lifecycle changes cannot leave an old exam attempt authorized.
+            $profile = DB::table('students')
+                ->where('user_id', $userId)
+                ->lockForUpdate()
+                ->first();
+
+            if ($profile && Schema::hasColumn('students', 'deleted_at')) {
+                abort_unless(
+                    $profile->deleted_at === null,
+                    403,
+                    'Your student profile is no longer active.'
+                );
             }
-            $profile = $profileQuery->lockForUpdate()->first();
+            if ($profile && Schema::hasColumn('students', 'status')) {
+                abort_unless(
+                    $profile->status === 'active',
+                    403,
+                    'Your student profile is inactive.'
+                );
+            }
 
             $profileBranchId = $profile && $profile->branch_id !== null
                 ? (int) $profile->branch_id
