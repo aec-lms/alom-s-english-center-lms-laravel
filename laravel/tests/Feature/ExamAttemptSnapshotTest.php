@@ -269,6 +269,42 @@ class ExamAttemptSnapshotTest extends TestCase
         $unsupportedVersion['version'] = 2;
         $invalidPrompt = $validSnapshot;
         $invalidPrompt['questions'][0]['prompt'] = 123;
+        $overlongPrompt = $validSnapshot;
+        $overlongPrompt['questions'][0]['prompt'] = str_repeat('x', 10001);
+        $overlongOption = $validSnapshot;
+        $overlongOption['questions'][0]['options'][0] = str_repeat('x', 301);
+        $tooManyOptions = $validSnapshot;
+        $tooManyOptions['questions'][0]['options'] = array_fill(0, 21, 'Option');
+        $perQuestionMarksOverLimit = $validSnapshot;
+        $perQuestionMarksOverLimit['questions'][0]['marks'] = 1000.01;
+        $passMarksOverLimit = $validSnapshot;
+        $passMarksOverLimit['pass_marks'] = 100001;
+        $durationOverLimit = $validSnapshot;
+        $durationOverLimit['duration_minutes'] = 361;
+        $aggregateOverLimit = $validSnapshot;
+        $aggregateOverLimit['questions'] = [];
+        for ($id = 1; $id <= 101; $id++) {
+            $aggregateOverLimit['questions'][] = [
+                'id' => $id,
+                'prompt' => 'Bounded aggregate question',
+                'options' => ['A', 'B'],
+                'correct_option_index' => 0,
+                'marks' => 1000.0,
+                'negative_marks' => 0.0,
+            ];
+        }
+        $questionCountOverLimit = $validSnapshot;
+        $questionCountOverLimit['questions'] = [];
+        for ($id = 1; $id <= 501; $id++) {
+            $questionCountOverLimit['questions'][] = [
+                'id' => $id,
+                'prompt' => 'Bounded question count',
+                'options' => ['A', 'B'],
+                'correct_option_index' => 0,
+                'marks' => 0.1,
+                'negative_marks' => 0.0,
+            ];
+        }
 
         $malformedSnapshots = [
             'missing question ID' => $missingQuestionId,
@@ -295,6 +331,14 @@ class ExamAttemptSnapshotTest extends TestCase
             'zero duration' => $invalidDuration,
             'unsupported version' => $unsupportedVersion,
             'non-string prompt' => $invalidPrompt,
+            'overlong prompt' => $overlongPrompt,
+            'overlong option' => $overlongOption,
+            'too many options' => $tooManyOptions,
+            'per-question marks over limit' => $perQuestionMarksOverLimit,
+            'pass marks over limit' => $passMarksOverLimit,
+            'duration over limit' => $durationOverLimit,
+            'aggregate marks over limit' => $aggregateOverLimit,
+            'question count over limit' => $questionCountOverLimit,
         ];
 
         foreach ($malformedSnapshots as $case => $snapshot) {
