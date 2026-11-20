@@ -350,6 +350,112 @@ class ExamAttemptEligibilityLockTest extends TestCase
         $this->assertAttemptStillPending($deletedAttempt);
     }
 
+
+    public function test_locked_exam_eligibility_rejects_an_account_deactivated_after_authentication(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['exam-management']);
+        $student = $this->createUserWithRole('student');
+        [$exam, $question] = $this->createSnapshotFixture();
+
+        $this->actingAs($student)->get('/exams/' . $exam->id . '/take')->assertOk();
+        $attempt = ExamAttempt::query()
+            ->where('exam_id', $exam->id)
+            ->where('user_id', $student->id)
+            ->firstOrFail();
+        $staleExam = $exam->fresh();
+
+        DB::table('users')->where('id', $student->id)->update(['is_active' => false]);
+
+        $controller = app(ExamController::class);
+        $this->assertControllerAbort(403, fn () => $controller->take(
+            $this->studentRequest('GET', '/exams/' . $exam->id . '/take', $student),
+            $staleExam
+        ));
+        $this->assertControllerAbort(403, fn () => $controller->apiTake(
+            $this->studentRequest('POST', '/api/v1/my/exams/' . $exam->id . '/attempts', $student, [], true),
+            $staleExam
+        ));
+        $this->assertControllerAbort(403, fn () => $controller->saveAttemptAnswers(
+            $this->studentRequest('POST', '/exams/' . $exam->id . '/attempt/autosave', $student, [
+                'attempt_id' => $attempt->id,
+                'answers' => [(string) $question->id => 1],
+            ]),
+            $staleExam
+        ));
+        $this->assertControllerAbort(403, fn () => $controller->submitAttempt(
+            $this->studentRequest('POST', '/exams/' . $exam->id . '/attempt', $student, [
+                'attempt_id' => $attempt->id,
+                'answers' => [(string) $question->id => 1],
+            ]),
+            $staleExam
+        ));
+        $this->assertControllerAbort(403, fn () => $controller->apiSubmitAttempt(
+            $this->studentRequest('POST', '/api/v1/my/exams/' . $exam->id . '/attempts/' . $attempt->id . '/submit', $student, [
+                'answers' => [(string) $question->id => 1,
+            ], true),
+            $staleExam,
+            (int) $attempt->id
+        ));
+
+        $this->assertAttemptStillPending($attempt);
+    }
+
+    public function test_locked_exam_eligibility_rejects_a_revoked_student_role_from_stale_authenticated_relation(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['exam-management']);
+        $student = $this->createUserWithRole('student');
+        // Cache the authenticated role relation to model a request that passed
+        // its pre-transaction role check before the administrator revoked it.
+        $student->load('roles');
+        [$exam, $question] = $this->createSnapshotFixture();
+
+        $this->actingAs($student)->get('/exams/' . $exam->id . '/take')->assertOk();
+        $attempt = ExamAttempt::query()
+            ->where('exam_id', $exam->id)
+            ->where('user_id', $student->id)
+            ->firstOrFail();
+        $staleExam = $exam->fresh();
+
+        $roleId = DB::table('roles')->where('slug', 'student')->value('id');
+        $this->assertNotNull($roleId);
+        DB::table('role_user')->where('user_id', $student->id)->where('role_id', $roleId)->delete();
+
+        $controller = app(ExamController::class);
+        $this->assertControllerAbort(403, fn () => $controller->take(
+            $this->studentRequest('GET', '/exams/' . $exam->id . '/take', $student),
+            $staleExam
+        ));
+        $this->assertControllerAbort(403, fn () => $controller->apiTake(
+            $this->studentRequest('POST', '/api/v1/my/exams/' . $exam->id . '/attempts', $student, [], true),
+            $staleExam
+        ));
+        $this->assertControllerAbort(403, fn () => $controller->saveAttemptAnswers(
+            $this->studentRequest('POST', '/exams/' . $exam->id . '/attempt/autosave', $student, [
+                'attempt_id' => $attempt->id,
+                'answers' => [(string) $question->id => 1],
+            ]),
+            $staleExam
+        ));
+        $this->assertControllerAbort(403, fn () => $controller->submitAttempt(
+            $this->studentRequest('POST', '/exams/' . $exam->id . '/attempt', $student, [
+                'attempt_id' => $attempt->id,
+                'answers' => [(string) $question->id => 1],
+            ]),
+            $staleExam
+        ));
+        $this->assertControllerAbort(403, fn () => $controller->apiSubmitAttempt(
+            $this->studentRequest('POST', '/api/v1/my/exams/' . $exam->id . '/attempts/' . $attempt->id . '/submit', $student, [
+                'answers' => [(string) $question->id => 1,
+            ], true),
+            $staleExam,
+            (int) $attempt->id
+        ));
+
+        $this->assertAttemptStillPending($attempt);
+    }
+
     public function test_revoked_paid_exam_entitlement_blocks_web_and_api_start_autosave_and_submit(): void
     {
         $this->markSystemInstalled();
@@ -504,17 +610,20 @@ class ExamAttemptEligibilityLockTest extends TestCase
         };
         $examLock = $lockIndex('exams');
         $userLock = $lockIndex('users');
+        $roleLock = $lockIndex('role_user');
         $studentLock = $lockIndex('students');
         $accessLock = $lockIndex('learn_earn_exam_access');
         $attemptLock = $lockIndex('exam_attempts');
 
         $this->assertNotNull($examLock, json_encode($lockedSql, JSON_THROW_ON_ERROR));
         $this->assertNotNull($userLock, json_encode($lockedSql, JSON_THROW_ON_ERROR));
+        $this->assertNotNull($roleLock, json_encode($lockedSql, JSON_THROW_ON_ERROR));
         $this->assertNotNull($studentLock, json_encode($lockedSql, JSON_THROW_ON_ERROR));
         $this->assertNotNull($accessLock, json_encode($lockedSql, JSON_THROW_ON_ERROR));
         $this->assertNotNull($attemptLock, json_encode($lockedSql, JSON_THROW_ON_ERROR));
         $this->assertLessThan($userLock, $examLock);
-        $this->assertLessThan($studentLock, $userLock);
+        $this->assertLessThan($roleLock, $userLock);
+        $this->assertLessThan($studentLock, $roleLock);
         $this->assertLessThan($accessLock, $studentLock);
         $this->assertLessThan($attemptLock, $accessLock);
 
