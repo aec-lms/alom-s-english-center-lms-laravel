@@ -229,30 +229,42 @@ class TeacherController extends Controller
 
     public function destroy(Request $request, Teacher $teacher): RedirectResponse
     {
-        $actor = $request->user();
-        $this->ensureAssignedBranch($actor);
-        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $teacher->branch_id) {
-            abort(403, 'Branch isolation violation.');
-        }
+        $actorId = (int) $request->user()->getKey();
+        $teacherId = (int) $teacher->getKey();
 
-        $code = $teacher->employee_code;
-        $id = (string) $teacher->id;
-        $user = $teacher->user;
+        $deleted = DB::transaction(function () use ($actorId, $teacherId): array {
+            // Keep the same lock order as update(): actor -> teacher -> linked user.
+            $actor = User::query()->lockForUpdate()->findOrFail($actorId);
+            $this->ensureAssignedBranch($actor);
 
-        DB::transaction(function () use ($teacher, $user): void {
+            $lockedTeacher = Teacher::query()->whereKey($teacherId)->lockForUpdate()->firstOrFail();
+            if ($actor->hasRole('branch_manager')) {
+                abort_unless((int) $actor->branch_id === (int) $lockedTeacher->branch_id, 403, 'Branch isolation violation.');
+            }
+
+            $user = User::query()->whereKey($lockedTeacher->user_id)->lockForUpdate()->first();
+            abort_unless($user, 409, 'The linked teacher account is missing; no changes were applied.');
+
             if (Schema::hasColumn('teachers', 'deleted_user_was_active')) {
-                $teacher->deleted_user_was_active = (bool) ($user?->is_active ?? false);
-                $teacher->save();
+                $lockedTeacher->deleted_user_was_active = (bool) $user->is_active;
+                $lockedTeacher->save();
             }
-            $teacher->delete();
-            if ($user) {
-                $user->update(['is_active' => false]);
-            }
+
+            $code = (string) $lockedTeacher->employee_code;
+            $id = (string) $lockedTeacher->getKey();
+            $lockedTeacher->delete();
+            $user->update(['is_active' => false]);
+
+            // Keep the audit event atomic with the lifecycle mutation.
+            $this->audit->log('teacher.deleted', 'teacher', $id, [
+                'code' => $code,
+                'user_was_active' => (bool) $user->is_active,
+            ]);
+
+            return ['code' => $code, 'id' => $id];
         });
 
-        $this->audit->log('teacher.deleted', 'teacher', $id, ['code' => $code]);
-
-        return back()->with('status', "Instructor '{$code}' removed without affecting shared LMS courses.");
+        return back()->with('status', "Instructor '{$deleted['code']}' removed without affecting shared LMS courses.");
     }
 
     private function storePhoto(UploadedFile $file): string
