@@ -272,6 +272,9 @@ class InvoicePaymentSessionReservationTest extends TestCase
         )->count();
         $this->assertSame(1, $orderRequests);
         $this->assertSame(1, DB::table('payment_transactions')->where('invoice_id', $invoice->id)->count());
+        $transaction = PaymentTransaction::query()->where('invoice_id', $invoice->id)->firstOrFail();
+        $this->assertArrayNotHasKey('fingerprint_parameters', $transaction->metadata);
+        $this->assertStringNotContainsString('RESERVE-CHANGED-', json_encode($transaction->metadata, JSON_THROW_ON_ERROR));
     }
 
     public function test_sslcommerz_same_key_rejects_changed_payer_before_second_session_request(): void
@@ -315,6 +318,11 @@ class InvoicePaymentSessionReservationTest extends TestCase
         )->count();
         $this->assertSame(1, $sessionRequests);
         $this->assertSame(1, DB::table('payment_transactions')->where('invoice_id', $invoice->id)->count());
+        $transaction = PaymentTransaction::query()->where('invoice_id', $invoice->id)->firstOrFail();
+        $metadataJson = json_encode($transaction->metadata, JSON_THROW_ON_ERROR);
+        $this->assertArrayNotHasKey('fingerprint_parameters', $transaction->metadata);
+        $this->assertStringNotContainsString('reservation-buyer@aec.test', $metadataJson);
+        $this->assertStringNotContainsString('changed-payer@aec.test', $metadataJson);
     }
 
     public function test_mysql_reservation_locks_invoice_before_checking_active_payment_transactions(): void
