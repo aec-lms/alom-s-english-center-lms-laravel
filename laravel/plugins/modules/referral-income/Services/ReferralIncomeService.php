@@ -254,7 +254,7 @@ class ReferralIncomeService
             $originalNotes = $originalPayment ? json_decode((string) $originalPayment->notes, true) : null;
             if (!$originalPayment
                 || ($originalPayment->invoice_id !== null && (int) $originalPayment->invoice_id !== (int) $order->invoice_id)
-                || $originalPayment->status !== 'verified'
+                || !in_array((string) $originalPayment->status, ['pending', 'risk_review', 'verified'], true)
                 || !is_array($originalNotes)
                 || ($originalNotes['purpose'] ?? null) !== 'course_cart'
                 || (int) ($originalNotes['course_cart_order_id'] ?? 0) !== (int) $order->id) {
