@@ -62,6 +62,7 @@ class SslcommerzController extends Controller
             'transaction_ref' => $session['transaction']->transaction_ref,
             'redirect_url' => $session['hosted_endpoint'],
             'status' => $session['transaction']->status,
+            'session_outcome' => $session['transaction']->metadata['session_outcome'] ?? null,
         ]);
     }
 
