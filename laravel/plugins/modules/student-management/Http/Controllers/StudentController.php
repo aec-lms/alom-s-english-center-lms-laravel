@@ -113,10 +113,9 @@ class StudentController extends Controller
 
         DB::transaction(function () use ($validated, $student, $actorId): void {
             $this->assertAuditAvailable();
-            $actor = User::query()->lockForUpdate()->findOrFail($actorId);
+            [$actor, $user, $lockedStudent] = $this->lockActorAndLinkedStudent($actorId, (int) $student->getKey());
             $this->ensureAssignedBranch($actor);
 
-            $lockedStudent = Student::query()->whereKey($student->getKey())->lockForUpdate()->firstOrFail();
             if ($actor->hasRole('branch_manager')) {
                 abort_unless((int) $actor->branch_id === (int) $lockedStudent->branch_id, 403, 'Branch isolation violation.');
                 abort_unless(
@@ -125,9 +124,6 @@ class StudentController extends Controller
                     'Branch isolation violation.'
                 );
             }
-
-            $user = User::query()->whereKey($lockedStudent->user_id)->lockForUpdate()->first();
-            abort_unless($user, 409, 'The linked student account is missing; no changes were applied.');
 
             $branchId = array_key_exists('branch_id', $validated)
                 ? $validated['branch_id']
@@ -186,16 +182,12 @@ class StudentController extends Controller
 
         DB::transaction(function () use ($student, $actorId, $id, &$code): void {
             $this->assertAuditAvailable();
-            $actor = User::query()->lockForUpdate()->findOrFail($actorId);
+            [$actor, $user, $lockedStudent] = $this->lockActorAndLinkedStudent($actorId, (int) $student->getKey());
             $this->ensureAssignedBranch($actor);
 
-            $lockedStudent = Student::query()->whereKey($student->getKey())->lockForUpdate()->firstOrFail();
             if ($actor->hasRole('branch_manager')) {
                 abort_unless((int) $actor->branch_id === (int) $lockedStudent->branch_id, 403, 'Branch isolation violation.');
             }
-
-            $user = User::query()->whereKey($lockedStudent->user_id)->lockForUpdate()->first();
-            abort_unless($user, 409, 'The linked student account is missing; no changes were applied.');
 
             $code = $lockedStudent->student_code;
             if (Schema::hasColumn('students', 'deleted_user_was_active')) {
@@ -209,6 +201,43 @@ class StudentController extends Controller
         });
 
         return back()->with('status', "Student '{$code}' removed from active enrollment directory.");
+    }
+
+    /**
+     * Lock all participating account rows in deterministic ID order before the
+     * student profile. Recycle Bin restore uses the same account-before-profile
+     * order, preventing the update/delete versus restore deadlock cycle.
+     *
+     * @return array{0: User, 1: User, 2: Student}
+     */
+    private function lockActorAndLinkedStudent(int $actorId, int $studentId): array
+    {
+        // Read only the relationship first; never hold a profile lock while
+        // acquiring an account lock.
+        $snapshot = Student::query()->whereKey($studentId)->firstOrFail();
+        $linkedUserId = (int) $snapshot->user_id;
+        abort_unless($linkedUserId > 0, 409, 'The linked student account is missing; no changes were applied.');
+
+        $userIds = array_values(array_unique([$actorId, $linkedUserId]));
+        sort($userIds, SORT_NUMERIC);
+
+        $lockedUsers = [];
+        foreach ($userIds as $userId) {
+            $lockedUsers[$userId] = User::query()->whereKey($userId)->lockForUpdate()->first();
+            abort_unless($lockedUsers[$userId], $userId === $linkedUserId ? 409 : 404,
+                $userId === $linkedUserId
+                    ? 'The linked student account is missing; no changes were applied.'
+                    : 'The acting account is unavailable.');
+        }
+
+        $lockedStudent = Student::query()->whereKey($studentId)->lockForUpdate()->firstOrFail();
+        abort_unless(
+            (int) $lockedStudent->user_id === $linkedUserId,
+            409,
+            'The linked student account changed during this operation; please retry.'
+        );
+
+        return [$lockedUsers[$actorId], $lockedUsers[$linkedUserId], $lockedStudent];
     }
 
     private function assertAuditAvailable(): void
