@@ -494,47 +494,59 @@ class FlashSaleEnrollmentTest extends TestCase
     public function test_premium_migration_retry_and_rollback_preserve_preexisting_branch_data(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['branch-management', 'course-management', 'flash-sale']);
+        $schema = \Illuminate\Support\Facades\Schema::class;
+        $schema::dropIfExists('flash_sales');
 
-        $branchId = DB::table('branches')->insertGetId([
-            'code' => 'FLASH-MIGRATION-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
-            'name' => 'Flash Migration Sentinel',
-            'is_active' => true,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-        $course = Course::query()->create([
-            'code' => 'FLASH-MIGRATION-COURSE-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
-            'title' => 'Migration Sentinel Course',
-            'slug' => 'migration-sentinel-' . bin2hex(random_bytes(3)),
-            'price' => 500,
-            'status' => 'published',
-        ]);
-        $saleId = DB::table('flash_sales')->insertGetId([
-            'course_id' => $course->id,
-            'branch_id' => $branchId,
-            'title' => 'Preserve this campaign',
-            'discount_type' => 'fixed',
-            'discount_value' => 50,
-            'starts_at' => now()->subMinute(),
-            'ends_at' => now()->addDay(),
-            'is_published' => true,
-            'is_active' => true,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        try {
+            $schema::create('flash_sales', function (\Illuminate\Database\Schema\Blueprint $table): void {
+                $table->id();
+                $table->unsignedBigInteger('course_id');
+                $table->string('title');
+                $table->string('discount_type');
+                $table->decimal('discount_value', 12, 2);
+                $table->dateTime('starts_at');
+                $table->dateTime('ends_at');
+                $table->boolean('is_published')->default(false);
+                $table->boolean('is_active')->default(false);
+                // Simulate a branch_id and index that predate this migration.
+                $table->unsignedBigInteger('branch_id')->nullable();
+                $table->index(
+                    ['branch_id', 'is_published', 'is_active', 'starts_at', 'ends_at'],
+                    'flash_sales_branch_schedule'
+                );
+                $table->timestamps();
+            });
 
-        $migration = require base_path('plugins/modules/flash-sale/Database/Migrations/2026_11_19_000001_add_premium_flash_sale_campaign_fields.php');
-        $migration->up();
-        $migration->up();
-        $migration->down();
+            $saleId = DB::table('flash_sales')->insertGetId([
+                'course_id' => 9001,
+                'branch_id' => 777,
+                'title' => 'Pre-existing branch sentinel',
+                'discount_type' => 'fixed',
+                'discount_value' => 50,
+                'starts_at' => now(),
+                'ends_at' => now()->addDay(),
+                'is_published' => true,
+                'is_active' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
 
-        $this->assertTrue(\Illuminate\Support\Facades\Schema::hasColumn('flash_sales', 'branch_id'));
-        $this->assertDatabaseHas('flash_sales', [
-            'id' => $saleId,
-            'branch_id' => $branchId,
-            'title' => 'Preserve this campaign',
-        ]);
+            $migration = require base_path('plugins/modules/flash-sale/Database/Migrations/2026_11_19_000001_add_premium_flash_sale_campaign_fields.php');
+            $migration->up();
+            $migration->up();
+            $migration->down();
+
+            $this->assertTrue($schema::hasColumn('flash_sales', 'branch_id'));
+            $this->assertTrue($schema::hasIndex('flash_sales', 'flash_sales_branch_schedule'));
+            $this->assertTrue($schema::hasIndex('flash_sales', 'flash_sales_course_priority'));
+            $this->assertDatabaseHas('flash_sales', [
+                'id' => $saleId,
+                'branch_id' => 777,
+                'title' => 'Pre-existing branch sentinel',
+            ]);
+        } finally {
+            $schema::dropIfExists('flash_sales');
+        }
     }
 
 }
