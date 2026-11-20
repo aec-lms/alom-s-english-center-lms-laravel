@@ -71,6 +71,7 @@
 .flash-page .fp-card .p-4{padding:1.5rem}
 .flash-page .fp-time{min-width:58px}
 .flash-page .fp-price-line{display:flex;align-items:baseline;flex-wrap:wrap;gap:.5rem}
+.flash-page .fp-cta:focus-visible{outline:3px solid #fbbf24;outline-offset:3px}
 @media(max-width:991px){.flash-page .row{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:640px){
   .flash-page{width:min(calc(100% - 1.25rem),1200px);padding-top:1rem}
