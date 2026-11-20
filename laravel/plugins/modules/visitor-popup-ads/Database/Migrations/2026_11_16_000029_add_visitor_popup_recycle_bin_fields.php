@@ -20,10 +20,9 @@ return new class extends Migration {
 
     public function down(): void
     {
-        if (Schema::hasTable('visitor_popups') && Schema::hasColumn('visitor_popups', 'deleted_at')) {
-            Schema::table('visitor_popups', function (Blueprint $table): void {
-                $table->dropSoftDeletes();
-            });
-        }
+        // Intentionally retain additive recycle-bin columns during rollback.
+        // They may predate this migration on customized installations or
+        // contain deletion history created after the migration was applied.
+        // Dropping them could destroy host-owned schema or recovery data.
     }
 };
