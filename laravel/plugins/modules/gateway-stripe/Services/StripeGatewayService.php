@@ -45,6 +45,11 @@ class StripeGatewayService
         $remaining = $reservation['remaining'];
 
         if ($reservation['reused']) {
+            if (in_array($tx->status, ['initiated', 'pending', 'risk_review', 'processing', 'authorized'], true)
+                && ($tx->metadata['session_outcome'] ?? '') !== 'created') {
+                throw new RuntimeException('A Stripe session reservation already exists with an unknown provider outcome; reconciliation is required before retrying.');
+            }
+
             return [
                 'transaction' => $tx,
                 'client_secret' => $tx->metadata['client_secret'] ?? null,
