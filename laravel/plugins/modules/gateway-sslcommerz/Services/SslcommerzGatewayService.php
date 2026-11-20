@@ -63,7 +63,12 @@ class SslcommerzGatewayService
         }
 
         if ($reservation['reused']) {
-            $existingUrl = (string) ($tx->metadata['gateway_url'] ?? '');
+            $existingUrl = '';
+            try {
+                $existingUrl = (string) decrypt((string) ($tx->metadata['gateway_url_encrypted'] ?? ''));
+            } catch (Throwable) {
+                // Missing/corrupt encrypted URL is fail-closed; keep reservation held.
+            }
             $host = strtolower((string) parse_url($existingUrl, PHP_URL_HOST));
             $scheme = strtolower((string) parse_url($existingUrl, PHP_URL_SCHEME));
             $sandboxMode = $this->plugins->getSetting('gateway-sslcommerz', 'sandbox_mode', '1') === '1';
@@ -133,7 +138,7 @@ class SslcommerzGatewayService
 
             $tx = $this->reservations->markCreated($tx, [
                 'session_key' => (string) ($data['sessionkey'] ?? ''),
-                'gateway_url' => $gatewayUrl,
+                'gateway_url_encrypted' => encrypt($gatewayUrl),
                 'session_created' => true,
             ]);
 
