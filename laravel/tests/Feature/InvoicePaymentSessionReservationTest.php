@@ -205,7 +205,7 @@ class InvoicePaymentSessionReservationTest extends TestCase
             $this->assertMatchesRegularExpression('/^[a-f0-9]{32}$/', $key);
         }
 
-        $stripe = app(\\Plugins\\Modules\\GatewayStripe\\Services\\StripeGatewayService::class);
+        $stripe = app(\Plugins\Modules\GatewayStripe\Services\StripeGatewayService::class);
         $stripeFirst = $stripe->initiateTokenizedCheckout($this->createInvoice(), 'pm_cross_invoice_first', 'reused-client-key-across-invoices');
         $stripeSecond = $stripe->initiateTokenizedCheckout($this->createInvoice(), 'pm_cross_invoice_second', 'reused-client-key-across-invoices');
         $this->assertNotSame($stripeFirst['payment_intent_id'], $stripeSecond['payment_intent_id']);
