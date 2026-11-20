@@ -43,12 +43,13 @@ class StudentManagementProvisioningSecurityTest extends TestCase
 
         $this->actingAs($admin)->post('/admin/students', [
             'name' => 'Legacy Case Learner',
-            'email' => 'legacy.case@aec.test',
+            'email' => 'Legacy.Case@AEC.TEST',
             'password' => 'StrongPassword123!',
             'student_code' => 'LEGACY-CASE-001',
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         $existing = Student::query()->where('student_code', 'LEGACY-CASE-001')->firstOrFail();
+        $this->assertDatabaseHas('users', ['id' => $existing->user_id, 'email' => 'legacy.case@aec.test']);
         DB::table('users')->where('id', $existing->user_id)->update(['email' => 'LEGACY.CASE@AEC.TEST']);
 
         $this->actingAs($admin)->post('/admin/students', [
