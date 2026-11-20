@@ -62,7 +62,6 @@ jobs:
           php artisan db:seed --class=CoreRolesAndPermissionsSeeder --force
           php artisan db:seed --class=E2EBrowserUserSeeder --force
           php artisan db:seed --class=FlashSaleE2EBrowserSeeder --force
-          php artisan db:seed --class=FlashSaleE2EBrowserSeeder --force
 
       - name: Install Playwright and Chromium
         run: |
