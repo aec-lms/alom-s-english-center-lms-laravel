@@ -444,12 +444,21 @@ final class PhoneticsSpeakingRecordingSecurityTest extends TestCase
         });
 
         try {
-            $this->actingAs($reviewer)
+            $response = $this->actingAs($reviewer)
                 ->patch('/admin/phonetics/learning/recordings/' . $recording->id . '/review', [
                     'score' => 5,
                     'feedback' => 'Review completed while the permission pivot was locked.',
-                ])
-                ->assertSessionHas('status');
+                ]);
+
+            $responseDetails = sprintf(
+                'Review response diagnostics: HTTP %d; Location=%s; Session keys=%s; Body=%s',
+                $response->getStatusCode(),
+                (string) $response->headers->get('Location', ''),
+                json_encode(array_keys($response->getSession()->all()), JSON_UNESCAPED_SLASHES),
+                substr(trim(strip_tags($response->getContent())), 0, 600)
+            );
+            $this->assertSame(302, $response->getStatusCode(), $responseDetails);
+            $this->assertArrayHasKey('status', $response->getSession()->all(), $responseDetails);
 
             $this->assertTrue($revocationAttempted, 'The second connection must attempt revocation after the final permission lock.');
             $this->assertTrue($revocationBlocked, 'Concurrent permission revocation must wait for the review transaction.');
