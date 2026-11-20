@@ -242,6 +242,79 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
         Http::assertSentCount(1);
     }
 
+    public function test_failed_malformed_and_unknown_stripe_responses_never_mutate_invoice_ledger(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'gateway-stripe']);
+
+        app(PluginManager::class)->saveSettings('gateway-stripe', [
+            'secret_key' => 'sk_test_refund_failures_123456',
+            'refunds_enabled' => '1',
+        ], ['secret_key']);
+
+        [$invoice, $transaction] = $this->createSettledPayment('gateway-stripe', 'pi_refund_failure_001');
+        $requester = $this->createUserWithRole('admin');
+        $approver = $this->createUserWithRole('admin');
+        $service = app(RefundOrchestrationService::class);
+
+        Http::fakeSequence()
+            ->push([
+                'id' => 're_refund_failed_001',
+                'payment_intent' => 'pi_refund_failure_001',
+                'amount' => 20000,
+                'currency' => 'bdt',
+                'status' => 'failed',
+            ], 200)
+            ->push([
+                'id' => 're_refund_mismatch_001',
+                'payment_intent' => 'pi_refund_failure_001',
+                'amount' => 19999,
+                'currency' => 'bdt',
+                'status' => 'succeeded',
+            ], 200)
+            ->push(['error' => ['message' => 'temporary provider outage']], 500);
+
+        $failedRequest = $service->requestOnlineRefund(
+            $transaction,
+            200,
+            'Provider declined refund',
+            (int) $requester->id,
+            'stripe-refund-failed-001',
+        );
+        $failed = $service->approveAndSubmit($failedRequest, (int) $approver->id);
+        $this->assertSame('failed', $failed->status);
+        $this->assertNotNull($failed->failed_at);
+        $this->assertNull($failed->ledger_applied_at);
+        $this->assertSame(1000.0, (float) $invoice->fresh()->paid_amount);
+
+        $mismatchRequest = $service->requestOnlineRefund(
+            $transaction,
+            200,
+            'Malformed amount response',
+            (int) $requester->id,
+            'stripe-refund-mismatch-001',
+        );
+        $mismatch = $service->approveAndSubmit($mismatchRequest, (int) $approver->id);
+        $this->assertSame('requires_review', $mismatch->status);
+        $this->assertSame('provider_response_mismatch', $mismatch->provider_status);
+        $this->assertNull($mismatch->ledger_applied_at);
+        $this->assertSame(1000.0, (float) $invoice->fresh()->paid_amount);
+
+        $unknownRequest = $service->requestOnlineRefund(
+            $transaction,
+            200,
+            'Unknown provider submission outcome',
+            (int) $requester->id,
+            'stripe-refund-unknown-001',
+        );
+        $unknown = $service->approveAndSubmit($unknownRequest, (int) $approver->id);
+        $this->assertSame('requires_review', $unknown->status);
+        $this->assertNull($unknown->provider_refund_reference);
+        $this->assertNull($unknown->ledger_applied_at);
+        $this->assertSame(1000.0, (float) $invoice->fresh()->paid_amount);
+        Http::assertSentCount(3);
+    }
+
     public function test_pending_stripe_refund_keeps_invoice_unchanged_and_reserves_amount_until_provider_query_confirms_success(): void
     {
         $this->markSystemInstalled();
