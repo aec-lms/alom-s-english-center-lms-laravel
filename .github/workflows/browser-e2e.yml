@@ -61,6 +61,7 @@ jobs:
           php artisan migrate:fresh --force
           php artisan db:seed --class=CoreRolesAndPermissionsSeeder --force
           php artisan db:seed --class=E2EBrowserUserSeeder --force
+          php artisan db:seed --class=E2EExamFixtureSeeder --force
           php artisan db:seed --class=FlashSaleE2EBrowserSeeder --force
 
       - name: Install Playwright and Chromium
