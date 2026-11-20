@@ -21,20 +21,21 @@
             @csrf
             <input type="hidden" name="attempt_id" value="{{ $attempt->id }}">
             @foreach($questions as $index => $question)
-                <section class="bg-white border border-slate-200 rounded-2xl p-5 space-y-4">
+                <fieldset class="bg-white border border-slate-200 rounded-2xl p-5 space-y-4" aria-labelledby="exam-question-{{ $question->id }}">
+                    <legend class="sr-only">Question {{ $index + 1 }}</legend>
                     <div class="flex items-start justify-between gap-3">
-                        <h2 class="font-bold text-slate-900">{{ $index + 1 }}. {{ $question->prompt }}</h2>
+                        <h2 id="exam-question-{{ $question->id }}" class="font-bold text-slate-900">{{ $index + 1 }}. {{ $question->prompt }}</h2>
                         <span class="text-xs text-slate-500 whitespace-nowrap">{{ number_format((float) $question->marks, 2) }} marks</span>
                     </div>
                     <div class="grid sm:grid-cols-2 gap-2">
                         @foreach((array) $question->options as $optionIndex => $option)
-                            <label class="flex items-start gap-3 rounded-xl border border-slate-200 p-3 hover:border-sky-400 cursor-pointer">
-                                <input type="radio" name="answers[{{ $question->id }}]" value="{{ $optionIndex }}" class="mt-1" @checked((string) data_get($attempt->submitted_answers ?? [], (string) $question->id) === (string) $optionIndex) required>
+                            <label class="flex min-h-12 items-start gap-3 rounded-xl border border-slate-200 p-3 hover:border-sky-400 focus-within:border-sky-600 focus-within:ring-2 focus-within:ring-sky-600 focus-within:ring-offset-2 cursor-pointer">
+                                <input type="radio" name="answers[{{ $question->id }}]" value="{{ $optionIndex }}" class="mt-1 h-4 w-4 accent-sky-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-700" @checked((string) data_get($attempt->submitted_answers ?? [], (string) $question->id) === (string) $optionIndex) required>
                                 <span class="text-sm text-slate-700">{{ $option }}</span>
                             </label>
                         @endforeach
                     </div>
-                </section>
+                </fieldset>
             @endforeach
             <p id="exam-autosave-status" class="text-xs text-slate-500" role="status" aria-live="polite">Answers save automatically as you choose them.</p>
             <div class="flex justify-end">
