@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Plugins\Modules\ExamManagement\Models\Exam;
 use Plugins\Modules\ExamManagement\Models\ExamAttempt;
 use Plugins\Modules\ExamManagement\Models\ExamQuestion;
@@ -474,6 +475,27 @@ class ExamAttemptSnapshotTest extends TestCase
         $this->assertSame(360, $attempt->fresh()->exam_snapshot['duration_minutes']);
         $this->assertSame(100000.0, (float) $attempt->fresh()->exam_snapshot['pass_marks']);
     }
+
+    public function test_snapshot_migration_rollback_preserves_historical_attempt_evidence(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['exam-management']);
+        $student = $this->createUserWithRole('student');
+        [$exam] = $this->createSnapshotFixture();
+
+        $this->actingAs($student)->get("/exams/{$exam->id}/take")->assertOk();
+        $attempt = ExamAttempt::query()->where('exam_id', $exam->id)->where('user_id', $student->id)->firstOrFail();
+        $snapshot = $attempt->exam_snapshot;
+        $this->assertIsArray($snapshot);
+        $this->assertNotEmpty($snapshot['questions']);
+
+        $migration = require base_path('plugins/modules/exam-management/Database/Migrations/2026_11_19_000002_add_exam_attempt_snapshots.php');
+        $migration->down();
+
+        $this->assertTrue(Schema::hasColumn('exam_attempts', 'exam_snapshot'));
+        $this->assertSame($snapshot, $attempt->fresh()->exam_snapshot);
+    }
+
 
     private function createSnapshotFixture(): array
     {
