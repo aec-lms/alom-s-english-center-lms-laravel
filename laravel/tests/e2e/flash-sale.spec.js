@@ -25,6 +25,7 @@ test('public Flash Sale storefront renders responsive offers with keyboard-visib
   await expect(page.getByRole('heading', { name: 'Flash Sale E2E' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'E2E Premium English Course' })).toBeVisible();
   await expect(page.getByText('E2E Winter Offer')).toBeVisible();
+  await expect(page.locator('.fp-price-disclaimer')).toContainText('final enrollment invoice amount may differ');
   await expect(page.locator('.fp-price')).toHaveText('BDT 800.00');
   await expect(page.locator('.fp-old')).toHaveText('BDT 1,000.00');
 

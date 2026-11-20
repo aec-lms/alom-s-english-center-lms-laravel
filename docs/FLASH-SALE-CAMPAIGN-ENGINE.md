@@ -24,6 +24,8 @@ The shared `FlashSalePricingService` is introduced as the canonical server-side 
 
 Both integration follow-ups must revalidate price snapshots at checkout before payment.
 
+Until those integrations are complete, the public campaign price is an offer preview rather than a guaranteed invoice total. The storefront explicitly tells visitors that the final enrollment invoice amount may differ and must be checked before payment.
+
 Gift-course purchase pricing is not included. Coupon eligibility and gift pricing remain controlled by their existing commerce services.
 
 ## Campaign management

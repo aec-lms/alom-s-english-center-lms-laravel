@@ -72,6 +72,10 @@
 .flash-page .fp-time{min-width:58px}
 .flash-page .fp-price-line{display:flex;align-items:baseline;flex-wrap:wrap;gap:.5rem}
 .flash-page .fp-cta:focus-visible{outline:3px solid #fbbf24;outline-offset:3px}
+.flash-page .fp-price-disclaimer{
+  margin:.85rem 0 0;padding:.9rem 1rem;border:1px solid #f5d88a;border-radius:12px;
+  background:#fffbeb;color:#854d0e;font-size:.9rem;line-height:1.55;
+}
 @media(max-width:991px){.flash-page .row{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:640px){
   .flash-page{width:min(calc(100% - 1.25rem),1200px);padding-top:1rem}
@@ -100,7 +104,7 @@
     </section>
 
     <div class="d-flex justify-content-between align-items-end flex-wrap gap-2 mb-4">
-        <div><div class="fp-eyebrow text-danger">Curated for your progress</div><h2 class="h2 fw-bold mb-1">Featured campaigns</h2><p class="text-secondary mb-0">Transparent prices. Secure checkout. Course access after verified payment.</p></div>
+        <div><div class="fp-eyebrow text-danger">Curated for your progress</div><h2 class="h2 fw-bold mb-1">Featured campaigns</h2><p class="fp-price-disclaimer" role="note">The campaign price shown here is an offer preview. Your final enrollment invoice amount may differ; please verify the payable total before making payment.</p></div>
         <span class="badge rounded-pill text-bg-light border px-3 py-2">{{ $sales->count() }} active {{ \Illuminate\Support\Str::plural('offer', $sales->count()) }}</span>
     </div>
 
