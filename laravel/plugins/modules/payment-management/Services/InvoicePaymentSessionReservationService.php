@@ -29,7 +29,7 @@ class InvoicePaymentSessionReservationService
      * transaction row is inserted while that lock is held, so a competing
      * gateway request must observe the reservation after it acquires the lock.
      *
-     * @return array{invoice: FeeInvoice, transaction: PaymentTransaction, remaining: float, reused: bool}
+     * @return array{invoice: FeeInvoice, transaction: PaymentTransaction, provider_idempotency_key: ?string, remaining: float, reused: bool}
      */
     public function reserve(
         FeeInvoice $invoice,
