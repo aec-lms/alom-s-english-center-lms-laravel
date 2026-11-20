@@ -472,6 +472,7 @@ class LiveClassCapacityTest extends TestCase
         }
 
         [$student, $liveClass, $participant] = $this->createLiveClassConcurrencyFixture();
+        $student->load('roles');
         // Preserve a stale authenticated role relation to model the request
         // that passed middleware before the administrator revoked the pivot.
         $student->load('roles');
@@ -606,6 +607,11 @@ class LiveClassCapacityTest extends TestCase
             $this->assertNull($unchanged->left_at);
             $this->assertSame((string) $expectedLastSeen, (string) $unchanged->last_seen_at);
             $this->assertSame('cancelled', $secondary->table('enrollments')->where('id', $enrollment->id)->value('status'));
+            $this->assertDatabaseMissing('student_activity_events', [
+                'user_id' => $student->id,
+                'event_type' => 'live_class_heartbeat',
+                'subject_id' => (string) $liveClass->id,
+            ]);
 
             DB::setDefaultConnection($primaryName);
             DB::purge($secondaryName);
