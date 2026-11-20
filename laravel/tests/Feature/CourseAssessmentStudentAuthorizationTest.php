@@ -48,11 +48,44 @@ class CourseAssessmentStudentAuthorizationTest extends TestCase
             ->get('/my-learning/assessments/history')
             ->assertForbidden();
 
+        $this->actingAs($student)
+            ->post('/my-learning/assessments/' . $set->id . '/start')
+            ->assertForbidden();
+
+        $this->actingAs($student)
+            ->put('/my-learning/assessments/attempts/' . $attempt->id . '/questions/1', [
+                'selected_option' => 0,
+            ])
+            ->assertForbidden();
+
         $this->assertDatabaseHas('course_assessment_attempts', [
             'id' => $attempt->id,
             'student_id' => $student->id,
             'status' => 'in_progress',
         ]);
+    }
+
+    public function test_inactive_student_account_is_denied_even_when_student_role_remains(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-assessments']);
+
+        $student = $this->createUserWithRole('student');
+        $set = AssessmentSet::query()->create([
+            'title' => 'Inactive account assessment',
+            'status' => 'published',
+            'created_by' => $student->id,
+        ]);
+
+        $student->forceFill(['is_active' => false])->save();
+
+        $this->actingAs($student)
+            ->get('/my-learning/assessments')
+            ->assertForbidden();
+
+        $this->actingAs($student)
+            ->post('/my-learning/assessments/' . $set->id . '/start')
+            ->assertForbidden();
     }
 
     public function test_student_cannot_open_another_students_assessment_attempt(): void
