@@ -193,7 +193,7 @@ class StudentManagementProvisioningSecurityTest extends TestCase
             'name' => 'Existing Collision Learner',
             'email' => 'collision.existing@aec.test',
             'password' => 'StrongPassword123!',
-            'student_code' => 'STU-COLLID',
+            'student_code' => 'STU-COLLISION1',
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         Str::createRandomStringsUsing(fn (int $length): string => 'COLLISION1');
