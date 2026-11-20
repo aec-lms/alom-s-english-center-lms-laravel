@@ -11,7 +11,10 @@ $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 
 $examId = (int) ($argv[1] ?? 0);
 $exam = Exam::query()->with('questions')->findOrFail($examId);
-$question = $exam->questions->firstOrFail();
+$question = $exam->questions->first();
+if (!$question) {
+    throw new RuntimeException('E2E exam fixture has no question.');
+}
 
 $exam->update([
     'duration_minutes' => 1,
