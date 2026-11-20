@@ -58,6 +58,19 @@ class CourseAssessmentStudentAuthorizationTest extends TestCase
             ])
             ->assertForbidden();
 
+        $this->actingAs($student, 'sanctum')
+            ->getJson('/api/v1/my-learning/assessments')
+            ->assertForbidden();
+        $this->actingAs($student, 'sanctum')
+            ->getJson('/api/v1/my-learning/assessments/history')
+            ->assertForbidden();
+        $this->actingAs($student, 'sanctum')
+            ->getJson('/api/v1/my-learning/assessments/attempts/' . $attempt->id)
+            ->assertForbidden();
+        $this->actingAs($student, 'sanctum')
+            ->postJson('/api/v1/my-learning/assessments/attempts/' . $attempt->id . '/submit')
+            ->assertForbidden();
+
         $this->assertDatabaseHas('course_assessment_attempts', [
             'id' => $attempt->id,
             'student_id' => $student->id,
