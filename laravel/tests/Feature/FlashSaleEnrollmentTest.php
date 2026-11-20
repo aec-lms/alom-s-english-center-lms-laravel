@@ -370,4 +370,151 @@ class FlashSaleEnrollmentTest extends TestCase
             ->assertSee('1,600.00');
     }
 
+    public function test_branch_manager_cannot_mutate_campaign_assigned_to_another_branch(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'course-management', 'flash-sale']);
+
+        $makeBranch = static fn (string $suffix): int => DB::table('branches')->insertGetId([
+            'code' => 'FLASH-AUTH-' . $suffix . '-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'name' => 'Flash Auth ' . $suffix,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $managerBranchId = $makeBranch('MANAGER');
+        $campaignBranchId = $makeBranch('CAMPAIGN');
+        $manager = $this->createUserWithRole('branch_manager', $managerBranchId);
+        $course = Course::query()->create([
+            'branch_id' => $managerBranchId,
+            'code' => 'FLASH-AUTH-COURSE-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'title' => 'Manager Branch Course',
+            'slug' => 'manager-branch-course-' . bin2hex(random_bytes(3)),
+            'price' => 900,
+            'status' => 'published',
+        ]);
+        $saleId = DB::table('flash_sales')->insertGetId([
+            'course_id' => $course->id,
+            'branch_id' => $campaignBranchId,
+            'title' => 'Foreign Branch Campaign',
+            'discount_type' => 'percent',
+            'discount_value' => 10,
+            'starts_at' => now()->subMinute(),
+            'ends_at' => now()->addDay(),
+            'is_published' => true,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($manager)->post('/admin/flash-sales/' . $saleId . '/toggle')
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('flash_sales', ['id' => $saleId, 'is_active' => true]);
+    }
+
+    public function test_student_branch_profile_conflict_excludes_all_branch_targeted_storefront_offers(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'student-management', 'course-management', 'flash-sale']);
+
+        $makeBranch = static fn (string $suffix): int => DB::table('branches')->insertGetId([
+            'code' => 'FLASH-VIEW-' . $suffix . '-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'name' => 'Flash View ' . $suffix,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $accountBranchId = $makeBranch('ACCOUNT');
+        $profileBranchId = $makeBranch('PROFILE');
+        $studentUser = $this->createUserWithRole('student', $accountBranchId);
+        Student::query()->create([
+            'user_id' => $studentUser->id,
+            'branch_id' => $profileBranchId,
+            'student_code' => 'FLASH-VIEW-' . strtoupper(substr(bin2hex(random_bytes(4)), 0, 8)),
+            'admission_date' => today(),
+            'status' => 'active',
+        ]);
+
+        $insertOffer = function (string $suffix, ?int $branchId): void {
+            $course = Course::query()->create([
+                'branch_id' => $branchId,
+                'code' => 'FLASH-VIEW-COURSE-' . $suffix . '-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+                'title' => 'Flash View Course ' . $suffix,
+                'slug' => 'flash-view-course-' . strtolower($suffix) . '-' . bin2hex(random_bytes(3)),
+                'price' => 1000,
+                'status' => 'published',
+            ]);
+            DB::table('flash_sales')->insert([
+                'course_id' => $course->id,
+                'branch_id' => $branchId,
+                'title' => 'Visible ' . $suffix . ' Offer',
+                'discount_type' => 'percent',
+                'discount_value' => 10,
+                'starts_at' => now()->subMinute(),
+                'ends_at' => now()->addDay(),
+                'is_published' => true,
+                'is_active' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        };
+
+        $insertOffer('ACCOUNT', $accountBranchId);
+        $insertOffer('PROFILE', $profileBranchId);
+        $insertOffer('GLOBAL', null);
+
+        $this->actingAs($studentUser)->get('/flash-sale')
+            ->assertOk()
+            ->assertSee('Visible GLOBAL Offer')
+            ->assertDontSee('Visible ACCOUNT Offer')
+            ->assertDontSee('Visible PROFILE Offer');
+    }
+
+    public function test_premium_migration_retry_and_rollback_preserve_preexisting_branch_data(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'course-management', 'flash-sale']);
+
+        $branchId = DB::table('branches')->insertGetId([
+            'code' => 'FLASH-MIGRATION-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'name' => 'Flash Migration Sentinel',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $course = Course::query()->create([
+            'code' => 'FLASH-MIGRATION-COURSE-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'title' => 'Migration Sentinel Course',
+            'slug' => 'migration-sentinel-' . bin2hex(random_bytes(3)),
+            'price' => 500,
+            'status' => 'published',
+        ]);
+        $saleId = DB::table('flash_sales')->insertGetId([
+            'course_id' => $course->id,
+            'branch_id' => $branchId,
+            'title' => 'Preserve this campaign',
+            'discount_type' => 'fixed',
+            'discount_value' => 50,
+            'starts_at' => now()->subMinute(),
+            'ends_at' => now()->addDay(),
+            'is_published' => true,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $migration = require base_path('plugins/modules/flash-sale/Database/Migrations/2026_11_19_000001_add_premium_flash_sale_campaign_fields.php');
+        $migration->up();
+        $migration->up();
+        $migration->down();
+
+        $this->assertTrue(\\Illuminate\\Support\\Facades\\Schema::hasColumn('flash_sales', 'branch_id'));
+        $this->assertDatabaseHas('flash_sales', [
+            'id' => $saleId,
+            'branch_id' => $branchId,
+            'title' => 'Preserve this campaign',
+        ]);
+    }
+
 }
