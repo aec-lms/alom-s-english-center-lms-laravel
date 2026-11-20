@@ -400,15 +400,23 @@ class ExamAttemptSnapshotTest extends TestCase
         }
     }
 
-    public function test_student_exam_take_route_retains_its_production_rate_limit(): void
+    public function test_student_exam_routes_use_independent_production_rate_limit_buckets(): void
     {
         $this->markSystemInstalled();
         $this->activatePlugins(['exam-management']);
 
-        $route = app('router')->getRoutes()->getByName('plugins.exams.take');
+        $expectedMiddleware = [
+            'plugins.exams.take' => 'throttle:20,1,exam-take:',
+            'plugins.exams.history' => 'throttle:30,1,exam-history:',
+            'plugins.exams.attempt' => 'throttle:5,1,exam-submit:',
+            'plugins.exams.autosave' => 'throttle:30,1,exam-autosave:',
+        ];
 
-        $this->assertNotNull($route);
-        $this->assertContains('throttle:20,1', (array) $route->getAction('middleware'));
+        foreach ($expectedMiddleware as $routeName => $middleware) {
+            $route = app('router')->getRoutes()->getByName($routeName);
+            $this->assertNotNull($route, "Missing exam route [{$routeName}].");
+            $this->assertContains($middleware, (array) $route->getAction('middleware'));
+        }
     }
 
     public function test_snapshot_validator_accepts_documented_upper_bounds_without_overflow(): void
