@@ -7,9 +7,13 @@
             <h1 class="text-2xl font-extrabold text-slate-900">Website CMS, Categories &amp; Homepage A-to-Z Control</h1>
             <p class="text-xs text-slate-500 mt-0.5">Manage post categories, blog posts (with PDF &amp; PDF cover thumbnails), every homepage section, footer details, and contact inquiries.</p>
         </div>
-        <a href="{{ route('home') }}" target="_blank" class="px-4 py-2 rounded-lg bg-white border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-50">
-            Preview Live Site &rarr;
-        </a>
+        <div class="flex flex-wrap gap-2">
+            <a href="{{ route('plugins.cms.editorial') }}" class="px-4 py-2 rounded-lg bg-slate-900 text-white text-xs font-bold">Editorial Workspace</a>
+            <a href="{{ route('plugins.cms.contributors.index') }}" class="px-4 py-2 rounded-lg bg-white border border-slate-300 text-xs font-bold text-slate-700">Contributors</a>
+            <a href="{{ route('home') }}" target="_blank" class="px-4 py-2 rounded-lg bg-white border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-50">
+                Preview Live Site &rarr;
+            </a>
+        </div>
     </div>
 
     <div class="flex flex-wrap gap-2 border-b border-slate-200 pb-3" id="cms-admin-tabs">
