@@ -66,9 +66,8 @@ class SslcommerzGatewayService
             $existingUrl = (string) ($tx->metadata['gateway_url'] ?? '');
             $host = strtolower((string) parse_url($existingUrl, PHP_URL_HOST));
             $scheme = strtolower((string) parse_url($existingUrl, PHP_URL_SCHEME));
-            $expectedHost = $sandbox = $this->plugins->getSetting('gateway-sslcommerz', 'sandbox_mode', '1') === '1'
-                ? 'sandbox.sslcommerz.com'
-                : 'securepay.sslcommerz.com';
+            $sandboxMode = $this->plugins->getSetting('gateway-sslcommerz', 'sandbox_mode', '1') === '1';
+            $expectedHost = $sandboxMode ? 'sandbox.sslcommerz.com' : 'securepay.sslcommerz.com';
             if ($scheme !== 'https' || $host !== $expectedHost || $existingUrl === '') {
                 throw new RuntimeException('An SSLCOMMERZ session is already reserved but its hosted URL is unavailable; reconciliation is required.');
             }
