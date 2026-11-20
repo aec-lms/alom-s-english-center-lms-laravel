@@ -75,6 +75,31 @@ class CourseCommercePaymentSettlementService
                 ]), JSON_THROW_ON_ERROR),
             ]);
 
+            // Referral commission recording must observe the committed-in-transaction
+            // verified provider state, not the pending state that existed while the
+            // cart order and invoice were being fulfilled above.
+            if ($purpose === 'course_cart' && $this->plugins->isEnabled('referral-income')) {
+                $orderId = (int) ($notes['course_cart_order_id'] ?? 0);
+                $order = DB::table('course_cart_orders')
+                    ->where('id', $orderId)
+                    ->where('user_id', (int) $locked->user_id)
+                    ->where('status', 'paid')
+                    ->first();
+
+                if (!$order) {
+                    throw new RuntimeException('Verified course-cart payment has no matching paid order for referral reconciliation.');
+                }
+
+                $buyer = User::query()->whereKey((int) $locked->user_id)->firstOrFail();
+                app(ReferralIncomeService::class)->recordSettledPurchase(
+                    $buyer,
+                    'course_cart_order',
+                    (string) $order->id,
+                    (float) $order->net_amount,
+                    (string) $order->currency
+                );
+            }
+
             return $locked->fresh();
         }, 3);
     }
@@ -176,18 +201,6 @@ class CourseCommercePaymentSettlementService
             'updated_at' => now(),
         ]);
 
-        if ($this->plugins->isEnabled('referral-income')) {
-            $buyer = User::query()->find((int) $transaction->user_id);
-            if ($buyer) {
-                app(ReferralIncomeService::class)->recordSettledPurchase(
-                    $buyer,
-                    'course_cart_order',
-                    (string) $orderId,
-                    (float) $order->net_amount,
-                    (string) $order->currency
-                );
-            }
-        }
     }
 
     private function settleGift(UniversalPaymentTransaction $transaction, array $notes): void
