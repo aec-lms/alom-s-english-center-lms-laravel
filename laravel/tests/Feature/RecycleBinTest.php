@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use Illuminate\Support\Facades\DB;
 use Plugins\Modules\StudentManagement\Models\Student;
 use Plugins\Modules\TeacherManagement\Models\Teacher;
 use Plugins\Modules\CourseManagement\Models\Course;
@@ -263,4 +264,50 @@ class RecycleBinTest extends TestCase
             'confirm_permanent_delete' => '1',
         ])->assertForbidden();
     }
+
+    public function test_student_restore_locks_linked_user_before_student_profile(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['student-management']);
+        $admin = $this->createUserWithRole('admin');
+        $learner = $this->createUserWithRole('student');
+        $student = Student::query()->create([
+            'user_id' => $learner->id,
+            'student_code' => 'RECYCLE-LOCK-ORDER-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($admin)->delete('/admin/students/' . $student->id)->assertRedirect();
+
+        $lockOrder = [];
+        DB::listen(function ($query) use (&$lockOrder): void {
+            $sql = strtolower($query->sql);
+            if (!str_contains($sql, 'for update')) {
+                return;
+            }
+            if (str_contains($sql, 'users')) {
+                $lockOrder[] = 'user';
+            } elseif (str_contains($sql, 'students')) {
+                $lockOrder[] = 'student';
+            }
+        });
+
+        $this->actingAs($admin)->post('/admin/recycle-bin/students/' . $student->id . '/restore')
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        if (DB::connection()->getDriverName() === 'mysql') {
+            $userLock = array_search('user', $lockOrder, true);
+            $profileLock = array_search('student', $lockOrder, true);
+            $this->assertNotFalse($userLock, 'Restore must lock the linked user row.');
+            $this->assertNotFalse($profileLock, 'Restore must lock the student profile row.');
+            $this->assertLessThan($profileLock, $userLock, 'User row must be locked before student profile to match Live Class access.');
+        }
+
+        $this->assertDatabaseHas('students', ['id' => $student->id, 'deleted_at' => null]);
+        $this->assertDatabaseHas('users', ['id' => $learner->id, 'is_active' => false]);
+    }
+
+
 }
