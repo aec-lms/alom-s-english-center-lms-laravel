@@ -119,6 +119,7 @@ class ScormRuntimeControllerTest extends TestCase
             'path' => 'index.html',
         ]);
         $this->assertSame('scorm.example.test', parse_url($contentUrl, PHP_URL_HOST));
+        $player->assertSee($contentUrl);
         $contentResponse = $this->get($contentUrl);
         $contentResponse->assertOk()->assertSee('window.API')->assertSee('LMSCommit')
             ->assertHeaderMissing('Set-Cookie')
