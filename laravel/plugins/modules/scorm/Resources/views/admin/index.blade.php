@@ -42,7 +42,7 @@
                                     <option value="{{ $option->id }}" @selected(old('replace_package_id') == $option->id)>{{ $option->course_title }} — {{ $option->title }} (revision {{ $option->revision_number }})</option>
                                 @endforeach
                             </select>
-                            <div class="form-text">Replacement is accepted only for the same course and when no learner attempt is in progress. Existing package files and attempt history are retained.</div>
+                            <div class="form-text">New revisions are staged as drafts while the current package stays live. Publishing the replacement is blocked until the previous revision has no active learner attempts; old files and attempt history are retained.</div>
                             @error('replace_package_id')<div class="text-danger small mt-1">{{ $message }}</div>@enderror
                         </div>
                         <div class="col-12 col-lg-5">
