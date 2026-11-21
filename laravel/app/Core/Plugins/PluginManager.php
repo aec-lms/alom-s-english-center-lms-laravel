@@ -1071,7 +1071,12 @@ class PluginManager
 
         $path = $realRoot . DIRECTORY_SEPARATOR . $filename;
         $contents = json_encode($payload, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR);
-        $handle = @fopen($path, 'x+b');
+        $previousUmask = umask(0077);
+        try {
+            $handle = @fopen($path, 'x+b');
+        } finally {
+            umask($previousUmask);
+        }
         if ($handle === false) {
             throw new RuntimeException('Private plugin backup destination already exists or could not be created exclusively.');
         }
@@ -1079,6 +1084,9 @@ class PluginManager
         $keepFile = false;
         $createdStat = @fstat($handle);
         try {
+            if (!@chmod($path, 0600)) {
+                throw new RuntimeException('Unable to restrict private plugin backup file permissions.');
+            }
             $pathStat = @lstat($path);
             if ($createdStat === false
                 || $pathStat === false
