@@ -109,3 +109,40 @@ The following rows close the missing-slug gap identified in issue #300. They doc
 This document does not store a stale CI snapshot. Before merge or release, inspect the latest workflow runs for the exact commit and require all applicable jobs to finish successfully: SQLite Laravel tests, MySQL 8 Laravel tests, Browser E2E, Composer Security Audit, and cPanel release-package verification. A queued, pending, cancelled, skipped, or in-progress job is not a pass.
 
 Do not merge or deploy solely on the basis of this document. Refresh CI status and close all environment/provider-specific gates before release.
+
+
+## Mandatory implementation-level acceptance (project-owner directive, 2026-11-21)
+
+The 60-manifest inventory and existing lifecycle/feature-test mapping above are **not acceptance by themselves**. From this directive onward, no plugin, issue, or PR may be labelled Finished, Accepted, Complete, or Ready to Release until its own evidence record addresses every applicable gate below. Closing an issue, creating a PR, removing Draft, a manifest/provider loading successfully, or green generic CI is not acceptance.
+
+For **each plugin independently**, inspect and record:
+
+1. **Source code and architecture:** trace the real user/admin workflow from entry point through controller/action, service, model and persistence; confirm the implementation is production code (not placeholder/stub/demo-only), follows the plugin/Core ownership boundary, and has no duplicate or dead implementation.
+2. **Routes and API contracts:** enumerate web/API routes, HTTP methods, middleware, authentication, CSRF/rate limits where applicable, request validation, response/error contracts, route names, and mobile/API parity. Prove unauthenticated and wrong-role requests are denied.
+3. **Permissions and data scope:** verify every read/write/export/delete/restore/action permission against the current persisted role and account state; verify branch, tenant, owner, enrollment and record-level scope. Include direct URL/API IDOR attempts, role revocation, disabled-account and cross-branch negative tests.
+4. **Database and migrations:** inspect schema, foreign keys, unique constraints, indexes, nullability, casts, transactions, locking and concurrency. Verify fresh install, upgrade from the prior schema, safe rollback where supported, uninstall/data-retention behavior, and no destructive loss of business/audit data. Exercise SQLite and MySQL 8; SQLite alone is insufficient for locking/constraint acceptance.
+5. **UI and user journey:** inspect every applicable admin, staff, student, teacher, guardian and public screen; verify complete create/read/update/delete or workflow actions, validation feedback, loading/empty/success/error states, responsive desktop/tablet/mobile layouts, keyboard operation, labels/focus, and accessibility. Attach browser evidence for critical paths; record real-device/manual checks where browser automation cannot prove them.
+6. **Tests and regressions:** map each acceptance claim to named tests and assertions. Cover happy paths, validation, authorization, branch/ownership boundaries, duplicates, concurrency/races, replay/idempotency, destructive actions, and regressions. Run focused tests plus full SQLite and MySQL 8 suites and relevant Browser E2E/security workflows on the exact candidate SHA.
+7. **Integrations and dependencies:** enumerate required and optional plugin/provider dependencies and prove install/activation does not silently install optional siblings. Verify contract shape, credentials/secrets handling, timeouts, retries, idempotency, webhook signature and event identity, duplicate/out-of-order callbacks, reconciliation, and sandbox acceptance. Mark live-provider checks BLOCKED until authorized credentials and provider evidence exist; never infer live success from mocks.
+8. **Failure handling and operations:** force provider/network/database/queue/storage failures, malformed or duplicate callbacks, permission denial, partial writes, lock timeout/deadlock, retry exhaustion and rollback. Verify fail-closed behavior, transaction rollback/no duplicate charge or ledger mutation, safe user-facing messages, structured/audited logs without secrets/PII leakage, actionable monitoring and recoverability.
+9. **Release and ownership evidence:** name one accountable owner and independent reviewer; record exact commit SHA, migration and deployment notes, rollback/recovery plan, CI run IDs/results, browser evidence, external sign-offs, unresolved risks and explicit N/A rationale for any inapplicable gate.
+
+### Per-plugin evidence record (required)
+
+Use one record per plugin slug; do not copy a shared/generic pass to all plugins. At minimum record:
+
+| Gate | Required evidence | Result |
+|---|---|---|
+| Source / architecture | Files and real workflow trace; placeholder/duplicate audit | PASS / FAIL / BLOCKED / N/A + evidence |
+| Routes / API | Route list, middleware, validation and denial tests | PASS / FAIL / BLOCKED / N/A + evidence |
+| Permissions / scope | Role/account/branch/owner matrix and negative tests | PASS / FAIL / BLOCKED / N/A + evidence |
+| Database | Migrations, constraints, upgrade/rollback, SQLite + MySQL 8 | PASS / FAIL / BLOCKED / N/A + evidence |
+| UI / accessibility | Screens and critical browser journeys, responsive/a11y evidence | PASS / FAIL / BLOCKED / N/A + evidence |
+| Tests / regression | Named tests, assertions, exact-SHA CI links | PASS / FAIL / BLOCKED / N/A + evidence |
+| Integrations | Dependency/provider contracts, sandbox or explicit blocker | PASS / FAIL / BLOCKED / N/A + evidence |
+| Failure handling | Injected failures, rollback/idempotency/logging evidence | PASS / FAIL / BLOCKED / N/A + evidence |
+| Release / review | Owner, independent approval, release/rollback evidence | PASS / FAIL / BLOCKED / N/A + evidence |
+
+Allowed results are **PASS**, **FAIL**, **BLOCKED**, or **N/A with a reason**. Missing evidence is BLOCKED, never assumed PASS. A plugin is accepted only when every applicable row is PASS, every N/A is justified, no unresolved severity-1/2 security/data-integrity defect remains, exact-head CI passes, independent formal approval is recorded, and required external/staging/manual gates are signed off. If one gate is blocked, the plugin remains In Progress/Blocked even when its PR is open, Ready for Review, or all available CI is green.
+
+The existing 60-plugin rows remain a coverage index only. They must be upgraded one plugin at a time with the evidence record above; no bulk status promotion is permitted. This rule applies to all current and future plugins and supersedes any weaker interpretation of the earlier matrix.
