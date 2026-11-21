@@ -23,6 +23,7 @@ config([
 \Illuminate\Support\Facades\DB::purge('mysql');
 
 $plugins = $app->make(PluginManager::class);
+$plugins->discoverManifests();
 if (!$plugins->isEnabled('learning-rewards')) {
     fwrite(STDERR, "Learning Rewards plugin is not enabled in the disposable test database.\n");
     exit(2);
