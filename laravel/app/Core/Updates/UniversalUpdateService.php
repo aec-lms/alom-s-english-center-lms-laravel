@@ -148,28 +148,34 @@ class UniversalUpdateService
             }
         }
 
-        // Create encrypted pre-update backup
-        $backup = $this->backups->createEncryptedBackup($actorId, false);
         $stagingDir = storage_path('app/update-staging/' . Str::uuid()->toString());
         $packageSnapshotPath = $stagingDir . '.signed.zip';
         $snapshotDir = storage_path('app/update-snapshots/' . Str::slug($targetSlug) . '-' . Str::uuid()->toString());
 
-        Artisan::call('down');
+        // Pin and re-verify before taking a database backup or entering maintenance
+        // mode. A replaced upload must fail without restoring an old DB snapshot.
+        $pinnedManifest = $this->createVerifiedPackageSnapshot(
+            $packagePath,
+            $expectedSha256,
+            $signatureHex,
+            $packageSnapshotPath
+        );
+        if ($pinnedManifest !== $manifest) {
+            @unlink($packageSnapshotPath);
+            throw new RuntimeException('Update package changed between initial verification and staging.');
+        }
 
         try {
-            // Pin the exact bytes that were signed before extraction. Re-open of the
-            // caller-controlled upload path after verification would permit a
-            // verify-then-swap race and could deploy bytes that were never signed.
-            $pinnedManifest = $this->createVerifiedPackageSnapshot(
-                $packagePath,
-                $expectedSha256,
-                $signatureHex,
-                $packageSnapshotPath
-            );
-            if ($pinnedManifest !== $manifest) {
-                throw new RuntimeException('Update package changed between initial verification and staging.');
+            $backup = $this->backups->createEncryptedBackup($actorId, false);
+            Artisan::call('down');
+        } catch (\\Throwable $exception) {
+            if (is_file($packageSnapshotPath) && !is_link($packageSnapshotPath)) {
+                @unlink($packageSnapshotPath);
             }
+            throw $exception;
+        }
 
+        try {
             $this->extractToStaging($packageSnapshotPath, $stagingDir);
 
             $targetDir = $this->resolveTargetDirectory($targetType, $targetSlug);
