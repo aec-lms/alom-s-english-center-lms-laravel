@@ -51,6 +51,25 @@
             </div>
         </div>
         <div class="mt-5 border-t pt-5">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <h3 class="font-bold">Spaced review queue</h3>
+                <span class="text-xs text-slate-500">{{ $reviewQueue->count() }} items due</span>
+            </div>
+            <p class="mt-1 text-xs text-slate-500">Review timing is based on your saved IPA quiz accuracy: weaker words return sooner. New assigned words appear immediately.</p>
+            @if($reviewQueue->isNotEmpty())
+                <ul class="mt-3 grid gap-2 sm:grid-cols-2">
+                    @foreach($reviewQueue as $item)
+                    <li class="flex items-center justify-between gap-2 rounded-lg bg-blue-50 p-3">
+                        <div><a class="font-semibold text-blue-800 underline" href="#phonetics-word-{{ $item['entry_id'] }}">{{ $item['word'] }}</a><p class="text-xs text-slate-600">{{ $item['reason'] }}</p></div>
+                        <span class="shrink-0 text-xs font-semibold">{{ $item['attempts'] === 0 ? 'New' : $item['accuracy'].'%' }}</span>
+                    </li>
+                    @endforeach
+                </ul>
+            @else
+                <p class="mt-2 text-sm text-slate-600">You are up to date. Your next review will appear when it is due.</p>
+            @endif
+        </div>
+        <div class="mt-5 border-t pt-5">
             <h3 class="font-bold">Recommended practice</h3>
             <p class="mt-1 text-xs text-slate-500">Recommendations are based on at least three saved IPA quiz attempts per assigned word.</p>
             @if($weakWords->isNotEmpty())
