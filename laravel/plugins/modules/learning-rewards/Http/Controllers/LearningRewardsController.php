@@ -103,6 +103,32 @@ class LearningRewardsController extends Controller
             'updated_at' => now(),
         ];
         DB::transaction(function () use ($values, $student, $audit): void {
+            $lockedUser = DB::table('users')->where('id', (int) $student->id)->lockForUpdate()->first();
+            abort_unless($lockedUser !== null
+                && (!Schema::hasColumn('users', 'is_active') || (bool) $lockedUser->is_active),
+                403,
+                'Student account is inactive.'
+            );
+            $studentRoleId = DB::table('roles')->where('slug', 'student')->value('id');
+            abort_unless($studentRoleId !== null, 503, 'Student role is not configured.');
+            abort_unless(
+                DB::table('role_user')->where('user_id', (int) $student->id)
+                    ->where('role_id', $studentRoleId)->lockForUpdate()->exists(),
+                403,
+                'An active student role is required.'
+            );
+            if (app(PluginManager::class)->isEnabled('student-management')) {
+                $profileQuery = DB::table('students')->where('user_id', (int) $student->id);
+                if (Schema::hasColumn('students', 'deleted_at')) {
+                    $profileQuery->whereNull('deleted_at');
+                }
+                $profile = $profileQuery->lockForUpdate()->first();
+                abort_unless($profile !== null, 403, 'An active student profile is required.');
+                if (Schema::hasColumn('students', 'status')) {
+                    abort_unless($profile->status === 'active', 403, 'Student profile is inactive.');
+                }
+            }
+
             // Insert-if-absent followed by update avoids a check-then-insert race
             // when a learner saves privacy settings from two active sessions.
             DB::table('learning_reward_profiles')->insertOrIgnore([
