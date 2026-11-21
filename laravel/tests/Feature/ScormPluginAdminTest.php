@@ -284,4 +284,19 @@ class ScormPluginAdminTest extends TestCase
             ->assertOk()->assertSee('Updated English Unit')->assertDontSee('Admin Imported English Unit');
     }
 
+
+    public function test_admin_upload_rejects_non_zip_files(): void
+    {
+        [$admin, $courseId] = $this->setupScorm();
+
+        $this->actingAs($admin)
+            ->post(route('plugins.scorm.admin.store'), [
+                'course_id' => $courseId,
+                'package' => UploadedFile::fake()->create('not-a-package.txt', 1, 'text/plain'),
+            ])
+            ->assertSessionHasErrors('package');
+
+        $this->assertDatabaseCount('scorm_packages', 0);
+    }
+
 }
