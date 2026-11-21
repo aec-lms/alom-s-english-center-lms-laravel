@@ -83,6 +83,34 @@ final class CourseTeacherAssignmentSecurityTest extends TestCase
     }
 
 
+    public function test_inactive_acting_admin_cannot_create_teacher_assignments(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management', 'teacher-management']);
+
+        $admin = $this->createUserWithRole('admin');
+        $admin->forceFill(['is_active' => false])->save();
+        $teacher = $this->createUserWithRole('teacher');
+        $course = Course::query()->create([
+            'code' => 'INACTIVE-ACTOR-COURSE',
+            'title' => 'Inactive Actor Assignment Course',
+            'slug' => 'inactive-actor-assignment-course',
+            'price' => 0,
+            'status' => 'draft',
+            'branch_id' => null,
+        ]);
+
+        $this->actingAs($admin)->post('/admin/courses/teacher-assignments', [
+            'course_id' => $course->id,
+            'teacher_user_id' => $teacher->id,
+        ])->assertForbidden();
+
+        $this->assertDatabaseMissing('course_teacher_assignments', [
+            'course_id' => $course->id,
+            'teacher_user_id' => $teacher->id,
+        ]);
+    }
+
     public function test_active_teacher_can_still_be_assigned_to_a_course(): void
     {
         $this->markSystemInstalled();
