@@ -22,7 +22,7 @@ The trusted player shell is served from the normal LMS application origin. Only 
 - The player-to-SCO iframe must remain cross-origin. Do not add a same-origin alias or wildcard cookie domain.
 - HTML SCO documents are limited to 10 MiB for runtime-adapter injection. Larger HTML entry documents are rejected rather than served without the SCORM API.
 - The SCO response uses `Content-Security-Policy` `frame-ancestors` to allow the LMS player and `Cross-Origin-Resource-Policy: cross-origin` so the cross-origin frame can load. Runtime API CORS still permits only the exact configured content origin.
-- The adapter bearer token is scoped to one attempt and is present only in the isolated SCO document/runtime; it is not embedded in the trusted player shell.
+- The attempt-scoped token is included only in the trusted LMS player’s dedicated content URL and the isolated SCO runtime request path; it is never exposed to the learner’s LMS session cookie or any unrelated origin. The player shell does not expose a `window.API` object to package code.
 
 ## Import limits and package safety
 
