@@ -23,8 +23,7 @@ final class AuditLoggerRequiredTest extends TestCase
 
     public function test_required_log_fails_closed_when_audit_storage_is_missing(): void
     {
-        Schema
-            ->shouldReceive('hasTable')
+        Schema::shouldReceive('hasTable')
             ->with('audit_logs')
             ->andReturn(false);
 
