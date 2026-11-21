@@ -218,4 +218,62 @@ class ScormRuntimeControllerTest extends TestCase
         $this->assertDatabaseCount('scorm_attempts', 0);
         File::deleteDirectory($packageRoot);
     }
+
+    public function test_completed_enrollment_can_resume_or_review_scorm_activity(): void
+    {
+        [$student, , $enrollmentId, $packageId, $packageRoot] = $this->setupRuntime();
+        DB::table('enrollments')->where('id', $enrollmentId)->update(['status' => 'completed']);
+
+        $this->actingAs($student)
+            ->get(route('plugins.scorm.launch', $packageId))
+            ->assertOk()
+            ->assertSee('SCORM Runtime Unit');
+
+        $this->assertDatabaseHas('scorm_attempts', [
+            'scorm_package_id' => $packageId,
+            'user_id' => $student->id,
+            'completion_state' => 'in_progress',
+        ]);
+        File::deleteDirectory($packageRoot);
+    }
+
+    public function test_pending_enrollment_and_cross_branch_package_are_denied(): void
+    {
+        [$student, $courseId, $enrollmentId, $packageId, $packageRoot] = $this->setupRuntime();
+        DB::table('enrollments')->where('id', $enrollmentId)->update(['status' => 'pending']);
+
+        $this->actingAs($student)->get(route('plugins.scorm.launch', $packageId))->assertForbidden();
+        $this->assertDatabaseCount('scorm_attempts', 0);
+
+        DB::table('enrollments')->where('id', $enrollmentId)->update(['status' => 'active', 'branch_id' => 22]);
+        DB::table('courses')->where('id', $courseId)->update(['branch_id' => 22]);
+        DB::table('scorm_packages')->where('id', $packageId)->update(['branch_id' => 22]);
+        DB::table('users')->where('id', $student->id)->update(['branch_id' => 11]);
+
+        $this->actingAs($student)->get(route('plugins.scorm.launch', $packageId))->assertForbidden();
+        $this->assertDatabaseCount('scorm_attempts', 0);
+        File::deleteDirectory($packageRoot);
+    }
+
+    public function test_inactive_student_archived_package_and_direct_private_file_access_are_denied(): void
+    {
+        [$student, , , $packageId, $packageRoot] = $this->setupRuntime();
+
+        $this->actingAs($student)->get(route('plugins.scorm.launch', $packageId))->assertOk();
+        $attempt = DB::table('scorm_attempts')->where('scorm_package_id', $packageId)->first();
+        $this->get(route('plugins.scorm.content.file', [
+            'attempt' => $attempt->id,
+            'token' => str_repeat('0', 64),
+            'path' => 'index.html',
+        ]))->assertForbidden();
+
+        DB::table('scorm_packages')->where('id', $packageId)->update(['status' => 'archived']);
+        $this->actingAs($student)->get(route('plugins.scorm.launch', $packageId))->assertNotFound();
+
+        DB::table('scorm_packages')->where('id', $packageId)->update(['status' => 'published']);
+        DB::table('users')->where('id', $student->id)->update(['is_active' => false]);
+        $this->actingAs($student)->get(route('plugins.scorm.launch', $packageId))->assertForbidden();
+        File::deleteDirectory($packageRoot);
+    }
+
 }
