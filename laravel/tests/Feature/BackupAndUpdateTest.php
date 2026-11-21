@@ -749,4 +749,48 @@ class BackupAndUpdateTest extends TestCase
         }
     }
 
+
+    public function test_private_backup_restore_rejects_a_symlinked_staging_root_before_writing_files(): void
+    {
+        $zipPath = tempnam(sys_get_temp_dir(), 'aec_restore_root_link_');
+        $outside = sys_get_temp_dir() . '/aec_restore_outside_' . bin2hex(random_bytes(5));
+        $stagingRoot = storage_path('app/restore-staging');
+        $this->assertNotFalse($zipPath);
+        mkdir($outside, 0700, true);
+        if (is_link($stagingRoot)) {
+            unlink($stagingRoot);
+        } elseif (is_dir($stagingRoot)) {
+            \\Illuminate\\Support\\Facades\\File::deleteDirectory($stagingRoot);
+        }
+
+        $zip = new ZipArchive();
+        $this->assertTrue($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true);
+        $this->assertTrue($zip->addFromString('private-files/student-documents/should-not-escape.txt', 'sensitive'));
+        $this->assertTrue($zip->close());
+        $archive = new ZipArchive();
+        $this->assertTrue($archive->open($zipPath) === true);
+        $stage = new \\ReflectionMethod(BackupService::class, 'stagePrivateFiles');
+        $stage->setAccessible(true);
+
+        try {
+            $this->assertTrue(symlink($outside, $stagingRoot));
+            try {
+                $stage->invoke(app(BackupService::class), $archive, ['includes_files' => true]);
+                $this->fail('A symlinked restore staging root must be rejected.');
+            } catch (\\ReflectionException $exception) {
+                throw $exception;
+            } catch (\\RuntimeException $exception) {
+                $this->assertSame('Private restore staging root must not be a symbolic link.', $exception->getMessage());
+            }
+            $this->assertSame([], array_values(array_diff(scandir($outside) ?: [], ['.', '..'])));
+        } finally {
+            $archive->close();
+            if (is_link($stagingRoot)) {
+                unlink($stagingRoot);
+            }
+            @rmdir($outside);
+            @unlink($zipPath);
+        }
+    }
+
 }
