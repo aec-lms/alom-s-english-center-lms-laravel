@@ -5,12 +5,43 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Core\Plugins\PluginManager;
+use App\Models\AuditLog;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\File;
 use Tests\TestCase;
 
 class PluginSettingsResetBackupTest extends TestCase
 {
+    public function test_plugin_settings_and_audit_roll_back_together_when_audit_storage_fails(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['gateway-sslcommerz']);
+
+        $manager = app(PluginManager::class);
+        $manager->saveSettings('gateway-sslcommerz', [
+            'store_id' => 'ORIGINAL-STORE',
+        ], ['store_id']);
+
+        AuditLog::creating(static function (): void {
+            throw new RuntimeException('forced plugin settings audit failure');
+        });
+
+        try {
+            try {
+                $manager->saveSettings('gateway-sslcommerz', [
+                    'store_id' => 'CHANGED-STORE',
+                ], ['store_id']);
+                $this->fail('Plugin settings must not change without required audit evidence.');
+            } catch (RuntimeException $exception) {
+                $this->assertSame('forced plugin settings audit failure', $exception->getMessage());
+            }
+
+            $this->assertSame('ORIGINAL-STORE', $manager->getSetting('gateway-sslcommerz', 'store_id'));
+        } finally {
+            AuditLog::flushEventListeners();
+        }
+    }
+
     public function test_admin_reset_restores_manifest_defaults_and_retains_encrypted_private_backup(): void
     {
         $this->markSystemInstalled();
