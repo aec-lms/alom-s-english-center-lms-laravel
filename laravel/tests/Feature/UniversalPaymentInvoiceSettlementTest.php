@@ -618,7 +618,7 @@ class UniversalPaymentInvoiceSettlementTest extends TestCase
             ]);
 
             try {
-                app(\Plugins\\Modules\\UniversalPayment\\Services\\StorefrontPaymentGatewayService::class)
+                app(\Plugins\Modules\UniversalPayment\Services\StorefrontPaymentGatewayService::class)
                     ->verifySslcommerz([
                         'tran_id' => $transaction->reference,
                         'val_id' => 'REPLAY-VALIDATION-' . $index,
