@@ -110,6 +110,10 @@ The feature matrix names the real test classes and limits for each of the 60 mai
 
 Update each row's functional acceptance only after code review and tests have been run on the exact candidate commit. Do not mark an integration as production-ready until sandbox/credential-backed provider tests are complete.
 
+## Historical audit snapshots
+
+Sections below that retain earlier counts (39/39, 44-plugin, 2026-11-18 and 2026-11-20 inventories) are preserved as historical evidence only. They are superseded by the 61-manifest inventory at the top of this document and the current per-plugin evidence in `PLUGIN-FEATURE-ACCEPTANCE-MATRIX.md`. Do not use those older counts as the current repository inventory.
+
 ## Verified common lifecycle acceptance (39/39)
 
 At candidate commit `e15a0299c55a1876ba555778eb19b8d1c47192c0`, the parameterized `AllPluginsIndependentAcceptanceTest` ran once for each of the 39 plugin slugs. It verifies each manifest and provider autoload, no required sibling dependency, install/enable, disable/re-enable, checksum-verified ZIP update with a newer version, uninstall/reinstall, reset-to-default settings, move-to-Recycle-Bin, restore to the prior installed/enabled state, and permanent removal from the Recycle Bin with a verified private recovery snapshot for test isolation. Optional integrations are not auto-installed. This establishes common lifecycle behavior for all 39 packages, not full feature acceptance for each plugin.
