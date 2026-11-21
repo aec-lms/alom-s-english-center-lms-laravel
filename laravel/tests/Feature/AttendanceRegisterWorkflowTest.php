@@ -90,6 +90,7 @@ class AttendanceRegisterWorkflowTest extends TestCase
         $payload['records'][0]['edit_reason'] = 'Teacher corrected register';
         $this->actingAs($admin)->post('/admin/attendance', $payload)->assertRedirect()->assertSessionHasNoErrors();
         $this->assertDatabaseHas('attendance_records', ['student_id' => $student->id, 'status' => 'late', 'edited_reason' => 'Teacher corrected register']);
+        $this->assertDatabaseHas('attendance_entries', ['student_id' => $student->id, 'status' => 'late']);
         $this->assertDatabaseHas('attendance_audit_logs', ['new_status' => 'late', 'event' => 'updated', 'reason' => 'Teacher corrected register']);
         $this->assertDatabaseHas('learning_reward_ledger', [
             'user_id' => $studentUser->id,
@@ -99,6 +100,7 @@ class AttendanceRegisterWorkflowTest extends TestCase
         $this->assertDatabaseHas('learning_reward_ledger', [
             'user_id' => $studentUser->id,
             'activity_key' => 'reversal',
+            'source_type' => 'reward_reversal',
             'points' => -5,
         ]);
     }
