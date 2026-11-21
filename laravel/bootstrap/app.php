@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Http\Middleware\EnsureCentralAdmin;
 use App\Http\Middleware\EnsureBranchContext;
 use App\Http\Middleware\EnsureDeviceSessionActive;
+use App\Http\Middleware\EnsureSanctumApiActive;
 use App\Http\Middleware\EnsureInstalled;
 use App\Http\Middleware\EnsureNotInstalled;
 use App\Http\Middleware\EnsurePluginEnabled;
@@ -25,7 +26,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [EnsureDeviceSessionActive::class, EnsureBranchContext::class, SetApplicationLocale::class]);
-        $middleware->api(append: [EnsureBranchContext::class]);
+        $middleware->api(append: [EnsureSanctumApiActive::class, EnsureBranchContext::class]);
         $middleware->alias([
             'installed' => EnsureInstalled::class,
             'not.installed' => EnsureNotInstalled::class,

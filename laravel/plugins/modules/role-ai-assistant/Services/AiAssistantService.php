@@ -58,7 +58,7 @@ class AiAssistantService
 
         $apiKey = (string) $this->plugins->getSetting('role-ai-assistant', 'api_key', '');
         if ($apiKey === '') {
-            $environmentKey = $provider === 'openai' ? env('OPENAI_API_KEY', '') : env('GEMINI_API_KEY', '');
+            $environmentKey = $provider === 'openai' ? config('services.openai.api_key', '') : config('services.gemini.api_key', '');
             $apiKey = is_string($environmentKey) ? $environmentKey : '';
         }
 
@@ -85,7 +85,7 @@ class AiAssistantService
 
         $apiKey = (string) $this->plugins->getSetting('role-ai-assistant', 'api_key', '');
         if ($apiKey === '') {
-            $environmentKey = $provider === 'openai' ? env('OPENAI_API_KEY', '') : env('GEMINI_API_KEY', '');
+            $environmentKey = $provider === 'openai' ? config('services.openai.api_key', '') : config('services.gemini.api_key', '');
             $apiKey = is_string($environmentKey) ? $environmentKey : '';
         }
 
