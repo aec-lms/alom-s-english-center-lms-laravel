@@ -228,7 +228,7 @@ class PluginRecycleBinAdminAcceptanceTest extends TestCase
 
             // File::put returning a positive short count simulates a truncated
             // metadata file; the archive must not be committed or orphaned.
-            File::shouldReceive('put')->once()->andReturn(1);
+            File::partialMock()->shouldReceive('put')->once()->andReturn(1);
 
             try {
                 $manager->deleteToRecycleBin($slug);
