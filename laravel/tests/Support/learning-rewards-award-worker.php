@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-use App\\Core\\Plugins\\PluginManager;
-use Illuminate\\Contracts\\Console\\Kernel;
-use Plugins\\Modules\\LearningRewards\\Services\\LearningRewardsService;
+use App\Core\Plugins\PluginManager;
+use Illuminate\Contracts\Console\Kernel;
+use Plugins\Modules\LearningRewards\Services\LearningRewardsService;
 
 $root = dirname(__DIR__, 2);
 require $root . '/vendor/autoload.php';
@@ -20,7 +20,7 @@ config([
     'database.connections.mysql.password' => (string) getenv('DB_PASSWORD'),
     'database.connections.mysql.strict' => true,
 ]);
-\\Illuminate\\Support\\Facades\\DB::purge('mysql');
+\Illuminate\Support\Facades\DB::purge('mysql');
 
 $plugins = $app->make(PluginManager::class);
 if (!$plugins->isEnabled('learning-rewards')) {
