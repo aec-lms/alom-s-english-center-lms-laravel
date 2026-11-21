@@ -77,10 +77,10 @@ return new class extends Migration {
         });
 
         DB::table('learning_reward_rules')->insert([
-            ['activity_key' => 'lesson_completed', 'points' => 10, 'daily_cap' => 100, 'is_enabled' => true, 'created_at' => now(), 'updated_at' => now()],
+            ['activity_key' => 'lesson_completed', 'points' => 10, 'daily_cap' => 100, 'pass_percentage' => null, 'is_enabled' => true, 'created_at' => now(), 'updated_at' => now()],
             ['activity_key' => 'quiz_passed', 'points' => 20, 'daily_cap' => 100, 'pass_percentage' => 60, 'is_enabled' => true, 'created_at' => now(), 'updated_at' => now()],
-            ['activity_key' => 'assignment_accepted', 'points' => 25, 'daily_cap' => 100, 'is_enabled' => true, 'created_at' => now(), 'updated_at' => now()],
-            ['activity_key' => 'attendance_present', 'points' => 5, 'daily_cap' => 20, 'is_enabled' => true, 'created_at' => now(), 'updated_at' => now()],
+            ['activity_key' => 'assignment_accepted', 'points' => 25, 'daily_cap' => 100, 'pass_percentage' => null, 'is_enabled' => true, 'created_at' => now(), 'updated_at' => now()],
+            ['activity_key' => 'attendance_present', 'points' => 5, 'daily_cap' => 20, 'pass_percentage' => null, 'is_enabled' => true, 'created_at' => now(), 'updated_at' => now()],
         ]);
 
         DB::table('learning_reward_badges')->insert([
