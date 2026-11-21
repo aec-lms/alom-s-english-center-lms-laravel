@@ -241,6 +241,7 @@ class CourseController extends Controller
             ? $this->parseSyllabusLines((string) $validated['syllabus_lines'])
             : $course->syllabus_json;
 
+        $this->assertCoursePathIntegrity((int) $course->id, false, (string) $validated['status']);
         $course->update([
             'code' => strtoupper(trim($validated['code'])),
             'title' => $validated['title'],
@@ -278,6 +279,7 @@ class CourseController extends Controller
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $course->branch_id) {
             abort(403, 'Branch isolation violation.');
         }
+        $this->assertCoursePathIntegrity((int) $course->id, true);
         foreach ([$course->thumbnail, $course->pdf_path, $course->pdf_thumbnail] as $assetPath) {
             $this->deleteUnusedUpload($assetPath, (int) $course->id);
         }
@@ -492,6 +494,31 @@ class CourseController extends Controller
 
         return '/uploads/' . $folder . '/' . $filename;
     }
+    private function assertCoursePathIntegrity(int $courseId, bool $deleting = false, ?string $newStatus = null): void
+    {
+        $plugins = app(PluginManager::class);
+        if (!$plugins->isEnabled('learning-paths')
+            || !Schema::hasTable('learning_path_courses')
+            || !Schema::hasTable('learning_path_enrollments')
+        ) {
+            return;
+        }
+
+        $hasActivePathLearners = DB::table('learning_path_courses as item')
+            ->join('learning_path_enrollments as enrollment', 'enrollment.learning_path_id', '=', 'item.learning_path_id')
+            ->where('item.course_id', $courseId)
+            ->where('enrollment.status', 'active')
+            ->exists();
+
+        if (!$hasActivePathLearners) {
+            return;
+        }
+
+        abort_if($deleting, 409, 'This course belongs to an active learning path. Complete or withdraw path learners before deleting it.');
+        abort_unless($newStatus === 'published', 409,
+            'This course belongs to an active learning path and cannot be unpublished or archived until those learners finish.');
+    }
+
     private function ensureAssignedBranch($actor): void
     {
         if (!$actor || !$actor->hasRole('branch_manager')) {
