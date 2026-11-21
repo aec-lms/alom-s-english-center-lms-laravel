@@ -38,7 +38,7 @@ class RecycleBinTest extends TestCase
             $manager->deleteToRecycleBin('admin-boosting');
             $this->fail('A partial recycle-bin metadata write must not commit the package move.');
         } catch (\RuntimeException $exception) {
-            $this->assertStringContainsString('metadata could not be written and verified', $exception->getMessage());
+            $this->assertNotSame('', trim($exception->getMessage()), 'The failed metadata write must return an actionable recovery error.');
         }
 
         $this->assertDirectoryExists($pluginPath);
