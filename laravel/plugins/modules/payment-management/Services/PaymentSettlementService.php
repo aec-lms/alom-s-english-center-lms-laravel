@@ -328,7 +328,7 @@ class PaymentSettlementService
                 }
             }
 
-            $this->audit->log('payment.settled', 'payment_transaction', (string) $lockedTx->id, [
+            $this->audit->logRequired('payment.settled', 'payment_transaction', (string) $lockedTx->id, [
                 'gateway' => $lockedTx->gateway_slug,
                 'amount' => $lockedTx->amount,
                 'invoice_id' => $invoice->id,
