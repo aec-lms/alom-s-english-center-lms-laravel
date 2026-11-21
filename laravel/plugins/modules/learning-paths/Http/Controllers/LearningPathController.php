@@ -33,6 +33,7 @@ class LearningPathController extends Controller
         }
         $courses = DB::table('courses')
             ->where('status', 'published')
+            ->when(Schema::hasColumn('courses', 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))
             ->when($isBranchManager, fn ($query) => $query->where('branch_id', $actor->branch_id))
             ->orderBy('title')
             ->get(['id', 'title', 'branch_id']);
@@ -124,7 +125,7 @@ class LearningPathController extends Controller
         if ($validated['status'] === 'published') {
             $items = $this->pathCourses((int) $record->id);
             abort_unless($items->count() >= 2, 422, 'A published learning path needs at least two courses.');
-            abort_unless($items->every(fn ($item) => $item->course_status === 'published'), 409,
+            abort_unless($items->every(fn ($item) => $item->course_status === 'published' && $item->course_deleted_at === null), 409,
                 'Every course in the path must remain published.');
             $this->assertPathCourseBranches($record, $items);
         }
@@ -185,7 +186,7 @@ class LearningPathController extends Controller
         $courses = $this->pathCourses((int) $path->id);
         abort_unless($courses->count() >= 2, 404);
         if (!$pathEnrollment) {
-            abort_unless($path->status === 'published' && $courses->every(fn ($course) => $course->course_status === 'published'), 404);
+            abort_unless($path->status === 'published' && $courses->every(fn ($course) => $course->course_status === 'published' && $course->course_deleted_at === null), 404);
             $this->assertPathCourseBranches($path, $courses);
         }
         $firstCourse = $courses->first();
@@ -214,7 +215,7 @@ class LearningPathController extends Controller
                     403, 'This learning path is not available to your branch.');
             }
             $courses = $this->pathCourses((int) $path->id);
-            abort_unless($courses->count() >= 2 && $courses->every(fn ($course) => $course->course_status === 'published'), 409);
+            abort_unless($courses->count() >= 2 && $courses->every(fn ($course) => $course->course_status === 'published' && $course->course_deleted_at === null), 409);
             $this->assertPathCourseBranches($path, $courses);
             $first = $courses->first();
             $firstEnrollment = DB::table('enrollments')->where('user_id', $student->id)
@@ -287,7 +288,8 @@ class LearningPathController extends Controller
             'course_ids.*' => ['required', 'integer', 'distinct'],
         ]);
         $ids = array_values(array_unique(array_map('intval', $validated['course_ids'])));
-        $query = DB::table('courses')->whereIn('id', $ids)->where('status', 'published');
+        $query = DB::table('courses')->whereIn('id', $ids)->where('status', 'published')
+            ->when(Schema::hasColumn('courses', 'deleted_at'), fn ($builder) => $builder->whereNull('deleted_at'));
         if ($actor->hasRole('branch_manager')) {
             $query->where('branch_id', $actor->branch_id ?: -1);
         }
@@ -323,7 +325,9 @@ class LearningPathController extends Controller
 
     private function replaceCourses(int $pathId, array $courseIds): void
     {
-        $courses = DB::table('courses')->whereIn('id', $courseIds)->where('status', 'published')->get()->keyBy('id');
+        $courses = DB::table('courses')->whereIn('id', $courseIds)->where('status', 'published')
+            ->when(Schema::hasColumn('courses', 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))
+            ->get()->keyBy('id');
         abort_unless($courses->count() === count($courseIds), 409, 'A selected course is no longer published.');
         DB::table('learning_path_courses')->where('learning_path_id', $pathId)->delete();
         foreach (array_values($courseIds) as $index => $courseId) {
@@ -341,14 +345,19 @@ class LearningPathController extends Controller
 
     private function pathCourses(int $pathId)
     {
+        $columns = [
+            'item.course_id', 'item.course_title', 'item.position',
+            'courses.slug as course_slug', 'courses.status as course_status', 'courses.branch_id as course_branch_id',
+        ];
+        $columns[] = Schema::hasColumn('courses', 'deleted_at')
+            ? 'courses.deleted_at as course_deleted_at'
+            : DB::raw('NULL as course_deleted_at');
+
         return DB::table('learning_path_courses as item')
             ->leftJoin('courses', 'courses.id', '=', 'item.course_id')
             ->where('item.learning_path_id', $pathId)
             ->orderBy('item.position')
-            ->get([
-                'item.course_id', 'item.course_title', 'item.position',
-                'courses.slug as course_slug', 'courses.status as course_status', 'courses.branch_id as course_branch_id',
-            ]);
+            ->get($columns);
     }
 
     private function assertPathCourseBranches($path, $courses): void
