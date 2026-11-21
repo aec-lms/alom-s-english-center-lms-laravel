@@ -163,3 +163,23 @@ Before recommending merge, the primary owner must verify and record all of the f
 6. PR body, tests, docs and this register accurately reflect the final scope, owner, dependencies and verification evidence.
 
 **Notification flow:** when all gates pass, the primary owner posts a concise completion note on the PR with exact head SHA, CI links/results, independent reviewer, screenshots/evidence and any accepted non-blocking follow-ups; then notifies the project owner that the PR is ready to merge. The project owner/authorized maintainer performs or explicitly authorizes the merge using repository policy (required approvals, branch protection and merge queue if enabled). If any gate is unmet, keep the PR Draft/open and report the specific blocker—never claim complete or recommend merge.
+
+
+
+## 2026-11-21 — Competitive LMS feature expansion
+
+| Task / Issue | Workstream and scope | Primary owner | Supporting / reviewer | Dependencies / overlap boundary | Status | Branch | Validation / next action |
+|---|---|---|---|---|---|---|---|
+| [#379](../issues/379) | SCORM 1.2 interoperability: secure ZIP package validation/import, private extraction, course association, learner attempt/runtime persistence, SCORM API adapter and admin/learner experience | `Alomsenglishcenter` | Independent security + learning-content review required | New standalone `scorm` plugin. Course Management, Course Content Studio, Learning Paths (#378), Mobile API and Plugin Manager remain optional integrations; no shared files edited. SCORM 2004 sequencing, xAPI/cmi5 LRS and LTI 1.3 are explicitly out of Phase 1. | In Progress | `feat/scorm-12-course-runtime` | Initial plugin manifest/provider, secure ZIP/manifest importer, private extraction, SCORM 1.2 CMI data-model foundation, package/attempt schema, admin import/list/publish/archive UI and focused importer/runtime/admin tests added. Not complete: learner enrollment/branch gate, isolated-origin content delivery, server-persisted runtime API, full conformance suite, browser E2E, exact-head SQLite/MySQL/security/release checks and independent review. Keep issue open and do not call this feature production-ready. |
+
+### Competitive feature-gap roadmap (do not duplicate active work)
+
+- Learning Paths / prerequisites: active PR [#378](../pull/378); do not create a second implementation.
+- Phonetics learner practice analytics: active PR [#377](../pull/377); provider-based pronunciation assessment remains separate from human teacher review.
+- SCORM 1.2: active Issue [#379](../issues/379); first interoperability phase.
+- SCORM 2004 sequencing/navigation: future phase after #379 acceptance.
+- xAPI / cmi5 Learning Record Store: separate future interoperability work; not included in #379.
+- LTI 1.3 integration: separate future interoperability work; not included in #379.
+- Spoken English Practice integration: existing Issue [#289]; do not duplicate the plugin or Phonetics workflows.
+- Plugin functional acceptance: Issue [#300] remains open; 60 manifest rows exist, but per-plugin acceptance depth and external evidence remain incomplete.
+- External release acceptance: Issue [#14] remains a release blocker for real cPanel staging, restore/rollback, provider sandbox callbacks and authorized live-class capacity validation.
