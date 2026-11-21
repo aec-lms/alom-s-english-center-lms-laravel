@@ -734,4 +734,19 @@ class LearningPathsPluginTest extends TestCase
         }
     }
 
+
+    public function test_student_without_profile_is_not_blocked_on_courses_outside_any_learning_path(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management', 'student-management', 'learning-paths']);
+
+        $student = $this->createUserWithRole('student');
+        app(\\Plugins\\Modules\\LearningPaths\\Services\\LearningPathAccess::class)
+            ->assertCourseUnlocked((int) $student->id, 999999);
+
+        $this->assertDatabaseMissing('learning_path_enrollments', [
+            'user_id' => $student->id,
+        ]);
+    }
+
 }

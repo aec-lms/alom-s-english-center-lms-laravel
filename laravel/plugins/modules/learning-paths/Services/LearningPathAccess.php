@@ -95,14 +95,10 @@ class LearningPathAccess
 
     private function assertCourseUnlockedWithinTransaction(int $userId, int $courseId): void
     {
-        // Resolve the current persisted account, RBAC assignment and active
-        // Student profile first. Student Management uses the same account ->
-        // role -> profile lock order when changing branch assignments.
-        $currentBranchId = $this->resolveStudentBranch($userId);
-
-        // Discover path IDs without locks, then lock each parent path in a
-        // deterministic order. Enrollment, status and curriculum mutations
-        // all serialize through the same path row.
+        // Discover whether this course is governed by one of the learner's
+        // active paths before requiring a Student profile. Courses outside a
+        // learner's path memberships continue through the ordinary course
+        // authorization path and must not be blocked by this optional plugin.
         $pathIds = DB::table('learning_path_courses as current')
             ->join('learning_path_enrollments as path_enrollment', 'path_enrollment.learning_path_id', '=', 'current.learning_path_id')
             ->where('path_enrollment.user_id', $userId)
@@ -113,6 +109,15 @@ class LearningPathAccess
             ->pluck('current.learning_path_id')
             ->map(static fn ($id): int => (int) $id)
             ->all();
+
+        if ($pathIds === []) {
+            return;
+        }
+
+        // For path-governed courses, resolve the current persisted account,
+        // RBAC assignment and active Student profile first. Student Management
+        // uses the same account -> role -> profile lock order for branch changes.
+        $currentBranchId = $this->resolveStudentBranch($userId);
 
         $lockedPaths = [];
         foreach ($pathIds as $pathId) {
