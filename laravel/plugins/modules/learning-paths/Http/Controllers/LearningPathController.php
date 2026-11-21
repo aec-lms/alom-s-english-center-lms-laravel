@@ -368,12 +368,19 @@ class LearningPathController extends Controller
                 && Schema::hasTable('course_curriculum_items')
                 && Schema::hasTable('course_content_progress')
             ) {
-                $required = DB::table('course_curriculum_items')->where('course_id', $course->course_id)
-                    ->where('is_active', true)->where('is_preview', false)->count();
+                $required = DB::table('course_curriculum_items as item')
+                    ->join('course_content_posts as post', 'post.id', '=', 'item.course_content_post_id')
+                    ->where('item.course_id', $course->course_id)
+                    ->where('item.is_active', true)->where('item.is_preview', false)
+                    ->where('post.status', 'published')->whereNotNull('post.published_at')
+                    ->where('post.published_at', '<=', now())->count();
                 $done = DB::table('course_content_progress as progress')
                     ->join('course_curriculum_items as item', 'item.id', '=', 'progress.course_curriculum_item_id')
+                    ->join('course_content_posts as post', 'post.id', '=', 'item.course_content_post_id')
                     ->where('progress.user_id', $userId)->where('item.course_id', $course->course_id)
                     ->where('item.is_active', true)->where('item.is_preview', false)
+                    ->where('post.status', 'published')->whereNotNull('post.published_at')
+                    ->where('post.published_at', '<=', now())
                     ->whereNotNull('progress.completed_at')->count();
                 $completed = $required > 0 && $done >= $required;
             }
