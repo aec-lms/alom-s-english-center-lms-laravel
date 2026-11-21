@@ -106,6 +106,7 @@ class LearningRewardsController extends Controller
             'rules.*.points' => ['required', 'integer', 'min:0', 'max:500'],
             'rules.*.daily_cap' => ['required', 'integer', 'min:0', 'max:5000'],
             'rules.*.is_enabled' => ['nullable', 'boolean'],
+            'rules.*.pass_percentage' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
         DB::transaction(function () use ($data, $audit, $actor): void {
@@ -116,6 +117,7 @@ class LearningRewardsController extends Controller
                 DB::table('learning_reward_rules')->where('activity_key', $rule['activity_key'])->update([
                     'points' => $rule['points'],
                     'daily_cap' => $rule['daily_cap'],
+                    'pass_percentage' => $rule['pass_percentage'] ?? null,
                     'is_enabled' => (bool) ($rule['is_enabled'] ?? false),
                     'updated_at' => now(),
                 ]);
