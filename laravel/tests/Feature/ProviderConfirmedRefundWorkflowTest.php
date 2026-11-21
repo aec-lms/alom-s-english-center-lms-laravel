@@ -471,6 +471,10 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
     {
         $this->markSystemInstalled();
         $this->activatePlugins(['fees-management', 'payment-management', 'gateway-stripe']);
+        app(PluginManager::class)->saveSettings('gateway-stripe', [
+            'secret_key' => 'sk_test_refund_audit_rollback_123456',
+            'refunds_enabled' => '1',
+        ], ['secret_key']);
         [, $transaction] = $this->createSettledPayment('gateway-stripe', 'pi_refund_audit_rollback');
         $requester = $this->createUserWithRole('admin');
 
