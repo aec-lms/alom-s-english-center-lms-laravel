@@ -851,6 +851,14 @@ class ExamController extends Controller
 
         // Conflicting persisted identities are ambiguous. Never select one
         // opportunistically for branch-scoped exam access.
+        if ($profileBranchId !== null && $userBranchId !== null) {
+            abort_unless(
+                $profileBranchId === $userBranchId,
+                403,
+                'Your account and student profile branch assignments do not match.'
+            );
+        }
+
         // Retain compatibility for installations where only one assignment
         // exists; when both are present they must agree.
         return $profileBranchId ?? $userBranchId;
