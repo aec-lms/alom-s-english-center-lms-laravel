@@ -40,6 +40,7 @@ return new class extends Migration {
                 // Enrollment is an optional Course Management integration.
                 $table->unsignedBigInteger('enrollment_id')->nullable()->index();
                 $table->unsignedInteger('attempt_number');
+                $table->unsignedInteger('state_version')->default(0);
                 $table->string('lesson_status', 20)->default('not attempted');
                 $table->string('entry_mode', 10)->default('ab-initio');
                 $table->string('lesson_location', 255)->default('');
@@ -57,6 +58,17 @@ return new class extends Migration {
                 $table->timestamps();
                 $table->unique(['scorm_package_id', 'user_id', 'attempt_number'], 'scorm_attempt_unique_number');
                 $table->index(['user_id', 'completion_state']);
+            });
+        }
+
+        if (!Schema::hasTable('scorm_attempt_sessions')) {
+            Schema::create('scorm_attempt_sessions', function (Blueprint $table): void {
+                $table->id();
+                $table->foreignId('scorm_attempt_id')->constrained('scorm_attempts')->cascadeOnDelete();
+                $table->char('token_sha256', 64)->unique();
+                $table->timestamp('expires_at')->index();
+                $table->timestamp('last_seen_at')->nullable();
+                $table->timestamps();
             });
         }
     }
