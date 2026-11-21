@@ -276,8 +276,7 @@ class ScormRuntimeController extends Controller
                 abort_unless($attempt && in_array($attempt->completion_state, ['in_progress', 'suspended'], true), 409, 'SCORM attempt is no longer writable.');
                 abort_unless((int) $attempt->state_version === (int) $validated['version'], 409, 'This SCORM attempt changed in another tab. Reload the learner session before continuing.');
 
-                $user = DB::table('users')->where('id', $attempt->user_id)->first();
-                abort_unless($user && (bool) $user->is_active, 403, 'Student account is inactive.');
+                [$user] = $this->assertAttemptEntitled($attempt);
 
                 $savedData = json_decode((string) $attempt->cmi_data, true);
                 $runtime = new Scorm12Runtime(
@@ -397,8 +396,60 @@ class ScormRuntimeController extends Controller
             ->where('expires_at', '>', now())
             ->first();
         abort_unless($session, 403, 'SCORM launch session expired or is invalid.');
+        $attemptRecord = DB::table('scorm_attempts')->where('id', $attemptId)->first();
+        abort_unless($attemptRecord, 404);
+        $this->assertAttemptEntitled($attemptRecord);
 
         return $session;
+    }
+
+    /**
+     * Revalidate current learner, enrollment, branch, course and payment access
+     * whenever private package bytes or runtime writes are requested.
+     *
+     * @return array{0:object,1:object,2:object}
+     */
+    private function assertAttemptEntitled(object $attempt): array
+    {
+        $user = DB::table('users')->where('id', $attempt->user_id)->first();
+        abort_unless($user && (bool) $user->is_active, 403, 'Student account is inactive.');
+
+        $studentRole = DB::table('role_user')
+            ->join('roles', 'roles.id', '=', 'role_user.role_id')
+            ->where('role_user.user_id', $user->id)
+            ->where('roles.slug', 'student')
+            ->exists();
+        abort_unless($studentRole, 403, 'Current student role is required.');
+
+        $enrollment = DB::table('enrollments')->where('id', $attempt->enrollment_id)->first();
+        abort_unless($enrollment && (int) $enrollment->user_id === (int) $user->id
+            && in_array($enrollment->status, ['active', 'completed'], true), 403, 'Course enrollment is no longer eligible.');
+
+        $course = DB::table('courses')->where('id', $enrollment->course_id)->first();
+        abort_unless($course && $course->status === 'published', 403, 'Course is no longer published.');
+        if ($user->branch_id !== null && $course->branch_id !== null) {
+            abort_unless((int) $user->branch_id === (int) $course->branch_id, 403, 'Course is outside the student branch.');
+        }
+        if ($enrollment->branch_id !== null && $user->branch_id !== null) {
+            abort_unless((int) $enrollment->branch_id === (int) $user->branch_id, 403, 'Enrollment is outside the student branch.');
+        }
+
+        $package = DB::table('scorm_packages')->where('id', $attempt->scorm_package_id)->first();
+        abort_unless($package && $package->status === 'published'
+            && (int) $package->course_id === (int) $course->id, 403, 'SCORM package is no longer available.');
+        if ($package->branch_id !== null) {
+            abort_unless((int) $package->branch_id === (int) ($user->branch_id ?? $enrollment->branch_id ?? 0), 403, 'SCORM package is outside the student branch.');
+        }
+
+        if ((float) $course->price > 0) {
+            abort_unless(Schema::hasTable('fee_invoices') && Schema::hasColumn('enrollments', 'invoice_id')
+                && $enrollment->invoice_id !== null, 403, 'Paid course invoice is required.');
+            $invoice = DB::table('fee_invoices')->where('id', $enrollment->invoice_id)->first();
+            abort_unless($invoice && $invoice->status === 'paid'
+                && (float) $invoice->paid_amount + 0.01 >= (float) $invoice->net_amount, 403, 'Course invoice is no longer settled.');
+        }
+
+        return [$user, $course, $package];
     }
 
     private function unsafeRelativePath(string $path): bool
