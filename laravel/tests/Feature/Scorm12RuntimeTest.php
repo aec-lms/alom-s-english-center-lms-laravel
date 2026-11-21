@@ -87,4 +87,30 @@ class Scorm12RuntimeTest extends TestCase
         $this->assertSame('checkpoint-3', $runtime->getValue('cmi.suspend_data'));
         $this->assertSame('incomplete', $runtime->getValue('cmi.core.lesson_status'));
     }
+
+    public function test_interaction_and_objective_data_model_collections_are_validated_and_counted(): void
+    {
+        $runtime = $this->runtime();
+        $runtime->initialize();
+
+        $this->assertSame('true', $runtime->setValue('cmi.interactions.0.id', 'question-1'));
+        $this->assertSame('true', $runtime->setValue('cmi.interactions.0.type', 'choice'));
+        $this->assertSame('true', $runtime->setValue('cmi.interactions.0.student_response', 'A'));
+        $this->assertSame('true', $runtime->setValue('cmi.interactions.0.result', 'correct'));
+        $this->assertSame('true', $runtime->setValue('cmi.interactions.0.objectives.0.id', 'objective-1'));
+        $this->assertSame('true', $runtime->setValue('cmi.interactions.0.correct_responses.0.pattern', 'A'));
+        $this->assertSame('true', $runtime->setValue('cmi.objectives.0.id', 'course-objective'));
+        $this->assertSame('true', $runtime->setValue('cmi.objectives.0.status', 'completed'));
+
+        $this->assertSame('1', $runtime->getValue('cmi.interactions._count'));
+        $this->assertSame('1', $runtime->getValue('cmi.objectives._count'));
+        $this->assertSame('1', $runtime->getValue('cmi.interactions.0.objectives._count'));
+        $this->assertSame('1', $runtime->getValue('cmi.interactions.0.correct_responses._count'));
+
+        $this->assertSame('false', $runtime->setValue('cmi.interactions.0.objectives._count', '2'));
+        $this->assertSame('403', $runtime->getLastError());
+        $this->assertSame('false', $runtime->setValue('cmi.interactions.1.type', 'unsupported'));
+        $this->assertSame('405', $runtime->getLastError());
+    }
+
 }
