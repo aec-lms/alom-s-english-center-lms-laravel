@@ -304,7 +304,7 @@ final class CourseTeacherAssignmentSecurityTest extends TestCase
                 'course_id' => $secondCourse->id,
                 'teacher_user_id' => $teacher->id,
             ]);
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             if ($primary->transactionLevel() > 0) {
                 $primary->rollBack();
             }
