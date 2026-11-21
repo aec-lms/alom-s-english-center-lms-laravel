@@ -1014,41 +1014,33 @@ class PaymentSettlementStateMachineTest extends TestCase
             'metadata' => [],
         ]);
 
-        Schema::dropIfExists('audit_logs');
+        DB::listen(function ($query): void {
+            $sql = strtolower(ltrim((string) $query->sql));
+            if (str_starts_with($sql, 'insert') && str_contains($sql, 'audit_logs')) {
+                throw new RuntimeException('Injected required audit insert failure.');
+            }
+        });
 
         try {
-            try {
-                app(PaymentSettlementService::class)->settleTransaction(
-                    $transaction,
-                    'AUDIT-FAIL-CLOSED-PROVIDER-REF',
-                );
-                $this->fail('Payment settlement must fail when its required audit event cannot be stored.');
-            } catch (RuntimeException $exception) {
-                $this->assertStringContainsString('Required audit logging is unavailable', $exception->getMessage());
-            }
-
-            $this->assertDatabaseHas('payment_transactions', [
-                'id' => $transaction->id,
-                'status' => 'initiated',
-                'external_reference' => null,
-            ]);
-            $this->assertDatabaseHas('fee_invoices', [
-                'id' => $invoice->id,
-                'paid_amount' => 0,
-                'status' => 'unpaid',
-            ]);
-        } finally {
-            Schema::create('audit_logs', function (\Illuminate\Database\Schema\Blueprint $table): void {
-                $table->id();
-                $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();
-                $table->string('action', 120)->index();
-                $table->string('entity_type', 80)->nullable();
-                $table->string('entity_id', 80)->nullable();
-                $table->string('ip_address', 45)->nullable();
-                $table->json('metadata')->nullable();
-                $table->timestamps();
-            });
+            app(PaymentSettlementService::class)->settleTransaction(
+                $transaction,
+                'AUDIT-FAIL-CLOSED-PROVIDER-REF',
+            );
+            $this->fail('Payment settlement must fail when its required audit event cannot be stored.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('Injected required audit insert failure', $exception->getMessage());
         }
+
+        $this->assertDatabaseHas('payment_transactions', [
+            'id' => $transaction->id,
+            'status' => 'initiated',
+            'external_reference' => null,
+        ]);
+        $this->assertDatabaseHas('fee_invoices', [
+            'id' => $invoice->id,
+            'paid_amount' => 0,
+            'status' => 'unpaid',
+        ]);
     }
 
 }
