@@ -68,7 +68,7 @@ class PluginSettingsResetBackupTest extends TestCase
             $this->assertFileExists(
                 config('plugins.modules_path') . DIRECTORY_SEPARATOR . 'gateway-sslcommerz' . DIRECTORY_SEPARATOR . 'plugin.json'
             );
-            $record = \\App\\Models\\PluginRecord::query()->where('slug', 'gateway-sslcommerz')->first();
+            $record = \App\Models\PluginRecord::query()->where('slug', 'gateway-sslcommerz')->first();
             $this->assertNotNull($record);
             $this->assertTrue((bool) $record->is_installed);
             $this->assertTrue((bool) $record->is_enabled);
