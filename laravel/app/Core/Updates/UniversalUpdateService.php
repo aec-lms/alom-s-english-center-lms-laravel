@@ -446,7 +446,7 @@ class UniversalUpdateService
                     throw new RuntimeException('Update archive exceeds the allowed uncompressed size.');
                 }
 
-                $dest = $stagingDir . DIRECTORY_SEPARATOR . str_replace(['/', '\\\\'], DIRECTORY_SEPARATOR, $entry);
+                $dest = $stagingDir . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $entry);
                 if (str_ends_with($entry, '/')) {
                     if (!is_dir($dest) && !mkdir($dest, 0700, true) && !is_dir($dest)) {
                         throw new RuntimeException("Unable to create update staging directory for {$entry}");
