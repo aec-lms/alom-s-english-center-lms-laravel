@@ -168,7 +168,12 @@ class BackupService
 
             $stagedPrivateFiles = null;
             try {
-                DB::transaction(function () use ($zip, &$stagedPrivateFiles, $backup, $actorId, $magic): void {
+                // SQLite cannot toggle PRAGMA foreign_keys from inside a transaction.
+                // Disable before the outer transaction so nested restore helpers can
+                // safely retain their existing disable/enable guards.
+                Schema::disableForeignKeyConstraints();
+                try {
+                    DB::transaction(function () use ($zip, &$stagedPrivateFiles, $backup, $actorId, $magic): void {
                     $manifestRaw = $zip->getFromName('manifest.json');
                     if ($manifestRaw === false) {
                         throw new RuntimeException('Backup archive missing manifest.json.');
@@ -205,7 +210,10 @@ class BackupService
                         'filename' => $backup->filename,
                         'backup_format' => $magic === "AECBK02\n" ? 2 : 1,
                     ], $actorId);
-                });
+                    });
+                } finally {
+                    Schema::enableForeignKeyConstraints();
+                }
             } finally {
                 $zip->close();
                 if ($stagedPrivateFiles !== null) {
