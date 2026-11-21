@@ -107,7 +107,9 @@ class ScormRuntimeControllerTest extends TestCase
         $this->assertSame(1, DB::table('scorm_attempt_sessions')->where('scorm_attempt_id', $attempt->id)->count());
 
         $player = $this->get($playerUrl);
-        $player->assertOk()->assertSee('window.API')->assertSee('LMSCommit');
+        $player->assertOk()->assertSee('window.API')->assertSee('LMSCommit')
+            ->assertSee('element.match(/^cmi\\.interactions\\.\\d+\\.(.+)$/)')
+            ->assertSee("if (field === 'time') return /^\\d{8}T\\d{6}(?:\\.\\d{1,2})?$/");
 
         $contentUrl = route('plugins.scorm.content.file', [
             'attempt' => $attempt->id,
