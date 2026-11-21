@@ -145,8 +145,8 @@
         LMSGetValue(element) {
             if (!initialized || finished) { lastError = '301'; return ''; }
             if (element === 'cmi.core.exit' || element === 'cmi.core.session_time') { lastError = '404'; return ''; }
-            if (element === 'cmi.interactions._count') { lastError = '0'; return String(new Set(Object.keys(data).map(key => key.match(/^cmi\\.interactions\\.(\\d+)\\./)?.[1]).filter(Boolean)).size); }
-            if (element === 'cmi.objectives._count') { lastError = '0'; return String(new Set(Object.keys(data).map(key => key.match(/^cmi\\.objectives\\.(\\d+)\\./)?.[1]).filter(Boolean)).size); }
+            if (element === 'cmi.interactions._count') { lastError = '0'; return String(new Set(Object.keys(data).map(key => key.match(/^cmi\.interactions\.(\d+)\./)?.[1]).filter(Boolean)).size); }
+            if (element === 'cmi.objectives._count') { lastError = '0'; return String(new Set(Object.keys(data).map(key => key.match(/^cmi\.objectives\.(\d+)\./)?.[1]).filter(Boolean)).size); }
             if (readOnlyDynamicPattern.test(element)) {
                 const match = element.match(/^cmi\.interactions\.(\d+)\.(objectives|correct_responses)\._count$/);
                 const indexes = new Set(Object.keys(data).flatMap(key => {
