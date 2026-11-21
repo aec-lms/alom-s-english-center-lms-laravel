@@ -21,7 +21,7 @@ final class TeacherProfileValidationTest extends TestCase
 
         AuditLog::creating(static function (AuditLog $log): void {
             if ($log->action === 'teacher.created') {
-                throw new \\RuntimeException('forced teacher audit failure');
+                throw new \RuntimeException('forced teacher audit failure');
             }
         });
 
@@ -35,7 +35,7 @@ final class TeacherProfileValidationTest extends TestCase
                     'is_active' => '1',
                 ]);
                 $this->fail('Teacher creation must fail when required audit storage fails.');
-            } catch (\\RuntimeException $exception) {
+            } catch (\RuntimeException $exception) {
                 $this->assertSame('forced teacher audit failure', $exception->getMessage());
             }
         } finally {
