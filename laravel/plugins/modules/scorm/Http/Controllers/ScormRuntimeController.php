@@ -26,10 +26,18 @@ class ScormRuntimeController extends Controller
 
         $contentOrigin = rtrim((string) config('scorm.content_origin', ''), '/');
         $contentHost = parse_url($contentOrigin, PHP_URL_HOST);
+        $contentScheme = parse_url($contentOrigin, PHP_URL_SCHEME);
         $appOrigin = rtrim((string) config('app.url'), '/');
         $appHost = parse_url($appOrigin, PHP_URL_HOST);
+        $appScheme = parse_url($appOrigin, PHP_URL_SCHEME);
         abort_unless(is_string($contentHost) && $contentHost !== '' && $contentHost !== $appHost, 503,
             'Configure SCORM_CONTENT_ORIGIN on a separate content subdomain before launching SCORM packages.');
+        abort_unless($appScheme !== 'https' || $contentScheme === 'https', 503,
+            'SCORM content origin must use HTTPS when the LMS uses HTTPS.');
+        $sessionDomain = ltrim((string) config('session.domain', ''), '.');
+        abort_unless($sessionDomain === ''
+            || !($contentHost === $sessionDomain || str_ends_with($contentHost, '.' . $sessionDomain)), 503,
+            'SCORM content host must not receive the LMS session cookie. Use a host-only SESSION_DOMAIN setting.');
 
         $packageRecord = DB::table('scorm_packages')->where('id', $package)->where('status', 'published')->first();
         abort_unless($packageRecord, 404, 'Published SCORM package not found.');
