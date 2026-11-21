@@ -18,15 +18,17 @@ Discounts do not stack. Percentage discounts are limited to 100%; fixed discount
 
 ## Pricing integration
 
-The shared `FlashSalePricingService` is introduced as the canonical server-side quote resolver. This PR does not replace the existing direct-enrollment pricing path because that integration requires a coordinated optional-dependency declaration in the course-management manifest and an owner-approved handoff for the course-management controller. The current legacy direct-enrollment discount path remains in place and does not yet use branch-aware campaign precedence.
+The shared `FlashSalePricingService` is the canonical server-side quote resolver used by all supported course-enrollment purchase paths in this release:
 
-**Unified Commerce / legacy course-cart integration is also excluded** because the canonical owner of `CommerceCatalog.php`, `CourseCommerceController.php`, and the commerce/course-management manifests is PR #275. That owner must apply and test the bounded quote integration separately. Do not assume cart checkout uses the new resolver until that follow-up is merged.
+- **Direct enrollment:** invoice subtotal, discount and payable amount use the same quote. Branch-specific/global precedence is shared with the storefront.
+- **Unified Commerce:** `CommerceCatalog::resolve('course')` uses the quote and stores campaign identity, regular price and discount amount in the server-generated cart snapshot.
+- **Legacy course cart:** add-to-cart snapshots use the same quote. Checkout revalidates the current quote against the stored unit price and returns a cart-review conflict before creating a payment session if the offer or price has changed.
 
-Both integration follow-ups must revalidate price snapshots at checkout before payment.
+Course Management and Commerce Cart declare Flash Sale as an optional dependency. When the Flash Sale plugin is disabled or its campaign table is unavailable, the resolver returns the regular course price.
 
-Until those integrations are complete, the public campaign price is an offer preview rather than a guaranteed invoice total. The storefront explicitly tells visitors that the final enrollment invoice amount may differ and must be checked before payment.
+Branch context is resolved server-side. Account and Student-profile branch assignments that conflict fail closed in the commerce catalogue, legacy cart and direct enrollment paths. A branch-targeted campaign cannot override a course assigned to another branch.
 
-Gift-course purchase pricing is not included. Coupon eligibility and gift pricing remain controlled by their existing commerce services.
+Gift-course pricing is intentionally excluded. Coupon eligibility and gift pricing remain controlled by their existing commerce services; this integration does not claim to alter those flows.
 
 ## Campaign management
 
