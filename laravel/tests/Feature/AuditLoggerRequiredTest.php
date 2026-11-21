@@ -32,4 +32,23 @@ final class AuditLoggerRequiredTest extends TestCase
 
         app(AuditLogger::class)->logRequired('security.permission_changed', 'user', '42');
     }
+    public function test_required_log_propagates_audit_insert_failures(): void
+    {
+        Schema::shouldReceive('hasTable')
+            ->with('audit_logs')
+            ->andReturn(true);
+
+        DB::listen(function ($query): void {
+            $sql = strtolower(ltrim((string) $query->sql));
+            if (str_starts_with($sql, 'insert') && str_contains($sql, 'audit_logs')) {
+                throw new RuntimeException('Injected audit insert failure.');
+            }
+        });
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Injected audit insert failure');
+
+        app(AuditLogger::class)->logRequired('payment.settled', 'payment_transaction', '42');
+    }
+
 }
