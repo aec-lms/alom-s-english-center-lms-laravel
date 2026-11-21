@@ -92,7 +92,7 @@ class LearningRewardsController extends Controller
         return view('learning-rewards::leaderboard', compact('query', 'period'));
     }
 
-    public function updatePrivacy(Request $request): RedirectResponse
+    public function updatePrivacy(Request $request, AuditLogger $audit): RedirectResponse
     {
         $student = $request->user();
         abort_unless($student && $student->hasRole('student'), 403);
@@ -106,11 +106,18 @@ class LearningRewardsController extends Controller
             'profile_public' => $data['profile_public'],
             'updated_at' => now(),
         ];
-        if ($profile) {
-            DB::table('learning_reward_profiles')->where('user_id', $student->id)->update($values);
-        } else {
-            DB::table('learning_reward_profiles')->insert($values + ['user_id' => $student->id, 'created_at' => now()]);
-        }
+        DB::transaction(function () use ($profile, $values, $student, $audit): void {
+            if ($profile) {
+                DB::table('learning_reward_profiles')->where('user_id', $student->id)->update($values);
+            } else {
+                DB::table('learning_reward_profiles')->insert($values + ['user_id' => $student->id, 'created_at' => now()]);
+            }
+
+            $audit->log('learning_rewards.privacy_updated', 'learning_reward_profile', (string) $student->id, [
+                'leaderboard_opt_out' => (bool) $values['leaderboard_opt_out'],
+                'profile_public' => (bool) $values['profile_public'],
+            ], $student->id);
+        });
 
         return back()->with('status', 'Reward profile privacy settings updated.');
     }
