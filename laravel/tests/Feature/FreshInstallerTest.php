@@ -382,6 +382,7 @@ class FreshInstallerTest extends TestCase
                     'APP_DEBUG' => 'false',
                     'APP_URL' => 'https://aec-concurrent.test',
                     'APP_KEY' => 'base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+                    'AEC_TEST_EXPLICIT_PLUGIN_BOOT' => '0',
                     'DB_CONNECTION' => 'sqlite',
                     'DB_DATABASE' => $databasePath,
                     'CACHE_STORE' => 'file',
