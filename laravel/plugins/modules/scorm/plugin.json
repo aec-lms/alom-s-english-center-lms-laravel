@@ -1,0 +1,19 @@
+{
+  "slug": "scorm",
+  "name": "SCORM 1.2 Learning Packages",
+  "version": "0.1.0",
+  "author": "Alom's English Center",
+  "category": "academic",
+  "description": "Secure SCORM 1.2 package import, private delivery and learner runtime tracking.",
+  "core_compatibility": "^2.0",
+  "dependencies": [],
+  "optional_dependencies": ["course-management", "course-content-studio", "learning-paths"],
+  "provider": "Plugins\\Modules\\Scorm\\Providers\\ScormServiceProvider",
+  "permissions": [
+    { "slug": "scorm.manage", "name": "Manage SCORM packages" }
+  ],
+  "settings_schema": [],
+  "admin_menu": [
+    { "group": "Academic & Operations", "label": "SCORM Packages", "route": "plugins.scorm.admin.index", "order": 185, "permission": "scorm.manage" }
+  ]
+}
