@@ -63,6 +63,31 @@ class BackupAndUpdateTest extends TestCase
 
 
 
+    public function test_backup_record_and_archive_are_rolled_back_when_required_audit_write_fails(): void
+    {
+        $this->markSystemInstalled();
+        $beforeCount = BackupRecord::query()->count();
+
+        AuditLog::creating(static function (): void {
+            throw new RuntimeException('forced backup audit failure');
+        });
+
+        try {
+            try {
+                app(BackupService::class)->createEncryptedBackup(null, false);
+                $this->fail('Backup creation must fail when required audit evidence cannot be stored.');
+            } catch (RuntimeException $exception) {
+                $this->assertSame('forced backup audit failure', $exception->getMessage());
+            }
+
+            $this->assertSame($beforeCount, BackupRecord::query()->count());
+            $backupFiles = glob(rtrim((string) config('lms.backup_path'), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'aec-backup-*.zip.enc') ?: [];
+            $this->assertSame([], $backupFiles);
+        } finally {
+            AuditLog::flushEventListeners();
+        }
+    }
+
     public function test_production_size_database_backup_restores_with_bounded_streaming_batches(): void
     {
         $this->markSystemInstalled();
