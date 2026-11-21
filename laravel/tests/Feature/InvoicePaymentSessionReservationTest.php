@@ -145,6 +145,55 @@ class InvoicePaymentSessionReservationTest extends TestCase
         );
     }
 
+    public function test_verified_stripe_webhook_can_settle_before_checkout_response_persists_provider_id(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'gateway-stripe']);
+        $secret = 'whsec_early_webhook_test_secret';
+        app(PluginManager::class)->saveSettings('gateway-stripe', [
+            'secret_key' => 'sk_test_early_webhook_123456',
+            'webhook_secret' => $secret,
+        ], ['secret_key', 'webhook_secret']);
+
+        $invoice = $this->createInvoice();
+        $reservation = app(InvoicePaymentSessionReservationService::class)->reserve(
+            $invoice,
+            'gateway-stripe',
+            'STRP',
+            [],
+            'early-webhook-key',
+        );
+        $transaction = $reservation['transaction'];
+        $this->assertNull($transaction->external_reference);
+
+        $event = [
+            'id' => 'evt_early_webhook_001',
+            'type' => 'payment_intent.succeeded',
+            'data' => ['object' => [
+                'id' => 'pi_early_webhook_001',
+                'metadata' => ['transaction_ref' => $transaction->transaction_ref],
+                'amount' => 120000,
+                'amount_received' => 120000,
+                'currency' => 'bdt',
+                'status' => 'succeeded',
+            ]],
+        ];
+        $rawBody = json_encode($event, JSON_THROW_ON_ERROR);
+        $timestamp = (string) time();
+        $signature = hash_hmac('sha256', $timestamp . '.' . $rawBody, $secret);
+
+        $settled = app(StripeGatewayService::class)->verifyAndSettleWebhook(
+            $rawBody,
+            't=' . $timestamp . ',v1=' . $signature,
+        );
+
+        $this->assertSame('settled', $settled->status);
+        $this->assertSame('pi_early_webhook_001', $settled->external_reference);
+        $this->assertSame(1200.0, (float) $invoice->fresh()->paid_amount);
+        $this->assertSame('paid', $invoice->fresh()->status);
+        $this->assertTrue($settled->metadata['stripe_webhook_received_before_checkout_response']);
+    }
+
     public function test_provider_idempotency_keys_are_scoped_to_the_invoice_and_gateway(): void
     {
         $this->markSystemInstalled();
