@@ -50,12 +50,10 @@ class LearningRewardsController extends Controller
         $query = DB::table('learning_reward_ledger as ledger')
             ->join('users', 'users.id', '=', 'ledger.user_id')
             ->leftJoin('learning_reward_profiles as profiles', 'profiles.user_id', '=', 'users.id')
-            ->where(function ($q): void {
-                $q->whereNull('profiles.leaderboard_opt_out')->orWhere('profiles.leaderboard_opt_out', false);
-            })
-            ->where(function ($q): void {
-                $q->whereNull('profiles.profile_public')->orWhere('profiles.profile_public', true);
-            })
+            // Leaderboard visibility is explicit opt-in. Missing privacy rows
+            // and users who have not chosen public visibility stay private.
+            ->where('profiles.leaderboard_opt_out', false)
+            ->where('profiles.profile_public', true)
             ->when($branchId !== null, fn ($q) => $q->where('ledger.branch_id', $branchId))
             ->when($start !== null, fn ($q) => $q->where('ledger.awarded_at', '>=', $start))
             ->selectRaw('users.id as user_id, users.name as student_name, SUM(ledger.points) as points')
