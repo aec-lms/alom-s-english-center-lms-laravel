@@ -15,5 +15,7 @@ Route::middleware(['web', 'installed', 'plugin:learning-rewards', 'auth'])->grou
         ->group(function (): void {
             Route::get('/', [LearningRewardsController::class, 'adminSettings'])->name('settings');
             Route::put('/rules', [LearningRewardsController::class, 'updateRules'])->name('rules.update');
+            Route::post('/badges', [LearningRewardsController::class, 'storeBadge'])->name('badges.store');
+            Route::put('/badges/{badge}', [LearningRewardsController::class, 'updateBadge'])->whereNumber('badge')->name('badges.update');
         });
 });
