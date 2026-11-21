@@ -231,6 +231,22 @@ class CourseBundlesPluginTest extends TestCase
             ->assertDontSee('Submit payment receipt')
             ->assertSee('Manual bank/cash receipt payments are currently disabled');
 
+        // The public checkout endpoint must enforce gateway settings even when a
+        // client bypasses the hidden/disabled receipt form and submits directly.
+        $invoice = DB::table('fee_invoices')->where('id', $order->invoice_id)->first();
+        $this->actingAs($student)->post('/universal-checkout', [
+            'payer_name' => $student->name,
+            'payer_contact' => $student->phone ?: $student->email,
+            'item_title' => 'Gateway Setting Bundle',
+            'gateway' => 'bank_cash',
+            'external_trx_id' => 'BANK-CASH-DISABLED-' . $order->id,
+            'fee_invoice_id' => $order->invoice_id,
+        ])->assertStatus(422);
+        $this->assertDatabaseMissing('universal_payment_transactions', [
+            'fee_invoice_id' => $order->invoice_id,
+            'external_trx_id' => 'BANK-CASH-DISABLED-' . $order->id,
+        ]);
+
         PluginSetting::query()->updateOrCreate(
             ['plugin_slug' => 'universal-payment', 'setting_key' => 'enabled_gateways'],
             ['setting_value' => 'sslcommerz,bank_cash', 'is_encrypted' => false]
