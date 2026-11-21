@@ -114,6 +114,53 @@ final class CourseTeacherAssignmentSecurityTest extends TestCase
         ]);
     }
 
+    public function test_teacher_account_and_profile_branch_mismatches_are_rejected(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management', 'teacher-management', 'branch-management']);
+
+        $admin = $this->createUserWithRole('admin');
+        $branchA = DB::table('branches')->insertGetId([
+            'code' => 'TEACHER-MISMATCH-A',
+            'name' => 'Teacher Mismatch Branch A',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $branchB = DB::table('branches')->insertGetId([
+            'code' => 'TEACHER-MISMATCH-B',
+            'name' => 'Teacher Mismatch Branch B',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        foreach ([[$branchA, $branchB], [$branchB, $branchA]] as $index => [$accountBranch, $profileBranch]) {
+            $teacher = $this->createUserWithRole('teacher');
+            $teacher->forceFill(['branch_id' => $accountBranch])->save();
+            $this->createTeacherProfile($teacher)->forceFill(['branch_id' => $profileBranch])->save();
+
+            $course = Course::query()->create([
+                'code' => 'TEACHER-MISMATCH-' . $index,
+                'title' => 'Teacher Branch Mismatch ' . $index,
+                'slug' => 'teacher-branch-mismatch-' . $index,
+                'price' => 0,
+                'status' => 'draft',
+                'branch_id' => null,
+            ]);
+
+            $this->actingAs($admin)->post('/admin/courses/teacher-assignments', [
+                'course_id' => $course->id,
+                'teacher_user_id' => $teacher->id,
+            ])->assertStatus(422);
+
+            $this->assertDatabaseMissing('course_teacher_assignments', [
+                'course_id' => $course->id,
+                'teacher_user_id' => $teacher->id,
+            ]);
+        }
+    }
+
     public function test_active_teacher_can_still_be_assigned_to_a_course(): void
     {
         $this->markSystemInstalled();
