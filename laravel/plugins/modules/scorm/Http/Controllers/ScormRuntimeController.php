@@ -196,11 +196,13 @@ class ScormRuntimeController extends Controller
             return [DB::table('scorm_attempts')->where('id', $attemptId)->first(), $token];
         });
 
-        $playerUrl = URL::temporarySignedRoute(
+        $signedPlayerPath = URL::temporarySignedRoute(
             'plugins.scorm.content.player',
             now()->addMinutes((int) config('scorm.launch_ttl_minutes', 240)),
-            ['attempt' => $attempt->id, 'token' => $token]
+            ['attempt' => $attempt->id, 'token' => $token],
+            false
         );
+        $playerUrl = rtrim((string) config('scorm.player_origin', ''), '/') . $signedPlayerPath;
 
         return view('scorm::launch', [
             'title' => $packageRecord->title,
@@ -211,6 +213,7 @@ class ScormRuntimeController extends Controller
 
     public function contentPlayer(Request $request, int $attempt, string $token): Response
     {
+        $this->assertConfiguredHost($request, 'scorm.player_origin');
         $session = $this->validSession($attempt, $token);
         $record = DB::table('scorm_attempts')->where('id', $attempt)->first();
         abort_unless($record, 404);
@@ -218,13 +221,13 @@ class ScormRuntimeController extends Controller
         abort_unless($package, 404);
 
         $bridgeNonce = bin2hex(random_bytes(32));
-        $launchUrl = route('plugins.scorm.content.bootstrap', [
+        $contentOrigin = rtrim((string) config('scorm.content_origin', ''), '/');
+        $launchUrl = $contentOrigin . route('plugins.scorm.content.bootstrap', [
             'attempt' => $attempt,
             'token' => $token,
             'path' => $package->launch_file,
             'bridge_nonce' => $bridgeNonce,
-        ]);
-        $contentOrigin = rtrim((string) config('scorm.content_origin', ''), '/');
+        ], false);
         $appOrigin = rtrim((string) config('app.url', ''), '/');
         abort_unless(parse_url($launchUrl, PHP_URL_HOST) === parse_url($contentOrigin, PHP_URL_HOST), 503, 'SCORM content bootstrap must resolve to the isolated content origin.');
 
@@ -260,16 +263,18 @@ class ScormRuntimeController extends Controller
 
     public function contentBootstrap(Request $request, int $attempt, string $token, ?string $path = null): Response
     {
+        $this->assertConfiguredHost($request, 'scorm.content_origin');
         $session = $this->validSession($attempt, $token);
         abort_unless(is_string($path) && $path !== '' && !$this->unsafeRelativePath($path), 404);
 
         $bridgeNonce = (string) $request->query('bridge_nonce', '');
         abort_unless(ctype_xdigit($bridgeNonce) && strlen($bridgeNonce) === 64, 403, 'SCORM bridge state is invalid.');
 
-        $location = route('plugins.scorm.content.file', [
+        $contentOrigin = rtrim((string) config('scorm.content_origin', ''), '/');
+        $location = $contentOrigin . route('plugins.scorm.content.file', [
             'attempt' => $attempt,
             'path' => $path,
-        ]);
+        ], false);
         $secure = parse_url((string) config('scorm.content_origin', ''), PHP_URL_SCHEME) === 'https';
         $cookiePath = '/scorm-content/' . $attempt . '/';
         $minutes = max(1, (int) config('scorm.launch_ttl_minutes', 240));
@@ -305,6 +310,7 @@ class ScormRuntimeController extends Controller
 
     public function contentFile(Request $request, int $attempt, ?string $path = null): Response
     {
+        $this->assertConfiguredHost($request, 'scorm.content_origin');
         $token = $request->cookie($this->contentSessionCookieName($attempt));
         abort_unless(is_string($token) && $token !== '', 403, 'SCORM content session is missing.');
         $session = $this->validSession($attempt, $token);
@@ -764,6 +770,14 @@ class ScormRuntimeController extends Controller
         }
 
         return false;
+    }
+
+    private function assertConfiguredHost(Request $request, string $originKey): void
+    {
+        $expectedHost = parse_url((string) config($originKey, ''), PHP_URL_HOST);
+        $requestHost = $request->getHost();
+        abort_unless(is_string($expectedHost) && $expectedHost !== ''
+            && hash_equals(strtolower($expectedHost), strtolower($requestHost)), 404);
     }
 
     private function isAllowedRuntimeOrigin(Request $request): bool
