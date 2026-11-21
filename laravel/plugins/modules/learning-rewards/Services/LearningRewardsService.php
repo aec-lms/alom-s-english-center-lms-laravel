@@ -107,6 +107,26 @@ class LearningRewardsService
         }
     }
 
+    public function reverseActivityAward(int $userId, string $activityKey, string $sourceType, int $sourceId, int $actorId, string $reason): ?int
+    {
+        $entry = DB::table('learning_reward_ledger')
+            ->where('user_id', $userId)
+            ->where('activity_key', $activityKey)
+            ->where('source_type', $sourceType)
+            ->where('source_id', $sourceId)
+            ->where('points', '>', 0)
+            ->orderByDesc('id')
+            ->get()
+            ->first(function ($candidate): bool {
+                return !DB::table('learning_reward_ledger')
+                    ->where('source_type', 'reward_reversal')
+                    ->where('source_id', $candidate->id)
+                    ->exists();
+            });
+
+        return $entry ? $this->reverseAward((int) $entry->id, $actorId, $reason) : null;
+    }
+
     public function reverseAward(int $ledgerId, int $actorId, string $reason): int
     {
         $reason = trim($reason);
