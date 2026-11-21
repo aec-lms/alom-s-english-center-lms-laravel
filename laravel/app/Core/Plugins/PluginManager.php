@@ -1082,19 +1082,21 @@ class PluginManager
         $keepFile = false;
         $createdStat = @fstat($handle);
         try {
-            if (!@chmod($path, 0600)) {
-                throw new RuntimeException('Unable to restrict private plugin backup file permissions.');
-            }
+            // The exclusive create inherits owner-only permissions from umask(0077).
+            // Do not chmod by pathname: a swapped symlink could redirect chmod
+            // to an unrelated file even though the open handle remains safe.
             $pathStat = @lstat($path);
             if ($createdStat === false
                 || $pathStat === false
                 || (($createdStat['mode'] & 0170000) !== 0100000)
                 || (($pathStat['mode'] & 0170000) !== 0100000)
+                || (($createdStat['mode'] & 0077) !== 0)
+                || (($pathStat['mode'] & 0077) !== 0)
                 || $createdStat['dev'] !== $pathStat['dev']
                 || $createdStat['ino'] !== $pathStat['ino']
                 || ($createdStat['nlink'] ?? 1) !== 1
             ) {
-                throw new RuntimeException('Private plugin backup file is not a newly created regular, non-linked file.');
+                throw new RuntimeException('Private plugin backup file is not a newly created owner-only regular, non-linked file.');
             }
 
             $written = $this->writeAllBytesToHandle($handle, $contents);
@@ -1106,9 +1108,6 @@ class PluginManager
             }
             if (function_exists('fsync') && !@fsync($handle)) {
                 throw new RuntimeException('Private plugin backup could not be synchronized to storage.');
-            }
-            if (!@chmod($path, 0600)) {
-                throw new RuntimeException('Unable to restrict private plugin backup file permissions.');
             }
 
             clearstatcache(true, $path);
