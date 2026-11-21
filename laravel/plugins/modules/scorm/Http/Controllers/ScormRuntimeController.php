@@ -422,9 +422,75 @@ class ScormRuntimeController extends Controller
 
         try {
             $result = DB::transaction(function () use ($validated): array {
-                $session = DB::table('scorm_attempt_sessions')
+                $tokenHash = hash('sha256', $validated['token']);
+                $sessionIdentity = DB::table('scorm_attempt_sessions')
                     ->where('scorm_attempt_id', $validated['attempt_id'])
-                    ->where('token_sha256', hash('sha256', $validated['token']))
+                    ->where('token_sha256', $tokenHash)
+                    ->where('expires_at', '>', now())
+                    ->first();
+                abort_unless($sessionIdentity, 403, 'SCORM launch session expired or is invalid.');
+
+                $attemptIdentity = DB::table('scorm_attempts')->where('id', $validated['attempt_id'])->first();
+                abort_unless($attemptIdentity, 404, 'SCORM attempt not found.');
+
+                // Match launch lock order to avoid an attempt/session vs entitlement deadlock:
+                // user -> role -> student profile -> enrollment -> course -> package -> invoice -> attempt -> session.
+                $lockedUser = DB::table('users')->where('id', $attemptIdentity->user_id)->lockForUpdate()->first();
+                abort_unless($lockedUser && (bool) $lockedUser->is_active, 403, 'Student account is inactive.');
+                $studentRole = DB::table('role_user')
+                    ->join('roles', 'roles.id', '=', 'role_user.role_id')
+                    ->where('role_user.user_id', $lockedUser->id)
+                    ->where('roles.slug', 'student')
+                    ->lockForUpdate()
+                    ->exists();
+                abort_unless($studentRole, 403, 'Current student role is required.');
+                $branchId = $this->currentStudentBranchId($lockedUser, true);
+
+                $lockedEnrollment = DB::table('enrollments')
+                    ->where('id', $attemptIdentity->enrollment_id)
+                    ->lockForUpdate()
+                    ->first();
+                abort_unless($lockedEnrollment && (int) $lockedEnrollment->user_id === (int) $lockedUser->id
+                    && in_array($lockedEnrollment->status, ['active', 'completed'], true), 403, 'Course enrollment is no longer eligible.');
+
+                $lockedCourse = DB::table('courses')->where('id', $lockedEnrollment->course_id)->lockForUpdate()->first();
+                abort_unless($lockedCourse && $lockedCourse->status === 'published', 403, 'Course is no longer published.');
+                $lockedPackage = DB::table('scorm_packages')->where('id', $attemptIdentity->scorm_package_id)->lockForUpdate()->first();
+                abort_unless($lockedPackage && in_array($lockedPackage->status, ['published', 'superseded'], true)
+                    && (int) $lockedPackage->course_id === (int) $lockedCourse->id, 403, 'SCORM package is no longer available.');
+
+                if ($lockedEnrollment->branch_id !== null) {
+                    abort_unless($branchId !== null && (int) $lockedEnrollment->branch_id === $branchId, 403, 'Enrollment is outside the student branch.');
+                }
+                if ($lockedCourse->branch_id !== null) {
+                    abort_unless($branchId !== null && (int) $lockedCourse->branch_id === $branchId, 403, 'Course is outside the student branch.');
+                }
+                if ($lockedPackage->branch_id !== null) {
+                    abort_unless($branchId !== null && (int) $lockedPackage->branch_id === $branchId, 403, 'SCORM package is outside the student branch.');
+                }
+
+                if ((float) $lockedCourse->price > 0) {
+                    abort_unless(Schema::hasTable('fee_invoices') && Schema::hasColumn('enrollments', 'invoice_id')
+                        && $lockedEnrollment->invoice_id !== null, 403, 'Paid course invoice is required.');
+                    $lockedInvoice = DB::table('fee_invoices')->where('id', $lockedEnrollment->invoice_id)->lockForUpdate()->first();
+                    abort_unless($lockedInvoice && $lockedInvoice->status === 'paid'
+                        && (float) $lockedInvoice->paid_amount + 0.01 >= (float) $lockedInvoice->net_amount, 403, 'Course invoice is no longer settled.');
+                }
+
+                $attempt = DB::table('scorm_attempts')->where('id', $validated['attempt_id'])->lockForUpdate()->first();
+                abort_unless($attempt
+                    && (int) $attempt->user_id === (int) $attemptIdentity->user_id
+                    && (int) $attempt->enrollment_id === (int) $attemptIdentity->enrollment_id
+                    && (int) $attempt->scorm_package_id === (int) $attemptIdentity->scorm_package_id,
+                    409,
+                    'SCORM attempt identity changed while committing.');
+                abort_unless(in_array($attempt->completion_state, ['in_progress', 'suspended'], true), 409, 'SCORM attempt is no longer writable.');
+                abort_unless((int) $attempt->state_version === (int) $validated['version'], 409, 'This SCORM attempt changed in another tab. Reload the learner session before continuing.');
+
+                $session = DB::table('scorm_attempt_sessions')
+                    ->where('id', $sessionIdentity->id)
+                    ->where('scorm_attempt_id', $attempt->id)
+                    ->where('token_sha256', $tokenHash)
                     ->where('expires_at', '>', now())
                     ->lockForUpdate()
                     ->first();
@@ -442,10 +508,6 @@ class ScormRuntimeController extends Controller
 
                     return $cachedResponse + ['replayed' => true];
                 }
-
-                $attempt = DB::table('scorm_attempts')->where('id', $validated['attempt_id'])->lockForUpdate()->first();
-                abort_unless($attempt && in_array($attempt->completion_state, ['in_progress', 'suspended'], true), 409, 'SCORM attempt is no longer writable.');
-                abort_unless((int) $attempt->state_version === (int) $validated['version'], 409, 'This SCORM attempt changed in another tab. Reload the learner session before continuing.');
 
                 [$user] = $this->assertAttemptEntitled($attempt);
 
