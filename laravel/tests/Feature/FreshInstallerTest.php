@@ -802,7 +802,7 @@ class FreshInstallerTest extends TestCase
                 app(FreshInstallerService::class)->installFresh([]);
                 $this->fail('Installer unexpectedly passed invalid install configuration.');
             } catch (RuntimeException $exception) {
-                $this->assertStringContainsString('Application name is required', $exception->getMessage());
+                $this->assertStringContainsString('Administrator name is required', $exception->getMessage());
             }
             $this->assertSame('preserve-existing-mutex', file_get_contents($mutexPath));
         } finally {
