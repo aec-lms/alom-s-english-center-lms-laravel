@@ -66,8 +66,17 @@ test('untrusted SCO cannot inspect LMS/player state and commits only through the
       const attemptToken = ${JSON.stringify(playerToken)};
       const attemptId = 41;
       let stateVersion = 0;
+      const observedMessages = [];
 
       window.addEventListener('message', async event => {
+        if (event.data && typeof event.data === 'object') {
+          observedMessages.push({
+            type: event.data.type || null,
+            origin: event.origin,
+            sourceMatches: event.source === frame.contentWindow,
+          });
+          document.body.dataset.messageTrace = JSON.stringify(observedMessages);
+        }
         if (event.source !== frame.contentWindow || event.origin !== 'null'
           || !event.data || typeof event.data !== 'object') return;
 
