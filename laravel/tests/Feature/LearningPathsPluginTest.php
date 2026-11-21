@@ -160,6 +160,68 @@ class LearningPathsPluginTest extends TestCase
         $this->assertSame((int) $branchB, (int) DB::table('courses')->where('id', $second)->value('branch_id'));
     }
 
+    public function test_learning_paths_catalog_admin_and_student_pages_render_in_english_and_bangla(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management', 'learning-paths']);
+        $admin = $this->createUserWithRole('admin');
+        $student = $this->createUserWithRole('student');
+        $first = $this->course('LP-I18N-A', 'English Grammar');
+        $second = $this->course('LP-I18N-B', 'Speaking Practice');
+        $pathId = DB::table('learning_paths')->insertGetId([
+            'created_by' => $admin->id,
+            'title' => 'English Learning Journey',
+            'slug' => 'english-learning-journey',
+            'description' => 'A guided course sequence.',
+            'status' => 'published',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        foreach ([$first, $second] as $index => $courseId) {
+            DB::table('learning_path_courses')->insert([
+                'learning_path_id' => $pathId,
+                'course_id' => $courseId,
+                'course_title' => DB::table('courses')->where('id', $courseId)->value('title'),
+                'position' => $index + 1,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+        DB::table('enrollments')->insert([
+            'user_id' => $student->id,
+            'course_id' => $first,
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('learning_path_enrollments')->insert([
+            'learning_path_id' => $pathId,
+            'user_id' => $student->id,
+            'status' => 'active',
+            'started_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        app()->setLocale('en');
+        $this->get('/learning-paths')->assertOk()->assertSee('Learn step by step');
+        $this->actingAs($student)->get('/learning-paths/english-learning-journey')
+            ->assertOk()->assertSee('All learning paths')->assertSee('Current step');
+        $this->actingAs($student)->get('/my-learning-paths')->assertOk()->assertSee('My Learning Paths');
+        $this->actingAs($admin)->get('/admin/learning-paths')
+            ->assertOk()->assertSee('Create a learning path')->assertSee('Course sequence');
+
+        app()->setLocale('bn');
+        $this->get('/learning-paths')->assertOk()->assertSee('ধাপে ধাপে শিখুন');
+        $this->actingAs($student)->get('/learning-paths/english-learning-journey')
+            ->assertOk()->assertSee('সব লার্নিং পাথ')->assertSee('বর্তমান ধাপ');
+        $this->actingAs($student)->get('/my-learning-paths')->assertOk()->assertSee('আমার লার্নিং পাথ');
+        $this->actingAs($admin)->get('/admin/learning-paths')
+            ->assertOk()->assertSee('লার্নিং পাথ তৈরি করুন')->assertSee('কোর্সের ক্রম');
+
+        app()->setLocale(config('app.locale', 'en'));
+    }
+
     public function test_enrolled_path_curriculum_cannot_be_reordered_or_replaced(): void
     {
         $this->markSystemInstalled();
