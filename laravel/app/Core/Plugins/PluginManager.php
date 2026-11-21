@@ -1064,7 +1064,7 @@ class PluginManager
         }
 
         if (basename($filename) !== $filename || $filename === ''
-            || str_contains($filename, "\\0")
+            || str_contains($filename, chr(0))
         ) {
             throw new RuntimeException('Invalid private plugin backup filename.');
         }
