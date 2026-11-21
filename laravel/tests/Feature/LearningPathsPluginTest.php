@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Core\Plugins\PluginManager;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Database\QueryException;
 use Tests\TestCase;
 
 class LearningPathsPluginTest extends TestCase
@@ -188,6 +189,110 @@ class LearningPathsPluginTest extends TestCase
         $this->actingAs($student)->get('/courses/' . $slug . '/content/optional-learning-paths-disabled')->assertOk();
         $this->actingAs($student)->post('/courses/' . $slug . '/content/optional-learning-paths-disabled/complete')
             ->assertRedirect()->assertSessionHasNoErrors();
+    }
+
+    public function test_mysql_path_status_and_enrollment_serialize_on_the_same_parent_lock(): void
+    {
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            $this->markTestSkipped('Path status/enrollment serialization requires MySQL 8 row locks.');
+        }
+
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management', 'learning-paths']);
+        $admin = $this->createUserWithRole('admin');
+        $student = $this->createUserWithRole('student');
+        $first = $this->course('LP-LOCK-RACE-A', 'Path Lock Race Course A');
+        $second = $this->course('LP-LOCK-RACE-B', 'Path Lock Race Course B');
+        DB::table('enrollments')->insert([
+            'user_id' => $student->id,
+            'course_id' => $first,
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $createPath = function (string $slug) use ($admin, $first, $second): int {
+            $pathId = DB::table('learning_paths')->insertGetId([
+                'created_by' => $admin->id,
+                'title' => $slug,
+                'slug' => $slug,
+                'status' => 'published',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            foreach ([$first, $second] as $index => $courseId) {
+                DB::table('learning_path_courses')->insert([
+                    'learning_path_id' => $pathId,
+                    'course_id' => $courseId,
+                    'course_title' => DB::table('courses')->where('id', $courseId)->value('title'),
+                    'position' => $index + 1,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+            return $pathId;
+        };
+
+        $statusPathId = $createPath('status-lock-race-path');
+        $enrollmentPathId = $createPath('enrollment-lock-race-path');
+        $default = DB::getDefaultConnection();
+        $secondaryName = 'learning_path_lock_' . bin2hex(random_bytes(3));
+        config(['database.connections.' . $secondaryName => config('database.connections.' . $default)]);
+        DB::purge($secondaryName);
+        $primary = DB::connection($default);
+        $secondary = DB::connection($secondaryName);
+        $secondary->statement('SET SESSION innodb_lock_wait_timeout = 1');
+
+        try {
+            // An archive transaction owns the parent path row. A concurrent
+            // enrolment must wait, then observe the archived status and fail.
+            $primary->beginTransaction();
+            $this->actingAs($admin)->patch('/admin/learning-paths/' . $statusPathId . '/status', [
+                'status' => 'archived',
+            ])->assertRedirect()->assertSessionHasNoErrors();
+
+            $secondary->beginTransaction();
+            try {
+                $secondary->table('learning_paths')->where('id', $statusPathId)->lockForUpdate()->first();
+                $this->fail('Concurrent path enrollment must wait for the path status transaction.');
+            } catch (QueryException $exception) {
+                $this->assertSame(1205, (int) ($exception->errorInfo[1] ?? 0), $exception->getMessage());
+            } finally {
+                if ($secondary->transactionLevel() > 0) $secondary->rollBack();
+            }
+            $primary->commit();
+
+            $this->actingAs($student)->post('/learning-paths/status-lock-race-path/enroll')->assertNotFound();
+
+            // Conversely, a join transaction owns the same parent row. An
+            // archive waits, then rechecks the committed active enrollment.
+            $primary->beginTransaction();
+            $this->actingAs($student)->post('/learning-paths/enrollment-lock-race-path/enroll')
+                ->assertRedirect()->assertSessionHasNoErrors();
+
+            $secondary->beginTransaction();
+            try {
+                $secondary->table('learning_paths')->where('id', $enrollmentPathId)->lockForUpdate()->first();
+                $this->fail('Concurrent path archive must wait for the learner enrollment transaction.');
+            } catch (QueryException $exception) {
+                $this->assertSame(1205, (int) ($exception->errorInfo[1] ?? 0), $exception->getMessage());
+            } finally {
+                if ($secondary->transactionLevel() > 0) $secondary->rollBack();
+            }
+            $primary->commit();
+
+            $this->actingAs($admin)->patch('/admin/learning-paths/' . $enrollmentPathId . '/status', [
+                'status' => 'archived',
+            ])->assertStatus(409);
+            $this->assertDatabaseHas('learning_path_enrollments', [
+                'learning_path_id' => $enrollmentPathId,
+                'user_id' => $student->id,
+                'status' => 'active',
+            ]);
+        } finally {
+            if ($primary->transactionLevel() > 0) $primary->rollBack();
+            DB::purge($secondaryName);
+        }
     }
 
     public function test_branch_reassignment_after_path_enrollment_revokes_course_content_access(): void
