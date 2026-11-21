@@ -247,7 +247,6 @@ class AttendanceController extends Controller
                             'attendance_present',
                             'attendance_entry',
                             (int) $entry->id,
-                            'present-' . $entry->updated_at?->format('Uu'),
                         );
                     } elseif ($isEdit && $oldStatus === 'present' && $entry->status !== 'present') {
                         $rewards->reverseActivityAward(
