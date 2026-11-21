@@ -85,7 +85,8 @@ class CourseContentLearningController extends Controller
         $item=CourseCurriculumItem::query()->where('course_id',$courseRow->id)->where('course_content_post_id',$content->id)->where('is_active',true)->firstOrFail();
         abort_if($item->is_preview,403,'Preview lessons do not count toward completion.');
         DB::transaction(function () use ($student, $item): void {
-            DB::table('users')->where('id', $student->id)->lockForUpdate()->firstOrFail();
+            $lockedStudent = DB::table('users')->where('id', $student->id)->lockForUpdate()->first();
+            abort_unless($lockedStudent, 404);
             $progress = CourseContentProgress::query()
                 ->where('user_id', $student->id)
                 ->where('course_curriculum_item_id', $item->id)
