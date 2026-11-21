@@ -212,4 +212,41 @@ class PluginRecycleBinAdminAcceptanceTest extends TestCase
         }
     }
 
+    public function test_partial_recycle_metadata_write_restores_package_and_previous_lifecycle_state(): void
+    {
+        $this->markSystemInstalled();
+        $slug = 'partial-metadata-probe-' . strtolower(substr(bin2hex(random_bytes(4)), 0, 8));
+        $modulePath = $this->createProbePlugin($slug);
+        $archivePath = null;
+
+        try {
+            $manager = app(PluginManager::class);
+            $manager->syncCatalog();
+            $manager->install($slug);
+            $this->assertTrue($manager->isInstalled($slug));
+            $this->assertTrue($manager->isEnabled($slug));
+
+            // File::put returning a positive short count simulates a truncated
+            // metadata file; the archive must not be committed or orphaned.
+            File::shouldReceive('put')->once()->andReturn(1);
+
+            try {
+                $manager->deleteToRecycleBin($slug);
+                $this->fail('A partial recycle-bin metadata write must abort plugin deletion.');
+            } catch (\\RuntimeException $exception) {
+                $this->assertStringContainsString('original package and lifecycle state were restored', $exception->getMessage());
+            }
+
+            $this->assertDirectoryExists($modulePath);
+            $this->assertTrue($manager->isInstalled($slug));
+            $this->assertTrue($manager->isEnabled($slug));
+            $this->assertSame([], $manager->recycledPlugins());
+        } finally {
+            File::deleteDirectory($modulePath);
+            if ($archivePath && is_dir($archivePath)) {
+                File::deleteDirectory($archivePath);
+            }
+        }
+    }
+
 }
