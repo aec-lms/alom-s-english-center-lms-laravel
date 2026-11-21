@@ -204,6 +204,7 @@ class ScormRuntimeController extends Controller
         $response = response()->view('scorm::content-player', [
             'title' => $package->title,
             'launchUrl' => $launchUrl,
+            'contentOrigin' => rtrim((string) config('scorm.content_origin', ''), '/'),
             'runtimeUrl' => $runtimeUrl,
             'attemptId' => $attempt,
             'token' => $token,
