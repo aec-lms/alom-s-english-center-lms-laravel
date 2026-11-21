@@ -72,6 +72,13 @@ class LearningPathAccess
             return;
         }
 
+        DB::transaction(function () use ($userId, $courseId): void {
+            $this->assertCourseUnlockedWithinTransaction($userId, $courseId);
+        });
+    }
+
+    private function assertCourseUnlockedWithinTransaction(int $userId, int $courseId): void
+    {
         $currentBranchId = $this->resolveStudentBranch($userId);
         $courseBranchId = Schema::hasColumn('courses', 'branch_id')
             ? DB::table('courses')->where('id', $courseId)->value('branch_id')
