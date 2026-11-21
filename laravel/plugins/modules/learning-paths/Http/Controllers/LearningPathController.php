@@ -264,6 +264,12 @@ class LearningPathController extends Controller
         $branchId = $actor->hasRole('branch_manager')
             ? (int) $actor->branch_id
             : (isset($validated['branch_id']) ? (int) $validated['branch_id'] : $branchIds->first());
+        if ($branchId !== null) {
+            abort_unless($this->plugins->isEnabled('branch-management')
+                && Schema::hasTable('branches')
+                && DB::table('branches')->where('id', $branchId)->where('is_active', true)->exists(),
+                422, 'Select an active branch from Branch Management.');
+        }
         if ($actor->hasRole('branch_manager')) {
             abort_unless($branchId > 0, 403, 'Branch managers must have an assigned branch.');
         }
@@ -318,7 +324,7 @@ class LearningPathController extends Controller
             $enrollment = DB::table('enrollments')->where('user_id', $userId)->where('course_id', $course->course_id)
                 ->whereIn('status', ['active', 'completed'])->first();
             $completed = $enrollment?->status === 'completed';
-            if (!$completed && $this->plugins->isEnabled('course-content-studio')
+            if ($enrollment && !$completed && $this->plugins->isEnabled('course-content-studio')
                 && Schema::hasTable('course_curriculum_items')
                 && Schema::hasTable('course_content_progress')
             ) {
