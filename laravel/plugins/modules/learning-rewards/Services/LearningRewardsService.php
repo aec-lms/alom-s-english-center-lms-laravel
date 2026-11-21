@@ -51,6 +51,9 @@ class LearningRewardsService
                 if (Schema::hasColumn('users', 'is_active')) {
                     abort_unless((bool) $user->is_active, 403, 'Inactive student accounts cannot earn learning rewards.');
                 }
+                if (Schema::hasColumn('users', 'is_active')) {
+                    abort_unless((bool) $user->is_active, 403, 'Inactive student accounts cannot earn learning rewards.');
+                }
 
                 $existing = DB::table('learning_reward_ledger')->where('idempotency_key', $idempotencyKey)->first();
                 if ($existing) {
