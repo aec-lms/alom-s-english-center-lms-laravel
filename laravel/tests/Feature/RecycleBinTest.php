@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Plugins\Modules\StudentManagement\Models\Student;
 use Plugins\Modules\TeacherManagement\Models\Teacher;
@@ -400,7 +401,7 @@ class RecycleBinTest extends TestCase
                 'is_active' => true,
             ]);
             $this->actingAs($admin)->delete('/admin/teachers/' . $teacher->id)->assertRedirect();
-            $teachers[] = $teacher->fresh();
+            $teachers[] = ['id' => (int) $teacher->id, 'user_id' => (int) $instructor->id];
         }
 
         $adminRoleId = (int) DB::table('roles')->where('slug', 'admin')->value('id');
@@ -416,7 +417,7 @@ class RecycleBinTest extends TestCase
         $primary->beginTransaction();
         try {
             $this->actingAs($admin)
-                ->post('/admin/recycle-bin/teachers/' . $teachers[0]->id . '/restore')
+                ->post('/admin/recycle-bin/teachers/' . $teachers[0]['id'] . '/restore')
                 ->assertRedirect();
 
             $secondary->beginTransaction();
@@ -442,15 +443,15 @@ class RecycleBinTest extends TestCase
                 ->delete();
 
             $this->actingAs($admin)
-                ->post('/admin/recycle-bin/teachers/' . $teachers[1]->id . '/restore')
+                ->post('/admin/recycle-bin/teachers/' . $teachers[1]['id'] . '/restore')
                 ->assertForbidden();
 
             $this->assertSoftDeleted('teachers', ['id' => $teachers[1]->id]);
             $this->assertDatabaseHas('users', [
-                'id' => $teachers[1]->user_id,
+                'id' => $teachers[1]['user_id'],
                 'is_active' => false,
             ]);
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             if ($primary->transactionLevel() > 0) {
                 $primary->rollBack();
             }
