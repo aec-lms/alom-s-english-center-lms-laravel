@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\Scorm\\Providers;
+namespace Plugins\Modules\Scorm\Providers;
 
-use App\\Core\\Plugins\\BasePluginServiceProvider;
+use App\Core\Plugins\BasePluginServiceProvider;
 
 class ScormServiceProvider extends BasePluginServiceProvider
 {
