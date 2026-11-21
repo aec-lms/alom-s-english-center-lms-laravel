@@ -591,16 +591,7 @@ class PluginManager
         $wasEnabled = (bool) ($record?->is_enabled);
 
         // Validate the destination before changing the plugin's lifecycle state.
-        $trashRoot = storage_path('app/plugin-recycle-bin');
-        if (is_link($trashRoot)) {
-            throw new RuntimeException('Plugin recycle-bin directory cannot be a symbolic link.');
-        }
-        File::ensureDirectoryExists($trashRoot);
-        $resolvedTrashRoot = realpath($trashRoot);
-        if (!$resolvedTrashRoot || !is_dir($resolvedTrashRoot)) {
-            throw new RuntimeException('Plugin recycle-bin directory is missing or unsafe.');
-        }
-        $trashRoot = $resolvedTrashRoot;
+        $trashRoot = $this->resolvePrivatePluginStorageRoot('plugin-recycle-bin');
 
         if ($wasInstalled) {
             $this->uninstall($slug, false, $actorId);
@@ -747,14 +738,12 @@ class PluginManager
             throw new RuntimeException('Invalid recycle-bin archive identifier.');
         }
 
-        $trashRootCandidate = storage_path('app/plugin-recycle-bin');
-        $trashRoot = realpath($trashRootCandidate);
-        $metadataPath = $trashRootCandidate . DIRECTORY_SEPARATOR . $archiveName . '.json';
-        $sourceCandidate = $trashRootCandidate . DIRECTORY_SEPARATOR . $archiveName;
+        $trashRoot = $this->resolvePrivatePluginStorageRoot('plugin-recycle-bin');
+        $metadataPath = $trashRoot . DIRECTORY_SEPARATOR . $archiveName . '.json';
+        $sourceCandidate = $trashRoot . DIRECTORY_SEPARATOR . $archiveName;
         $metadataRealPath = realpath($metadataPath);
         $source = realpath($sourceCandidate);
-        if (!$trashRoot || is_link($trashRootCandidate)
-            || is_link($metadataPath) || !$metadataRealPath || dirname($metadataRealPath) !== $trashRoot
+        if (is_link($metadataPath) || !$metadataRealPath || dirname($metadataRealPath) !== $trashRoot
             || is_link($sourceCandidate) || !$source || dirname($source) !== $trashRoot || !is_dir($source)) {
             throw new RuntimeException('Recycled plugin package is missing or outside the protected recycle-bin directory.');
         }
@@ -828,14 +817,12 @@ class PluginManager
         if (preg_match('/^[a-z0-9][a-z0-9-]{1,79}-[0-9]{14}-[a-f0-9]{10}$/', $archiveName) !== 1) {
             throw new RuntimeException('Invalid recycle-bin archive identifier.');
         }
-        $trashRootCandidate = storage_path('app/plugin-recycle-bin');
-        $trashRoot = realpath($trashRootCandidate);
-        $metadataPath = $trashRootCandidate . DIRECTORY_SEPARATOR . $archiveName . '.json';
-        $sourceCandidate = $trashRootCandidate . DIRECTORY_SEPARATOR . $archiveName;
+        $trashRoot = $this->resolvePrivatePluginStorageRoot('plugin-recycle-bin');
+        $metadataPath = $trashRoot . DIRECTORY_SEPARATOR . $archiveName . '.json';
+        $sourceCandidate = $trashRoot . DIRECTORY_SEPARATOR . $archiveName;
         $metadataRealPath = realpath($metadataPath);
         $source = realpath($sourceCandidate);
-        if (!$trashRoot || is_link($trashRootCandidate)
-            || is_link($metadataPath) || !$metadataRealPath || dirname($metadataRealPath) !== $trashRoot
+        if (is_link($metadataPath) || !$metadataRealPath || dirname($metadataRealPath) !== $trashRoot
             || is_link($sourceCandidate) || !$source || dirname($source) !== $trashRoot || !is_dir($source)) {
             throw new RuntimeException('Recycled plugin package is missing or outside the protected recycle-bin directory.');
         }
@@ -850,16 +837,7 @@ class PluginManager
         }
 
         // Keep a private, integrity-checked recovery snapshot before permanent removal.
-        $backupRoot = storage_path('app/plugin-permanent-delete-backups');
-        if (is_link($backupRoot)) {
-            throw new RuntimeException('Permanent-delete recovery directory cannot be a symbolic link.');
-        }
-        File::ensureDirectoryExists($backupRoot);
-        $resolvedBackupRoot = realpath($backupRoot);
-        if (!$resolvedBackupRoot || !is_dir($resolvedBackupRoot)) {
-            throw new RuntimeException('Permanent-delete recovery directory is missing or unsafe.');
-        }
-        @chmod($resolvedBackupRoot, 0700);
+        $resolvedBackupRoot = $this->resolvePrivatePluginStorageRoot('plugin-permanent-delete-backups');
         $backupPath = $resolvedBackupRoot . DIRECTORY_SEPARATOR . $archiveName;
         if (is_link($backupPath) || (file_exists($backupPath) && !is_dir($backupPath))) {
             throw new RuntimeException('Permanent-delete recovery snapshot path is unsafe.');
@@ -1037,6 +1015,40 @@ class PluginManager
      *
      * @param array<string, mixed> $payload
      */
+
+    private function resolvePrivatePluginStorageRoot(string $directoryName): string
+    {
+        if (!in_array($directoryName, ['plugin-recycle-bin', 'plugin-permanent-delete-backups'], true)) {
+            throw new RuntimeException('Invalid private plugin storage directory.');
+        }
+
+        $storagePath = storage_path('app');
+        $storageRoot = realpath($storagePath);
+        if ($storageRoot === false || is_link($storagePath)) {
+            throw new RuntimeException('Private plugin storage root is unavailable or redirected.');
+        }
+
+        $candidate = $storageRoot . DIRECTORY_SEPARATOR . $directoryName;
+        if (is_link($candidate)) {
+            throw new RuntimeException('Private plugin storage directory cannot be a symbolic link.');
+        }
+        if (!is_dir($candidate) && !@mkdir($candidate, 0700) && !is_dir($candidate)) {
+            throw new RuntimeException('Unable to create private plugin storage directory.');
+        }
+        if (!@chmod($candidate, 0700)) {
+            throw new RuntimeException('Unable to restrict private plugin storage directory permissions.');
+        }
+
+        $resolved = realpath($candidate);
+        $stat = $resolved !== false ? @stat($resolved) : false;
+        if ($resolved === false || dirname($resolved) !== $storageRoot || $stat === false
+            || (($stat['mode'] & 0170000) !== 0040000) || (($stat['mode'] & 0077) !== 0)) {
+            throw new RuntimeException('Plugin private storage directory must be a private real directory directly under storage/app.');
+        }
+
+        return $resolved;
+    }
+
     private function writeVerifiedPrivateJson(string $root, string $filename, array $payload): string
     {
         $storagePath = storage_path('app');
