@@ -193,28 +193,9 @@ class ScormRuntimeController extends Controller
         ]);
         $contentOrigin = rtrim((string) config('scorm.content_origin', ''), '/');
         abort_unless(parse_url($launchUrl, PHP_URL_HOST) === parse_url($contentOrigin, PHP_URL_HOST), 503, 'SCORM content files must resolve to the isolated content origin.');
-        $user = DB::table('users')->where('id', $record->user_id)->first();
-        $appOrigin = rtrim((string) config('app.url'), '/');
-        $runtimeUrl = $appOrigin . '/api/scorm-runtime/commit';
-        $savedData = json_decode((string) $record->cmi_data, true);
-        if (!is_array($savedData)) {
-            $savedData = [];
-        }
-        // Session time is per launch session; total time is supplied separately as read-only CMI data.
-        $savedData['cmi.core.session_time'] = '0000:00:00.00';
-
         $response = response()->view('scorm::content-player', [
             'title' => $package->title,
             'launchUrl' => $launchUrl,
-            'runtimeUrl' => $runtimeUrl,
-            'attemptId' => $attempt,
-            'token' => $token,
-            'stateVersion' => (int) $record->state_version,
-            'studentId' => (string) $record->user_id,
-            'studentName' => (string) ($user->name ?? 'Learner'),
-            'entryMode' => $record->entry_mode,
-            'totalTime' => $this->formatScormTime((int) $record->total_time_seconds),
-            'savedData' => $savedData,
             'contentOrigin' => $contentOrigin,
         ]);
 
