@@ -125,4 +125,57 @@ class ScormPackageImporterTest extends TestCase
             @unlink($archive);
         }
     }
+
+    public function test_archive_symbolic_links_are_rejected(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'aec-scorm-link-');
+        $zip = new ZipArchive();
+        $zip->open($path, ZipArchive::CREATE | ZipArchive::OVERWRITE);
+        $zip->addFromString('imsmanifest.xml', $this->validManifest());
+        $zip->addFromString('index.html', 'ok');
+        $zip->addFromString('linked-file', 'index.html');
+        $zip->setExternalAttributesName('linked-file', ZipArchive::OPSYS_UNIX, (0120777 << 16));
+        $zip->close();
+
+        try {
+            $this->expectException(RuntimeException::class);
+            app(ScormPackageImporter::class)->import($path);
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    public function test_percent_encoded_archive_paths_are_rejected(): void
+    {
+        $archive = $this->makeArchive([
+            'imsmanifest.xml' => $this->validManifest(),
+            'index.html' => 'ok',
+            '%2e%2e/escape.txt' => 'must not be interpreted as a path',
+        ]);
+
+        try {
+            $this->expectException(RuntimeException::class);
+            app(ScormPackageImporter::class)->import($archive);
+        } finally {
+            @unlink($archive);
+        }
+    }
+
+    public function test_case_colliding_archive_paths_are_rejected(): void
+    {
+        $archive = $this->makeArchive([
+            'imsmanifest.xml' => $this->validManifest(),
+            'index.html' => 'ok',
+            'Assets/Word.txt' => 'first',
+            'assets/word.txt' => 'second',
+        ]);
+
+        try {
+            $this->expectException(RuntimeException::class);
+            app(ScormPackageImporter::class)->import($archive);
+        } finally {
+            @unlink($archive);
+        }
+    }
+
 }
