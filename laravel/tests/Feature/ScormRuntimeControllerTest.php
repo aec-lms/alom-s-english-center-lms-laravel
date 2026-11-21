@@ -120,6 +120,7 @@ class ScormRuntimeControllerTest extends TestCase
         $this->assertSame('scorm.example.test', parse_url($contentUrl, PHP_URL_HOST));
         $contentResponse = $this->get($contentUrl);
         $contentResponse->assertOk()->assertSee('window.API')->assertSee('LMSCommit')
+            ->assertHeader('Cross-Origin-Resource-Policy', 'cross-origin')
             ->assertSee('element.match(/^cmi\\.interactions\\.\\d+\\.(.+)$/)')
             ->assertSee("if (field === 'time') return /^\\d{8}T\\d{6}(?:\\.\\d{1,2})?$/")
             ->assertHeader('X-Content-Type-Options', 'nosniff');
