@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Core\Plugins\PluginManager;
+use App\Models\AuditLog;
 use App\Models\Permission;
 use App\Models\Role;
 use Illuminate\Support\Carbon;
@@ -135,6 +136,58 @@ class LearningRewardsPluginTest extends TestCase
             'id' => $award['ledger_id'],
             'points' => 25,
         ]);
+    }
+
+    public function test_required_audit_failures_roll_back_reward_awards_and_reversals(): void
+    {
+        $this->bootRewards();
+        $student = $this->createUserWithRole('student');
+        $admin = $this->createUserWithRole('admin');
+        $service = app(LearningRewardsService::class);
+
+        AuditLog::creating(static function (AuditLog $log): void {
+            if ($log->action === 'learning_rewards.points_awarded') {
+                throw new \\RuntimeException('forced reward award audit failure');
+            }
+        });
+
+        try {
+            try {
+                $service->awardVerifiedActivity((int) $student->id, 'lesson_completed', 'course_lesson', 88001);
+                $this->fail('Reward award must roll back when its required audit event cannot be written.');
+            } catch (\\RuntimeException $exception) {
+                $this->assertSame('forced reward award audit failure', $exception->getMessage());
+            }
+        } finally {
+            AuditLog::flushEventListeners();
+        }
+
+        $this->assertDatabaseMissing('learning_reward_ledger', [
+            'user_id' => $student->id,
+            'source_id' => 88001,
+        ]);
+        $this->assertDatabaseMissing('learning_reward_streaks', ['user_id' => $student->id]);
+
+        $award = $service->awardVerifiedActivity((int) $student->id, 'lesson_completed', 'course_lesson', 88001);
+        AuditLog::creating(static function (AuditLog $log): void {
+            if ($log->action === 'learning_rewards.points_reversed') {
+                throw new \\RuntimeException('forced reward reversal audit failure');
+            }
+        });
+
+        try {
+            try {
+                $service->reverseAward($award['ledger_id'], (int) $admin->id, 'Correction requires reversal.');
+                $this->fail('Reward reversal must roll back when its required audit event cannot be written.');
+            } catch (\\RuntimeException $exception) {
+                $this->assertSame('forced reward reversal audit failure', $exception->getMessage());
+            }
+        } finally {
+            AuditLog::flushEventListeners();
+        }
+
+        $this->assertSame(1, DB::table('learning_reward_ledger')->where('user_id', $student->id)->count());
+        $this->assertSame(25, (int) DB::table('learning_reward_ledger')->where('user_id', $student->id)->sum('points'));
     }
 
     public function test_attendance_correction_cannot_be_farmed_by_present_absent_present_toggles(): void
