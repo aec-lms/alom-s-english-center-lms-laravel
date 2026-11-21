@@ -230,6 +230,90 @@ final class CourseTeacherAssignmentSecurityTest extends TestCase
         }
     }
 
+
+    public function test_mysql_teacher_profile_deactivation_waits_for_assignment_and_future_assignment_is_denied(): void
+    {
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            $this->markTestSkipped('Teacher profile/assignment serialization requires MySQL 8.');
+        }
+
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management', 'teacher-management']);
+        $admin = $this->createUserWithRole('admin');
+        $teacher = $this->createUserWithRole('teacher');
+        $profile = $this->createTeacherProfile($teacher);
+
+        $firstCourse = Course::query()->create([
+            'code' => 'TEACHER-PROFILE-RACE-1',
+            'title' => 'Teacher Profile Race One',
+            'slug' => 'teacher-profile-race-one',
+            'price' => 0,
+            'status' => 'draft',
+            'branch_id' => null,
+        ]);
+        $secondCourse = Course::query()->create([
+            'code' => 'TEACHER-PROFILE-RACE-2',
+            'title' => 'Teacher Profile Race Two',
+            'slug' => 'teacher-profile-race-two',
+            'price' => 0,
+            'status' => 'draft',
+            'branch_id' => null,
+        ]);
+
+        $default = DB::getDefaultConnection();
+        $secondaryName = 'teacher_profile_assignment_race_' . bin2hex(random_bytes(3));
+        config(['database.connections.' . $secondaryName => config('database.connections.' . $default)]);
+        DB::purge($secondaryName);
+        $primary = DB::connection($default);
+        $secondary = DB::connection($secondaryName);
+        $secondary->statement('SET SESSION innodb_lock_wait_timeout = 1');
+        $primary->beginTransaction();
+
+        try {
+            $this->actingAs($admin)->post('/admin/courses/teacher-assignments', [
+                'course_id' => $firstCourse->id,
+                'teacher_user_id' => $teacher->id,
+            ])->assertRedirect()->assertSessionHasNoErrors();
+
+            try {
+                $secondary->table('teachers')->where('id', $profile->id)->update([
+                    'is_active' => false,
+                    'updated_at' => now(),
+                ]);
+                $this->fail('Teacher profile deactivation must wait while course assignment holds the profile lock.');
+            } catch (QueryException $exception) {
+                $this->assertSame(1205, (int) ($exception->errorInfo[1] ?? 0), $exception->getMessage());
+            }
+
+            $primary->commit();
+            $secondary->table('teachers')->where('id', $profile->id)->update([
+                'is_active' => false,
+                'updated_at' => now(),
+            ]);
+
+            $this->actingAs($admin)->post('/admin/courses/teacher-assignments', [
+                'course_id' => $secondCourse->id,
+                'teacher_user_id' => $teacher->id,
+            ])->assertStatus(422);
+
+            $this->assertDatabaseHas('course_teacher_assignments', [
+                'course_id' => $firstCourse->id,
+                'teacher_user_id' => $teacher->id,
+            ]);
+            $this->assertDatabaseMissing('course_teacher_assignments', [
+                'course_id' => $secondCourse->id,
+                'teacher_user_id' => $teacher->id,
+            ]);
+        } catch (\\Throwable $exception) {
+            if ($primary->transactionLevel() > 0) {
+                $primary->rollBack();
+            }
+            throw $exception;
+        } finally {
+            DB::purge($secondaryName);
+        }
+    }
+
     public function test_mysql_teacher_role_revocation_waits_for_assignment_and_future_assignment_is_denied(): void
     {
         if (DB::connection()->getDriverName() !== 'mysql') {
