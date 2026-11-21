@@ -69,25 +69,25 @@ class LearningRewardsController extends Controller
             ->havingRaw('SUM(ledger.points) > 0')
             ->orderByDesc('points')
             ->orderBy('users.name')
-            ->when(
-                app(PluginManager::class)->isEnabled('student-management') && Schema::hasTable('students'),
-                function ($q): void {
-                    $q->whereExists(function ($students): void {
-                        $students->selectRaw('1')
-                            ->from('students')
-                            ->whereColumn('students.user_id', 'users.id');
-                        if (Schema::hasColumn('students', 'status')) {
-                            $students->where('students.status', 'active');
-                        }
-                        if (Schema::hasColumn('students', 'deleted_at')) {
-                            $students->whereNull('students.deleted_at');
-                        }
-                    });
-                },
-                fn ($q) => $q->whereRaw('1 = 0')
-            )
-            ->paginate(25)
-            ->withQueryString();
+            ;
+
+        if (app(PluginManager::class)->isEnabled('student-management')) {
+            abort_unless(Schema::hasTable('students') && Schema::hasColumn('students', 'user_id'),
+                403, 'Student profile storage is unavailable.');
+            $query->whereExists(function ($students): void {
+                $students->selectRaw('1')
+                    ->from('students')
+                    ->whereColumn('students.user_id', 'users.id');
+                if (Schema::hasColumn('students', 'status')) {
+                    $students->where('students.status', 'active');
+                }
+                if (Schema::hasColumn('students', 'deleted_at')) {
+                    $students->whereNull('students.deleted_at');
+                }
+            });
+        }
+
+        $query = $query->paginate(25)->withQueryString();
 
         return view('learning-rewards::leaderboard', compact('query', 'period'));
     }
