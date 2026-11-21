@@ -320,7 +320,7 @@ class LearningRewardsPluginTest extends TestCase
             'created_at' => now(), 'updated_at' => now(),
         ]);
         $student = $this->createUserWithRole('student', $branchA);
-        \\Plugins\\Modules\\StudentManagement\\Models\\Student::query()->create([
+        \Plugins\Modules\StudentManagement\Models\Student::query()->create([
             'user_id' => $student->id,
             'branch_id' => $branchB,
             'student_code' => 'REWARD-CONFLICT-STUDENT',
@@ -331,7 +331,7 @@ class LearningRewardsPluginTest extends TestCase
         try {
             app(LearningRewardsService::class)->awardVerifiedActivity((int) $student->id, 'lesson_completed', 'course_lesson', 901);
             $this->fail('Conflicting account/profile branch assignments must not earn rewards.');
-        } catch (\\Symfony\\Component\\HttpKernel\\Exception\\HttpException $exception) {
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) {
             $this->assertSame(403, $exception->getStatusCode());
         }
 
