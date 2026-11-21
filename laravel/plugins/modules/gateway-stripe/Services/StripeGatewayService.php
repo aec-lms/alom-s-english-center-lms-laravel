@@ -112,10 +112,11 @@ class StripeGatewayService
                 throw new RuntimeException('Stripe payment could not be confirmed. Status: ' . $status . '. Reservation remains held for reconciliation.');
             }
 
+            // A PaymentIntent client_secret is a bearer credential. Return it
+            // only to the authenticated checkout response; never persist it in
+            // transaction metadata, audit payloads, or logs.
             $tx = $this->reservations->markCreated($tx, [
                 'stripe_status' => $status,
-                'client_secret' => $intent['client_secret'] ?? null,
-                'payment_method_id' => null,
             ], 'initiated', (string) $intent['id']);
 
             return ['transaction' => $tx, 'client_secret' => $intent['client_secret'] ?? null, 'payment_intent_id' => $intent['id']];
