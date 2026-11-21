@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-use Illuminate\\Database\\Migrations\\Migration;
-use Illuminate\\Database\\Schema\\Blueprint;
-use Illuminate\\Support\\Facades\\Schema;
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration {
     public function up(): void
@@ -26,7 +26,7 @@ return new class extends Migration {
             Schema::create('learning_path_courses', function (Blueprint $table): void {
                 $table->id();
                 $table->foreignId('learning_path_id')->constrained('learning_paths')->cascadeOnDelete();
-                // Course Management is optional; keep this plugin independently installable.
+                // Course Management is optional; deliberately no foreign key to courses.
                 $table->unsignedBigInteger('course_id')->index();
                 $table->string('course_title', 180);
                 $table->unsignedInteger('position');
