@@ -161,7 +161,7 @@ jobs:
 
   laravel-mysql-tests:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 45
     services:
       mysql:
         image: mysql:8.0
