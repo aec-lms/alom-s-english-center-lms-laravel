@@ -92,6 +92,16 @@ class LearningRewardsPluginTest extends TestCase
         app(LearningRewardsService::class)->awardVerifiedActivity((int) $teacher->id, 'lesson_completed', 'course_lesson', 101);
     }
 
+    public function test_inactive_student_accounts_cannot_receive_learning_rewards(): void
+    {
+        $this->bootRewards();
+        $student = $this->createUserWithRole('student');
+        $student->forceFill(['is_active' => false])->save();
+
+        $this->expectException(\\Symfony\\Component\\HttpKernel\\Exception\\HttpException::class);
+        app(LearningRewardsService::class)->awardVerifiedActivity((int) $student->id, 'lesson_completed', 'course_lesson', 102);
+    }
+
     public function test_reversal_is_immutable_traceable_and_idempotent(): void
     {
         $this->bootRewards();
