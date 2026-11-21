@@ -9,6 +9,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 use Plugins\Modules\Scorm\Services\ScormPackageImporter;
@@ -118,12 +119,13 @@ class ScormPackageController extends Controller
             });
         } catch (Throwable $exception) {
             if (is_dir($imported['directory']) && !is_link($imported['directory'])) {
-                \\Illuminate\\Support\\Facades\\File::deleteDirectory($imported['directory']);
+                File::deleteDirectory($imported['directory']);
             }
             throw $exception;
         }
 
-        $message = $validated['replace_package_id'] ?? null
+        $revisionNumber = (int) DB::table('scorm_packages')->where('id', $packageId)->value('revision_number');
+        $message = !empty($validated['replace_package_id'])
             ? 'Replacement imported as revision ' . $revisionNumber . ' in draft state. The previous package is archived and its attempts are retained.'
             : 'SCORM 1.2 package imported and saved as draft. Review it before publishing.';
 
