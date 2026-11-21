@@ -15,6 +15,7 @@ use Illuminate\View\View;
 use Plugins\Modules\CourseContentStudio\Models\CourseContentPost;
 use Plugins\Modules\CourseContentStudio\Models\CourseContentProgress;
 use Plugins\Modules\CourseContentStudio\Models\CourseCurriculumItem;
+use Plugins\Modules\LearningRewards\Services\LearningRewardsService;
 
 class CourseContentLearningController extends Controller
 {
