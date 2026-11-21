@@ -12,6 +12,7 @@ use App\Models\PluginRecord;
 use App\Models\SystemSetting;
 use App\Models\UpdateLog;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
