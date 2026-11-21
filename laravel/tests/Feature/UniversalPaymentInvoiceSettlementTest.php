@@ -550,4 +550,35 @@ class UniversalPaymentInvoiceSettlementTest extends TestCase
         ]);
     }
 
+
+    public function test_unverified_sslcommerz_browser_failure_and_cancel_do_not_release_pending_checkout(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['universal-payment']);
+
+        $transaction = UniversalPaymentTransaction::query()->create([
+            'reference' => 'UPAY-UNVERIFIED-RETURN-001',
+            'payer_name' => 'Callback Test Buyer',
+            'payer_contact' => '01712345678',
+            'item_title' => 'Paid e-book',
+            'gateway' => 'sslcommerz',
+            'currency' => 'BDT',
+            'amount' => 500,
+            'status' => 'pending',
+        ]);
+
+        $gateway = app(\\Plugins\\Modules\\UniversalPayment\\Services\\StorefrontPaymentGatewayService::class);
+
+        $failedReturn = $gateway->markSslcommerzFailed(['tran_id' => $transaction->reference], 'failed');
+        $this->assertSame('pending', $failedReturn->status);
+
+        $cancelledReturn = $gateway->markSslcommerzFailed(['tran_id' => $transaction->reference], 'cancelled');
+        $this->assertSame('pending', $cancelledReturn->status);
+
+        $this->assertDatabaseHas('universal_payment_transactions', [
+            'id' => $transaction->id,
+            'status' => 'pending',
+        ]);
+    }
+
 }
