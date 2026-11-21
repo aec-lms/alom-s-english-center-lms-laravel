@@ -349,7 +349,7 @@ class CourseCommercePaymentSettlementTest extends TestCase
                 DB::setDefaultConnection($secondaryName);
                 $commissionId = $referral->recordSettledPurchase($student, 'course_cart_order', (string) $orderId, 1250, 'BDT');
                 $replayedId = $referral->recordSettledPurchase($student, 'course_cart_order', (string) $orderId, 1250, 'BDT');
-            } catch (\\Throwable $exception) {
+            } catch (\Throwable $exception) {
                 if ($primary->transactionLevel() > 0) {
                     $primary->rollBack();
                 }
