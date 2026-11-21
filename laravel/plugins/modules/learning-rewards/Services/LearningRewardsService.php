@@ -111,22 +111,27 @@ class LearningRewardsService
 
     public function reverseActivityAward(int $userId, string $activityKey, string $sourceType, int $sourceId, int $actorId, string $reason): ?int
     {
-        $entry = DB::table('learning_reward_ledger as original')
-            ->where('original.user_id', $userId)
-            ->where('original.activity_key', $activityKey)
-            ->where('original.source_type', $sourceType)
-            ->where('original.source_id', $sourceId)
-            ->where('original.points', '>', 0)
-            ->whereNotExists(function ($query): void {
-                $query->selectRaw('1')
-                    ->from('learning_reward_ledger as reversal')
-                    ->where('reversal.source_type', 'reward_reversal')
-                    ->whereColumn('reversal.source_id', 'original.id');
-            })
-            ->orderByDesc('original.id')
+        $entry = DB::table('learning_reward_ledger')
+            ->where('user_id', $userId)
+            ->where('activity_key', $activityKey)
+            ->where('source_type', $sourceType)
+            ->where('source_id', $sourceId)
+            ->where('points', '>', 0)
+            ->orderByDesc('id')
             ->first();
 
-        return $entry ? $this->reverseAward((int) $entry->id, $actorId, $reason) : null;
+        if (!$entry) {
+            return null;
+        }
+
+        $existingReversal = DB::table('learning_reward_ledger')
+            ->where('source_type', 'reward_reversal')
+            ->where('source_id', $entry->id)
+            ->first();
+
+        return $existingReversal
+            ? (int) $existingReversal->id
+            : $this->reverseAward((int) $entry->id, $actorId, $reason);
     }
 
     public function reverseAward(int $ledgerId, int $actorId, string $reason): int
