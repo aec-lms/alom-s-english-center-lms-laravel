@@ -136,6 +136,14 @@ class LearningRewardsPluginTest extends TestCase
         app(LearningRewardsService::class)->awardVerifiedActivity((int) $studentB->id, 'quiz_passed', 'quiz_attempt', 2);
 
         $this->actingAs($studentA)->get('/my-learning-rewards')->assertOk()->assertSee('My Learning Rewards');
+        // No privacy profile means no public leaderboard visibility until the
+        // learner explicitly opts in.
+        $this->actingAs($studentA)->get('/learning-leaderboard?period=month')->assertOk()->assertDontSee($studentA->name);
+
+        $this->actingAs($studentA)->patch('/my-learning-rewards/privacy', [
+            'leaderboard_opt_out' => false,
+            'profile_public' => true,
+        ])->assertRedirect();
         $this->actingAs($studentA)->get('/learning-leaderboard?period=month')->assertOk()->assertSee($studentA->name);
 
         $this->actingAs($studentB)->patch('/my-learning-rewards/privacy', [
