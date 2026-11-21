@@ -36,7 +36,7 @@ if command -v rsync >/dev/null 2>&1; then
     --exclude='phpunit.xml' \
     --exclude='storage/framework/sessions/*' \
     --exclude='storage/framework/views/*' \
-    --exclude='storage/app/installed.lock' \
+    --exclude='storage/app/installed.lock*' \
     --exclude='storage/app/backups/*' \
     --exclude='storage/app/plugin-recycle-bin/**' \
     --exclude='storage/app/plugin-setting-backups/**' \
@@ -67,7 +67,7 @@ else
     --exclude='phpunit.xml' \
     --exclude='storage/framework/sessions/*' \
     --exclude='storage/framework/views/*' \
-    --exclude='storage/app/installed.lock' \
+    --exclude='storage/app/installed.lock*' \
     --exclude='storage/app/backups/*' \
     --exclude='storage/app/plugin-recycle-bin/**' \
     --exclude='storage/app/plugin-setting-backups/**' \
