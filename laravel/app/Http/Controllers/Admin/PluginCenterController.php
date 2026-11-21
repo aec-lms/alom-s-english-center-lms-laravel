@@ -354,7 +354,7 @@ class PluginCenterController extends Controller
             PluginRecord::query()->where('slug', $item->plugin_slug)->where('is_core', false)->delete();
             $slug = $item->plugin_slug;
             $item->delete();
-            app(\App\Core\Security\AuditLogger::class)->log(
+            app(\App\Core\Security\AuditLogger::class)->logRequired(
                 'plugin.archive_permanently_deleted',
                 'plugin',
                 $slug,
