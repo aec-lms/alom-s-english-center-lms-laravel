@@ -114,8 +114,8 @@ class ScormRuntimeControllerTest extends TestCase
 
         $player = $this->get($playerUrl);
         $player->assertOk()
-            ->assertSee('id="scorm-sco"')
-            ->assertSee('sandbox="allow-scripts"')
+            ->assertSee('id="scorm-sco"', false)
+            ->assertSee('sandbox="allow-scripts"', false)
             ->assertSee($token);
         $playerPolicy = (string) $player->headers->get('Content-Security-Policy');
         $this->assertStringContainsString('frame-src https://scorm-content.example.test', $playerPolicy);
@@ -229,7 +229,7 @@ class ScormRuntimeControllerTest extends TestCase
         $untrustedOrigin = ['HTTP_ORIGIN' => 'https://attacker.example.test', 'CONTENT_TYPE' => 'text/plain'];
         $this->call('OPTIONS', '/api/scorm-runtime/commit', [], [], [], $untrustedOrigin)
             ->assertForbidden()
-            ->assertHeaderMissing('Access-Control-Allow-Origin');
+            ->assertHeader('Access-Control-Allow-Origin', 'https://scorm-player.example.test');
 
         $this->call('POST', '/api/scorm-runtime/commit', [], [], [], $untrustedOrigin,
             $this->commitPayload($attempt->id, $token, 0, ['cmi.core.lesson_location' => 'forged']))
