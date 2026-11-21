@@ -222,7 +222,21 @@ class LearningPathsPluginTest extends TestCase
         ]);
         $firstSlug = DB::table('courses')->where('id', $first)->value('slug');
         $secondSlug = DB::table('courses')->where('id', $second)->value('slug');
+        $legacyLesson = DB::table('course_lessons')->insertGetId([
+            'course_id' => $second,
+            'title' => 'Legacy protected lesson',
+            'content' => 'Legacy lesson body.',
+            'sort_order' => 1,
+            'media_path' => 'private/legacy-lesson.mp4',
+            'media_mime' => 'video/mp4',
+            'protection_enabled' => true,
+            'is_downloadable' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
+        $this->actingAs($student)->get('/my-learning/courses/' . $second . '/lessons')->assertForbidden();
+        $this->actingAs($student)->get('/my-learning/lessons/' . $legacyLesson . '/media-access')->assertForbidden();
         $this->actingAs($student)->get('/courses/' . $secondSlug . '/content/learning-path-second-lesson')->assertForbidden();
 
         $this->actingAs($student)->post('/courses/' . $firstSlug . '/content/learning-path-first-lesson/complete')
@@ -230,6 +244,8 @@ class LearningPathsPluginTest extends TestCase
 
         $this->actingAs($student)->get('/courses/' . $secondSlug . '/content/learning-path-second-lesson')
             ->assertOk()->assertSee('Learning Path Lesson learning-path-second-lesson');
+        $this->actingAs($student)->get('/my-learning/courses/' . $second . '/lessons')->assertOk();
+        $this->actingAs($student)->get('/my-learning/lessons/' . $legacyLesson . '/media-access')->assertOk();
 
         $this->assertDatabaseHas('course_content_progress', [
             'user_id' => $student->id,
