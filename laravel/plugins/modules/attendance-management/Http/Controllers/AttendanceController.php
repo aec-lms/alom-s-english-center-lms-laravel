@@ -238,6 +238,28 @@ class AttendanceController extends Controller
                     app(StudentActivityTracker::class)->record((int) $student->user_id, 'attendance_marked', 'attendance', (int) $record->id, null, ['attendance_status' => $record->status, 'source' => $validated['source'] ?? 'online'], (int) $actor->id);
                 }
 
+                if ($plugins->isEnabled('learning-rewards') && $student->user_id) {
+                    $rewards = app(LearningRewardsService::class);
+                    if ($entry->status === 'present' && (!$isEdit || $oldStatus !== 'present')) {
+                        $rewards->awardVerifiedActivity(
+                            (int) $student->user_id,
+                            'attendance_present',
+                            'attendance_entry',
+                            (int) $entry->id,
+                            'present-' . $entry->updated_at?->format('Uu'),
+                        );
+                    } elseif ($isEdit && $oldStatus === 'present' && $entry->status !== 'present') {
+                        $rewards->reverseActivityAward(
+                            (int) $student->user_id,
+                            'attendance_present',
+                            'attendance_entry',
+                            (int) $entry->id,
+                            (int) $actor->id,
+                            'Attendance status was changed from present.',
+                        );
+                    }
+                }
+
                 $this->audit->log($isEdit ? 'attendance.updated' : 'attendance.marked', 'attendance', (string) $record->id, ['status' => $record->status, 'source' => $validated['source'] ?? 'online', 'reason' => $changed ? $reason : null]);
             }
         });
