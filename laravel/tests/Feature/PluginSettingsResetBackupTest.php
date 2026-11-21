@@ -68,7 +68,7 @@ class PluginSettingsResetBackupTest extends TestCase
             'sandbox_mode' => '0',
         ], ['store_id', 'store_password']);
 
-        $manager = \\Mockery::mock(PluginManager::class, [app(\\App\\Core\\Security\\AuditLogger::class)])->makePartial();
+        $manager = \Mockery::mock(PluginManager::class, [app(\App\Core\Security\AuditLogger::class)])->makePartial();
         $manager->shouldAllowMockingProtectedMethods()
             ->shouldReceive('writeAllBytesToHandle')->once()->andReturn(1);
 
@@ -95,7 +95,7 @@ class PluginSettingsResetBackupTest extends TestCase
             'sandbox_mode' => '0',
         ], ['store_id', 'store_password']);
 
-        $manager = \\Mockery::mock(PluginManager::class, [app(\\App\\Core\\Security\\AuditLogger::class)])->makePartial();
+        $manager = \Mockery::mock(PluginManager::class, [app(\App\Core\Security\AuditLogger::class)])->makePartial();
         $manager->shouldAllowMockingProtectedMethods()
             ->shouldReceive('writeAllBytesToHandle')->once()->andReturn(0);
 
@@ -127,13 +127,13 @@ class PluginSettingsResetBackupTest extends TestCase
         try {
             $this->assertTrue(symlink($target, $symlinkPath));
             $manager = app(PluginManager::class);
-            $writer = new \\ReflectionMethod(PluginManager::class, 'writeVerifiedPrivateJson');
+            $writer = new \ReflectionMethod(PluginManager::class, 'writeVerifiedPrivateJson');
 
             foreach (['existing.json', 'linked.json'] as $filename) {
                 try {
                     $writer->invoke($manager, $root, $filename, ['replacement' => true]);
                     $this->fail('Exclusive backup creation must reject an existing destination.');
-                } catch (\\RuntimeException $exception) {
+                } catch (\RuntimeException $exception) {
                     $this->assertStringContainsString('created exclusively', $exception->getMessage());
                 }
             }
