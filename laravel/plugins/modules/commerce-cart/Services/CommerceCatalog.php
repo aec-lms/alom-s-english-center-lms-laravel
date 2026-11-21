@@ -60,19 +60,26 @@ class CommerceCatalog
             throw new RuntimeException('The course enrollment module must support invoice-linked pending enrollments before courses can be sold through the unified cart.');
         }
         $price = round((float) ($course->price ?? 0), 2);
-        if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('flash-sale') && Schema::hasTable('flash_sales')) {
-            $sale = DB::table('flash_sales')->where('course_id', $id)->where('is_published', true)
-                ->where('is_active', true)->where('starts_at', '<=', now())->where('ends_at', '>', now())
-                ->orderByDesc('id')->first();
-            if ($sale) {
-                $discount = $sale->discount_type === 'percent'
-                    ? $price * ((float) $sale->discount_value / 100)
-                    : (float) $sale->discount_value;
-                $price = round(max(0, $price - min($price, $discount)), 2);
+        $metadata = ['course_id' => $id];
+        if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('flash-sale')
+            && Schema::hasTable('flash_sales')) {
+            $effectiveBranchId = $courseBranchId !== null
+                ? (int) $courseBranchId
+                : $this->effectiveUserBranchId($user);
+            $quote = app(\Plugins\Modules\FlashSale\Services\FlashSalePricingService::class)
+                ->quote($id, $effectiveBranchId);
+            $price = (float) $quote['total'];
+            if ($quote['sale']) {
+                $metadata['flash_sale'] = [
+                    'campaign_id' => (int) $quote['sale']->id,
+                    'campaign_title' => (string) $quote['sale']->title,
+                    'regular_price' => (float) $quote['subtotal'],
+                    'discount_amount' => (float) $quote['discount'],
+                ];
             }
         }
         if ($price <= 0) throw ValidationException::withMessages(['item' => 'Free courses should be enrolled in directly, not purchased.']);
-        return $this->snapshot('course', $id, (string) $course->title, $price, ['course_id' => $id]);
+        return $this->snapshot('course', $id, (string) $course->title, $price, $metadata);
     }
 
     private function ebook(int $id, ?Authenticatable $user): array
@@ -250,26 +257,44 @@ class CommerceCatalog
 
     private function assertBranchAccess(?Authenticatable $user, mixed $resourceBranchId): void
     {
+        $userBranchId = $this->effectiveUserBranchId($user);
         if ($resourceBranchId === null) {
             return; // Platform-wide catalogue items remain available to every branch.
-        }
-        $userBranchId = null;
-        if ($user && method_exists($user, 'getAuthIdentifier')
-            && app(\App\Core\Plugins\PluginManager::class)->isEnabled('student-management')
-            && Schema::hasTable('students')
-            && Schema::hasColumn('students', 'branch_id')) {
-            $profileBranchId = DB::table('students')->where('user_id', $user->getAuthIdentifier())->value('branch_id');
-            if ($profileBranchId !== null) {
-                $userBranchId = (int) $profileBranchId;
-            }
-        }
-        if ($userBranchId === null && $user && method_exists($user, 'getAttribute')) {
-            $accountBranchId = $user->getAttribute('branch_id');
-            $userBranchId = $accountBranchId !== null ? (int) $accountBranchId : null;
         }
         if ($userBranchId === null || (int) $userBranchId !== (int) $resourceBranchId) {
             throw ValidationException::withMessages(['item' => 'This item is not available to your assigned branch.']);
         }
+    }
+
+    /**
+     * Resolve account/profile branch context without silently preferring one
+     * persisted assignment when the two disagree.
+     */
+    private function effectiveUserBranchId(?Authenticatable $user): ?int
+    {
+        if (!$user || !method_exists($user, 'getAuthIdentifier')) {
+            return null;
+        }
+
+        $accountValue = method_exists($user, 'getAttribute') ? $user->getAttribute('branch_id') : null;
+        $accountBranchId = $accountValue !== null ? (int) $accountValue : null;
+        $profileBranchId = null;
+
+        if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('student-management')
+            && Schema::hasTable('students') && Schema::hasColumn('students', 'branch_id')) {
+            $profileValue = DB::table('students')
+                ->where('user_id', $user->getAuthIdentifier())
+                ->value('branch_id');
+            $profileBranchId = $profileValue !== null ? (int) $profileValue : null;
+        }
+
+        if ($accountBranchId !== null && $profileBranchId !== null && $accountBranchId !== $profileBranchId) {
+            throw ValidationException::withMessages([
+                'item' => 'Your account and student profile have conflicting branch assignments. Contact the administrator before checkout.',
+            ]);
+        }
+
+        return $profileBranchId ?? $accountBranchId;
     }
 
     private function snapshot(string $type, int $id, string $title, float $price, array $metadata): array
