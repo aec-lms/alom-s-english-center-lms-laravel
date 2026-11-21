@@ -71,7 +71,8 @@ class TeacherController extends Controller
         $teacher = DB::transaction(function () use ($validated, $request, $photoPath, $actorId): Teacher {
             $actor = User::query()->whereKey($actorId)->lockForUpdate()->firstOrFail();
             abort_unless($actor->is_active, 403, 'Inactive accounts cannot manage teacher records.');
-            $this->lockActorRoleAssignments($actorId);
+            $actorRolePivots = $this->lockActorRoleAssignments($actorId);
+            $this->assertActorCanManageTeachers($actor, $actorRolePivots);
             $this->ensureAssignedBranch($actor);
 
             $branchId = $validated['branch_id'] ?? null;
@@ -164,7 +165,8 @@ class TeacherController extends Controller
 
             $actor = $lockedUsers[$actorId];
             abort_unless($actor->is_active, 403, 'Inactive accounts cannot manage teacher records.');
-            $this->lockActorRoleAssignments($actorId);
+            $actorRolePivots = $this->lockActorRoleAssignments($actorId);
+            $this->assertActorCanManageTeachers($actor, $actorRolePivots);
             $linkedUser = $lockedUsers[$linkedUserId];
             $lockedTeacher = Teacher::query()->whereKey($teacher->getKey())->lockForUpdate()->firstOrFail();
             abort_unless(
@@ -267,7 +269,8 @@ class TeacherController extends Controller
 
             $actor = $lockedUsers[$actorId];
             abort_unless($actor->is_active, 403, 'Inactive accounts cannot manage teacher records.');
-            $this->lockActorRoleAssignments($actorId);
+            $actorRolePivots = $this->lockActorRoleAssignments($actorId);
+            $this->assertActorCanManageTeachers($actor, $actorRolePivots);
             $user = $lockedUsers[$linkedUserId];
             $lockedTeacher = Teacher::query()->whereKey($teacherId)->lockForUpdate()->firstOrFail();
             abort_unless(
@@ -321,13 +324,43 @@ class TeacherController extends Controller
         };
     }
 
-    private function lockActorRoleAssignments(int $actorId): void
+    private function lockActorRoleAssignments(int $actorId)
     {
-        DB::table('role_user')
+        return DB::table('role_user')
             ->where('user_id', $actorId)
             ->orderBy('role_id')
             ->lockForUpdate()
             ->get(['role_id']);
+    }
+
+    /**
+     * Route middleware is an early gate only. Lock the current non-admin
+     * teachers.manage grant so role-permission revocation cannot race teacher
+     * creation, update or deletion.
+     */
+    private function assertActorCanManageTeachers(User $actor, $actorRolePivots): void
+    {
+        $adminRoleId = Role::query()->where('slug', 'admin')->value('id');
+        if ($adminRoleId !== null && $actorRolePivots->contains(
+            fn ($pivot): bool => (int) $pivot->role_id === (int) $adminRoleId
+        )) {
+            return;
+        }
+
+        $permissionId = DB::table('permissions')->where('slug', 'teachers.manage')->value('id');
+        if ($permissionId === null) {
+            abort(403, 'The teacher-management permission is not configured.');
+        }
+
+        $roleIds = $actorRolePivots->pluck('role_id')->map(static fn ($id): int => (int) $id)->all();
+        $grantedRoles = DB::table('permission_role')
+            ->whereIn('role_id', $roleIds)
+            ->where('permission_id', $permissionId)
+            ->orderBy('role_id')
+            ->lockForUpdate()
+            ->get(['role_id']);
+
+        abort_unless($grantedRoles->isNotEmpty(), 403, 'The acting account no longer has teacher-management permission.');
     }
 
     private function storePhoto(UploadedFile $file): string
