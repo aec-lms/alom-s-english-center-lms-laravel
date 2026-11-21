@@ -1355,7 +1355,7 @@ class PluginManager
      * Create a private recovery artifact without following or replacing a path
      * that may have been substituted with a symlink after a prior existence check.
      */
-    private function writePrivateFileExclusive(string $path, string $contents): int
+    protected function writePrivateFileExclusive(string $path, string $contents): int
     {
         $previousUmask = umask(0077);
         try {
