@@ -131,7 +131,7 @@ class PluginRecycleBinAdminAcceptanceTest extends TestCase
             $this->actingAs($admin)->post('/admin/plugins/' . $slug . '/delete')->assertSessionHas('status');
             $archive = PluginArchive::query()->where('plugin_slug', $slug)->firstOrFail();
             $archivePath = $archive->archive_path;
-            File::append($archivePath . '/plugin.json', "\\n/* tampered after archival */");
+            File::append($archivePath . '/plugin.json', "\n/* tampered after archival */");
 
             $this->actingAs($admin)
                 ->post('/admin/plugins/recycle-bin/' . $archive->id . '/permanent-delete')
@@ -227,7 +227,7 @@ class PluginRecycleBinAdminAcceptanceTest extends TestCase
             $this->assertTrue($manager->isEnabled($slug));
 
             // Simulate a short write through the same handle-based writer used in production.
-            $manager = \\Mockery::mock(PluginManager::class, [app(\\App\\Core\\Security\\AuditLogger::class)])->makePartial();
+            $manager = \Mockery::mock(PluginManager::class, [app(\App\Core\Security\AuditLogger::class)])->makePartial();
             $manager->shouldAllowMockingProtectedMethods()
                 ->shouldReceive('writeAllBytesToHandle')->once()->andReturn(1);
 
@@ -263,7 +263,7 @@ class PluginRecycleBinAdminAcceptanceTest extends TestCase
             $manager->syncCatalog();
             $manager->install($slug);
 
-            $manager = \\Mockery::mock(PluginManager::class, [app(\\App\\Core\\Security\\AuditLogger::class)])->makePartial();
+            $manager = \Mockery::mock(PluginManager::class, [app(\App\Core\Security\AuditLogger::class)])->makePartial();
             $manager->shouldAllowMockingProtectedMethods()
                 ->shouldReceive('writeAllBytesToHandle')->once()->andReturn(1);
             $moveCalls = 0;
@@ -313,7 +313,7 @@ class PluginRecycleBinAdminAcceptanceTest extends TestCase
             $manager->syncCatalog();
             $manager->install($slug);
 
-            $manager = \\Mockery::mock(PluginManager::class, [app(\\App\\Core\\Security\\AuditLogger::class)])->makePartial();
+            $manager = \Mockery::mock(PluginManager::class, [app(\App\Core\Security\AuditLogger::class)])->makePartial();
             $manager->shouldAllowMockingProtectedMethods()
                 ->shouldReceive('writeAllBytesToHandle')->once()->andReturn(1);
             $moveCalls = 0;
