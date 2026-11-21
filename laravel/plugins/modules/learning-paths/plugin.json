@@ -7,7 +7,7 @@
   "description": "Ordered, branch-aware course journeys with learner enrollment, progress tracking and prerequisite gates.",
   "core_compatibility": "^2.0",
   "dependencies": [],
-  "optional_dependencies": ["course-management", "course-content-studio", "certificate-management", "notification-center"],
+  "optional_dependencies": ["course-management", "course-content-studio"],
   "provider": "Plugins\\Modules\\LearningPaths\\Providers\\LearningPathsServiceProvider",
   "permissions": [
     {"slug": "learning_paths.manage", "name": "Manage learning paths"}
