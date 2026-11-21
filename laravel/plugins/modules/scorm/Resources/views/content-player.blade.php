@@ -53,7 +53,10 @@
         'cmi.launch_data': '',
         'cmi.student_data._children': 'mastery_score,max_time_allowed,time_limit_action',
         'cmi.interactions._children': 'id,objectives,time,type,correct_responses,weighting,student_response,result,latency',
-        'cmi.interactions._count': '0'
+        'cmi.interactions._count': '0',
+        'cmi.objectives._count': '0',
+        'cmi.core.score._children': 'raw,max,min',
+        'cmi.student_preference._children': 'audio,language,speed,text'
     };
     const data = Object.assign({
         'cmi.core.lesson_location': '',
@@ -140,8 +143,11 @@
         LMSGetValue(element) {
             if (!initialized || finished) { lastError = '301'; return ''; }
             if (element === 'cmi.core.exit' || element === 'cmi.core.session_time') { lastError = '404'; return ''; }
+            if (element === 'cmi.interactions._count') { lastError = '0'; return String(new Set(Object.keys(data).map(key => key.match(/^cmi\\.interactions\\.(\\d+)\\./)?.[1]).filter(Boolean)).size); }
+            if (element === 'cmi.objectives._count') { lastError = '0'; return String(new Set(Object.keys(data).map(key => key.match(/^cmi\\.objectives\\.(\\d+)\\./)?.[1]).filter(Boolean)).size); }
+            if (readOnlyDynamicPattern.test(element)) { lastError = '0'; return '0'; }
             if (Object.prototype.hasOwnProperty.call(readOnly, element)) { lastError = '0'; return String(readOnly[element]); }
-            if (writable.has(element) || dynamicPattern.test(element)) {
+            if (writable.has(element) || dynamicPattern.test(element) || objectivePattern.test(element)) {
                 lastError = '0';
                 return Object.prototype.hasOwnProperty.call(data, element) ? String(data[element]) : '';
             }
@@ -150,7 +156,7 @@
         },
         LMSSetValue(element, value) {
             if (!initialized || finished) return setError('301');
-            if (Object.prototype.hasOwnProperty.call(readOnly, element)) return setError('403');
+            if (Object.prototype.hasOwnProperty.call(readOnly, element) || readOnlyDynamicPattern.test(element)) return setError('403');
             if (typeof value !== 'string') return setError('405');
             let valid = false;
             switch (element) {
@@ -159,7 +165,7 @@
                 case 'cmi.core.score.raw':
                 case 'cmi.core.score.max':
                 case 'cmi.core.score.min': valid = isScore(value); break;
-                case 'cmi.core.exit': valid = ['time-out','suspend','logout',''].includes(value); break;
+                case 'cmi.core.exit': valid = ['time-out','suspend','logout','normal',''].includes(value); break;
                 case 'cmi.core.session_time': valid = isSessionTime(value); break;
                 case 'cmi.suspend_data':
                 case 'cmi.comments': valid = value.length <= 4096; break;
@@ -167,7 +173,7 @@
                 case 'cmi.student_preference.text': valid = ['-1','0','1'].includes(value); break;
                 case 'cmi.student_preference.speed': valid = Number.isFinite(Number(value)) && Number(value) >= -100 && Number(value) <= 100; break;
                 case 'cmi.student_preference.language': valid = value.length <= 255; break;
-                default: valid = dynamicPattern.test(element) && element.length <= 255;
+                default: valid = (dynamicPattern.test(element) || objectivePattern.test(element)) && element.length <= 255;
             }
             if (!valid) return setError(writable.has(element) || dynamicPattern.test(element) ? '405' : '401');
             data[element] = value;
