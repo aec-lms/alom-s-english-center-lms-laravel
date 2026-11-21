@@ -760,7 +760,7 @@ class BackupAndUpdateTest extends TestCase
         if (is_link($stagingRoot)) {
             unlink($stagingRoot);
         } elseif (is_dir($stagingRoot)) {
-            \\Illuminate\\Support\\Facades\\File::deleteDirectory($stagingRoot);
+            \Illuminate\Support\Facades\File::deleteDirectory($stagingRoot);
         }
 
         $zip = new ZipArchive();
@@ -769,7 +769,7 @@ class BackupAndUpdateTest extends TestCase
         $this->assertTrue($zip->close());
         $archive = new ZipArchive();
         $this->assertTrue($archive->open($zipPath) === true);
-        $stage = new \\ReflectionMethod(BackupService::class, 'stagePrivateFiles');
+        $stage = new \ReflectionMethod(BackupService::class, 'stagePrivateFiles');
         $stage->setAccessible(true);
 
         try {
@@ -777,9 +777,9 @@ class BackupAndUpdateTest extends TestCase
             try {
                 $stage->invoke(app(BackupService::class), $archive, ['includes_files' => true]);
                 $this->fail('A symlinked restore staging root must be rejected.');
-            } catch (\\ReflectionException $exception) {
+            } catch (\ReflectionException $exception) {
                 throw $exception;
-            } catch (\\RuntimeException $exception) {
+            } catch (\RuntimeException $exception) {
                 $this->assertSame('Private restore staging root must not be a symbolic link.', $exception->getMessage());
             }
             $this->assertSame([], array_values(array_diff(scandir($outside) ?: [], ['.', '..'])));

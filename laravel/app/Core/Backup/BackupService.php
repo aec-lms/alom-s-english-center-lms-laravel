@@ -40,7 +40,7 @@ class BackupService
         @chmod($jsonlPath, 0600);
         try {
             $tableNames = $this->exportDatabaseJsonLines($jsonlPath);
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             @unlink($jsonlPath);
             throw $exception;
         }
