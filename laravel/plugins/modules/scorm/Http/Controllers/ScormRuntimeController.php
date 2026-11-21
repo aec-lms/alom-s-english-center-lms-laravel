@@ -277,7 +277,7 @@ class ScormRuntimeController extends Controller
             ])->render();
 
             if (preg_match('/<head\\b[^>]*>/i', $html) === 1) {
-                $html = preg_replace('/(<head\\b[^>]*>)/i', '$1' . $adapter, $html, 1);
+                $html = preg_replace_callback('/(<head\\b[^>]*>)/i', static fn (array $matches): string => $matches[1] . $adapter, $html, 1);
             } else {
                 $html = $adapter . $html;
             }
