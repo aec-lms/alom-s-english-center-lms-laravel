@@ -520,6 +520,14 @@ class UniversalPaymentInvoiceSettlementTest extends TestCase
                 );
             }
 
+            // Exercise the real provider IPN route as well as the service guard.
+            // A replayed success callback for a terminal transaction must be
+            // rejected before provider validation or any access/ledger mutation.
+            $this->post('/universal-payment/sslcommerz/ipn', [
+                'tran_id' => $transaction->reference,
+                'val_id' => 'ROUTE-REPLAY-' . $index,
+            ])->assertStatus(422)->assertJson(['status' => 'pending_validation']);
+
             $this->assertDatabaseHas('universal_payment_transactions', [
                 'id' => $transaction->id,
                 'status' => $status,
