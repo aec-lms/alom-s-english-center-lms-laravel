@@ -805,6 +805,31 @@ class FreshInstallerTest extends TestCase
                 $this->assertStringContainsString('Administrator name is required', $exception->getMessage());
             }
             $this->assertSame('preserve-existing-mutex', file_get_contents($mutexPath));
+
+            $unsafeDirectory = sys_get_temp_dir() . '/aec-installer-world-writable-' . uniqid('', true);
+            mkdir($unsafeDirectory, 0700, true);
+            chmod($unsafeDirectory, 0777);
+            config(['lms.install_lock_path' => $unsafeDirectory . '/installed.lock']);
+            try {
+                app(FreshInstallerService::class)->installFresh([]);
+                $this->fail('Installer accepted a group/world-writable lock directory.');
+            } catch (RuntimeException $exception) {
+                $this->assertStringContainsString('writable by group or other users', $exception->getMessage());
+            }
+
+            @rmdir($unsafeDirectory);
+
+            $progressPath = $mutexDirectory . '/installed.lock.in-progress';
+            file_put_contents($progressPath, json_encode(['phase' => 'database_migrations'], JSON_THROW_ON_ERROR));
+            chmod($progressPath, 0644);
+            config(['lms.install_lock_path' => $mutexDirectory . '/installed.lock']);
+            try {
+                app(FreshInstallerService::class)->installFresh([]);
+                $this->fail('Installer accepted a group/world-readable progress marker.');
+            } catch (RuntimeException $exception) {
+                $this->assertStringContainsString('private, regular, non-linked file', $exception->getMessage());
+            }
+            @unlink($progressPath);
         } finally {
             @unlink($symlinkDirectory);
             @unlink($mutexDirectory . '/installed.lock.mutex');
