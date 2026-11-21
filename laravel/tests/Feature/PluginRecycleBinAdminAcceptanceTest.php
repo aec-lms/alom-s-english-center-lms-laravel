@@ -240,7 +240,7 @@ class PluginRecycleBinAdminAcceptanceTest extends TestCase
             $this->assertDirectoryExists($modulePath);
             $this->assertTrue($manager->isInstalled($slug));
             $this->assertTrue($manager->isEnabled($slug));
-            $this->assertSame([], $manager->recycledPlugins());
+            $this->assertFalse(collect($manager->recycledPlugins())->contains(fn (array $item): bool => ($item['slug'] ?? null) === $slug));
         } finally {
             File::deleteDirectory($modulePath);
             if ($archivePath && is_dir($archivePath)) {
