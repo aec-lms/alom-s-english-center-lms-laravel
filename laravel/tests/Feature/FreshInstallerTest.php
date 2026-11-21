@@ -187,6 +187,7 @@ class FreshInstallerTest extends TestCase
             'currency' => 'BDT',
         ];
 
+        $consoleKernel = app(\Illuminate\Contracts\Console\Kernel::class);
         try {
             \Illuminate\Support\Facades\Artisan::shouldReceive('call')
                 ->once()
@@ -201,7 +202,7 @@ class FreshInstallerTest extends TestCase
             } catch (RuntimeException $exception) {
                 $this->assertStringContainsString('Core database migrations failed', $exception->getMessage());
             } finally {
-                \Illuminate\Support\Facades\Artisan::swap(app(\Illuminate\Contracts\Console\Kernel::class));
+                \Illuminate\Support\Facades\Artisan::swap($consoleKernel);
             }
 
             $this->assertFileDoesNotExist($lockPath, 'A failed migration must never create the installed marker.');
@@ -220,7 +221,7 @@ class FreshInstallerTest extends TestCase
             $this->assertSame(1, (int) User::query()->where('email', 'retry-admin@aec.test')->count());
             $this->assertSame(1, (int) $result['admin_id']);
         } finally {
-            \Illuminate\Support\Facades\Artisan::swap(app(\Illuminate\Contracts\Console\Kernel::class));
+            \Illuminate\Support\Facades\Artisan::swap($consoleKernel);
             DB::disconnect('installer_failure_test');
             DB::setDefaultConnection($originalDefault);
             config([
@@ -283,12 +284,13 @@ class FreshInstallerTest extends TestCase
             'currency' => 'BDT',
         ];
 
+        $consoleKernel = app(\Illuminate\Contracts\Console\Kernel::class);
         try {
             \Illuminate\Support\Facades\Artisan::shouldReceive('call')
                 ->once()
                 ->with('migrate', ['--force' => true])
-                ->andReturnUsing(static function (string $command, array $parameters): int {
-                    return app(\Illuminate\Contracts\Console\Kernel::class)->call($command, $parameters);
+                ->andReturnUsing(static function (string $command, array $parameters) use ($consoleKernel): int {
+                    return $consoleKernel->call($command, $parameters);
                 });
             \Illuminate\Support\Facades\Artisan::shouldReceive('call')
                 ->once()
@@ -303,7 +305,7 @@ class FreshInstallerTest extends TestCase
             } catch (RuntimeException $exception) {
                 $this->assertStringContainsString('Core roles and permissions seeding failed', $exception->getMessage());
             } finally {
-                \Illuminate\Support\Facades\Artisan::swap(app(\Illuminate\Contracts\Console\Kernel::class));
+                \Illuminate\Support\Facades\Artisan::swap($consoleKernel);
             }
 
             $this->assertFileDoesNotExist($lockPath, 'A partially migrated database must never receive the installed marker.');
@@ -327,7 +329,7 @@ class FreshInstallerTest extends TestCase
             }
             $this->assertFileDoesNotExist($lockPath);
         } finally {
-            \Illuminate\Support\Facades\Artisan::swap(app(\Illuminate\Contracts\Console\Kernel::class));
+            \Illuminate\Support\Facades\Artisan::swap($consoleKernel);
             DB::disconnect('installer_seeder_failure_test');
             DB::setDefaultConnection($originalDefault);
             config([
