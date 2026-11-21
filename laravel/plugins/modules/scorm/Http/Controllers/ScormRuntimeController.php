@@ -629,7 +629,7 @@ class ScormRuntimeController extends Controller
 
     private function isAllowedRuntimeOrigin(Request $request): bool
     {
-        $allowed = rtrim((string) config('scorm.content_origin', ''), '/');
+        $allowed = rtrim((string) config('scorm.player_origin', ''), '/');
         $origin = rtrim((string) $request->headers->get('Origin', ''), '/');
 
         return $allowed !== '' && $origin !== '' && hash_equals($allowed, $origin);
@@ -638,7 +638,7 @@ class ScormRuntimeController extends Controller
     private function corsHeaders(Request $request): array
     {
         return [
-            'Access-Control-Allow-Origin' => rtrim((string) $request->headers->get('Origin', ''), '/'),
+            'Access-Control-Allow-Origin' => rtrim((string) config('scorm.player_origin', ''), '/'),
             'Access-Control-Allow-Methods' => 'POST, OPTIONS',
             'Access-Control-Allow-Headers' => 'Content-Type',
             'Access-Control-Max-Age' => '600',
@@ -649,18 +649,23 @@ class ScormRuntimeController extends Controller
     private function playerSecurityPolicy(): string
     {
         $contentOrigin = rtrim((string) config('scorm.content_origin', ''), '/');
+        $appOrigin = rtrim((string) config('app.url', ''), '/');
 
-        return "default-src 'self' data: blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src {$contentOrigin}; frame-ancestors 'self'; form-action 'none'; object-src 'none'; base-uri 'self'";
+        return "default-src 'self' data: blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src {$appOrigin}; frame-src {$contentOrigin}; frame-ancestors {$appOrigin}; form-action 'none'; object-src 'none'; base-uri 'self'";
     }
 
     private function contentSecurityPolicy(): string
     {
-        $appOrigin = rtrim((string) config('app.url'), '/');
+        $playerOrigin = rtrim((string) config('scorm.player_origin', ''), '/');
 
-        // SCO packages are untrusted active content. Permit the LMS runtime API,
-        // but block arbitrary HTTPS egress that could leak the attempt token or
-        // learner data through fetch, images, media, frames, fonts or forms.
-        return "default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' {$appOrigin}; frame-src 'self'; frame-ancestors {$appOrigin}; form-action 'none'; object-src 'none'; base-uri 'self'";
+        // SCO code has an opaque sandbox origin and cannot access player/LMS APIs
+        // except through the allow-listed postMessage bridge.
+        return "default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; frame-ancestors {$playerOrigin}; form-action 'none'; object-src 'none'; base-uri 'self'";
+    }
+
+    private function contentSessionCookieName(int $attemptId): string
+    {
+        return 'aec_scorm_' . $attemptId;
     }
 
     private function parseScormTime(string $value): int
