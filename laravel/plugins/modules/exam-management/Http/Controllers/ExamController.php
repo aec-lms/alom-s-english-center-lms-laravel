@@ -225,6 +225,7 @@ class ExamController extends Controller
             'options' => $question['options'],
             'marks' => $question['marks'],
         ]);
+        $exam->setAttribute('title', $snapshot['title']);
         $exam->setAttribute('duration_minutes', $snapshot['duration_minutes']);
         $exam->setAttribute('pass_marks', $snapshot['pass_marks']);
         $deadline = $attempt->started_at->copy()->addMinutes((int) $snapshot['duration_minutes']);
@@ -447,8 +448,11 @@ class ExamController extends Controller
         abort_if($attempt->submitted_at !== null, 403, 'Your exam time has expired or all attempts have been used.');
         $snapshot = $this->validatedAttemptSnapshot($attempt, $request);
         $deadline = $attempt->started_at->copy()->addMinutes((int) $snapshot['duration_minutes']);
-
         return response()->json([
+            'exam' => [
+                'id' => $exam->id,
+                'title' => $snapshot['title'],
+            ],
             'attempt' => [
                 'id' => $attempt->id,
                 'started_at' => $attempt->started_at?->toIso8601String(),
@@ -635,6 +639,7 @@ class ExamController extends Controller
 
         $snapshot = [
             'version' => 1,
+            'title' => (string) $exam->title,
             'duration_minutes' => (int) $exam->duration_minutes,
             'pass_marks' => (float) $exam->pass_marks,
             'questions' => $questions->map(static fn (ExamQuestion $question): array => [
@@ -670,6 +675,9 @@ class ExamController extends Controller
 
         if (!is_array($snapshot)
             || ($snapshot['version'] ?? null) !== 1
+            || !is_string($snapshot['title'] ?? null)
+            || trim($snapshot['title']) === ''
+            || mb_strlen($snapshot['title']) > 180
             || !is_int($snapshot['duration_minutes'] ?? null)
             || $snapshot['duration_minutes'] < 1
             || $snapshot['duration_minutes'] > self::MAX_DURATION_MINUTES
