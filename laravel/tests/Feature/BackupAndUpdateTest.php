@@ -240,6 +240,74 @@ class BackupAndUpdateTest extends TestCase
         $record->delete();
     }
 
+
+    public function test_private_backup_restore_streams_large_entries_and_rejects_unix_symlinks(): void
+    {
+        $zipPath = tempnam(sys_get_temp_dir(), 'aec_private_restore_');
+        $this->assertNotFalse($zipPath);
+        $zip = new ZipArchive();
+        $this->assertTrue($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true);
+
+        $largePayload = str_repeat('A', 4 * 1024 * 1024);
+        $this->assertTrue($zip->addFromString('private-files/student-documents/large.bin', $largePayload));
+        $this->assertTrue($zip->addFromString('private-files/student-documents/linked.txt', 'outside-target'));
+        $this->assertTrue($zip->setExternalAttributesName(
+            'private-files/student-documents/linked.txt',
+            ZipArchive::OPSYS_UNIX,
+            0120777 << 16
+        ));
+        $this->assertTrue($zip->close());
+
+        $archive = new ZipArchive();
+        $this->assertTrue($archive->open($zipPath) === true);
+        $service = app(BackupService::class);
+        $stage = new \\ReflectionMethod(BackupService::class, 'stagePrivateFiles');
+        $stage->setAccessible(true);
+
+        try {
+            $this->expectException(RuntimeException::class);
+            $this->expectExceptionMessage('Symlink entry rejected in backup');
+            $stage->invoke($service, $archive, ['includes_files' => true]);
+        } finally {
+            $archive->close();
+            @unlink($zipPath);
+        }
+    }
+
+    public function test_private_backup_restore_streams_large_file_entries_to_staging(): void
+    {
+        $zipPath = tempnam(sys_get_temp_dir(), 'aec_private_stream_');
+        $this->assertNotFalse($zipPath);
+        $zip = new ZipArchive();
+        $this->assertTrue($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true);
+
+        $payload = str_repeat('streamed-private-content-', 120000);
+        $this->assertTrue($zip->addFromString('private-files/student-documents/large.txt', $payload));
+        $this->assertTrue($zip->close());
+
+        $archive = new ZipArchive();
+        $this->assertTrue($archive->open($zipPath) === true);
+        $service = app(BackupService::class);
+        $stage = new \\ReflectionMethod(BackupService::class, 'stagePrivateFiles');
+        $stage->setAccessible(true);
+        $stagingPath = null;
+
+        try {
+            $stagingPath = $stage->invoke($service, $archive, ['includes_files' => true]);
+            $this->assertIsString($stagingPath);
+            $this->assertSame(
+                hash('sha256', $payload),
+                hash_file('sha256', $stagingPath . '/student-documents/large.txt')
+            );
+        } finally {
+            $archive->close();
+            if (is_string($stagingPath) && is_dir($stagingPath)) {
+                \\Illuminate\\Support\\Facades\\File::deleteDirectory($stagingPath);
+            }
+            @unlink($zipPath);
+        }
+    }
+
     public function test_backup_restore_rejects_paths_outside_the_private_backup_directory(): void
     {
         $this->markSystemInstalled();
