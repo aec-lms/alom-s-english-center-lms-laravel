@@ -567,7 +567,7 @@ class UniversalPaymentInvoiceSettlementTest extends TestCase
             'status' => 'pending',
         ]);
 
-        $gateway = app(\\Plugins\\Modules\\UniversalPayment\\Services\\StorefrontPaymentGatewayService::class);
+        $gateway = app(\Plugins\Modules\UniversalPayment\Services\StorefrontPaymentGatewayService::class);
 
         $failedReturn = $gateway->markSslcommerzFailed(['tran_id' => $transaction->reference], 'failed');
         $this->assertSame('pending', $failedReturn->status);
