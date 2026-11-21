@@ -17,6 +17,32 @@ use Tests\TestCase;
 
 class RecycleBinTest extends TestCase
 {
+
+    public function test_plugin_recycle_bin_restores_package_when_metadata_write_is_partial(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['admin-boosting']);
+        $manager = app(PluginManager::class);
+        $modulesRoot = (string) config('plugins.modules_path');
+        $pluginPath = rtrim($modulesRoot, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'admin-boosting';
+        $this->assertDirectoryExists($pluginPath);
+        $this->assertTrue($manager->isInstalled('admin-boosting'));
+        $this->assertTrue($manager->isEnabled('admin-boosting'));
+
+        File::partialMock()->shouldReceive('put')->once()->andReturn(1);
+
+        try {
+            $manager->deleteToRecycleBin('admin-boosting');
+            $this->fail('A partial recycle-bin metadata write must not commit the package move.');
+        } catch (\\RuntimeException $exception) {
+            $this->assertStringContainsString('metadata could not be written and verified', $exception->getMessage());
+        }
+
+        $this->assertDirectoryExists($pluginPath);
+        $this->assertTrue($manager->isInstalled('admin-boosting'));
+        $this->assertTrue($manager->isEnabled('admin-boosting'));
+    }
+
     public function test_student_delete_preserves_history_and_restore_keeps_account_inactive(): void
     {
         $this->markSystemInstalled();
