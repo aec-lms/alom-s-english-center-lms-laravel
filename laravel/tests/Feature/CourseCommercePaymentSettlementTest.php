@@ -309,8 +309,58 @@ class CourseCommercePaymentSettlementTest extends TestCase
         $assertRejected('A zero-paid invoice must not create a referral commission.');
 
         DB::table('fee_invoices')->where('id', $invoiceId)->update(['paid_amount' => 1250]);
-        $commissionId = $referral->recordSettledPurchase($student, 'course_cart_order', (string) $orderId, 1250, 'BDT');
-        $replayedId = $referral->recordSettledPurchase($student, 'course_cart_order', (string) $orderId, 1250, 'BDT');
+
+        if (DB::connection()->getDriverName() === 'mysql') {
+            $primaryName = DB::getDefaultConnection();
+            $primary = DB::connection($primaryName);
+            $secondaryName = 'referral_payment_binding_' . bin2hex(random_bytes(3));
+            config(['database.connections.' . $secondaryName => config('database.connections.' . $primaryName)]);
+            DB::purge($secondaryName);
+            $secondary = DB::connection($secondaryName);
+            $secondary->statement('SET SESSION innodb_lock_wait_timeout = 1');
+            $primary->beginTransaction();
+
+            try {
+                // The resolver must lock the exact provider transaction before
+                // inserting a commission, so a concurrent status/refund writer wins first.
+                $primary->table('universal_payment_transactions')
+                    ->where('id', $settled->id)
+                    ->lockForUpdate()
+                    ->first();
+
+                DB::setDefaultConnection($secondaryName);
+                try {
+                    $referral->recordSettledPurchase($student, 'course_cart_order', (string) $orderId, 1250, 'BDT');
+                    $this->fail('Referral commission insertion must wait for the locked provider payment row.');
+                } catch (\\Illuminate\\Database\\QueryException $exception) {
+                    $this->assertSame(1205, (int) ($exception->errorInfo[1] ?? 0), $exception->getMessage());
+                }
+
+                $this->assertSame(0, $secondary->table('referral_commissions')
+                    ->where('referred_user_id', $student->id)
+                    ->where('source_type', 'course_cart_order')
+                    ->where('source_id', (string) $orderId)
+                    ->count());
+
+                DB::setDefaultConnection($primaryName);
+                $primary->commit();
+
+                DB::setDefaultConnection($secondaryName);
+                $commissionId = $referral->recordSettledPurchase($student, 'course_cart_order', (string) $orderId, 1250, 'BDT');
+                $replayedId = $referral->recordSettledPurchase($student, 'course_cart_order', (string) $orderId, 1250, 'BDT');
+            } catch (\\Throwable $exception) {
+                if ($primary->transactionLevel() > 0) {
+                    $primary->rollBack();
+                }
+                throw $exception;
+            } finally {
+                DB::setDefaultConnection($primaryName);
+                DB::purge($secondaryName);
+            }
+        } else {
+            $commissionId = $referral->recordSettledPurchase($student, 'course_cart_order', (string) $orderId, 1250, 'BDT');
+            $replayedId = $referral->recordSettledPurchase($student, 'course_cart_order', (string) $orderId, 1250, 'BDT');
+        }
 
         $this->assertNotNull($commissionId);
         $this->assertSame((int) $commissionId, (int) $replayedId);
