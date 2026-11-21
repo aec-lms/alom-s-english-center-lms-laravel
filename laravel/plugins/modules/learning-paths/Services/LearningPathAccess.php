@@ -61,6 +61,7 @@ class LearningPathAccess
         if (!$this->plugins->isEnabled('course-content-studio')
             || !Schema::hasTable('course_curriculum_items')
             || !Schema::hasTable('course_content_progress')
+            || !Schema::hasTable('course_content_posts')
         ) {
             return false;
         }
