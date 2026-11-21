@@ -249,4 +249,97 @@ class PluginRecycleBinAdminAcceptanceTest extends TestCase
         }
     }
 
+
+    public function test_failed_archive_rollback_reports_the_actual_retained_archive_path(): void
+    {
+        $this->markSystemInstalled();
+        $slug = 'rollback-failure-probe-' . strtolower(substr(bin2hex(random_bytes(4)), 0, 8));
+        $modulePath = $this->createProbePlugin($slug);
+        $archivePath = null;
+
+        try {
+            $manager = app(PluginManager::class);
+            $manager->syncCatalog();
+            $manager->install($slug);
+
+            $moveCalls = 0;
+            $file = File::partialMock();
+            $file->shouldReceive('put')->once()->andReturn(1);
+            $file->shouldReceive('moveDirectory')->twice()->andReturnUsing(
+                function (string $from, string $to) use (&$moveCalls): bool {
+                    $moveCalls++;
+                    return $moveCalls === 1 ? rename($from, $to) : false;
+                }
+            );
+
+            try {
+                $manager->deleteToRecycleBin($slug);
+                $this->fail('Metadata write failure with failed rollback must report retained archive.');
+            } catch (\\RuntimeException $exception) {
+                $this->assertStringContainsString('without a committed metadata index', $exception->getMessage());
+                $this->assertStringContainsString('plugin-recycle-bin', $exception->getMessage());
+            }
+
+            $archives = glob(storage_path('app/plugin-recycle-bin/' . $slug . '-*')) ?: [];
+            $this->assertCount(1, $archives);
+            $archivePath = $archives[0];
+            $this->assertDirectoryExists($archivePath);
+            $this->assertDirectoryDoesNotExist($modulePath);
+            $this->assertFalse($manager->isInstalled($slug));
+            $this->assertFalse($manager->isEnabled($slug));
+            $this->assertSame([], array_values(array_filter(
+                $manager->recycledPlugins(),
+                fn (array $item): bool => ($item['slug'] ?? null) === $slug
+            )));
+        } finally {
+            File::deleteDirectory($modulePath);
+            if ($archivePath && is_dir($archivePath)) {
+                File::deleteDirectory($archivePath);
+            }
+        }
+    }
+
+    public function test_checksum_mismatch_after_archive_rollback_never_reinstalls_plugin(): void
+    {
+        $this->markSystemInstalled();
+        $slug = 'rollback-checksum-probe-' . strtolower(substr(bin2hex(random_bytes(4)), 0, 8));
+        $modulePath = $this->createProbePlugin($slug);
+
+        try {
+            $manager = app(PluginManager::class);
+            $manager->syncCatalog();
+            $manager->install($slug);
+
+            $moveCalls = 0;
+            $file = File::partialMock();
+            $file->shouldReceive('put')->once()->andReturn(1);
+            $file->shouldReceive('moveDirectory')->twice()->andReturnUsing(
+                function (string $from, string $to) use (&$moveCalls): bool {
+                    $moveCalls++;
+                    if (!rename($from, $to)) {
+                        return false;
+                    }
+                    if ($moveCalls === 2) {
+                        file_put_contents($to . '/plugin.json', "\\n/* checksum mismatch during rollback */", FILE_APPEND);
+                    }
+                    return true;
+                }
+            );
+
+            try {
+                $manager->deleteToRecycleBin($slug);
+                $this->fail('A checksum mismatch during rollback must fail closed.');
+            } catch (\\RuntimeException $exception) {
+                $this->assertStringContainsString('failed checksum verification', $exception->getMessage());
+                $this->assertStringContainsString($modulePath, $exception->getMessage());
+            }
+
+            $this->assertDirectoryExists($modulePath);
+            $this->assertFalse($manager->isInstalled($slug));
+            $this->assertFalse($manager->isEnabled($slug));
+        } finally {
+            File::deleteDirectory($modulePath);
+        }
+    }
+
 }
