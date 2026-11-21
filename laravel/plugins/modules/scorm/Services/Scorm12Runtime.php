@@ -14,6 +14,7 @@ class Scorm12Runtime
     private const READ_ONLY = [
         'cmi._version',
         'cmi.core._children',
+        'cmi.core.score._children',
         'cmi.core.student_id',
         'cmi.core.student_name',
         'cmi.core.credit',
@@ -22,6 +23,10 @@ class Scorm12Runtime
         'cmi.core.total_time',
         'cmi.launch_data',
         'cmi.student_data._children',
+        'cmi.student_preference._children',
+        'cmi.comments_from_lms',
+        'cmi.comments_from_lms._count',
+        'cmi.objectives._count',
         'cmi.student_data.mastery_score',
         'cmi.student_data.max_time_allowed',
         'cmi.student_data.time_limit_action',
@@ -106,6 +111,8 @@ class Scorm12Runtime
         $fixed = [
             'cmi._version' => '3.4',
             'cmi.core._children' => 'student_id,student_name,lesson_location,credit,lesson_status,entry,score,total_time,lesson_mode,exit,session_time',
+            'cmi.core.score._children' => 'raw,max,min',
+            'cmi.student_preference._children' => 'audio,language,speed,text',
             'cmi.core.student_id' => $this->studentId,
             'cmi.core.student_name' => $this->studentName,
             'cmi.core.credit' => 'credit',
@@ -115,14 +122,19 @@ class Scorm12Runtime
             'cmi.launch_data' => $this->launchData,
             'cmi.student_data._children' => 'mastery_score,max_time_allowed,time_limit_action',
             'cmi.interactions._children' => 'id,objectives,time,type,correct_responses,weighting,student_response,result,latency',
-            'cmi.interactions._count' => (string) ($this->data['cmi.interactions._count'] ?? '0'),
+            'cmi.interactions._count' => $this->indexedCount('/^cmi\\.interactions\\.(\\d+)\\./'),
+            'cmi.objectives._count' => $this->indexedCount('/^cmi\\.objectives\\.(\\d+)\\./'),
         ];
 
+        if ($this->isReadOnlyDynamicElement($element)) {
+            $this->lastError = '0';
+            return $this->dynamicCount($element);
+        }
         if (array_key_exists($element, $fixed)) {
             $this->lastError = '0';
             return (string) $fixed[$element];
         }
-        if (in_array($element, self::READ_ONLY, true)) {
+        if (in_array($element, self::READ_ONLY, true) || $this->isReadOnlyDynamicElement($element)) {
             $this->lastError = '0';
             return '';
         }
@@ -150,14 +162,14 @@ class Scorm12Runtime
             'cmi.core.lesson_location' => mb_strlen($value) <= 255,
             'cmi.core.lesson_status' => in_array($value, ['passed', 'completed', 'failed', 'incomplete', 'browsed', 'not attempted'], true),
             'cmi.core.score.raw', 'cmi.core.score.max', 'cmi.core.score.min' => $this->isValidScore($value),
-            'cmi.core.exit' => in_array($value, ['time-out', 'suspend', 'logout', ''], true),
+            'cmi.core.exit' => in_array($value, ['time-out', 'suspend', 'logout', 'normal', ''], true),
             'cmi.core.session_time' => $this->isValidScormTime($value),
             'cmi.suspend_data' => mb_strlen($value) <= 4096,
             'cmi.comments' => mb_strlen($value) <= 4096,
             'cmi.student_preference.audio', 'cmi.student_preference.text' => in_array($value, ['-1', '0', '1'], true),
             'cmi.student_preference.speed' => is_numeric($value) && (float) $value >= -100 && (float) $value <= 100,
             'cmi.student_preference.language' => mb_strlen($value) <= 255,
-            default => $this->isSupportedDynamicElement($element),
+            default => $this->isValidDynamicValue($element, $value),
         };
 
         if (!$valid) {
@@ -218,7 +230,70 @@ class Scorm12Runtime
     private function isSupportedDynamicElement(string $element): bool
     {
         return preg_match('/^cmi\.interactions\.\d+\.(?:id|type|time|weighting|student_response|result|latency|objectives\.\d+\.id|correct_responses\.\d+\.pattern)$/', $element) === 1
-            && mb_strlen($element) <= 255;
+            || preg_match('/^cmi\.objectives\.\d+\.(?:id|score\.(?:raw|min|max)|status)$/', $element) === 1;
+    }
+
+    private function isValidDynamicValue(string $element, string $value): bool
+    {
+        if (!$this->isSupportedDynamicElement($element) || mb_strlen($element) > 255) {
+            return false;
+        }
+        if (preg_match('/^cmi\.interactions\.\d+\.(.+)$/', $element, $matches) === 1) {
+            $field = $matches[1];
+            return match (true) {
+                $field === 'id', str_ends_with($field, '.id'), str_ends_with($field, '.pattern') => mb_strlen($value) <= 255,
+                $field === 'type' => in_array($value, ['true-false', 'choice', 'fill-in', 'matching', 'performance', 'sequencing', 'likert', 'numeric', 'other'], true),
+                $field === 'time' => preg_match('/^\d{8}T\d{6}(?:\.\d{1,2})?$/', $value) === 1,
+                $field === 'weighting' => $value !== '' && is_numeric($value),
+                $field === 'student_response' => mb_strlen($value) <= 4096,
+                $field === 'result' => in_array($value, ['correct', 'wrong', 'unanticipated', 'neutral'], true) || is_numeric($value),
+                $field === 'latency' => $this->isValidScormTime($value),
+                default => false,
+            };
+        }
+
+        if (str_ends_with($element, '.id')) {
+            return mb_strlen($value) <= 255;
+        }
+        if (str_ends_with($element, '.status')) {
+            return in_array($value, ['passed', 'completed', 'failed', 'incomplete', 'browsed', 'not attempted'], true);
+        }
+
+        return $this->isValidScore($value);
+    }
+
+    private function isReadOnlyDynamicElement(string $element): bool
+    {
+        return preg_match('/^cmi\.interactions\.\d+\.(?:objectives|correct_responses)\._count$/', $element) === 1;
+    }
+
+    private function dynamicCount(string $element): string
+    {
+        if ($element === 'cmi.interactions._count') {
+            return $this->indexedCount('/^cmi\.interactions\.(\d+)\./');
+        }
+        if ($element === 'cmi.objectives._count') {
+            return $this->indexedCount('/^cmi\.objectives\.(\d+)\./');
+        }
+        if (preg_match('/^cmi\.interactions\.(\d+)\.(objectives|correct_responses)\._count$/', $element, $matches) === 1) {
+            $prefix = 'cmi.interactions.' . $matches[1] . '.' . $matches[2] . '.';
+            $pattern = '/^' . preg_quote($prefix, '/') . '(\d+)\./';
+            return $this->indexedCount($pattern);
+        }
+
+        return '0';
+    }
+
+    private function indexedCount(string $pattern): string
+    {
+        $indices = [];
+        foreach (array_keys($this->data) as $key) {
+            if (preg_match($pattern, $key, $matches) === 1) {
+                $indices[$matches[1]] = true;
+            }
+        }
+
+        return (string) count($indices);
     }
 
     private function fail(string $code): string
