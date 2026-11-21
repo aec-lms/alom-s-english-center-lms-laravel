@@ -271,7 +271,7 @@ class BackupAndUpdateTest extends TestCase
             'updated_at' => $timestamp,
         ]);
 
-        $restore = new \\ReflectionMethod(BackupService::class, 'restoreLegacyDatabaseSnapshot');
+        $restore = new \ReflectionMethod(BackupService::class, 'restoreLegacyDatabaseSnapshot');
         $restore->setAccessible(true);
         $restore->invoke(app(BackupService::class), [
             'tables' => [
