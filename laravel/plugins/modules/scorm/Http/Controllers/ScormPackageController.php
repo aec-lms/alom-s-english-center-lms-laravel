@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\Scorm\\Http\\Controllers;
+namespace Plugins\Modules\Scorm\Http\Controllers;
 
-use App\\Core\\Plugins\\PluginManager;
-use App\\Http\\Controllers\\Controller;
-use Illuminate\\Http\\RedirectResponse;
-use Illuminate\\Http\\Request;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Facades\\Schema;
-use Illuminate\\View\\View;
-use Plugins\\Modules\\Scorm\\Services\\ScormPackageImporter;
+use App\Core\Plugins\PluginManager;
+use App\Http\Controllers\Controller;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\View\View;
+use Plugins\Modules\Scorm\Services\ScormPackageImporter;
 use RuntimeException;
 use Throwable;
 
@@ -59,7 +59,9 @@ class ScormPackageController extends Controller
             abort_unless($course->branch_id === null || (int) $course->branch_id === (int) $actor->branch_id, 403, 'Course is outside your assigned branch.');
         }
 
-        $imported = $importer->import($request->file('package')->getRealPath());
+        $archivePath = $request->file('package')?->getRealPath();
+        abort_unless(is_string($archivePath) && $archivePath !== '', 422, 'Uploaded SCORM package is not readable.');
+        $imported = $importer->import($archivePath);
         try {
             DB::table('scorm_packages')->insert([
                 'course_id' => $course->id,
@@ -80,7 +82,7 @@ class ScormPackageController extends Controller
             ]);
         } catch (Throwable $exception) {
             if (is_dir($imported['directory']) && !is_link($imported['directory'])) {
-                \\Illuminate\\Support\\Facades\\File::deleteDirectory($imported['directory']);
+                \Illuminate\Support\Facades\File::deleteDirectory($imported['directory']);
             }
             throw $exception;
         }
@@ -88,10 +90,11 @@ class ScormPackageController extends Controller
         return redirect()->route('plugins.scorm.admin.index')->with('status', 'SCORM 1.2 package imported and saved as draft. Review it before publishing.');
     }
 
-    public function publish(int $package): RedirectResponse
+    public function publish(Request $request, int $package): RedirectResponse
     {
         $record = DB::table('scorm_packages')->where('id', $package)->first();
         abort_unless($record, 404);
+        $this->assertBranchAccess($request, $record);
         abort_unless($record->status === 'draft', 409, 'Only draft SCORM packages can be published.');
         abort_unless($record->course_id !== null && Schema::hasTable('courses')
             && DB::table('courses')->where('id', $record->course_id)->where('status', 'published')->exists(),
@@ -106,10 +109,11 @@ class ScormPackageController extends Controller
         return back()->with('status', 'SCORM package published.');
     }
 
-    public function archive(int $package): RedirectResponse
+    public function archive(Request $request, int $package): RedirectResponse
     {
         $record = DB::table('scorm_packages')->where('id', $package)->first();
         abort_unless($record, 404);
+        $this->assertBranchAccess($request, $record);
         $activeAttempts = DB::table('scorm_attempts')
             ->where('scorm_package_id', $package)
             ->whereIn('completion_state', ['in_progress', 'suspended'])
@@ -123,5 +127,12 @@ class ScormPackageController extends Controller
         ]);
 
         return back()->with('status', 'SCORM package archived. Learner attempt history is retained.');
+    }
+    private function assertBranchAccess(Request $request, object $package): void
+    {
+        $actor = $request->user();
+        if ($actor && $actor->hasRole('branch_manager')) {
+            abort_unless($actor->branch_id !== null && (int) $package->branch_id === (int) $actor->branch_id, 403, 'SCORM package is outside your assigned branch.');
+        }
     }
 }
