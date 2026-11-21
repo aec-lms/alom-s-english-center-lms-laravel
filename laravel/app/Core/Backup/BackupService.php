@@ -168,9 +168,11 @@ class BackupService
 
             $stagedPrivateFiles = null;
             try {
-                    DB::transaction(function () use ($zip, &$stagedPrivateFiles, $backup, $actorId, $magic): void {
-                        $manifestRaw = $zip->getFromName('manifest.json');
-                    if ($manifestRaw === false) throw new RuntimeException('Backup archive missing manifest.json.');
+                DB::transaction(function () use ($zip, &$stagedPrivateFiles, $backup, $actorId, $magic): void {
+                    $manifestRaw = $zip->getFromName('manifest.json');
+                    if ($manifestRaw === false) {
+                        throw new RuntimeException('Backup archive missing manifest.json.');
+                    }
                     $manifest = json_decode($manifestRaw, true, 512, JSON_THROW_ON_ERROR);
                     if (($manifest['core_version'] ?? '') !== (string) config('lms.core_version', '2.0.0')) {
                         throw new RuntimeException('Backup core version mismatch.');
@@ -187,16 +189,28 @@ class BackupService
                     } else {
                         // Legacy JSON snapshots remain restorable; new backups use the streaming format.
                         $dbRaw = $zip->getFromName('database.json');
-                        if ($dbRaw === false) throw new RuntimeException('Backup archive missing database.json or database.jsonl.');
+                        if ($dbRaw === false) {
+                            throw new RuntimeException('Backup archive missing database.json or database.jsonl.');
+                        }
                         $dbSnapshot = json_decode($dbRaw, true, 512, JSON_THROW_ON_ERROR);
                         $this->restoreLegacyDatabaseSnapshot($dbSnapshot);
                         unset($dbRaw, $dbSnapshot);
                     }
 
-                    if ($stagedPrivateFiles !== null) $this->restoreStagedPrivateFiles($stagedPrivateFiles);
+                    if ($stagedPrivateFiles !== null) {
+                        $this->restoreStagedPrivateFiles($stagedPrivateFiles);
+                    }
+
+                    $this->audit->logRequired('backup.restored', 'backup', (string) $backup->id, [
+                        'filename' => $backup->filename,
+                        'backup_format' => $magic === "AECBK02\n" ? 2 : 1,
+                    ], $actorId);
+                });
             } finally {
-                    $zip->close();
-                    if ($stagedPrivateFiles !== null) $this->deleteDirectoryTree($stagedPrivateFiles);
+                $zip->close();
+                if ($stagedPrivateFiles !== null) {
+                    $this->deleteDirectoryTree($stagedPrivateFiles);
+                }
             }
         } finally {
             @unlink($tempZip);
