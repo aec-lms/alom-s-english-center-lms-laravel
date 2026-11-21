@@ -191,6 +191,11 @@ class LearningRewardsPluginTest extends TestCase
             'leaderboard_opt_out' => false,
             'profile_public' => true,
         ])->assertRedirect();
+        $this->assertDatabaseHas('audit_logs', [
+            'user_id' => $studentA->id,
+            'action' => 'learning_rewards.privacy_updated',
+            'entity_type' => 'learning_reward_profile',
+        ]);
         $this->actingAs($studentA)->get('/learning-leaderboard?period=month')->assertOk()->assertSee($studentA->name)->assertDontSee($inactiveStudent->name);
 
         $this->actingAs($studentB)->patch('/my-learning-rewards/privacy', [
