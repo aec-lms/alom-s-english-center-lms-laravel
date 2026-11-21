@@ -191,7 +191,8 @@ class LearningPathController extends Controller
             abort_unless($courses->count() >= 2 && $courses->every(fn ($course) => $course->course_status === 'published'), 409);
             $first = $courses->first();
             $hasFirstEnrollment = DB::table('enrollments')->where('user_id', $student->id)
-                ->where('course_id', $first->course_id)->whereIn('status', ['active', 'completed'])->exists();
+                ->where('course_id', $first->course_id)->whereIn('status', ['active', 'completed'])
+                ->lockForUpdate()->exists();
             abort_unless($hasFirstEnrollment, 409,
                 'Enroll in the first course before starting this learning path. Course purchases and fees remain separate.');
 
