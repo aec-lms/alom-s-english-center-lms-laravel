@@ -37,7 +37,13 @@ class BackupService
         if ($jsonlPath === false) {
             throw new RuntimeException('Unable to allocate temporary database snapshot file.');
         }
-        $tableNames = $this->exportDatabaseJsonLines($jsonlPath);
+        @chmod($jsonlPath, 0600);
+        try {
+            $tableNames = $this->exportDatabaseJsonLines($jsonlPath);
+        } catch (\\Throwable $exception) {
+            @unlink($jsonlPath);
+            throw $exception;
+        }
         $zip = new ZipArchive();
         if ($zip->open($archivePath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
             @unlink($jsonlPath);
@@ -200,7 +206,7 @@ class BackupService
     private function stagePrivateFiles(ZipArchive $zip, array $manifest): ?string
     {
         $includesFiles = (bool) ($manifest['includes_files'] ?? false);
-        $stagingDir = storage_path('app/restore-staging/' . Str::uuid()->toString());
+        $stagingDir = null;
         $seen = [];
         $totalBytes = 0;
         $fileCount = 0;
@@ -264,6 +270,7 @@ class BackupService
                     continue;
                 }
 
+                $stagingDir ??= $this->createPrivateStorageChild('restore-staging');
                 $destination = $stagingDir . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $normalized);
                 $parent = dirname($destination);
                 if (!is_dir($parent) && !mkdir($parent, 0700, true) && !is_dir($parent)) {
@@ -298,15 +305,14 @@ class BackupService
                 return null;
             }
 
-            if (!is_dir($stagingDir) && !mkdir($stagingDir, 0700, true) && !is_dir($stagingDir)) {
-                throw new RuntimeException('Unable to create private restore staging directory.');
-            }
-
+            $stagingDir ??= $this->createPrivateStorageChild('restore-staging');
             return $stagingDir;
         } catch (\Throwable $exception) {
             // A rejected archive may fail after earlier members were already staged.
             // Remove that partial tree so repeated restore attempts cannot fill storage.
-            $this->deleteDirectoryTree($stagingDir);
+            if (is_string($stagingDir)) {
+                $this->deleteDirectoryTree($stagingDir);
+            }
             throw $exception;
         }
     }
@@ -375,6 +381,50 @@ class BackupService
                 }
             }
         }
+    }
+
+
+    private function createPrivateStorageChild(string $rootName): string
+    {
+        abort_unless(in_array($rootName, ['restore-staging'], true), 500, 'Invalid private restore directory.');
+
+        $storagePath = storage_path('app');
+        $storageRoot = realpath($storagePath);
+        if ($storageRoot === false || is_link($storagePath)) {
+            throw new RuntimeException('Private restore storage root is unavailable or redirected.');
+        }
+
+        $root = $storageRoot . DIRECTORY_SEPARATOR . $rootName;
+        if (is_link($root)) {
+            throw new RuntimeException('Private restore staging root must not be a symbolic link.');
+        }
+        if (!is_dir($root) && !@mkdir($root, 0700) && !is_dir($root)) {
+            throw new RuntimeException('Unable to create private restore staging root.');
+        }
+        if (!@chmod($root, 0700)) {
+            throw new RuntimeException('Unable to restrict private restore staging root permissions.');
+        }
+
+        $resolvedRoot = realpath($root);
+        $rootStat = $resolvedRoot !== false ? @stat($resolvedRoot) : false;
+        if ($resolvedRoot === false || dirname($resolvedRoot) !== $storageRoot || $rootStat === false
+            || (($rootStat['mode'] & 0170000) !== 0040000) || (($rootStat['mode'] & 0077) !== 0)) {
+            throw new RuntimeException('Private restore staging root must be a private real directory under storage/app.');
+        }
+
+        $child = $resolvedRoot . DIRECTORY_SEPARATOR . Str::uuid()->toString();
+        if (!@mkdir($child, 0700)) {
+            throw new RuntimeException('Unable to create isolated private restore staging directory.');
+        }
+        $resolvedChild = realpath($child);
+        $childStat = $resolvedChild !== false ? @stat($resolvedChild) : false;
+        if ($resolvedChild === false || dirname($resolvedChild) !== $resolvedRoot || is_link($child)
+            || $childStat === false || (($childStat['mode'] & 0170000) !== 0040000)
+            || (($childStat['mode'] & 0077) !== 0)) {
+            throw new RuntimeException('Private restore staging directory failed its filesystem safety checks.');
+        }
+
+        return $resolvedChild;
     }
 
     private function deleteDirectoryTree(string $directory): void
