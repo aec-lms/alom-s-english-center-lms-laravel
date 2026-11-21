@@ -170,6 +170,9 @@ class LearningRewardsPluginTest extends TestCase
         $studentA = $this->createUserWithRole('student');
         $studentB = $this->createUserWithRole('student');
         $inactiveStudent = $this->createUserWithRole('student');
+        $studentA->forceFill(['name' => 'Rewards Student A'])->save();
+        $studentB->forceFill(['name' => 'Rewards Student B'])->save();
+        $inactiveStudent->forceFill(['name' => 'Inactive Rewards Student'])->save();
         app(LearningRewardsService::class)->awardVerifiedActivity((int) $studentA->id, 'lesson_completed', 'course_lesson', 1);
         app(LearningRewardsService::class)->awardVerifiedActivity((int) $studentB->id, 'quiz_passed', 'quiz_attempt', 2);
         app(LearningRewardsService::class)->awardVerifiedActivity((int) $inactiveStudent->id, 'lesson_completed', 'course_lesson', 3);
@@ -232,6 +235,9 @@ class LearningRewardsPluginTest extends TestCase
         $studentA = $this->createUserWithRole('student', $branchA);
         $studentB = $this->createUserWithRole('student', $branchB);
         $unassignedStudent = $this->createUserWithRole('student');
+        $studentA->forceFill(['name' => 'Branch A Rewards Student'])->save();
+        $studentB->forceFill(['name' => 'Branch B Rewards Student'])->save();
+        $unassignedStudent->forceFill(['name' => 'Unassigned Rewards Student'])->save();
         $service = app(LearningRewardsService::class);
         $service->awardVerifiedActivity((int) $studentA->id, 'lesson_completed', 'course_lesson', 301);
         $service->awardVerifiedActivity((int) $studentB->id, 'lesson_completed', 'course_lesson', 302);
@@ -272,6 +278,8 @@ class LearningRewardsPluginTest extends TestCase
         ]);
         $active = $this->createUserWithRole('student', $branch);
         $inactive = $this->createUserWithRole('student', $branch);
+        $active->forceFill(['name' => 'Active Profile Rewards Student'])->save();
+        $inactive->forceFill(['name' => 'Inactive Profile Rewards Student'])->save();
 
         foreach ([[$active, 'REWARD-PROFILE-A'], [$inactive, 'REWARD-PROFILE-I']] as [$user, $code]) {
             \Plugins\Modules\StudentManagement\Models\Student::query()->create([
