@@ -242,7 +242,7 @@ class CourseController extends Controller
             ? $this->parseSyllabusLines((string) $validated['syllabus_lines'])
             : $course->syllabus_json;
 
-        $course->update([
+        $attributes = [
             'code' => strtoupper(trim($validated['code'])),
             'title' => $validated['title'],
             'category' => $categoryName,
@@ -261,7 +261,12 @@ class CourseController extends Controller
             'original_price' => $validated['original_price'] ?? $course->original_price,
             'duration_weeks' => (int) ($validated['duration_weeks'] ?? $course->duration_weeks ?? 12),
             'status' => $validated['status'],
-        ]);
+        
+        ];
+        DB::transaction(function () use ($course, $attributes): void {
+            $this->assertCoursePathIntegrity((int) $course->id, false, (string) $attributes['status']);
+            $course->update($attributes);
+        });
 
         foreach ([[$oldAssets[0], $thumbPath], [$oldAssets[1], $pdfPath], [$oldAssets[2], $pdfThumbPath]] as [$oldPath, $newPath]) {
             if ($oldPath && $oldPath !== $newPath) $this->deleteUnusedUpload($oldPath, (int) $course->id);
@@ -280,14 +285,16 @@ class CourseController extends Controller
             abort(403, 'Branch isolation violation.');
         }
         $this->assertCoursePathIntegrity((int) $course->id, true);
+        $title = $course->title;
+        $id = (string) $course->id;
+        DB::transaction(function () use ($course, $id, $title): void {
+            $this->assertCoursePathIntegrity((int) $course->id, true);
+            $course->delete();
+            $this->audit->log('course.deleted', 'course', $id, ['title' => $title]);
+        });
         foreach ([$course->thumbnail, $course->pdf_path, $course->pdf_thumbnail] as $assetPath) {
             $this->deleteUnusedUpload($assetPath, (int) $course->id);
         }
-        $title = $course->title;
-        $id = (string) $course->id;
-        $course->delete();
-
-        $this->audit->log('course.deleted', 'course', $id, ['title' => $title]);
 
         return back()->with('status', "Course '{$title}' deleted.");
     }
@@ -500,14 +507,32 @@ class CourseController extends Controller
         // plugin is temporarily disabled; its historical tables are retained.
         if (!Schema::hasTable('learning_path_courses')
             || !Schema::hasTable('learning_path_enrollments')
+            || !Schema::hasTable('learning_paths')
         ) {
             return;
         }
 
-        $hasActivePathLearners = DB::table('learning_path_courses as item')
-            ->join('learning_path_enrollments as enrollment', 'enrollment.learning_path_id', '=', 'item.learning_path_id')
-            ->where('item.course_id', $courseId)
-            ->where('enrollment.status', 'active')
+        $pathIds = DB::table('learning_path_courses')
+            ->where('course_id', $courseId)
+            ->orderBy('learning_path_id')
+            ->pluck('learning_path_id')
+            ->unique()
+            ->values();
+        if ($pathIds->isEmpty()) {
+            return;
+        }
+
+        // Path enrollment locks the parent path first. Taking the same locks
+        // here serializes course archive/deletion against a concurrent join.
+        DB::table('learning_paths')
+            ->whereIn('id', $pathIds)
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get(['id']);
+
+        $hasActivePathLearners = DB::table('learning_path_enrollments')
+            ->whereIn('learning_path_id', $pathIds)
+            ->where('status', 'active')
             ->exists();
 
         if (!$hasActivePathLearners) {
