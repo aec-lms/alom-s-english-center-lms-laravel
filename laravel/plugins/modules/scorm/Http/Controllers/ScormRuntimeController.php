@@ -395,9 +395,14 @@ class ScormRuntimeController extends Controller
             return response()->json(['message' => 'SCORM runtime origin is not allowed.'], 403);
         }
 
-        // The content origin uses a simple text/plain XHR so SCORM's synchronous
-        // JavaScript API does not depend on a credentialed CORS preflight.
-        $payload = json_decode($request->getContent(), true);
+        // The isolated SCO bridge caps serialized payload size before decoding
+        // so untrusted package data cannot force unbounded JSON allocation.
+        $rawPayload = $request->getContent();
+        if (strlen($rawPayload) > 262144) {
+            return response()->json(['ok' => false, 'message' => 'SCORM runtime payload exceeds the 256 KiB limit.'], 413)
+                ->withHeaders($this->corsHeaders($request));
+        }
+        $payload = json_decode($rawPayload, true);
         if (!is_array($payload)) {
             return response()->json(['ok' => false, 'message' => 'Invalid SCORM runtime payload.'], 422)
                 ->withHeaders($this->corsHeaders($request));
