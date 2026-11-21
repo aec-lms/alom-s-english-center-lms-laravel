@@ -83,7 +83,7 @@ class FreshInstallerService
      */
     private function persistGeneratedKeys(array $keys): void
     {
-        $envPath = base_path('.env');
+        $envPath = (string) config('lms.env_path', base_path('.env'));
         if (!is_file($envPath) || !is_writable($envPath)) {
             throw new RuntimeException('The Laravel .env file must exist and be writable so fresh encryption keys can be saved securely.');
         }
