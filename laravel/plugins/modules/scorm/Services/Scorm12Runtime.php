@@ -124,6 +124,7 @@ class Scorm12Runtime
             'cmi.interactions._children' => 'id,objectives,time,type,correct_responses,weighting,student_response,result,latency',
             'cmi.interactions._count' => $this->indexedCount('/^cmi\\.interactions\\.(\\d+)\\./'),
             'cmi.objectives._count' => $this->indexedCount('/^cmi\\.objectives\\.(\\d+)\\./'),
+            'cmi.objectives._count' => $this->indexedCount('/^cmi\\.objectives\\.(\\d+)\\./'),
         ];
 
         if ($this->isReadOnlyDynamicElement($element)) {
