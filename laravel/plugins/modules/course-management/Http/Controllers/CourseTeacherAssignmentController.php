@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Plugins\Modules\CourseManagement\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Core\Plugins\PluginManager;
 use App\Core\Security\BranchAccess;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class CourseTeacherAssignmentController extends Controller
@@ -20,9 +22,20 @@ class CourseTeacherAssignmentController extends Controller
     {
         $branchId = $this->branches->assignedBranchId($request->user());
         $courses = DB::table('courses')->whereNull('deleted_at')->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))->orderBy('title')->get(['id', 'title', 'branch_id']);
-        $teachers = User::query()->where('is_active', true)->whereHas('roles', fn ($q) => $q->where('slug', 'teacher'))
-            ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
-            ->orderBy('name')->get(['id', 'name', 'email', 'branch_id']);
+        $teachersQuery = User::query()->where('is_active', true)->whereHas('roles', fn ($q) => $q->where('slug', 'teacher'))
+            ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId));
+        if (app(PluginManager::class)->isEnabled('teacher-management') && Schema::hasTable('teachers')) {
+            $teachersQuery->whereExists(function ($query): void {
+                $query->selectRaw('1')->from('teachers')->whereColumn('teachers.user_id', 'users.id');
+                if (Schema::hasColumn('teachers', 'is_active')) {
+                    $query->where('teachers.is_active', true);
+                }
+                if (Schema::hasColumn('teachers', 'deleted_at')) {
+                    $query->whereNull('teachers.deleted_at');
+                }
+            });
+        }
+        $teachers = $teachersQuery->orderBy('name')->get(['id', 'name', 'email', 'branch_id']);
         $assignments = DB::table('course_teacher_assignments')
             ->join('courses', 'courses.id', '=', 'course_teacher_assignments.course_id')
             ->join('users', 'users.id', '=', 'course_teacher_assignments.teacher_user_id')
@@ -30,6 +43,20 @@ class CourseTeacherAssignmentController extends Controller
             ->join('roles as teacher_roles', 'teacher_roles.id', '=', 'teacher_role_user.role_id')
             ->where('users.is_active', true)
             ->where('teacher_roles.slug', 'teacher')
+            ->when(
+                app(PluginManager::class)->isEnabled('teacher-management') && Schema::hasTable('teachers'),
+                function ($query): void {
+                    $query->whereExists(function ($profile): void {
+                        $profile->selectRaw('1')->from('teachers')->whereColumn('teachers.user_id', 'users.id');
+                        if (Schema::hasColumn('teachers', 'is_active')) {
+                            $profile->where('teachers.is_active', true);
+                        }
+                        if (Schema::hasColumn('teachers', 'deleted_at')) {
+                            $profile->whereNull('teachers.deleted_at');
+                        }
+                    });
+                }
+            )
             ->when($branchId !== null, fn ($q) => $q->where('courses.branch_id', $branchId)->where('users.branch_id', $branchId))
             ->select('course_teacher_assignments.*', 'courses.title as course_title', 'users.name as teacher_name', 'users.email as teacher_email')
             ->orderBy('courses.title')->paginate(30);
@@ -78,6 +105,25 @@ class CourseTeacherAssignmentController extends Controller
             );
             abort_unless((bool) $teacher->is_active && $hasTeacherRole, 422, 'Select an active teacher account.');
 
+            $teacherProfile = null;
+            if (app(PluginManager::class)->isEnabled('teacher-management') && Schema::hasTable('teachers')) {
+                $profileQuery = DB::table('teachers')->where('user_id', $teacherId);
+                if (Schema::hasColumn('teachers', 'deleted_at')) {
+                    $profileQuery->whereNull('deleted_at');
+                }
+                $teacherProfile = $profileQuery->lockForUpdate()->first();
+                abort_unless(
+                    $teacherProfile
+                        && (!Schema::hasColumn('teachers', 'is_active') || (bool) $teacherProfile->is_active),
+                    422,
+                    'Select a teacher with an active teacher profile.'
+                );
+            }
+
+            $teacherBranchId = $teacherProfile && $teacherProfile->branch_id !== null
+                ? (int) $teacherProfile->branch_id
+                : ($teacher->branch_id !== null ? (int) $teacher->branch_id : null);
+
             $course = DB::table('courses')->where('id', $data['course_id'])->whereNull('deleted_at')
                 ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
                 ->lockForUpdate()
@@ -85,9 +131,9 @@ class CourseTeacherAssignmentController extends Controller
             abort_unless($course, 404, 'Course not found in your assigned branch.');
 
             if ($branchId !== null) {
-                abort_unless((int) $course->branch_id === $branchId && (int) $teacher->branch_id === $branchId, 404, 'Course and teacher must belong to your assigned branch.');
+                abort_unless((int) $course->branch_id === $branchId && $teacherBranchId === $branchId, 404, 'Course and teacher must belong to your assigned branch.');
             }
-            abort_if($course->branch_id !== null && (int) $teacher->branch_id !== (int) $course->branch_id, 422, 'Teacher and course must belong to the same branch.');
+            abort_if($course->branch_id !== null && $teacherBranchId !== (int) $course->branch_id, 422, 'Teacher and course must belong to the same branch.');
 
             DB::table('course_teacher_assignments')->updateOrInsert(
                 ['course_id' => $course->id, 'teacher_user_id' => $teacher->id],
