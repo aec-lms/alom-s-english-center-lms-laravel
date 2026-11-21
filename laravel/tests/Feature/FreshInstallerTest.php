@@ -578,6 +578,174 @@ class FreshInstallerTest extends TestCase
         }
     }
 
+    public function test_two_real_php_workers_serialize_fresh_installation_against_one_mysql_database(): void
+    {
+        if (config('database.default') !== 'mysql') {
+            $this->markTestSkipped('The real MySQL installer concurrency regression runs only in the MySQL 8 CI job.');
+        }
+        if (!function_exists('proc_open') || !function_exists('proc_close')) {
+            $this->markTestSkipped('The PHP process control extension is required for the installer concurrency regression.');
+        }
+
+        $adminUsername = (string) getenv('AEC_TEST_MYSQL_ADMIN_USERNAME');
+        $adminPassword = (string) getenv('AEC_TEST_MYSQL_ADMIN_PASSWORD');
+        if ($adminUsername === '' || $adminPassword === '') {
+            $this->markTestSkipped('Disposable MySQL database admin credentials are not configured for CI.');
+        }
+
+        $host = (string) config('database.connections.mysql.host', '127.0.0.1');
+        $port = (string) config('database.connections.mysql.port', '3306');
+        $databaseName = 'aec_installer_race_' . bin2hex(random_bytes(6));
+        $adminPdo = null;
+        $root = sys_get_temp_dir() . '/aec-installer-mysql-concurrency-' . bin2hex(random_bytes(8));
+        $lockDirectory = $root . '/locks';
+        $privateDirectory = $root . '/private';
+        $backupDirectory = $root . '/backups';
+        $envPath = $root . '/.env';
+        $gatePath = $root . '/start.gate';
+        $workerPath = base_path('tests/Support/fresh-installer-worker.php');
+        mkdir($lockDirectory, 0700, true);
+        file_put_contents($envPath, "APP_KEY=\n");
+
+        $processes = [];
+        $pipesByWorker = [];
+        try {
+            $adminPdo = new PDO(
+                "mysql:host={$host};port={$port};charset=utf8mb4",
+                $adminUsername,
+                $adminPassword,
+                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+            );
+            $adminPdo->exec("CREATE DATABASE `{$databaseName}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+
+            $this->assertFileExists($workerPath, 'The real PHP installer worker must be present.');
+            $baseEnvironment = [
+                'PATH' => (string) (getenv('PATH') ?: ''),
+                'HOME' => (string) (getenv('HOME') ?: sys_get_temp_dir()),
+            ];
+
+            for ($worker = 1; $worker <= 2; $worker++) {
+                $workerEnvironment = array_merge($baseEnvironment, [
+                    'APP_ENV' => 'testing',
+                    'APP_DEBUG' => 'false',
+                    'APP_URL' => 'https://aec-mysql-concurrent.test',
+                    'APP_KEY' => 'base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+                    'AEC_TEST_EXPLICIT_PLUGIN_BOOT' => '0',
+                    'DB_CONNECTION' => 'mysql',
+                    'DB_HOST' => $host,
+                    'DB_PORT' => $port,
+                    'DB_DATABASE' => $databaseName,
+                    'DB_USERNAME' => $adminUsername,
+                    'DB_PASSWORD' => $adminPassword,
+                    'CACHE_STORE' => 'file',
+                    'CACHE_DRIVER' => 'file',
+                    'SESSION_DRIVER' => 'file',
+                    'QUEUE_CONNECTION' => 'sync',
+                    'AEC_INSTALL_LOCK_PATH' => $lockDirectory . '/installed.lock',
+                    'AEC_ENV_FILE_PATH' => $envPath,
+                    'AEC_PRIVATE_STORAGE_PATH' => $privateDirectory,
+                    'AEC_BACKUP_PATH' => $backupDirectory,
+                    'AEC_INSTALLER_READY_FILE' => $root . '/worker-' . $worker . '.ready',
+                    'AEC_INSTALLER_START_GATE' => $gatePath,
+                ]);
+
+                $pipes = [];
+                $process = proc_open(
+                    [PHP_BINARY, $workerPath],
+                    [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+                    $pipes,
+                    base_path(),
+                    $workerEnvironment
+                );
+                $this->assertIsResource($process, 'Unable to start a real MySQL installer worker.');
+                fclose($pipes[0]);
+                $processes[] = $process;
+                $pipesByWorker[] = $pipes;
+            }
+
+            $readyDeadline = microtime(true) + 15;
+            while (microtime(true) < $readyDeadline) {
+                if (is_file($root . '/worker-1.ready') && is_file($root . '/worker-2.ready')) {
+                    break;
+                }
+                usleep(10000);
+            }
+            $this->assertFileExists($root . '/worker-1.ready', 'First MySQL PHP worker did not reach the shared start barrier.');
+            $this->assertFileExists($root . '/worker-2.ready', 'Second MySQL PHP worker did not reach the shared start barrier.');
+
+            file_put_contents($gatePath, 'go', LOCK_EX);
+
+            $outcomes = [];
+            foreach ($processes as $index => $process) {
+                $stdout = stream_get_contents($pipesByWorker[$index][1]);
+                $stderr = stream_get_contents($pipesByWorker[$index][2]);
+                fclose($pipesByWorker[$index][1]);
+                fclose($pipesByWorker[$index][2]);
+                $exitCode = proc_close($process);
+
+                $decoded = json_decode(trim((string) $stdout), true);
+                $this->assertSame(0, $exitCode, 'MySQL installer worker exited abnormally: ' . (string) $stderr);
+                $this->assertIsArray($decoded, 'MySQL installer worker did not return JSON. stdout=' . (string) $stdout . ' stderr=' . (string) $stderr);
+                $outcomes[] = $decoded;
+            }
+
+            $successful = array_values(array_filter($outcomes, static fn (array $outcome): bool => ($outcome['success'] ?? false) === true));
+            $rejected = array_values(array_filter($outcomes, static fn (array $outcome): bool => ($outcome['success'] ?? true) === false));
+
+            $this->assertCount(1, $successful, 'Exactly one real PHP worker must complete the MySQL fresh installation.');
+            $this->assertCount(1, $rejected, 'The competing MySQL PHP worker must observe the install lock.');
+            $this->assertStringContainsString('already installed', strtolower((string) ($rejected[0]['message'] ?? '')));
+
+            $appPdo = new PDO(
+                "mysql:host={$host};port={$port};dbname={$databaseName};charset=utf8mb4",
+                $adminUsername,
+                $adminPassword,
+                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+            );
+            $this->assertSame(1, (int) $appPdo->query("SELECT COUNT(*) FROM users WHERE email = 'concurrent-admin@aec.test'")->fetchColumn());
+            $this->assertGreaterThan(0, (int) $appPdo->query('SELECT COUNT(*) FROM migrations')->fetchColumn());
+            $this->assertFileExists($lockDirectory . '/installed.lock');
+            $this->assertFileDoesNotExist($lockDirectory . '/installed.lock.in-progress');
+        } finally {
+            foreach ($processes as $index => $process) {
+                if (is_resource($process)) {
+                    @proc_terminate($process);
+                    if (isset($pipesByWorker[$index])) {
+                        foreach ([1, 2] as $pipeIndex) {
+                            if (isset($pipesByWorker[$index][$pipeIndex]) && is_resource($pipesByWorker[$index][$pipeIndex])) {
+                                @fclose($pipesByWorker[$index][$pipeIndex]);
+                            }
+                        }
+                    }
+                    @proc_close($process);
+                }
+            }
+
+            if ($adminPdo instanceof PDO) {
+                try {
+                    $adminPdo->exec("DROP DATABASE IF EXISTS `{$databaseName}`");
+                } catch (Throwable) {
+                    // Preserve the original test failure; the schema is disposable CI data.
+                }
+            }
+
+            foreach (glob($root . '/*') ?: [] as $entry) {
+                if (is_dir($entry) && !is_link($entry)) {
+                    foreach (glob($entry . '/*') ?: [] as $child) {
+                        if (is_file($child) || is_link($child)) {
+                            @unlink($child);
+                        }
+                    }
+                    @rmdir($entry);
+                } else {
+                    @unlink($entry);
+                }
+            }
+            @unlink($envPath);
+            @rmdir($root);
+        }
+    }
+
     public function test_fresh_installer_rejects_symlinked_lock_directory_and_mutex_file(): void
     {
         $targetDirectory = sys_get_temp_dir() . '/aec-installer-lock-target-' . uniqid('', true);
