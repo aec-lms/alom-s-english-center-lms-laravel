@@ -484,9 +484,6 @@ class ScormRuntimeController extends Controller
                     && (int) $attempt->scorm_package_id === (int) $attemptIdentity->scorm_package_id,
                     409,
                     'SCORM attempt identity changed while committing.');
-                abort_unless(in_array($attempt->completion_state, ['in_progress', 'suspended'], true), 409, 'SCORM attempt is no longer writable.');
-                abort_unless((int) $attempt->state_version === (int) $validated['version'], 409, 'This SCORM attempt changed in another tab. Reload the learner session before continuing.');
-
                 $session = DB::table('scorm_attempt_sessions')
                     ->where('id', $sessionIdentity->id)
                     ->where('scorm_attempt_id', $attempt->id)
@@ -508,6 +505,9 @@ class ScormRuntimeController extends Controller
 
                     return $cachedResponse + ['replayed' => true];
                 }
+
+                abort_unless(in_array($attempt->completion_state, ['in_progress', 'suspended'], true), 409, 'SCORM attempt is no longer writable.');
+                abort_unless((int) $attempt->state_version === (int) $validated['version'], 409, 'This SCORM attempt changed in another tab. Reload the learner session before continuing.');
 
                 [$user] = $this->assertAttemptEntitled($attempt);
 
