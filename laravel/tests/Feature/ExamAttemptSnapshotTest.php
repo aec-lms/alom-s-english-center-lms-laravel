@@ -31,7 +31,7 @@ class ExamAttemptSnapshotTest extends TestCase
         $this->actingAs($student)->post("/exams/{$exam->id}/attempt", [
             'attempt_id' => $attemptId,
             'answers' => $answers,
-        ])->assertStatus(422);
+        ])->assertRedirect()->assertSessionHasErrors('answers');
 
         $token = $student->createToken('bounded-exam-answer-payload')->plainTextToken;
         $this->withHeader('Authorization', 'Bearer ' . $token)
