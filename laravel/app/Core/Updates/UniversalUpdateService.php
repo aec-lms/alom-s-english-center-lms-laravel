@@ -77,11 +77,21 @@ class UniversalUpdateService
                 throw new RuntimeException('Update archive exceeds the allowed uncompressed size.');
             }
 
-            $attributes = (int) ($stat['external_attributes'] ?? 0);
-            $fileType = ($attributes >> 16) & 0xF000;
-            if ($fileType === 0xA000) {
-                $zip->close();
-                throw new RuntimeException("Symlink entry rejected in update ZIP: {$entryName}");
+            $opsys = 0;
+            $externalAttributes = 0;
+            if ($zip->getExternalAttributesIndex($i, $opsys, $externalAttributes)
+                && $opsys === ZipArchive::OPSYS_UNIX
+            ) {
+                // statIndex() does not expose Unix external attributes.
+                $fileType = ($externalAttributes >> 16) & 0170000;
+                if ($fileType === 0120000) {
+                    $zip->close();
+                    throw new RuntimeException("Symlink entry rejected in update ZIP: {$entryName}");
+                }
+                if ($fileType !== 0 && $fileType !== 0100000 && $fileType !== 0040000) {
+                    $zip->close();
+                    throw new RuntimeException("Special file entry rejected in update ZIP: {$entryName}");
+                }
             }
         }
 
@@ -403,34 +413,77 @@ class UniversalUpdateService
 
     private function extractToStaging(string $packagePath, string $stagingDir): void
     {
-        if (!is_dir($stagingDir)) {
-            mkdir($stagingDir, 0755, true);
+        if (!is_dir($stagingDir) && !mkdir($stagingDir, 0700, true) && !is_dir($stagingDir)) {
+            throw new RuntimeException('Unable to create private update staging directory.');
         }
         $zip = new ZipArchive();
         if ($zip->open($packagePath) !== true) {
             throw new RuntimeException('Unable to open signed update ZIP for staging.');
         }
 
-        for ($i = 0; $i < $zip->numFiles; $i++) {
-            $entry = (string) $zip->getNameIndex($i);
-            $this->assertSafeZipEntryPath($entry);
-            $dest = $stagingDir . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $entry);
-            if (str_ends_with($entry, '/')) {
-                if (!is_dir($dest)) {
-                    mkdir($dest, 0755, true);
+        $totalBytes = 0;
+        try {
+            for ($i = 0; $i < $zip->numFiles; $i++) {
+                $entry = (string) $zip->getNameIndex($i);
+                $this->assertSafeZipEntryPath($entry);
+
+                $opsys = 0;
+                $externalAttributes = 0;
+                if ($zip->getExternalAttributesIndex($i, $opsys, $externalAttributes)
+                    && $opsys === ZipArchive::OPSYS_UNIX
+                ) {
+                    $fileType = ($externalAttributes >> 16) & 0170000;
+                    if ($fileType === 0120000
+                        || ($fileType !== 0 && $fileType !== 0100000 && $fileType !== 0040000)) {
+                        throw new RuntimeException("Unsafe special file entry in update ZIP: {$entry}");
+                    }
                 }
-                continue;
+
+                $stat = $zip->statIndex($i);
+                $size = (int) ($stat['size'] ?? 0);
+                $totalBytes += $size;
+                if ($size > 268435456 || $totalBytes > 1073741824) {
+                    throw new RuntimeException('Update archive exceeds the allowed uncompressed size.');
+                }
+
+                $dest = $stagingDir . DIRECTORY_SEPARATOR . str_replace(['/', '\\\\'], DIRECTORY_SEPARATOR, $entry);
+                if (str_ends_with($entry, '/')) {
+                    if (!is_dir($dest) && !mkdir($dest, 0700, true) && !is_dir($dest)) {
+                        throw new RuntimeException("Unable to create update staging directory for {$entry}");
+                    }
+                    continue;
+                }
+                $parent = dirname($dest);
+                if (!is_dir($parent) && !mkdir($parent, 0700, true) && !is_dir($parent)) {
+                    throw new RuntimeException("Unable to create update staging directory for {$entry}");
+                }
+
+                // Avoid materializing large ZIP members in PHP memory. Release
+                // archives allow up to 256 MiB per entry, which exceeds many cPanel
+                // memory_limit configurations.
+                $input = $zip->getStream($entry);
+                if (!is_resource($input)) {
+                    throw new RuntimeException("Unable to open update archive entry: {$entry}");
+                }
+                $output = fopen($dest, 'xb');
+                if ($output === false) {
+                    fclose($input);
+                    throw new RuntimeException("Unable to create staged update file: {$entry}");
+                }
+                try {
+                    $copied = stream_copy_to_stream($input, $output, $size + 1);
+                    if ($copied !== $size || !fflush($output)) {
+                        throw new RuntimeException("Unable to stage update file completely: {$entry}");
+                    }
+                } finally {
+                    fclose($input);
+                    fclose($output);
+                }
+                @chmod($dest, 0600);
             }
-            $parent = dirname($dest);
-            if (!is_dir($parent)) {
-                mkdir($parent, 0755, true);
-            }
-            $contents = $zip->getFromIndex($i);
-            if ($contents !== false) {
-                file_put_contents($dest, $contents);
-            }
+        } finally {
+            $zip->close();
         }
-        $zip->close();
     }
 
     private function resolveTargetDirectory(string $targetType, string $targetSlug): ?string
