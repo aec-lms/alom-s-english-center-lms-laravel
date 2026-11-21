@@ -306,7 +306,7 @@ class ExamController extends Controller
 
         $validated = $request->validate([
             'attempt_id' => ['required', 'integer'],
-            'answers' => ['required', 'array'],
+            'answers' => ['required', 'array', 'max:500'],
             'answers.*' => ['nullable', 'integer', 'min:0'],
         ]);
 
@@ -454,7 +454,7 @@ class ExamController extends Controller
         abort_if($exam->ends_at && now()->greaterThanOrEqualTo($exam->ends_at), 403, 'The exam submission window has closed.');
 
         $validated = $request->validate([
-            'answers' => ['required', 'array'],
+            'answers' => ['required', 'array', 'max:500'],
             'answers.*' => ['nullable', 'integer', 'min:0'],
         ]);
 
