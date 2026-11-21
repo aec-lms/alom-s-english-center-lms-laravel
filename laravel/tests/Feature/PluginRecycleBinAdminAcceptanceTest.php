@@ -226,9 +226,10 @@ class PluginRecycleBinAdminAcceptanceTest extends TestCase
             $this->assertTrue($manager->isInstalled($slug));
             $this->assertTrue($manager->isEnabled($slug));
 
-            // File::put returning a positive short count simulates a truncated
-            // metadata file; the archive must not be committed or orphaned.
-            File::partialMock()->shouldReceive('put')->once()->andReturn(1);
+            // Simulate a short write through the same handle-based writer used in production.
+            $manager = \\Mockery::mock(PluginManager::class, [app(\\App\\Core\\Security\\AuditLogger::class)])->makePartial();
+            $manager->shouldAllowMockingProtectedMethods()
+                ->shouldReceive('writeAllBytesToHandle')->once()->andReturn(1);
 
             try {
                 $manager->deleteToRecycleBin($slug);
@@ -262,9 +263,11 @@ class PluginRecycleBinAdminAcceptanceTest extends TestCase
             $manager->syncCatalog();
             $manager->install($slug);
 
+            $manager = \\Mockery::mock(PluginManager::class, [app(\\App\\Core\\Security\\AuditLogger::class)])->makePartial();
+            $manager->shouldAllowMockingProtectedMethods()
+                ->shouldReceive('writeAllBytesToHandle')->once()->andReturn(1);
             $moveCalls = 0;
             $file = File::partialMock();
-            $file->shouldReceive('put')->once()->andReturn(1);
             $file->shouldReceive('moveDirectory')->twice()->andReturnUsing(
                 function (string $from, string $to) use (&$moveCalls): bool {
                     $moveCalls++;
