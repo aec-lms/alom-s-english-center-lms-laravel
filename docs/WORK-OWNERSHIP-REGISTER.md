@@ -311,3 +311,10 @@ This update supersedes the 2026-11-20 point-in-time rows above for the PRs liste
 ### 2026-11-21 project-owner Ready-for-Review rule
 
 This operating rule supersedes historical status snapshots and any older Draft guidance in this register: all active pull requests must remain open and Ready for Review, even when blocked. Ready for Review does not mean the work is complete, approved, mergeable under protection rules, or authorized to merge. Record blockers explicitly and keep working them down; merge only after exact-head checks, independent approval, conflict resolution and enforced repository policy are verified.
+
+
+### 2026-11-21 mandatory per-plugin implementation acceptance
+
+The project owner has explicitly required implementation-level acceptance for every plugin. The canonical checklist and evidence-record template are in [docs/PLUGIN-FEATURE-ACCEPTANCE-MATRIX.md](PLUGIN-FEATURE-ACCEPTANCE-MATRIX.md), under **Mandatory implementation-level acceptance**. Each plugin must independently evidence source-code workflow, routes/API, permissions and branch/record scope, database/migrations, UI/responsive/accessibility, named tests and exact-head CI, integrations/provider contracts, failure handling/recovery, and owner/reviewer/release sign-off.
+
+Manifest presence, a named test, issue closure, PR creation, Ready-for-Review state, or green generic CI is not functional acceptance. Missing evidence is BLOCKED; N/A requires a reason. Do not mark any plugin Finished/Accepted/Complete or merge/release it until all applicable gates pass, formal independent approval is recorded, and external/manual/staging gates are signed off. Upgrade the 60-plugin inventory one plugin at a time; do not bulk-promote status. This rule supersedes weaker or ambiguous acceptance language in older register entries.
