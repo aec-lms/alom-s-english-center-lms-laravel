@@ -162,7 +162,7 @@ Before recommending merge, the primary owner must verify and record all of the f
 5. Independent review by a different maintainer is recorded and all blocking review comments are resolved. Author self-review or a COMMENTED review is not an approval.
 6. PR body, tests, docs and this register accurately reflect the final scope, owner, dependencies and verification evidence.
 
-**Notification flow:** when all gates pass, the primary owner posts a concise completion note on the PR with exact head SHA, CI links/results, independent reviewer, screenshots/evidence and any accepted non-blocking follow-ups; then notifies the project owner that the PR is ready to merge. The project owner/authorized maintainer performs or explicitly authorizes the merge using repository policy (required approvals, branch protection and merge queue if enabled). If any gate is unmet, keep the PR Draft/open and report the specific blocker—never claim complete or recommend merge.
+**Notification flow:** when all gates pass, the primary owner posts a concise completion note on the PR with exact head SHA, CI links/results, independent reviewer, screenshots/evidence and any accepted non-blocking follow-ups; then notifies the project owner that the PR is ready to merge. The project owner/authorized maintainer performs or explicitly authorizes the merge using repository policy (required approvals, branch protection and merge queue if enabled). If any gate is unmet, keep the PR open and non-Draft, clearly report the specific blocker, and do not claim complete or recommend merge. Work must remain visible in a normal PR; non-Draft status is not approval or merge readiness.
 
 
 ## 2026-11-20 current-mainline pull-request reconciliation
@@ -392,3 +392,10 @@ This section corrects the earlier point-in-time table above. The older SHA rows 
 ### Repository-wide merge controls
 
 The LMS ruleset was previously observed disabled with zero required approvals/status checks. Recheck repository settings before any merge. Exact-head green CI, mergeable metadata, reviewer requests, Ready-for-Review status, or a complete documentation checklist do not substitute for enforced branch protection and a formal independent approval. External payment/provider sandbox, cPanel staging/restore, human accessibility and authorized load tests remain separate release gates.
+
+
+## 2026-11-21 repository-wide pull-request visibility checkpoint
+
+A fresh GitHub search of this repository returned 29 open pull requests. Each was individually fetched and confirmed `draft: false`; no open PR is currently in Draft. This is a visibility/status fact only, not an acceptance or merge claim. Continue doing implementation work directly on the relevant PR branch, keep the PR open and non-Draft, and record exact-head test/review blockers. Do not create a separate Draft PR for follow-up fixes.
+
+The CodeQL action pinning work is canonical in PR #388. Other PRs that still reference mutable action tags may fail CodeQL until the canonical pinning change is integrated; do not create duplicate workflow-pin changes in every feature PR. PR #397 must retain `.github/workflows/codeql.yml`; its accidental deletion was restored in commit `1dab0c76eb1444a6948afcbfbb03ac09e3ffcc02`.
