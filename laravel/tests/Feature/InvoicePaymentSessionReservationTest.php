@@ -185,7 +185,7 @@ class InvoicePaymentSessionReservationTest extends TestCase
 
         $settled = app(StripeGatewayService::class)->verifyAndSettleWebhook(
             $rawBody,
-            't=' . $timestamp . ',v1=' . $signature,
+            't=' . $timestamp . ',v1=' . str_repeat('0', 64) . ',v1=' . $signature,
         );
 
         $this->assertSame('settled', $settled->status);
