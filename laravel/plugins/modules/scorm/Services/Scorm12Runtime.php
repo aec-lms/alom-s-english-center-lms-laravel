@@ -151,7 +151,7 @@ class Scorm12Runtime
         if (!$this->initialized || $this->finished) {
             return $this->fail('301');
         }
-        if (in_array($element, self::READ_ONLY, true)) {
+        if (in_array($element, self::READ_ONLY, true) || $this->isReadOnlyDynamicElement($element)) {
             return $this->fail('403');
         }
         if (in_array($element, self::WRITE_ONLY, true) && $element !== 'cmi.core.exit' && $element !== 'cmi.core.session_time') {
