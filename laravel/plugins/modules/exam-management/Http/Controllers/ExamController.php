@@ -621,7 +621,7 @@ class ExamController extends Controller
         });
     }
 
-private function buildExamSnapshot(Exam $exam): array
+    private function buildExamSnapshot(Exam $exam): array
     {
         $questions = $exam->questions()->orderBy('id')->lockForUpdate()->get();
         abort_if($questions->isEmpty(), 404, 'This exam has no questions yet.');
@@ -649,7 +649,7 @@ private function buildExamSnapshot(Exam $exam): array
         return $snapshot;
     }
 
-private function isValidExamSnapshot(mixed $snapshot): bool
+    private function isValidExamSnapshot(mixed $snapshot): bool
     {
         $isFiniteNonNegativeNumber = static fn (mixed $value): bool => is_numeric($value)
             && is_finite((float) $value)
@@ -714,7 +714,7 @@ private function isValidExamSnapshot(mixed $snapshot): bool
         return true;
     }
 
-private function validatedAttemptSnapshot(ExamAttempt $attempt, Request $request): array
+    private function validatedAttemptSnapshot(ExamAttempt $attempt, Request $request): array
     {
         $snapshot = $attempt->exam_snapshot;
 
@@ -740,7 +740,7 @@ private function validatedAttemptSnapshot(ExamAttempt $attempt, Request $request
         return $snapshot;
     }
 
-private function assertLockedStudentExamEligibility(
+    private function assertLockedStudentExamEligibility(
         Exam $lockedExam,
         object $student,
         int $unpublishedStatus,
@@ -778,7 +778,7 @@ private function assertLockedStudentExamEligibility(
         }
     }
 
-private function lockStudentBranchContext(object $student): ?int
+    private function lockStudentBranchContext(object $student): ?int
     {
         $userId = (int) $student->id;
         $user = DB::table('users')->where('id', $userId)->lockForUpdate()->first();
