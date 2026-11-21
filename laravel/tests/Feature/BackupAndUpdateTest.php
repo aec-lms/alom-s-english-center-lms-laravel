@@ -479,7 +479,7 @@ class BackupAndUpdateTest extends TestCase
         $this->assertTrue($zip->close());
 
         $stagingDir = storage_path('app/test-update-stage-' . bin2hex(random_bytes(6)));
-        $extract = new \\ReflectionMethod(UniversalUpdateService::class, 'extractToStaging');
+        $extract = new \ReflectionMethod(UniversalUpdateService::class, 'extractToStaging');
         $extract->setAccessible(true);
 
         try {
