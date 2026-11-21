@@ -87,6 +87,15 @@ class LearningPathAccess
             abort_unless($currentBranchId !== null && (int) $currentBranchId === (int) $courseBranchId,
                 403, 'Course is outside your current student branch.');
         }
+        $currentEnrollment = DB::table('enrollments')
+            ->where('user_id', $userId)
+            ->where('course_id', $courseId)
+            ->whereIn('status', ['active', 'completed'])
+            ->first();
+        if ($currentEnrollment?->branch_id !== null) {
+            abort_unless($currentBranchId !== null && (int) $currentBranchId === (int) $currentEnrollment->branch_id,
+                403, 'Enrollment is outside your current student branch.');
+        }
 
         $memberships = DB::table('learning_path_courses as current')
             ->join('learning_path_enrollments as path_enrollment', 'path_enrollment.learning_path_id', '=', 'current.learning_path_id')
