@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\View\View;
 use Plugins\Modules\Scorm\Services\Scorm12Runtime;
 use InvalidArgumentException;
-use Symfony\\Component\\HttpKernel\\Exception\\HttpExceptionInterface;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpFoundation\Response;
 
 class ScormRuntimeController extends Controller
