@@ -437,18 +437,21 @@ PHP;
 
         do {
             $transaction = $monitor->selectOne(
-                'SELECT trx_state FROM information_schema.innodb_trx WHERE trx_mysql_thread_id = ?',
+                'SELECT 1 AS lock_wait FROM performance_schema.data_lock_waits AS waits '
+                . 'INNER JOIN performance_schema.threads AS threads '
+                . 'ON threads.thread_id = waits.requesting_thread_id '
+                . 'WHERE threads.processlist_id = ? LIMIT 1',
                 [$threadId]
             );
 
-            if (strtoupper((string) ($transaction->trx_state ?? '')) === 'LOCK WAIT') {
+            if ($transaction !== null) {
                 return;
             }
 
             usleep(25_000);
         } while (microtime(true) < $deadline);
 
-        $this->fail('The concurrent assessment request never entered an InnoDB row-lock wait.');
+        $this->fail('The concurrent assessment request never entered a Performance Schema row-lock wait.');
     }
 
     private function assertMysqlLockTimeout(callable $statement, string $message): void
