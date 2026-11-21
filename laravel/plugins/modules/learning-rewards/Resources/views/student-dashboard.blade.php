@@ -38,8 +38,8 @@
         <h2 class="h5">Privacy</h2>
         <form method="POST" action="{{ route('plugins.learning-rewards.privacy') }}">
             @csrf @method('PATCH')
-            <div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="leaderboard_opt_out" value="1" id="leaderboardOptOut" @checked((bool) ($profile->leaderboard_opt_out ?? false))><label class="form-check-label" for="leaderboardOptOut">Hide me from leaderboards</label></div>
-            <div class="form-check mb-3"><input class="form-check-input" type="checkbox" name="profile_public" value="1" id="profilePublic" @checked((bool) ($profile->profile_public ?? true))><label class="form-check-label" for="profilePublic">Show my achievement profile</label></div>
+            <input type="hidden" name="leaderboard_opt_out" value="0"><div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="leaderboard_opt_out" value="1" id="leaderboardOptOut" @checked((bool) ($profile->leaderboard_opt_out ?? false))><label class="form-check-label" for="leaderboardOptOut">Hide me from leaderboards</label></div>
+            <input type="hidden" name="profile_public" value="0"><div class="form-check mb-3"><input class="form-check-input" type="checkbox" name="profile_public" value="1" id="profilePublic" @checked((bool) ($profile->profile_public ?? true))><label class="form-check-label" for="profilePublic">Show my achievement profile</label></div>
             <button class="btn btn-primary" type="submit">Save privacy settings</button>
         </form>
     </div></div>
