@@ -57,9 +57,13 @@ class ScormRuntimeController extends Controller
         $contentOrigin = rtrim((string) config('scorm.content_origin', ''), '/');
         $contentHost = parse_url($contentOrigin, PHP_URL_HOST);
         $contentScheme = parse_url($contentOrigin, PHP_URL_SCHEME);
+        $contentParts = parse_url($contentOrigin);
         $appOrigin = rtrim((string) config('app.url'), '/');
         $appHost = parse_url($appOrigin, PHP_URL_HOST);
         $appScheme = parse_url($appOrigin, PHP_URL_SCHEME);
+        abort_unless(is_array($contentParts) && in_array($contentScheme, ['http', 'https'], true)
+            && !isset($contentParts['user'], $contentParts['pass'], $contentParts['path'], $contentParts['query'], $contentParts['fragment'], $contentParts['port']), 503,
+            'SCORM_CONTENT_ORIGIN must be a scheme and hostname only (no path, credentials or port).');
         abort_unless(is_string($contentHost) && $contentHost !== '' && $contentHost !== $appHost, 503,
             'Configure SCORM_CONTENT_ORIGIN on a separate content subdomain before launching SCORM packages.');
         abort_unless($appScheme !== 'https' || $contentScheme === 'https', 503,
@@ -193,6 +197,8 @@ class ScormRuntimeController extends Controller
         if (!is_array($savedData)) {
             $savedData = [];
         }
+        // Session time is per launch session; total time is supplied separately as read-only CMI data.
+        $savedData['cmi.core.session_time'] = '0000:00:00.00';
 
         $response = response()->view('scorm::content-player', [
             'title' => $package->title,
