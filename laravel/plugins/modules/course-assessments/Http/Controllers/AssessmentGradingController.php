@@ -151,11 +151,12 @@ class AssessmentGradingController extends Controller
         }
 
         abort_unless($actor->hasRole('teacher'), 403);
-        // Teacher lifecycle writes update the profile before the linked user.
-        // Keep that lock order, then re-read the account and current role pivot.
+        // Match Teacher Management's canonical lifecycle order: lock the
+        // linked User row, then its teacher role pivot, then the Teacher profile.
+        // This prevents grading from deadlocking against account/profile updates.
+        $account = $this->teacherAccount($actor, true);
         $profile = $this->teacherProfile($actor, true);
         abort_unless($profile && (bool) $profile->is_active, 403, 'An active teacher profile is required.');
-        $account = $this->teacherAccount($actor, true);
         $this->assertTeacherBranchConsistency($account, $profile);
 
         $branchId = $profile->branch_id === null ? null : (int) $profile->branch_id;
