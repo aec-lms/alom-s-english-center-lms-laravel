@@ -1,13 +1,13 @@
 @extends('layouts.app')
 
-@section('title', 'Learning Paths')
+@section('title', __('Learning Paths — Administration'))
 
 @section('content')
 <div class="mx-auto max-w-7xl space-y-6 px-4 py-8">
     <header>
-        <p class="text-sm font-semibold uppercase tracking-wide text-indigo-600">Academic Management</p>
-        <h1 class="mt-1 text-3xl font-extrabold text-slate-900">Learning Paths</h1>
-        <p class="mt-2 text-sm text-slate-600">Build ordered learning journeys. Learners must complete each course before the next step unlocks.</p>
+        <p class="text-sm font-semibold uppercase tracking-wide text-indigo-600">{{ __('Academic Management') }}</p>
+        <h1 class="mt-1 text-3xl font-extrabold text-slate-900">{{ __('Learning Path Administration') }}</h1>
+        <p class="mt-2 text-sm text-slate-600">{{ __('Build ordered learning journeys. Learners must complete each course before the next step unlocks.') }}</p>
     </header>
     @if (session('status')) <div class="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800">{{ session('status') }}</div> @endif
     @if ($errors->any()) <div class="rounded-xl bg-rose-50 p-4 text-sm text-rose-800">{{ $errors->first() }}</div> @endif
@@ -16,14 +16,14 @@
         <h2 class="text-lg font-bold text-slate-900">{{ __('Create a learning path') }}</h2>
         <form method="POST" action="{{ route('plugins.learning-paths.admin.store') }}" class="mt-4 grid gap-4 md:grid-cols-2">
             @csrf
-            <label class="text-sm font-medium">Path title<input name="title" required maxlength="180" class="mt-1 w-full rounded-lg border-slate-300" value="{{ old('title') }}"></label>
+            <label class="text-sm font-medium">{{ __('Path title') }}<input name="title" required maxlength="180" class="mt-1 w-full rounded-lg border-slate-300" value="{{ old('title') }}"></label>
             <label class="text-sm font-medium">{{ __('Status') }}<select name="status" class="mt-1 w-full rounded-lg border-slate-300"><option value="draft">{{ __('Draft') }}</option><option value="published">{{ __('Published') }}</option></select></label>
             <label class="text-sm font-medium md:col-span-2">{{ __('Description') }}<textarea name="description" rows="2" maxlength="5000" class="mt-1 w-full rounded-lg border-slate-300">{{ old('description') }}</textarea></label>
             @unless (auth()->user()->hasRole('branch_manager'))
                 <label class="text-sm font-medium">{{ __('Branch (optional)') }}<select name="branch_id" class="mt-1 w-full rounded-lg border-slate-300"><option value="">{{ __('All branches') }}</option>@foreach ($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select></label>
             @endunless
 <div class="md:col-span-2" data-learning-path-steps>
-                <p class="mb-2 text-sm font-medium">{{ __('Course sequence (use ↑ and ↓ to set the order)') }}</p>
+                <p class="mb-2 text-sm font-medium">{{ __('{{ __('Course sequence (use ↑ and ↓ to set the order)') }}') }}</p>
                 <div class="space-y-3" data-course-step-list>
                     @foreach ([1, 2] as $stepNumber)
                         <div class="flex items-end gap-2" data-course-step>
@@ -34,7 +34,7 @@
                 </div>
                 <template data-course-step-template>
                     <div class="flex items-end gap-2" data-course-step>
-                        <label class="flex-1 text-sm">Step <span data-step-number>3</span><select name="course_ids[]" required class="mt-1 w-full rounded-lg border-slate-300"><option value="">{{ __('Choose a course…') }}</option>@foreach ($courses as $course)<option value="{{ $course->id }}">{{ $course->title }} · #{{ $course->id }}</option>@endforeach</select></label>
+                        <label class="flex-1 text-sm">{{ __('Step') }} <span data-step-number>3</span><select name="course_ids[]" required class="mt-1 w-full rounded-lg border-slate-300"><option value="">{{ __('Choose a course…') }}</option>@foreach ($courses as $course)<option value="{{ $course->id }}">{{ $course->title }} · #{{ $course->id }}</option>@endforeach</select></label>
                         <div class="flex gap-1"><button type="button" data-move-up class="rounded border px-2 py-2 text-sm" aria-label="{{ __('Move step up') }}">↑</button><button type="button" data-move-down class="rounded border px-2 py-2 text-sm" aria-label="{{ __('Move step down') }}">↓</button><button type="button" data-remove-step class="rounded border px-2 py-2 text-sm" aria-label="{{ __('Remove step') }}">×</button></div>
                     </div>
                 </template>
@@ -92,7 +92,7 @@
                 </details>
             </article>
         @empty
-            <div class="rounded-2xl border border-dashed p-8 text-center text-sm text-slate-500">{{ __('No learning paths created yet.') }}</div>
+            <div class="rounded-2xl border border-dashed p-8 text-center text-sm text-slate-500">{{ __('{{ __('No learning paths created yet.') }}') }}</div>
         @endforelse
         {{ $paths->links() }}
     </section>
