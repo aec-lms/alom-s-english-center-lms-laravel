@@ -7,7 +7,6 @@ namespace Tests\Feature;
 use App\Core\Security\AuditLogger;
 use App\Models\AuditLog;
 use App\Models\User;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use RuntimeException;
@@ -56,10 +55,7 @@ class RequiredAuditLoggerTest extends TestCase
 
     public function test_required_audit_write_failure_rolls_back_the_enclosing_business_transaction(): void
     {
-        Schema::create('audit_required_atomicity_probe', function (Blueprint $table): void {
-            $table->id();
-            $table->string('value');
-        });
+        $user = User::factory()->create(['name' => 'Before audit failure']);
 
         AuditLog::creating(static function (): void {
             throw new RuntimeException('forced audit persistence failure');
@@ -67,8 +63,8 @@ class RequiredAuditLoggerTest extends TestCase
 
         try {
             try {
-                DB::transaction(function (): void {
-                    DB::table('audit_required_atomicity_probe')->insert(['value' => 'must-rollback']);
+                DB::transaction(function () use ($user): void {
+                    $user->refresh()->update(['name' => 'Must roll back']);
                     app(AuditLogger::class)->logRequired('finance.payout', 'payout', 'failure-injection');
                 });
                 $this->fail('Required audit write failure should abort the business transaction.');
@@ -76,10 +72,10 @@ class RequiredAuditLoggerTest extends TestCase
                 $this->assertSame('forced audit persistence failure', $exception->getMessage());
             }
 
-            $this->assertDatabaseCount('audit_required_atomicity_probe', 0);
+            $this->assertSame('Before audit failure', $user->fresh()->name);
         } finally {
             AuditLog::flushEventListeners();
-            Schema::dropIfExists('audit_required_atomicity_probe');
         }
     }
+
 }
