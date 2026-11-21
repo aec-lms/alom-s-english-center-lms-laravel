@@ -802,18 +802,18 @@ class BackupAndUpdateTest extends TestCase
         if (is_link($stagingRoot)) {
             unlink($stagingRoot);
         } elseif (is_dir($stagingRoot)) {
-            \\Illuminate\\Support\\Facades\\File::deleteDirectory($stagingRoot);
+            \Illuminate\Support\Facades\File::deleteDirectory($stagingRoot);
         }
 
         try {
             $this->assertTrue(symlink($outside, $stagingRoot));
-            $method = new \\ReflectionMethod(UniversalUpdateService::class, 'createPrivateStorageDirectory');
+            $method = new \ReflectionMethod(UniversalUpdateService::class, 'createPrivateStorageDirectory');
             $method->setAccessible(true);
 
             try {
                 $method->invoke(app(UniversalUpdateService::class), 'update-staging');
                 $this->fail('A symlinked update staging root must be rejected.');
-            } catch (\\RuntimeException $exception) {
+            } catch (\RuntimeException $exception) {
                 $this->assertSame('Private update storage root must not be a symbolic link.', $exception->getMessage());
             }
             $this->assertSame([], array_values(array_diff(scandir($outside) ?: [], ['.', '..'])));
