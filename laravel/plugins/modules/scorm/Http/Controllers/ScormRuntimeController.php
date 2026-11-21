@@ -19,11 +19,11 @@ use Symfony\Component\HttpFoundation\Response;
 
 class ScormRuntimeController extends Controller
 {
-    public function studentIndex(Request $request): View
+    public function studentIndex(Request $request, PluginManager $plugins): View
     {
         $actor = $request->user();
         abort_unless($actor && $actor->is_active && $actor->hasRole('student'), 403, 'An active student account is required.');
-        abort_unless(Schema::hasTable('courses') && Schema::hasTable('enrollments'), 503, 'Course Management is required to browse SCORM activities.');
+        abort_unless($plugins->isEnabled('course-management') && Schema::hasTable('courses') && Schema::hasTable('enrollments'), 503, 'Enable Course Management to browse SCORM activities.');
 
         $packages = DB::table('scorm_packages as p')
             ->join('courses as c', 'c.id', '=', 'p.course_id')
@@ -48,11 +48,11 @@ class ScormRuntimeController extends Controller
         return view('scorm::student.index', compact('packages'));
     }
 
-    public function launch(Request $request, int $package): View
+    public function launch(Request $request, PluginManager $plugins, int $package): View
     {
         $actor = $request->user();
         abort_unless($actor && $actor->is_active && $actor->hasRole('student'), 403, 'An active student account is required.');
-        abort_unless(Schema::hasTable('courses') && Schema::hasTable('enrollments'), 503, 'Course Management is required to launch SCORM content.');
+        abort_unless($plugins->isEnabled('course-management') && Schema::hasTable('courses') && Schema::hasTable('enrollments'), 503, 'Enable Course Management to launch SCORM content.');
 
         $contentOrigin = rtrim((string) config('scorm.content_origin', ''), '/');
         $contentHost = parse_url($contentOrigin, PHP_URL_HOST);
