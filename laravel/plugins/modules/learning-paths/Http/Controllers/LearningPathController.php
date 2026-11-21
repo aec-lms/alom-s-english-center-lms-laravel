@@ -36,8 +36,11 @@ class LearningPathController extends Controller
             ->when($isBranchManager, fn ($query) => $query->where('branch_id', $actor->branch_id))
             ->orderBy('title')
             ->get(['id', 'title', 'branch_id']);
+        $branches = Schema::hasTable('branches')
+            ? DB::table('branches')->where('is_active', true)->orderBy('name')->get(['id', 'name'])
+            : collect();
 
-        return view('learning-paths::admin-index', compact('paths', 'courses'));
+        return view('learning-paths::admin-index', compact('paths', 'courses', 'branches'));
     }
 
     public function store(Request $request): RedirectResponse
