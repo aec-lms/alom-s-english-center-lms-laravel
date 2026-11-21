@@ -126,9 +126,22 @@ class CourseTeacherAssignmentController extends Controller
                 );
             }
 
-            $teacherBranchId = $teacherProfile && $teacherProfile->branch_id !== null
-                ? (int) $teacherProfile->branch_id
-                : ($teacher->branch_id !== null ? (int) $teacher->branch_id : null);
+            $userBranchId = $teacher->branch_id !== null ? (int) $teacher->branch_id : null;
+            if ($teacherProfile !== null) {
+                $profileBranchId = $teacherProfile->branch_id !== null ? (int) $teacherProfile->branch_id : null;
+
+                // The account and teacher profile are two independent sources of
+                // branch authority. Never silently prefer one when they disagree:
+                // a stale profile must not grant cross-branch assignment rights.
+                abort_unless(
+                    $profileBranchId === $userBranchId,
+                    422,
+                    'Teacher account and profile branch assignments do not match.'
+                );
+                $teacherBranchId = $profileBranchId;
+            } else {
+                $teacherBranchId = $userBranchId;
+            }
 
             $course = DB::table('courses')->where('id', $data['course_id'])->whereNull('deleted_at')
                 ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
