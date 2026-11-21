@@ -123,6 +123,8 @@ jobs:
               raise SystemExit(f"Release package missing required files: {sorted(missing)}")
           forbidden = [
               "storage/app/installed.lock",
+              "storage/app/installed.lock.mutex",
+              "storage/app/installed.lock.in-progress",
               "storage/app/backups/",
               "storage/app/private/",
               "storage/app/restore-staging/",
