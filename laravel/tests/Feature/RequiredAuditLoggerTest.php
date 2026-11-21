@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Core\Security\AuditLogger;
+use App\Core\Updates\UniversalUpdateService;
 use App\Models\AuditLog;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -74,6 +75,33 @@ class RequiredAuditLoggerTest extends TestCase
             }
 
             $this->assertSame('Before audit failure', $user->fresh()->name);
+        } finally {
+            AuditLog::flushEventListeners();
+        }
+    }
+
+    public function test_update_feed_configuration_rolls_back_when_required_audit_write_fails(): void
+    {
+        $before = DB::table('system_settings')->where('key', 'lms_update_feed_url')->value('value');
+
+        AuditLog::creating(static function (): void {
+            throw new RuntimeException('forced update feed audit failure');
+        });
+
+        try {
+            try {
+                app(UniversalUpdateService::class)->saveRemoteFeedUrl(
+                    'https://updates.alomsenglishcenter.com/lms-channel.json'
+                );
+                $this->fail('Update feed configuration must fail when required audit evidence cannot be stored.');
+            } catch (RuntimeException $exception) {
+                $this->assertSame('forced update feed audit failure', $exception->getMessage());
+            }
+
+            $this->assertSame(
+                $before,
+                DB::table('system_settings')->where('key', 'lms_update_feed_url')->value('value')
+            );
         } finally {
             AuditLog::flushEventListeners();
         }
