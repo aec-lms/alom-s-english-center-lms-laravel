@@ -12,10 +12,14 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
+use Plugins\Modules\LearningPaths\Services\LearningPathAccess;
 
 class LearningPathController extends Controller
 {
-    public function __construct(private readonly PluginManager $plugins) {}
+    public function __construct(
+        private readonly PluginManager $plugins,
+        private readonly LearningPathAccess $learningPathAccess
+    ) {}
 
     public function index(Request $request): View
     {
@@ -152,11 +156,14 @@ class LearningPathController extends Controller
     {
         $this->ensureCourses();
         $actor = $request->user();
+        $actorBranchId = $actor && $actor->hasRole('student')
+            ? $this->learningPathAccess->resolveStudentBranch((int) $actor->id)
+            : null;
         $paths = DB::table('learning_paths')
             ->where('status', 'published')
-            ->when($actor && $actor->hasRole('student'), fn ($query) => $query->where(function ($branch) use ($actor): void {
+            ->when($actor && $actor->hasRole('student'), fn ($query) => $query->where(function ($branch) use ($actorBranchId): void {
                 $branch->whereNull('branch_id');
-                if ($actor->branch_id !== null) $branch->orWhere('branch_id', $actor->branch_id);
+                if ($actorBranchId !== null) $branch->orWhere('branch_id', $actorBranchId);
             }))
             ->when(!$actor || !$actor->hasRole('student'), fn ($query) => $query->whereNull('branch_id'))
             ->orderBy('title')->paginate(12);
@@ -178,6 +185,9 @@ class LearningPathController extends Controller
     {
         $this->ensureCourses();
         $actor = $request->user();
+        $actorBranchId = $actor && $actor->hasRole('student')
+            ? $this->learningPathAccess->resolveStudentBranch((int) $actor->id)
+            : null;
         $path = DB::table('learning_paths')->where('slug', $slug)
             ->when($actor && $actor->hasRole('student'), fn ($query) => $query->where(function ($visibility) use ($actor): void {
                 $visibility->where('status', 'published')
@@ -189,9 +199,9 @@ class LearningPathController extends Controller
                     });
             }))
             ->when(!$actor || !$actor->hasRole('student'), fn ($query) => $query->where('status', 'published'))
-            ->when($actor && $actor->hasRole('student'), fn ($query) => $query->where(function ($branch) use ($actor): void {
+            ->when($actor && $actor->hasRole('student'), fn ($query) => $query->where(function ($branch) use ($actorBranchId): void {
                 $branch->whereNull('branch_id');
-                if ($actor->branch_id !== null) $branch->orWhere('branch_id', $actor->branch_id);
+                if ($actorBranchId !== null) $branch->orWhere('branch_id', $actorBranchId);
             }))
             ->when(!$actor || !$actor->hasRole('student'), fn ($query) => $query->whereNull('branch_id'))
             ->first();
@@ -206,6 +216,9 @@ class LearningPathController extends Controller
             $this->assertPathCourseBranches($path, $courses);
         }
         $firstCourse = $courses->first();
+        if ($pathEnrollment && $actor && $actor->hasRole('student')) {
+            $this->learningPathAccess->assertCourseUnlocked((int) $actor->id, (int) $firstCourse->course_id);
+        }
         $firstEnrollment = $actor && $actor->hasRole('student')
             ? DB::table('enrollments')->where('user_id', $actor->id)->where('course_id', $firstCourse->course_id)
                 ->whereIn('status', ['active', 'completed'])->exists()
@@ -221,13 +234,14 @@ class LearningPathController extends Controller
         abort_unless($student && $student->hasRole('student'), 403, 'Student accounts only.');
         abort_unless((bool) $student->is_active, 403, 'An active student account is required.');
         $this->ensureCourses();
+        $studentBranchId = $this->learningPathAccess->resolveStudentBranch((int) $student->id);
 
-        DB::transaction(function () use ($student, $slug): void {
+        DB::transaction(function () use ($student, $studentBranchId, $slug): void {
             DB::table('users')->where('id', $student->id)->lockForUpdate()->first();
             $path = DB::table('learning_paths')->where('slug', $slug)->where('status', 'published')->lockForUpdate()->first();
             abort_unless($path, 404);
             if ($path->branch_id !== null) {
-                abort_unless($student->branch_id !== null && (int) $student->branch_id === (int) $path->branch_id,
+                abort_unless($studentBranchId !== null && (int) $studentBranchId === (int) $path->branch_id,
                     403, 'This learning path is not available to your branch.');
             }
             $courses = $this->pathCourses((int) $path->id);
@@ -239,7 +253,7 @@ class LearningPathController extends Controller
                 ->lockForUpdate()->first();
             abort_unless($firstEnrollment, 409,
                 'Enroll in the first course before starting this learning path. Course purchases and fees remain separate.');
-            $expectedEnrollmentBranch = $path->branch_id ?? $student->branch_id;
+            $expectedEnrollmentBranch = $path->branch_id ?? $studentBranchId;
             if ($firstEnrollment->branch_id !== null) {
                 abort_unless($expectedEnrollmentBranch !== null
                     && (int) $firstEnrollment->branch_id === (int) $expectedEnrollmentBranch,
@@ -255,7 +269,7 @@ class LearningPathController extends Controller
                 DB::table('learning_path_enrollments')->insert([
                     'learning_path_id' => $path->id,
                     'user_id' => $student->id,
-                    'branch_id' => $path->branch_id ?? $student->branch_id,
+                    'branch_id' => $path->branch_id ?? $studentBranchId,
                     'status' => 'active',
                     'started_at' => now(),
                     'completed_at' => null,
@@ -272,10 +286,15 @@ class LearningPathController extends Controller
     {
         $student = $request->user();
         abort_unless($student->hasRole('student'), 403);
+        $studentBranchId = $this->learningPathAccess->resolveStudentBranch((int) $student->id);
         $enrollments = DB::table('learning_path_enrollments as e')
             ->join('learning_paths as p', 'p.id', '=', 'e.learning_path_id')
             ->where('e.user_id', $student->id)
             ->whereIn('e.status', ['active', 'completed'])
+            ->where(function ($branch) use ($studentBranchId): void {
+                $branch->whereNull('e.branch_id');
+                if ($studentBranchId !== null) $branch->orWhere('e.branch_id', $studentBranchId);
+            })
             ->orderByDesc('e.started_at')
             ->select('e.*', 'p.title', 'p.slug', 'p.description')
             ->get();
