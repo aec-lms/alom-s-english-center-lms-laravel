@@ -168,7 +168,7 @@ class UniversalUpdateService
         try {
             $backup = $this->backups->createEncryptedBackup($actorId, false);
             Artisan::call('down');
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             if (is_file($packageSnapshotPath) && !is_link($packageSnapshotPath)) {
                 @unlink($packageSnapshotPath);
             }
