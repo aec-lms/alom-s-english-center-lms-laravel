@@ -54,7 +54,7 @@ class LearningRewardsController extends Controller
             // and users who have not chosen public visibility stay private.
             ->where('profiles.leaderboard_opt_out', false)
             ->where('profiles.profile_public', true)
-            ->when($branchId !== null, fn ($q) => $q->where('ledger.branch_id', $branchId))
+            ->when($branchId !== null, fn ($q) => $q->where('ledger.branch_id', $branchId), fn ($q) => $q->whereNull('ledger.branch_id'))
             ->when($start !== null, fn ($q) => $q->where('ledger.awarded_at', '>=', $start))
             ->selectRaw('users.id as user_id, users.name as student_name, SUM(ledger.points) as points')
             ->groupBy('users.id', 'users.name')
