@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-use Illuminate\\Database\\Migrations\\Migration;
-use Illuminate\\Database\\Schema\\Blueprint;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Facades\\Schema;
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
@@ -70,6 +70,6 @@ return new class extends Migration
         // Settings may predate this migration on upgraded installations. The
         // migration cannot reliably distinguish an adopted table from one it
         // created, so rollback must preserve the table and its configuration.
-        \\Illuminate\\Support\\Facades\\Cache::forget('al-branding-loader.settings');
+        \Illuminate\Support\Facades\Cache::forget('al-branding-loader.settings');
     }
 };
