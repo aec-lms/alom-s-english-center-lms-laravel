@@ -212,25 +212,35 @@ class AssessmentGradingController extends Controller
             abort_unless((bool) $account->is_active, 403, 'This teacher account is inactive.');
         }
 
-        if (Schema::hasTable('role_user') && Schema::hasTable('roles')) {
-            $roleQuery = DB::table('role_user')
-                ->join('roles', 'roles.id', '=', 'role_user.role_id')
-                ->where('role_user.user_id', $actor->id)
-                ->where('roles.slug', 'teacher');
-            if ($lock) {
-                $roleQuery->lockForUpdate();
-            }
-            $role = $roleQuery->first();
-            abort_unless($role !== null, 403, 'Only active teacher accounts can grade assessments.');
-        } else {
-            abort_unless($actor->hasRole('teacher'), 403, 'Only active teacher accounts can grade assessments.');
+        abort_unless(
+            Schema::hasTable('role_user') && Schema::hasTable('roles'),
+            503,
+            'Teacher role authorization storage is unavailable.'
+        );
+        $roleQuery = DB::table('role_user')
+            ->join('roles', 'roles.id', '=', 'role_user.role_id')
+            ->where('role_user.user_id', $actor->id)
+            ->where('roles.slug', 'teacher');
+        if ($lock) {
+            $roleQuery->lockForUpdate();
         }
+        $role = $roleQuery->first();
+        abort_unless($role !== null, 403, 'Only active teacher accounts can grade assessments.');
 
         return $account;
     }
 
     private function teacherProfile($actor, bool $lock): ?object
     {
+        $teacherManagementEnabled = app(PluginManager::class)->isEnabled('teacher-management');
+        if ($teacherManagementEnabled) {
+            abort_unless(
+                Schema::hasTable('teachers') && Schema::hasColumn('teachers', 'user_id'),
+                503,
+                'Teacher profile authorization storage is unavailable.'
+            );
+        }
+
         if (Schema::hasTable('teachers')) {
             $query = DB::table('teachers')->where('user_id', $actor->id);
             if (Schema::hasColumn('teachers', 'deleted_at')) {

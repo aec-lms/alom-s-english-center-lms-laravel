@@ -646,4 +646,31 @@ final class CourseAssessmentGradingBranchIsolationTest extends TestCase
         ]);
     }
 
+
+    public function test_missing_teacher_profile_storage_fails_closed_when_teacher_management_is_enabled(): void
+    {
+        $this->setupAssessmentPlugins();
+        $branch = $this->createBranch('MISSING-PROFILE');
+        $teacher = $this->createTeacher($branch, $branch);
+        $course = $this->createCourse($branch);
+        $attempt = $this->createPendingAttempt($course, $branch, 'Missing Teacher Profile Storage');
+        $this->assignTeacher((int) $teacher->id, $course);
+        $question = (int) DB::table('course_assessment_attempt_questions')
+            ->where('attempt_id', $attempt)
+            ->value('id');
+
+        Schema::dropIfExists('teachers');
+
+        $this->actingAs($teacher)->patch(route('plugins.course-assessments.grading.update', $attempt), [
+            'scores' => [$question => 3],
+        ])->assertStatus(503);
+
+        $this->assertDatabaseHas('course_assessment_attempts', [
+            'id' => $attempt,
+            'status' => 'pending_review',
+            'manual_score' => 0,
+            'graded_by' => null,
+        ]);
+    }
+
 }
