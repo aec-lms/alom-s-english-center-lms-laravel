@@ -15,8 +15,6 @@ return new class extends Migration {
                 // Course and branch are optional integrations; keep the plugin independently installable.
                 $table->unsignedBigInteger('course_id')->nullable()->index();
                 $table->unsignedBigInteger('branch_id')->nullable()->index();
-                $table->foreignId('replaces_package_id')->nullable()->constrained('scorm_packages')->nullOnDelete();
-                $table->unsignedInteger('version_number')->default(1);
                 $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
                 $table->string('title', 255);
                 $table->string('identifier', 191)->nullable();
