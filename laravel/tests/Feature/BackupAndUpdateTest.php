@@ -535,6 +535,76 @@ class BackupAndUpdateTest extends TestCase
         }
     }
 
+    public function test_failed_update_recovery_preserves_failure_log_and_audit_history(): void
+    {
+        $this->markSystemInstalled();
+        config(['lms.plugin_signing_key' => 'test-plugin-signing-key']);
+
+        $zipPath = tempnam(sys_get_temp_dir(), 'aec_update_failure_');
+        $zip = new ZipArchive();
+        $this->assertTrue($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true);
+        $this->assertTrue($zip->addFromString('update-manifest.json', json_encode([
+            'target_type' => 'core',
+            'target_slug' => 'aec-lms-core',
+            'version' => '2.0.1',
+        ], JSON_THROW_ON_ERROR)));
+        $this->assertTrue($zip->addEmptyDir('files'));
+        $this->assertTrue($zip->close());
+
+        $sha = hash_file('sha256', $zipPath);
+        $signature = hash_hmac('sha256', $sha, 'test-plugin-signing-key');
+        $historyId = DB::table('audit_logs')->insertGetId([
+            'user_id' => null,
+            'action' => 'pre_update.audit_history_marker',
+            'entity_type' => 'test',
+            'entity_id' => 'failed-update-recovery',
+            'ip_address' => null,
+            'metadata' => json_encode(['preserve' => true], JSON_THROW_ON_ERROR),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        \Illuminate\Support\Facades\Artisan::shouldReceive('call')
+            ->with('down')
+            ->once()
+            ->andReturn(0);
+        \Illuminate\Support\Facades\Artisan::shouldReceive('call')
+            ->with('migrate', ['--force' => true])
+            ->once()
+            ->andReturn(1);
+        \Illuminate\Support\Facades\Artisan::shouldReceive('call')
+            ->with('up')
+            ->once()
+            ->andReturn(0);
+
+        try {
+            try {
+                app(UniversalUpdateService::class)->applyVerifiedUpdate($zipPath, $sha, $signature);
+                $this->fail('A migration failure must trigger recovery and retain a failure log.');
+            } catch (\RuntimeException $exception) {
+                $this->assertStringContainsString('Database migrations failed', $exception->getMessage());
+            }
+
+            $this->assertDatabaseHas('update_logs', [
+                'target_type' => 'core',
+                'target_slug' => 'aec-lms-core',
+                'to_version' => '2.0.1',
+                'status' => 'failed',
+            ]);
+            $this->assertDatabaseHas('audit_logs', [
+                'id' => $historyId,
+                'action' => 'pre_update.audit_history_marker',
+            ]);
+            $this->assertDatabaseHas('audit_logs', [
+                'action' => 'update.failed',
+                'entity_type' => 'core',
+                'entity_id' => 'aec-lms-core',
+            ]);
+        } finally {
+            @unlink($zipPath);
+        }
+    }
+
     public function test_update_package_is_pinned_and_reverified_before_extraction(): void
     {
         config(['lms.plugin_signing_key' => 'test-plugin-signing-key']);
