@@ -7,6 +7,8 @@ namespace Tests\Feature;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Plugins\Modules\CourseManagement\Models\Course;
+use Plugins\Modules\CourseManagement\Models\LiveClass;
+use Plugins\Modules\TeacherManagement\Models\Teacher;
 use Tests\TestCase;
 
 final class CourseTeacherAssignmentSecurityTest extends TestCase
@@ -308,6 +310,158 @@ final class CourseTeacherAssignmentSecurityTest extends TestCase
         } finally {
             DB::purge($secondaryName);
         }
+    }
+
+
+    public function test_assigned_active_teacher_can_answer_live_class_questions_without_name_based_authorization(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management', 'teacher-management']);
+        $teacher = $this->createUserWithRole('teacher');
+        [$course, $liveClass, $questionId] = $this->createTeacherLiveQuestionFixture($teacher, true);
+
+        $this->actingAs($teacher)
+            ->postJson("/learning-interactions/live-classes/{$liveClass->id}/questions/{$questionId}/answers", [
+                'body' => 'Here is the explanation.',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('answered', true);
+
+        $this->assertDatabaseHas('live_class_discussions', [
+            'live_class_id' => $liveClass->id,
+            'parent_id' => $questionId,
+            'user_id' => $teacher->id,
+            'body' => 'Here is the explanation.',
+        ]);
+    }
+
+    public function test_inactive_teacher_account_cannot_answer_with_a_stale_session_or_assignment(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management', 'teacher-management']);
+        $teacher = $this->createUserWithRole('teacher');
+        [, $liveClass, $questionId] = $this->createTeacherLiveQuestionFixture($teacher, true);
+        $teacher->forceFill(['is_active' => false])->save();
+
+        $this->actingAs($teacher)
+            ->postJson("/learning-interactions/live-classes/{$liveClass->id}/questions/{$questionId}/answers", [
+                'body' => 'This must be rejected.',
+            ])
+            ->assertForbidden();
+
+        $this->assertDatabaseMissing('live_class_discussions', [
+            'live_class_id' => $liveClass->id,
+            'parent_id' => $questionId,
+            'user_id' => $teacher->id,
+            'body' => 'This must be rejected.',
+        ]);
+    }
+
+    public function test_teacher_name_match_without_current_course_assignment_cannot_moderate_live_class(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management', 'teacher-management']);
+        $teacher = $this->createUserWithRole('teacher');
+        [, $liveClass, $questionId] = $this->createTeacherLiveQuestionFixture($teacher, false);
+
+        $this->actingAs($teacher)
+            ->postJson("/learning-interactions/live-classes/{$liveClass->id}/questions/{$questionId}/answers", [
+                'body' => 'A display-name match is not authorization.',
+            ])
+            ->assertForbidden();
+
+        $this->assertDatabaseMissing('live_class_discussions', [
+            'live_class_id' => $liveClass->id,
+            'parent_id' => $questionId,
+            'user_id' => $teacher->id,
+            'body' => 'A display-name match is not authorization.',
+        ]);
+    }
+
+    public function test_inactive_teacher_profile_cannot_moderate_even_when_user_account_is_active(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management', 'teacher-management']);
+        $teacher = $this->createUserWithRole('teacher');
+        [, $liveClass, $questionId] = $this->createTeacherLiveQuestionFixture($teacher, true);
+        Teacher::query()->where('user_id', $teacher->id)->update(['is_active' => false]);
+
+        $this->actingAs($teacher)
+            ->postJson("/learning-interactions/live-classes/{$liveClass->id}/questions/{$questionId}/answers", [
+                'body' => 'An inactive profile cannot moderate.',
+            ])
+            ->assertForbidden();
+    }
+
+    public function test_teacher_without_current_teacher_role_cannot_moderate_existing_assignment(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management', 'teacher-management']);
+        $teacher = $this->createUserWithRole('teacher');
+        [, $liveClass, $questionId] = $this->createTeacherLiveQuestionFixture($teacher, true);
+        $teacherRoleId = (int) DB::table('roles')->where('slug', 'teacher')->value('id');
+        DB::table('role_user')->where('user_id', $teacher->id)->where('role_id', $teacherRoleId)->delete();
+
+        $this->actingAs($teacher)
+            ->postJson("/learning-interactions/live-classes/{$liveClass->id}/questions/{$questionId}/answers", [
+                'body' => 'A stale assignment cannot grant teacher access.',
+            ])
+            ->assertForbidden();
+    }
+
+    private function createTeacherLiveQuestionFixture(object $teacher, bool $assign): array
+    {
+        Teacher::query()->create([
+            'user_id' => $teacher->id,
+            'branch_id' => $teacher->branch_id,
+            'employee_code' => 'QA-' . $teacher->id . '-' . bin2hex(random_bytes(3)),
+            'specialization' => 'English',
+            'is_active' => true,
+        ]);
+
+        $course = Course::query()->create([
+            'code' => 'TEACHER-QA-' . $teacher->id . '-' . strtoupper(bin2hex(random_bytes(2))),
+            'title' => 'Teacher Live Q&A Authorization',
+            'slug' => 'teacher-live-qa-' . $teacher->id . '-' . bin2hex(random_bytes(2)),
+            'instructor_name' => $teacher->name,
+            'price' => 0,
+            'status' => 'published',
+            'branch_id' => null,
+        ]);
+
+        if ($assign) {
+            DB::table('course_teacher_assignments')->insert([
+                'course_id' => $course->id,
+                'teacher_user_id' => $teacher->id,
+                'assigned_by' => $teacher->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $liveClass = LiveClass::query()->create([
+            'course_id' => $course->id,
+            'title' => 'Teacher Authorization Live Class',
+            'instructor_name' => $teacher->name,
+            'platform' => 'zoom',
+            'meeting_url' => 'https://example.com/live-class',
+            'starts_at' => now()->subMinute(),
+            'capacity' => 300,
+            'status' => 'live',
+        ]);
+
+        $questionId = DB::table('live_class_discussions')->insertGetId([
+            'live_class_id' => $liveClass->id,
+            'user_id' => $teacher->id,
+            'parent_id' => null,
+            'body' => 'Please explain this topic.',
+            'status' => 'visible',
+            'is_pinned' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return [$course, $liveClass, $questionId];
     }
 
 }
