@@ -96,18 +96,37 @@
         };
 
         try {
-            const response = await fetch(runtimeUrl, {
-                method: 'POST',
-                mode: 'cors',
-                credentials: 'omit',
-                cache: 'no-store',
-                headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-                body: JSON.stringify(payload),
-                keepalive: true,
-            });
-            const result = await response.json().catch(() => ({}));
-            if (!response.ok || result.ok !== true || !Number.isInteger(Number(result.version))) {
-                throw new Error(result.message || @json(__('plugins.scorm::messages.save_failed')));
+            let response = null;
+            let result = {};
+            let lastNetworkError = null;
+
+            // Retry only transport/server failures with the exact same request
+            // id and payload. The server's idempotency ledger safely replays a
+            // commit if the first response was lost after its transaction.
+            for (let attempt = 0; attempt < 3; attempt += 1) {
+                try {
+                    response = await fetch(runtimeUrl, {
+                        method: 'POST',
+                        mode: 'cors',
+                        credentials: 'omit',
+                        cache: 'no-store',
+                        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+                        body: JSON.stringify(payload),
+                    });
+                    result = await response.json().catch(() => ({}));
+                    if (response.ok || response.status < 500) break;
+                    lastNetworkError = new Error(result.message || 'SCORM runtime service is temporarily unavailable.');
+                } catch (error) {
+                    lastNetworkError = error;
+                }
+                if (attempt < 2) {
+                    await new Promise(resolve => window.setTimeout(resolve, 250 * (attempt + 1)));
+                }
+            }
+
+            if (!response || !response.ok || result.ok !== true || !Number.isInteger(Number(result.version))) {
+                throw new Error(result.message || (lastNetworkError && lastNetworkError.message)
+                    || @json(__('plugins.scorm::messages.save_failed')));
             }
 
             stateVersion = Number(result.version);
