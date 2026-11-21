@@ -146,8 +146,13 @@ class TeacherController extends Controller
         }
 
         DB::transaction(function () use ($teacher, $validated, $request, $photoPath): void {
+            // Match course-assignment lifecycle order: lock the linked account
+            // before its teacher profile so concurrent assignment/deactivation
+            // cannot deadlock or observe a half-updated active state.
+            $user = User::query()->whereKey($teacher->user_id)->lockForUpdate()->first();
+            $lockedTeacher = Teacher::query()->whereKey($teacher->id)->lockForUpdate()->firstOrFail();
             $isActive = $request->boolean('is_active');
-            $teacher->update([
+            $lockedTeacher->update([
                 'branch_id' => $validated['branch_id'] ?? null,
                 'employee_code' => strtoupper(trim($validated['employee_code'])),
                 'specialization' => $validated['specialization'],
@@ -159,7 +164,7 @@ class TeacherController extends Controller
                 'is_active' => $isActive,
             ]);
 
-            if ($teacher->user) {
+            if ($user) {
                 $userUpdates = [
                     'name' => $validated['name'],
                     'branch_id' => $validated['branch_id'] ?? null,
@@ -168,10 +173,11 @@ class TeacherController extends Controller
                 if (array_key_exists('email', $validated) && !empty($validated['email'])) {
                     $userUpdates['email'] = strtolower(trim($validated['email']));
                 }
-                $teacher->user->update($userUpdates);
+                $user->update($userUpdates);
             }
         });
 
+        $teacher->refresh();
         $this->audit->log('teacher.updated', 'teacher', (string) $teacher->id, ['code' => $teacher->employee_code]);
 
         return back()->with('status', "Instructor '{$validated['name']}' updated.");
@@ -187,14 +193,18 @@ class TeacherController extends Controller
 
         $code = $teacher->employee_code;
         $id = (string) $teacher->id;
-        $user = $teacher->user;
 
-        DB::transaction(function () use ($teacher, $user): void {
+        DB::transaction(function () use ($teacher): void {
+            // Keep account -> profile lock order consistent with assignment and
+            // profile updates; deactivation must serialize with new assignments.
+            $user = User::query()->whereKey($teacher->user_id)->lockForUpdate()->first();
+            $lockedTeacher = Teacher::query()->whereKey($teacher->id)->lockForUpdate()->firstOrFail();
+
             if (Schema::hasColumn('teachers', 'deleted_user_was_active')) {
-                $teacher->deleted_user_was_active = (bool) ($user?->is_active ?? false);
-                $teacher->save();
+                $lockedTeacher->deleted_user_was_active = (bool) ($user?->is_active ?? false);
+                $lockedTeacher->save();
             }
-            $teacher->delete();
+            $lockedTeacher->delete();
             if ($user) {
                 $user->update(['is_active' => false]);
             }
