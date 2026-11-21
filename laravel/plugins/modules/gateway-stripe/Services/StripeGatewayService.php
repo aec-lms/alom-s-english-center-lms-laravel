@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Http;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
 use Plugins\Modules\PaymentManagement\Services\PaymentSettlementService;
+use Plugins\Modules\PaymentManagement\Services\InvoicePaymentSessionReservationService;
 use RuntimeException;
 
 class StripeGatewayService
@@ -16,6 +17,7 @@ class StripeGatewayService
     public function __construct(
         private readonly PluginManager $plugins,
         private readonly PaymentSettlementService $settlement,
+        private readonly InvoicePaymentSessionReservationService $reservations,
     ) {}
 
     public function initiateTokenizedCheckout(FeeInvoice $invoice, string $paymentToken, ?string $idempotencyKey = null): array
@@ -31,42 +33,49 @@ class StripeGatewayService
             throw new RuntimeException('Stripe requires a PaymentMethod ID created by Stripe.js (pm_...). Raw card details are never accepted.');
         }
 
-        if ($idempotencyKey) {
-            $existing = PaymentTransaction::query()
-                ->where('invoice_id', $invoice->id)
-                ->where('gateway_slug', 'gateway-stripe')
-                ->where('metadata->idempotency_key', $idempotencyKey)
-                ->first();
-            if ($existing) {
-                return [
-                    'transaction' => $existing,
-                    'client_secret' => $existing->metadata['client_secret'] ?? null,
-                    'payment_intent_id' => $existing->external_reference,
-                ];
+        $providerMode = str_starts_with($secretKey, 'sk_live_') ? 'live' : 'test';
+        $description = 'AEC LMS invoice ' . $invoice->invoice_number;
+        $returnUrl = url('/payments/stripe/return');
+        $reservation = $this->reservations->reserve(
+            $invoice,
+            'gateway-stripe',
+            'STRP',
+            [
+                'fingerprint_parameters' => [
+                    'payment_method_id' => $paymentToken,
+                    'confirm' => 'true',
+                    'automatic_payment_methods_enabled' => 'true',
+                    'provider_mode' => $providerMode,
+                    'invoice_number' => (string) $invoice->invoice_number,
+                    'description' => $description,
+                    'return_url' => $returnUrl,
+                ],
+            ],
+            $idempotencyKey,
+        );
+        $invoice = $reservation['invoice'];
+        $tx = $reservation['transaction'];
+        $remaining = $reservation['remaining'];
+
+        if ($reservation['reused']) {
+            if (in_array($tx->status, ['initiated', 'pending', 'risk_review', 'processing', 'authorized'], true)
+                && ($tx->metadata['session_outcome'] ?? '') !== 'created') {
+                throw new RuntimeException('A Stripe session reservation already exists with an unknown provider outcome; reconciliation is required before retrying.');
             }
+
+            return [
+                'transaction' => $tx,
+                'client_secret' => $tx->metadata['client_secret'] ?? null,
+                'payment_intent_id' => $tx->external_reference,
+            ];
         }
 
-        $remaining = round((float) $invoice->net_amount - (float) $invoice->paid_amount, 2);
-        if ($remaining <= 0) {
-            throw new RuntimeException('Invoice is already fully settled.');
-        }
-
-        $tx = PaymentTransaction::query()->create([
-            'transaction_ref' => 'STRP-' . strtoupper(bin2hex(random_bytes(6))),
-            'invoice_id' => $invoice->id,
-            'branch_id' => $invoice->branch_id,
-            'gateway_slug' => 'gateway-stripe',
-            'amount' => $remaining,
-            'currency' => strtoupper($invoice->currency),
-            'status' => 'initiated',
-            'metadata' => ['idempotency_key' => $idempotencyKey, 'payment_method_id' => $paymentToken],
-        ]);
-
+        $response = null;
         try {
             $amountMinor = (int) round($remaining * 100);
             $response = Http::asForm()
                 ->withBasicAuth($secretKey, '')
-                ->withHeaders($idempotencyKey ? ['Idempotency-Key' => $idempotencyKey] : [])
+                ->withHeaders(!empty($reservation['provider_idempotency_key']) ? ['Idempotency-Key' => $reservation['provider_idempotency_key']] : [])
                 ->timeout(25)
                 ->post('https://api.stripe.com/v1/payment_intents', [
                     'amount' => $amountMinor,
@@ -76,46 +85,52 @@ class StripeGatewayService
                     'automatic_payment_methods[enabled]' => 'true',
                     'metadata[transaction_ref]' => $tx->transaction_ref,
                     'metadata[invoice_number]' => (string) $invoice->invoice_number,
-                    'description' => 'AEC LMS invoice ' . $invoice->invoice_number,
-                    'return_url' => url('/payments/stripe/return'),
+                    'description' => $description,
+                    'return_url' => $returnUrl,
                 ]);
 
             if (!$response->successful()) {
+                if ($response->clientError()) {
+                    $this->reservations->markRejected($tx, 'provider_http_4xx');
+                } else {
+                    $this->reservations->markUnknown($tx, 'provider_http_5xx');
+                }
                 $message = (string) $response->json('error.message', 'Stripe PaymentIntent creation failed.');
                 throw new RuntimeException($message);
             }
 
             $intent = $response->json();
-            if (!is_array($intent) || empty($intent['id']) || !str_starts_with((string) $intent['id'], 'pi_')) {
-                throw new RuntimeException('Stripe returned an invalid PaymentIntent response.');
+            if (!is_array($intent) || empty($intent['id']) || !str_starts_with((string) $intent['id'], 'pi_') || empty($intent['client_secret'])) {
+                $this->reservations->markUnknown($tx, 'invalid_success_response');
+                throw new RuntimeException('Stripe returned an invalid PaymentIntent response; the reservation remains held for reconciliation.');
             }
 
             $status = (string) ($intent['status'] ?? 'requires_payment_method');
-            $tx->update([
-                'external_reference' => $intent['id'],
-                'status' => $status === 'succeeded' ? 'pending' : 'initiated',
-                'metadata' => array_merge($tx->metadata ?? [], [
-                    'stripe_status' => $status,
-                    'client_secret' => $intent['client_secret'] ?? null,
-                    'payment_method_id' => null,
-                ]),
-            ]);
-
-            if ($status === 'succeeded') {
-                return ['transaction' => $tx->fresh(), 'client_secret' => $intent['client_secret'] ?? null, 'payment_intent_id' => $intent['id']];
+            if ($status !== 'succeeded'
+                && !in_array($status, ['requires_action', 'requires_confirmation', 'processing', 'requires_capture'], true)) {
+                $this->reservations->markUnknown($tx, 'unexpected_payment_intent_status');
+                throw new RuntimeException('Stripe payment could not be confirmed. Status: ' . $status . '. Reservation remains held for reconciliation.');
             }
 
-            if (!in_array($status, ['requires_action', 'requires_confirmation', 'processing', 'requires_capture'], true)) {
-                throw new RuntimeException('Stripe payment could not be confirmed. Status: ' . $status);
-            }
+            $tx = $this->reservations->markCreated($tx, [
+                'stripe_status' => $status,
+                'client_secret' => $intent['client_secret'] ?? null,
+                'payment_method_id' => null,
+            ], 'initiated', (string) $intent['id']);
 
-            return ['transaction' => $tx->fresh(), 'client_secret' => $intent['client_secret'] ?? null, 'payment_intent_id' => $intent['id']];
+            return ['transaction' => $tx, 'client_secret' => $intent['client_secret'] ?? null, 'payment_intent_id' => $intent['id']];
         } catch (\Throwable $e) {
-            $tx->update(['status' => 'failed']);
+            if ($response === null) {
+                $this->reservations->markUnknown($tx, 'transport_or_timeout');
+            } elseif ($response->serverError()) {
+                $this->reservations->markUnknown($tx, 'provider_http_5xx');
+            } elseif ($response->successful()) {
+                $this->reservations->markUnknown($tx, 'post_provider_processing_error');
+            }
             if ($e instanceof RuntimeException) {
                 throw $e;
             }
-            throw new RuntimeException('Unable to create Stripe PaymentIntent.', 0, $e);
+            throw new RuntimeException('Unable to create Stripe PaymentIntent; reservation remains held for reconciliation.', 0, $e);
         }
     }
 
