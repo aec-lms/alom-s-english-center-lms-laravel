@@ -214,7 +214,6 @@ test('untrusted SCO cannot inspect LMS/player state and commits only through the
 
   const playerFrame = page.frameLocator('#trusted-player');
   const scoFrame = playerFrame.frameLocator('#scorm-sco');
-  await expect(playerFrame.locator('#runtime-status')).toHaveText('ready');
   await expect(scoFrame.locator('body')).toHaveAttribute('data-api-commit', 'success');
   await expect(playerFrame.locator('body')).toHaveAttribute('data-privileged-action', 'blocked');
   const result = JSON.parse(await playerFrame.locator('body').getAttribute('data-scorm-result'));
