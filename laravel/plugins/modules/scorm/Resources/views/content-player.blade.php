@@ -101,12 +101,12 @@
 
     function isValidDynamicValue(element, value) {
         if (element.length > 255) return false;
-        const interaction = element.match(/^cmi\\.interactions\\.\\d+\\.(.+)$/);
+        const interaction = element.match(/^cmi\.interactions\.\d+\.(.+)$/);
         if (interaction) {
             const field = interaction[1];
             if (field === 'id' || field.endsWith('.id') || field.endsWith('.pattern')) return value.length <= 255;
             if (field === 'type') return ['true-false','choice','fill-in','matching','performance','sequencing','likert','numeric','other'].includes(value);
-            if (field === 'time') return /^\\d{8}T\\d{6}(?:\\.\\d{1,2})?$/.test(value);
+            if (field === 'time') return /^\d{8}T\d{6}(?:\.\d{1,2})?$/.test(value);
             if (field === 'weighting') return value !== '' && Number.isFinite(Number(value));
             if (field === 'student_response') return value.length <= 4096;
             if (field === 'result') return ['correct','wrong','unanticipated','neutral'].includes(value) || (value !== '' && Number.isFinite(Number(value)));
