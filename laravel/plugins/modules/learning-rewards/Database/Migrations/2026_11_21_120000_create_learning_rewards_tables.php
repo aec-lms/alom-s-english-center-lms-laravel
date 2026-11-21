@@ -16,7 +16,7 @@ return new class extends Migration {
             $table->unsignedSmallInteger('points')->default(0);
             $table->unsignedInteger('daily_cap')->default(0);
             $table->unsignedSmallInteger('pass_percentage')->nullable();
-            $table->boolean('is_enabled')->default(true);
+            $table->boolean('is_enabled')->default(false);
             $table->timestamps();
         });
 
