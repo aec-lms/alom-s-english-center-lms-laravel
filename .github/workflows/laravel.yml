@@ -123,6 +123,8 @@ jobs:
               raise SystemExit(f"Release package missing required files: {sorted(missing)}")
           forbidden = [
               "storage/app/installed.lock",
+              "storage/app/installed.lock.mutex",
+              "storage/app/installed.lock.in-progress",
               "storage/app/backups/",
               "storage/app/private/",
               "storage/app/restore-staging/",
@@ -159,12 +161,13 @@ jobs:
 
   laravel-mysql-tests:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 45
     services:
       mysql:
         image: mysql:8.0
         env:
           MYSQL_ROOT_PASSWORD: root
+          MYSQL_ROOT_HOST: "%"
           MYSQL_DATABASE: aec_lms_test
           MYSQL_USER: aec_lms
           MYSQL_PASSWORD: aec_lms_test_password
@@ -188,6 +191,8 @@ jobs:
       QUEUE_CONNECTION: sync
       MAIL_MAILER: array
       AEC_TEST_EXPLICIT_PLUGIN_BOOT: "1"
+      AEC_TEST_MYSQL_ADMIN_USERNAME: root
+      AEC_TEST_MYSQL_ADMIN_PASSWORD: root
     defaults:
       run:
         working-directory: laravel
