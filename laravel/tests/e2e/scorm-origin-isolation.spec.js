@@ -70,6 +70,7 @@ test('untrusted SCO cannot inspect LMS/player state and commits only through the
     (() => {
       const frame = document.getElementById('scorm-sco');
       const status = document.getElementById('runtime-status');
+      const appOrigin = ${JSON.stringify(appOrigin)};
       const bridgeNonce = ${JSON.stringify(bridgeNonce)};
       const attemptToken = ${JSON.stringify(playerToken)};
       const attemptId = 41;
