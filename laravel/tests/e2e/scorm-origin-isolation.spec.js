@@ -92,12 +92,21 @@ test('untrusted SCO cannot inspect LMS/player state and commits only through the
         }
 
         const message = event.data;
+        const requestIdValid = typeof message.request_id === 'string'
+          && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(message.request_id);
+        document.body.dataset.commitValidation = JSON.stringify({
+          typeValid: message.type === 'scorm:commit',
+          nonceValid: message.bridge_nonce === bridgeNonce,
+          attemptValid: message.attempt_id === attemptId,
+          methodValid: ['LMSCommit', 'LMSFinish'].includes(message.method),
+          requestIdValid,
+          dataValid: !!message.data && typeof message.data === 'object' && !Array.isArray(message.data),
+        });
         if (message.type !== 'scorm:commit'
           || message.bridge_nonce !== bridgeNonce
           || message.attempt_id !== attemptId
           || !['LMSCommit', 'LMSFinish'].includes(message.method)
-          || typeof message.request_id !== 'string'
-          || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(message.request_id)
+          || !requestIdValid
           || !message.data || typeof message.data !== 'object' || Array.isArray(message.data)) return;
 
         const payload = {
