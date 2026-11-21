@@ -585,7 +585,7 @@ class UniversalPaymentController extends Controller
                     return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)
                         ->with('status', 'Payment was received but requires manual review. No additional exam access was granted.');
                 }
-                $reviewSlug = DB::table('storefront_items')->where('id', $transaction->storefront_item_id)->value('slug');
+                $reviewSlug = $this->storefrontSlugFor($transaction);
                 return $reviewSlug
                     ? redirect('/ebooks/' . rawurlencode((string) $reviewSlug))->with('status', 'Payment was received but requires manual review. Existing access was not changed.')
                     : redirect('/ebooks')->with('status', 'Payment was received but requires manual review.');
@@ -689,6 +689,21 @@ class UniversalPaymentController extends Controller
         }
         $slug = DB::table('storefront_items')->where('id', $transaction->storefront_item_id)->value('slug');
         return redirect('/ebooks/' . rawurlencode((string) $slug))->with('status', 'The browser return cannot confirm cancellation. The transaction remains pending; do not retry until support reconciles its status.');
+    }
+
+    private function storefrontSlugFor(UniversalPaymentTransaction $transaction): ?string
+    {
+        if (!$transaction->storefront_item_id
+            || !Schema::hasTable('storefront_items')
+            || !Schema::hasColumn('storefront_items', 'slug')) {
+            return null;
+        }
+
+        $slug = DB::table('storefront_items')
+            ->where('id', $transaction->storefront_item_id)
+            ->value('slug');
+
+        return is_string($slug) && $slug !== '' ? $slug : null;
     }
 
     private function assertInvoiceEnrollmentBranchAccess(object $invoice): void
