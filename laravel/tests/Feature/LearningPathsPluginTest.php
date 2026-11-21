@@ -201,11 +201,12 @@ class LearningPathsPluginTest extends TestCase
 
         $firstPost = $this->contentPost($admin->id, 'learning-path-first-lesson');
         $secondPost = $this->contentPost($admin->id, 'learning-path-second-lesson');
+        DB::table('course_content_posts')->where('id', $secondPost)->update(['access_type' => 'free']);
         $firstItem = DB::table('course_curriculum_items')->insertGetId([
             'course_id' => $first,
             'course_content_post_id' => $firstPost,
             'position' => 1,
-            'is_preview' => false,
+            'is_preview' => true,
             'is_active' => true,
             'created_at' => now(),
             'updated_at' => now(),
