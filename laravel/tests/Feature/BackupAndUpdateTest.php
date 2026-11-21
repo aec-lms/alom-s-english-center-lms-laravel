@@ -468,6 +468,48 @@ class BackupAndUpdateTest extends TestCase
         }
     }
 
+    public function test_update_package_is_pinned_and_reverified_before_extraction(): void
+    {
+        config(['lms.plugin_signing_key' => 'test-plugin-signing-key']);
+        $packagePath = tempnam(sys_get_temp_dir(), 'aec_update_pinned_source_');
+        $snapshotPath = sys_get_temp_dir() . '/aec_update_pinned_' . bin2hex(random_bytes(8)) . '/package.zip';
+        $zip = new ZipArchive();
+
+        $this->assertTrue($zip->open($packagePath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true);
+        $this->assertTrue($zip->addFromString('update-manifest.json', json_encode([
+            'target_type' => 'core',
+            'target_slug' => 'aec-lms-core',
+            'version' => '2.0.1',
+        ], JSON_THROW_ON_ERROR)));
+        $this->assertTrue($zip->addFromString('files/payload.php', '<?php // signed payload'));
+        $this->assertTrue($zip->close());
+
+        $sha = hash_file('sha256', $packagePath);
+        $signature = hash_hmac('sha256', $sha, 'test-plugin-signing-key');
+        $service = app(UniversalUpdateService::class);
+        $pin = new \\ReflectionMethod(UniversalUpdateService::class, 'createVerifiedPackageSnapshot');
+        $pin->setAccessible(true);
+
+        try {
+            $manifest = $pin->invoke($service, $packagePath, $sha, $signature, $snapshotPath);
+            $this->assertSame('aec-lms-core', $manifest['target_slug']);
+            $this->assertSame($sha, hash_file('sha256', $snapshotPath));
+
+            // Replacing the original upload after pinning must not change the
+            // package bytes subsequently consumed by ZIP extraction.
+            file_put_contents($packagePath, 'replaced after verification');
+            $this->assertSame($sha, hash_file('sha256', $snapshotPath));
+            $this->assertSame(
+                $manifest,
+                $service->verifySignedPackage($snapshotPath, $sha, $signature)
+            );
+        } finally {
+            @unlink($packagePath);
+            @unlink($snapshotPath);
+            @rmdir(dirname($snapshotPath));
+        }
+    }
+
     public function test_update_staging_streams_large_zip_entries_to_disk(): void
     {
         $zipPath = tempnam(sys_get_temp_dir(), 'aec_update_stream_');
