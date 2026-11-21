@@ -331,7 +331,7 @@ The 60-slug inventory was first scanned at `db493c6525f110cd4815024f7a8965c1da8b
 
 ## Supplemental acceptance mapping for newer manifests (PR branch inventory: 61)
 
-The original static inventory above predates the latest plugin additions. The following rows bring its functional test references up to the current 60-manifest mainline inventory plus the new Learning Rewards plugin in this PR. These are targeted test references, not production certifications.
+The top inventory table is the complete 61-manifest PR-branch file count. The following supplemental rows record focused test references for newer plugins that were absent from the earlier 39-plugin historical snapshot. These are targeted test references, not production certifications.
 
 | Plugin | Focused feature-test evidence | Coverage / limitation |
 |---|---|---|
