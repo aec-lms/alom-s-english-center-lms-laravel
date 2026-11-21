@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', '{{ __('My Learning Paths') }}')
+@section('title', __('My Learning Paths'))
 
 @section('content')
 <div class="mx-auto max-w-5xl space-y-6 px-4 py-8">
@@ -11,7 +11,7 @@
             @php($done = $enrollment->progress->where('completed', true)->count())
             @php($total = $enrollment->progress->count())
             <div class="mt-4"><div class="mb-1 flex justify-between text-xs text-slate-500"><span>{{ __('Progress') }}</span><span>{{ $done }} / {{ $total }} {{ __('courses') }}</span></div><div class="h-2 overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full bg-indigo-600" style="width: {{ $total ? round($done / $total * 100) : 0 }}%"></div></div></div>
-            <ol class="mt-4 space-y-2">@foreach ($enrollment->progress as $step)<li class="flex items-center justify-between gap-3 text-sm"><span>{{ $step->position }}. {{ $step->course_title }}</span><span class="{{ $step->completed ? 'text-emerald-700' : ($step->unlocked ? 'text-indigo-700' : 'text-slate-400') }}">{{ $step->completed ? '{{ __('Completed') }}' : ($step->unlocked ? '{{ __('Available') }}' : '{{ __('Locked') }}') }}</span></li>@endforeach</ol>
+            <ol class="mt-4 space-y-2">@foreach ($enrollment->progress as $step)<li class="flex items-center justify-between gap-3 text-sm"><span>{{ $step->position }}. {{ $step->course_title }}</span><span class="{{ $step->completed ? 'text-emerald-700' : ($step->unlocked ? 'text-indigo-700' : 'text-slate-400') }}">{{ $step->completed ? __('Completed') : ($step->unlocked ? __('Available') : __('Locked')) }}</span></li>@endforeach</ol>
             <a href="{{ route('learning-paths.show', $enrollment->slug) }}" class="mt-4 inline-flex text-sm font-semibold text-indigo-700">{{ __('Open path →') }}</a>
         </article>
     @empty
