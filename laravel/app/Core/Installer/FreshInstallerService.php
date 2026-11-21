@@ -196,7 +196,54 @@ class FreshInstallerService
         }
     }
 
+    /**
+     * Serialize installation attempts across PHP workers on the same host.
+     *
+     * The mutex is deliberately separate from the final installed marker: flock()
+     * is released by the operating system if a worker exits unexpectedly, so a
+     * crashed installer cannot leave a permanently stale mutex.
+     */
     public function installFresh(array $config): array
+    {
+        $installLockPath = (string) config('lms.install_lock_path');
+        if ($installLockPath === '') {
+            throw new RuntimeException('The installation lock path is not configured.');
+        }
+
+        $lockDirectory = dirname($installLockPath);
+        if (!is_dir($lockDirectory) && !mkdir($lockDirectory, 0750, true) && !is_dir($lockDirectory)) {
+            throw new RuntimeException('Unable to create the installation lock directory.');
+        }
+
+        $mutexPath = $installLockPath . '.mutex';
+        if (is_link($mutexPath)) {
+            throw new RuntimeException('The installation mutex must not be a symbolic link.');
+        }
+
+        $mutex = @fopen($mutexPath, 'c');
+        if ($mutex === false) {
+            throw new RuntimeException('Unable to open the installation mutex.');
+        }
+
+        try {
+            @chmod($mutexPath, 0600);
+            if (!flock($mutex, LOCK_EX)) {
+                throw new RuntimeException('Unable to acquire the exclusive installation mutex.');
+            }
+
+            // The installed marker and empty-database precondition are rechecked
+            // only after this process owns the mutex.
+            return $this->installFreshWhileLocked($config);
+        } finally {
+            @flock($mutex, LOCK_UN);
+            fclose($mutex);
+        }
+    }
+
+    /**
+     * Runs the complete fresh installation while the caller holds the OS mutex.
+     */
+    private function installFreshWhileLocked(array $config): array
     {
         if ($this->isInstalled()) {
             throw new RuntimeException('AEC LMS is already installed and locked.');
