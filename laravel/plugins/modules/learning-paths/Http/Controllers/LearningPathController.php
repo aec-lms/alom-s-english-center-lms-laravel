@@ -137,6 +137,9 @@ class LearningPathController extends Controller
                 'A path with active learners cannot be unpublished or archived until they finish.');
 
             if ($validated['status'] === 'published') {
+                // Serialize publication against course edits, archival and
+                // branch reassignment. Always acquire course locks by ID.
+                $this->lockPathCourseRecords((int) $record->id);
                 $items = $this->pathCourses((int) $record->id);
                 abort_unless($items->count() >= 2, 422, 'A published learning path needs at least two courses.');
                 abort_unless($items->every(fn ($item) => $item->course_status === 'published' && $item->course_deleted_at === null), 409,
@@ -358,12 +361,57 @@ class LearningPathController extends Controller
         ];
     }
 
+    private function lockPathCourseRecords(int $pathId)
+    {
+        $courseIds = DB::table('learning_path_courses')
+            ->where('learning_path_id', $pathId)
+            ->orderBy('course_id')
+            ->pluck('course_id')
+            ->map(static fn ($id): int => (int) $id)
+            ->all();
+
+        if ($courseIds === []) {
+            return collect();
+        }
+
+        $query = DB::table('courses')->whereIn('id', $courseIds)->orderBy('id');
+        if (Schema::hasColumn('courses', 'deleted_at')) {
+            $query->whereNull('deleted_at');
+        }
+
+        return $query->lockForUpdate()->get(['id', 'status', 'branch_id']);
+    }
+
     private function replaceCourses(int $pathId, array $courseIds): void
     {
-        $courses = DB::table('courses')->whereIn('id', $courseIds)->where('status', 'published')
-            ->when(Schema::hasColumn('courses', 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))
-            ->get()->keyBy('id');
-        abort_unless($courses->count() === count($courseIds), 409, 'A selected course is no longer published.');
+        $path = DB::table('learning_paths')->where('id', $pathId)->lockForUpdate()->first();
+        abort_unless($path, 404);
+
+        // Validation in the request is only a user-friendly preflight. Lock and
+        // revalidate every selected course in deterministic order inside the
+        // path transaction to close status/branch TOCTOU windows.
+        $query = DB::table('courses')->whereIn('id', $courseIds)->orderBy('id');
+        if (Schema::hasColumn('courses', 'deleted_at')) {
+            $query->whereNull('deleted_at');
+        }
+        $courses = $query->lockForUpdate()->get()->keyBy('id');
+        abort_unless($courses->count() === count($courseIds)
+            && $courses->every(fn ($course) => $course->status === 'published'),
+            409,
+            'A selected course is no longer published.'
+        );
+
+        $courseBranches = $courses->pluck('branch_id')->filter()->map(static fn ($id): int => (int) $id)->unique();
+        abort_if($courseBranches->count() > 1, 409, 'A learning path cannot mix courses from different branches.');
+        if ($path->branch_id === null) {
+            abort_if($courseBranches->isNotEmpty(), 409, 'A branch-specific course cannot be added to a global learning path.');
+        } elseif ($courseBranches->isNotEmpty()) {
+            abort_unless($courseBranches->count() === 1 && (int) $courseBranches->first() === (int) $path->branch_id,
+                409,
+                'Every selected course must belong to the learning path branch.'
+            );
+        }
+
         DB::table('learning_path_courses')->where('learning_path_id', $pathId)->delete();
         foreach (array_values($courseIds) as $index => $courseId) {
             $course = $courses->get($courseId);
