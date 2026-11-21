@@ -130,6 +130,9 @@ class FreshInstallerTest extends TestCase
         } finally {
             DB::disconnect('installer_test');
             @rmdir($privatePath);
+            foreach ([$this->tempLockPath, $this->tempLockPath . '.mutex', $this->tempLockPath . '.in-progress'] as $lockArtifact) {
+                @unlink($lockArtifact);
+            }
             @rmdir($lockDirectory);
             DB::setDefaultConnection($originalDefault);
             config([
