@@ -146,6 +146,53 @@ class BackupAndUpdateTest extends TestCase
         }
     }
 
+    public function test_backup_restore_database_rolls_back_when_required_audit_write_fails(): void
+    {
+        $this->markSystemInstalled();
+
+        $email = 'backup-audit-rollback-' . bin2hex(random_bytes(6)) . '@aec.test';
+        $timestamp = now();
+        DB::table('users')->insert([
+            'name' => 'Before backup',
+            'email' => $email,
+            'password' => password_hash('NotARealPassword!2026', PASSWORD_BCRYPT),
+            'is_active' => true,
+            'created_at' => $timestamp,
+            'updated_at' => $timestamp,
+        ]);
+
+        $backups = app(BackupService::class);
+        $record = $backups->createEncryptedBackup(null, false);
+
+        try {
+            DB::table('users')->where('email', $email)->update(['name' => 'Current live value']);
+
+            AuditLog::creating(static function (AuditLog $log): void {
+                if ($log->action === 'backup.restored') {
+                    throw new RuntimeException('forced backup restore audit failure');
+                }
+            });
+
+            try {
+                $backups->restoreEncryptedBackup($record);
+                $this->fail('Backup restore must fail if its required audit event cannot be stored.');
+            } catch (RuntimeException $exception) {
+                $this->assertSame('forced backup restore audit failure', $exception->getMessage());
+            } finally {
+                AuditLog::flushEventListeners();
+            }
+
+            $this->assertSame(
+                'Current live value',
+                DB::table('users')->where('email', $email)->value('name'),
+                'Database restore must roll back with the required audit write.'
+            );
+        } finally {
+            @unlink($record->storage_path);
+            $record->delete();
+        }
+    }
+
     public function test_legacy_aes_encrypted_backup_restores_using_streamed_decryption(): void
     {
         $this->markSystemInstalled();
