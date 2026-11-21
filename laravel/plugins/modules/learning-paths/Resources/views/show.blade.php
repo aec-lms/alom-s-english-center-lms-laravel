@@ -26,7 +26,7 @@
             <article class="flex items-start gap-4 rounded-2xl border border-slate-200 bg-white p-5">
                 <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full {{ $step && $step->completed ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-50 text-indigo-700' }} font-bold">{{ $course->position }}</div>
                 <div class="min-w-0 flex-1"><h2 class="font-bold text-slate-900">{{ $course->course_title }}</h2><p class="mt-1 text-sm text-slate-500">{{ $step && $step->completed ? 'Completed' : ($step && $step->unlocked ? 'Current step' : 'Locked until previous course is completed') }}</p>
-                    @if ($step && $step->unlocked && $step->enrolled && $course->course_slug && $course->course_status === 'published')
+                    @if ($step && $step->unlocked && $step->enrolled && $course->course_slug && $course->course_status === 'published' && $course->course_deleted_at === null)
                         <a class="mt-2 inline-flex text-sm font-semibold text-indigo-700" href="{{ route('public.courses.show', $course->course_slug) }}">Open course →</a>
                     @elseif ($step && $step->unlocked && !$step->enrolled)
                         <span class="mt-2 inline-block text-xs text-amber-700">Enroll in this course separately to begin</span>
