@@ -144,6 +144,50 @@ class FreshInstallerTest extends TestCase
     }
 
 
+    public function test_fresh_installer_rejects_symlinked_lock_directory_and_mutex_file(): void
+    {
+        $targetDirectory = sys_get_temp_dir() . '/aec-installer-lock-target-' . uniqid('', true);
+        $symlinkDirectory = sys_get_temp_dir() . '/aec-installer-lock-link-' . uniqid('', true);
+        $mutexDirectory = sys_get_temp_dir() . '/aec-installer-mutex-dir-' . uniqid('', true);
+        $mutexTarget = sys_get_temp_dir() . '/aec-installer-mutex-target-' . uniqid('', true);
+
+        mkdir($targetDirectory, 0700, true);
+        mkdir($mutexDirectory, 0700, true);
+        file_put_contents($mutexTarget, 'do-not-modify');
+
+        try {
+            $this->assertTrue(symlink($targetDirectory, $symlinkDirectory));
+            config(['lms.install_lock_path' => $symlinkDirectory . '/installed.lock']);
+
+            try {
+                app(FreshInstallerService::class)->installFresh([]);
+                $this->fail('Installer accepted a symbolic-link lock directory.');
+            } catch (RuntimeException $exception) {
+                $this->assertStringContainsString('lock directory', $exception->getMessage());
+            }
+
+            $mutexPath = $mutexDirectory . '/installed.lock.mutex';
+            $this->assertTrue(symlink($mutexTarget, $mutexPath));
+            config(['lms.install_lock_path' => $mutexDirectory . '/installed.lock']);
+
+            try {
+                app(FreshInstallerService::class)->installFresh([]);
+                $this->fail('Installer accepted a symbolic-link mutex file.');
+            } catch (RuntimeException $exception) {
+                $this->assertStringContainsString('symbolic link', $exception->getMessage());
+            }
+
+            $this->assertSame('do-not-modify', file_get_contents($mutexTarget));
+        } finally {
+            @unlink($symlinkDirectory);
+            @unlink($mutexDirectory . '/installed.lock.mutex');
+            @unlink($mutexTarget);
+            @rmdir($targetDirectory);
+            @rmdir($mutexDirectory);
+            config(['lms.install_lock_path' => $this->tempLockPath]);
+        }
+    }
+
     public function test_browser_installer_page_uses_file_sessions_before_database_installation(): void
     {
         config([
