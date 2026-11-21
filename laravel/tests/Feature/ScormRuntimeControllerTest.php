@@ -148,7 +148,10 @@ class ScormRuntimeControllerTest extends TestCase
             'total_time_seconds' => 15,
         ]);
 
-        $this->get($contentUrl)->assertForbidden();
+        $this->get($contentUrl)->assertOk();
+        $this->call('POST', '/api/scorm-runtime/commit', [], [], [], $origin,
+            $this->commitPayload($attempt->id, $token, 2, ['cmi.core.lesson_location' => 'late-write']))
+            ->assertStatus(409);
         File::deleteDirectory($packageRoot);
     }
 
