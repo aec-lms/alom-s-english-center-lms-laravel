@@ -31,8 +31,20 @@ class PaymentSettlementService
             unset($sanitizedMetadata[$forbidden]);
         }
 
-        return DB::transaction(function () use ($transaction, $externalReference, $sanitizedMetadata, $actorId): PaymentTransaction {
+        $invoiceId = PaymentTransaction::query()->whereKey($transaction->id)->value('invoice_id');
+        if ($invoiceId === null) {
+            throw new RuntimeException('A payment transaction must be linked to an invoice before settlement.');
+        }
+
+        return DB::transaction(function () use ($transaction, $invoiceId, $externalReference, $sanitizedMetadata, $actorId): PaymentTransaction {
+            // Money lifecycle writers use one lock order: invoice -> payment
+            // transaction -> buyer -> commerce order -> refund. This prevents
+            // refund/settlement deadlocks around the shared invoice balance.
+            $invoice = FeeInvoice::query()->whereKey($invoiceId)->lockForUpdate()->firstOrFail();
             $lockedTx = PaymentTransaction::query()->where('id', $transaction->id)->lockForUpdate()->firstOrFail();
+            if ((int) $lockedTx->invoice_id !== (int) $invoice->id) {
+                throw new RuntimeException('Payment transaction invoice ownership changed during settlement.');
+            }
             if ($lockedTx->status === 'settled') {
                 return $lockedTx;
             }
@@ -46,18 +58,24 @@ class PaymentSettlementService
                 throw new RuntimeException('Only initiated payment transactions can be settled.');
             }
 
-            $invoice = FeeInvoice::query()->where('id', $lockedTx->invoice_id)->lockForUpdate()->firstOrFail();
 
             // Referral attribution and first-paid-order settlement serialize on
             // the buyer account row. Resolve the order owner without locking the
             // order, then acquire the shared buyer lock before any paid-state
             // mutation or order-row lock later in this transaction.
             if (Schema::hasTable('commerce_orders')) {
-                $commerceBuyerId = DB::table('commerce_orders')
+                $commerceBuyerIds = DB::table('commerce_orders')
                     ->where('invoice_id', $invoice->id)
-                    ->value('user_id');
-                if ($commerceBuyerId !== null) {
-                    User::query()->whereKey((int) $commerceBuyerId)->lockForUpdate()->firstOrFail();
+                    ->whereNotNull('user_id')
+                    ->distinct()
+                    ->orderBy('user_id')
+                    ->pluck('user_id');
+
+                if ($commerceBuyerIds->count() > 1) {
+                    throw new RuntimeException('One invoice cannot settle commerce orders belonging to multiple buyers.');
+                }
+                if ($commerceBuyerIds->isNotEmpty()) {
+                    User::query()->whereKey((int) $commerceBuyerIds->first())->lockForUpdate()->firstOrFail();
                 }
             }
 
