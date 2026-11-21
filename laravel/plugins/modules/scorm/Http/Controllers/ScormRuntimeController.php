@@ -449,7 +449,7 @@ class ScormRuntimeController extends Controller
         if ((float) $course->price > 0) {
             abort_unless(Schema::hasTable('fee_invoices') && Schema::hasColumn('enrollments', 'invoice_id')
                 && $enrollment->invoice_id !== null, 403, 'Paid course invoice is required.');
-            $invoice = DB::table('fee_invoices')->where('id', $enrollment->invoice_id)->first();
+            $invoice = DB::table('fee_invoices')->where('id', $enrollment->invoice_id)->lockForUpdate()->first();
             abort_unless($invoice && $invoice->status === 'paid'
                 && (float) $invoice->paid_amount + 0.01 >= (float) $invoice->net_amount, 403, 'Course invoice is no longer settled.');
         }
