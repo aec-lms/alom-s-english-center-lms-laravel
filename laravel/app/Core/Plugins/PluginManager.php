@@ -752,7 +752,8 @@ class PluginManager
             throw new RuntimeException('Recycled plugin package is missing or outside the protected recycle-bin directory.');
         }
 
-        $metadata = json_decode(File::get($metadataPath), true, 512, JSON_THROW_ON_ERROR);
+        $metadataContents = File::get($metadataPath);
+        $metadata = json_decode($metadataContents, true, 512, JSON_THROW_ON_ERROR);
         $slug = (string) ($metadata['slug'] ?? '');
         if (preg_match('/^[a-z0-9][a-z0-9-]{1,79}$/', $slug) !== 1
             || ($metadata['archive'] ?? null) !== $archiveName
@@ -790,16 +791,16 @@ class PluginManager
                     $this->disable($slug, $actorId);
                 }
             }
-            // Keep the recovery metadata until the required audit event is durable.
-            // If audit storage fails, the catch block can return the package to the
-            // recycle bin and the original metadata remains discoverable.
+            // Remove the index before writing the success audit. If the audit
+            // fails, the catch path recreates this exact metadata after returning
+            // the package to the recycle bin, avoiding a false success event.
+            if (!@unlink($metadataPath) && is_file($metadataPath)) {
+                throw new RuntimeException('Could not remove recycle-bin metadata; plugin restore was rolled back.');
+            }
             $this->audit->logRequired('plugin.restored_from_recycle_bin', 'plugin', $slug, [
                 'archive' => $archiveName,
                 'business_data_preserved' => true,
             ], $actorId);
-            if (!@unlink($metadataPath)) {
-                throw new RuntimeException('Plugin was restored and audited, but recycle-bin metadata could not be removed; manual reconciliation is required.');
-            }
             return $record;
         } catch (Throwable $e) {
             // If installation succeeded but restoring the previous enabled state failed,
@@ -816,6 +817,16 @@ class PluginManager
             }
             if (is_dir($target)) {
                 File::moveDirectory($target, $source);
+            }
+            if (!is_file($metadataPath)) {
+                $written = File::put($metadataPath, $metadataContents);
+                if ($written === false) {
+                    throw new RuntimeException(
+                        'Plugin restore failed and recycle-bin metadata could not be recreated; manual recovery is required.',
+                        previous: $e,
+                    );
+                }
+                @chmod($metadataPath, 0600);
             }
             throw $e;
         }
