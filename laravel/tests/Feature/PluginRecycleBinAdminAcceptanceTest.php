@@ -275,7 +275,7 @@ class PluginRecycleBinAdminAcceptanceTest extends TestCase
             try {
                 $manager->deleteToRecycleBin($slug);
                 $this->fail('Metadata write failure with failed rollback must report retained archive.');
-            } catch (\\RuntimeException $exception) {
+            } catch (\RuntimeException $exception) {
                 $this->assertStringContainsString('without a committed metadata index', $exception->getMessage());
                 $this->assertStringContainsString('plugin-recycle-bin', $exception->getMessage());
             }
@@ -320,7 +320,7 @@ class PluginRecycleBinAdminAcceptanceTest extends TestCase
                         return false;
                     }
                     if ($moveCalls === 2) {
-                        file_put_contents($to . '/plugin.json', "\\n/* checksum mismatch during rollback */", FILE_APPEND);
+                        file_put_contents($to . '/plugin.json', "\n/* checksum mismatch during rollback */", FILE_APPEND);
                     }
                     return true;
                 }
@@ -329,7 +329,7 @@ class PluginRecycleBinAdminAcceptanceTest extends TestCase
             try {
                 $manager->deleteToRecycleBin($slug);
                 $this->fail('A checksum mismatch during rollback must fail closed.');
-            } catch (\\RuntimeException $exception) {
+            } catch (\RuntimeException $exception) {
                 $this->assertStringContainsString('failed checksum verification', $exception->getMessage());
                 $this->assertStringContainsString($modulePath, $exception->getMessage());
             }
