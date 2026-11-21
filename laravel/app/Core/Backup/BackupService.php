@@ -322,6 +322,14 @@ class BackupService
      */
     private function restoreStagedPrivateFiles(string $stagingDir): void
     {
+        $storageRoot = realpath(storage_path('app'));
+        $restoreRoot = $storageRoot !== false ? realpath($storageRoot . DIRECTORY_SEPARATOR . 'restore-staging') : false;
+        $resolvedStaging = realpath($stagingDir);
+        if ($storageRoot === false || $restoreRoot === false || is_link($stagingDir)
+            || $resolvedStaging === false || dirname($resolvedStaging) !== $restoreRoot) {
+            throw new RuntimeException('Private restore staging directory is outside its isolated storage root.');
+        }
+        $stagingDir = $resolvedStaging;
         $privateDir = (string) config('lms.private_storage_path');
         if ($privateDir === '' || is_link($privateDir)) {
             throw new RuntimeException('Private storage path is invalid or is a symbolic link.');
@@ -429,9 +437,14 @@ class BackupService
 
     private function deleteDirectoryTree(string $directory): void
     {
-        if (!is_dir($directory) || is_link($directory)) {
+        $storageRoot = realpath(storage_path('app'));
+        $restoreRoot = $storageRoot !== false ? realpath($storageRoot . DIRECTORY_SEPARATOR . 'restore-staging') : false;
+        $resolvedDirectory = realpath($directory);
+        if (!is_dir($directory) || is_link($directory) || $restoreRoot === false
+            || $resolvedDirectory === false || dirname($resolvedDirectory) !== $restoreRoot) {
             return;
         }
+        $directory = $resolvedDirectory;
         $iterator = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS),
             \RecursiveIteratorIterator::CHILD_FIRST

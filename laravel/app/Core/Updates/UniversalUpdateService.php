@@ -803,9 +803,14 @@ class UniversalUpdateService
 
     private function deleteDirectory(string $dir): void
     {
-        if (!is_dir($dir)) {
+        $storageRoot = realpath(storage_path('app'));
+        $stagingRoot = $storageRoot !== false ? realpath($storageRoot . DIRECTORY_SEPARATOR . 'update-staging') : false;
+        $resolvedDirectory = realpath($dir);
+        if (!is_dir($dir) || is_link($dir) || $stagingRoot === false
+            || $resolvedDirectory === false || dirname($resolvedDirectory) !== $stagingRoot) {
             return;
         }
+        $dir = $resolvedDirectory;
         $iterator = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
             RecursiveIteratorIterator::CHILD_FIRST
