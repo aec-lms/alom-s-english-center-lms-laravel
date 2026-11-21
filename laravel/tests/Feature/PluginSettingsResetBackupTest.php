@@ -41,8 +41,13 @@ class PluginSettingsResetBackupTest extends TestCase
             ->filter(fn ($file) => !in_array($file->getPathname(), $before, true))
             ->values();
         $this->assertCount(1, $newFiles);
+        $backupPath = $newFiles->first()->getPathname();
+        clearstatcache(true, $backupRoot);
+        clearstatcache(true, $backupPath);
+        $this->assertSame(0, fileperms($backupRoot) & 0077, 'Plugin settings backup directory must be owner-only.');
+        $this->assertSame(0, fileperms($backupPath) & 0077, 'Plugin settings backup file must be owner-only.');
 
-        $backup = json_decode(File::get($newFiles->first()->getPathname()), true, 512, JSON_THROW_ON_ERROR);
+        $backup = json_decode(File::get($backupPath), true, 512, JSON_THROW_ON_ERROR);
         $this->assertSame('gateway-sslcommerz', $backup['plugin_slug']);
 
         $secretRow = collect($backup['settings'])->firstWhere('setting_key', 'store_password');
