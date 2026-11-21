@@ -233,10 +233,18 @@ class ScormRuntimeControllerTest extends TestCase
             'total_time_seconds' => 15,
         ]);
 
-        $this
-            ->withCookie($cookie->getName(), $cookie->getValue())
-            ->withCookie($bridgeCookie->getName(), $bridgeCookie->getValue())
-            ->get($cleanContentUrl)->assertOk();
+        // Revalidate the private-content handler with the issued host-only
+        // cookie values directly. The real cross-host cookie transport and
+        // encryption are exercised by the browser E2E suite.
+        $contentAfterFinishRequest = Request::create($cleanContentUrl, 'GET');
+        $contentAfterFinishRequest->cookies->set($this->scormSessionCookieName((int) $attempt->id), $token);
+        $contentAfterFinishRequest->cookies->set($this->scormBridgeCookieName((int) $attempt->id), $bridgeNonce);
+        $contentAfterFinish = app(ScormRuntimeController::class)->contentFile(
+            $contentAfterFinishRequest,
+            (int) $attempt->id,
+            'index.html'
+        );
+        $this->assertSame(200, $contentAfterFinish->getStatusCode());
         $this->call('POST', '/api/scorm-runtime/commit', [], [], [], $origin,
             $this->commitPayload($attempt->id, $token, 2, ['cmi.core.lesson_location' => 'late-write']))
             ->assertStatus(409);
@@ -269,7 +277,9 @@ class ScormRuntimeControllerTest extends TestCase
         $trustedOrigin = ['HTTP_ORIGIN' => 'https://scorm-player.example.test'];
         $this->call('OPTIONS', '/api/scorm-runtime/commit', [], [], [], $trustedOrigin)
             ->assertNoContent()
-            ->assertHeader('Access-Control-Allow-Origin', '*');
+            ->assertHeader('Access-Control-Allow-Origin', 'https://scorm-player.example.test')
+            ->assertHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+            ->assertHeader('Access-Control-Allow-Headers', 'Content-Type');
 
         $this->call('POST', '/api/scorm-runtime/commit', [], [], [], $trustedOrigin + [
             'CONTENT_TYPE' => 'text/plain',

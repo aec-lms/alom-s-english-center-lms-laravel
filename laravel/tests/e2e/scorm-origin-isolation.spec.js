@@ -139,6 +139,15 @@ test('untrusted SCO cannot inspect LMS/player state and commits only through the
 <script>
 (() => {
   const bridgeNonce = ${JSON.stringify(bridgeNonce)};
+  let contentCookie = '';
+  let contentCookieReadBlocked = false;
+  try {
+    contentCookie = document.cookie;
+  } catch (error) {
+    // A sandboxed opaque-origin SCO cannot read even its own cookie jar.
+    contentCookieReadBlocked = true;
+  }
+
   const result = {
     playerDocumentReadable: false,
     playerSecretReadable: false,
@@ -148,7 +157,8 @@ test('untrusted SCO cannot inspect LMS/player state and commits only through the
     frameElementAvailable: window.frameElement !== null,
     sandboxRemovalSucceeded: false,
     contentUrlHasToken: location.href.includes(${JSON.stringify(playerToken)}),
-    contentCookie: document.cookie
+    contentCookie,
+    contentCookieReadBlocked
   };
 
   try {
@@ -242,6 +252,7 @@ test('untrusted SCO cannot inspect LMS/player state and commits only through the
   expect(result.sandboxRemovalSucceeded).toBe(false);
   expect(result.contentUrlHasToken).toBe(false);
   expect(result.contentCookie).toBe('');
+  expect(result.contentCookieReadBlocked).toBe(true);
 
   expect(capturedPayloads).toHaveLength(1);
   expect(capturedPayloads[0].attempt_id).toBe(41);
