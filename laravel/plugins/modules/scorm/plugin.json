@@ -7,7 +7,7 @@
   "description": "Secure SCORM 1.2 package import, private delivery and learner runtime tracking.",
   "core_compatibility": "^2.0",
   "dependencies": [],
-  "optional_dependencies": ["course-management", "course-content-studio", "learning-paths"],
+  "optional_dependencies": ["course-management", "course-content-studio"],
   "provider": "Plugins\\Modules\\Scorm\\Providers\\ScormServiceProvider",
   "permissions": [
     { "slug": "scorm.manage", "name": "Manage SCORM packages" }
