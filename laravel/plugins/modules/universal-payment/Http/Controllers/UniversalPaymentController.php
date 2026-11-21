@@ -657,7 +657,7 @@ class UniversalPaymentController extends Controller
             return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)->withErrors(['payment' => 'The provider return did not verify the payment. The transaction remains pending; do not retry until support reconciles its status.']);
         }
         $slug = DB::table('storefront_items')->where('id', $transaction->storefront_item_id)->value('slug');
-        return redirect('/ebooks/' . rawurlencode((string) $slug))->withErrors(['payment' => 'Payment was not completed. You can try again.']);
+        return redirect('/ebooks/' . rawurlencode((string) $slug))->withErrors(['payment' => 'The provider return did not verify the payment. The transaction remains pending; do not retry until support reconciles its status.']);
     }
 
     public function sslcommerzCancelled(Request $request): RedirectResponse
@@ -688,7 +688,7 @@ class UniversalPaymentController extends Controller
             return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)->with('status', 'The browser return cannot confirm cancellation. The transaction remains pending; do not retry until support reconciles its status.');
         }
         $slug = DB::table('storefront_items')->where('id', $transaction->storefront_item_id)->value('slug');
-        return redirect('/ebooks/' . rawurlencode((string) $slug))->with('status', 'Payment was cancelled.');
+        return redirect('/ebooks/' . rawurlencode((string) $slug))->with('status', 'The browser return cannot confirm cancellation. The transaction remains pending; do not retry until support reconciles its status.');
     }
 
     private function assertInvoiceEnrollmentBranchAccess(object $invoice): void
