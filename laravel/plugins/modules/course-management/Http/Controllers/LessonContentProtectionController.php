@@ -115,6 +115,9 @@ class LessonContentProtectionController extends Controller
             $courseRow->branch_id !== null ? (int) $courseRow->branch_id : null,
             $enrollment
         );
+        if (app(PluginManager::class)->isEnabled('learning-paths')) {
+            app(LearningPathAccess::class)->assertCourseUnlocked((int) $request->user()->id, $course);
+        }
 
         $lessons = DB::table('course_lessons')
             ->where('course_id', $course)
@@ -259,6 +262,9 @@ class LessonContentProtectionController extends Controller
             $row->course_branch_id !== null ? (int) $row->course_branch_id : null,
             $enrollment
         );
+        if (app(PluginManager::class)->isEnabled('learning-paths')) {
+            app(LearningPathAccess::class)->assertCourseUnlocked((int) $request->user()->id, (int) $row->course_id);
+        }
         return $row;
     }
 
