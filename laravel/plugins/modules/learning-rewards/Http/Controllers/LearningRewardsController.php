@@ -132,20 +132,23 @@ class LearningRewardsController extends Controller
 
     private function resolveStudentBranch(object $student): ?int
     {
+        if (Schema::hasColumn('users', 'is_active')) {
+            abort_unless((bool) $student->is_active, 403, 'Inactive student accounts cannot view the leaderboard.');
+        }
+
         $accountBranchId = $student->branch_id !== null ? (int) $student->branch_id : null;
         $profileBranchId = null;
-
         if (app(PluginManager::class)->isEnabled('student-management')) {
             abort_unless(Schema::hasTable('students') && Schema::hasColumn('students', 'user_id'),
-                403, 'An active student profile is required to view the learning leaderboard.');
+                403, 'An active student profile is required to view the leaderboard.');
             $profileQuery = DB::table('students')->where('user_id', $student->id);
             if (Schema::hasColumn('students', 'deleted_at')) {
                 $profileQuery->whereNull('deleted_at');
             }
             $profile = $profileQuery->first();
-            abort_unless($profile, 403, 'An active student profile is required to view the learning leaderboard.');
+            abort_unless($profile, 403, 'An active student profile is required to view the leaderboard.');
             if (Schema::hasColumn('students', 'status')) {
-                abort_unless($profile->status === 'active', 403, 'Inactive student profiles cannot view the learning leaderboard.');
+                abort_unless($profile->status === 'active', 403, 'Inactive student profiles cannot view the leaderboard.');
             }
             if (Schema::hasColumn('students', 'branch_id') && $profile->branch_id !== null) {
                 $profileBranchId = (int) $profile->branch_id;
