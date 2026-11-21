@@ -151,6 +151,45 @@ class LearningRewardsPluginTest extends TestCase
         ]);
     }
 
+    public function test_leaderboard_is_scoped_to_the_students_assigned_branch(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'learning-rewards']);
+        $branchA = DB::table('branches')->insertGetId([
+            'code' => 'REWARD-A',
+            'name' => 'Rewards Branch A',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $branchB = DB::table('branches')->insertGetId([
+            'code' => 'REWARD-B',
+            'name' => 'Rewards Branch B',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $studentA = $this->createUserWithRole('student', $branchA);
+        $studentB = $this->createUserWithRole('student', $branchB);
+        $service = app(LearningRewardsService::class);
+        $service->awardVerifiedActivity((int) $studentA->id, 'lesson_completed', 'course_lesson', 301);
+        $service->awardVerifiedActivity((int) $studentB->id, 'lesson_completed', 'course_lesson', 302);
+
+        $this->actingAs($studentA)->get('/learning-leaderboard?period=all')
+            ->assertOk()
+            ->assertSee($studentA->name)
+            ->assertDontSee($studentB->name);
+
+        $this->assertDatabaseHas('learning_reward_ledger', [
+            'user_id' => $studentA->id,
+            'branch_id' => $branchA,
+        ]);
+        $this->assertDatabaseHas('learning_reward_ledger', [
+            'user_id' => $studentB->id,
+            'branch_id' => $branchB,
+        ]);
+    }
+
     public function test_admin_can_create_and_deactivate_achievement_badges(): void
     {
         $this->bootRewards();
