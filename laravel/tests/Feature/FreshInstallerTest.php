@@ -244,6 +244,94 @@ class FreshInstallerTest extends TestCase
         }
     }
 
+    public function test_environment_key_persistence_failure_is_recorded_and_can_retry_on_empty_database(): void
+    {
+        $originalDefault = config('database.default');
+        $originalAppKey = config('app.key');
+        $originalSigningKey = config('lms.plugin_signing_key');
+        $originalBackupKey = config('lms.backup_encryption_key');
+        $root = sys_get_temp_dir() . '/aec-installer-env-failure-' . bin2hex(random_bytes(8));
+        mkdir($root, 0700, true);
+
+        $lockPath = $root . '/installed.lock';
+        $envPath = $root . '/missing/.env';
+        $privatePath = $root . '/private';
+        $backupPath = $root . '/backups';
+
+        config([
+            'database.connections.installer_env_failure_test' => [
+                'driver' => 'sqlite',
+                'database' => ':memory:',
+                'prefix' => '',
+                'foreign_key_constraints' => true,
+            ],
+            'database.default' => 'installer_env_failure_test',
+            'lms.install_lock_path' => $lockPath,
+            'lms.env_path' => $envPath,
+            'lms.private_storage_path' => $privatePath,
+            'lms.backup_path' => $backupPath,
+        ]);
+        DB::purge('installer_env_failure_test');
+        DB::setDefaultConnection('installer_env_failure_test');
+
+        $installConfig = [
+            'app_name' => 'AEC Environment Retry Test',
+            'app_url' => 'https://aec-env-retry.test',
+            'admin_name' => 'Environment Retry Admin',
+            'admin_email' => 'environment-retry-admin@aec.test',
+            'admin_password' => 'EnvironmentRetryStrongPassword!2026',
+            'country_code' => 'BD',
+            'locale' => 'en',
+            'timezone' => 'Asia/Dhaka',
+            'currency' => 'BDT',
+        ];
+
+        try {
+            try {
+                app(FreshInstallerService::class)->installFresh($installConfig);
+                $this->fail('Installer unexpectedly persisted generated keys to a missing environment-file path.');
+            } catch (RuntimeException $exception) {
+                $this->assertStringContainsString('.env file must exist and be writable', $exception->getMessage());
+            }
+
+            $this->assertFileDoesNotExist($lockPath);
+            $this->assertFileExists($lockPath . '.in-progress', 'Key persistence failure must leave a durable phase marker.');
+            $probe = fopen($lockPath . '.mutex', 'c');
+            $this->assertNotFalse($probe);
+            $this->assertTrue(flock($probe, LOCK_EX | LOCK_NB), 'The mutex must be released after key persistence failure.');
+            flock($probe, LOCK_UN);
+            fclose($probe);
+
+            // Repair only the missing environment file. The database is still empty,
+            // so the interrupted marker can be cleared and installation retried safely.
+            mkdir(dirname($envPath), 0700, true);
+            file_put_contents($envPath, "APP_KEY=\n");
+            $result = app(FreshInstallerService::class)->installFresh($installConfig);
+
+            $this->assertFileExists($lockPath);
+            $this->assertFileDoesNotExist($lockPath . '.in-progress');
+            $this->assertSame(1, (int) User::query()->where('email', 'environment-retry-admin@aec.test')->count());
+            $this->assertGreaterThan(0, (int) $result['admin_id']);
+        } finally {
+            DB::disconnect('installer_env_failure_test');
+            DB::setDefaultConnection($originalDefault);
+            config([
+                'database.default' => $originalDefault,
+                'app.key' => $originalAppKey,
+                'lms.plugin_signing_key' => $originalSigningKey,
+                'lms.backup_encryption_key' => $originalBackupKey,
+            ]);
+
+            foreach ([$lockPath, $lockPath . '.mutex', $lockPath . '.in-progress', $envPath] as $file) {
+                @unlink($file);
+            }
+            foreach ([$privatePath, $backupPath, dirname($envPath)] as $directory) {
+                @rmdir($directory);
+            }
+            @rmdir($root);
+        }
+    }
+
     public function test_seeder_failure_never_marks_partial_schema_installed_and_requires_a_fresh_database_for_recovery(): void
     {
         $originalDefault = config('database.default');
