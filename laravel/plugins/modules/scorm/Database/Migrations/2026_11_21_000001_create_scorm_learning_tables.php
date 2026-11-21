@@ -67,6 +67,7 @@ return new class extends Migration {
                 $table->foreignId('scorm_attempt_id')->constrained('scorm_attempts')->cascadeOnDelete();
                 $table->char('token_sha256', 64)->unique();
                 $table->timestamp('expires_at')->index();
+                $table->unsignedInteger('last_session_seconds')->default(0);
                 $table->timestamp('last_seen_at')->nullable();
                 $table->timestamps();
             });
