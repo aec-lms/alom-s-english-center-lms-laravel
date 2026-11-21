@@ -156,7 +156,7 @@ class CourseTeacherAssignmentController extends Controller
      * the locked role pivot; non-admin grants are serialized against role
      * permission edits via permission_role.
      *
-     * @param \\Illuminate\\Support\\Collection<int, object> $actorRolePivots
+     * @param \Illuminate\Support\Collection<int, object> $actorRolePivots
      */
     private function assertActorCanManageCourses(User $actor, $actorRolePivots): void
     {
