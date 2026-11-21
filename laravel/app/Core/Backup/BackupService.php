@@ -205,103 +205,110 @@ class BackupService
         $totalBytes = 0;
         $fileCount = 0;
 
-        for ($i = 0; $i < $zip->numFiles; $i++) {
-            $name = (string) $zip->getNameIndex($i);
-            if ($name === 'database.json' || $name === 'database.jsonl' || $name === 'manifest.json') {
-                continue;
+        try {
+            for ($i = 0; $i < $zip->numFiles; $i++) {
+                $name = (string) $zip->getNameIndex($i);
+                if ($name === 'database.json' || $name === 'database.jsonl' || $name === 'manifest.json') {
+                    continue;
+                }
+                if (!str_starts_with($name, 'private-files/')) {
+                    throw new RuntimeException("Unexpected entry in backup archive: {$name}");
+                }
+                if (!$includesFiles) {
+                    throw new RuntimeException('Backup archive contains private files but its manifest says files were excluded.');
+                }
+
+                $relative = substr($name, strlen('private-files/'));
+                $normalized = str_replace('\\\\', '/', $relative);
+                $segments = explode('/', $normalized);
+                if ($relative === ''
+                    || str_contains($relative, "\\0")
+                    || str_contains($relative, '\\\\')
+                    || str_starts_with($normalized, '/')
+                    || preg_match('/^[a-zA-Z]:/', $normalized) === 1
+                    || in_array('..', $segments, true)
+                    || in_array('.', $segments, true)
+                ) {
+                    throw new RuntimeException("Unsafe private file path in backup: {$name}");
+                }
+
+                if (isset($seen[$normalized])) {
+                    throw new RuntimeException("Duplicate private file in backup: {$name}");
+                }
+                $seen[$normalized] = true;
+
+                $opsys = 0;
+                $externalAttributes = 0;
+                if ($zip->getExternalAttributesIndex($i, $opsys, $externalAttributes)
+                    && $opsys === ZipArchive::OPSYS_UNIX
+                ) {
+                    // statIndex() does not expose Unix external attributes. Read the
+                    // actual ZIP entry attributes so symlinks and special files fail closed.
+                    $fileType = ($externalAttributes >> 16) & 0170000;
+                    if ($fileType === 0120000) {
+                        throw new RuntimeException("Symlink entry rejected in backup: {$name}");
+                    }
+                    if ($fileType !== 0 && $fileType !== 0100000 && $fileType !== 0040000) {
+                        throw new RuntimeException("Special file entry rejected in backup: {$name}");
+                    }
+                }
+
+                $stat = $zip->statIndex($i);
+                $size = (int) ($stat['size'] ?? 0);
+                $totalBytes += $size;
+                if (++$fileCount > 5000 || $size > 268435456 || $totalBytes > 1073741824) {
+                    throw new RuntimeException('Private files in backup exceed the allowed size or file count.');
+                }
+
+                if (str_ends_with($normalized, '/')) {
+                    continue;
+                }
+
+                $destination = $stagingDir . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $normalized);
+                $parent = dirname($destination);
+                if (!is_dir($parent) && !mkdir($parent, 0700, true) && !is_dir($parent)) {
+                    throw new RuntimeException('Unable to create private restore staging directory.');
+                }
+
+                // Stream ZIP members directly to disk. getFromIndex() materializes the
+                // entire entry in PHP memory and can exhaust the memory limit on large
+                // private uploads (the archive permits entries up to 256 MiB).
+                $input = $zip->getStream($name);
+                if (!is_resource($input)) {
+                    throw new RuntimeException("Unable to open private file from backup: {$name}");
+                }
+                $output = fopen($destination, 'xb');
+                if ($output === false) {
+                    fclose($input);
+                    throw new RuntimeException("Unable to create staged private file from backup: {$name}");
+                }
+                try {
+                    $copied = stream_copy_to_stream($input, $output, $size + 1);
+                    if ($copied !== $size || !fflush($output)) {
+                        throw new RuntimeException("Unable to stage private file completely from backup: {$name}");
+                    }
+                } finally {
+                    fclose($input);
+                    fclose($output);
+                }
+                @chmod($destination, 0600);
             }
-            if (!str_starts_with($name, 'private-files/')) {
-                throw new RuntimeException("Unexpected entry in backup archive: {$name}");
-            }
+
             if (!$includesFiles) {
-                throw new RuntimeException('Backup archive contains private files but its manifest says files were excluded.');
+                return null;
             }
 
-            $relative = substr($name, strlen('private-files/'));
-            $normalized = str_replace('\\', '/', $relative);
-            $segments = explode('/', $normalized);
-            if ($relative === ''
-                || str_contains($relative, "\0")
-                || str_contains($relative, '\\')
-                || str_starts_with($normalized, '/')
-                || preg_match('/^[a-zA-Z]:/', $normalized) === 1
-                || in_array('..', $segments, true)
-                || in_array('.', $segments, true)
-            ) {
-                throw new RuntimeException("Unsafe private file path in backup: {$name}");
-            }
-
-            if (isset($seen[$normalized])) {
-                throw new RuntimeException("Duplicate private file in backup: {$name}");
-            }
-            $seen[$normalized] = true;
-
-            $opsys = 0;
-            $externalAttributes = 0;
-            if ($zip->getExternalAttributesIndex($i, $opsys, $externalAttributes)
-                && $opsys === ZipArchive::OPSYS_UNIX
-            ) {
-                // statIndex() does not expose Unix external attributes. Read the
-                // actual ZIP entry attributes so symlinks and special files fail closed.
-                $fileType = ($externalAttributes >> 16) & 0170000;
-                if ($fileType === 0120000) {
-                    throw new RuntimeException("Symlink entry rejected in backup: {$name}");
-                }
-                if ($fileType !== 0 && $fileType !== 0100000 && $fileType !== 0040000) {
-                    throw new RuntimeException("Special file entry rejected in backup: {$name}");
-                }
-            }
-
-            $stat = $zip->statIndex($i);
-            $size = (int) ($stat['size'] ?? 0);
-            $totalBytes += $size;
-            if (++$fileCount > 5000 || $size > 268435456 || $totalBytes > 1073741824) {
-                throw new RuntimeException('Private files in backup exceed the allowed size or file count.');
-            }
-
-            if (str_ends_with($normalized, '/')) {
-                continue;
-            }
-
-            $destination = $stagingDir . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $normalized);
-            $parent = dirname($destination);
-            if (!is_dir($parent) && !mkdir($parent, 0700, true) && !is_dir($parent)) {
+            if (!is_dir($stagingDir) && !mkdir($stagingDir, 0700, true) && !is_dir($stagingDir)) {
                 throw new RuntimeException('Unable to create private restore staging directory.');
             }
 
-            // Stream ZIP members directly to disk. getFromIndex() materializes the
-            // entire entry in PHP memory and can exhaust the memory limit on large
-            // private uploads (the archive permits entries up to 256 MiB).
-            $input = $zip->getStream($name);
-            if (!is_resource($input)) {
-                throw new RuntimeException("Unable to open private file from backup: {$name}");
-            }
-            $output = fopen($destination, 'xb');
-            if ($output === false) {
-                fclose($input);
-                throw new RuntimeException("Unable to create staged private file from backup: {$name}");
-            }
-            try {
-                $copied = stream_copy_to_stream($input, $output, $size + 1);
-                if ($copied !== $size || !fflush($output)) {
-                    throw new RuntimeException("Unable to stage private file completely from backup: {$name}");
-                }
-            } finally {
-                fclose($input);
-                fclose($output);
-            }
-            @chmod($destination, 0600);
+            return $stagingDir;
+        } catch (\\Throwable $exception) {
+            // A rejected archive may fail after earlier members were already staged.
+            // Remove that partial tree so repeated restore attempts cannot fill storage.
+            $this->deleteDirectoryTree($stagingDir);
+            throw $exception;
         }
-
-        if (!$includesFiles) {
-            return null;
-        }
-
-        if (!is_dir($stagingDir) && !mkdir($stagingDir, 0700, true) && !is_dir($stagingDir)) {
-            throw new RuntimeException('Unable to create private restore staging directory.');
-        }
-
-        return $stagingDir;
     }
 
     /**
