@@ -100,7 +100,7 @@ class RefundOrchestrationService
                 'request_fingerprint' => $fingerprint,
                 'metadata' => ['approval_required' => true],
             ]);
-            $this->audit->log('payment.refund_requested', 'payment_transaction', (string) $lockedTx->id, [
+            $this->audit->logRequired('payment.refund_requested', 'payment_transaction', (string) $lockedTx->id, [
                 'refund_id' => $created->id,
                 'amount' => $created->amount,
                 'gateway' => $created->gateway_slug,
@@ -157,7 +157,7 @@ class RefundOrchestrationService
                 'status' => 'submitted',
                 'submitted_at' => now(),
             ]);
-            $this->audit->log('payment.refund_approved', 'payment_transaction', (string) $transactionId, [
+            $this->audit->logRequired('payment.refund_approved', 'payment_transaction', (string) $transactionId, [
                 'refund_id' => $lockedRefund->id,
                 'amount' => $lockedRefund->amount,
                 'gateway' => $lockedRefund->gateway_slug,
@@ -214,7 +214,7 @@ class RefundOrchestrationService
                 'rejected_by' => $actorId,
                 'rejected_at' => now(),
             ]);
-            $this->audit->log('payment.refund_rejected', 'payment_transaction', (string) $transactionId, [
+            $this->audit->logRequired('payment.refund_rejected', 'payment_transaction', (string) $transactionId, [
                 'refund_id' => $lockedRefund->id,
                 'amount' => $lockedRefund->amount,
                 'gateway' => $lockedRefund->gateway_slug,
@@ -353,7 +353,7 @@ class RefundOrchestrationService
                     $locked->update(['reconciled_at' => now()]);
                 }
                 $fresh = $locked->fresh();
-                $this->audit->log('payment.refund_provider_state_changed', 'payment_transaction', (string) $transactionId, [
+                $this->audit->logRequired('payment.refund_provider_state_changed', 'payment_transaction', (string) $transactionId, [
                     'refund_id' => $fresh->id,
                     'status' => $fresh->status,
                     'provider_status' => $fresh->provider_status,
@@ -381,7 +381,7 @@ class RefundOrchestrationService
 
             $locked->update($changes);
             $fresh = $locked->fresh();
-            $this->audit->log('payment.refund_provider_state_changed', 'payment_transaction', (string) $transactionId, [
+            $this->audit->logRequired('payment.refund_provider_state_changed', 'payment_transaction', (string) $transactionId, [
                 'refund_id' => $fresh->id,
                 'status' => $fresh->status,
                 'provider_status' => $fresh->provider_status,
