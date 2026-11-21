@@ -241,6 +241,49 @@ class BackupAndUpdateTest extends TestCase
     }
 
 
+
+    public function test_legacy_update_rollback_restore_preserves_update_and_audit_history(): void
+    {
+        $this->markSystemInstalled();
+        $timestamp = now();
+
+        $updateId = DB::table('update_logs')->insertGetId([
+            'target_type' => 'core',
+            'target_slug' => 'aec-lms-core',
+            'from_version' => '2.0.0',
+            'to_version' => '2.0.1',
+            'package_checksum' => str_repeat('b', 64),
+            'status' => 'applied',
+            'backup_reference' => 'legacy-rollback-fixture',
+            'notes' => 'legacy rollback history fixture',
+            'executed_by' => null,
+            'created_at' => $timestamp,
+            'updated_at' => $timestamp,
+        ]);
+        $auditId = DB::table('audit_logs')->insertGetId([
+            'user_id' => null,
+            'action' => 'update.applied',
+            'entity_type' => 'core',
+            'entity_id' => 'aec-lms-core',
+            'ip_address' => null,
+            'metadata' => json_encode(['to' => '2.0.1'], JSON_THROW_ON_ERROR),
+            'created_at' => $timestamp,
+            'updated_at' => $timestamp,
+        ]);
+
+        $restore = new \\ReflectionMethod(BackupService::class, 'restoreLegacyDatabaseSnapshot');
+        $restore->setAccessible(true);
+        $restore->invoke(app(BackupService::class), [
+            'tables' => [
+                'update_logs' => [],
+                'audit_logs' => [],
+            ],
+        ], true);
+
+        $this->assertDatabaseHas('update_logs', ['id' => $updateId, 'status' => 'applied']);
+        $this->assertDatabaseHas('audit_logs', ['id' => $auditId, 'action' => 'update.applied']);
+    }
+
     public function test_update_rollback_restore_preserves_update_and_audit_history(): void
     {
         $this->markSystemInstalled();
