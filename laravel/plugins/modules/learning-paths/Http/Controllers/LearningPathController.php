@@ -84,6 +84,10 @@ class LearningPathController extends Controller
             $hasLearners = DB::table('learning_path_enrollments')->where('learning_path_id', $locked->id)->exists();
             abort_if($hasLearners && $currentIds !== $nextIds, 409,
                 'Course order is locked after learners enroll. Create a new path version to change its curriculum.');
+            abort_if($hasLearners && (int) ($locked->branch_id ?? 0) !== (int) ($validated['branch_id'] ?? 0), 409,
+                'Branch assignment is locked after learners enroll.');
+            abort_if($hasLearners && $validated['status'] !== 'published', 409,
+                'A path with enrolled learners cannot be unpublished or archived until those learners finish.');
 
             DB::table('learning_paths')->where('id', $locked->id)->update([
                 'branch_id' => $validated['branch_id'],
@@ -110,11 +114,16 @@ class LearningPathController extends Controller
             ->when($actor->hasRole('branch_manager'), fn ($query) => $query->where('branch_id', $actor->branch_id))
             ->where('id', $path)->first();
         abort_unless($record, 404);
+        $hasActiveLearners = DB::table('learning_path_enrollments')
+            ->where('learning_path_id', $record->id)->where('status', 'active')->exists();
+        abort_if($hasActiveLearners && $validated['status'] !== 'published', 409,
+            'A path with active learners cannot be unpublished or archived until they finish.');
         if ($validated['status'] === 'published') {
             $items = $this->pathCourses((int) $record->id);
             abort_unless($items->count() >= 2, 422, 'A published learning path needs at least two courses.');
             abort_unless($items->every(fn ($item) => $item->course_status === 'published'), 409,
                 'Every course in the path must remain published.');
+            $this->assertPathCourseBranches($record, $items);
         }
         DB::table('learning_paths')->where('id', $record->id)->update([
             'status' => $validated['status'], 'updated_at' => now(),
@@ -159,6 +168,7 @@ class LearningPathController extends Controller
         abort_unless($path, 404);
         $courses = $this->pathCourses((int) $path->id);
         abort_unless($courses->count() >= 2 && $courses->every(fn ($course) => $course->course_status === 'published'), 404);
+        $this->assertPathCourseBranches($path, $courses);
 
         $pathEnrollment = $actor && $actor->hasRole('student')
             ? DB::table('learning_path_enrollments')->where('learning_path_id', $path->id)->where('user_id', $actor->id)->first()
@@ -189,6 +199,7 @@ class LearningPathController extends Controller
             }
             $courses = $this->pathCourses((int) $path->id);
             abort_unless($courses->count() >= 2 && $courses->every(fn ($course) => $course->course_status === 'published'), 409);
+            $this->assertPathCourseBranches($path, $courses);
             $first = $courses->first();
             $firstEnrollment = DB::table('enrollments')->where('user_id', $student->id)
                 ->where('course_id', $first->course_id)->whereIn('status', ['active', 'completed'])
@@ -316,6 +327,19 @@ class LearningPathController extends Controller
                 'item.course_id', 'item.course_title', 'item.position',
                 'courses.slug as course_slug', 'courses.status as course_status', 'courses.branch_id as course_branch_id',
             ]);
+    }
+
+    private function assertPathCourseBranches($path, $courses): void
+    {
+        $courseBranchIds = $courses->pluck('course_branch_id')->filter()->map(fn ($id): int => (int) $id)->unique();
+        abort_if($courseBranchIds->count() > 1, 409, 'The path contains courses from multiple branches.');
+        if ($path->branch_id !== null && $courseBranchIds->isNotEmpty()) {
+            abort_unless($courseBranchIds->count() === 1 && (int) $courseBranchIds->first() === (int) $path->branch_id,
+                409, 'A course branch changed after this learning path was configured.');
+        }
+        if ($path->branch_id === null && $courseBranchIds->isNotEmpty()) {
+            abort(409, 'A branch-specific course cannot be delivered through a global learning path.');
+        }
     }
 
     private function learnerProgress($path, int $userId, $courses)
