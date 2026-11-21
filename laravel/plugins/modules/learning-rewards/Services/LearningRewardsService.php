@@ -57,7 +57,7 @@ class LearningRewardsService
                     return ['awarded' => false, 'duplicate' => false, 'points' => 0, 'ledger_id' => null];
                 }
 
-                $timezone = 'Asia/Dhaka';
+                $timezone = (string) config('app.timezone', 'Asia/Dhaka');
                 $today = Carbon::now($timezone)->toDateString();
                 $dayStart = Carbon::parse($today, $timezone)->startOfDay()->utc();
                 $dayEnd = Carbon::parse($today, $timezone)->endOfDay()->utc();
