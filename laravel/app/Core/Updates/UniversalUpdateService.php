@@ -151,12 +151,26 @@ class UniversalUpdateService
         // Create encrypted pre-update backup
         $backup = $this->backups->createEncryptedBackup($actorId, false);
         $stagingDir = storage_path('app/update-staging/' . Str::uuid()->toString());
+        $packageSnapshotPath = $stagingDir . '.signed.zip';
         $snapshotDir = storage_path('app/update-snapshots/' . Str::slug($targetSlug) . '-' . Str::uuid()->toString());
 
         Artisan::call('down');
 
         try {
-            $this->extractToStaging($packagePath, $stagingDir);
+            // Pin the exact bytes that were signed before extraction. Re-open of the
+            // caller-controlled upload path after verification would permit a
+            // verify-then-swap race and could deploy bytes that were never signed.
+            $pinnedManifest = $this->createVerifiedPackageSnapshot(
+                $packagePath,
+                $expectedSha256,
+                $signatureHex,
+                $packageSnapshotPath
+            );
+            if ($pinnedManifest !== $manifest) {
+                throw new RuntimeException('Update package changed between initial verification and staging.');
+            }
+
+            $this->extractToStaging($packageSnapshotPath, $stagingDir);
 
             $targetDir = $this->resolveTargetDirectory($targetType, $targetSlug);
 
@@ -245,6 +259,9 @@ class UniversalUpdateService
             throw new RuntimeException($failureMessage, previous: $e);
         } finally {
             $this->deleteDirectory($stagingDir);
+            if (is_file($packageSnapshotPath) && !is_link($packageSnapshotPath)) {
+                @unlink($packageSnapshotPath);
+            }
             Artisan::call('up');
         }
     }
@@ -408,6 +425,58 @@ class UniversalUpdateService
             || in_array('.', $segments, true)
         ) {
             throw new RuntimeException("Unsafe ZIP path detected: {$entryName}");
+        }
+    }
+
+    /**
+     * Copy an uploaded package into a private, exclusive file and verify that copy.
+     * All subsequent ZIP reads must use this pinned artifact, never the mutable
+     * caller-supplied path that was used for the initial signature check.
+     *
+     * @return array<string, mixed>
+     */
+    private function createVerifiedPackageSnapshot(
+        string $packagePath,
+        string $expectedSha256,
+        string $signatureHex,
+        string $snapshotPath,
+    ): array {
+        $directory = dirname($snapshotPath);
+        if (is_link($directory)) {
+            throw new RuntimeException('Update package staging directory must not be a symbolic link.');
+        }
+        if (!is_dir($directory) && !mkdir($directory, 0700, true) && !is_dir($directory)) {
+            throw new RuntimeException('Unable to create private update package staging directory.');
+        }
+
+        $input = @fopen($packagePath, 'rb');
+        $output = @fopen($snapshotPath, 'xb');
+        if ($input === false || $output === false) {
+            if (is_resource($input)) fclose($input);
+            if (is_resource($output)) fclose($output);
+            throw new RuntimeException('Unable to create a private snapshot of the signed update package.');
+        }
+
+        try {
+            if (stream_copy_to_stream($input, $output) === false || !fflush($output)) {
+                throw new RuntimeException('Unable to copy the signed update package into private staging.');
+            }
+            @chmod($snapshotPath, 0600);
+        } catch (\\Throwable $exception) {
+            fclose($input);
+            fclose($output);
+            @unlink($snapshotPath);
+            throw $exception;
+        }
+
+        fclose($input);
+        fclose($output);
+
+        try {
+            return $this->verifySignedPackage($snapshotPath, $expectedSha256, $signatureHex);
+        } catch (\\Throwable $exception) {
+            @unlink($snapshotPath);
+            throw $exception;
         }
     }
 
