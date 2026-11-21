@@ -361,3 +361,34 @@ This section corrects the earlier point-in-time table above. The older SHA rows 
 **Current integration decision:** #372 and #374 both modify `PluginManager.php` and overlapping reset/recycle-bin tests. #374 is the stronger canonical candidate at this snapshot because its shared helper validates private storage containment, file permissions, regular-file status, complete writes and read-back checksums. Before integration, strengthen the helper against exclusive-create/TOCTOU concerns and preserve the distinct partial-write regression coverage from #372. Re-run the complete SQLite, MySQL 8, Browser E2E and Composer matrix on the final consolidated head, then obtain independent formal approval.
 
 **No completion claim:** none of these PRs is merged or accepted by this checkpoint. Branch protection (#242), provider/cPanel staging and live-class load evidence remain separate release gates.
+
+
+## 2026-11-21 current GitHub reconciliation — continuation checkpoint
+
+**Baseline:** `main` at `7f86dc468332a76f7470fcb9d5bc14843bd81c7f`. This section supersedes earlier point-in-time status rows and stale Draft guidance. Every active PR is Open and Ready for Review; blocked work is not Draft, and Ready is not acceptance or merge authorization.
+
+| PR | Current disposition | Exact next gate |
+|---|---|---|
+| [#386](../pull/386) SCORM 1.2 runtime | **BLOCKED — security changes requested.** Current implementation serves untrusted SCO and player from the same content origin and combines `allow-scripts` with `allow-same-origin`. | Separate player/SCO origins, remove same-origin sandbox privilege, strict source/origin/method/schema/size-checked postMessage bridge, regression proving parent DOM/token isolation and valid SCORM calls, then exact-head full CI. |
+| [#347](../pull/347) Flash Sale engine | **BLOCKED — stale/diverged base.** Current branch 13 ahead / 83 behind `main`; campaign storefront/resolver does not yet integrate direct enrollment or unified cart checkout. | Reconstruct safely on current main; rerun all checks and independent review. Shared checkout integration remains issue #335 and must use the canonical quote resolver at invoice/cart snapshot/checkout. |
+| [#354](../pull/354) Red-team inventory | **BLOCKED — stale/diverged base.** 6 ahead / 3 behind; Composer and Browser pass, Laravel pending, CodeQL failed because the base workflow action refs are not SHA-pinned. | Reconcile current main; incorporate/reuse #391's SHA-pinning repair and rerun exact-head CodeQL + all other checks. |
+| [#355](../pull/355) Ownership register | **BLOCKED — stale/diverged base.** 33 ahead / 3 behind; prior reviewer comments refer to older SHAs. | Superseded by this current-mainline documentation reconstruction PR #397; close #355 after #397 is reviewed/merged. |
+| [#391](../pull/391) CodeQL action SHA pinning | CodeQL Advanced, Browser E2E, Composer audit and Laravel SQLite pass; MySQL 8 still running at checkpoint. | Complete MySQL 8 and independent approval; then merge only under enforced repository policy. |
+| [#393](../pull/393) Installer hardening | Current-mainline reconstruction, 7 ahead / 0 behind. Fresh CI running; CodeQL fails before analysis due the existing mainline pinning issue tracked by #391. | Finish SQLite/MySQL/Browser/Composer/package checks; rerun CodeQL after #391 is merged or pinning is ported; independent security review and cPanel staging evidence. Supersedes closed #367. |
+| [#394](../pull/394) Course Assessment authorization | Current-mainline reconstruction, 3 ahead / 0 behind. Fresh exact-head CI pending. | SQLite/MySQL concurrency, Browser, Composer, independent security review and lock-order verification. Supersedes closed #346. |
+| [#395](../pull/395) Branding Loader migration safety | Current-mainline reconstruction, 2 ahead / 0 behind. Fresh exact-head CI pending. | SQLite/MySQL, Browser, Composer, independent migration/data-retention review. Supersedes closed #360. |
+| [#396](../pull/396) Student Management security audit | Current-mainline documentation refresh, 1 ahead / 0 behind. | Independent review of source/test interpretations; exact-head release-candidate CI remains separate. Supersedes closed #356. |
+| [#397](../pull/397) Ownership + plugin acceptance documentation | Current-mainline documentation reconstruction, 2 ahead / 0 behind. | Verify addenda against current PR/issue states and obtain independent documentation review. Supersedes #355 if accepted. |
+
+### Supersession decisions
+
+- #367 closed in favor of #393 after confirming its three intervening mainline changes were disjoint from the seven installer-owned paths.
+- #346 closed in favor of #394 after confirming the intervening mainline changes were disjoint from the three assessment-owned paths.
+- #360 closed in favor of #395 after confirming the intervening mainline changes were disjoint from its two migration/test paths.
+- #356 closed in favor of #396 after its audit was refreshed against current Student Management source and tests.
+- #355 remains open until #397 has independent review and is accepted; do not merge both documentation candidates.
+- No PR in this checkpoint is merged or production-deployed by this reconciliation.
+
+### Repository-wide merge controls
+
+The LMS ruleset was previously observed disabled with zero required approvals/status checks. Recheck repository settings before any merge. Exact-head green CI, mergeable metadata, reviewer requests, Ready-for-Review status, or a complete documentation checklist do not substitute for enforced branch protection and a formal independent approval. External payment/provider sandbox, cPanel staging/restore, human accessibility and authorized load tests remain separate release gates.
