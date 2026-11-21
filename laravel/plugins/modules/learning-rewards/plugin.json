@@ -1,0 +1,18 @@
+{
+  "slug": "learning-rewards",
+  "name": "Learning Rewards & Gamification",
+  "version": "1.0.0",
+  "author": "Alom's English Center",
+  "category": "academic",
+  "description": "Non-monetary XP, verified learning achievements, daily streaks, badges and privacy-aware leaderboards.",
+  "core_compatibility": "^2.0",
+  "dependencies": [],
+  "permissions": [
+    {"slug": "gamification.manage", "name": "Manage learning rewards and achievement rules"}
+  ],
+  "settings_schema": [],
+  "provider": "Plugins\\Modules\\LearningRewards\\Providers\\LearningRewardsServiceProvider",
+  "admin_menu": [
+    {"group": "Academic & Operations", "label": "Learning Rewards", "route": "plugins.learning-rewards.admin.settings", "order": 185, "permission": "gamification.manage"}
+  ]
+}

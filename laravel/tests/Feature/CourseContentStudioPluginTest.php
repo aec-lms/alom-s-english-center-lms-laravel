@@ -114,7 +114,7 @@ class CourseContentStudioPluginTest extends TestCase
     public function test_enrolled_student_can_view_complete_and_resume_a_lesson(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['course-management','course-content-studio']);
+        $this->activatePlugins(['course-management','course-content-studio','learning-rewards']);
         $teacher=$this->createUserWithRole('teacher');
         $student=$this->createUserWithRole('student');
         $course=$this->course();
@@ -143,6 +143,10 @@ class CourseContentStudioPluginTest extends TestCase
             'user_id'=>$student->id,'course_curriculum_item_id'=>$item,
         ]);
         $this->assertNotNull(DB::table('course_content_progress')->where('user_id',$student->id)->where('course_curriculum_item_id',$item)->value('completed_at'));
+        $this->assertSame(10, (int) DB::table('learning_reward_ledger')->where('user_id', $student->id)->sum('points'));
+        $this->actingAs($student)->post('/courses/'.DB::table('courses')->where('id',$course)->value('slug').'/content/student-learning-lesson/complete')
+            ->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame(1, DB::table('learning_reward_ledger')->where('user_id', $student->id)->where('activity_key', 'lesson_completed')->count());
     }
 
     public function test_unenrolled_student_cannot_open_locked_content_or_mark_preview_complete(): void

@@ -91,7 +91,10 @@ class CourseAssessmentsPluginTest extends TestCase
     public function test_student_attempt_autosaves_and_server_grades_without_exposing_answer_key(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['course-assessments']);
+        $this->activatePlugins(['course-assessments', 'learning-rewards']);
+        $this->assertTrue(app(\App\Core\Plugins\PluginManager::class)->isEnabled('learning-rewards'));
+        $this->assertTrue(\Illuminate\Support\Facades\Schema::hasTable('learning_reward_rules'));
+        $this->assertSame(20, (int) DB::table('learning_reward_rules')->where('activity_key', 'quiz_passed')->value('points'));
         $student=$this->createUserWithRole('student');
         $set=$this->createSet();
         $question=$this->createQuestion($set);
@@ -111,6 +114,13 @@ class CourseAssessmentsPluginTest extends TestCase
         $this->post(route('plugins.course-assessments.student.submit',$attemptId))->assertRedirect();
         $this->assertDatabaseHas('course_assessment_attempts',['id'=>$attemptId,'status'=>'submitted','auto_score'=>2]);
         $this->assertDatabaseHas('course_assessment_attempt_questions',['id'=>$attemptQuestion,'selected_option'=>1,'is_correct'=>1,'marks_awarded'=>2]);
+        $this->assertDatabaseHas('learning_reward_ledger', [
+            'user_id' => $student->id,
+            'activity_key' => 'quiz_passed',
+            'source_type' => 'assessment_attempt',
+            'source_id' => $attemptId,
+            'points' => 20,
+        ]);
     }
 
     public function test_written_answers_require_teacher_grading_and_attempt_limit_is_enforced(): void

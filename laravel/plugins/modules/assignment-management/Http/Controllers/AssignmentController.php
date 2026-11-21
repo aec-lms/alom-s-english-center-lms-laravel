@@ -18,6 +18,7 @@ use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Plugins\Modules\AssignmentManagement\Models\Assignment;
 use Plugins\Modules\AssignmentManagement\Models\AssignmentSubmission;
+use Plugins\Modules\LearningRewards\Services\LearningRewardsService;
 use Throwable;
 
 class AssignmentController extends Controller
@@ -263,6 +264,9 @@ class AssignmentController extends Controller
         DB::transaction(function () use ($grader, $record, $validated): void {
             $locked = AssignmentSubmission::query()->with('assignment')->lockForUpdate()->findOrFail($record->id);
             $this->authorizeGrading($grader, $locked->assignment);
+            $previouslyGraded = $locked->status === 'graded';
+            $previousScore = (float) ($locked->score ?? 0);
+            $newScore = (float) $validated['score'];
             $locked->update([
                 'score' => $validated['score'],
                 'feedback' => $validated['feedback'] ?? null,
@@ -270,6 +274,29 @@ class AssignmentController extends Controller
                 'graded_by' => $grader->id,
                 'graded_at' => now(),
             ]);
+
+            if (app(PluginManager::class)->isEnabled('learning-rewards')) {
+                $rewards = app(LearningRewardsService::class);
+                if ($newScore > 0 && (!$previouslyGraded || $previousScore <= 0)) {
+                    $rewards->awardVerifiedActivity(
+                        (int) $locked->student_id,
+                        'assignment_accepted',
+                        'assignment_submission',
+                        (int) $locked->id,
+                        $previouslyGraded ? 'regraded-' . $locked->updated_at?->format('Uu') : null,
+                    );
+                } elseif ($previouslyGraded && $previousScore > 0 && $newScore <= 0) {
+                    $rewards->reverseActivityAward(
+                        (int) $locked->student_id,
+                        'assignment_accepted',
+                        'assignment_submission',
+                        (int) $locked->id,
+                        (int) $grader->id,
+                        'Assignment grade was changed to zero.',
+                    );
+                }
+            }
+
             $this->audit->log('assignment.graded', 'assignment_submission', (string) $locked->id, [
                 'assignment_id' => $locked->assignment_id,
                 'score' => $validated['score'],

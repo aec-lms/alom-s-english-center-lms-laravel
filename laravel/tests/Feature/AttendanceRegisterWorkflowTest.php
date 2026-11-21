@@ -16,7 +16,7 @@ class AttendanceRegisterWorkflowTest extends TestCase
     public function test_batch_attendance_is_audited_and_edits_require_a_reason(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['branch-management', 'student-management', 'course-management', 'batch-management', 'guardian-management', 'attendance-management']);
+        $this->activatePlugins(['branch-management', 'student-management', 'course-management', 'batch-management', 'guardian-management', 'attendance-management', 'learning-rewards']);
 
         $branch = DB::table('branches')->insertGetId(['code' => 'ATT-REG-01', 'name' => 'Attendance Register', 'created_at' => now(), 'updated_at' => now()]);
         $admin = $this->createUserWithRole('admin', $branch);
@@ -90,7 +90,37 @@ class AttendanceRegisterWorkflowTest extends TestCase
         $payload['records'][0]['edit_reason'] = 'Teacher corrected register';
         $this->actingAs($admin)->post('/admin/attendance', $payload)->assertRedirect()->assertSessionHasNoErrors();
         $this->assertDatabaseHas('attendance_records', ['student_id' => $student->id, 'status' => 'late', 'edited_reason' => 'Teacher corrected register']);
+        $this->assertDatabaseHas('attendance_entries', ['student_id' => $student->id, 'status' => 'late']);
         $this->assertDatabaseHas('attendance_audit_logs', ['new_status' => 'late', 'event' => 'updated', 'reason' => 'Teacher corrected register']);
+        $this->assertDatabaseHas('learning_reward_ledger', [
+            'user_id' => $studentUser->id,
+            'activity_key' => 'attendance_present',
+            'source_type' => 'attendance_record',
+            'points' => 5,
+        ]);
+        $this->assertDatabaseHas('learning_reward_ledger', [
+            'user_id' => $studentUser->id,
+            'activity_key' => 'reversal',
+            'source_type' => 'reward_reversal',
+            'points' => -5,
+        ]);
+
+        // Re-marking the same attendance row as present must not mint a
+        // second award after its original award has already been reversed.
+        $payload['records'][0]['status'] = 'present';
+        $payload['records'][0]['edit_reason'] = 'Teacher restored the original status';
+        $this->actingAs($admin)->post('/admin/attendance', $payload)->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame(1, DB::table('learning_reward_ledger')
+            ->where('user_id', $studentUser->id)
+            ->where('activity_key', 'attendance_present')
+            ->where('points', 5)
+            ->count());
+        $this->assertSame(1, DB::table('learning_reward_ledger')
+            ->where('user_id', $studentUser->id)
+            ->where('activity_key', 'reversal')
+            ->where('points', -5)
+            ->count());
+        $this->assertSame(0, (int) DB::table('learning_reward_ledger')->where('user_id', $studentUser->id)->sum('points'));
     }
 
     public function test_offline_sync_is_idempotent_and_records_offline_source(): void

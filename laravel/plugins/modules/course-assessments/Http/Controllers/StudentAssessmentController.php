@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 use Plugins\Modules\CourseAssessments\Models\AssessmentAttempt;
 use Plugins\Modules\CourseAssessments\Models\AssessmentSet;
+use Plugins\Modules\LearningRewards\Services\LearningRewardsService;
 
 class StudentAssessmentController extends Controller
 {
@@ -408,7 +409,37 @@ class StudentAssessmentController extends Controller
                     if($correct)$auto+=(float)$q->marks;
                 }else{$hasManual=true;}
             }
-            $locked->update(['auto_score'=>$auto,'manual_score'=>$manual,'final_score'=>$hasManual?null:$auto,'status'=>$hasManual?'pending_review':'submitted','submitted_at'=>now()]);
+            $locked->update([
+                'auto_score' => $auto,
+                'manual_score' => $manual,
+                'final_score' => $hasManual ? null : $auto,
+                'status' => $hasManual ? 'pending_review' : 'submitted',
+                'submitted_at' => now(),
+            ]);
+
+            // Award XP only for an automatically graded, verified passing
+            // attempt. Manual-review submissions are never rewarded here.
+            // The service enforces daily caps and a unique idempotency key in
+            // this same transaction, so retries cannot double-award points.
+            if (!$hasManual
+                && (float) $locked->max_score > 0
+                && app(PluginManager::class)->isEnabled('learning-rewards')
+                && Schema::hasTable('learning_reward_rules')) {
+                $rule = DB::table('learning_reward_rules')
+                    ->where('activity_key', 'quiz_passed')
+                    ->lockForUpdate()
+                    ->first();
+                $passPercentage = (int) ($rule->pass_percentage ?? 60);
+
+                if (($auto / (float) $locked->max_score) * 100 >= $passPercentage) {
+                    app(LearningRewardsService::class)->awardVerifiedActivity(
+                        (int) $lockedStudent->id,
+                        'quiz_passed',
+                        'assessment_attempt',
+                        (int) $locked->id,
+                    );
+                }
+            }
         });
     }
 
