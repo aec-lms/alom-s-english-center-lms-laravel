@@ -1,10 +1,10 @@
 {
     "slug": "payment-management",
     "name": "Payment Ledger & Reconciliation",
-    "version": "2.0.5",
+    "version": "2.0.6",
     "author": "Alom's English Center",
     "category": "finance",
-    "description": "Unified payment ledger, settlement, offline receipts, partial refunds and provider-reference reconciliation with branch isolation.",
+    "description": "Unified payment ledger, settlement, offline receipts, provider-confirmed refund lifecycle, partial refunds and reconciliation with branch isolation.",
     "core_compatibility": "^2.0",
     "dependencies": [],
     "provider": "Plugins\\Modules\\PaymentManagement\\Providers\\PaymentManagementServiceProvider",
