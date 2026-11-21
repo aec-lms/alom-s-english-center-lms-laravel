@@ -486,7 +486,7 @@ class BackupAndUpdateTest extends TestCase
             $extract->invoke(app(UniversalUpdateService::class), $zipPath, $stagingDir);
             $this->assertSame(hash('sha256', $payload), hash_file('sha256', $stagingDir . '/files/large.bin'));
         } finally {
-            \\Illuminate\\Support\\Facades\\File::deleteDirectory($stagingDir);
+            \Illuminate\Support\Facades\File::deleteDirectory($stagingDir);
             @unlink($zipPath);
         }
     }
