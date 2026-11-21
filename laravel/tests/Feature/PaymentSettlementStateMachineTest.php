@@ -1038,7 +1038,7 @@ class PaymentSettlementStateMachineTest extends TestCase
                 'status' => 'unpaid',
             ]);
         } finally {
-            Schema::create('audit_logs', function (\\Illuminate\\Database\\Schema\\Blueprint $table): void {
+            Schema::create('audit_logs', function (\Illuminate\Database\Schema\Blueprint $table): void {
                 $table->id();
                 $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();
                 $table->string('action', 120)->index();
