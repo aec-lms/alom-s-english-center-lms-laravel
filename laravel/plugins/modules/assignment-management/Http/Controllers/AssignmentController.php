@@ -18,6 +18,7 @@ use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Plugins\Modules\AssignmentManagement\Models\Assignment;
 use Plugins\Modules\AssignmentManagement\Models\AssignmentSubmission;
+use Plugins\Modules\LearningRewards\Services\LearningRewardsService;
 use Throwable;
 
 class AssignmentController extends Controller
