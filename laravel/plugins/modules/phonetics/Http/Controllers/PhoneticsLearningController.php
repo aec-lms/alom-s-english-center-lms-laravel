@@ -40,7 +40,21 @@ final class PhoneticsLearningController extends Controller
             'words_practiced' => 0,
             'uk_attempts' => 0,
             'us_attempts' => 0,
+            'recent_7_days' => 0,
+            'recent_30_days' => 0,
+            'speaking_reviewed' => 0,
+            'speaking_pending' => 0,
+            'speaking_average_score' => null,
         ];
+        $dailyActivity = collect(range(6, 0))->map(fn (int $daysAgo): array => [
+            'date' => now()->startOfDay()->subDays($daysAgo)->toDateString(),
+            'label' => now()->startOfDay()->subDays($daysAgo)->format('D'),
+            'attempts' => 0,
+            'bar_percent' => 0,
+        ]);
+        $weakWords = collect();
+        $accentAccuracy = ['uk' => null, 'us' => null];
+
         if ($entries->isNotEmpty()) {
             $progressQuery = PhoneticAttempt::query()
                 ->where('user_id', (string) $request->user()->getAuthIdentifier())
@@ -54,6 +68,82 @@ final class PhoneticsLearningController extends Controller
             $progress['words_practiced'] = (clone $progressQuery)->distinct()->count('entry_id');
             $progress['uk_attempts'] = (clone $progressQuery)->where('target_accent', 'uk')->count();
             $progress['us_attempts'] = (clone $progressQuery)->where('target_accent', 'us')->count();
+
+            $sevenDayStart = now()->startOfDay()->subDays(6);
+            $progress['recent_7_days'] = (clone $progressQuery)->where('created_at', '>=', $sevenDayStart)->count();
+            $progress['recent_30_days'] = (clone $progressQuery)->where('created_at', '>=', now()->subDays(30))->count();
+
+            $dailyRows = (clone $progressQuery)
+                ->where('created_at', '>=', $sevenDayStart)
+                ->selectRaw('DATE(created_at) as practice_date, COUNT(*) as attempts')
+                ->groupBy('practice_date')
+                ->get()
+                ->keyBy('practice_date');
+            $dailyActivity = $dailyActivity->map(function (array $day) use ($dailyRows): array {
+                $day['attempts'] = (int) ($dailyRows->get($day['date'])->attempts ?? 0);
+                return $day;
+            });
+            $maxDailyAttempts = max(1, (int) $dailyActivity->max('attempts'));
+            $dailyActivity = $dailyActivity->map(function (array $day) use ($maxDailyAttempts): array {
+                $day['bar_percent'] = $day['attempts'] > 0
+                    ? max(8, (int) round(($day['attempts'] / $maxDailyAttempts) * 100))
+                    : 0;
+                return $day;
+            });
+
+            $wordStats = (clone $progressQuery)
+                ->selectRaw('entry_id, COUNT(*) as attempts, SUM(CASE WHEN is_correct = 1 THEN 1 ELSE 0 END) as correct')
+                ->groupBy('entry_id')
+                ->get();
+            $wordProgress = $wordStats->map(function ($row) use ($entries): array {
+                $entry = $entries->firstWhere('id', (int) $row->entry_id);
+                $attempts = (int) $row->attempts;
+                $correct = (int) $row->correct;
+                return [
+                    'entry_id' => (int) $row->entry_id,
+                    'word' => (string) ($entry?->word ?? 'Assigned word'),
+                    'category' => (string) ($entry?->category ?? 'Vocabulary'),
+                    'attempts' => $attempts,
+                    'accuracy' => $attempts > 0 ? (int) round(($correct / $attempts) * 100) : 0,
+                ];
+            })->filter(fn (array $item): bool => $item['entry_id'] > 0)->values();
+
+            // Recommendations use only server-graded IPA quiz attempts. Three
+            // attempts are required before identifying a weak item.
+            $weakWords = $wordProgress
+                ->filter(fn (array $item): bool => $item['attempts'] >= 3 && $item['accuracy'] < 70)
+                ->sortBy('accuracy')
+                ->take(5)
+                ->values();
+
+            $accentRows = (clone $progressQuery)
+                ->selectRaw('target_accent, COUNT(*) as attempts, SUM(CASE WHEN is_correct = 1 THEN 1 ELSE 0 END) as correct')
+                ->whereIn('target_accent', ['uk', 'us'])
+                ->groupBy('target_accent')
+                ->get()
+                ->keyBy('target_accent');
+            foreach (['uk', 'us'] as $accent) {
+                $row = $accentRows->get($accent);
+                if ($row && (int) $row->attempts > 0) {
+                    $accentAccuracy[$accent] = (int) round(((int) $row->correct / (int) $row->attempts) * 100);
+                }
+            }
+        }
+
+        if (Schema::hasTable('phonetic_speaking_recordings')) {
+            $speakingStats = DB::table('phonetic_speaking_recordings')
+                ->where('lms_driver', $this->catalog->driver())
+                ->where('course_ref', $courseRef)
+                ->where('user_id', (string) $request->user()->getAuthIdentifier())
+                ->selectRaw("SUM(CASE WHEN status = 'reviewed' THEN 1 ELSE 0 END) as reviewed_count")
+                ->selectRaw("SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending_count")
+                ->selectRaw("AVG(CASE WHEN status = 'reviewed' THEN score ELSE NULL END) as average_score")
+                ->first();
+            $progress['speaking_reviewed'] = (int) ($speakingStats->reviewed_count ?? 0);
+            $progress['speaking_pending'] = (int) ($speakingStats->pending_count ?? 0);
+            $progress['speaking_average_score'] = $speakingStats->average_score !== null
+                ? round((float) $speakingStats->average_score, 1)
+                : null;
         }
         $isPaid = $this->catalog->isPaid($course);
         $exams = PhoneticExam::query()->where('lms_driver', $this->catalog->driver())->where('status', 'published')
@@ -94,6 +184,9 @@ final class PhoneticsLearningController extends Controller
             'setting' => $setting,
             'entries' => $entries,
             'progress' => $progress,
+            'dailyActivity' => $dailyActivity,
+            'weakWords' => $weakWords,
+            'accentAccuracy' => $accentAccuracy,
             'exams' => $exams,
             'challenge' => $challenge,
             'lessonRef' => $request->query('lesson'),
