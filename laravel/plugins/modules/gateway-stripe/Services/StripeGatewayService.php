@@ -178,9 +178,6 @@ class StripeGatewayService
             ->where('gateway_slug', 'gateway-stripe')
             ->firstOrFail();
 
-        if ((string) $intent['id'] !== (string) $tx->external_reference) {
-            throw new RuntimeException('Stripe PaymentIntent ID does not match the stored transaction.');
-        }
         if ((int) ($intent['amount_received'] ?? $intent['amount'] ?? 0) !== (int) round((float) $tx->amount * 100)) {
             throw new RuntimeException('Stripe webhook amount does not match the invoice.');
         }
@@ -188,7 +185,24 @@ class StripeGatewayService
             throw new RuntimeException('Stripe webhook currency does not match the invoice.');
         }
 
-        return $this->settlement->settleTransaction($tx, (string) $intent['id'], [
+        $paymentIntentId = (string) $intent['id'];
+        $storedIntentId = trim((string) $tx->external_reference);
+        if ($storedIntentId !== '' && !hash_equals($storedIntentId, $paymentIntentId)) {
+            throw new RuntimeException('Stripe PaymentIntent ID does not match the stored transaction.');
+        }
+
+        // A valid Stripe webhook can beat the checkout HTTP response to our
+        // database. Bind the provider ID only after signature, transaction
+        // reference, amount and currency have all been verified. The same
+        // row lock makes this safe against the late create-response writer.
+        if ($storedIntentId === '') {
+            $tx = $this->reservations->markCreated($tx, [
+                'stripe_status' => 'succeeded',
+                'stripe_webhook_received_before_checkout_response' => true,
+            ], 'initiated', $paymentIntentId);
+        }
+
+        return $this->settlement->settleTransaction($tx, $paymentIntentId, [
             'stripe_event_id' => (string) ($event['id'] ?? ''),
             'stripe_webhook_verified' => true,
         ]);
