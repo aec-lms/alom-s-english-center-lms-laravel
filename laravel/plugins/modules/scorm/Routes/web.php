@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-use Illuminate\\Support\\Facades\\Route;
-use Plugins\\Modules\\Scorm\\Http\\Controllers\\ScormPackageController;
-use Plugins\\Modules\\Scorm\\Http\\Controllers\\ScormRuntimeController;
+use Illuminate\Support\Facades\Route;
+use Plugins\Modules\Scorm\Http\Controllers\ScormPackageController;
+use Plugins\Modules\Scorm\Http\Controllers\ScormRuntimeController;
 
 Route::middleware(['web', 'installed', 'plugin:scorm'])->group(function (): void {
     Route::get('/my-learning/scorm', [ScormRuntimeController::class, 'studentIndex'])
