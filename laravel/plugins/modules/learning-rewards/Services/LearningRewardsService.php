@@ -249,10 +249,10 @@ class LearningRewardsService
 
         $branchId = $profileBranchId ?? $accountBranchId;
         if ($branchId !== null) {
-            abort_unless(app(PluginManager::class)->isEnabled('branch-management')
-                && Schema::hasTable('branches')
-                && DB::table('branches')->where('id', $branchId)->where('is_active', true)->lockForUpdate()->exists(),
+            abort_unless(app(PluginManager::class)->isEnabled('branch-management') && Schema::hasTable('branches'),
                 403, 'Student branch is unavailable or inactive.');
+            $branch = DB::table('branches')->where('id', $branchId)->where('is_active', true)->lockForUpdate()->first();
+            abort_unless($branch, 403, 'Student branch is unavailable or inactive.');
         }
 
         return $branchId;
