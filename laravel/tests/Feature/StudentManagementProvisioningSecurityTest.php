@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Models\Role;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Plugins\Modules\StudentManagement\Models\Student;
@@ -228,10 +230,10 @@ class StudentManagementProvisioningSecurityTest extends TestCase
 
             $injected = true;
             Student::withoutEvents(function (): void {
-                $user = \App\Models\User::query()->create([
+                $user = User::query()->create([
                     'name' => 'Concurrent Student',
                     'email' => 'concurrent.race@aec.test',
-                    'password' => \Illuminate\Support\Facades\Hash::make('StrongPassword123!'),
+                    'password' => Hash::make('StrongPassword123!'),
                     'is_active' => true,
                 ]);
 
@@ -286,10 +288,10 @@ class StudentManagementProvisioningSecurityTest extends TestCase
 
     private function createLegacyStudentForIdentityTest(string $email, string $studentCode): Student
     {
-        $user = \App\Models\User::query()->create([
+        $user = User::query()->create([
             'name' => 'Legacy Student',
             'email' => $email,
-            'password' => \Illuminate\Support\Facades\Hash::make('StrongPassword123!'),
+            'password' => Hash::make('StrongPassword123!'),
             'is_active' => true,
         ]);
 
