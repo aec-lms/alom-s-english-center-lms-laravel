@@ -524,7 +524,7 @@ class ScormRuntimeController extends Controller
 
     private function unsafeRelativePath(string $path): bool
     {
-        if ($path === '' || str_contains($path, chr(0)) || str_contains($path, '\')
+        if ($path === '' || str_contains($path, chr(0)) || str_contains($path, '\\')
             || str_contains($path, '%') || str_starts_with($path, '/')) {
             return true;
         }
