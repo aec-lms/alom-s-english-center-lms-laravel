@@ -7,6 +7,7 @@ namespace Plugins\Modules\CourseManagement\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Core\Plugins\PluginManager;
 use Plugins\Modules\StudentTracking\Services\StudentActivityTracker;
+use Plugins\Modules\LearningPaths\Services\LearningPathAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
