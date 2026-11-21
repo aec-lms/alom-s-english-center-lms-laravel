@@ -114,7 +114,7 @@ class ScormRuntimeControllerTest extends TestCase
         $player->assertOk()
             ->assertSee('id="scorm-sco"')
             ->assertSee('sandbox="allow-scripts"')
-            ->assertDontSee($token);
+            ->assertSee($token);
         $playerPolicy = (string) $player->headers->get('Content-Security-Policy');
         $this->assertStringContainsString('frame-src https://scorm-content.example.test', $playerPolicy);
         $this->assertStringContainsString('frame-ancestors https://lms.example.test', $playerPolicy);
@@ -131,15 +131,22 @@ class ScormRuntimeControllerTest extends TestCase
         $this->assertStringContainsString('/scorm-content/' . $attempt->id . '/index.html', $cleanContentUrl);
         $this->assertStringNotContainsString($token, $cleanContentUrl);
 
-        $cookie = collect($bootstrap->headers->getCookies())->first(
-            fn ($candidate) => $candidate->getName() === 'aec_scorm_' . $attempt->id
-        );
+        $cookies = collect($bootstrap->headers->getCookies());
+        $cookie = $cookies->first(fn ($candidate) => $candidate->getName() === 'aec_scorm_' . $attempt->id);
+        $bridgeCookie = $cookies->first(fn ($candidate) => $candidate->getName() === 'aec_scorm_bridge_' . $attempt->id);
         $this->assertNotNull($cookie);
-        $this->assertTrue($cookie->isHttpOnly());
-        $this->assertSame('/scorm-content/' . $attempt->id . '/', $cookie->getPath());
-        $this->assertSame('none', strtolower((string) $cookie->getSameSite()));
+        $this->assertNotNull($bridgeCookie);
+        foreach ([$cookie, $bridgeCookie] as $scormCookie) {
+            $this->assertTrue($scormCookie->isHttpOnly());
+            $this->assertSame('/scorm-content/' . $attempt->id . '/', $scormCookie->getPath());
+            $this->assertSame('none', strtolower((string) $scormCookie->getSameSite()));
+        }
+        $this->assertNotSame($cookie->getValue(), $bridgeCookie->getValue());
 
-        $contentResponse = $this->withCookie($cookie->getName(), $cookie->getValue())->get($cleanContentUrl);
+        $contentResponse = $this
+            ->withCookie($cookie->getName(), $cookie->getValue())
+            ->withCookie($bridgeCookie->getName(), $bridgeCookie->getValue())
+            ->get($cleanContentUrl);
         $contentResponse->assertOk()->assertSee('window.API')->assertSee('LMSCommit')
             ->assertDontSee($token)
             ->assertSee('postMessage')
@@ -200,7 +207,10 @@ class ScormRuntimeControllerTest extends TestCase
             'total_time_seconds' => 15,
         ]);
 
-        $this->withCookie($cookie->getName(), $cookie->getValue())->get($cleanContentUrl)->assertOk();
+        $this
+            ->withCookie($cookie->getName(), $cookie->getValue())
+            ->withCookie($bridgeCookie->getName(), $bridgeCookie->getValue())
+            ->get($cleanContentUrl)->assertOk();
         $this->call('POST', '/api/scorm-runtime/commit', [], [], [], $origin,
             $this->commitPayload($attempt->id, $token, 2, ['cmi.core.lesson_location' => 'late-write']))
             ->assertStatus(409);
