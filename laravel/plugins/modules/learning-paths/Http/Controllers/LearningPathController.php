@@ -374,6 +374,7 @@ class LearningPathController extends Controller
             if ($enrollment && !$completed && $this->plugins->isEnabled('course-content-studio')
                 && Schema::hasTable('course_curriculum_items')
                 && Schema::hasTable('course_content_progress')
+                && Schema::hasTable('course_content_posts')
             ) {
                 $required = DB::table('course_curriculum_items as item')
                     ->join('course_content_posts as post', 'post.id', '=', 'item.course_content_post_id')
