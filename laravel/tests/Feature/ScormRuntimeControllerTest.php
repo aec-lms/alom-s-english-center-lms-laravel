@@ -135,7 +135,9 @@ class ScormRuntimeControllerTest extends TestCase
         $firstPayload = $this->commitPayload($attempt->id, $token, 0, [
             'cmi.core.lesson_location' => 'unit-1/page-2',
             'cmi.core.lesson_status' => 'incomplete',
-            'cmi.core.score.raw' => '75',
+            'cmi.core.score.raw' => '750',
+            'cmi.core.score.min' => '-100',
+            'cmi.core.score.max' => '1000',
             'cmi.core.session_time' => '0000:00:10.00',
             'cmi.suspend_data' => 'checkpoint-1',
         ]);
@@ -148,7 +150,9 @@ class ScormRuntimeControllerTest extends TestCase
             'id' => $attempt->id,
             'state_version' => 1,
             'lesson_location' => 'unit-1/page-2',
-            'score_raw' => 75,
+            'score_raw' => 750,
+            'score_min' => -100,
+            'score_max' => 1000,
             'total_time_seconds' => 10,
         ]);
 
