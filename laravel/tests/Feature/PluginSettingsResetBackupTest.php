@@ -76,4 +76,30 @@ class PluginSettingsResetBackupTest extends TestCase
         $this->assertSame('keep-this-secret', $manager->getSetting('gateway-sslcommerz', 'store_password'));
         $this->assertSame('0', $manager->getSetting('gateway-sslcommerz', 'sandbox_mode'));
     }
+    public function test_false_recovery_backup_write_aborts_reset_and_preserves_existing_settings(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['gateway-sslcommerz']);
+
+        $manager = app(PluginManager::class);
+        $manager->saveSettings('gateway-sslcommerz', [
+            'store_id' => 'AEC-KEEP-FALSE-WRITE',
+            'store_password' => 'keep-false-write-secret',
+            'sandbox_mode' => '0',
+        ], ['store_id', 'store_password']);
+
+        File::partialMock()->shouldReceive('put')->once()->andReturn(false);
+
+        try {
+            $manager->resetSettingsToDefaults('gateway-sslcommerz');
+            $this->fail('A false recovery backup write must abort settings reset.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('backup write was incomplete', $exception->getMessage());
+        }
+
+        $this->assertSame('AEC-KEEP-FALSE-WRITE', $manager->getSetting('gateway-sslcommerz', 'store_id'));
+        $this->assertSame('keep-false-write-secret', $manager->getSetting('gateway-sslcommerz', 'store_password'));
+        $this->assertSame('0', $manager->getSetting('gateway-sslcommerz', 'sandbox_mode'));
+    }
+
 }
