@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Plugins\Modules\LearningRewards\Http\Controllers;
 
 use App\Core\Security\AuditLogger;
+use App\Core\Plugins\PluginManager;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class LearningRewardsController extends Controller
@@ -38,6 +40,7 @@ class LearningRewardsController extends Controller
         $period = $request->query('period', 'month');
         abort_unless(in_array($period, ['week', 'month', 'all'], true), 404);
         $timezone = (string) config('app.timezone', 'Asia/Dhaka');
+        $branchId = $this->resolveStudentBranch($student);
         $start = match ($period) {
             'week' => now($timezone)->startOfWeek()->utc(),
             'month' => now($timezone)->startOfMonth()->utc(),
@@ -53,7 +56,7 @@ class LearningRewardsController extends Controller
             ->where(function ($q): void {
                 $q->whereNull('profiles.profile_public')->orWhere('profiles.profile_public', true);
             })
-            ->when($student->branch_id !== null, fn ($q) => $q->where('ledger.branch_id', (int) $student->branch_id))
+            ->when($branchId !== null, fn ($q) => $q->where('ledger.branch_id', $branchId))
             ->when($start !== null, fn ($q) => $q->where('ledger.awarded_at', '>=', $start))
             ->selectRaw('users.id as user_id, users.name as student_name, SUM(ledger.points) as points')
             ->groupBy('users.id', 'users.name')
@@ -127,6 +130,22 @@ class LearningRewardsController extends Controller
         });
 
         return back()->with('status', 'Learning reward rules updated.');
+    }
+
+    private function resolveStudentBranch(object $student): ?int
+    {
+        $accountBranchId = $student->branch_id !== null ? (int) $student->branch_id : null;
+        if (app(PluginManager::class)->isEnabled('student-management')
+            && Schema::hasTable('students')
+            && Schema::hasColumn('students', 'branch_id')) {
+            $profileBranchId = DB::table('students')->where('user_id', $student->id)->value('branch_id');
+            if ($profileBranchId !== null) {
+                abort_unless($accountBranchId === null || $accountBranchId === (int) $profileBranchId, 403, 'Student branch assignments do not match.');
+                return (int) $profileBranchId;
+            }
+        }
+
+        return $accountBranchId;
     }
 
     public function storeBadge(Request $request, AuditLogger $audit): RedirectResponse
