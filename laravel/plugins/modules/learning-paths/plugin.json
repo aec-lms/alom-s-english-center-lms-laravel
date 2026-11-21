@@ -8,7 +8,7 @@
   "core_compatibility": "^2.0",
   "dependencies": [],
   "optional_dependencies": ["course-management", "course-content-studio", "certificate-management", "notification-center"],
-  "provider": "Plugins\\\\Modules\\\\LearningPaths\\\\Providers\\\\LearningPathsServiceProvider",
+  "provider": "Plugins\\Modules\\LearningPaths\\Providers\\LearningPathsServiceProvider",
   "permissions": [
     {"slug": "learning_paths.manage", "name": "Manage learning paths"}
   ],
