@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 use Plugins\Modules\CourseManagement\Models\Course;
 use Plugins\Modules\CourseManagement\Models\Enrollment;
@@ -983,5 +984,42 @@ class LiveClassCapacityTest extends TestCase
         }
     }
 
+
+
+    public function test_missing_student_profile_storage_fails_closed_when_student_management_is_enabled(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management', 'student-management']);
+
+        $course = Course::query()->create([
+            'code' => 'LIVE-MISSING-PROFILE-TABLE',
+            'title' => 'Missing Student Profile Storage Course',
+            'slug' => 'missing-student-profile-storage-course',
+            'price' => 0,
+            'status' => 'published',
+        ]);
+        $liveClass = LiveClass::query()->create([
+            'course_id' => $course->id,
+            'title' => 'Missing Profile Storage Session',
+            'platform' => 'zoom',
+            'meeting_url' => 'https://zoom.us/j/123456789',
+            'starts_at' => now()->subMinute(),
+            'status' => 'live',
+            'capacity' => 300,
+        ]);
+        $student = $this->createUserWithRole('student');
+        Enrollment::query()->create([
+            'user_id' => $student->id,
+            'course_id' => $course->id,
+            'status' => 'active',
+        ]);
+
+        Schema::dropIfExists('students');
+
+        $this->actingAs($student)
+            ->post('/live-classes/' . $liveClass->id . '/join')
+            ->assertForbidden();
+        $this->assertDatabaseCount('live_class_participants', 0);
+    }
 
 }

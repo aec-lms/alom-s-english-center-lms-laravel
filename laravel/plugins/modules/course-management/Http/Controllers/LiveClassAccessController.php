@@ -192,9 +192,13 @@ class LiveClassAccessController extends Controller
         }
 
         $profile = null;
-        $studentManagementEnabled = app(\App\Core\Plugins\PluginManager::class)->isEnabled('student-management')
-            && Schema::hasTable('students');
+        $studentManagementEnabled = app(\App\Core\Plugins\PluginManager::class)->isEnabled('student-management');
         if ($studentManagementEnabled) {
+            abort_unless(
+                Schema::hasTable('students') && Schema::hasColumn('students', 'user_id'),
+                403,
+                'Student profile storage is unavailable.'
+            );
             $profileQuery = DB::table('students')->where('user_id', $student->id);
             if (Schema::hasColumn('students', 'deleted_at')) {
                 $profileQuery->whereNull('deleted_at');
