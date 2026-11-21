@@ -100,6 +100,7 @@ class ScormPackageController extends Controller
                     abort_unless($replacement, 404, 'The package selected for replacement no longer exists.');
                     $this->assertBranchAccess($request, $replacement);
                     abort_unless((int) $replacement->course_id === (int) $course->id, 422, 'A replacement package must belong to the same course.');
+                    abort_unless((int) ($replacement->branch_id ?? 0) === (int) (($course->branch_id ?? $actor->branch_id) ?? 0), 422, 'A replacement package must belong to the same branch.');
                     abort_unless($replacement->status === 'published', 409, 'Only a published package can be replaced.');
                     $revisionNumber = (int) ($replacement->revision_number ?? 1) + 1;
                 }
