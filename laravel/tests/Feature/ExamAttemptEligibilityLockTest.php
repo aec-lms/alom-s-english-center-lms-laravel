@@ -1201,15 +1201,20 @@ class ExamAttemptEligibilityLockTest extends TestCase
         DB::setDefaultConnection($connectionName);
 
         try {
-            $controller = app(PaymentController::class);
-            $method = new \ReflectionMethod(PaymentController::class, 'suspendCommerceAccessAfterRefund');
+            // Refund settlement owns the production commerce/SCORM entitlement
+            // revocation writer; keep this MySQL lock test on that implementation.
+            $settlement = app(\\Plugins\\Modules\\PaymentManagement\\Services\\RefundSettlementService::class);
+            $method = new \\ReflectionMethod(
+                \\Plugins\\Modules\\PaymentManagement\\Services\\RefundSettlementService::class,
+                'suspendCommerceAccessAfterRefund'
+            );
             $method->setAccessible(true);
 
             $invoice = new FeeInvoice();
             $invoice->setAttribute('id', $invoiceId);
             $invoice->setAttribute('net_amount', 10.0);
 
-            $method->invoke($controller, $invoice, 0.0);
+            $method->invoke($settlement, $invoice, 0.0);
         } finally {
             DB::setDefaultConnection($originalDefault);
         }
