@@ -8,13 +8,14 @@
     <form method="POST" action="{{ route('plugins.learning-rewards.admin.rules.update') }}">
         @csrf @method('PUT')
         <div class="card"><div class="table-responsive"><table class="table align-middle mb-0">
-            <thead><tr><th>Activity</th><th>Points</th><th>Daily cap</th><th>Enabled</th></tr></thead>
+            <thead><tr><th>Activity</th><th>Points</th><th>Daily cap</th><th>Pass %</th><th>Enabled</th></tr></thead>
             <tbody>
             @foreach($rules as $index => $rule)
                 <tr>
                     <td><input type="hidden" name="rules[{{ $index }}][activity_key]" value="{{ $rule->activity_key }}"><code>{{ $rule->activity_key }}</code></td>
                     <td><input class="form-control" type="number" min="0" max="500" name="rules[{{ $index }}][points]" value="{{ $rule->points }}" required></td>
                     <td><input class="form-control" type="number" min="0" max="5000" name="rules[{{ $index }}][daily_cap]" value="{{ $rule->daily_cap }}" required></td>
+                    <td>@if($rule->activity_key === 'quiz_passed')<input class="form-control" type="number" min="1" max="100" name="rules[{{ $index }}][pass_percentage]" value="{{ $rule->pass_percentage ?? 60 }}" required>@else<span class="text-muted">—</span>@endif</td>
                     <td><input class="form-check-input" type="checkbox" name="rules[{{ $index }}][is_enabled]" value="1" @checked($rule->is_enabled) aria-label="Enable {{ $rule->activity_key }}"></td>
                 </tr>
             @endforeach
