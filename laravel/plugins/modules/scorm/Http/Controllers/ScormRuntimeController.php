@@ -505,7 +505,7 @@ class ScormRuntimeController extends Controller
         }
 
         $package = DB::table('scorm_packages')->where('id', $attempt->scorm_package_id)->lockForUpdate()->first();
-        abort_unless($package && $package->status === 'published'
+        abort_unless($package && in_array($package->status, ['published', 'superseded'], true)
             && (int) $package->course_id === (int) $course->id, 403, 'SCORM package is no longer available.');
         if ($package->branch_id !== null) {
             abort_unless((int) $package->branch_id === (int) ($user->branch_id ?? $enrollment->branch_id ?? 0), 403, 'SCORM package is outside the student branch.');
