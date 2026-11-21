@@ -269,7 +269,7 @@ class LearningRewardsPluginTest extends TestCase
         $inactive = $this->createUserWithRole('student', $branch);
 
         foreach ([[$active, 'REWARD-PROFILE-A'], [$inactive, 'REWARD-PROFILE-I']] as [$user, $code]) {
-            \\Plugins\\Modules\\StudentManagement\\Models\\Student::query()->create([
+            \Plugins\Modules\StudentManagement\Models\Student::query()->create([
                 'user_id' => $user->id,
                 'branch_id' => $branch,
                 'student_code' => $code,
@@ -302,7 +302,7 @@ class LearningRewardsPluginTest extends TestCase
         try {
             $service->awardVerifiedActivity((int) $inactive->id, 'lesson_completed', 'course_lesson', 803);
             $this->fail('Inactive student profiles must not earn learning rewards.');
-        } catch (\\Symfony\\Component\\HttpKernel\\Exception\\HttpException $exception) {
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) {
             $this->assertSame(403, $exception->getStatusCode());
         }
     }
