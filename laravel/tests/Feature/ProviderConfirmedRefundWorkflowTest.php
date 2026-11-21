@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Core\Plugins\PluginManager;
+use App\Models\AuditLog;
 use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -464,6 +465,40 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
         $this->assertDatabaseCount('payment_refunds', 0);
         $this->assertSame(1000.0, (float) $invoice->fresh()->paid_amount);
         Http::assertNothingSent();
+    }
+
+    public function test_refund_request_rolls_back_when_required_audit_write_fails(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'gateway-stripe']);
+        [, $transaction] = $this->createSettledPayment('gateway-stripe', 'pi_refund_audit_rollback');
+        $requester = $this->createUserWithRole('admin');
+
+        AuditLog::creating(static function (AuditLog $log): void {
+            if ($log->action === 'payment.refund_requested') {
+                throw new \\RuntimeException('forced refund audit failure');
+            }
+        });
+
+        try {
+            try {
+                app(RefundOrchestrationService::class)->requestOnlineRefund(
+                    $transaction,
+                    100,
+                    'Audit failure rollback test',
+                    (int) $requester->id,
+                    'refund-audit-rollback-001',
+                );
+                $this->fail('Refund request must roll back when its required audit event cannot be stored.');
+            } catch (\\RuntimeException $exception) {
+                $this->assertSame('forced refund audit failure', $exception->getMessage());
+            }
+        } finally {
+            AuditLog::flushEventListeners();
+        }
+
+        $this->assertSame(0, PaymentRefund::query()->where('payment_transaction_id', $transaction->id)->count());
+        $this->assertSame('settled', $transaction->fresh()->status);
     }
 
     public function test_offline_refund_keeps_existing_ledger_behavior_and_is_audited_once(): void
