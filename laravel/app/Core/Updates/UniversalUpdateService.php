@@ -148,9 +148,12 @@ class UniversalUpdateService
             }
         }
 
-        $stagingDir = storage_path('app/update-staging/' . Str::uuid()->toString());
+        $stagingDir = $this->createPrivateStorageDirectory('update-staging');
         $packageSnapshotPath = $stagingDir . '.signed.zip';
-        $snapshotDir = storage_path('app/update-snapshots/' . Str::slug($targetSlug) . '-' . Str::uuid()->toString());
+        $snapshotDir = $this->createPrivateStorageDirectory(
+            'update-snapshots',
+            Str::slug($targetSlug) . '-' . Str::uuid()->toString()
+        );
 
         // Pin and re-verify before taking a database backup or entering maintenance
         // mode. A replaced upload must fail without restoring an old DB snapshot.
@@ -486,11 +489,91 @@ class UniversalUpdateService
         }
     }
 
+
+    private function createPrivateStorageDirectory(string $rootName, ?string $childName = null): string
+    {
+        abort_unless(in_array($rootName, ['update-staging', 'update-snapshots'], true), 500,
+            'Invalid private update storage directory.');
+        $storagePath = storage_path('app');
+        $storageRoot = realpath($storagePath);
+        if ($storageRoot === false || is_link($storagePath)) {
+            throw new RuntimeException('Private update storage root is unavailable or redirected.');
+        }
+
+        $root = $storageRoot . DIRECTORY_SEPARATOR . $rootName;
+        if (is_link($root)) {
+            throw new RuntimeException('Private update storage root must not be a symbolic link.');
+        }
+        if (!is_dir($root) && !@mkdir($root, 0700) && !is_dir($root)) {
+            throw new RuntimeException('Unable to create private update storage root.');
+        }
+        if (!@chmod($root, 0700)) {
+            throw new RuntimeException('Unable to restrict private update storage root permissions.');
+        }
+
+        $resolvedRoot = realpath($root);
+        $rootStat = $resolvedRoot !== false ? @stat($resolvedRoot) : false;
+        if ($resolvedRoot === false || dirname($resolvedRoot) !== $storageRoot || $rootStat === false
+            || (($rootStat['mode'] & 0170000) !== 0040000) || (($rootStat['mode'] & 0077) !== 0)) {
+            throw new RuntimeException('Private update storage root must be a private real directory under storage/app.');
+        }
+
+        $childName = $childName ?? Str::uuid()->toString();
+        if ($childName === '' || basename($childName) !== $childName || $childName === '.' || $childName === '..') {
+            throw new RuntimeException('Invalid private update staging directory name.');
+        }
+        $child = $resolvedRoot . DIRECTORY_SEPARATOR . $childName;
+        if (is_link($child) || !@mkdir($child, 0700)) {
+            throw new RuntimeException('Unable to create isolated private update staging directory.');
+        }
+        $resolvedChild = realpath($child);
+        $childStat = $resolvedChild !== false ? @stat($resolvedChild) : false;
+        if ($resolvedChild === false || dirname($resolvedChild) !== $resolvedRoot || is_link($child)
+            || $childStat === false || (($childStat['mode'] & 0170000) !== 0040000)
+            || (($childStat['mode'] & 0077) !== 0)) {
+            throw new RuntimeException('Private update staging directory failed its filesystem safety checks.');
+        }
+
+        return $resolvedChild;
+    }
+
+    private function assertPrivateStorageChild(string $directory, string $rootName): string
+    {
+        abort_unless(in_array($rootName, ['update-staging', 'update-snapshots'], true), 500,
+            'Invalid private update storage directory.');
+        $storagePath = storage_path('app');
+        $storageRoot = realpath($storagePath);
+        if ($storageRoot === false || is_link($storagePath)) {
+            throw new RuntimeException('Private update storage root is unavailable or redirected.');
+        }
+        $root = $storageRoot . DIRECTORY_SEPARATOR . $rootName;
+        if (is_link($root)) {
+            throw new RuntimeException('Private update storage root must not be a symbolic link.');
+        }
+        $resolvedRoot = realpath($root);
+        $rootStat = $resolvedRoot !== false ? @stat($resolvedRoot) : false;
+        if ($resolvedRoot === false || dirname($resolvedRoot) !== $storageRoot || $rootStat === false
+            || (($rootStat['mode'] & 0170000) !== 0040000) || (($rootStat['mode'] & 0077) !== 0)) {
+            throw new RuntimeException('Private update storage root failed its filesystem safety checks.');
+        }
+
+        if (is_link($directory)) {
+            throw new RuntimeException('Private update staging directory must not be a symbolic link.');
+        }
+        $resolvedDirectory = realpath($directory);
+        $directoryStat = $resolvedDirectory !== false ? @stat($resolvedDirectory) : false;
+        if ($resolvedDirectory === false || dirname($resolvedDirectory) !== $resolvedRoot
+            || $directoryStat === false || (($directoryStat['mode'] & 0170000) !== 0040000)
+            || (($directoryStat['mode'] & 0077) !== 0)) {
+            throw new RuntimeException('Private update staging directory failed its filesystem safety checks.');
+        }
+
+        return $resolvedDirectory;
+    }
+
     private function extractToStaging(string $packagePath, string $stagingDir): void
     {
-        if (!is_dir($stagingDir) && !mkdir($stagingDir, 0700, true) && !is_dir($stagingDir)) {
-            throw new RuntimeException('Unable to create private update staging directory.');
-        }
+        $stagingDir = $this->assertPrivateStorageChild($stagingDir, 'update-staging');
         $zip = new ZipArchive();
         if ($zip->open($packagePath) !== true) {
             throw new RuntimeException('Unable to open signed update ZIP for staging.');
@@ -580,9 +663,7 @@ class UniversalUpdateService
         if (!is_dir($sourceDir) || $targetDir === '') {
             throw new RuntimeException('Update payload or target directory is unavailable.');
         }
-        if (!is_dir($snapshotDir) && !mkdir($snapshotDir, 0700, true) && !is_dir($snapshotDir)) {
-            throw new RuntimeException('Unable to create private pre-update snapshot directory.');
-        }
+        $snapshotDir = $this->assertPrivateStorageChild($snapshotDir, 'update-snapshots');
 
         $entries = [];
         $iterator = new RecursiveIteratorIterator(
@@ -624,6 +705,7 @@ class UniversalUpdateService
 
     private function restorePayloadSnapshot(string $snapshotDir): void
     {
+        $snapshotDir = $this->assertPrivateStorageChild($snapshotDir, 'update-snapshots');
         $manifestPath = $snapshotDir . DIRECTORY_SEPARATOR . 'snapshot.json';
         $manifest = json_decode((string) file_get_contents($manifestPath), true, 512, JSON_THROW_ON_ERROR);
         $targetDir = (string) ($manifest['target_dir'] ?? '');
