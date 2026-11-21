@@ -674,10 +674,35 @@ class PluginManager
             throw new RuntimeException('Plugin recycle-bin metadata could not be written; the package was returned to its original location.');
         }
         @chmod($metadataPath, 0600);
-        $this->audit->logRequired('plugin.deleted_to_recycle_bin', 'plugin', $slug, [
-            'archive' => $archiveName,
-            'business_data_preserved' => true,
-        ], $actorId);
+        try {
+            $this->audit->logRequired('plugin.deleted_to_recycle_bin', 'plugin', $slug, [
+                'archive' => $archiveName,
+                'business_data_preserved' => true,
+            ], $actorId);
+        } catch (Throwable $exception) {
+            // A failed required audit must not strand a plugin in the recycle bin.
+            // Restore the original package and lifecycle state where possible.
+            if (is_dir($destination) && !file_exists($source)) {
+                File::moveDirectory($destination, $source);
+            }
+            if (is_file($metadataPath)) {
+                @unlink($metadataPath);
+            }
+            if ($wasInstalled && is_dir($source)) {
+                try {
+                    $this->install($slug, $actorId);
+                    if (!$wasEnabled) {
+                        $this->disable($slug, $actorId);
+                    }
+                } catch (Throwable) {
+                    PluginRecord::query()->where('slug', $slug)->update([
+                        'is_installed' => false,
+                        'is_enabled' => false,
+                    ]);
+                }
+            }
+            throw $exception;
+        }
 
         return $metadata;
     }
