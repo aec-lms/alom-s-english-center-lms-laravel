@@ -99,34 +99,68 @@
     const isSessionTime = value => /^\d{4}:[0-5]\d:[0-5]\d(?:\.\d{1,2})?$/.test(value);
     const isScore = value => value !== '' && Number.isFinite(Number(value)) && Number(value) >= 0 && Number(value) <= 100;
 
-    function persist(finish) {
+    let pendingRequest = null;
+
+    function newRequestId() {
+        if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+            return window.crypto.randomUUID();
+        }
+        const bytes = new Uint8Array(16);
+        window.crypto.getRandomValues(bytes);
+        return Array.from(bytes, value => value.toString(16).padStart(2, '0')).join('');
+    }
+
+    function sendPendingRequest() {
+        const payload = pendingRequest;
+        const dataSnapshot = JSON.stringify(payload.data);
+        const wasFinish = payload.finish;
         const xhr = new XMLHttpRequest();
         xhr.open('POST', runtimeUrl, false);
         xhr.setRequestHeader('Content-Type', 'text/plain;charset=UTF-8');
         try {
-            xhr.send(JSON.stringify({
-                attempt_id: attemptId,
-                token,
-                version: stateVersion,
-                data,
-                finish: Boolean(finish)
-            }));
+            xhr.send(JSON.stringify(payload));
             const response = JSON.parse(xhr.responseText || '{}');
             if (xhr.status < 200 || xhr.status >= 300 || response.ok !== true) {
-                lastError = xhr.status === 409 ? '101' : '101';
+                lastError = '101';
                 document.getElementById('runtime-status').textContent = response.message || 'Save failed';
-                return false;
+                return { ok: false };
             }
             stateVersion = response.version;
+            pendingRequest = null;
             lastError = '0';
-            document.getElementById('runtime-status').textContent = finish ? 'Saved' : 'Progress saved';
-            if (finish) finished = true;
-            return true;
+            document.getElementById('runtime-status').textContent = wasFinish ? 'Saved' : 'Progress saved';
+            return { ok: true, dataSnapshot, wasFinish };
         } catch (error) {
             lastError = '101';
             document.getElementById('runtime-status').textContent = 'Connection error — progress may not be saved';
-            return false;
+            return { ok: false };
         }
+    }
+
+    function persist(finish) {
+        const requestedFinish = Boolean(finish);
+        if (pendingRequest) {
+            const pendingResult = sendPendingRequest();
+            if (!pendingResult.ok) return false;
+            if (requestedFinish && !pendingResult.wasFinish) return persist(true);
+            if (JSON.stringify(data) !== pendingResult.dataSnapshot) return persist(requestedFinish);
+            if (requestedFinish) finished = true;
+            return true;
+        }
+
+        pendingRequest = {
+            request_id: newRequestId(),
+            attempt_id: attemptId,
+            token,
+            version: stateVersion,
+            data: Object.assign({}, data),
+            finish: requestedFinish
+        };
+        const result = sendPendingRequest();
+        if (!result.ok) return false;
+        if (requestedFinish) finished = true;
+        if (JSON.stringify(data) !== result.dataSnapshot) return persist(requestedFinish);
+        return true;
     }
 
     const api = {
