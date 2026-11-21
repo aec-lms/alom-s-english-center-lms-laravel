@@ -12,7 +12,6 @@
         .player__title { margin: 0; font-size: 1rem; font-weight: 600; }
         .player__status { margin-left: auto; font-size: .875rem; color: #475569; }
         .player__content { flex: 1; min-height: 0; width: 100%; border: 0; background: #fff; }
-        .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
     </style>
 </head>
 <body>
@@ -26,20 +25,132 @@
         class="player__content"
         src="{{ $launchUrl }}"
         title="{{ $title }}"
-        sandbox="allow-scripts allow-same-origin"
+        sandbox="allow-scripts"
         referrerpolicy="no-referrer"
     ></iframe>
 </div>
 <script>
 (() => {
     'use strict';
+
     const frame = document.getElementById('scorm-sco');
     const status = document.getElementById('runtime-status');
-    const contentOrigin = @json($contentOrigin);
+    const runtimeUrl = @json($runtimeUrl);
+    const appOrigin = @json($appOrigin);
+    const attemptId = Number(@json($attemptId));
+    const token = @json($token);
+    const bridgeNonce = @json($bridgeNonce);
+    let stateVersion = Number(@json($stateVersion));
+    let commitQueue = Promise.resolve();
+
+    function showStatus(message) {
+        status.textContent = String(message || '').slice(0, 160);
+    }
+
+    function sendResult(payload) {
+        try {
+            // The SCO has an opaque sandbox origin ("null"), so "*" is required
+            // as targetOrigin. The source window and per-attempt nonce are checked
+            // in both directions.
+            frame.contentWindow.postMessage(payload, '*');
+        } catch (error) {
+            showStatus(@json(__('plugins.scorm::messages.connection_error')));
+        }
+    }
+
+    function validCommit(message) {
+        if (!message || typeof message !== 'object' || Array.isArray(message)
+            || message.type !== 'scorm:commit'
+            || message.attempt_id !== attemptId
+            || message.bridge_nonce !== bridgeNonce
+            || !['LMSCommit', 'LMSFinish'].includes(message.method)
+            || typeof message.request_id !== 'string'
+            || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(message.request_id)
+            || !message.data || typeof message.data !== 'object' || Array.isArray(message.data)) {
+            return false;
+        }
+
+        const entries = Object.entries(message.data);
+        if (entries.length > 300) return false;
+        for (const [key, value] of entries) {
+            if (typeof key !== 'string' || key.length === 0 || key.length > 255
+                || typeof value !== 'string' || value.length > 4096) return false;
+        }
+
+        try {
+            return JSON.stringify(message.data).length <= 262144;
+        } catch (error) {
+            return false;
+        }
+    }
+
+    async function commit(message) {
+        const finish = message.method === 'LMSFinish';
+        const payload = {
+            attempt_id: attemptId,
+            token,
+            request_id: message.request_id,
+            version: stateVersion,
+            data: message.data,
+            finish,
+        };
+
+        try {
+            const response = await fetch(runtimeUrl, {
+                method: 'POST',
+                mode: 'cors',
+                credentials: 'omit',
+                cache: 'no-store',
+                headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+                body: JSON.stringify(payload),
+                keepalive: true,
+            });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok || result.ok !== true || !Number.isInteger(Number(result.version))) {
+                throw new Error(result.message || @json(__('plugins.scorm::messages.save_failed')));
+            }
+
+            stateVersion = Number(result.version);
+            showStatus(finish ? @json(__('plugins.scorm::messages.saved')) : @json(__('plugins.scorm::messages.progress_saved')));
+            sendResult({
+                type: 'scorm:commit-result',
+                bridge_nonce: bridgeNonce,
+                request_id: message.request_id,
+                ok: true,
+                version: stateVersion,
+            });
+        } catch (error) {
+            const messageText = String(error && error.message ? error.message : @json(__('plugins.scorm::messages.connection_error')));
+            showStatus(messageText);
+            sendResult({
+                type: 'scorm:commit-result',
+                bridge_nonce: bridgeNonce,
+                request_id: message.request_id,
+                ok: false,
+                message: messageText.slice(0, 160),
+                version: stateVersion,
+            });
+        }
+    }
+
     window.addEventListener('message', event => {
-        if (event.source !== frame.contentWindow || event.origin !== contentOrigin
-            || !event.data || event.data.type !== 'scorm:status') return;
-        status.textContent = String(event.data.message || '').slice(0, 160);
+        // The SCO is deliberately sandboxed without allow-same-origin.
+        if (event.source !== frame.contentWindow || event.origin !== 'null'
+            || !event.data || typeof event.data !== 'object') return;
+
+        if (event.data.type === 'scorm:status'
+            && event.data.bridge_nonce === bridgeNonce) {
+            showStatus(event.data.message);
+            return;
+        }
+
+        if (!validCommit(event.data)) return;
+
+        // Serialize commits so every request uses the last server-confirmed
+        // version; overlapping LMSCommit/LMSFinish calls cannot race or reorder.
+        commitQueue = commitQueue.then(() => commit(event.data)).catch(error => {
+            showStatus(@json(__('plugins.scorm::messages.connection_error')));
+        });
     });
 })();
 </script>
