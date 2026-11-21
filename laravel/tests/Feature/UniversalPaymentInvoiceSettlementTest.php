@@ -550,4 +550,53 @@ class UniversalPaymentInvoiceSettlementTest extends TestCase
         ]);
     }
 
+
+    public function test_unverified_sslcommerz_browser_failure_and_cancel_do_not_release_pending_checkout(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['universal-payment']);
+
+        $transaction = UniversalPaymentTransaction::query()->create([
+            'reference' => 'UPAY-UNVERIFIED-RETURN-001',
+            'payer_name' => 'Callback Test Buyer',
+            'payer_contact' => '01712345678',
+            'item_title' => 'Paid e-book',
+            'gateway' => 'sslcommerz',
+            'currency' => 'BDT',
+            'amount' => 500,
+            'status' => 'pending',
+        ]);
+
+        $gateway = app(\Plugins\Modules\UniversalPayment\Services\StorefrontPaymentGatewayService::class);
+
+        $failedReturn = $gateway->markSslcommerzFailed(['tran_id' => $transaction->reference], 'failed');
+        $this->assertSame('pending', $failedReturn->status);
+
+        $cancelledReturn = $gateway->markSslcommerzFailed(['tran_id' => $transaction->reference], 'cancelled');
+        $this->assertSame('pending', $cancelledReturn->status);
+
+        // Exercise the actual browser-return routes, not only the service method:
+        // an untrusted redirect must communicate the ambiguity and leave the
+        // provider reservation pending for reconciliation.
+        $this->post('/universal-payment/sslcommerz/failed', [
+            'tran_id' => $transaction->reference,
+        ])->assertRedirect('/ebooks')
+            ->assertSessionHasErrors([
+                'payment' => 'The provider return did not verify the payment. The transaction remains pending; do not retry until support reconciles its status.',
+            ]);
+
+        $this->post('/universal-payment/sslcommerz/cancelled', [
+            'tran_id' => $transaction->reference,
+        ])->assertRedirect('/ebooks')
+            ->assertSessionHas(
+                'status',
+                'The browser return cannot confirm cancellation. The transaction remains pending; do not retry until support reconciles its status.'
+            );
+
+        $this->assertDatabaseHas('universal_payment_transactions', [
+            'id' => $transaction->id,
+            'status' => 'pending',
+        ]);
+    }
+
 }

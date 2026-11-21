@@ -9,9 +9,10 @@ $privateStoragePath = str_starts_with($privateStoragePath, DIRECTORY_SEPARATOR)
 
 return [
     'core_version' => env('APP_VERSION', '2.0.0'),
-    'install_lock_path' => storage_path('app/installed.lock'),
+    'install_lock_path' => (string) env('AEC_INSTALL_LOCK_PATH', storage_path('app/installed.lock')),
+    'env_path' => (string) env('AEC_ENV_FILE_PATH', base_path('.env')),
     'private_storage_path' => $privateStoragePath,
-    'backup_path' => storage_path('app/backups'),
+    'backup_path' => (string) env('AEC_BACKUP_PATH', storage_path('app/backups')),
     'health_alert_email' => env('AEC_HEALTH_ALERT_EMAIL'),
     'health_min_free_disk_bytes' => (int) env('AEC_HEALTH_MIN_FREE_DISK_BYTES', 268435456),
     'health_queue_backlog_limit' => (int) env('AEC_HEALTH_QUEUE_BACKLOG_LIMIT', 1000),
