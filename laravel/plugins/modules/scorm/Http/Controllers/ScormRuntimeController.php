@@ -244,20 +244,32 @@ class ScormRuntimeController extends Controller
         $session = $this->validSession($attempt, $token);
         abort_unless(is_string($path) && $path !== '' && !$this->unsafeRelativePath($path), 404);
 
-        $bridgeNonce = (string) $request->query('bridge_nonce', '');
+        $bridgeNonce = (string) $request->cookie($this->contentBridgeCookieName($attempt), '');
         abort_unless(ctype_xdigit($bridgeNonce) && strlen($bridgeNonce) === 64, 403, 'SCORM bridge state is invalid.');
 
         $location = route('plugins.scorm.content.file', [
             'attempt' => $attempt,
             'path' => $path,
-            'bridge_nonce' => $bridgeNonce,
         ]);
         $secure = parse_url((string) config('scorm.content_origin', ''), PHP_URL_SCHEME) === 'https';
-        $cookie = cookie(
+        $cookiePath = '/scorm-content/' . $attempt . '/';
+        $minutes = max(1, (int) config('scorm.launch_ttl_minutes', 240));
+        $sessionCookie = cookie(
             $this->contentSessionCookieName($attempt),
             $token,
-            max(1, (int) config('scorm.launch_ttl_minutes', 240)),
-            '/scorm-content/' . $attempt . '/',
+            $minutes,
+            $cookiePath,
+            null,
+            $secure,
+            true,
+            false,
+            'none'
+        );
+        $bridgeCookie = cookie(
+            $this->contentBridgeCookieName($attempt),
+            $bridgeNonce,
+            $minutes,
+            $cookiePath,
             null,
             $secure,
             true,
@@ -266,7 +278,8 @@ class ScormRuntimeController extends Controller
         );
 
         return redirect()->to($location, 302)
-            ->withCookie($cookie)
+            ->withCookie($sessionCookie)
+            ->withCookie($bridgeCookie)
             ->header('Referrer-Policy', 'no-referrer')
             ->header('Cache-Control', 'private, no-store');
     }
@@ -666,6 +679,11 @@ class ScormRuntimeController extends Controller
     private function contentSessionCookieName(int $attemptId): string
     {
         return 'aec_scorm_' . $attemptId;
+    }
+
+    private function contentBridgeCookieName(int $attemptId): string
+    {
+        return 'aec_scorm_bridge_' . $attemptId;
     }
 
     private function parseScormTime(string $value): int
