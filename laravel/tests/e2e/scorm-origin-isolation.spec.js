@@ -63,7 +63,7 @@ test('untrusted SCORM content cannot inspect or escape the trusted LMS player', 
         id="scorm-sco"
         title="Untrusted SCORM package"
         src="${contentOrigin}/attempt/41/token/attempt-scoped-secret/index.html"
-        sandbox="allow-scripts allow-same-origin"
+        sandbox="allow-scripts"
         referrerpolicy="no-referrer"
       ></iframe>
     </main>
@@ -71,7 +71,7 @@ test('untrusted SCORM content cannot inspect or escape the trusted LMS player', 
       (() => {
         const frame = document.getElementById('scorm-sco');
         window.addEventListener('message', event => {
-          if (event.origin !== ${JSON.stringify(contentOrigin)}
+          if (event.origin !== 'null'
             || event.source !== frame.contentWindow
             || !event.data || typeof event.data !== 'object'
             || event.data.type !== 'scorm:status') return;
@@ -96,5 +96,5 @@ test('untrusted SCORM content cannot inspect or escape the trusted LMS player', 
 
   // The trusted shell accepts only a status message from the exact SCO frame.
   await expect(page.locator('body')).not.toHaveAttribute('data-scorm-arbitrary');
-  await expect(page.locator('#scorm-sco')).toHaveAttribute('sandbox', 'allow-scripts allow-same-origin');
+  await expect(page.locator('#scorm-sco')).toHaveAttribute('sandbox', 'allow-scripts');
 });
