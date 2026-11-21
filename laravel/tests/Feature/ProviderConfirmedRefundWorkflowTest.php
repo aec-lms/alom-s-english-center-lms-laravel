@@ -1292,4 +1292,64 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
         Http::assertSentCount(2);
     }
 
+
+    public function test_refund_approval_rejects_changed_transaction_and_gateway_bindings(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'gateway-stripe']);
+
+        app(PluginManager::class)->saveSettings('gateway-stripe', [
+            'secret_key' => 'sk_test_refund_binding_123456',
+            'refunds_enabled' => '1',
+        ], ['secret_key']);
+        Http::fake();
+
+        [$invoiceA, $transactionA] = $this->createSettledPayment('gateway-stripe', 'pi_refund_binding_a');
+        [$invoiceB, $transactionB] = $this->createSettledPayment('gateway-stripe', 'pi_refund_binding_b');
+        $requester = $this->createUserWithRole('admin');
+        $approver = $this->createUserWithRole('admin');
+        $service = app(RefundOrchestrationService::class);
+
+        $transactionBinding = $service->requestOnlineRefund(
+            $transactionA, 100, 'Verify refund transaction ownership', (int) $requester->id, 'refund-binding-tx-001'
+        );
+        DB::table('payment_refunds')->where('id', $transactionBinding->id)->update([
+            'payment_transaction_id' => $transactionB->id,
+        ]);
+
+        try {
+            $service->approveAndSubmit($transactionBinding, (int) $approver->id);
+            $this->fail('A refund moved to another payment transaction must not be submitted.');
+        } catch (HttpException $exception) {
+            $this->assertSame(409, $exception->getStatusCode());
+        }
+
+        $this->assertDatabaseHas('payment_refunds', [
+            'id' => $transactionBinding->id,
+            'status' => 'requested',
+            'payment_transaction_id' => $transactionB->id,
+        ]);
+
+        $gatewayBinding = $service->requestOnlineRefund(
+            $transactionB, 100, 'Verify refund gateway ownership', (int) $requester->id, 'refund-binding-gateway-001'
+        );
+        DB::table('payment_refunds')->where('id', $gatewayBinding->id)->update([
+            'gateway_slug' => 'gateway-paypal',
+        ]);
+
+        try {
+            $service->approveAndSubmit($gatewayBinding, (int) $approver->id);
+            $this->fail('A refund with a changed gateway binding must not be submitted.');
+        } catch (HttpException $exception) {
+            $this->assertSame(409, $exception->getStatusCode());
+        }
+
+        $this->assertDatabaseHas('payment_refunds', [
+            'id' => $gatewayBinding->id,
+            'status' => 'requested',
+            'gateway_slug' => 'gateway-paypal',
+        ]);
+        Http::assertNothingSent();
+    }
+
 }
