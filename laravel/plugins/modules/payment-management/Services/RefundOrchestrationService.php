@@ -40,6 +40,7 @@ class RefundOrchestrationService
 
             $lockedInvoice = FeeInvoice::query()->whereKey($invoiceId)->lockForUpdate()->firstOrFail();
             $lockedTx = PaymentTransaction::query()->whereKey($transaction->id)->lockForUpdate()->firstOrFail();
+            $this->assertTransactionInvoiceBinding($lockedTx, $lockedInvoice);
             if ($lockedTx->status !== 'settled' || $lockedTx->gateway_slug === 'offline') {
                 throw new RuntimeException('Only settled online payment transactions can request a provider refund.');
             }
@@ -126,6 +127,7 @@ class RefundOrchestrationService
 
             $lockedInvoice = FeeInvoice::query()->whereKey($invoiceId)->lockForUpdate()->firstOrFail();
             $transaction = PaymentTransaction::query()->whereKey($transactionId)->lockForUpdate()->firstOrFail();
+            $this->assertTransactionInvoiceBinding($transaction, $lockedInvoice);
             $this->settlement->assertActorBranchScope($actorId, $transaction);
             abort_unless(
                 strtoupper((string) $transaction->currency) === strtoupper((string) $lockedInvoice->currency),
@@ -134,6 +136,7 @@ class RefundOrchestrationService
             );
             $this->settlement->assertNoGiftOrderForInvoice((int) $invoiceId, $lockedInvoice, $transaction);
             $lockedRefund = PaymentRefund::query()->whereKey($refundId)->lockForUpdate()->firstOrFail();
+            $this->assertRefundTransactionBinding($lockedRefund, $transaction);
             $this->settlement->assertInvoiceRefundAmountAvailable(
                 $lockedInvoice,
                 (float) $lockedRefund->amount,
@@ -201,10 +204,12 @@ class RefundOrchestrationService
         }
 
         return DB::transaction(function () use ($refundId, $transactionId, $invoiceId, $actorId): PaymentRefund {
-            FeeInvoice::query()->whereKey($invoiceId)->lockForUpdate()->firstOrFail();
+            $lockedInvoice = FeeInvoice::query()->whereKey($invoiceId)->lockForUpdate()->firstOrFail();
             $transaction = PaymentTransaction::query()->whereKey($transactionId)->lockForUpdate()->firstOrFail();
+            $this->assertTransactionInvoiceBinding($transaction, $lockedInvoice);
             $this->settlement->assertActorBranchScope($actorId, $transaction);
             $lockedRefund = PaymentRefund::query()->whereKey($refundId)->lockForUpdate()->firstOrFail();
+            $this->assertRefundTransactionBinding($lockedRefund, $transaction);
 
             abort_unless($lockedRefund->status === 'requested', 409, 'Only a requested refund can be rejected.');
             abort_unless((int) $lockedRefund->requested_by !== $actorId, 403, 'A refund requester cannot reject their own request.');
@@ -233,15 +238,20 @@ class RefundOrchestrationService
         $invoiceId = PaymentTransaction::query()->whereKey($transactionId)->value('invoice_id');
 
         $prepared = DB::transaction(function () use ($refundId, $transactionId, $invoiceId, $actorId): array {
+            $lockedInvoice = null;
             if ($invoiceId !== null && Schema::hasTable('fee_invoices')) {
                 // If an invoice was removed after provider submission, still
                 // query the provider and retain the confirmed result for manual
                 // ledger review instead of leaving an invisible pending refund.
-                FeeInvoice::query()->whereKey($invoiceId)->lockForUpdate()->first();
+                $lockedInvoice = FeeInvoice::query()->whereKey($invoiceId)->lockForUpdate()->first();
             }
             $transaction = PaymentTransaction::query()->whereKey($transactionId)->lockForUpdate()->firstOrFail();
+            if ($lockedInvoice) {
+                $this->assertTransactionInvoiceBinding($transaction, $lockedInvoice);
+            }
             $this->settlement->assertActorBranchScope($actorId, $transaction);
             $lockedRefund = PaymentRefund::query()->whereKey($refundId)->lockForUpdate()->firstOrFail();
+            $this->assertRefundTransactionBinding($lockedRefund, $transaction);
 
             abort_unless(
                 in_array($lockedRefund->status, ['submitted', 'pending', 'requires_review'], true),
@@ -345,8 +355,9 @@ class RefundOrchestrationService
             if ($invoiceId !== null && Schema::hasTable('fee_invoices')) {
                 FeeInvoice::query()->whereKey($invoiceId)->lockForUpdate()->first();
             }
-            PaymentTransaction::query()->whereKey($transactionId)->lockForUpdate()->firstOrFail();
+            $lockedTx = PaymentTransaction::query()->whereKey($transactionId)->lockForUpdate()->firstOrFail();
             $locked = PaymentRefund::query()->whereKey($refund->id)->lockForUpdate()->firstOrFail();
+            $this->assertRefundTransactionBinding($locked, $lockedTx);
 
             if ($locked->ledger_applied_at !== null) {
                 if ($reconciled) {
@@ -391,6 +402,26 @@ class RefundOrchestrationService
         }, 3);
 
         return $updated;
+    }
+
+
+    private function assertTransactionInvoiceBinding(PaymentTransaction $transaction, FeeInvoice $invoice): void
+    {
+        abort_unless(
+            (int) $transaction->invoice_id === (int) $invoice->id,
+            409,
+            'Payment transaction invoice ownership changed during refund processing.'
+        );
+    }
+
+    private function assertRefundTransactionBinding(PaymentRefund $refund, PaymentTransaction $transaction): void
+    {
+        abort_unless(
+            (int) $refund->payment_transaction_id === (int) $transaction->id
+                && hash_equals((string) $transaction->gateway_slug, (string) $refund->gateway_slug),
+            409,
+            'Refund ownership or gateway binding changed during provider processing.'
+        );
     }
 
     private function fingerprint(
