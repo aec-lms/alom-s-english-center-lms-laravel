@@ -371,10 +371,12 @@ class FreshInstallerTest extends TestCase
         $pipesByWorker = [];
         try {
             $this->assertFileExists($workerPath, 'The real PHP installer worker must be present.');
-            $baseEnvironment = getenv();
-            if (!is_array($baseEnvironment)) {
-                $baseEnvironment = [];
-            }
+            // Pass only the minimal runtime environment; never inherit CI database
+            // credentials or unrelated secrets into the child installer processes.
+            $baseEnvironment = [
+                'PATH' => (string) (getenv('PATH') ?: ''),
+                'HOME' => (string) (getenv('HOME') ?: sys_get_temp_dir()),
+            ];
 
             for ($worker = 1; $worker <= 2; $worker++) {
                 $workerEnvironment = array_merge($baseEnvironment, [
