@@ -252,8 +252,8 @@ class AttendanceController extends Controller
                         $rewards->reverseActivityAward(
                             (int) $student->user_id,
                             'attendance_present',
-                            'attendance_entry',
-                            (int) $entry->id,
+                            'attendance_record',
+                            (int) $record->id,
                             (int) $actor->id,
                             'Attendance status was changed from present.',
                         );
