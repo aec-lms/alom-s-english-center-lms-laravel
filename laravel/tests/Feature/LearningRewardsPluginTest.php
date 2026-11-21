@@ -98,7 +98,7 @@ class LearningRewardsPluginTest extends TestCase
         $student = $this->createUserWithRole('student');
         $student->forceFill(['is_active' => false])->save();
 
-        $this->expectException(\\Symfony\\Component\\HttpKernel\\Exception\\HttpException::class);
+        $this->expectException(\Symfony\\Component\\HttpKernel\\Exception\\HttpException::class);
         app(LearningRewardsService::class)->awardVerifiedActivity((int) $student->id, 'lesson_completed', 'course_lesson', 102);
     }
 
@@ -259,21 +259,6 @@ class LearningRewardsPluginTest extends TestCase
         $permission = Permission::query()->where('slug', 'gamification.manage')->firstOrFail();
         Role::query()->where('slug', 'admin')->firstOrFail()->permissions()->syncWithoutDetaching([$permission->id]);
         $this->actingAs($admin)->get('/admin/learning-rewards')->assertOk();
-    }
-
-    public function test_inactive_student_accounts_cannot_receive_learning_rewards(): void
-    {
-        $this->bootRewards();
-        $student = $this->createUserWithRole('student');
-        DB::table('users')->where('id', $student->id)->update(['is_active' => false]);
-
-        $this->expectException(\\Symfony\\Component\\HttpKernel\\Exception\\HttpException::class);
-        app(LearningRewardsService::class)->awardVerifiedActivity(
-            (int) $student->id,
-            'lesson_completed',
-            'course_lesson',
-            909,
-        );
     }
 
     public function test_streak_badges_unlock_even_when_xp_is_disabled(): void
