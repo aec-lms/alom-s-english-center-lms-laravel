@@ -244,7 +244,7 @@ class ScormRuntimeController extends Controller
         $session = $this->validSession($attempt, $token);
         abort_unless(is_string($path) && $path !== '' && !$this->unsafeRelativePath($path), 404);
 
-        $bridgeNonce = (string) $request->cookie($this->contentBridgeCookieName($attempt), '');
+        $bridgeNonce = (string) $request->query('bridge_nonce', '');
         abort_unless(ctype_xdigit($bridgeNonce) && strlen($bridgeNonce) === 64, 403, 'SCORM bridge state is invalid.');
 
         $location = route('plugins.scorm.content.file', [
@@ -290,7 +290,7 @@ class ScormRuntimeController extends Controller
         abort_unless(is_string($token) && $token !== '', 403, 'SCORM content session is missing.');
         $session = $this->validSession($attempt, $token);
         abort_unless(is_string($path) && $path !== '' && !$this->unsafeRelativePath($path), 404);
-        $bridgeNonce = (string) $request->query('bridge_nonce', '');
+        $bridgeNonce = (string) $request->cookie($this->contentBridgeCookieName($attempt), '');
         abort_unless(ctype_xdigit($bridgeNonce) && strlen($bridgeNonce) === 64, 403, 'SCORM bridge state is invalid.');
 
         $record = DB::table('scorm_attempts')->where('id', $attempt)->first();
