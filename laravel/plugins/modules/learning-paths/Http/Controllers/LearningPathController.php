@@ -202,6 +202,7 @@ class LearningPathController extends Controller
     {
         $student = $request->user();
         abort_unless($student && $student->hasRole('student'), 403, 'Student accounts only.');
+        abort_unless((bool) $student->is_active, 403, 'An active student account is required.');
         $this->ensureCourses();
 
         DB::transaction(function () use ($student, $slug): void {
@@ -221,6 +222,12 @@ class LearningPathController extends Controller
                 ->lockForUpdate()->first();
             abort_unless($firstEnrollment, 409,
                 'Enroll in the first course before starting this learning path. Course purchases and fees remain separate.');
+            $expectedEnrollmentBranch = $path->branch_id ?? $student->branch_id;
+            if ($firstEnrollment->branch_id !== null) {
+                abort_unless($expectedEnrollmentBranch !== null
+                    && (int) $firstEnrollment->branch_id === (int) $expectedEnrollmentBranch,
+                    403, 'Your first-course enrollment is outside this learning path branch.');
+            }
 
             $existingPathEnrollment = DB::table('learning_path_enrollments')
                 ->where('learning_path_id', $path->id)
