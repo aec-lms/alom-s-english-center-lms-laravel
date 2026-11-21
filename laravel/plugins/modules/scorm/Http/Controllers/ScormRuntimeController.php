@@ -115,17 +115,20 @@ class ScormRuntimeController extends Controller
                 ->exists();
             abort_unless($studentRole, 403, 'Current student role is required.');
 
-            // Keep the same lock order as runtime refresh (user -> profile -> enrollment -> course -> package).
+            // Match the refresh/commit lock order: user -> role -> profile -> enrollment -> course -> package.
             $branchId = $this->currentStudentBranchId($lockedUser, true);
-            $lockedPackage = DB::table('scorm_packages')->where('id', $packageRecord->id)->lockForUpdate()->first();
-            abort_unless($lockedPackage && $lockedPackage->status === 'published', 404, 'SCORM package is no longer published.');
 
             $lockedEnrollment = DB::table('enrollments')->where('id', $enrollment->id)->lockForUpdate()->first();
             abort_unless($lockedEnrollment && in_array($lockedEnrollment->status, ['active', 'completed'], true)
-                && (int) $lockedEnrollment->course_id === (int) $lockedPackage->course_id, 403, 'Course enrollment is no longer active.');
+                && (int) $lockedEnrollment->user_id === (int) $actor->id, 403, 'Course enrollment is no longer active.');
 
-            $lockedCourse = DB::table('courses')->where('id', $lockedPackage->course_id)->lockForUpdate()->first();
+            $lockedCourse = DB::table('courses')->where('id', $lockedEnrollment->course_id)->lockForUpdate()->first();
             abort_unless($lockedCourse && $lockedCourse->status === 'published', 403, 'The linked course is no longer published.');
+
+            $lockedPackage = DB::table('scorm_packages')->where('id', $packageRecord->id)->lockForUpdate()->first();
+            abort_unless($lockedPackage && $lockedPackage->status === 'published'
+                && (int) $lockedPackage->course_id === (int) $lockedCourse->id, 404, 'SCORM package is no longer published.');
+
             abort_unless($lockedEnrollment->branch_id === null
                 || ($branchId !== null && (int) $lockedEnrollment->branch_id === $branchId), 403, 'Enrollment is outside the current student branch.');
             abort_unless($lockedPackage->branch_id === null
