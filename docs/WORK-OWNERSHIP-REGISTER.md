@@ -126,7 +126,7 @@ The project owner has explicitly directed that **a bug fix or technically functi
 6. **Evidence:** PR description must state the user journeys tested, visual checks performed at desktop/tablet/mobile, accessibility checks, and attach screenshots or browser evidence where practical.
 7. **Technical quality remains mandatory:** security, authorization, data integrity, performance, migrations/rollback safety, automated tests and exact-head CI are required. Green CI does not replace visual review; attractive UI does not replace correctness.
 8. **Backend-only tasks:** where no user-facing surface exists, apply the premium standard to API contracts, operational clarity, documentation, observability and developer experience.
-9. **Completion gate:** include a checklist for functionality, visual polish (where applicable), responsive behavior, accessibility, edge cases, security and exact-head CI. Keep the PR Draft until all applicable checks and independent review pass.
+9. **Completion gate:** include a checklist for functionality, visual polish (where applicable), responsive behavior, accessibility, edge cases, security and exact-head CI. Per the project owner's explicit instruction, every active PR must remain open and Ready for Review, including while blocked; do not convert blocked PRs to Draft. Ready for Review is a visibility state only, not completion, approval or merge authorization. Record each unmet gate and its owner.
 
 This standard applies to every current and future PR, issue, plugin, admin panel, student/teacher/guardian workflow, CMS, commerce flow, builder, public page and API. One primary owner per task remains mandatory; helpers must agree and record a bounded handoff before contributing.
 
@@ -162,7 +162,7 @@ Before recommending merge, the primary owner must verify and record all of the f
 5. Independent review by a different maintainer is recorded and all blocking review comments are resolved. Author self-review or a COMMENTED review is not an approval.
 6. PR body, tests, docs and this register accurately reflect the final scope, owner, dependencies and verification evidence.
 
-**Notification flow:** when all gates pass, the primary owner posts a concise completion note on the PR with exact head SHA, CI links/results, independent reviewer, screenshots/evidence and any accepted non-blocking follow-ups; then notifies the project owner that the PR is ready to merge. The project owner/authorized maintainer performs or explicitly authorizes the merge using repository policy (required approvals, branch protection and merge queue if enabled). If any gate is unmet, keep the PR Draft/open and report the specific blocker—never claim complete or recommend merge.
+**Notification flow:** when all gates pass, the primary owner posts a concise completion note on the PR with exact head SHA, CI links/results, independent reviewer, screenshots/evidence and any accepted non-blocking follow-ups; then notifies the project owner that the PR is technically ready for merge review. The project owner/authorized maintainer performs or explicitly authorizes the merge using repository policy (required approvals, branch protection and merge queue if enabled). If any gate is unmet, leave the PR open and Ready for Review, report the specific blocker and its owner, and continue remediation—never convert it to Draft, claim complete or recommend merge.
 
 ## 2026-11-20 current-mainline pull-request reconciliation
 
@@ -306,3 +306,8 @@ This update supersedes the 2026-11-20 point-in-time rows above for the PRs liste
 - #357 and #359 are separate security slices from the broader legacy teacher-management work; neither closes the remaining scope of #293.
 - #346, #357, #358 and #359 remain Draft. #355 also remains Draft while its MySQL run and independent review are outstanding.
 - The LMS repository ruleset was last verified disabled with zero required approvals and zero required status checks. An authorized repository administrator must enable and configure the intended protection. Do not merge any candidate based only on mergeable metadata or green CI.
+
+
+### 2026-11-21 project-owner Ready-for-Review rule
+
+This operating rule supersedes historical status snapshots and any older Draft guidance in this register: all active pull requests must remain open and Ready for Review, even when blocked. Ready for Review does not mean the work is complete, approved, mergeable under protection rules, or authorized to merge. Record blockers explicitly and keep working them down; merge only after exact-head checks, independent approval, conflict resolution and enforced repository policy are verified.
