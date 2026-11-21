@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use Plugins\\Modules\\Scorm\\Services\\Scorm12Runtime;
-use Tests\\TestCase;
+use Plugins\Modules\Scorm\Services\Scorm12Runtime;
+use Tests\TestCase;
 
 class Scorm12RuntimeTest extends TestCase
 {
