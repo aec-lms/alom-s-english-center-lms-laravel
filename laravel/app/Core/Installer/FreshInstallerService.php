@@ -210,8 +210,18 @@ class FreshInstallerService
         }
 
         $lockDirectory = dirname($installLockPath);
+        if (is_link($lockDirectory)) {
+            throw new RuntimeException('The installation lock directory must not be a symbolic link.');
+        }
         if (!is_dir($lockDirectory) && !mkdir($lockDirectory, 0750, true) && !is_dir($lockDirectory)) {
             throw new RuntimeException('Unable to create the installation lock directory.');
+        }
+
+        // Resolve the directory after creation: a symlink in any path component
+        // must not silently redirect the mutex to an attacker-controlled location.
+        $realLockDirectory = realpath($lockDirectory);
+        if ($realLockDirectory === false || $realLockDirectory !== rtrim($lockDirectory, DIRECTORY_SEPARATOR)) {
+            throw new RuntimeException('The installation lock directory path must resolve without symbolic-link redirection.');
         }
 
         $mutexPath = $installLockPath . '.mutex';
@@ -225,6 +235,21 @@ class FreshInstallerService
         }
 
         try {
+            // Verify the opened inode still matches the path and is a private regular
+            // file. This also rejects hard-linked mutex files and symlink swap races.
+            $openedStat = fstat($mutex);
+            $pathStat = @lstat($mutexPath);
+            if ($openedStat === false
+                || $pathStat === false
+                || (($openedStat['mode'] & 0170000) !== 0100000)
+                || (($pathStat['mode'] & 0170000) !== 0100000)
+                || $openedStat['dev'] !== $pathStat['dev']
+                || $openedStat['ino'] !== $pathStat['ino']
+                || ($openedStat['nlink'] ?? 1) !== 1
+            ) {
+                throw new RuntimeException('The installation mutex must be a private, regular, non-linked file.');
+            }
+
             @chmod($mutexPath, 0600);
             if (!flock($mutex, LOCK_EX)) {
                 throw new RuntimeException('Unable to acquire the exclusive installation mutex.');
