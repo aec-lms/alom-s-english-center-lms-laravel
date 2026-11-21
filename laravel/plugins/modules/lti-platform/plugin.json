@@ -1,0 +1,19 @@
+{
+  "slug": "lti-platform",
+  "name": "LTI 1.3 Platform Integration",
+  "version": "0.1.0",
+  "author": "Alom's English Center",
+  "category": "integration",
+  "description": "Secure LTI 1.3 platform launches, platform JWKS and scoped LTI Advantage service tokens.",
+  "core_compatibility": "^2.0",
+  "dependencies": [],
+  "optional_dependencies": ["course-management", "student-management", "branch-management", "course-assessments"],
+  "permissions": [
+    {"slug": "lti.manage", "name": "Manage LTI platform tools and deployments"}
+  ],
+  "settings_schema": [],
+  "provider": "Plugins\\Modules\\LtiPlatform\\Providers\\LtiPlatformServiceProvider",
+  "admin_menu": [
+    {"group": "Integrations & APIs", "label": "LTI Tools", "route": "plugins.lti-platform.admin.index", "order": 220, "permission": "lti.manage"}
+  ]
+}
