@@ -51,4 +51,29 @@ class PluginSettingsResetBackupTest extends TestCase
         $this->assertNotSame('private-live-password', $secretRow['setting_value']);
         $this->assertSame('private-live-password', Crypt::decryptString($secretRow['setting_value']));
     }
+    public function test_partial_recovery_backup_write_aborts_reset_and_preserves_existing_settings(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['gateway-sslcommerz']);
+
+        $manager = app(PluginManager::class);
+        $manager->saveSettings('gateway-sslcommerz', [
+            'store_id' => 'AEC-KEEP-THIS-STORE',
+            'store_password' => 'keep-this-secret',
+            'sandbox_mode' => '0',
+        ], ['store_id', 'store_password']);
+
+        File::shouldReceive('put')->once()->andReturn(1);
+
+        try {
+            $manager->resetSettingsToDefaults('gateway-sslcommerz');
+            $this->fail('A partial recovery backup write must abort settings reset.');
+        } catch (\\RuntimeException $exception) {
+            $this->assertStringContainsString('backup write was incomplete', $exception->getMessage());
+        }
+
+        $this->assertSame('AEC-KEEP-THIS-STORE', $manager->getSetting('gateway-sslcommerz', 'store_id'));
+        $this->assertSame('keep-this-secret', $manager->getSetting('gateway-sslcommerz', 'store_password'));
+        $this->assertSame('0', $manager->getSetting('gateway-sslcommerz', 'sandbox_mode'));
+    }
 }
