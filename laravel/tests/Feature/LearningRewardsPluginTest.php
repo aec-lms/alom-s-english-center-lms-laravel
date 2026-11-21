@@ -307,6 +307,40 @@ class LearningRewardsPluginTest extends TestCase
         }
     }
 
+    public function test_reward_awards_fail_closed_when_student_account_and_profile_branches_conflict(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'student-management', 'learning-rewards']);
+        $branchA = DB::table('branches')->insertGetId([
+            'code' => 'REWARD-CONFLICT-A', 'name' => 'Reward Conflict A', 'is_active' => true,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $branchB = DB::table('branches')->insertGetId([
+            'code' => 'REWARD-CONFLICT-B', 'name' => 'Reward Conflict B', 'is_active' => true,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $student = $this->createUserWithRole('student', $branchA);
+        \\Plugins\\Modules\\StudentManagement\\Models\\Student::query()->create([
+            'user_id' => $student->id,
+            'branch_id' => $branchB,
+            'student_code' => 'REWARD-CONFLICT-STUDENT',
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+        ]);
+
+        try {
+            app(LearningRewardsService::class)->awardVerifiedActivity((int) $student->id, 'lesson_completed', 'course_lesson', 901);
+            $this->fail('Conflicting account/profile branch assignments must not earn rewards.');
+        } catch (\\Symfony\\Component\\HttpKernel\\Exception\\HttpException $exception) {
+            $this->assertSame(403, $exception->getStatusCode());
+        }
+
+        $this->assertDatabaseMissing('learning_reward_ledger', [
+            'user_id' => $student->id,
+            'source_id' => 901,
+        ]);
+    }
+
     public function test_admin_can_create_and_deactivate_achievement_badges(): void
     {
         $this->bootRewards();
