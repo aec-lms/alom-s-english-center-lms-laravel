@@ -192,7 +192,7 @@ class PaypalGatewayService
         }
         $captures = collect($response->json('purchase_units.0.payments.captures', []));
         if ($captures->count() !== 1) {
-            throw new RuntimeException('PayPal multi-capture orders are blocked until each capture has its own payment ledger transaction.');
+            throw new RuntimeException('PayPal orders must contain exactly one capture until each capture has its own payment ledger transaction.');
         }
         $capture = $captures->first();
         if (!$capture || ($capture['status'] ?? '') !== 'COMPLETED') {
