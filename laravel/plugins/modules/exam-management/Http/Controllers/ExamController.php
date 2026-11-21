@@ -239,7 +239,14 @@ class ExamController extends Controller
     {
         $actor = $request->user();
         abort_unless($actor && $actor->hasRole('student'), 403, 'Only student accounts can view exam history.');
-        $this->assertStudentExamBranch($actor, $exam);
+        $branchId = $this->assignedBranchId($actor);
+        if ($exam->branch_id !== null) {
+            abort_unless(
+                $branchId !== null && $branchId === (int) $exam->branch_id,
+                403,
+                'Exam is outside your assigned branch.'
+            );
+        }
 
         $attempts = ExamAttempt::query()
             ->where('exam_id', $exam->id)
@@ -857,28 +864,65 @@ class ExamController extends Controller
         return $profileBranchId ?? $userBranchId;
     }
 
-    private function assertStudentExamBranch(object $student, Exam $exam): void
-    {
-        if ($exam->branch_id !== null) {
-            $branchId = $this->assignedBranchId($student);
-            abort_unless($branchId !== null && $branchId === (int) $exam->branch_id, 403, 'Exam is outside your assigned branch.');
-        }
-    }
-
     private function assignedBranchId(object $student): ?int
     {
+        $user = DB::table('users')->where('id', (int) $student->id)->first();
+        abort_unless($user !== null, 403, 'Student account is no longer available.');
+        abort_unless(
+            !Schema::hasColumn('users', 'is_active') || (bool) $user->is_active,
+            403,
+            'An active student account is required.'
+        );
+
+        abort_unless(
+            Schema::hasTable('roles') && Schema::hasTable('role_user'),
+            503,
+            'Student role authorization storage is unavailable.'
+        );
+        $studentRoleId = DB::table('roles')->where('slug', 'student')->value('id');
+        abort_unless($studentRoleId !== null, 503, 'The student role is not configured.');
+        abort_unless(
+            DB::table('role_user')
+                ->where('user_id', (int) $student->id)
+                ->where('role_id', $studentRoleId)
+                ->exists(),
+            403,
+            'An active student role is required.'
+        );
+
+        $userBranchId = Schema::hasColumn('users', 'branch_id') && $user->branch_id !== null
+            ? (int) $user->branch_id
+            : null;
+        $profileBranchId = null;
+
         if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('student-management')
             && Schema::hasTable('students')
             && Schema::hasColumn('students', 'branch_id')) {
-            $profileBranchId = DB::table('students')->where('user_id', $student->id)->value('branch_id');
-            if ($profileBranchId !== null) {
-                return (int) $profileBranchId;
+            $profile = DB::table('students')->where('user_id', (int) $student->id)->first();
+
+            if ($profile !== null) {
+                if (Schema::hasColumn('students', 'deleted_at')) {
+                    abort_unless($profile->deleted_at === null, 403, 'Your student profile is no longer active.');
+                }
+                if (Schema::hasColumn('students', 'status')) {
+                    abort_unless($profile->status === 'active', 403, 'Your student profile is inactive.');
+                }
+
+                $profileBranchId = $profile->branch_id !== null
+                    ? (int) $profile->branch_id
+                    : null;
             }
         }
 
-        return Schema::hasColumn('users', 'branch_id') && $student->branch_id !== null
-            ? (int) $student->branch_id
-            : null;
+        if ($profileBranchId !== null && $userBranchId !== null) {
+            abort_unless(
+                $profileBranchId === $userBranchId,
+                403,
+                'Your account and student profile branch assignments do not match.'
+            );
+        }
+
+        return $profileBranchId ?? $userBranchId;
     }
 
     private function ensureAssignedBranch($actor): void
