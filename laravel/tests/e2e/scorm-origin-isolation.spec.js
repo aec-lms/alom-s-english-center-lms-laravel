@@ -147,6 +147,6 @@ test('untrusted SCO runs on an opaque content origin with no LMS or player DOM a
     }
   });
   expect(lmsCanReadPlayer).toBe(false);
-  await expect(playerFrame.locator('body')).toHaveAttribute('data-privileged-action', 'undefined');
+  await expect(playerFrame.locator('body')).toHaveAttribute('data-privileged-action', 'blocked');
   await expect(playerFrame.locator('#scorm-sco')).toHaveAttribute('sandbox', 'allow-scripts');
 });
