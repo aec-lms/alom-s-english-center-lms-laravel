@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\URL;
 use Tests\TestCase;
 
 class ScormRuntimeControllerTest extends TestCase
