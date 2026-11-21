@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Plugins\Modules\Scorm\Http\Controllers;
 
+use App\Core\Plugins\PluginManager;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
