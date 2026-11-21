@@ -496,9 +496,9 @@ class CourseController extends Controller
     }
     private function assertCoursePathIntegrity(int $courseId, bool $deleting = false, ?string $newStatus = null): void
     {
-        $plugins = app(PluginManager::class);
-        if (!$plugins->isEnabled('learning-paths')
-            || !Schema::hasTable('learning_path_courses')
+        // Keep active learning-path curriculum intact even while the optional
+        // plugin is temporarily disabled; its historical tables are retained.
+        if (!Schema::hasTable('learning_path_courses')
             || !Schema::hasTable('learning_path_enrollments')
         ) {
             return;
