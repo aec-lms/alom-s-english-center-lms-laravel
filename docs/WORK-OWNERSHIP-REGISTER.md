@@ -163,32 +163,3 @@ Before recommending merge, the primary owner must verify and record all of the f
 6. PR body, tests, docs and this register accurately reflect the final scope, owner, dependencies and verification evidence.
 
 **Notification flow:** when all gates pass, the primary owner posts a concise completion note on the PR with exact head SHA, CI links/results, independent reviewer, screenshots/evidence and any accepted non-blocking follow-ups; then notifies the project owner that the PR is ready to merge. The project owner/authorized maintainer performs or explicitly authorizes the merge using repository policy (required approvals, branch protection and merge queue if enabled). If any gate is unmet, keep the PR Draft/open and report the specific blocker—never claim complete or recommend merge.
-
-
-
-## 2026-11-21 — Competitive LMS feature expansion
-
-| Task / Issue | Workstream and scope | Primary owner | Supporting / reviewer | Dependencies / overlap boundary | Status | Branch | Validation / next action |
-|---|---|---|---|---|---|---|---|
-| [#379](https://github.com/aec-lms/alom-s-english-center-lms-laravel/issues/379) | SCORM 1.2 interoperability: secure ZIP package validation/import, private extraction, course association, learner attempt/runtime persistence, SCORM API adapter and admin/learner experience | `Alomsenglishcenter` | Independent security + learning-content review required | New standalone `scorm` plugin. Course Management, Course Content Studio, Learning Paths (#378), Mobile API and Plugin Manager remain optional integrations; no shared files edited. SCORM 2004 sequencing, xAPI/cmi5 LRS and LTI 1.3 are explicitly out of Phase 1. | In Progress | `feat/scorm-12-course-runtime` | Implemented: plugin lifecycle, hardened ZIP/SCORM 1.2 manifest import, private extraction, admin package workflow, student activity library, active enrollment/payment/branch checks, isolated-origin player, SCORM 1.2 API adapter, server-side CMI persistence, versioned attempts, idempotent commit replay and focused importer/runtime/admin/controller tests. Still not complete: full SCORM 1.2 conformance validation, exact-head SQLite + MySQL 8 + PHP/Blade + Browser E2E + Composer + release-package checks, independent security review and cPanel staging. Keep issue open and do not call production-ready. |
-
-### Competitive feature-gap roadmap (do not duplicate active work)
-
-- Learning Paths / prerequisites: active PR [#378](https://github.com/aec-lms/alom-s-english-center-lms-laravel/pull/378); do not create a second implementation.
-- Phonetics learner practice analytics: active PR [#377](https://github.com/aec-lms/alom-s-english-center-lms-laravel/pull/377); provider-based pronunciation assessment remains separate from human teacher review.
-- SCORM 1.2: active Issue [#379](https://github.com/aec-lms/alom-s-english-center-lms-laravel/issues/379); first interoperability phase.
-- SCORM 2004 sequencing/navigation: future phase after #379 acceptance.
-- xAPI / cmi5 Learning Record Store: separate future interoperability work; not included in #379.
-- LTI 1.3 integration: separate future interoperability work; not included in #379.
-- Spoken English Practice integration: existing Issue [#289]; do not duplicate the plugin or Phonetics workflows.
-- Plugin functional acceptance: Issue [#300] remains open; 60 manifest rows exist, but per-plugin acceptance depth and external evidence remain incomplete.
-- External release acceptance: Issue [#14] remains a release blocker for real cPanel staging, restore/rollback, provider sandbox callbacks and authorized live-class capacity validation.
-
-
-### 2026-11-21 — SCORM 1.2 implementation ownership
-
-| Task / scope | Primary owner | Supporting / reviewer | Status | Issue / PR | Branch / head SHA | Ownership boundary / next action |
-|---|---|---|---|---|---|---|
-| Secure SCORM 1.2 package import, isolated learner runtime, attempt persistence, safe immutable package revisions and usage reporting | `Alomsenglishcenter` | `md-lalchand` requested as independent security reviewer | In Progress / exact-head CI pending | [#379](https://github.com/aec-lms/alom-s-english-center-lms-laravel/issues/379) · [PR #386](https://github.com/aec-lms/alom-s-english-center-lms-laravel/pull/386) | `feat/scorm-12-course-runtime` · `aad5f41ab4fc6b34173d1c26957a6fb19ef983bf` | SCORM plugin owns only `laravel/plugins/modules/scorm/**`, its config and SCORM-specific tests/docs. Course Management remains owner of enrollment/course completion contracts. Includes admin package import/publish/archive, immutable replacement revisions blocked while active attempts exist, package usage metrics, separate content origin and server-side learner entitlement checks. Current head `aad5f41ab4fc6b34173d1c26957a6fb19ef983bf`: fresh exact-head CI has not yet reported results. Prior workflow attempts were cancelled during rapid branch updates and must not be counted as passes. Independent review and cPanel staging remain pending. |
-
-The SCORM issue owner confirmed in #379 that no parallel implementation should be created. The existing branch is the canonical implementation. The independent reviewer offered a bounded review of ZIP central-directory/extraction safety, XML parsing, launch authorization, attempt ownership, replay/concurrency and package replacement. The SCORM PR must link this review request and keep #379 open until every acceptance gate is evidenced.
