@@ -741,7 +741,7 @@ class LearningPathsPluginTest extends TestCase
         $this->activatePlugins(['course-management', 'student-management', 'learning-paths']);
 
         $student = $this->createUserWithRole('student');
-        app(\\Plugins\\Modules\\LearningPaths\\Services\\LearningPathAccess::class)
+        app(\Plugins\Modules\LearningPaths\Services\LearningPathAccess::class)
             ->assertCourseUnlocked((int) $student->id, 999999);
 
         $this->assertDatabaseMissing('learning_path_enrollments', [
