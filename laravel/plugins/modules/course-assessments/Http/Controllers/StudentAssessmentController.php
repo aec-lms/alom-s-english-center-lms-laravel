@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 use Plugins\Modules\CourseAssessments\Models\AssessmentAttempt;
 use Plugins\Modules\CourseAssessments\Models\AssessmentSet;
+use Plugins\Modules\LearningRewards\Services\LearningRewardsService;
 
 class StudentAssessmentController extends Controller
 {
@@ -355,6 +356,22 @@ class StudentAssessmentController extends Controller
                 }else{$hasManual=true;}
             }
             $locked->update(['auto_score'=>$auto,'manual_score'=>$manual,'final_score'=>$hasManual?null:$auto,'status'=>$hasManual?'pending_review':'submitted','submitted_at'=>now()]);
+
+            if (!$hasManual && (float) $locked->max_score > 0
+                && app(PluginManager::class)->isEnabled('learning-rewards')
+                && Schema::hasTable('learning_reward_rules')) {
+                $passPercentage = (int) (DB::table('learning_reward_rules')
+                    ->where('activity_key', 'quiz_passed')
+                    ->value('pass_percentage') ?? 60);
+                if (($auto / (float) $locked->max_score) * 100 >= $passPercentage) {
+                    app(LearningRewardsService::class)->awardVerifiedActivity(
+                        (int) $locked->student_id,
+                        'quiz_passed',
+                        'assessment_attempt',
+                        (int) $locked->id,
+                    );
+                }
+            }
         });
     }
 
