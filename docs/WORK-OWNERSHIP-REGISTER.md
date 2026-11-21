@@ -163,3 +163,201 @@ Before recommending merge, the primary owner must verify and record all of the f
 6. PR body, tests, docs and this register accurately reflect the final scope, owner, dependencies and verification evidence.
 
 **Notification flow:** when all gates pass, the primary owner posts a concise completion note on the PR with exact head SHA, CI links/results, independent reviewer, screenshots/evidence and any accepted non-blocking follow-ups; then notifies the project owner that the PR is ready to merge. The project owner/authorized maintainer performs or explicitly authorizes the merge using repository policy (required approvals, branch protection and merge queue if enabled). If any gate is unmet, keep the PR Draft/open and report the specific blocker—never claim complete or recommend merge.
+
+
+## 2026-11-20 current-mainline pull-request reconciliation
+
+**Checkpoint main:** `0f3aad9cc469d1abff7fcb7efcd6610ba3fbfc30` (merged commit for PR #331).  
+**Purpose:** supersede stale PR/head observations above. All statuses below are point-in-time observations and must be refreshed against the exact SHA before merge.
+
+### Canonical PRs and supersession
+
+| Workstream | Canonical candidate | Legacy / duplicate PR | Current exact-head status and remaining gate |
+|---|---|---|---|
+| Course Assessment student role/account authorization | [#346](../pull/346), owner `Alomsenglishcenter`; branch `security/course-assessment-student-role-mainline` | [#318](../pull/318), legacy candidate | #346 exact head `0f8b71136f53a5490c9e37cce85f0c8ba9cc2b68`; Composer and Browser E2E pass; MySQL 8 is running and SQLite job is cancelled (not a pass). Lock-wait diagnostics use only the ephemeral CI app DB account with PROCESS. Fresh exact-head SQLite + MySQL completion and independent review required. Do not merge legacy #318 and #346 together. |
+| Flash Sale premium campaign engine | [#347](../pull/347), owner `Alomsenglishcenter`; branch `feat/flash-sale-premium-campaign-mainline-v2` | [#334](../pull/334), legacy candidate | #347 exact head `7032a5a6f8a7d34de78cae23d811028ccbd1198a`; SQLite/Laravel, Browser E2E and Composer Security Audit passed; MySQL 8 is still running. Fresh independent review, human NVDA/Firefox or NVDA/Chrome smoke test, and authorized ruleset enablement remain required. Shared direct-enrollment/Unified Commerce pricing remains separately owned under #335/#275. Do not merge #334 and #347 together. |
+| Red-Team open-issue inventory | [#349](../pull/349), owner `Alomsenglishcenter`; branch `docs/red-team-open-issues-mainline` | [#315](../pull/315), legacy candidate | #349 exact head `7acd8b1f00c0217152d2cf1b8f9c1b63c2d36f2d`; Laravel including MySQL 8.0, Browser E2E and Composer Security Audit all passed. This inventory does not implement or close findings. Fresh independent review and authorized ruleset enablement required. Do not merge #315 and #349 together. |
+| 60-plugin acceptance matrix | [#350](../pull/350), owner `Alomsenglishcenter`; branch `docs/plugin-acceptance-matrix-60-mainline` | [#320](../pull/320), legacy candidate | #350 exact head `bd39d771d886845fa5fba785df677a6f1f28a7d8`; Laravel including MySQL 8.0, Browser E2E and Composer Security Audit all passed. The corrected snapshot table has 60 unique plugin slugs and 636 Git blob files; directory tree objects are excluded. This is inventory/evidence documentation, not functional certification. Fresh independent review and authorized ruleset enablement required. Do not merge #320 and #350 together. |
+| Exam Management immutable attempt snapshot / eligibility | [#343](../pull/343), owner `mdlalchandakand-cell`; branch `security/exam-attempt-snapshot-mainline` | [#311](../pull/311), superseded legacy candidate | #343 is based on current `main` at `0f3aad9cc469d1abff7fcb7efcd6610ba3fbfc30` (6 commits ahead / 0 behind). Exact head `a9248e1bfc7862506a34018bd19b51c2e42b44c6`: Laravel SQLite + MySQL 8.0, Browser E2E and Composer Security Audit all passed. Dedicated MySQL tests prove account-deactivation and Student-role-revocation writers block behind the authenticated exam request's User/role locks, then the next submit is denied without mutating the attempt. Ready for independent review. Do not merge #311 and #343 together. |
+| Invoice-wide gateway payment-session reservations | [#341](../pull/341), owner `mdlalchandakand-cell`; branch `security/invoice-payment-session-reservation-mainline` | [#326](../pull/326), superseded legacy candidate | #341 is based on current `main` at `0f3aad9cc469d1abff7fcb7efcd6610ba3fbfc30` (1 commit ahead / 0 behind). Exact head `385d770de5947f38ee212c70b847748a8049c8a8`: Laravel SQLite, Browser E2E and Composer Security Audit passed; MySQL 8 is still running. Fresh independent financial/security approval is still required. Do not merge #326 and #341 together. |
+
+### Legacy Flash Sale integration boundary
+
+- [#335](../issues/335) remains the separate direct-enrollment, legacy-cart and Unified Commerce quote integration workstream. #334/#347 do not edit #275-owned shared commerce files and do not claim discounted checkout integration.
+- The #334 prior head `5d524e2228b714bfbcced0994b616f84d967ea10` passed SQLite **740/7,387**, MySQL 8 **742/7,413**, Browser E2E **6/6**, Composer Security Audit, PHP lint/metadata/Blade/backup checks and 6,764-file cPanel package verification. These are historical results for #334's old base, not evidence for new #347.
+
+### Repository branch-protection blocker
+
+GitHub repository ruleset **LMS** (ID `27607063`) was rechecked on 2026-11-20:
+- `enforcement: disabled`
+- `required_approving_review_count: 0`
+- `required_status_checks: []`
+
+Therefore review/CI are not currently enforced by this ruleset. An authorized repository administrator must enable the ruleset and configure the intended approval and required CI checks before any PR is treated as merge-ready. This integration cannot change the ruleset; a 403 was previously returned for branch-protection administration. No PR should be merged by bypassing this gate.
+
+### PR #331 reconciliation
+
+PR #331 was merged into main as commit `0f3aad9cc469d1abff7fcb7efcd6610ba3fbfc30` on 2026-11-20. This current-main addendum replaces the earlier point-in-time status entries above; no historical CI/review result is carried forward to a different head.
+
+
+### Phonetics private speaking recordings — PR #292 / ownership-doc reconciliation
+
+| Item | Current verified state (2026-11-20) |
+|---|---|
+| Feature PR | [#292](../pull/292), head `2db83e4cf04bfe06177526dd4959575bab27d0a8`, branch `feature/phonetics-speaking-recordings-review`, Draft; 10 recording-related changed paths. |
+| Shared baseline owner | Merged [#288](../pull/288) owns the dedicated-course Phonetics practice baseline and its baseline tests. #292 owns the recording migration/model/controller/routes, recording admin views, recorder/history integration, and recording-specific feature/security tests. The current #292 changed-file list does not include #288's branding-loader test. |
+| Exact-head CI | Laravel SQLite, Laravel MySQL 8, Browser E2E, and Composer Security Audit were verified green for the recorded #292 head. These results do not transfer to a later head after synchronization. |
+| Mainline divergence | The last live compare recorded #292 as 66 commits ahead / 461 behind `main`, merge base `db493c6525f110cd4815024f7a8965c1da8baa22`. The feature diff overlaps current-main shared files; wholesale copying of the old practice view, routes, or manifest risks losing newer mainline changes. A conflict-aware sync and fresh 10-path diff/ownership audit are mandatory. |
+| Security/test review | Source audit recorded self-review denial, reviewer permission revalidation under deterministic locks, branch/course scope rechecks, and private audio response handling. The MySQL concurrency regression test is present; its synchronous listener/lock-timeout orchestration remains a test-quality caveat and should be independently reviewed rather than treated as proof of all possible race schedules. |
+| Independent approval | No independent APPROVED review was present at the last review query. Request fresh maintainer review after the synchronized candidate is ready. |
+| Documentation follow-up | [#348](../pull/348) is a two-commit docs-only reconciliation of #292's ownership/status, but this current-mainline addendum records the same feature boundary in the broader current-main register. Do not merge both documentation PRs if they carry duplicate register content; compare the final diffs and retain one canonical update. |
+
+**Required next steps:** an authorized branch owner must perform the conflict-aware integration of #292 onto current `main` (or explicitly authorize a new integration branch), preserve all unrelated mainline changes, rerun the full exact-head matrix (SQLite, MySQL 8, Browser E2E, Composer Audit, lint/Blade/build/package), attach responsive/accessibility evidence, and obtain independent maintainer approval. Keep #292 Draft until every gate is met. The GitHub connector available to this workflow exposes file/branch-pointer operations but no conflict-aware merge/rebase/cherry-pick operation; no unsafe replacement of shared files or force-update is authorized.
+
+
+## 2026-11-20 exact-head CI refresh (16:55 Bangladesh time)
+
+This refresh supersedes stale “running” notes above only where an exact-head workflow result is explicitly listed. It does not grant merge approval or mark a workstream Done.
+
+| Candidate | Exact head | Current CI evidence | Remaining gate |
+|---|---|---|---|
+| [#351](../pull/351) ownership register | `8525c1fe455c824a5f4fe93cb4fe9053d5a95d41` | Laravel incl. MySQL 8.0, Browser E2E, Composer Security Audit: **passed** on this prior head; a later documentation commit now requires fresh exact-head CI | Independent review; authorized LMS ruleset configuration |
+| [#350](../pull/350) plugin matrix | `bd39d771d886845fa5fba785df677a6f1f28a7d8` | Laravel incl. MySQL 8.0, Browser E2E, Composer Security Audit: **passed** | Independent review; ruleset configuration |
+| [#349](../pull/349) red-team inventory | `7acd8b1f00c0217152d2cf1b8f9c1b63c2d36f2d` | Laravel incl. MySQL 8.0, Browser E2E, Composer Security Audit: **passed** | Independent review; inventory itself closes no findings |
+| [#347](../pull/347) Flash Sale | `7032a5a6f8a7d34de78cae23d811028ccbd1198a` | SQLite/Laravel, Browser E2E, Composer: **passed**; MySQL 8.0: **in progress** | MySQL, independent review, human screen-reader smoke test, ruleset |
+| [#346](../pull/346) Course Assessment student authorization | `b8542031150dcd58baaf4dfbd6621db83acba206` | SQLite/Laravel, Browser E2E, Composer: **passed**; MySQL 8.0: **in progress** | MySQL, independent review, ruleset |
+| [#345](../pull/345) teacher grading authorization | `900513e88ee7a7682dd8b5a81d33fc3af8fd75ac` | Laravel SQLite, Laravel MySQL 8, Browser E2E and Composer Security Audit are all green on the exact head. PR is ready for independent review after adding MySQL account-deactivation and teacher-role-revocation contention proofs. | Fresh independent teacher-grading/account/branch authorization approval. |
+| [#344](../pull/344) live-class branch consistency | `843400888028b99446d17e9e81c6f48f0427e9e2` | Added both-direction account/profile mismatch coverage and MySQL role/account/enrollment/paid-entitlement revocation races. Prior MySQL run exposed that the HTTP test kernel rendered lock timeout as generic 500; new helper disables exception handling only for the contention request to assert the actual 1205/1213 exception. Exact-head SQLite/MySQL/Browser/Composer checks are running. | Exact-head MySQL 8 pass, independent review; coordinate shared entitlement ownership with #312 (closed as superseded). |
+| [#343](../pull/343) exam snapshots | `a9248e1bfc7862506a34018bd19b51c2e42b44c6` | Laravel SQLite/MySQL 8, Browser E2E and Composer Security Audit all pass. Added MySQL account-deactivation and Student-role-revocation writer-contention tests. PR is ready for independent review. | Fresh independent exam-integrity approval. |
+| [#342](../pull/342) provider-confirmed refunds | `ae20681ce5a3f82b423a57b4cade6d2b593926f7` | Exact-head Laravel SQLite, MySQL 8, Browser E2E and Composer Security Audit all pass. Provider response identities are bound to the exact local transaction/refund; negative mismatch tests assert no ledger mutation. PR is ready for independent finance/security review; refunds remain disabled pending provider sandbox acceptance. | Fresh independent approval and official provider sandbox acceptance; merge after #341 and then reconcile shared PayPal service. |
+| [#341](../pull/341) invoice-wide gateway reservations | `385d770de5947f38ee212c70b847748a8049c8a8` | Invoice+gateway-scoped provider idempotency keys prevent a client key replaying a different invoice's Stripe/PayPal session. Exact-head SQLite, MySQL 8, Browser E2E and Composer Security Audit all pass; PR is ready for independent financial/security review. | Independent approval; sequence before #342 because both edit `PaypalGatewayService`. |
+| [#348](../pull/348) Phonetics ownership reconciliation | `fd2e22c0d5656cbdf10156a70872cefb7cf0e2f2` | Browser E2E, Composer: **passed**; Laravel: **in progress** | Exact-head Laravel completion and independent review |
+| [#292](../pull/292) Phonetics recordings | `2db83e4cf04bfe06177526dd4959575bab27d0a8` | Laravel, Browser E2E, Composer: **passed** | Independent review; preserve #288 shared-file ownership boundary |
+
+The latest repository audit closed superseded/duplicate candidates without merging: #318→#346, #319→#345, #311→#343, #326→#341, #312→#344, #334→#347, #340→#356, #349→#354, #351→#355, and #352→#358, #353→#358 (stale-head PR closed); earlier duplicate #315/#320/#350 were also closed. These closures do not imply that their canonical replacements are merge-approved. #336 and #293 remain legacy/unmergeable candidates pending safe integration or clean-mainline rebuild. The LMS ruleset remains disabled with zero required approvals/status checks; only an authorized repository admin can enable and configure it.
+
+
+## 2026-11-20 coordinated security and payment follow-up
+
+This addendum supersedes earlier status rows only for the exact heads below. It records work performed after the prior 16:55 Bangladesh-time snapshot; it is not merge approval.
+
+| PR | Exact head | Verified result / new work | Remaining gate |
+|---|---|---|---|
+| [#341](../pull/341) invoice-wide gateway reservations | `385d770de5947f38ee212c70b847748a8049c8a8` | Invoice+gateway-scoped provider idempotency keys prevent a client key replaying a different invoice's Stripe/PayPal session. Exact-head SQLite, MySQL 8, Browser E2E and Composer Security Audit all pass; PR is ready for independent financial/security review. | Independent approval; sequence before #342 because both edit `PaypalGatewayService`. |
+| [#342](../pull/342) provider-confirmed refunds | `ae20681ce5a3f82b423a57b4cade6d2b593926f7` | Exact-head Laravel SQLite, MySQL 8, Browser E2E and Composer Security Audit all pass. Provider response identities are bound to the exact local transaction/refund; negative mismatch tests assert no ledger mutation. PR is ready for independent finance/security review; refunds remain disabled pending provider sandbox acceptance. | Fresh independent approval and official provider sandbox acceptance; merge after #341 and then reconcile shared PayPal service. |
+| [#343](../pull/343) exam attempt snapshots | `a9248e1bfc7862506a34018bd19b51c2e42b44c6` | Added two MySQL 8 tests proving account deactivation and Student-role revocation writers wait while a protected authenticated exam request holds the User/role lock; denied follow-up submit must leave the attempt unchanged. Laravel SQLite, MySQL 8, Browser E2E and Composer Security Audit are all green. | Fresh independent assessment-integrity approval. |
+| [#344](../pull/344) live-class branch consistency | `843400888028b99446d17e9e81c6f48f0427e9e2` | Added both-direction account/profile mismatch coverage and MySQL role/account/enrollment/paid-entitlement revocation races. Prior MySQL run exposed that the HTTP test kernel rendered lock timeout as generic 500; new helper disables exception handling only for the contention request to assert the actual 1205/1213 exception. Exact-head SQLite/MySQL/Browser/Composer checks are running. | Exact-head MySQL 8 pass, independent review; coordinate shared entitlement ownership with #312 (closed as superseded). |
+| [#345](../pull/345) teacher grading authorization | `900513e88ee7a7682dd8b5a81d33fc3af8fd75ac` | Laravel SQLite, Laravel MySQL 8, Browser E2E and Composer Security Audit are all green on the exact head. PR is ready for independent review after adding MySQL account-deactivation and teacher-role-revocation contention proofs. | Fresh independent teacher-grading/account/branch authorization approval. |
+| [#346](../pull/346) Course Assessment student authorization | `b8542031150dcd58baaf4dfbd6621db83acba206` | MySQL lock-wait tests now use the app test user with `PROCESS` granted only to the ephemeral CI database user; no root monitor credential is passed into Laravel. Browser E2E and Composer pass; earlier SQLite/MySQL attempts were cancelled during execution and fresh reruns are pending. | Exact-head SQLite + MySQL 8 completion and independent review; do not treat cancelled attempts as passes. |
+| [#347](../pull/347) Flash Sale clean-mainline v2 | `7032a5a6f8a7d34de78cae23d811028ccbd1198a` | Exact-head SQLite, MySQL 8, Browser E2E and Composer Security Audit all pass; PR is ready for independent review. | Independent review, human NVDA/Firefox or NVDA/Chrome screen-reader smoke test, and separate #335 shared-commerce pricing integration. |
+| [#339](../pull/339) referral payout concurrency | `211f360446bf3d4f9c9141281b2a6f03b10ad5ad` | Laravel SQLite, MySQL 8, Browser E2E and Composer Security Audit are all green. | Independent finance review; do not merge while Draft or review is outstanding. |
+| [#332](../pull/332) verified course-cart referral payment | `345c0aa1d843d94bbca1bf4d36733b537feecc9d` | Exact-head SQLite, MySQL 8, Browser E2E and Composer all pass. Resolver locks/re-reads the payment transaction and binds buyer, non-null invoice ID, currency, gateway-payable amount after wallet credit, verified status and exact order reference. Regression covers all rejected bindings, partial/zero payment and valid idempotent replay. PR moved to ready-for-review; fresh independent finance/security approval still required after prior change request. | Independent finance review before merge. |
+
+| [#358](../pull/358) Student identity normalization and generated-code retry | `d24cbe643a1a472826f7e4dd2d2c85e498bcfbe1` | Exact-head Laravel SQLite, MySQL 8, Browser E2E and Composer Security Audit all pass. Normalizes email/student codes, rejects case-insensitive legacy duplicates, handles concurrent unique-index violations, retries generated-code collisions up to ten times, and rolls back on exhaustion. PR is ready for independent review. | Independent Student Management/security approval; broader hard-delete/FK retention audit remains separate. |
+| [#357](../pull/357) teacher account reactivation security | `b07bdccbc293a58ea16896b8299d2dcce4a75465` | Clean-mainline security slice rebuilt from legacy #293: ordinary profile edits cannot reactivate a separately disabled login; only admins may explicitly reactivate; account/role locks and actor-attributed status audit are enforced. Browser E2E and Composer pass, SQLite passed after replacing a brittle logger mock with a persisted audit-log assertion; MySQL 8 is running. | Exact-head MySQL 8 and independent teacher-management/security review. Does not supersede #293's broader teacher-directory/assignment/recycle-bin feature scope. |
+| [#359](../pull/359) active teacher course assignment | `6bbc42be9949439af80b49388d65b5f37d59d5ea` | Clean-mainline slice from legacy #293: inactive teachers are hidden and cannot be assigned; assignment re-reads/locks the User and teacher role pivot inside the transaction, and MySQL 8 regressions prove assignment serializes against both account deactivation and teacher-role revocation. Exact-head CI is pending/running. | Exact-head SQLite, MySQL 8, Browser E2E, Composer and independent course/teacher authorization review. |
+All listed candidates remain Draft. No branch was merged or deployed. MySQL 8 results are explicitly pending where shown; a green SQLite run is not a substitute for row-lock proof. Repository LMS ruleset remains disabled with zero required approvals/status checks, so authorized repository administration is still required before any merge gate is considered enforced.
+
+
+### 2026-11-20 student identity follow-up
+
+| Candidate | Exact head | Scope / status |
+|---|---|---|
+| [#352](../pull/352) Student Management identity normalization | `0d456b8629463cc246c6be627040e894096b6f79` | Clean-mainline Draft candidate. Normalizes email and student_code before store/update validation, checks legacy mixed-case collisions, maps unique-index races to field validation errors, and retries generated student-code collisions with a bounded loop. Regression tests cover store/update normalization, legacy duplicate rejection and deterministic generated-code retry. Exact-head SQLite/MySQL/Browser/Composer checks are queued; independent review is outstanding. |
+
+## 2026-11-20 latest PR audit update (12:10 Bangladesh time)
+
+This addendum supersedes earlier point-in-time status rows only where the exact current head is stated. No PR was merged or deployed in this audit.
+
+| PR | Exact head | Verified current result | Remaining gate |
+|---|---|---|---|
+| #341 payment-session reservation | `385d770de5947f38ee212c70b847748a8049c8a8` | SQLite Laravel, Browser E2E and Composer pass; MySQL 8 still running. | MySQL 8 and independent finance/security review; reconcile shared PayPal service with #342 before either merge. |
+| #342 provider-confirmed refunds | `99f05adba09f274c6d28013ed3e803263762dc94` | Added explicit PayPal invoice_id/custom_id mismatch regression; Composer passed; Laravel and Browser E2E are running. | Exact-head MySQL + SQLite + Browser + Composer green, provider sandbox acceptance, independent finance review; refunds remain disabled by default. |
+| #343 exam snapshot | `a9248e1bfc7862506a34018bd19b51c2e42b44c6` | Laravel SQLite/MySQL, Browser E2E and Composer all passed. Added MySQL user-deactivation and student-role-revocation lock tests. | Fresh independent exam-integrity approval. |
+| #344 live class | `4d22cf8746d3169f275cd02d13f741b2fa50a187` | Laravel SQLite, Browser E2E and Composer passed; MySQL 8 running. Covers both branch mismatch directions and account/role/enrollment/paid-pass heartbeat races. | Exact-head MySQL and independent review. |
+| #345 teacher grading | `900513e88ee7a7682dd8b5a81d33fc3af8fd75ac` | Laravel SQLite/MySQL, Browser E2E and Composer all passed. | Fresh independent teacher-grading security approval. |
+| #346 student assessment role | `0f8b71136f53a5490c9e37cce85f0c8ba9cc2b68` | Composer and Browser passed; MySQL running; SQLite job cancelled (not a pass). | Rerun SQLite after active workflow ends; MySQL pass and independent review. |
+| #347 Flash Sale | `7032a5a6f8a7d34de78cae23d811028ccbd1198a` | Composer and Browser passed; Laravel SQLite passed; MySQL running. | MySQL, independent review, human screen-reader smoke test and separate #335 checkout integration. |
+| #349 red-team inventory | `919b99317fbf88183d917e9c949ce5b89ee1ca8e` | Stale branch re-adds a document already present on main; exact compare showed 80 commits behind current main and mergeable=false. | Superseded by clean-mainline #354; do not merge #349. |
+| #351 ownership register | `d9157f189a84fcddb810e52884b98b73c24c4191` | SQLite, Browser and Composer passed; original MySQL job cancelled; targeted MySQL rerun requested. | Confirm rerun MySQL result and independent review. |
+| #352 student identity | Closed without merge; useful normalization and legacy-collision coverage was ported into #358. | Superseded by the clean-mainline #358 candidate. | No merge; avoid duplicate StudentController implementations. |
+| #353 student identity | Closed without merge because its PR head remained pinned to an older commit after the branch advanced. | Replaced by clean-head PR #358 at `d24cbe643a1a472826f7e4dd2d2c85e498bcfbe1`. | No merge; #358 is canonical. |
+| #354 red-team inventory clean-mainline refresh | `49295346d902d915927a78ac86097653a711bb1a` | 29-line addendum appended to existing current-main document; Composer and Browser running, Laravel queued. | Exact-head CI and independent documentation/security review. Supersedes #349 after acceptance. |
+
+Additional coordination: #341 and #342 both edit `PaypalGatewayService`; after independent approval and exact-head CI, merge #341 first, then reconcile/rebase #342 and rerun its full matrix. Legacy counterparts #311, #312, #318, #319, #326 and #334 are closed without merge; their clean-mainline candidates are #343, #344, #346, #345, #341 and #347 respectively. #336 remains a separate legacy commerce handoff with a divergent base; do not merge it alongside #347 or #335.
+
+The repository LMS ruleset is still disabled with zero required approvals and zero required status checks. An authorized repository administrator must configure and verify branch protection. Green CI, Draft removal or mergeability metadata does not replace independent approval, external provider acceptance or release gates.
+
+
+## 2026-11-21 exact-head reconciliation (Bangladesh time)
+
+This update supersedes the 2026-11-20 point-in-time rows above for the PRs listed here. All results are tied to the exact SHA shown; a later commit requires fresh CI. No PR was merged or deployed in this reconciliation.
+
+| PR | Exact head | Current verified CI | Review / remaining gate |
+|---|---|---|---|
+| [#355](../pull/355) ownership register refresh | `c00ca3e1e4fe00b97b55f09d8e7e57946ba24c44` | Composer Security Audit and Browser E2E passed; Laravel SQLite job passed; Laravel MySQL 8 job is still running. | Independent review not yet recorded. Keep Draft until MySQL 8 and independent review complete. |
+| [#346](../pull/346) Course Assessment student authorization | `9ffe61ac6d9e2e9c6d3fa899b66b298a8cf83517` | Browser E2E and Composer Security Audit passed; Laravel workflow still running (SQLite job passed; MySQL 8 test job still running). | Independent review has comments on this head; prior CHANGES_REQUESTED review remains part of review history. Resolve every blocking finding and obtain fresh formal approval. |
+| [#357](../pull/357) teacher account reactivation security | `b073bfb92efee389410af206264757b6e011024d` | Laravel (including SQLite and MySQL 8), Browser E2E and Composer Security Audit passed. | Latest independent review is COMMENTED, not APPROVED. Fresh formal approval required. |
+| [#358](../pull/358) student identity normalization | `953ffecf4f497ccad251dcb240b19173384ef9a2` | Browser E2E and Composer Security Audit passed; Laravel workflow still running (SQLite passed; MySQL 8 still running). | Explicit student-code unique-index race handler and competing-insert rollback regression are present. Earlier CHANGES_REQUESTED reviews and latest COMMENTED follow-up are not formal approval; fresh approval required. |
+| [#359](../pull/359) active teacher course assignment | `2a38d53a41f0e240a5ba4748cf3cd99fb95faed3` | New exact-head workflows have not yet appeared in the PR-triggered run list. | Added a regression proving an existing assignment cannot authorize live-class question access or answers after account deactivation or teacher-role revocation. Verify new exact-head CI and obtain independent approval. |
+
+### Current ownership and merge controls
+
+- #358 is the canonical clean-mainline Student Management identity candidate; #352 and #353 are superseded and must not be merged.
+- #357 and #359 are separate security slices from the broader legacy teacher-management work; neither closes the remaining scope of #293.
+- #346, #357, #358 and #359 remain Draft. #355 also remains Draft while its MySQL run and independent review are outstanding.
+- The LMS repository ruleset was last verified disabled with zero required approvals and zero required status checks. An authorized repository administrator must enable and configure the intended protection. Do not merge any candidate based only on mergeable metadata or green CI.
+
+
+### 2026-11-21 project-owner Ready-for-Review rule
+
+This operating rule supersedes historical status snapshots and any older Draft guidance in this register: all active pull requests must remain open and Ready for Review, even when blocked. Ready for Review does not mean the work is complete, approved, mergeable under protection rules, or authorized to merge. Record blockers explicitly and keep working them down; merge only after exact-head checks, independent approval, conflict resolution and enforced repository policy are verified.
+
+
+### 2026-11-21 mandatory per-plugin implementation acceptance
+
+The project owner has explicitly required implementation-level acceptance for every plugin. The canonical checklist and evidence-record template are in [docs/PLUGIN-FEATURE-ACCEPTANCE-MATRIX.md](PLUGIN-FEATURE-ACCEPTANCE-MATRIX.md), under **Mandatory implementation-level acceptance**. Each plugin must independently evidence source-code workflow, routes/API, permissions and branch/record scope, database/migrations, UI/responsive/accessibility, named tests and exact-head CI, integrations/provider contracts, failure handling/recovery, and owner/reviewer/release sign-off.
+
+Manifest presence, a named test, issue closure, PR creation, Ready-for-Review state, or green generic CI is not functional acceptance. Missing evidence is BLOCKED; N/A requires a reason. Do not mark any plugin Finished/Accepted/Complete or merge/release it until all applicable gates pass, formal independent approval is recorded, and external/manual/staging gates are signed off. Upgrade the 60-plugin inventory one plugin at a time; do not bulk-promote status. This rule supersedes weaker or ambiguous acceptance language in older register entries.
+
+
+### 2026-11-21 latest PR integration checkpoint
+
+The following exact-head observations supersede earlier point-in-time rows for these PRs. Any subsequent commit invalidates its prior CI result. All listed PRs remain Open and non-Draft; no PR in this checkpoint is accepted or merged.
+
+| PR | Primary owner | Exact head / relation to main | Current CI observation | Blocker / next action |
+|---|---|---|---|---|
+| [#374](../pull/374) plugin recovery backup integrity | `md-lalchand` | `09119b249f39460369c13f788e6cf247a9b60307` | Composer passed; Laravel and Browser E2E running | Overlaps #372 in `PluginManager.php` and reset/recycle-bin tests. Coordinate one canonical branch; add unique tests from the other; verify every partial-write recovery outcome and checksum disposition. |
+| [#372](../pull/372) plugin reset/recycle-bin backup guard | `mdlalchandakand-cell` | `205dd082b1f5df9be378ba1ded9b677092d727a0` | Composer and Browser E2E passed; Laravel running | Duplicate overlapping implementation with #374. Do not merge both. Select one canonical implementation and consolidate tests before final review. |
+| [#365](../pull/365) streamed private backup restore | `mdlalchandakand-cell` | `65f358af109abe313f7bc71ed46f168377576e9a`; 20 ahead / 0 behind | Composer and Browser E2E passed; Laravel running | Exact-head MySQL 8 and full Laravel results; controlled staging restore/rollback with private files, interrupted recovery and audit-history preservation. cPanel/production restore remains external BLOCKED. |
+| [#364](../pull/364) red-team acceptance audit | `aec-lms` | `0ca4947e6a080f5dca47260c013d881a3b5a5d97`; 3 ahead / 0 behind | Composer and Browser E2E passed; Laravel running | Audit inventory is not functional acceptance of 60 plugins. Complete exact-head Laravel checks and plugin-by-plugin evidence. |
+| [#363](../pull/363) unverified SSLCOMMERZ browser returns | `aec-lms` | `55361d98ceefa4ebdeb2a0271ba9d14324bd2686`; 6 ahead / 0 behind | Composer and Browser E2E passed; Laravel running | Added actual failed/cancelled route tests with exact safe flash messages and pending-state assertions. Finish Laravel checks and obtain independent approval; provider reconciliation remains external. |
+| [#362](../pull/362) terminal payment replay guard | `mdlalchandakand-cell` | `46e811985fcadc44b69d5e5f66d130a4b48f16c1`; 10 ahead / 0 behind | Laravel, Browser E2E and Composer passed | Independent review and route-level callback replay coverage still required. |
+| [#361](../pull/361) Course Bundle manual gateway settings | `md-lalchand` | `380fc98907dfe2f7d00fd78ba831d6f777187a90`; 4 ahead / 0 behind | Composer and Browser E2E passed; Laravel running | Added direct POST regression proving disabled bank/cash checkout returns 422 and creates no transaction. Re-run exact-head CI and obtain independent approval. |
+| [#342](../pull/342) provider-confirmed refunds | `md-lalchand` | `ca58ec8fc3cc64bd0f091206e23c982b495a0139`; 45 ahead / 98 behind | Laravel, Browser E2E and Composer passed on this stale head | Rebuild/rebase on current main and rerun full integrated matrix; independent approval and provider sandbox/refund reconciliation required. Do not merge the diverged branch. |
+| [#341](../pull/341) invoice payment-session reservations | `mdlalchandakand-cell` | `fa0687fdc091ee23684511b5b7d96e66bb181902`; 16 ahead / 98 behind | Composer and Browser E2E passed; Laravel running | Rebuild/rebase on current main and reconcile payment/refund overlaps; exact integrated CI and independent approval required. Do not merge the diverged branch. |
+| [#355](../pull/355) ownership register refresh | `Alomsenglishcenter` | Current register branch; this commit updates the checkpoint | Current exact-head workflows must be rerun after this documentation commit | Independent formal review still required. |
+
+**Shared-file arbitration:** #372 and #374 both modify `laravel/app/Core/Plugins/PluginManager.php` and overlapping feature tests. The coordinator must select one canonical owner/branch before any further shared-file edits. Do not merge either PR until the conflict is resolved and the combined exact-head checks pass.
+
+**External release gates remain open:** #242 (main branch protection) requires repository-admin settings access; #14 requires owner-authorized disposable cPanel/MySQL staging, provider sandbox credentials and authorized 300+ participant validation. These cannot be inferred from GitHub CI and are not marked complete.
+
+### 2026-11-21 live verification refresh (latest observed heads)
+
+This section corrects the earlier point-in-time table above. The older SHA rows and their Draft instructions are historical only; the project-owner Ready-for-Review rule above governs current state. These observations were re-fetched from GitHub during this refresh. CI states are exact-head observations, not acceptance or merge authorization.
+
+| PR | Exact head | Exact-head CI at refresh | Review state / next action |
+|---|---|---|---|
+| #355 | `9cc728977d568f6c97eae44c155ebc412cc647ff` | Composer and Browser E2E passed; Laravel SQLite passed; MySQL 8 running | Prior formal submissions are COMMENTED on an older head; no APPROVED review on current head. Refresh the register after the remaining CI completes. |
+| #361 | `380fc98907dfe2f7d00fd78ba831d6f777187a90` | Composer and Browser E2E passed; Laravel SQLite passed; MySQL 8 running | No formal review submission yet. Obtain independent review after exact-head CI. |
+| #362 | `0f8118f418427becd18e2179a8b64075bd1909b3` | Laravel, Browser E2E and Composer passed | No formal review submission yet. Route-level terminal-state replay regression is present; independent review remains required. |
+| #363 | `311a7ea3705a541aaf0b9c510c66a8f4389f0999` | Composer and Browser E2E passed; Laravel SQLite passed; MySQL 8 running | No formal review submission yet. Browser fail/cancel callback tests preserve pending state; provider reconciliation remains an external gate. |
+| #364 | `9d00fbe380f3ae8cfa70789ccffc592472b10faa` | Laravel, Browser E2E and Composer passed | No formal review submission yet. Red-team inventory is not 60-plugin functional acceptance. |
+| #365 | `4092af8fdcc40261325b92e7d561ee58e59808fc` | Composer and Browser E2E passed; Laravel SQLite passed; MySQL 8 running | No formal review submission yet. Controlled staging restore/rollback and cPanel evidence remain external gates. |
+| #367 | `644bf67fc02c9e2de3a0159f6159ee7cd185cea8` | Composer and Browser E2E passed; Laravel MySQL 8 running; SQLite job cancelled in the current run | No formal review submission yet. The SQLite job could not be rerun while the same workflow run was still active; recheck after the run completes, then rerun if still cancelled. |
+| #372 | `205dd082b1f5df9be378ba1ded9b677092d727a0` | Composer and Browser E2E passed; Laravel SQLite passed; MySQL 8 running | No formal review submission yet. Shared-file overlap with #374 remains; do not merge both. |
+| #374 | `1105a3fb9dd86096a828389be4ea31c7e1106791` | Composer and Browser E2E passed; Laravel SQLite passed; MySQL 8 running | No formal review submission yet. Prefer this branch as the canonical implementation candidate because it centralizes verified private JSON backup writing; port any unique #372 regression coverage before retiring the duplicate implementation. |
+
+**Current integration decision:** #372 and #374 both modify `PluginManager.php` and overlapping reset/recycle-bin tests. #374 is the stronger canonical candidate at this snapshot because its shared helper validates private storage containment, file permissions, regular-file status, complete writes and read-back checksums. Before integration, strengthen the helper against exclusive-create/TOCTOU concerns and preserve the distinct partial-write regression coverage from #372. Re-run the complete SQLite, MySQL 8, Browser E2E and Composer matrix on the final consolidated head, then obtain independent formal approval.
+
+**No completion claim:** none of these PRs is merged or accepted by this checkpoint. Branch protection (#242), provider/cPanel staging and live-class load evidence remain separate release gates.
