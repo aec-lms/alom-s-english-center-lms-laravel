@@ -480,4 +480,46 @@ final class CourseTeacherAssignmentSecurityTest extends TestCase
         ]);
     }
 
+
+    public function test_inactive_teacher_profile_is_not_offered_or_assignable(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management', 'teacher-management']);
+        $admin = $this->createUserWithRole('admin');
+        $teacher = $this->createUserWithRole('teacher');
+        $this->createTeacherProfile($teacher)->forceFill(['is_active' => false])->save();
+        $course = Course::query()->create([
+            'code' => 'INACTIVE-TEACHER-PROFILE-' . $teacher->id,
+            'title' => 'Inactive Teacher Profile Course',
+            'slug' => 'inactive-teacher-profile-' . $teacher->id,
+            'price' => 0,
+            'status' => 'draft',
+            'branch_id' => null,
+        ]);
+
+        $this->actingAs($admin)->get('/admin/courses/teacher-assignments')
+            ->assertOk()
+            ->assertDontSee($teacher->email);
+
+        $this->actingAs($admin)->post('/admin/courses/teacher-assignments', [
+            'course_id' => $course->id,
+            'teacher_user_id' => $teacher->id,
+        ])->assertStatus(422);
+
+        $this->assertDatabaseMissing('course_teacher_assignments', [
+            'course_id' => $course->id,
+            'teacher_user_id' => $teacher->id,
+        ]);
+    }
+
+    public function test_inactive_teacher_profile_cannot_open_teacher_dashboard(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['teacher-management']);
+        $teacher = $this->createUserWithRole('teacher');
+        $this->createTeacherProfile($teacher)->forceFill(['is_active' => false])->save();
+
+        $this->actingAs($teacher)->get('/dashboard')->assertForbidden();
+    }
+
 }
