@@ -914,14 +914,6 @@ class ExamController extends Controller
             }
         }
 
-        if ($profileBranchId !== null && $userBranchId !== null) {
-            abort_unless(
-                $profileBranchId === $userBranchId,
-                403,
-                'Your account and student profile branch assignments do not match.'
-            );
-        }
-
         return $profileBranchId ?? $userBranchId;
     }
 
