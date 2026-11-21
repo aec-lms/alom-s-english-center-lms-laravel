@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-use Illuminate\Support\Facades\Route;
-use Plugins\Modules\Scorm\Http\Controllers\ScormPackageController;
-use Plugins\Modules\Scorm\Http\Controllers\ScormRuntimeController;
+use Illuminate\\Support\\Facades\\Route;
+use Plugins\\Modules\\Scorm\\Http\\Controllers\\ScormPackageController;
+use Plugins\\Modules\\Scorm\\Http\\Controllers\\ScormRuntimeController;
 
 Route::middleware(['web', 'installed', 'plugin:scorm'])->group(function (): void {
     Route::get('/my-learning/scorm', [ScormRuntimeController::class, 'studentIndex'])
@@ -20,26 +20,17 @@ Route::middleware(['web', 'installed', 'plugin:scorm'])->group(function (): void
             Route::patch('/{package}/publish', [ScormPackageController::class, 'publish'])->whereNumber('package')->name('publish');
             Route::patch('/{package}/archive', [ScormPackageController::class, 'archive'])->whereNumber('package')->name('archive');
         });
+
+    // Resolve the paths on every install, including test runtimes that override
+    // the configured origin after Laravel has booted. The controller enforces
+    // the exact host, while signed:relative binds the short-lived player URL to
+    // this path/query without accidentally signing APP_URL instead.
+    Route::get('/scorm-player/{attempt}/{token}', [ScormRuntimeController::class, 'contentPlayer'])
+        ->whereNumber('attempt')->middleware('signed:relative')->name('plugins.scorm.content.player');
+
+    Route::get('/scorm-bootstrap/{attempt}/{token}/{path?}', [ScormRuntimeController::class, 'contentBootstrap'])
+        ->whereNumber('attempt')->where('path', '.*')->name('plugins.scorm.content.bootstrap');
+
+    Route::get('/scorm-content/{attempt}/{path?}', [ScormRuntimeController::class, 'contentFile'])
+        ->whereNumber('attempt')->where('path', '.*')->name('plugins.scorm.content.file');
 });
-
-$playerHost = parse_url((string) config('scorm.player_origin', ''), PHP_URL_HOST);
-$contentHost = parse_url((string) config('scorm.content_origin', ''), PHP_URL_HOST);
-$appHost = parse_url((string) config('app.url'), PHP_URL_HOST);
-
-if (is_string($playerHost) && $playerHost !== '' && $playerHost !== $appHost && $playerHost !== $contentHost) {
-    Route::domain($playerHost)->middleware(['web', 'installed', 'plugin:scorm'])->group(function (): void {
-        Route::get('/scorm-player/{attempt}/{token}', [ScormRuntimeController::class, 'contentPlayer'])
-            ->whereNumber('attempt')->name('plugins.scorm.content.player')->middleware('signed');
-    });
-}
-
-if (is_string($contentHost) && $contentHost !== '' && $contentHost !== $appHost && $contentHost !== $playerHost) {
-    Route::domain($contentHost)->middleware(['web', 'installed', 'plugin:scorm'])->group(function (): void {
-        // Token is accepted only by the bootstrap route. It is exchanged for an
-        // HttpOnly, host-only cookie and then removed from the visible SCO URL.
-        Route::get('/scorm-bootstrap/{attempt}/{token}/{path?}', [ScormRuntimeController::class, 'contentBootstrap'])
-            ->whereNumber('attempt')->where('path', '.*')->name('plugins.scorm.content.bootstrap');
-        Route::get('/scorm-content/{attempt}/{path?}', [ScormRuntimeController::class, 'contentFile'])
-            ->whereNumber('attempt')->where('path', '.*')->name('plugins.scorm.content.file');
-    });
-}
