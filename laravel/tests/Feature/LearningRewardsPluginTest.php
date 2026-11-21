@@ -242,6 +242,15 @@ class LearningRewardsPluginTest extends TestCase
         $service->awardVerifiedActivity((int) $studentA->id, 'lesson_completed', 'course_lesson', 301);
         $service->awardVerifiedActivity((int) $studentB->id, 'lesson_completed', 'course_lesson', 302);
         $service->awardVerifiedActivity((int) $unassignedStudent->id, 'lesson_completed', 'course_lesson', 303);
+        foreach ([$studentA, $studentB, $unassignedStudent] as $user) {
+            DB::table('learning_reward_profiles')->insert([
+                'user_id' => $user->id,
+                'leaderboard_opt_out' => false,
+                'profile_public' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
 
         $this->actingAs($studentA)->get('/learning-leaderboard?period=all')
             ->assertOk()
