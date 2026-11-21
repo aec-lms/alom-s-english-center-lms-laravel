@@ -157,42 +157,50 @@ class ScormPackageController extends Controller
 
     public function publish(Request $request, int $package): RedirectResponse
     {
-        $record = DB::table('scorm_packages')->where('id', $package)->first();
-        abort_unless($record, 404);
-        $this->assertBranchAccess($request, $record);
-        abort_unless($record->status === 'draft', 409, 'Only draft SCORM packages can be published.');
-        abort_unless($record->course_id !== null && Schema::hasTable('courses')
-            && DB::table('courses')->where('id', $record->course_id)->where('status', 'published')->exists(),
-            422, 'The linked course must remain published.');
+        DB::transaction(function () use ($request, $package): void {
+            $record = DB::table('scorm_packages')->where('id', $package)->lockForUpdate()->first();
+            abort_unless($record, 404);
+            $this->assertBranchAccess($request, $record);
+            abort_unless($record->status === 'draft', 409, 'Only draft SCORM packages can be published.');
+            abort_unless($record->course_id !== null && Schema::hasTable('courses')
+                && DB::table('courses')->where('id', $record->course_id)->where('status', 'published')->exists(),
+                422, 'The linked course must remain published.');
 
-        DB::table('scorm_packages')->where('id', $package)->update([
-            'status' => 'published',
-            'published_at' => now(),
-            'updated_at' => now(),
-        ]);
+            DB::table('scorm_packages')->where('id', $package)->update([
+                'status' => 'published',
+                'published_at' => now(),
+                'updated_at' => now(),
+            ]);
+        });
 
         return back()->with('status', 'SCORM package published.');
     }
 
     public function archive(Request $request, int $package): RedirectResponse
     {
-        $record = DB::table('scorm_packages')->where('id', $package)->first();
-        abort_unless($record, 404);
-        $this->assertBranchAccess($request, $record);
-        $activeAttempts = DB::table('scorm_attempts')
-            ->where('scorm_package_id', $package)
-            ->whereIn('completion_state', ['in_progress', 'suspended'])
-            ->count();
-        abort_if($activeAttempts > 0, 409, 'This package has active learner attempts and cannot be archived yet.');
+        DB::transaction(function () use ($request, $package): void {
+            $record = DB::table('scorm_packages')->where('id', $package)->lockForUpdate()->first();
+            abort_unless($record, 404);
+            $this->assertBranchAccess($request, $record);
+            abort_unless($record->status === 'published', 409, 'Only a published package can be archived.');
 
-        DB::table('scorm_packages')->where('id', $package)->update([
-            'status' => 'archived',
-            'archived_at' => now(),
-            'updated_at' => now(),
-        ]);
+            $activeAttempts = DB::table('scorm_attempts')
+                ->where('scorm_package_id', $package)
+                ->whereIn('completion_state', ['in_progress', 'suspended'])
+                ->lockForUpdate()
+                ->get(['id']);
+            abort_if($activeAttempts->isNotEmpty(), 409, 'This package has active learner attempts and cannot be archived yet.');
+
+            DB::table('scorm_packages')->where('id', $package)->update([
+                'status' => 'archived',
+                'archived_at' => now(),
+                'updated_at' => now(),
+            ]);
+        });
 
         return back()->with('status', 'SCORM package archived. Learner attempt history is retained.');
     }
+
     private function assertBranchAccess(Request $request, object $package): void
     {
         $actor = $request->user();
