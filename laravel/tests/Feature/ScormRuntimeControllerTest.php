@@ -113,6 +113,9 @@ class ScormRuntimeControllerTest extends TestCase
         $player->assertOk()
             ->assertSee('id="scorm-sco"')
             ->assertSee('sandbox="allow-scripts allow-same-origin"');
+        $playerPolicy = (string) $player->headers->get('Content-Security-Policy');
+        $this->assertStringContainsString('frame-src https://scorm.example.test', $playerPolicy);
+        $this->assertStringNotContainsString('https:;', $playerPolicy);
 
         $contentUrl = route('plugins.scorm.content.file', [
             'attempt' => $attempt->id,
@@ -128,6 +131,10 @@ class ScormRuntimeControllerTest extends TestCase
             ->assertSee('element.match(/^cmi\\.interactions\\.\\d+\\.(.+)$/)')
             ->assertSee("if (field === 'time') return /^\\d{8}T\\d{6}(?:\\.\\d{1,2})?$/")
             ->assertHeader('X-Content-Type-Options', 'nosniff');
+        $contentPolicy = (string) $contentResponse->headers->get('Content-Security-Policy');
+        $this->assertStringContainsString("connect-src 'self' https://lms.example.test", $contentPolicy);
+        $this->assertStringContainsString("form-action 'none'", $contentPolicy);
+        $this->assertStringNotContainsString('https:;', $contentPolicy);
         $cacheControl = strtolower((string) $contentResponse->headers->get('Cache-Control'));
         $this->assertStringContainsString('private', $cacheControl);
         $this->assertStringContainsString('no-store', $cacheControl);
