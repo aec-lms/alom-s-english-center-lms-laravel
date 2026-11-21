@@ -657,9 +657,8 @@ class PluginManager
         try {
             $this->writeVerifiedPrivateJson($trashRoot, $archiveName . '.json', $metadata);
         } catch (Throwable $writeError) {
-            if (is_file($metadataPath) && !is_link($metadataPath)) {
-                @unlink($metadataPath);
-            }
+            // The exclusive writer owns cleanup of any partial file it created.
+            // Never unlink a pre-existing destination that caused O_EXCL to fail.
 
             // A failed move can still have completed partially. Determine the
             // actual on-disk disposition instead of trusting its boolean result.
