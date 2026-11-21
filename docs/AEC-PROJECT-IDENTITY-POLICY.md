@@ -8,7 +8,8 @@ This repository is the independently maintained **Alom's English Center Learning
 - Short name: **AEC LMS**
 - Product ownership, documentation, user-facing language, and project conventions must consistently reflect Alom's English Center.
 - Do not introduce external authoring-tool or assistant branding into repository names, branches, directories, filenames, namespaces, application labels, documentation titles, generated assets, or release packages.
-- New project-owned files and directories must use clear AEC/LMS domain terminology.
+- New project-owned files, directories and branch names must use clear AEC/LMS domain terminology.
+- Do not retain external builder/platform names in project-owned repository paths, branch names, namespaces, product labels, generated assets or release artifacts. Legacy references must be reviewed and removed or renamed only after checking active PRs, workflows and dependency compatibility.
 
 ## Engineering boundaries
 
