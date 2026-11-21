@@ -575,6 +575,40 @@ class ExamAttemptSnapshotTest extends TestCase
     }
 
 
+    public function test_exam_authoring_rejects_out_of_range_correct_option_indices(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['exam-management']);
+        $admin = $this->createUserWithRole('admin');
+        [$exam] = $this->createSnapshotFixture();
+
+        foreach ([-1, 2, 9] as $index) {
+            $this->actingAs($admin)->post("/admin/exams/{$exam->id}/questions", [
+                'prompt' => 'Invalid answer index question ' . $index,
+                'options' => ['Option A', 'Option B'],
+                'correct_option_index' => $index,
+                'marks' => 5,
+            ])->assertSessionHasErrors('correct_option_index');
+
+            $this->assertSame(1, ExamQuestion::query()->where('exam_id', $exam->id)->count());
+        }
+
+        $this->actingAs($admin)->post("/admin/exams/{$exam->id}/questions", [
+            'prompt' => 'Valid boundary answer index question',
+            'options' => ['Option A', 'Option B'],
+            'correct_option_index' => 1,
+            'marks' => 5,
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('exam_questions', [
+            'exam_id' => $exam->id,
+            'prompt' => 'Valid boundary answer index question',
+            'correct_option_index' => 1,
+        ]);
+    }
+
+
+
     private function createSnapshotFixture(): array
     {
         $exam = Exam::query()->create([
