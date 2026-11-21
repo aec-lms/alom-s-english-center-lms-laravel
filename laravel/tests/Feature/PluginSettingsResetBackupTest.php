@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Core\Plugins\PluginManager;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\File;
+use ReflectionMethod;
 use Tests\TestCase;
 
 class PluginSettingsResetBackupTest extends TestCase
@@ -24,7 +25,7 @@ class PluginSettingsResetBackupTest extends TestCase
             'sandbox_mode' => '0',
         ], ['store_id', 'store_password']);
 
-        File::partialMock()->shouldReceive('ensureDirectoryExists')->once()->andThrow(new \\RuntimeException('simulated recovery directory failure'));
+        File::partialMock()->shouldReceive('ensureDirectoryExists')->once()->andThrow(new \RuntimeException('simulated recovery directory failure'));
 
         try {
             $manager->resetSettingsToDefaults('gateway-sslcommerz');
@@ -53,9 +54,9 @@ class PluginSettingsResetBackupTest extends TestCase
             try {
                 $writer->invoke($manager, $link, '{"secret":"must-not-write"}');
                 $this->fail('Exclusive recovery writer must refuse a pre-existing symlink.');
-            } catch (\\ReflectionException $exception) {
+            } catch (\ReflectionException $exception) {
                 throw $exception;
-            } catch (\\RuntimeException $exception) {
+            } catch (\RuntimeException $exception) {
                 $this->assertStringContainsString('could not be created exclusively', $exception->getMessage());
             }
 
