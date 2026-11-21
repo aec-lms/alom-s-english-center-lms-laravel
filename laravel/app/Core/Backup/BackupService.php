@@ -91,21 +91,34 @@ class BackupService
             @unlink($encryptedPath);
             throw new RuntimeException('Unable to calculate encrypted backup checksum.');
         }
-        $record = BackupRecord::query()->create([
-            'filename' => basename($encryptedPath),
-            'storage_path' => $encryptedPath,
-            'checksum_sha256' => $checksum,
-            'is_encrypted' => true,
-            'includes_files' => $includePrivateFiles,
-            'size_bytes' => filesize($encryptedPath) ?: 0,
-            'core_version' => (string) config('lms.core_version', '2.0.0'),
-            'metadata' => ['tables' => $tableNames, 'backup_format' => 2],
-            'created_by' => $actorId,
-        ]);
+        try {
+            return DB::transaction(function () use ($encryptedPath, $checksum, $includePrivateFiles, $tableNames, $actorId): BackupRecord {
+                $record = BackupRecord::query()->create([
+                    'filename' => basename($encryptedPath),
+                    'storage_path' => $encryptedPath,
+                    'checksum_sha256' => $checksum,
+                    'is_encrypted' => true,
+                    'includes_files' => $includePrivateFiles,
+                    'size_bytes' => filesize($encryptedPath) ?: 0,
+                    'core_version' => (string) config('lms.core_version', '2.0.0'),
+                    'metadata' => ['tables' => $tableNames, 'backup_format' => 2],
+                    'created_by' => $actorId,
+                ]);
 
-        $this->audit->logRequired('backup.created', 'backup', (string) $record->id, ['filename' => $record->filename], $actorId);
+                $this->audit->logRequired(
+                    'backup.created',
+                    'backup',
+                    (string) $record->id,
+                    ['filename' => $record->filename],
+                    $actorId,
+                );
 
-        return $record;
+                return $record;
+            });
+        } catch (\\Throwable $exception) {
+            @unlink($encryptedPath);
+            throw $exception;
+        }
     }
 
     public function verifyBackupIntegrity(BackupRecord $backup): bool
