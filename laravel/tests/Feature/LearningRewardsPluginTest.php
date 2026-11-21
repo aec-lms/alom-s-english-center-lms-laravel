@@ -1,0 +1,147 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Feature;
+
+use App\Models\Permission;
+use App\Models\Role;
+use Illuminate\Support\Facades\DB;
+use Plugins\Modules\LearningRewards\Services\LearningRewardsService;
+use Tests\TestCase;
+
+class LearningRewardsPluginTest extends TestCase
+{
+    private function bootRewards(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['learning-rewards']);
+    }
+
+    public function test_learning_rewards_installs_independently_and_seeds_safe_non_cash_rules(): void
+    {
+        $this->bootRewards();
+
+        $this->assertDatabaseHas('learning_reward_rules', [
+            'activity_key' => 'lesson_completed',
+            'points' => 10,
+            'daily_cap' => 100,
+            'is_enabled' => 1,
+        ]);
+        $this->assertDatabaseHas('learning_reward_badges', ['slug' => 'first-steps']);
+        $this->assertDatabaseMissing('plugins', ['slug' => 'course-management']);
+    }
+
+    public function test_verified_learning_awards_are_idempotent_and_daily_capped(): void
+    {
+        $this->bootRewards();
+        $student = $this->createUserWithRole('student');
+        $service = app(LearningRewardsService::class);
+
+        $first = $service->awardVerifiedActivity((int) $student->id, 'lesson_completed', 'course_lesson', 101);
+        $retry = $service->awardVerifiedActivity((int) $student->id, 'lesson_completed', 'course_lesson', 101);
+
+        $this->assertTrue($first['awarded']);
+        $this->assertTrue($retry['duplicate']);
+        $this->assertSame(10, $first['points']);
+        $this->assertSame(1, DB::table('learning_reward_ledger')->where('user_id', $student->id)->count());
+
+        for ($lessonId = 102; $lessonId <= 112; $lessonId++) {
+            $service->awardVerifiedActivity((int) $student->id, 'lesson_completed', 'course_lesson', $lessonId);
+        }
+
+        $total = (int) DB::table('learning_reward_ledger')->where('user_id', $student->id)->sum('points');
+        $this->assertSame(100, $total);
+        $this->assertSame(1, DB::table('learning_reward_user_badges')
+            ->join('learning_reward_badges', 'learning_reward_badges.id', '=', 'learning_reward_user_badges.badge_id')
+            ->where('learning_reward_user_badges.user_id', $student->id)
+            ->where('learning_reward_badges.slug', 'first-steps')
+            ->count());
+    }
+
+    public function test_non_student_accounts_cannot_receive_learning_rewards(): void
+    {
+        $this->bootRewards();
+        $teacher = $this->createUserWithRole('teacher');
+
+        $this->expectException(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+        app(LearningRewardsService::class)->awardVerifiedActivity((int) $teacher->id, 'lesson_completed', 'course_lesson', 101);
+    }
+
+    public function test_reversal_is_immutable_traceable_and_idempotent(): void
+    {
+        $this->bootRewards();
+        $student = $this->createUserWithRole('student');
+        $admin = $this->createUserWithRole('admin');
+        $service = app(LearningRewardsService::class);
+
+        $award = $service->awardVerifiedActivity((int) $student->id, 'assignment_accepted', 'assignment_submission', 55);
+        $firstReversal = $service->reverseActivityAward(
+            (int) $student->id,
+            'assignment_accepted',
+            'assignment_submission',
+            55,
+            (int) $admin->id,
+            'Teacher changed the grade to zero.',
+        );
+        $secondReversal = $service->reverseActivityAward(
+            (int) $student->id,
+            'assignment_accepted',
+            'assignment_submission',
+            55,
+            (int) $admin->id,
+            'Duplicate correction request.',
+        );
+
+        $this->assertNotNull($firstReversal);
+        $this->assertSame($firstReversal, $secondReversal);
+        $this->assertSame(2, DB::table('learning_reward_ledger')->where('user_id', $student->id)->count());
+        $this->assertSame(0, (int) DB::table('learning_reward_ledger')->where('user_id', $student->id)->sum('points'));
+        $this->assertDatabaseHas('learning_reward_ledger', [
+            'id' => $award['ledger_id'],
+            'points' => 25,
+        ]);
+    }
+
+    public function test_student_dashboard_and_privacy_aware_branch_leaderboard_work(): void
+    {
+        $this->bootRewards();
+        $studentA = $this->createUserWithRole('student');
+        $studentB = $this->createUserWithRole('student');
+        app(LearningRewardsService::class)->awardVerifiedActivity((int) $studentA->id, 'lesson_completed', 'course_lesson', 1);
+        app(LearningRewardsService::class)->awardVerifiedActivity((int) $studentB->id, 'quiz_passed', 'quiz_attempt', 2);
+
+        $this->actingAs($studentA)->get('/my-learning-rewards')->assertOk()->assertSee('My Learning Rewards');
+        $this->actingAs($studentA)->get('/learning-leaderboard?period=month')->assertOk()->assertSee($studentA->name);
+
+        $this->actingAs($studentB)->patch('/my-learning-rewards/privacy', [
+            'leaderboard_opt_out' => true,
+            'profile_public' => true,
+        ])->assertRedirect();
+
+        $this->actingAs($studentA)->get('/learning-leaderboard?period=month')->assertOk()->assertDontSee($studentB->name);
+        $this->assertDatabaseHas('learning_reward_profiles', [
+            'user_id' => $studentB->id,
+            'leaderboard_opt_out' => 1,
+            'profile_public' => 1,
+        ]);
+    }
+
+    public function test_client_cannot_award_points_and_admin_rule_updates_are_permission_gated(): void
+    {
+        $this->bootRewards();
+        $student = $this->createUserWithRole('student');
+        $this->actingAs($student)->post('/my-learning-rewards/award', [
+            'activity_key' => 'lesson_completed',
+            'source_id' => 999,
+            'points' => 500,
+        ])->assertNotFound();
+
+        $this->actingAs($student)->get('/admin/learning-rewards')->assertForbidden();
+
+        $admin = $this->createUserWithRole('admin');
+        $permission = Permission::query()->where('slug', 'gamification.manage')->firstOrFail();
+        Role::query()->where('slug', 'admin')->firstOrFail()->permissions()->syncWithoutDetaching([$permission->id]);
+        $this->actingAs($admin)->get('/admin/learning-rewards')->assertOk();
+    }
+}
