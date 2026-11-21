@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Schema;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
 use Plugins\Modules\PaymentManagement\Services\PaymentSettlementService;
+use Plugins\Modules\PaymentManagement\Services\InvoicePaymentSessionReservationService;
 use RuntimeException;
 use Throwable;
 
@@ -18,9 +19,10 @@ class SslcommerzGatewayService
     public function __construct(
         private readonly PluginManager $plugins,
         private readonly PaymentSettlementService $settlement,
+        private readonly InvoicePaymentSessionReservationService $reservations,
     ) {}
 
-    public function initiateHostedCheckout(FeeInvoice $invoice): array
+    public function initiateHostedCheckout(FeeInvoice $invoice, ?string $idempotencyKey = null): array
     {
         $storeId = (string) $this->plugins->getSetting('gateway-sslcommerz', 'store_id', '');
         $storePass = (string) $this->plugins->getSetting('gateway-sslcommerz', 'store_password', '');
@@ -44,25 +46,78 @@ class SslcommerzGatewayService
             throw new RuntimeException('Add a valid customer phone number before starting SSLCOMMERZ checkout.');
         }
 
-        $remaining = round((float) $invoice->net_amount - (float) $invoice->paid_amount, 2);
-        if ($remaining < 10 || $remaining > 500000) {
-            throw new RuntimeException('SSLCOMMERZ checkout amount must be between 10.00 and 500000.00.');
-        }
-
-        $tx = PaymentTransaction::query()->create([
-            'transaction_ref' => 'SSL-' . strtoupper(bin2hex(random_bytes(6))),
-            'invoice_id' => $invoice->id,
-            'branch_id' => $invoice->branch_id,
-            'gateway_slug' => 'gateway-sslcommerz',
-            'amount' => $remaining,
-            'currency' => strtoupper((string) $invoice->currency),
-            'status' => 'initiated',
-            'metadata' => ['channel' => 'sslcommerz_hosted'],
-        ]);
-
         $sandbox = $this->plugins->getSetting('gateway-sslcommerz', 'sandbox_mode', '1') === '1';
         $baseUrl = $sandbox ? 'https://sandbox.sslcommerz.com' : 'https://securepay.sslcommerz.com';
         $endpoint = $baseUrl . '/gwprocess/v4/api.php';
+        $successUrl = url('/payments/sslcommerz/success');
+        $failUrl = url('/payments/sslcommerz/failed');
+        $cancelUrl = url('/payments/sslcommerz/cancelled');
+        $ipnUrl = url('/payments/sslcommerz/ipn');
+        $providerCustomerName = mb_substr($customerName, 0, 50);
+        $providerCustomerEmail = mb_substr($customerEmail, 0, 50);
+        $providerCustomerPhone = mb_substr($phone, 0, 20);
+        $productName = 'Course fee invoice ' . (string) $invoice->invoice_number;
+
+        // Fingerprint the same allowlisted, non-secret fields sent to the
+        // provider. The reservation service stores only their one-way hash.
+        $fingerprintParameters = [
+            'store_id' => $storeId,
+            'endpoint' => $endpoint,
+            'sandbox_mode' => $sandbox ? 'sandbox' : 'live',
+            'success_url' => $successUrl,
+            'fail_url' => $failUrl,
+            'cancel_url' => $cancelUrl,
+            'ipn_url' => $ipnUrl,
+            'cus_name' => $providerCustomerName,
+            'cus_email' => $providerCustomerEmail,
+            'cus_add1' => 'N/A',
+            'cus_city' => 'N/A',
+            'cus_postcode' => '0000',
+            'cus_country' => 'Bangladesh',
+            'cus_phone' => $providerCustomerPhone,
+            'shipping_method' => 'NO',
+            'num_of_item' => '1',
+            'product_name' => $productName,
+            'product_category' => 'Education',
+            'product_profile' => 'non-physical-goods',
+        ];
+
+        $reservation = $this->reservations->reserve(
+            $invoice,
+            'gateway-sslcommerz',
+            'SSL',
+            ['fingerprint_parameters' => $fingerprintParameters],
+            $idempotencyKey,
+        );
+        $invoice = $reservation['invoice'];
+        $tx = $reservation['transaction'];
+        $remaining = $reservation['remaining'];
+
+        if ($remaining < 10 || $remaining > 500000) {
+            $this->reservations->markRejected($tx, 'amount_out_of_provider_range');
+            throw new RuntimeException('SSLCOMMERZ checkout amount must be between 10.00 and 500000.00.');
+        }
+
+        if ($reservation['reused']) {
+            if (in_array($tx->status, ['failed', 'refunded', 'settled'], true)) {
+                return ['transaction' => $tx, 'hosted_endpoint' => ''];
+            }
+
+            $existingUrl = '';
+            try {
+                $existingUrl = (string) decrypt((string) ($tx->metadata['gateway_url_encrypted'] ?? ''));
+            } catch (Throwable) {
+                // Missing/corrupt encrypted URL is fail-closed; keep reservation held.
+            }
+            $host = strtolower((string) parse_url($existingUrl, PHP_URL_HOST));
+            $scheme = strtolower((string) parse_url($existingUrl, PHP_URL_SCHEME));
+            $expectedHost = $sandbox ? 'sandbox.sslcommerz.com' : 'securepay.sslcommerz.com';
+            if ($scheme !== 'https' || $host !== $expectedHost || $existingUrl === '') {
+                throw new RuntimeException('An SSLCOMMERZ session is already reserved but its hosted URL is unavailable; reconciliation is required.');
+            }
+
+            return ['transaction' => $tx, 'hosted_endpoint' => $existingUrl];
+        }
 
         $payload = [
             'store_id' => $storeId,
@@ -70,24 +125,25 @@ class SslcommerzGatewayService
             'total_amount' => number_format($remaining, 2, '.', ''),
             'currency' => strtoupper((string) $invoice->currency),
             'tran_id' => $tx->transaction_ref,
-            'success_url' => url('/payments/sslcommerz/success'),
-            'fail_url' => url('/payments/sslcommerz/failed'),
-            'cancel_url' => url('/payments/sslcommerz/cancelled'),
-            'ipn_url' => url('/payments/sslcommerz/ipn'),
-            'cus_name' => mb_substr($customerName, 0, 50),
-            'cus_email' => mb_substr($customerEmail, 0, 50),
+            'success_url' => $successUrl,
+            'fail_url' => $failUrl,
+            'cancel_url' => $cancelUrl,
+            'ipn_url' => $ipnUrl,
+            'cus_name' => $providerCustomerName,
+            'cus_email' => $providerCustomerEmail,
             'cus_add1' => 'N/A',
             'cus_city' => 'N/A',
             'cus_postcode' => '0000',
             'cus_country' => 'Bangladesh',
-            'cus_phone' => mb_substr($phone, 0, 20),
+            'cus_phone' => $providerCustomerPhone,
             'shipping_method' => 'NO',
             'num_of_item' => '1',
-            'product_name' => 'Course fee invoice ' . $invoice->invoice_number,
+            'product_name' => $productName,
             'product_category' => 'Education',
             'product_profile' => 'non-physical-goods',
         ];
 
+        $response = null;
         try {
             $response = Http::asForm()
                 ->acceptJson()
@@ -95,6 +151,11 @@ class SslcommerzGatewayService
                 ->post($endpoint, $payload);
 
             if (!$response->successful()) {
+                if ($response->clientError()) {
+                    $this->reservations->markRejected($tx, 'provider_http_4xx');
+                } else {
+                    $this->reservations->markUnknown($tx, 'provider_http_5xx');
+                }
                 throw new RuntimeException('SSLCOMMERZ session API returned an unsuccessful HTTP response.');
             }
 
@@ -106,31 +167,34 @@ class SslcommerzGatewayService
 
             if (!is_array($data) || strtoupper((string) ($data['status'] ?? '')) !== 'SUCCESS'
                 || $scheme !== 'https' || $host !== $expectedHost || $gatewayUrl === '') {
-                throw new RuntimeException('SSLCOMMERZ did not return a valid hosted checkout URL.');
+                $this->reservations->markUnknown($tx, 'invalid_success_response');
+                throw new RuntimeException('SSLCOMMERZ did not return a valid hosted checkout URL; the reservation remains held for reconciliation.');
             }
 
-            $tx->update([
-                'metadata' => array_merge($tx->metadata ?? [], [
-                    'session_key' => (string) ($data['sessionkey'] ?? ''),
-                    'session_created' => true,
-                ]),
+            $tx = $this->reservations->markCreated($tx, [
+                'session_key' => (string) ($data['sessionkey'] ?? ''),
+                'gateway_url_encrypted' => encrypt($gatewayUrl),
+                'session_created' => true,
             ]);
 
             return [
-                'transaction' => $tx->fresh(),
+                'transaction' => $tx,
                 'hosted_endpoint' => $gatewayUrl,
             ];
         } catch (Throwable $exception) {
-            $tx->update([
-                'status' => 'failed',
-                'metadata' => array_merge($tx->metadata ?? [], ['session_created' => false]),
-            ]);
+            if ($response === null) {
+                $this->reservations->markUnknown($tx, 'transport_or_timeout');
+            } elseif ($response->serverError()) {
+                $this->reservations->markUnknown($tx, 'provider_http_5xx');
+            } elseif ($response->successful()) {
+                $this->reservations->markUnknown($tx, 'post_provider_processing_error');
+            }
 
             if ($exception instanceof RuntimeException) {
                 throw $exception;
             }
 
-            throw new RuntimeException('Unable to create an SSLCOMMERZ hosted checkout session.', 0, $exception);
+            throw new RuntimeException('Unable to create an SSLCOMMERZ hosted checkout session; the reservation remains held for reconciliation.', 0, $exception);
         }
     }
 

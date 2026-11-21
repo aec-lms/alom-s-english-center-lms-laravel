@@ -56,6 +56,7 @@ class StripeController extends Controller
             'amount' => $result['transaction']->amount,
             'currency' => $result['transaction']->currency,
             'status' => $result['transaction']->status,
+            'session_outcome' => $result['transaction']->metadata['session_outcome'] ?? null,
         ]);
     }
 
