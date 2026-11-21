@@ -99,6 +99,25 @@
     const isSessionTime = value => /^\d{4}:[0-5]\d:[0-5]\d(?:\.\d{1,2})?$/.test(value);
     const isScore = value => value !== '' && Number.isFinite(Number(value)) && Number(value) >= 0 && Number(value) <= 100;
 
+    function isValidDynamicValue(element, value) {
+        if (element.length > 255) return false;
+        const interaction = element.match(/^cmi\\.interactions\\.\\d+\\.(.+)$/);
+        if (interaction) {
+            const field = interaction[1];
+            if (field === 'id' || field.endsWith('.id') || field.endsWith('.pattern')) return value.length <= 255;
+            if (field === 'type') return ['true-false','choice','fill-in','matching','performance','sequencing','likert','numeric','other'].includes(value);
+            if (field === 'time') return /^\\d{8}T\\d{6}(?:\\.\\d{1,2})?$/.test(value);
+            if (field === 'weighting') return value !== '' && Number.isFinite(Number(value));
+            if (field === 'student_response') return value.length <= 4096;
+            if (field === 'result') return ['correct','wrong','unanticipated','neutral'].includes(value) || (value !== '' && Number.isFinite(Number(value)));
+            if (field === 'latency') return isSessionTime(value);
+            return false;
+        }
+        if (element.endsWith('.id')) return value.length <= 255;
+        if (element.endsWith('.status')) return ['passed','completed','failed','incomplete','browsed','not attempted'].includes(value);
+        return isScore(value);
+    }
+
     let pendingRequest = null;
 
     function newRequestId() {
@@ -220,7 +239,7 @@
                 case 'cmi.student_preference.text': valid = ['-1','0','1'].includes(value); break;
                 case 'cmi.student_preference.speed': valid = Number.isFinite(Number(value)) && Number(value) >= -100 && Number(value) <= 100; break;
                 case 'cmi.student_preference.language': valid = value.length <= 255; break;
-                default: valid = (dynamicPattern.test(element) || objectivePattern.test(element)) && element.length <= 255;
+                default: valid = (dynamicPattern.test(element) || objectivePattern.test(element)) && isValidDynamicValue(element, value);
             }
             if (!valid) return setError(writable.has(element) || dynamicPattern.test(element) ? '405' : '401');
             data[element] = value;
