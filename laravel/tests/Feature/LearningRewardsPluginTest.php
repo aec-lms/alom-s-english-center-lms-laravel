@@ -147,7 +147,7 @@ class LearningRewardsPluginTest extends TestCase
 
         AuditLog::creating(static function (AuditLog $log): void {
             if ($log->action === 'learning_rewards.points_awarded') {
-                throw new \\RuntimeException('forced reward award audit failure');
+                throw new \RuntimeException('forced reward award audit failure');
             }
         });
 
@@ -155,7 +155,7 @@ class LearningRewardsPluginTest extends TestCase
             try {
                 $service->awardVerifiedActivity((int) $student->id, 'lesson_completed', 'course_lesson', 88001);
                 $this->fail('Reward award must roll back when its required audit event cannot be written.');
-            } catch (\\RuntimeException $exception) {
+            } catch (\RuntimeException $exception) {
                 $this->assertSame('forced reward award audit failure', $exception->getMessage());
             }
         } finally {
@@ -171,7 +171,7 @@ class LearningRewardsPluginTest extends TestCase
         $award = $service->awardVerifiedActivity((int) $student->id, 'lesson_completed', 'course_lesson', 88001);
         AuditLog::creating(static function (AuditLog $log): void {
             if ($log->action === 'learning_rewards.points_reversed') {
-                throw new \\RuntimeException('forced reward reversal audit failure');
+                throw new \RuntimeException('forced reward reversal audit failure');
             }
         });
 
@@ -179,7 +179,7 @@ class LearningRewardsPluginTest extends TestCase
             try {
                 $service->reverseAward($award['ledger_id'], (int) $admin->id, 'Correction requires reversal.');
                 $this->fail('Reward reversal must roll back when its required audit event cannot be written.');
-            } catch (\\RuntimeException $exception) {
+            } catch (\RuntimeException $exception) {
                 $this->assertSame('forced reward reversal audit failure', $exception->getMessage());
             }
         } finally {
