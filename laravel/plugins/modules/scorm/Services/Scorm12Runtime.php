@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\Scorm\\Services;
+namespace Plugins\Modules\Scorm\Services;
 
 class Scorm12Runtime
 {
@@ -212,12 +212,12 @@ class Scorm12Runtime
 
     private function isValidScormTime(string $value): bool
     {
-        return preg_match('/^\\d{4}:[0-5]\\d:[0-5]\\d(?:\\.\\d{1,2})?$/', $value) === 1;
+        return preg_match('/^\d{4}:[0-5]\d:[0-5]\d(?:\.\d{1,2})?$/', $value) === 1;
     }
 
     private function isSupportedDynamicElement(string $element): bool
     {
-        return preg_match('/^cmi\\.interactions\\.\\d+\\.(?:id|type|time|weighting|student_response|result|latency|objectives\\.\\d+\\.id|correct_responses\\.\\d+\\.pattern)$/', $element) === 1
+        return preg_match('/^cmi\.interactions\.\d+\.(?:id|type|time|weighting|student_response|result|latency|objectives\.\d+\.id|correct_responses\.\d+\.pattern)$/', $element) === 1
             && mb_strlen($element) <= 255;
     }
 
