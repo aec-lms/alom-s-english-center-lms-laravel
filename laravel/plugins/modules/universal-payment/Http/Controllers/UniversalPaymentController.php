@@ -585,7 +585,7 @@ class UniversalPaymentController extends Controller
                     return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)
                         ->with('status', 'Payment was received but requires manual review. No additional exam access was granted.');
                 }
-                $reviewSlug = DB::table('storefront_items')->where('id', $transaction->storefront_item_id)->value('slug');
+                $reviewSlug = $this->storefrontSlugFor($transaction);
                 return $reviewSlug
                     ? redirect('/ebooks/' . rawurlencode((string) $reviewSlug))->with('status', 'Payment was received but requires manual review. Existing access was not changed.')
                     : redirect('/ebooks')->with('status', 'Payment was received but requires manual review.');
@@ -594,8 +594,10 @@ class UniversalPaymentController extends Controller
                 return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)
                     ->with('status', 'Payment verified. Your paid exam is now unlocked.');
             }
-            $slug = DB::table('storefront_items')->where('id', $transaction->storefront_item_id)->value('slug');
-            return redirect('/ebooks/' . rawurlencode((string) $slug))->with('status', 'Payment verified. Your e-book download is now available.');
+            $slug = $this->storefrontSlugFor($transaction);
+            return $slug
+                ? redirect('/ebooks/' . rawurlencode($slug))->with('status', 'Payment verified. Your e-book download is now available.')
+                : redirect('/ebooks')->with('status', 'Payment was verified, but the storefront item is no longer available. Contact support if you need help.');
         } catch (\Throwable $exception) {
             report($exception);
             $reference = trim((string) $request->input('tran_id', ''));
@@ -610,7 +612,7 @@ class UniversalPaymentController extends Controller
                     ->withErrors(['payment' => 'Payment could not yet be verified. No exam access has been granted.']);
             }
             $slug = $transaction?->storefront_item_id
-                ? DB::table('storefront_items')->where('id', $transaction->storefront_item_id)->value('slug')
+                ? $this->storefrontSlugFor($transaction)
                 : null;
             return $slug
                 ? redirect('/ebooks/' . rawurlencode((string) $slug))->withErrors(['payment' => 'Payment could not yet be verified. No download access has been granted.'])
@@ -639,7 +641,7 @@ class UniversalPaymentController extends Controller
                     ? 'Payment was already verified; your course or gift access remains available.'
                     : 'Payment requires manual review. No course or gift access has been granted yet.');
             }
-            return redirect('/student/course-commerce/cart')->withErrors(['payment' => 'Payment was not completed. Your cart is available to try again.']);
+            return redirect('/student/course-commerce/cart')->withErrors(['payment' => 'The provider return did not verify the payment. The transaction remains pending; do not retry until support reconciles its status.']);
         }
         if (in_array($transaction->status, ['verified', 'risk_review'], true)) {
             $message = $transaction->status === 'verified'
@@ -648,16 +650,18 @@ class UniversalPaymentController extends Controller
             if ($transaction->learn_earn_exam_id) {
                 return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)->with('status', $message);
             }
-            $reviewSlug = DB::table('storefront_items')->where('id', $transaction->storefront_item_id)->value('slug');
+            $reviewSlug = $this->storefrontSlugFor($transaction);
             return $reviewSlug
                 ? redirect('/ebooks/' . rawurlencode((string) $reviewSlug))->with('status', $message)
                 : redirect('/ebooks')->with('status', $message);
         }
         if ($transaction->learn_earn_exam_id) {
-            return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)->withErrors(['payment' => 'Payment was not completed. You can try again.']);
+            return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)->withErrors(['payment' => 'The provider return did not verify the payment. The transaction remains pending; do not retry until support reconciles its status.']);
         }
-        $slug = DB::table('storefront_items')->where('id', $transaction->storefront_item_id)->value('slug');
-        return redirect('/ebooks/' . rawurlencode((string) $slug))->withErrors(['payment' => 'Payment was not completed. You can try again.']);
+        $slug = $this->storefrontSlugFor($transaction);
+        return $slug
+            ? redirect('/ebooks/' . rawurlencode($slug))->withErrors(['payment' => 'The provider return did not verify the payment. The transaction remains pending; do not retry until support reconciles its status.'])
+            : redirect('/ebooks')->withErrors(['payment' => 'The provider return did not verify the payment. The transaction remains pending; do not retry until support reconciles its status.']);
     }
 
     public function sslcommerzCancelled(Request $request): RedirectResponse
@@ -670,7 +674,7 @@ class UniversalPaymentController extends Controller
                     ? 'Payment was already verified; your course or gift access remains available.'
                     : 'Payment requires manual review. No course or gift access has been granted yet.');
             }
-            return redirect('/student/course-commerce/cart')->with('status', 'Payment was cancelled. Your cart is available to try again.');
+            return redirect('/student/course-commerce/cart')->with('status', 'The browser return cannot confirm cancellation. The transaction remains pending; do not retry until support reconciles its status.');
         }
         if (in_array($transaction->status, ['verified', 'risk_review'], true)) {
             $message = $transaction->status === 'verified'
@@ -679,16 +683,33 @@ class UniversalPaymentController extends Controller
             if ($transaction->learn_earn_exam_id) {
                 return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)->with('status', $message);
             }
-            $reviewSlug = DB::table('storefront_items')->where('id', $transaction->storefront_item_id)->value('slug');
+            $reviewSlug = $this->storefrontSlugFor($transaction);
             return $reviewSlug
                 ? redirect('/ebooks/' . rawurlencode((string) $reviewSlug))->with('status', $message)
                 : redirect('/ebooks')->with('status', $message);
         }
         if ($transaction->learn_earn_exam_id) {
-            return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)->with('status', 'Payment was cancelled.');
+            return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)->with('status', 'The browser return cannot confirm cancellation. The transaction remains pending; do not retry until support reconciles its status.');
         }
-        $slug = DB::table('storefront_items')->where('id', $transaction->storefront_item_id)->value('slug');
-        return redirect('/ebooks/' . rawurlencode((string) $slug))->with('status', 'Payment was cancelled.');
+        $slug = $this->storefrontSlugFor($transaction);
+        return $slug
+            ? redirect('/ebooks/' . rawurlencode($slug))->with('status', 'The browser return cannot confirm cancellation. The transaction remains pending; do not retry until support reconciles its status.')
+            : redirect('/ebooks')->with('status', 'The browser return cannot confirm cancellation. The transaction remains pending; do not retry until support reconciles its status.');
+    }
+
+    private function storefrontSlugFor(UniversalPaymentTransaction $transaction): ?string
+    {
+        if (!$transaction->storefront_item_id
+            || !Schema::hasTable('storefront_items')
+            || !Schema::hasColumn('storefront_items', 'slug')) {
+            return null;
+        }
+
+        $slug = DB::table('storefront_items')
+            ->where('id', $transaction->storefront_item_id)
+            ->value('slug');
+
+        return is_string($slug) && $slug !== '' ? $slug : null;
     }
 
     private function assertInvoiceEnrollmentBranchAccess(object $invoice): void

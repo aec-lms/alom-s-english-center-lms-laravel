@@ -161,11 +161,17 @@ class StorefrontPaymentGatewayService
     {
         $reference = trim((string) ($callback['tran_id'] ?? ''));
         abort_if($reference === '', 422, 'Missing payment reference.');
-        $transaction = UniversalPaymentTransaction::query()->where('reference', $reference)->where('gateway', 'sslcommerz')->firstOrFail();
-        if ($transaction->status === 'pending') {
-            $transaction->update(['status' => $status]);
-        }
-        return $transaction->fresh();
+        $transaction = UniversalPaymentTransaction::query()
+            ->where('reference', $reference)
+            ->where('gateway', 'sslcommerz')
+            ->firstOrFail();
+
+        // Browser fail/cancel return URLs are not authenticated provider messages.
+        // Never release a pending checkout from an untrusted redirect: the provider
+        // may have captured the payment even if the browser was forged or interrupted.
+        // Only verifySslcommerz() may move this transaction to a verified state;
+        // ambiguous outcomes remain pending for reconciliation.
+        return $transaction;
     }
 
  
