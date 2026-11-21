@@ -82,6 +82,7 @@ class ScormRuntimeControllerTest extends TestCase
         return json_encode([
             'attempt_id' => $attemptId,
             'token' => $token,
+            'request_id' => (string) Str::uuid(),
             'version' => $version,
             'data' => $data,
             'finish' => $finish,
@@ -115,15 +116,18 @@ class ScormRuntimeControllerTest extends TestCase
         $this->get($contentUrl)->assertOk()->assertSee('SCORM unit');
 
         $origin = ['HTTP_ORIGIN' => 'https://scorm.example.test', 'CONTENT_TYPE' => 'text/plain'];
-        $first = $this->call('POST', '/api/scorm-runtime/commit', [], [], [], $origin,
-            $this->commitPayload($attempt->id, $token, 0, [
-                'cmi.core.lesson_location' => 'unit-1/page-2',
-                'cmi.core.lesson_status' => 'incomplete',
-                'cmi.core.score.raw' => '75',
-                'cmi.core.session_time' => '0000:00:10.00',
-                'cmi.suspend_data' => 'checkpoint-1',
-            ]));
+        $firstPayload = $this->commitPayload($attempt->id, $token, 0, [
+            'cmi.core.lesson_location' => 'unit-1/page-2',
+            'cmi.core.lesson_status' => 'incomplete',
+            'cmi.core.score.raw' => '75',
+            'cmi.core.session_time' => '0000:00:10.00',
+            'cmi.suspend_data' => 'checkpoint-1',
+        ]);
+        $first = $this->call('POST', '/api/scorm-runtime/commit', [], [], [], $origin, $firstPayload);
         $first->assertOk()->assertJsonPath('version', 1)->assertHeader('Access-Control-Allow-Origin', 'https://scorm.example.test');
+        $replay = $this->call('POST', '/api/scorm-runtime/commit', [], [], [], $origin, $firstPayload);
+        $replay->assertOk()->assertJsonPath('version', 1)->assertJsonPath('replayed', true);
+        $this->assertDatabaseHas('scorm_attempts', ['id' => $attempt->id, 'total_time_seconds' => 10]);
         $this->assertDatabaseHas('scorm_attempts', [
             'id' => $attempt->id,
             'state_version' => 1,
