@@ -72,6 +72,18 @@ return new class extends Migration {
                 $table->timestamps();
             });
         }
+
+        if (!Schema::hasTable('scorm_runtime_requests')) {
+            Schema::create('scorm_runtime_requests', function (Blueprint $table): void {
+                $table->id();
+                $table->foreignId('scorm_attempt_session_id')->constrained('scorm_attempt_sessions')->cascadeOnDelete();
+                $table->uuid('request_id');
+                $table->char('payload_sha256', 64);
+                $table->longText('response_body');
+                $table->timestamps();
+                $table->unique(['scorm_attempt_session_id', 'request_id'], 'scorm_runtime_request_unique');
+            });
+        }
     }
 
     public function down(): void
