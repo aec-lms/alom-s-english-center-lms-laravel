@@ -23,6 +23,7 @@ return [
     'completed' => 'সম্পন্ন',
     'active' => 'সক্রিয়',
     'average_score' => 'গড় নম্বর',
+    'actions' => 'করণীয়',
     'status' => 'অবস্থা',
     'revision' => 'সংস্করণ',
     'replaces' => 'যে প্যাকেজের নতুন সংস্করণ',
