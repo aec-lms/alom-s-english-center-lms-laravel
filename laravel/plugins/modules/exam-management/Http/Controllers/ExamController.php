@@ -111,7 +111,7 @@ class ExamController extends Controller
             'title' => ['required', 'string', 'max:180'],
             'duration_minutes' => ['required', 'integer', 'min:5', 'max:360'],
             'max_attempts' => ['nullable', 'integer', 'min:1', 'max:20'],
-            'pass_marks' => ['required', 'numeric', 'min:0'],
+            'pass_marks' => ['required', 'numeric', 'min:0', 'max:100000'],
             'is_published' => ['nullable', 'boolean'],
         ]);
 
@@ -163,8 +163,8 @@ class ExamController extends Controller
             abort(403, 'Branch isolation violation.');
         }
         $validated = $request->validate([
-            'prompt' => ['required', 'string'],
-            'options' => ['required', 'array', 'min:2'],
+            'prompt' => ['required', 'string', 'max:10000'],
+            'options' => ['required', 'array', 'min:2', 'max:20'],
             'options.*' => ['required', 'string', 'max:300'],
             'correct_option_index' => ['required', 'integer', 'min:0'],
             'marks' => ['required', 'numeric', 'gt:0', 'max:1000'],
