@@ -298,13 +298,20 @@ class RefundOrchestrationService
 
             try {
                 return $this->settlement->applyProviderConfirmedRefund($pending);
-            } catch (Throwable) {
+            } catch (Throwable $exception) {
+                // Keep provider secrets and exception messages out of persisted
+                // metadata; the exception class/code are safe diagnostic signals
+                // for an administrator investigating a held financial ledger.
                 return $this->updateProviderState(
                     $pending,
                     RefundProviderResult::REQUIRES_REVIEW,
                     $result->providerReference,
                     $result->providerStatus,
-                    ['provider_confirmed_ledger_review_required' => true],
+                    [
+                        'provider_confirmed_ledger_review_required' => true,
+                        'ledger_review_exception_type' => get_class($exception),
+                        'ledger_review_exception_code' => (int) $exception->getCode(),
+                    ],
                     false,
                     $actorId,
                 );
