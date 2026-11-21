@@ -355,4 +355,109 @@ class RecycleBinTest extends TestCase
         $this->assertDatabaseHas('users', ['id' => $instructor->id, 'is_active' => false]);
     }
 
+    public function test_inactive_admin_cannot_restore_a_teacher_profile(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['teacher-management']);
+        $admin = $this->createUserWithRole('admin');
+        $instructor = $this->createUserWithRole('teacher');
+        $teacher = Teacher::query()->create([
+            'user_id' => $instructor->id,
+            'branch_id' => null,
+            'employee_code' => 'INACTIVE-RESTORE-ACTOR-' . $instructor->id,
+            'specialization' => 'English',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($admin)->delete('/admin/teachers/' . $teacher->id)->assertRedirect();
+        $admin->forceFill(['is_active' => false])->save();
+
+        $this->actingAs($admin)->post('/admin/recycle-bin/teachers/' . $teacher->id . '/restore')
+            ->assertForbidden();
+
+        $this->assertSoftDeleted('teachers', ['id' => $teacher->id]);
+        $this->assertDatabaseHas('users', ['id' => $instructor->id, 'is_active' => false]);
+    }
+
+    public function test_mysql_teacher_restore_holds_admin_role_until_commit_and_rechecks_revocation(): void
+    {
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            $this->markTestSkipped('Teacher restore role-revocation serialization requires MySQL 8.');
+        }
+
+        $this->markSystemInstalled();
+        $this->activatePlugins(['teacher-management']);
+        $admin = $this->createUserWithRole('admin');
+
+        $teachers = [];
+        foreach (['ROLE-RESTORE-LOCK-A', 'ROLE-RESTORE-LOCK-B'] as $code) {
+            $instructor = $this->createUserWithRole('teacher');
+            $teacher = Teacher::query()->create([
+                'user_id' => $instructor->id,
+                'branch_id' => null,
+                'employee_code' => $code,
+                'specialization' => 'English',
+                'is_active' => true,
+            ]);
+            $this->actingAs($admin)->delete('/admin/teachers/' . $teacher->id)->assertRedirect();
+            $teachers[] = $teacher->fresh();
+        }
+
+        $adminRoleId = (int) DB::table('roles')->where('slug', 'admin')->value('id');
+        $this->assertGreaterThan(0, $adminRoleId);
+        $default = DB::getDefaultConnection();
+        $secondaryName = 'teacher_restore_admin_revoke_' . bin2hex(random_bytes(3));
+        config(['database.connections.' . $secondaryName => config('database.connections.' . $default)]);
+        DB::purge($secondaryName);
+        $primary = DB::connection($default);
+        $secondary = DB::connection($secondaryName);
+        $secondary->statement('SET SESSION innodb_lock_wait_timeout = 1');
+
+        $primary->beginTransaction();
+        try {
+            $this->actingAs($admin)
+                ->post('/admin/recycle-bin/teachers/' . $teachers[0]->id . '/restore')
+                ->assertRedirect();
+
+            $secondary->beginTransaction();
+            try {
+                $secondary->table('role_user')
+                    ->where('user_id', $admin->id)
+                    ->where('role_id', $adminRoleId)
+                    ->delete();
+                $this->fail('Admin role revocation must wait while teacher restore holds the role-pivot lock.');
+            } catch (QueryException $exception) {
+                $this->assertSame(1205, (int) ($exception->errorInfo[1] ?? 0), $exception->getMessage());
+            } finally {
+                if ($secondary->transactionLevel() > 0) {
+                    $secondary->rollBack();
+                }
+            }
+
+            $primary->commit();
+
+            $secondary->table('role_user')
+                ->where('user_id', $admin->id)
+                ->where('role_id', $adminRoleId)
+                ->delete();
+
+            $this->actingAs($admin)
+                ->post('/admin/recycle-bin/teachers/' . $teachers[1]->id . '/restore')
+                ->assertForbidden();
+
+            $this->assertSoftDeleted('teachers', ['id' => $teachers[1]->id]);
+            $this->assertDatabaseHas('users', [
+                'id' => $teachers[1]->user_id,
+                'is_active' => false,
+            ]);
+        } catch (\\Throwable $exception) {
+            if ($primary->transactionLevel() > 0) {
+                $primary->rollBack();
+            }
+            throw $exception;
+        } finally {
+            DB::purge($secondaryName);
+        }
+    }
+
 }
