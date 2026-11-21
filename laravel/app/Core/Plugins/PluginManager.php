@@ -699,11 +699,11 @@ class PluginManager
                     'is_installed' => false,
                     'is_enabled' => false,
                 ]);
-                $message = 'Plugin recycle-bin metadata could not be written. The package is at its original modules path but failed checksum verification; it remains uninstalled and disabled and requires manual integrity review.';
+                $message = 'Plugin recycle-bin metadata could not be written. The package is at '{$source}' but failed checksum verification; it remains uninstalled and disabled and requires manual integrity review.';
             } elseif ($destinationExists) {
-                $message = 'Plugin recycle-bin metadata could not be written. The package remains at its protected recycle-bin archive path without a committed metadata index; preserve it for manual recovery.';
+                $message = 'Plugin recycle-bin metadata could not be written. The package remains at '{$destination}' without a committed metadata index; preserve it for manual recovery.';
             } else {
-                $message = 'Plugin recycle-bin metadata could not be written and the package location is uncertain. Do not reinstall, delete, or modify either path; preserve storage/app and contact the maintainer for recovery.';
+                $message = 'Plugin recycle-bin metadata could not be written and the package location is uncertain (source: '{$source}', archive: '{$destination}'). Do not reinstall, delete, or modify either path; preserve storage/app and contact the maintainer for recovery.';
             }
 
             throw new RuntimeException($message, previous: $writeError);
