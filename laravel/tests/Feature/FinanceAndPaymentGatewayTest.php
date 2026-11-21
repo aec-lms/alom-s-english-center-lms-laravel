@@ -368,7 +368,7 @@ class FinanceAndPaymentGatewayTest extends TestCase
             if (str_contains($url, '/v1/payment_intents')) {
                 return Http::response([
                     'id' => 'pi_test_settled_1',
-                    'status' => 'requires_action',
+                    'status' => 'succeeded',
                     'client_secret' => 'pi_test_settled_1_secret_test',
                 ], 200);
             }
@@ -414,6 +414,7 @@ class FinanceAndPaymentGatewayTest extends TestCase
             'idempotency_key' => 'idem-stripe-1',
         ])->assertOk()->json();
         $this->assertSame($stripeRes1['transaction_ref'], $stripeRes2['transaction_ref']);
+        $this->assertSame('initiated', $stripeRes1['status'], 'An immediate Stripe success must remain settleable by the verified webhook.');
         $this->assertSame($stripeIntentRequestCount, Http::recorded()->filter(
             fn (array $record): bool => str_contains($record[0]->url(), '/v1/payment_intents')
         )->count());
