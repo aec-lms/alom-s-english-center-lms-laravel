@@ -441,6 +441,7 @@ final class CourseAssessmentGradingBranchIsolationTest extends TestCase
         }
     }
 
+    // This two-session regression proves the role pivot stays serialized with the canonical User -> role -> Teacher profile grading lock order.
     public function test_mysql_teacher_role_revocation_waits_for_grading_then_blocks_the_next_grade(): void
     {
         if (DB::connection()->getDriverName() !== 'mysql') {
