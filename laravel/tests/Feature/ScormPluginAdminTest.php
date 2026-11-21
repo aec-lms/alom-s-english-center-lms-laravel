@@ -109,6 +109,10 @@ class ScormPluginAdminTest extends TestCase
             'updated_at' => now(),
         ]);
 
+        $report = $this->actingAs($admin)->get(route('plugins.scorm.admin.index'));
+        $report->assertOk()->assertSee('Attempts')->assertSee('Completed')->assertSee('Active');
+        $this->assertStringContainsString('1', $report->getContent());
+
         $this->actingAs($admin)
             ->patch(route('plugins.scorm.admin.archive', $package->id))
             ->assertStatus(409);
