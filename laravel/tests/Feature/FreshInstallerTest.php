@@ -432,7 +432,7 @@ class FreshInstallerTest extends TestCase
                 'lms.backup_encryption_key' => $originalBackupKey,
             ]);
 
-            foreach ([$lockPath, $lockPath . '.mutex', $envPath] as $file) {
+            foreach ([$lockPath, $lockPath . '.mutex', $lockPath . '.in-progress', $envPath] as $file) {
                 @unlink($file);
             }
             foreach ([$privatePath, $backupPath] as $directory) {
