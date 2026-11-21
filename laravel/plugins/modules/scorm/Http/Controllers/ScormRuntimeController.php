@@ -115,6 +115,8 @@ class ScormRuntimeController extends Controller
                 ->exists();
             abort_unless($studentRole, 403, 'Current student role is required.');
 
+            // Keep the same lock order as runtime refresh (user -> profile -> enrollment -> course -> package).
+            $branchId = $this->currentStudentBranchId($lockedUser, true);
             $lockedPackage = DB::table('scorm_packages')->where('id', $packageRecord->id)->lockForUpdate()->first();
             abort_unless($lockedPackage && $lockedPackage->status === 'published', 404, 'SCORM package is no longer published.');
 
@@ -124,7 +126,6 @@ class ScormRuntimeController extends Controller
 
             $lockedCourse = DB::table('courses')->where('id', $lockedPackage->course_id)->lockForUpdate()->first();
             abort_unless($lockedCourse && $lockedCourse->status === 'published', 403, 'The linked course is no longer published.');
-            $branchId = $this->currentStudentBranchId($lockedUser, true);
             abort_unless($lockedEnrollment->branch_id === null
                 || ($branchId !== null && (int) $lockedEnrollment->branch_id === $branchId), 403, 'Enrollment is outside the current student branch.');
             abort_unless($lockedPackage->branch_id === null
@@ -603,7 +604,7 @@ class ScormRuntimeController extends Controller
             if (!Schema::hasTable('fee_invoices') || !$enrollment->invoice_id) {
                 return null;
             }
-            $invoice = DB::table('fee_invoices')->where('id', $enrollment->invoice_id)->lockForUpdate()->first();
+            $invoice = DB::table('fee_invoices')->where('id', $enrollment->invoice_id)->first();
             if (!$invoice || $invoice->status !== 'paid'
                 || (float) $invoice->paid_amount + 0.01 < (float) $invoice->net_amount) {
                 return null;
