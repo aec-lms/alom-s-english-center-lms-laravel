@@ -11,6 +11,33 @@ use Tests\TestCase;
 
 class PluginSettingsResetBackupTest extends TestCase
 {
+
+    public function test_reset_keeps_existing_settings_when_recovery_backup_write_fails(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['gateway-sslcommerz']);
+
+        $manager = app(PluginManager::class);
+        $manager->saveSettings('gateway-sslcommerz', [
+            'store_id' => 'AEC-STORE-RECOVERY-001',
+            'store_password' => 'recovery-password-secret',
+            'sandbox_mode' => '0',
+        ], ['store_id', 'store_password']);
+
+        File::partialMock()->shouldReceive('put')->once()->andReturn(false);
+
+        try {
+            $manager->resetSettingsToDefaults('gateway-sslcommerz');
+            $this->fail('Settings reset must stop when the recovery backup cannot be written.');
+        } catch (\\RuntimeException $exception) {
+            $this->assertStringContainsString('backup could not be written completely', $exception->getMessage());
+        }
+
+        $this->assertSame('AEC-STORE-RECOVERY-001', $manager->getSetting('gateway-sslcommerz', 'store_id'));
+        $this->assertSame('recovery-password-secret', $manager->getSetting('gateway-sslcommerz', 'store_password'));
+        $this->assertSame('0', $manager->getSetting('gateway-sslcommerz', 'sandbox_mode'));
+    }
+
     public function test_admin_reset_restores_manifest_defaults_and_retains_encrypted_private_backup(): void
     {
         $this->markSystemInstalled();
