@@ -37,9 +37,10 @@ class LearningRewardsController extends Controller
         abort_unless($student && $student->hasRole('student'), 403);
         $period = $request->query('period', 'month');
         abort_unless(in_array($period, ['week', 'month', 'all'], true), 404);
+        $timezone = (string) config('app.timezone', 'Asia/Dhaka');
         $start = match ($period) {
-            'week' => now('Asia/Dhaka')->startOfWeek()->utc(),
-            'month' => now('Asia/Dhaka')->startOfMonth()->utc(),
+            'week' => now($timezone)->startOfWeek()->utc(),
+            'month' => now($timezone)->startOfMonth()->utc(),
             default => null,
         };
 
