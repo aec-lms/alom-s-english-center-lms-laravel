@@ -371,7 +371,7 @@ api/*",
    'enabled'=>true,'course_slug'=>'british-american-phonetics','course_title'=>'British & American Phonetics',
   ]);
   PhoneticSetting::query()->whereKey(1)->update(['enabled'=>true,'course_slug'=>'british-american-phonetics']);
-  \\Illuminate\\Support\\Facades\\Cache::forget('phonetics.settings');
+  \Illuminate\Support\Facades\Cache::forget('phonetics.settings');
 
   $weak=PhoneticEntry::query()->create([
    'word'=>'analytics-car','category'=>'rhoticity','uk_ipa'=>'/kɑː/','us_ipa'=>'/kɑːr/',
@@ -393,7 +393,7 @@ api/*",
    ]);
   }
 
-  $insertAttempt=function(int $userId,int $entryId,string $accent,bool $correct,\\Illuminate\\Support\\Carbon $createdAt,string $courseRef) : void {
+  $insertAttempt=function(int $userId,int $entryId,string $accent,bool $correct,\Illuminate\Support\Carbon $createdAt,string $courseRef) : void {
    DB::table('alom_english_center_phonetic_attempts')->insert([
     'user_id'=>(string)$userId,'course_ref'=>$courseRef,'entry_id'=>$entryId,
     'target_accent'=>$accent,'quiz_mode'=>'course-vocabulary',
