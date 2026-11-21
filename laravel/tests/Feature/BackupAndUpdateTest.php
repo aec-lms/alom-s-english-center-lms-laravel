@@ -793,4 +793,36 @@ class BackupAndUpdateTest extends TestCase
         }
     }
 
+
+    public function test_signed_update_staging_rejects_a_symlinked_private_root(): void
+    {
+        $outside = sys_get_temp_dir() . '/aec_update_staging_outside_' . bin2hex(random_bytes(5));
+        $stagingRoot = storage_path('app/update-staging');
+        mkdir($outside, 0700, true);
+        if (is_link($stagingRoot)) {
+            unlink($stagingRoot);
+        } elseif (is_dir($stagingRoot)) {
+            \\Illuminate\\Support\\Facades\\File::deleteDirectory($stagingRoot);
+        }
+
+        try {
+            $this->assertTrue(symlink($outside, $stagingRoot));
+            $method = new \\ReflectionMethod(UniversalUpdateService::class, 'createPrivateStorageDirectory');
+            $method->setAccessible(true);
+
+            try {
+                $method->invoke(app(UniversalUpdateService::class), 'update-staging');
+                $this->fail('A symlinked update staging root must be rejected.');
+            } catch (\\RuntimeException $exception) {
+                $this->assertSame('Private update storage root must not be a symbolic link.', $exception->getMessage());
+            }
+            $this->assertSame([], array_values(array_diff(scandir($outside) ?: [], ['.', '..'])));
+        } finally {
+            if (is_link($stagingRoot)) {
+                unlink($stagingRoot);
+            }
+            @rmdir($outside);
+        }
+    }
+
 }
