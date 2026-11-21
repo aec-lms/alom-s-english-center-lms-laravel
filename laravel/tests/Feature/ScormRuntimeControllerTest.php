@@ -91,6 +91,7 @@ class ScormRuntimeControllerTest extends TestCase
     public function test_enrolled_student_launches_private_scorm_player_and_commits_progress(): void
     {
         [$student, , , $packageId, $packageRoot] = $this->setupRuntime();
+        $this->actingAs($student)->get(route('plugins.scorm.student.index'))->assertOk()->assertSee('SCORM Runtime Unit');
 
         $response = $this->actingAs($student)->get(route('plugins.scorm.launch', $packageId));
         $response->assertOk()->assertSee('SCORM Runtime Unit');
