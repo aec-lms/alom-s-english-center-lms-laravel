@@ -86,7 +86,7 @@ class CourseCommerceController extends Controller
             $existing = DB::table('course_cart_items')->where('cart_id', $cartId)->where('course_id', $course->id)->first();
             if ($existing) {
                 DB::table('course_cart_items')->where('id', $existing->id)->update([
-                    'unit_price' => round((float) $course->price, 2),
+                    'unit_price' => $this->currentCoursePrice($course, $student),
                     'updated_at' => now(),
                 ]);
                 return;
@@ -95,7 +95,7 @@ class CourseCommerceController extends Controller
             DB::table('course_cart_items')->insert([
                 'cart_id' => $cartId,
                 'course_id' => $course->id,
-                'unit_price' => round((float) $course->price, 2),
+                'unit_price' => $this->currentCoursePrice($course, $student),
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
@@ -677,7 +677,7 @@ class CourseCommerceController extends Controller
 
             foreach ($cartItems as $cartItem) {
                 $course = $courses->get($cartItem->course_id);
-                abort_if(abs((float) $course->price - (float) $cartItem->unit_price) > 0.01, 409, 'A course price changed. Review your cart before paying.');
+                abort_if(abs($this->currentCoursePrice($course, $student) - (float) $cartItem->unit_price) > 0.01, 409, 'A course price or Flash Sale offer changed. Review your cart before paying.');
                 $this->assertNoOpenBatch((int) $course->id);
                 abort_if(DB::table('enrollments')->where('user_id', $student->id)->where('course_id', $course->id)
                     ->whereIn('status', ['pending', 'active', 'completed'])->exists(), 409, 'You already have a pending or active enrollment in one of the selected courses.');
@@ -1068,24 +1068,52 @@ class CourseCommerceController extends Controller
         return $student;
     }
 
+    /**
+     * Keep legacy cart snapshots and checkout revalidation on the same
+     * server-authoritative quote as direct enrollment and Unified Commerce.
+     */
+    private function currentCoursePrice(object $course, $student): float
+    {
+        $basePrice = round((float) ($course->price ?? 0), 2);
+        if (!$this->plugins->isEnabled('flash-sale') || !Schema::hasTable('flash_sales')) {
+            return $basePrice;
+        }
+
+        $branchId = $course->branch_id !== null
+            ? (int) $course->branch_id
+            : $this->assignedBranchId($student);
+
+        return (float) app(\Plugins\Modules\FlashSale\Services\FlashSalePricingService::class)
+            ->quote((int) $course->id, $branchId)['total'];
+    }
+
     private function assertCourseBranch($student, object $course): void
     {
+        $assignedBranchId = $this->assignedBranchId($student);
         if ($course->branch_id !== null) {
-            $assignedBranchId = $this->assignedBranchId($student);
             abort_unless($assignedBranchId !== null && $assignedBranchId === (int) $course->branch_id, 403, 'This course is outside your assigned branch.');
         }
     }
 
     private function assignedBranchId($student): ?int
     {
-        if ($this->plugins->isEnabled('student-management') && Schema::hasTable('students')) {
-            $profileBranch = DB::table('students')->where('user_id', $student->id)->value('branch_id');
-            if ($profileBranch !== null) {
-                return (int) $profileBranch;
-            }
+        $accountValue = $student->branch_id ?? null;
+        $accountBranchId = $accountValue !== null ? (int) $accountValue : null;
+        $profileBranchId = null;
+
+        if ($this->plugins->isEnabled('student-management') && Schema::hasTable('students')
+            && Schema::hasColumn('students', 'branch_id')) {
+            $profileValue = DB::table('students')->where('user_id', $student->id)->value('branch_id');
+            $profileBranchId = $profileValue !== null ? (int) $profileValue : null;
         }
 
-        return $student->branch_id !== null ? (int) $student->branch_id : null;
+        abort_if(
+            $accountBranchId !== null && $profileBranchId !== null && $accountBranchId !== $profileBranchId,
+            403,
+            'Your account and student profile have conflicting branch assignments. Contact the administrator before checkout.'
+        );
+
+        return $profileBranchId ?? $accountBranchId;
     }
 
     private function assertNoOpenBatch(int $courseId): void

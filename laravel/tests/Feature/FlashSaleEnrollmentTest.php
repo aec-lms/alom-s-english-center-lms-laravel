@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+use Plugins\Modules\CommerceCart\Services\CommerceCatalog;
 use Plugins\Modules\CourseManagement\Models\Course;
 use Plugins\Modules\CourseManagement\Models\Enrollment;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
@@ -593,6 +595,219 @@ class FlashSaleEnrollmentTest extends TestCase
         } finally {
             $schema::dropIfExists('flash_sales');
         }
+    }
+
+
+    public function test_unified_commerce_uses_branch_specific_flash_sale_quote_over_higher_priority_global_offer(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'student-management', 'course-management', 'commerce-cart', 'flash-sale']);
+
+        $branchId = DB::table('branches')->insertGetId([
+            'code' => 'UNIFIED-FLASH-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'name' => 'Unified Flash Branch',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $studentUser = $this->createUserWithRole('student', $branchId);
+        Student::query()->create([
+            'user_id' => $studentUser->id,
+            'branch_id' => $branchId,
+            'student_code' => 'UNIFIED-' . strtoupper(substr(bin2hex(random_bytes(4)), 0, 8)),
+            'admission_date' => today(),
+            'status' => 'active',
+        ]);
+        $course = Course::query()->create([
+            'code' => 'UNIFIED-FLASH-01',
+            'title' => 'Unified Flash Course',
+            'slug' => 'unified-flash-course',
+            'price' => 1000,
+            'status' => 'published',
+        ]);
+
+        DB::table('flash_sales')->insert([
+            [
+                'course_id' => $course->id,
+                'title' => 'High Priority Global Offer',
+                'discount_type' => 'percent',
+                'discount_value' => 10,
+                'priority' => 999,
+                'branch_id' => null,
+                'starts_at' => now()->subMinute(),
+                'ends_at' => now()->addDay(),
+                'is_published' => true,
+                'is_active' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'course_id' => $course->id,
+                'title' => 'Branch Launch Offer',
+                'discount_type' => 'percent',
+                'discount_value' => 30,
+                'priority' => 1,
+                'branch_id' => $branchId,
+                'starts_at' => now()->subMinute(),
+                'ends_at' => now()->addDay(),
+                'is_published' => true,
+                'is_active' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        $quote = app(CommerceCatalog::class)->resolve('course', (int) $course->id, $studentUser);
+
+        $this->assertEquals(700.00, (float) $quote['price']);
+        $this->assertSame('Branch Launch Offer', $quote['metadata']['flash_sale']['campaign_title']);
+        $this->assertEquals(300.00, (float) $quote['metadata']['flash_sale']['discount_amount']);
+    }
+
+    public function test_legacy_course_cart_snapshots_and_revalidates_the_same_flash_sale_price(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'student-management', 'fees-management', 'course-management', 'flash-sale']);
+
+        $branchId = DB::table('branches')->insertGetId([
+            'code' => 'LEGACY-FLASH-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'name' => 'Legacy Flash Branch',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $studentUser = $this->createUserWithRole('student', $branchId);
+        Student::query()->create([
+            'user_id' => $studentUser->id,
+            'branch_id' => $branchId,
+            'student_code' => 'LEGACY-' . strtoupper(substr(bin2hex(random_bytes(4)), 0, 8)),
+            'admission_date' => today(),
+            'status' => 'active',
+        ]);
+        $course = Course::query()->create([
+            'code' => 'LEGACY-FLASH-01',
+            'title' => 'Legacy Cart Flash Course',
+            'slug' => 'legacy-cart-flash-course',
+            'price' => 1000,
+            'status' => 'published',
+        ]);
+        $saleId = DB::table('flash_sales')->insertGetId([
+            'course_id' => $course->id,
+            'title' => 'Cart Snapshot Offer',
+            'discount_type' => 'percent',
+            'discount_value' => 25,
+            'priority' => 10,
+            'branch_id' => $branchId,
+            'starts_at' => now()->subMinute(),
+            'ends_at' => now()->addDay(),
+            'is_published' => true,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($studentUser)
+            ->post(route('course-commerce.cart.add', $course->id))
+            ->assertRedirect(route('course-commerce.cart'));
+
+        $cartItem = DB::table('course_cart_items')->first();
+        $this->assertNotNull($cartItem);
+        $this->assertEquals(750.00, (float) $cartItem->unit_price);
+
+        DB::table('flash_sales')->where('id', $saleId)->update([
+            'discount_value' => 40,
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($studentUser)
+            ->post(route('course-commerce.checkout'), ['payer_contact' => '01712345678'])
+            ->assertStatus(409);
+
+        $this->assertDatabaseMissing('course_cart_orders', ['user_id' => $studentUser->id]);
+    }
+
+    public function test_conflicting_account_and_student_profile_branches_fail_closed_for_commerce_catalog(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'student-management', 'course-management', 'commerce-cart', 'flash-sale']);
+
+        $accountBranchId = DB::table('branches')->insertGetId([
+            'code' => 'ACCOUNT-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'name' => 'Account Branch',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $profileBranchId = DB::table('branches')->insertGetId([
+            'code' => 'PROFILE-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'name' => 'Profile Branch',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $studentUser = $this->createUserWithRole('student', $accountBranchId);
+        Student::query()->create([
+            'user_id' => $studentUser->id,
+            'branch_id' => $profileBranchId,
+            'student_code' => 'CONFLICT-' . strtoupper(substr(bin2hex(random_bytes(4)), 0, 8)),
+            'admission_date' => today(),
+            'status' => 'active',
+        ]);
+        $course = Course::query()->create([
+            'code' => 'CONFLICT-FLASH-01',
+            'title' => 'Conflict Branch Course',
+            'slug' => 'conflict-branch-course',
+            'price' => 1000,
+            'status' => 'published',
+        ]);
+
+        $this->expectException(ValidationException::class);
+        app(CommerceCatalog::class)->resolve('course', (int) $course->id, $studentUser);
+    }
+
+    public function test_direct_enrollment_rejects_conflicting_account_and_student_profile_branches(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'student-management', 'fees-management', 'course-management', 'flash-sale']);
+
+        $accountBranchId = DB::table('branches')->insertGetId([
+            'code' => 'ENROLL-ACCOUNT-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'name' => 'Enrollment Account Branch',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $profileBranchId = DB::table('branches')->insertGetId([
+            'code' => 'ENROLL-PROFILE-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'name' => 'Enrollment Profile Branch',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $studentUser = $this->createUserWithRole('student', $accountBranchId);
+        Student::query()->create([
+            'user_id' => $studentUser->id,
+            'branch_id' => $profileBranchId,
+            'student_code' => 'ENROLL-CONFLICT-' . strtoupper(substr(bin2hex(random_bytes(4)), 0, 8)),
+            'admission_date' => today(),
+            'status' => 'active',
+        ]);
+        $course = Course::query()->create([
+            'code' => 'ENROLL-CONFLICT-01',
+            'title' => 'Enrollment Conflict Course',
+            'slug' => 'enrollment-conflict-course',
+            'price' => 1000,
+            'status' => 'published',
+        ]);
+
+        $this->actingAs($studentUser)
+            ->post('/courses/' . $course->id . '/enroll')
+            ->assertForbidden();
+
+        $this->assertDatabaseMissing('enrollments', [
+            'user_id' => $studentUser->id,
+            'course_id' => $course->id,
+        ]);
     }
 
 }
