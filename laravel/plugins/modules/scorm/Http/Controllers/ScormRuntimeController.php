@@ -389,6 +389,8 @@ class ScormRuntimeController extends Controller
                     'lesson_location' => (string) ($data['cmi.core.lesson_location'] ?? ''),
                     'suspend_data' => (string) ($data['cmi.suspend_data'] ?? ''),
                     'score_raw' => is_numeric($data['cmi.core.score.raw'] ?? null) ? $data['cmi.core.score.raw'] : null,
+                    'score_min' => is_numeric($data['cmi.core.score.min'] ?? null) ? $data['cmi.core.score.min'] : null,
+                    'score_max' => is_numeric($data['cmi.core.score.max'] ?? null) ? $data['cmi.core.score.max'] : null,
                     'total_time_seconds' => $totalSeconds,
                     'session_time_seconds' => $sessionSeconds,
                     'cmi_data' => json_encode($data, JSON_THROW_ON_ERROR),
