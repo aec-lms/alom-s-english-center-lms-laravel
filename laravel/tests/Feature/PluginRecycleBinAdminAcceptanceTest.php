@@ -235,7 +235,7 @@ class PluginRecycleBinAdminAcceptanceTest extends TestCase
                 $manager->deleteToRecycleBin($slug);
                 $this->fail('A partial recycle-bin metadata write must abort plugin deletion.');
             } catch (\RuntimeException $exception) {
-                $this->assertStringContainsString('original package and lifecycle state were restored', $exception->getMessage());
+                $this->assertStringContainsString('original package checksum was verified and its previous lifecycle state was restored where possible', $exception->getMessage());
             }
 
             $this->assertDirectoryExists($modulePath);
