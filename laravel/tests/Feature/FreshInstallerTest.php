@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Core\Installer\FreshInstallerService;
+use App\Models\AuditLog;
 use App\Models\SystemSetting;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -109,6 +110,12 @@ class FreshInstallerTest extends TestCase
             $admin = User::query()->where('email', 'fresh-admin@aec.test')->firstOrFail();
             $this->assertTrue(Hash::check('FreshStrongPassword!2026', $admin->password));
             $this->assertTrue($admin->hasRole('admin'));
+            $this->assertDatabaseHas('audit_logs', [
+                'action' => 'core.installed',
+                'entity_type' => 'system',
+                'entity_id' => 'fresh_install',
+                'user_id' => $admin->id,
+            ]);
             $this->assertSame('false', SystemSetting::query()->where('key', 'legacy_records_imported')->value('value'));
             $this->assertSame('US', SystemSetting::query()->where('key', 'institution.country_code')->value('value'));
             $this->assertSame('en', SystemSetting::query()->where('key', 'localization.locale')->value('value'));
