@@ -44,6 +44,41 @@ class PluginSettingsResetBackupTest extends TestCase
     }
 
 
+
+    public function test_recycle_delete_audit_failure_restores_package_and_install_state(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['gateway-sslcommerz']);
+
+        $manager = app(PluginManager::class);
+        AuditLog::creating(static function (AuditLog $log): void {
+            if ($log->action === 'plugin.deleted_to_recycle_bin') {
+                throw new RuntimeException('forced recycle delete audit failure');
+            }
+        });
+
+        try {
+            try {
+                $manager->deleteToRecycleBin('gateway-sslcommerz');
+                $this->fail('Recycle delete must fail when its required audit event cannot be persisted.');
+            } catch (RuntimeException $exception) {
+                $this->assertSame('forced recycle delete audit failure', $exception->getMessage());
+            }
+
+            $this->assertFileExists(
+                config('plugins.modules_path') . DIRECTORY_SEPARATOR . 'gateway-sslcommerz' . DIRECTORY_SEPARATOR . 'plugin.json'
+            );
+            $record = \\App\\Models\\PluginRecord::query()->where('slug', 'gateway-sslcommerz')->first();
+            $this->assertNotNull($record);
+            $this->assertTrue((bool) $record->is_installed);
+            $this->assertTrue((bool) $record->is_enabled);
+            $this->assertSame([], $manager->recycledPlugins());
+        } finally {
+            AuditLog::flushEventListeners();
+        }
+    }
+
+
     public function test_restore_audit_failure_keeps_recycle_bin_metadata_and_returns_package(): void
     {
         $this->markSystemInstalled();
