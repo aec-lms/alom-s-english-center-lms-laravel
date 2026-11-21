@@ -84,7 +84,7 @@ test('untrusted SCO cannot inspect LMS/player state and commits only through the
           data: message.data,
           finish: message.method === 'LMSFinish',
         };
-        const response = await fetch(`${appOrigin}/api/scorm-runtime/commit`, {
+        const response = await fetch(appOrigin + '/api/scorm-runtime/commit', {
           method: 'POST',
           mode: 'cors',
           credentials: 'omit',
