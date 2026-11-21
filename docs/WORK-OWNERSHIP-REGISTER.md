@@ -386,7 +386,7 @@ This section corrects the earlier point-in-time table above. The older SHA rows 
 - #346 closed in favor of #394 after confirming the intervening mainline changes were disjoint from the three assessment-owned paths.
 - #360 closed in favor of #395 after confirming the intervening mainline changes were disjoint from its two migration/test paths.
 - #356 closed in favor of #396 after its audit was refreshed against current Student Management source and tests.
-- #355 remains open until #397 has independent review and is accepted; do not merge both documentation candidates.
+- #355 is superseded by #397 and must not be merged; keep only #397 as the canonical documentation candidate.
 - No PR in this checkpoint is merged or production-deployed by this reconciliation.
 
 ### Repository-wide merge controls
