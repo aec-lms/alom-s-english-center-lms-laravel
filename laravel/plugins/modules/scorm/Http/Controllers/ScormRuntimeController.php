@@ -813,7 +813,9 @@ class ScormRuntimeController extends Controller
 
         // SCO code has an opaque sandbox origin and cannot access player/LMS APIs
         // except through the allow-listed postMessage bridge.
-        return "default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; frame-ancestors {$playerOrigin}; form-action 'none'; object-src 'none'; base-uri 'self'";
+        $appOrigin = rtrim((string) config('app.url', ''), '/');
+
+        return "default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; frame-ancestors {$appOrigin} {$playerOrigin}; form-action 'none'; object-src 'none'; base-uri 'self'";
     }
 
     private function contentSessionCookieName(int $attemptId): string

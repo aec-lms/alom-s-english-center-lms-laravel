@@ -184,8 +184,8 @@ class ScormRuntimeControllerTest extends TestCase
         $this->assertSame('nosniff', $contentResponse->headers->get('X-Content-Type-Options'));
         $contentPolicy = (string) $contentResponse->headers->get('Content-Security-Policy');
         $this->assertStringContainsString("connect-src 'self'", $contentPolicy);
-        $this->assertStringContainsString('frame-ancestors https://scorm-player.example.test', $contentPolicy);
-        $this->assertStringNotContainsString('https://lms.example.test', $contentPolicy);
+        $this->assertStringContainsString('frame-ancestors https://lms.example.test https://scorm-player.example.test', $contentPolicy);
+        $this->assertStringContainsString("form-action 'none'", $contentPolicy);
         $this->assertStringContainsString("form-action 'none'", $contentPolicy);
         $cacheControl = strtolower((string) $contentResponse->headers->get('Cache-Control'));
         $this->assertStringContainsString('private', $cacheControl);

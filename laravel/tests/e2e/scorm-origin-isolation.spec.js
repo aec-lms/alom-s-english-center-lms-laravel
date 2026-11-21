@@ -17,6 +17,21 @@ test('untrusted SCO cannot inspect LMS/player state and commits only through the
   }, lmsSecret);
 
   await page.route(`${appOrigin}/api/scorm-runtime/commit`, async route => {
+    if (route.request().method() === 'OPTIONS') {
+      await route.fulfill({
+        status: 204,
+        headers: {
+          'Access-Control-Allow-Origin': playerOrigin,
+          'Access-Control-Allow-Methods': 'POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
+          'Access-Control-Allow-Private-Network': 'true',
+          'Access-Control-Max-Age': '600',
+          'Vary': 'Origin',
+        },
+      });
+      return;
+    }
+
     const payload = JSON.parse(route.request().postData() || '{}');
     capturedPayloads.push(payload);
     await route.fulfill({
@@ -114,7 +129,7 @@ test('untrusted SCO cannot inspect LMS/player state and commits only through the
     status: 200,
     contentType: 'text/html; charset=utf-8',
     headers: {
-      'Content-Security-Policy': `default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self'; frame-ancestors ${playerOrigin}; form-action 'none'; object-src 'none'`,
+      'Content-Security-Policy': `default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self'; frame-ancestors ${appOrigin} ${playerOrigin}; form-action 'none'; object-src 'none'`,
       'Cross-Origin-Resource-Policy': 'cross-origin',
       'Referrer-Policy': 'no-referrer',
       'Cache-Control': 'private, no-store',
