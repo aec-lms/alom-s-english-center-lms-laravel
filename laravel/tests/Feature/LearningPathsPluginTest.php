@@ -190,6 +190,13 @@ class LearningPathsPluginTest extends TestCase
             'updated_at' => now(),
         ]);
 
+        $this->actingAs($admin)->put('/admin/courses/' . $first, [
+            'code' => DB::table('courses')->where('id', $first)->value('code'),
+            'title' => 'Protected Path Course A',
+            'price' => 0,
+            'status' => 'archived',
+        ])->assertStatus(409);
+
         $this->actingAs($admin)->delete('/admin/courses/' . $first)->assertStatus(409);
         $this->assertDatabaseHas('courses', ['id' => $first, 'status' => 'published']);
         $this->assertDatabaseHas('learning_path_courses', ['learning_path_id' => $pathId, 'course_id' => $first]);
