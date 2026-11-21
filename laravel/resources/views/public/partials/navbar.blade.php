@@ -10,6 +10,7 @@
         ];
     }
     if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('learning-paths')
+        && app(\App\Core\Plugins\PluginManager::class)->isEnabled('course-management')
         && Route::has('learning-paths.catalog')) {
         $navLinks[] = [
             'label' => 'Learning Paths',
@@ -20,6 +21,7 @@
     }
     if (auth()->check() && auth()->user()->hasRole('student')
         && app(\App\Core\Plugins\PluginManager::class)->isEnabled('learning-paths')
+        && app(\App\Core\Plugins\PluginManager::class)->isEnabled('course-management')
         && Route::has('learning-paths.mine')) {
         $navLinks[] = [
             'label' => 'My Learning Paths',
