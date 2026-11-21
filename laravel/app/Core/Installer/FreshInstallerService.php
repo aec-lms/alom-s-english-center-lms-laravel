@@ -255,6 +255,25 @@ class FreshInstallerService
                 throw new RuntimeException('Unable to acquire the exclusive installation mutex.');
             }
 
+            // Revalidate both the path and directory after acquiring the lock. This
+            // closes the window where an attacker swaps the mutex path while this
+            // worker is blocked in flock().
+            $lockedStat = fstat($mutex);
+            $currentPathStat = @lstat($mutexPath);
+            $currentLockDirectory = realpath($lockDirectory);
+            if ($lockedStat === false
+                || $currentPathStat === false
+                || (($lockedStat['mode'] & 0170000) !== 0100000)
+                || (($currentPathStat['mode'] & 0170000) !== 0100000)
+                || $lockedStat['dev'] !== $currentPathStat['dev']
+                || $lockedStat['ino'] !== $currentPathStat['ino']
+                || ($lockedStat['nlink'] ?? 1) !== 1
+                || $currentLockDirectory === false
+                || $currentLockDirectory !== $realLockDirectory
+            ) {
+                throw new RuntimeException('The installation mutex or lock directory changed while acquiring the lock.');
+            }
+
             // Another worker may have completed installation while this worker waited.
             if ($this->isInstalled()) {
                 throw new RuntimeException('AEC LMS is already installed and locked.');
