@@ -197,6 +197,115 @@ class FreshInstallerService
     }
 
     /**
+     * Atomically record the current installation phase for crash-safe recovery.
+     * The marker is diagnostic state, not proof that the application is installed.
+     */
+    private function writeInstallProgressMarker(string $phase): void
+    {
+        $installLockPath = (string) config('lms.install_lock_path');
+        $progressPath = $installLockPath . '.in-progress';
+        if (is_link($progressPath)) {
+            throw new RuntimeException('The installation progress marker must not be a symbolic link.');
+        }
+
+        $existingStat = is_file($progressPath) ? @lstat($progressPath) : false;
+        if ($existingStat !== false
+            && ((($existingStat['mode'] & 0170000) !== 0100000) || ($existingStat['nlink'] ?? 1) !== 1)
+        ) {
+            throw new RuntimeException('The installation progress marker must be a private, regular, non-linked file.');
+        }
+
+        $existingPayload = [];
+        if (is_file($progressPath)) {
+            $existingContents = file_get_contents($progressPath);
+            $decoded = $existingContents === false ? null : json_decode($existingContents, true);
+            if (is_array($decoded)) {
+                $existingPayload = $decoded;
+            }
+        }
+
+        $payload = json_encode([
+            'started_at' => $existingPayload['started_at'] ?? now()->toIso8601String(),
+            'updated_at' => now()->toIso8601String(),
+            'phase' => $phase,
+            'core_version' => config('lms.core_version'),
+            'process_id' => getmypid(),
+        ], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
+
+        $temporaryPath = tempnam(dirname($progressPath), '.aec-install-progress-');
+        if ($temporaryPath === false) {
+            throw new RuntimeException('Unable to allocate the installation progress marker.');
+        }
+
+        try {
+            if (file_put_contents($temporaryPath, $payload, LOCK_EX) === false) {
+                throw new RuntimeException('Unable to write the installation progress marker.');
+            }
+            @chmod($temporaryPath, 0600);
+            if (!rename($temporaryPath, $progressPath)) {
+                throw new RuntimeException('Unable to atomically update the installation progress marker.');
+            }
+            @chmod($progressPath, 0600);
+        } finally {
+            if (is_file($temporaryPath)) {
+                @unlink($temporaryPath);
+            }
+        }
+    }
+
+    /**
+     * A previous attempt may leave committed DDL without the final installed lock.
+     * Resume only when the database is still empty; otherwise fail closed and
+     * require a backed-up/replaced empty database rather than dropping user data.
+     */
+    private function recoverInterruptedInstallIfSafe(): void
+    {
+        $installLockPath = (string) config('lms.install_lock_path');
+        $progressPath = $installLockPath . '.in-progress';
+        if (is_link($progressPath)) {
+            throw new RuntimeException('The installation progress marker must not be a symbolic link.');
+        }
+        if (!file_exists($progressPath)) {
+            return;
+        }
+
+        $progressStat = @lstat($progressPath);
+        if ($progressStat === false
+            || (($progressStat['mode'] & 0170000) !== 0100000)
+            || ($progressStat['nlink'] ?? 1) !== 1
+        ) {
+            throw new RuntimeException('The installation progress marker must be a private, regular, non-linked file.');
+        }
+
+        $contents = file_get_contents($progressPath);
+        if ($contents === false) {
+            throw new RuntimeException('Unable to read the interrupted installation progress marker.');
+        }
+        $progress = json_decode($contents, true);
+        $phase = is_array($progress) ? (string) ($progress['phase'] ?? 'unknown') : 'unknown';
+
+        $pdo = DB::connection()->getPdo();
+        try {
+            $this->assertFreshEmptyDatabase(
+                $pdo,
+                (string) DB::connection()->getDatabaseName(),
+                DB::connection()->getDriverName()
+            );
+        } catch (RuntimeException $exception) {
+            throw new RuntimeException(
+                "A previous fresh installation was interrupted during phase '{$phase}', and this database now contains tables. "
+                . 'The installer will not drop or truncate existing data. Back up this database, provision or restore a completely empty database, then retry installation.',
+                0,
+                $exception
+            );
+        }
+
+        if (!@unlink($progressPath)) {
+            throw new RuntimeException('The previous installation marker could not be cleared from the empty database; retry is unsafe.');
+        }
+    }
+
+    /**
      * Serialize fresh installation across PHP workers on the same filesystem.
      *
      * flock() is released by the operating system when a worker exits or crashes,
@@ -279,6 +388,7 @@ class FreshInstallerService
                 throw new RuntimeException('AEC LMS is already installed and locked.');
             }
 
+            $this->recoverInterruptedInstallIfSafe();
             return $this->performInstallFresh($config);
         } finally {
             if (is_resource($mutex)) {
@@ -342,6 +452,7 @@ class FreshInstallerService
         $dbName = (string) DB::connection()->getDatabaseName();
 
         $this->assertFreshEmptyDatabase($pdo, $dbName, $driver);
+        $this->writeInstallProgressMarker('preparing');
 
         $this->preparePrivateStorageDirectories();
 
@@ -360,7 +471,9 @@ class FreshInstallerService
         ]);
         config(['app.timezone' => $timezone, 'app.locale' => $locale]);
 
+        $this->writeInstallProgressMarker('migrations');
         $this->callArtisanOrFail('migrate', ['--force' => true], 'Core database migrations');
+        $this->writeInstallProgressMarker('seeding_and_admin_creation');
 
         $admin = DB::transaction(function () use ($adminName, $adminEmail, $adminPassword, $appName, $appUrl, $countryCode, $locale, $timezone, $currency): User {
             $this->callArtisanOrFail('db:seed', ['--class' => CoreRolesAndPermissionsSeeder::class, '--force' => true], 'Core roles and permissions seeding');
@@ -389,6 +502,8 @@ class FreshInstallerService
 
             return $admin;
         });
+
+        $this->writeInstallProgressMarker('writing_installed_marker');
 
         $lockPayload = json_encode([
             'installed_at' => now()->toIso8601String(),
@@ -420,6 +535,10 @@ class FreshInstallerService
                 @unlink($temporaryLockPath);
             }
         }
+
+        // The installed marker is authoritative. Remove the diagnostic progress
+        // marker only after the final marker is atomically in place.
+        @unlink($lockPath . '.in-progress');
 
         $this->audit->log('core.installed', 'system', 'fresh_install', ['legacy_records_imported' => false], $admin->id);
 
