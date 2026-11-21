@@ -63,6 +63,9 @@ class LearningPathsPluginTest extends TestCase
         $first = $this->course('LP-GRAMMAR', 'Grammar Foundations');
         $second = $this->course('LP-SPEAKING', 'Speaking Practice');
 
+        $this->actingAs($admin)->get('/admin/learning-paths')
+            ->assertOk()->assertSee('Create a learning path')->assertSee('Add course step');
+
         $this->actingAs($admin)->post('/admin/learning-paths', [
             'title' => 'English Foundations Journey',
             'description' => 'A guided English learning sequence.',
