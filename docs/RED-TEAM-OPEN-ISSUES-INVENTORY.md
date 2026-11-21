@@ -60,7 +60,7 @@ This is a point-in-time snapshot, not a merge approval. The workflow names below
 | #312 Live Class entitlement | `896c9a25ec87` | Open, Draft | Browser E2E and Composer Security Audit passed; Laravel failed on SQLite and MySQL at `LiveClassCapacityTest.php:349` because `DB` resolves as `Tests\\Feature\\DB`. Import `Illuminate\\Support\\Facades\\DB` (or fully qualify it), then rerun both database suites. |
 | #275 Gift Commerce | `faa48d13621c` | Open, Draft | Laravel, Browser E2E and Composer Security Audit passed. Combined MySQL concurrency proof with #325 and ownership coordination on shared settlement paths remain required. |
 
-**Interpretation:** green workflows are necessary but not sufficient. Draft state, unresolved review feedback, missing feature-specific browser/accessibility evidence, independent review, exact-head rechecks and external provider gates still block merge/release where listed. Recheck every head before acting because branch updates invalidate this snapshot.
+**Interpretation:** green workflows are necessary but not sufficient. Unresolved review feedback, missing feature-specific browser/accessibility evidence, independent review, exact-head rechecks and external provider gates still block merge/release where listed. All active PRs remain open and Ready for Review; Draft status is not used. Recheck every head before acting because branch updates invalidate this snapshot.
 
 | #315 Red-Team inventory | `68976434f6b3` | Open, Draft | Documentation-only inventory refresh; Laravel, Browser E2E and Composer Security Audit all passed on this exact head. It closes no application findings and is not merge/release approval. |
 
@@ -87,7 +87,7 @@ The historical snapshot above is retained for audit history. The following is th
 
 **Coordination:** #311 and #334 share .github/workflows/browser-e2e.yml; Alomsenglishcenter is the single integration owner and both PRs must retain compatible optional fixture seeding. Do not merge one and assume the combined post-merge Browser E2E is proven; run the combined workflow on main after both are integrated.
 
-**Merge discipline:** a green workflow is necessary, not sufficient. Keep Draft while a current-head Request Changes, missing human acceptance evidence, missing independent approval, stale ownership state or external financial/provider gate remains. Never dismiss another reviewer's request on their behalf.
+**Merge discipline:** a green workflow is necessary, not sufficient. Keep PRs open and Ready for Review while a current-head Request Changes, missing human acceptance evidence, missing independent approval, stale ownership state or external financial/provider gate remains. Do not merge until those blockers are resolved. Never dismiss another reviewer's request on their behalf.
 
 
 
