@@ -113,7 +113,7 @@ class LearningRewardsController extends Controller
                 DB::table('learning_reward_profiles')->insert($values + ['user_id' => $student->id, 'created_at' => now()]);
             }
 
-            $audit->log('learning_rewards.privacy_updated', 'learning_reward_profile', (string) $student->id, [
+            $audit->logRequired('learning_rewards.privacy_updated', 'learning_reward_profile', (string) $student->id, [
                 'leaderboard_opt_out' => (bool) $values['leaderboard_opt_out'],
                 'profile_public' => (bool) $values['profile_public'],
             ], $student->id);
@@ -156,7 +156,7 @@ class LearningRewardsController extends Controller
                     'updated_at' => now(),
                 ]);
             }
-            $audit->log('learning_rewards.rules_updated', 'learning_reward_rules', 'all', ['activity_keys' => array_keys($seen)], $actor->id);
+            $audit->logRequired('learning_rewards.rules_updated', 'learning_reward_rules', 'all', ['activity_keys' => array_keys($seen)], $actor->id);
         });
 
         return back()->with('status', 'Learning reward rules updated.');
@@ -216,18 +216,26 @@ class LearningRewardsController extends Controller
         ]);
         abort_if(empty($data['points_threshold']) && empty($data['streak_threshold']), 422, 'A badge needs a points or streak threshold.');
 
-        $id = DB::table('learning_reward_badges')->insertGetId([
-            'slug' => $data['slug'],
-            'name' => trim($data['name']),
-            'description' => trim($data['description']),
-            'icon' => $data['icon'],
-            'points_threshold' => $data['points_threshold'] ?? null,
-            'streak_threshold' => $data['streak_threshold'] ?? null,
-            'is_active' => true,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-        $audit->log('learning_rewards.badge_created', 'learning_reward_badge', (string) $id, ['slug' => $data['slug']], $actor->id);
+        DB::transaction(function () use ($data, $audit, $actor): void {
+            $id = DB::table('learning_reward_badges')->insertGetId([
+                'slug' => $data['slug'],
+                'name' => trim($data['name']),
+                'description' => trim($data['description']),
+                'icon' => $data['icon'],
+                'points_threshold' => $data['points_threshold'] ?? null,
+                'streak_threshold' => $data['streak_threshold'] ?? null,
+                'is_active' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            $audit->logRequired(
+                'learning_rewards.badge_created',
+                'learning_reward_badge',
+                (string) $id,
+                ['slug' => $data['slug']],
+                $actor->id,
+            );
+        });
 
         return back()->with('status', 'Achievement badge created.');
     }
@@ -236,8 +244,6 @@ class LearningRewardsController extends Controller
     {
         $actor = $request->user();
         abort_unless($actor && $actor->hasPermission('gamification.manage'), 403);
-        $record = DB::table('learning_reward_badges')->where('id', $badge)->first();
-        abort_unless($record, 404);
         $data = $request->validate([
             'name' => ['required', 'string', 'max:100'],
             'description' => ['required', 'string', 'max:240'],
@@ -248,16 +254,26 @@ class LearningRewardsController extends Controller
         ]);
         abort_if(empty($data['points_threshold']) && empty($data['streak_threshold']), 422, 'A badge needs a points or streak threshold.');
 
-        DB::table('learning_reward_badges')->where('id', $badge)->update([
-            'name' => trim($data['name']),
-            'description' => trim($data['description']),
-            'icon' => $data['icon'],
-            'points_threshold' => $data['points_threshold'] ?? null,
-            'streak_threshold' => $data['streak_threshold'] ?? null,
-            'is_active' => (bool) $data['is_active'],
-            'updated_at' => now(),
-        ]);
-        $audit->log('learning_rewards.badge_updated', 'learning_reward_badge', (string) $badge, ['slug' => $record->slug, 'is_active' => (bool) $data['is_active']], $actor->id);
+        DB::transaction(function () use ($data, $badge, $audit, $actor): void {
+            $record = DB::table('learning_reward_badges')->where('id', $badge)->lockForUpdate()->first();
+            abort_unless($record, 404);
+            DB::table('learning_reward_badges')->where('id', $badge)->update([
+                'name' => trim($data['name']),
+                'description' => trim($data['description']),
+                'icon' => $data['icon'],
+                'points_threshold' => $data['points_threshold'] ?? null,
+                'streak_threshold' => $data['streak_threshold'] ?? null,
+                'is_active' => (bool) $data['is_active'],
+                'updated_at' => now(),
+            ]);
+            $audit->logRequired(
+                'learning_rewards.badge_updated',
+                'learning_reward_badge',
+                (string) $badge,
+                ['slug' => $record->slug, 'is_active' => (bool) $data['is_active']],
+                $actor->id,
+            );
+        });
 
         return back()->with('status', 'Achievement badge updated.');
     }
