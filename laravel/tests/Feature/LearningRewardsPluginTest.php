@@ -267,6 +267,36 @@ class LearningRewardsPluginTest extends TestCase
         ]);
     }
 
+    public function test_rewards_pages_and_privacy_recheck_persisted_student_role(): void
+    {
+        $this->bootRewards();
+        $student = $this->createUserWithRole('student');
+        app(LearningRewardsService::class)->awardVerifiedActivity(
+            (int) $student->id,
+            'lesson_completed',
+            'course_lesson',
+            88001,
+        );
+        $student->load('roles');
+        $studentRoleId = DB::table('roles')->where('slug', 'student')->value('id');
+        $this->assertNotNull($studentRoleId);
+
+        DB::table('role_user')
+            ->where('user_id', $student->id)
+            ->where('role_id', $studentRoleId)
+            ->delete();
+
+        // A cached Eloquent role relation must never authorize a subsequent request.
+        $this->actingAs($student)->get('/my-learning-rewards')->assertForbidden();
+        $this->actingAs($student)->get('/learning-leaderboard')->assertForbidden();
+        $this->actingAs($student)->patch('/my-learning-rewards/privacy', [
+            'leaderboard_opt_out' => false,
+            'profile_public' => true,
+        ])->assertForbidden();
+
+        $this->assertDatabaseMissing('learning_reward_profiles', ['user_id' => $student->id]);
+    }
+
     public function test_leaderboard_is_scoped_to_the_students_assigned_branch(): void
     {
         $this->markSystemInstalled();
