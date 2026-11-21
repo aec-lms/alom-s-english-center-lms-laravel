@@ -219,7 +219,9 @@ class Scorm12Runtime
 
     private function isValidScore(string $value): bool
     {
-        return $value !== '' && is_numeric($value) && (float) $value >= 0 && (float) $value <= 100;
+        // SCORM 1.2 scores are numeric, not fixed to a 0–100 scale. Keep the
+        // value within the precision of the persisted DECIMAL(8,3) columns.
+        return $value === '' || (is_numeric($value) && is_finite((float) $value) && abs((float) $value) <= 99999.999);
     }
 
     private function isValidScormTime(string $value): bool
