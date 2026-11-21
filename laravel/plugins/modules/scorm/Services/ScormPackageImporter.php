@@ -103,6 +103,10 @@ class ScormPackageImporter
                 throw new RuntimeException('SCORM archive contains duplicate or case-colliding paths.');
             }
 
+            if (isset($stat['encryption_method']) && (int) $stat['encryption_method'] !== ZipArchive::EM_NONE) {
+                throw new RuntimeException('Encrypted SCORM ZIP entries are not supported.');
+            }
+
             $size = (int) $stat['size'];
             $compressed = (int) $stat['comp_size'];
             if ($size < 0 || $size > self::MAX_FILE_BYTES) {
@@ -162,7 +166,8 @@ class ScormPackageImporter
         $directory = str_ends_with($name, '/');
         $segments = explode('/', rtrim($name, '/'));
         foreach ($segments as $segment) {
-            if ($segment === '' || $segment === '.' || $segment === '..') {
+            if ($segment === '' || $segment === '.' || $segment === '..'
+                || str_ends_with($segment, '.') || str_ends_with($segment, ' ')) {
                 throw new RuntimeException('SCORM archive contains a traversal or ambiguous path segment.');
             }
         }
@@ -258,7 +263,8 @@ class ScormPackageImporter
 
         $segments = explode('/', $href);
         foreach ($segments as $segment) {
-            if ($segment === '' || $segment === '.' || $segment === '..') {
+            if ($segment === '' || $segment === '.' || $segment === '..'
+                || str_ends_with($segment, '.') || str_ends_with($segment, ' ')) {
                 throw new RuntimeException('SCORM manifest launch path is ambiguous or escapes the package.');
             }
         }
@@ -384,7 +390,11 @@ class ScormPackageImporter
                 throw new RuntimeException('SCORM package contains an unexpected filesystem entry after extraction.');
             }
             $relative = substr($file->getPathname(), strlen($directory) + 1);
-            $files[str_replace(DIRECTORY_SEPARATOR, '/', $relative)] = hash_file('sha256', $file->getPathname());
+            $checksum = hash_file('sha256', $file->getPathname());
+            if (!is_string($checksum)) {
+                throw new RuntimeException('Unable to checksum an extracted SCORM package file.');
+            }
+            $files[str_replace(DIRECTORY_SEPARATOR, '/', $relative)] = $checksum;
         }
         ksort($files);
 
