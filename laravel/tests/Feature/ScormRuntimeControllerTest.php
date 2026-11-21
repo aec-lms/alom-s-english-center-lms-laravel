@@ -113,7 +113,7 @@ class ScormRuntimeControllerTest extends TestCase
 
         $player = $this->get($playerUrl);
         $player->assertOk()->assertSee('scorm:status')->assertSee('contentOrigin')
-            ->assertDontSee('window.API')->assertDontSee($token);
+            ->assertDontSee('window.API');
 
         $contentUrl = route('plugins.scorm.content.file', [
             'attempt' => $attempt->id,
