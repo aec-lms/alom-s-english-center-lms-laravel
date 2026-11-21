@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\DB;
 use Plugins\Modules\BranchManagement\Models\Branch;
 use Plugins\Modules\ExamManagement\Http\Controllers\ExamController;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
-use Plugins\Modules\PaymentManagement\Http\Controllers\PaymentController;
+use Plugins\Modules\PaymentManagement\Services\RefundSettlementService;
 use Plugins\Modules\ExamManagement\Models\Exam;
 use Plugins\Modules\ExamManagement\Models\ExamAttempt;
 use Plugins\Modules\ExamManagement\Models\ExamQuestion;
@@ -1201,8 +1201,8 @@ class ExamAttemptEligibilityLockTest extends TestCase
         DB::setDefaultConnection($connectionName);
 
         try {
-            $controller = app(PaymentController::class);
-            $method = new \ReflectionMethod(PaymentController::class, 'suspendCommerceAccessAfterRefund');
+            $settlement = app(RefundSettlementService::class);
+            $method = new \ReflectionMethod(RefundSettlementService::class, 'suspendCommerceAccessAfterRefund');
             $method->setAccessible(true);
 
             $invoice = new FeeInvoice();
