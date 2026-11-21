@@ -732,7 +732,7 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
         ], ['secret_key']);
 
         $confirmed = $service->reconcile($pending, (int) $approver->id);
-        $this->assertSame('succeeded', $confirmed->status);
+        $this->assertSame('succeeded', $confirmed->status, 'Provider-confirmed ledger settlement failed: ' . json_encode($confirmed->metadata, JSON_THROW_ON_ERROR));
         $this->assertNotNull($confirmed->ledger_applied_at);
         $this->assertSame(600.0, (float) $invoice->fresh()->paid_amount);
         $this->assertSame('partial', $invoice->fresh()->status);
