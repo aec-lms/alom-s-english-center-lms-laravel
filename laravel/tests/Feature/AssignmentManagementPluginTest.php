@@ -42,7 +42,7 @@ class AssignmentManagementPluginTest extends TestCase
     public function test_student_can_submit_and_teacher_can_grade_assignment(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['assignment-management']);
+        $this->activatePlugins(['assignment-management', 'learning-rewards']);
         $teacher = $this->createUserWithRole('teacher');
         $student = $this->createUserWithRole('student');
 
@@ -78,6 +78,12 @@ class AssignmentManagementPluginTest extends TestCase
             'score' => 8,
             'status' => 'graded',
             'graded_by' => $teacher->id,
+        ]);
+        $this->assertDatabaseHas('learning_reward_ledger', [
+            'user_id' => $student->id,
+            'activity_key' => 'assignment_accepted',
+            'source_id' => $submissionId,
+            'points' => 25,
         ]);
     }
 
