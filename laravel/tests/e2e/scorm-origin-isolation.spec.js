@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 
-test('untrusted SCO runs on an opaque content origin with no LMS or player DOM access', async ({ page }) => {
+test('untrusted SCO cannot inspect LMS/player state and commits only through the trusted player bridge', async ({ page }) => {
   const appOrigin = 'http://127.0.0.1:8000';
   const playerOrigin = 'https://scorm-player.e2e.invalid';
   const contentOrigin = 'https://scorm-content.e2e.invalid';
@@ -8,12 +8,24 @@ test('untrusted SCO runs on an opaque content origin with no LMS or player DOM a
   const bridgeNonce = 'abcdef0123456789'.repeat(4);
   const lmsSecret = 'lms-session-secret';
   const playerSecret = 'trusted-player-secret';
+  const capturedPayloads = [];
 
   await page.goto('/');
   await page.evaluate(secret => {
     document.cookie = 'lms_session=' + encodeURIComponent(secret) + '; path=/; SameSite=Lax';
     document.body.dataset.lmsSecret = secret;
   }, lmsSecret);
+
+  await page.route(`${appOrigin}/api/scorm-runtime/commit`, async route => {
+    const payload = JSON.parse(route.request().postData() || '{}');
+    capturedPayloads.push(payload);
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers: { 'Access-Control-Allow-Origin': playerOrigin, 'Vary': 'Origin' },
+      body: JSON.stringify({ ok: true, version: Number(payload.version) + 1, completion_state: 'in_progress' }),
+    });
+  });
 
   await page.route(`${playerOrigin}/**`, route => route.fulfill({
     status: 200,
@@ -37,18 +49,61 @@ test('untrusted SCO runs on an opaque content origin with no LMS or player DOM a
       const status = document.getElementById('runtime-status');
       const bridgeNonce = ${JSON.stringify(bridgeNonce)};
       const attemptToken = ${JSON.stringify(playerToken)};
-      window.addEventListener('message', event => {
+      const attemptId = 41;
+      let stateVersion = 0;
+
+      window.addEventListener('message', async event => {
         if (event.source !== frame.contentWindow || event.origin !== 'null'
-          || !event.data || event.data.type !== 'scorm:status'
-          || event.data.bridge_nonce !== bridgeNonce) return;
-        status.textContent = String(event.data.message || '');
-        document.body.dataset.scormResult = JSON.stringify(event.data.result || {});
-      });
-      window.addEventListener('message', event => {
-        if (event.source !== frame.contentWindow || event.origin !== 'null'
-          || !event.data || event.data.type !== 'scorm:invoke') return;
-        // Deliberately do not dispatch privileged calls from package-origin messages.
-        document.body.dataset.privilegedAction = 'blocked';
+          || !event.data || typeof event.data !== 'object') return;
+
+        if (event.data.type === 'scorm:invoke') {
+          document.body.dataset.privilegedAction = 'blocked';
+          return;
+        }
+        if (event.data.type === 'scorm:status'
+          && event.data.bridge_nonce === bridgeNonce) {
+          status.textContent = String(event.data.message || '');
+          document.body.dataset.scormResult = JSON.stringify(event.data.result || {});
+          return;
+        }
+
+        const message = event.data;
+        if (message.type !== 'scorm:commit'
+          || message.bridge_nonce !== bridgeNonce
+          || message.attempt_id !== attemptId
+          || !['LMSCommit', 'LMSFinish'].includes(message.method)
+          || typeof message.request_id !== 'string'
+          || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(message.request_id)
+          || !message.data || typeof message.data !== 'object' || Array.isArray(message.data)) return;
+
+        const payload = {
+          attempt_id: attemptId,
+          token: attemptToken,
+          request_id: message.request_id,
+          version: stateVersion,
+          data: message.data,
+          finish: message.method === 'LMSFinish',
+        };
+        const response = await fetch(`${appOrigin}/api/scorm-runtime/commit`, {
+          method: 'POST',
+          mode: 'cors',
+          credentials: 'omit',
+          cache: 'no-store',
+          headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+          body: JSON.stringify(payload),
+        });
+        const result = await response.json();
+        if (!response.ok || result.ok !== true) return;
+
+        stateVersion = Number(result.version);
+        frame.contentWindow.postMessage({
+          type: 'scorm:commit-result',
+          bridge_nonce: bridgeNonce,
+          request_id: message.request_id,
+          ok: true,
+          version: stateVersion,
+        }, '*');
+        document.body.dataset.apiCredentials = 'omit';
       });
     })();
   </script>
@@ -68,8 +123,9 @@ test('untrusted SCO runs on an opaque content origin with no LMS or player DOM a
 <html><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"></head><body>
 <script>
 (() => {
+  const bridgeNonce = ${JSON.stringify(bridgeNonce)};
   const result = {
-    parentDocumentReadable: false,
+    playerDocumentReadable: false,
     playerSecretReadable: false,
     lmsDocumentReadable: false,
     lmsSecretReadable: false,
@@ -82,7 +138,7 @@ test('untrusted SCO runs on an opaque content origin with no LMS or player DOM a
 
   try {
     result.playerSecretReadable = parent.document.getElementById('player-secret').textContent === ${JSON.stringify(playerSecret)};
-    result.parentDocumentReadable = true;
+    result.playerDocumentReadable = true;
   } catch (error) {}
   try {
     result.lmsSecretReadable = top.document.body.dataset.lmsSecret === ${JSON.stringify(lmsSecret)};
@@ -96,16 +152,50 @@ test('untrusted SCO runs on an opaque content origin with no LMS or player DOM a
     result.sandboxRemovalSucceeded = true;
   } catch (error) {}
 
+  window.API = {
+    LMSInitialize(parameter) { return parameter === '' ? 'true' : 'false'; },
+    LMSSetValue(element, value) {
+      if (element !== 'cmi.core.lesson_location' || typeof value !== 'string') return 'false';
+      this.data[element] = value;
+      return 'true';
+    },
+    data: {},
+    LMSCommit(parameter) {
+      if (parameter !== '') return 'false';
+      parent.postMessage({
+        type: 'scorm:commit',
+        method: 'LMSCommit',
+        attempt_id: 41,
+        bridge_nonce: bridgeNonce,
+        request_id: '123e4567-e89b-42d3-a456-426614174000',
+        data: this.data,
+      }, '*');
+      return 'true';
+    }
+  };
+
+  window.addEventListener('message', event => {
+    if (event.source !== parent || event.origin !== ${JSON.stringify(playerOrigin)}
+      || !event.data || event.data.type !== 'scorm:commit-result'
+      || event.data.bridge_nonce !== bridgeNonce) return;
+    document.body.dataset.apiCommit = event.data.ok === true ? 'success' : 'failed';
+    document.body.dataset.apiVersion = String(event.data.version);
+  });
+
+  API.LMSInitialize('');
+  API.LMSSetValue('cmi.core.lesson_location', 'unit-1/page-2');
+  API.LMSCommit('');
+
   parent.postMessage({
     type: 'scorm:invoke',
     method: 'deleteCourse',
     args: [1],
-    bridge_nonce: ${JSON.stringify(bridgeNonce)}
+    bridge_nonce: bridgeNonce
   }, '*');
   parent.postMessage({
     type: 'scorm:status',
     message: 'ready',
-    bridge_nonce: ${JSON.stringify(bridgeNonce)},
+    bridge_nonce: bridgeNonce,
     result
   }, '*');
 })();
@@ -122,12 +212,14 @@ test('untrusted SCO runs on an opaque content origin with no LMS or player DOM a
     </main>
   `);
 
-  await expect(page.frameLocator('#trusted-player').locator('#runtime-status')).toHaveText('ready');
   const playerFrame = page.frameLocator('#trusted-player');
-  await expect(playerFrame.locator('body')).toHaveAttribute('data-scorm-result', /.+/);
+  const scoFrame = playerFrame.frameLocator('#scorm-sco');
+  await expect(playerFrame.locator('#runtime-status')).toHaveText('ready');
+  await expect(scoFrame.locator('body')).toHaveAttribute('data-api-commit', 'success');
+  await expect(playerFrame.locator('body')).toHaveAttribute('data-privileged-action', 'blocked');
   const result = JSON.parse(await playerFrame.locator('body').getAttribute('data-scorm-result'));
 
-  expect(result.parentDocumentReadable).toBe(false);
+  expect(result.playerDocumentReadable).toBe(false);
   expect(result.playerSecretReadable).toBe(false);
   expect(result.lmsDocumentReadable).toBe(false);
   expect(result.lmsSecretReadable).toBe(false);
@@ -137,8 +229,16 @@ test('untrusted SCO runs on an opaque content origin with no LMS or player DOM a
   expect(result.contentUrlHasToken).toBe(false);
   expect(result.contentCookie).toBe('');
 
+  expect(capturedPayloads).toHaveLength(1);
+  expect(capturedPayloads[0].attempt_id).toBe(41);
+  expect(capturedPayloads[0].token).toBe(playerToken);
+  expect(capturedPayloads[0].version).toBe(0);
+  expect(capturedPayloads[0].data['cmi.core.lesson_location']).toBe('unit-1/page-2');
+  expect(capturedPayloads[0].finish).toBe(false);
+  await expect(scoFrame.locator('body')).toHaveAttribute('data-api-version', '1');
+
   // The LMS cannot inspect the trusted player DOM, even though it may frame
-  // that separate origin. The player alone is allowed to bridge the opaque SCO.
+  // that separate origin. The player alone can bridge the opaque SCO.
   const lmsCanReadPlayer = await page.evaluate(() => {
     try {
       return !!document.querySelector('#trusted-player').contentDocument.querySelector('#player-secret');
@@ -147,6 +247,5 @@ test('untrusted SCO runs on an opaque content origin with no LMS or player DOM a
     }
   });
   expect(lmsCanReadPlayer).toBe(false);
-  await expect(playerFrame.locator('body')).toHaveAttribute('data-privileged-action', 'blocked');
   await expect(playerFrame.locator('#scorm-sco')).toHaveAttribute('sandbox', 'allow-scripts');
 });
