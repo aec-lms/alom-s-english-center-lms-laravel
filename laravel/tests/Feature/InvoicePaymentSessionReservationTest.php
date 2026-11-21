@@ -606,4 +606,82 @@ class InvoicePaymentSessionReservationTest extends TestCase
     }
 
 
+
+    public function test_paypal_order_with_zero_captures_is_not_settled(): void
+    {
+        $this->assertPaypalCaptureCardinalityRejected([], 'ZERO');
+    }
+
+    public function test_paypal_order_with_multiple_captures_is_not_settled(): void
+    {
+        $this->assertPaypalCaptureCardinalityRejected([
+            ['id' => 'CAPTURE-CARDINALITY-001', 'status' => 'COMPLETED', 'amount' => ['value' => '600.00', 'currency_code' => 'BDT']],
+            ['id' => 'CAPTURE-CARDINALITY-002', 'status' => 'COMPLETED', 'amount' => ['value' => '600.00', 'currency_code' => 'BDT']],
+        ], 'MULTIPLE');
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $captures
+     */
+    private function assertPaypalCaptureCardinalityRejected(array $captures, string $suffix): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'gateway-paypal']);
+        app(PluginManager::class)->saveSettings('gateway-paypal', [
+            'client_id' => 'paypal-capture-cardinality-client',
+            'client_secret' => 'paypal-capture-cardinality-secret',
+            'sandbox_mode' => '1',
+        ], ['client_secret']);
+
+        $invoice = $this->createInvoice();
+        $orderId = 'ORDER-CAPTURE-CARDINALITY-' . $suffix;
+
+        Http::fake(function (ClientRequest $request) use ($captures, $orderId) {
+            $path = (string) parse_url($request->url(), PHP_URL_PATH);
+            if (str_ends_with($path, '/v1/oauth2/token')) {
+                return Http::response(['access_token' => 'paypal-capture-cardinality-token'], 200);
+            }
+            if (str_ends_with($path, '/v2/checkout/orders')) {
+                return Http::response([
+                    'id' => $orderId,
+                    'status' => 'CREATED',
+                    'links' => [[
+                        'rel' => 'approve',
+                        'href' => 'https://www.sandbox.paypal.com/checkoutnow?token=' . $orderId,
+                    ]],
+                ], 201);
+            }
+            if (str_ends_with($path, '/v2/checkout/orders/' . $orderId . '/capture')) {
+                return Http::response([
+                    'id' => $orderId,
+                    'status' => 'COMPLETED',
+                    'purchase_units' => [[
+                        'payments' => ['captures' => $captures],
+                    ]],
+                ], 201);
+            }
+
+            return Http::response(['message' => 'Unexpected PayPal request'], 500);
+        });
+
+        $service = app(PaypalGatewayService::class);
+        $checkout = $service->createOrder($invoice, 'paypal-capture-cardinality-' . strtolower($suffix));
+        $transaction = $checkout['transaction'];
+
+        try {
+            $service->captureOrder((string) $transaction->transaction_ref);
+            $this->fail('PayPal must not settle an order unless it contains exactly one capture.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('exactly one capture', strtolower($exception->getMessage()));
+        }
+
+        $transaction->refresh();
+        $this->assertSame('initiated', $transaction->status);
+        $this->assertSame($orderId, $transaction->external_reference);
+        $this->assertSame(0.0, (float) $invoice->fresh()->paid_amount);
+        $this->assertSame('unpaid', $invoice->fresh()->status);
+        Http::assertSentCount(3);
+    }
+
+
 }
