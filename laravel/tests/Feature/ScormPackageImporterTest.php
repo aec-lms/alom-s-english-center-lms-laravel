@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use Illuminate\\Support\\Facades\\File;
-use Plugins\\Modules\\Scorm\\Services\\ScormPackageImporter;
+use Illuminate\Support\Facades\File;
+use Plugins\Modules\Scorm\Services\ScormPackageImporter;
 use RuntimeException;
-use Tests\\TestCase;
+use Tests\TestCase;
 use ZipArchive;
 
 class ScormPackageImporterTest extends TestCase
