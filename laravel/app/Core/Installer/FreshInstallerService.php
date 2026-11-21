@@ -208,7 +208,7 @@ class FreshInstallerService
             throw new RuntimeException('The installation progress marker must not be a symbolic link.');
         }
 
-        $existingStat = is_file($progressPath) ? @lstat($progressPath) : false;
+        $existingStat = @lstat($progressPath);
         if ($existingStat !== false
             && ((($existingStat['mode'] & 0170000) !== 0100000) || ($existingStat['nlink'] ?? 1) !== 1)
         ) {
@@ -216,7 +216,7 @@ class FreshInstallerService
         }
 
         $existingPayload = [];
-        if (is_file($progressPath)) {
+        if ($existingStat !== false) {
             $existingContents = file_get_contents($progressPath);
             $decoded = $existingContents === false ? null : json_decode($existingContents, true);
             if (is_array($decoded)) {
