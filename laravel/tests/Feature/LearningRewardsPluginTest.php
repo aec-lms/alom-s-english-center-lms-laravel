@@ -137,6 +137,33 @@ class LearningRewardsPluginTest extends TestCase
         ]);
     }
 
+    public function test_attendance_correction_cannot_be_farmed_by_present_absent_present_toggles(): void
+    {
+        $this->bootRewards();
+        $student = $this->createUserWithRole('student');
+        $admin = $this->createUserWithRole('admin');
+        $service = app(LearningRewardsService::class);
+
+        $first = $service->awardVerifiedActivity((int) $student->id, 'attendance_present', 'attendance_entry', 7001);
+        $this->assertSame(5, $first['points']);
+
+        $service->reverseActivityAward(
+            (int) $student->id,
+            'attendance_present',
+            'attendance_entry',
+            7001,
+            (int) $admin->id,
+            'Attendance was corrected to absent.',
+        );
+
+        // A later present correction must not mint another award for the same attendance row.
+        $second = $service->awardVerifiedActivity((int) $student->id, 'attendance_present', 'attendance_entry', 7001);
+        $this->assertTrue($second['duplicate']);
+        $this->assertSame(5, $second['points']);
+        $this->assertSame(2, DB::table('learning_reward_ledger')->where('user_id', $student->id)->count());
+        $this->assertSame(0, (int) DB::table('learning_reward_ledger')->where('user_id', $student->id)->sum('points'));
+    }
+
     public function test_student_dashboard_and_privacy_aware_branch_leaderboard_work(): void
     {
         $this->bootRewards();
