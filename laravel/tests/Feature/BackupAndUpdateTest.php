@@ -290,6 +290,19 @@ class BackupAndUpdateTest extends TestCase
         $backup = app(BackupService::class)->createEncryptedBackup(null, false);
         $timestamp = now();
 
+        $targetDir = storage_path('framework/testing/update-rollback-' . bin2hex(random_bytes(5)));
+        $targetFile = $targetDir . DIRECTORY_SEPARATOR . 'payload.txt';
+        $snapshotRoot = storage_path('app/update-snapshots');
+        $snapshotDir = $snapshotRoot . DIRECTORY_SEPARATOR . 'rollback-test-' . bin2hex(random_bytes(5));
+        mkdir($targetDir, 0700, true);
+        mkdir($snapshotDir . DIRECTORY_SEPARATOR . 'files', 0700, true);
+        file_put_contents($targetFile, 'new version');
+        file_put_contents($snapshotDir . DIRECTORY_SEPARATOR . 'files' . DIRECTORY_SEPARATOR . 'payload.txt', 'previous version');
+        file_put_contents($snapshotDir . DIRECTORY_SEPARATOR . 'snapshot.json', json_encode([
+            'target_dir' => $targetDir,
+            'entries' => [['path' => 'payload.txt', 'existed' => true]],
+        ], JSON_THROW_ON_ERROR));
+
         $updateId = DB::table('update_logs')->insertGetId([
             'target_type' => 'core',
             'target_slug' => 'aec-lms-core',
@@ -298,7 +311,7 @@ class BackupAndUpdateTest extends TestCase
             'package_checksum' => str_repeat('a', 64),
             'status' => 'applied',
             'backup_reference' => $backup->filename,
-            'notes' => 'rollback history fixture',
+            'notes' => json_encode(['snapshot_path' => $snapshotDir], JSON_THROW_ON_ERROR),
             'executed_by' => null,
             'created_at' => $timestamp,
             'updated_at' => $timestamp,
@@ -315,11 +328,22 @@ class BackupAndUpdateTest extends TestCase
         ]);
 
         try {
-            app(BackupService::class)->restoreEncryptedBackup($backup, null, true);
+            app(UniversalUpdateService::class)->rollbackUpdate(
+                \\App\\Models\\UpdateLog::query()->findOrFail($updateId)
+            );
 
-            $this->assertDatabaseHas('update_logs', ['id' => $updateId, 'status' => 'applied']);
+            $this->assertDatabaseHas('update_logs', ['id' => $updateId, 'status' => 'rolled_back']);
             $this->assertDatabaseHas('audit_logs', ['id' => $auditId, 'action' => 'update.applied']);
+            $this->assertDatabaseHas('audit_logs', [
+                'action' => 'update.rolled_back',
+                'entity_type' => 'core',
+                'entity_id' => 'aec-lms-core',
+            ]);
+            $this->assertSame('previous version', file_get_contents($targetFile));
         } finally {
+            @unlink($targetFile);
+            \\Illuminate\\Support\\Facades\\File::deleteDirectory($targetDir);
+            \\Illuminate\\Support\\Facades\\File::deleteDirectory($snapshotDir);
             @unlink($backup->storage_path);
             $backup->delete();
         }
