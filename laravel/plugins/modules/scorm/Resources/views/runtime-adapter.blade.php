@@ -230,5 +230,6 @@
     };
 
     window.API = api;
+    notifyStatus(@json(__('plugins.scorm::messages.course_loaded')));
 })();
 </script>
