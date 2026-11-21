@@ -7,7 +7,7 @@
   "description": "Standalone assignment publishing, private student submissions, late policies and teacher grading with optional course and branch integration.",
   "core_compatibility": "^2.0",
   "dependencies": [],
-  "optional_dependencies": ["course-management", "student-management", "teacher-management"],
+  "optional_dependencies": ["course-management", "student-management", "teacher-management", "learning-rewards"],
   "provider": "Plugins\\Modules\\AssignmentManagement\\Providers\\AssignmentManagementServiceProvider",
   "permissions": [
     {"slug": "assignments.manage", "name": "Create and manage assignments"},
