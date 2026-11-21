@@ -130,7 +130,7 @@ class TeacherController extends Controller
                 }
             }
             throw $exception;
-        });
+        }
 
         return back()->with('status', "Instructor '{$validated['name']}' added.");
     }
