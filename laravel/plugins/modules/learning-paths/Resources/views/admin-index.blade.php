@@ -22,11 +22,24 @@
             @unless (auth()->user()->hasRole('branch_manager'))
                 <label class="text-sm font-medium">Branch (optional)<select name="branch_id" class="mt-1 w-full rounded-lg border-slate-300"><option value="">All branches</option>@foreach ($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select></label>
             @endunless
-            <label class="text-sm font-medium md:col-span-2">Courses in sequence (Ctrl/Cmd-click to select at least 2)
-                <select name="course_ids[]" multiple required size="7" class="mt-1 w-full rounded-lg border-slate-300">
-                    @foreach ($courses as $course)<option value="{{ $course->id }}">{{ $course->title }} · #{{ $course->id }}</option>@endforeach
-                </select>
-            </label>
+<div class="md:col-span-2" data-learning-path-steps>
+                <p class="mb-2 text-sm font-medium">Course sequence (use ↑ and ↓ to set the order)</p>
+                <div class="space-y-3" data-course-step-list>
+                    @foreach ([1, 2] as $stepNumber)
+                        <div class="flex items-end gap-2" data-course-step>
+                            <label class="flex-1 text-sm">Step {{ $stepNumber }}<select name="course_ids[]" required class="mt-1 w-full rounded-lg border-slate-300"><option value="">Choose a course…</option>@foreach ($courses as $course)<option value="{{ $course->id }}">{{ $course->title }} · #{{ $course->id }}</option>@endforeach</select></label>
+                            <div class="flex gap-1"><button type="button" data-move-up class="rounded border px-2 py-2 text-sm" aria-label="Move step up">↑</button><button type="button" data-move-down class="rounded border px-2 py-2 text-sm" aria-label="Move step down">↓</button><button type="button" data-remove-step class="rounded border px-2 py-2 text-sm" aria-label="Remove step">×</button></div>
+                        </div>
+                    @endforeach
+                </div>
+                <template data-course-step-template>
+                    <div class="flex items-end gap-2" data-course-step>
+                        <label class="flex-1 text-sm">Step <span data-step-number>3</span><select name="course_ids[]" required class="mt-1 w-full rounded-lg border-slate-300"><option value="">Choose a course…</option>@foreach ($courses as $course)<option value="{{ $course->id }}">{{ $course->title }} · #{{ $course->id }}</option>@endforeach</select></label>
+                        <div class="flex gap-1"><button type="button" data-move-up class="rounded border px-2 py-2 text-sm" aria-label="Move step up">↑</button><button type="button" data-move-down class="rounded border px-2 py-2 text-sm" aria-label="Move step down">↓</button><button type="button" data-remove-step class="rounded border px-2 py-2 text-sm" aria-label="Remove step">×</button></div>
+                    </div>
+                </template>
+                <button type="button" data-add-step class="mt-3 rounded-lg border border-indigo-300 px-3 py-2 text-sm font-semibold text-indigo-700">+ Add course step</button>
+            </div>
             <div class="md:col-span-2"><button class="rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white">Create path</button></div>
         </form>
     </section>
@@ -56,11 +69,24 @@
                         @unless (auth()->user()->hasRole('branch_manager'))
                             <label class="text-sm">Branch<select name="branch_id" class="mt-1 w-full rounded-lg border-slate-300"><option value="">All branches</option>@foreach ($branches as $branch)<option value="{{ $branch->id }}" @selected((int) $path->branch_id === (int) $branch->id)>{{ $branch->name }}</option>@endforeach</select></label>
                         @endunless
-                        <label class="text-sm md:col-span-2">Course order (curriculum is locked once a learner joins)
-                            <select name="course_ids[]" multiple required size="6" class="mt-1 w-full rounded-lg border-slate-300">
-                                @foreach ($courses as $course)<option value="{{ $course->id }}" @selected($path->courses->contains(fn($item)=>(int)$item->course_id===(int)$course->id))>{{ $course->title }} · #{{ $course->id }}</option>@endforeach
-                            </select>
-                        </label>
+                        <div class="md:col-span-2" data-learning-path-steps>
+                            <p class="mb-2 text-sm font-medium">Course sequence (curriculum is locked once a learner joins)</p>
+                            <div class="space-y-3" data-course-step-list>
+                                @foreach ($path->courses as $step)
+                                    <div class="flex items-end gap-2" data-course-step>
+                                        <label class="flex-1 text-sm">Step {{ $step->position }}<select name="course_ids[]" required class="mt-1 w-full rounded-lg border-slate-300"><option value="">Choose a course…</option>@foreach ($courses as $course)<option value="{{ $course->id }}" @selected((int) $step->course_id === (int) $course->id)>{{ $course->title }} · #{{ $course->id }}</option>@endforeach</select></label>
+                                        <div class="flex gap-1"><button type="button" data-move-up class="rounded border px-2 py-2 text-sm" aria-label="Move step up">↑</button><button type="button" data-move-down class="rounded border px-2 py-2 text-sm" aria-label="Move step down">↓</button><button type="button" data-remove-step class="rounded border px-2 py-2 text-sm" aria-label="Remove step">×</button></div>
+                                    </div>
+                                @endforeach
+                            </div>
+                            <template data-course-step-template>
+                                <div class="flex items-end gap-2" data-course-step>
+                                    <label class="flex-1 text-sm">Step <span data-step-number>{{ $path->courses->count() + 1 }}</span><select name="course_ids[]" required class="mt-1 w-full rounded-lg border-slate-300"><option value="">Choose a course…</option>@foreach ($courses as $course)<option value="{{ $course->id }}">{{ $course->title }} · #{{ $course->id }}</option>@endforeach</select></label>
+                                    <div class="flex gap-1"><button type="button" data-move-up class="rounded border px-2 py-2 text-sm" aria-label="Move step up">↑</button><button type="button" data-move-down class="rounded border px-2 py-2 text-sm" aria-label="Move step down">↓</button><button type="button" data-remove-step class="rounded border px-2 py-2 text-sm" aria-label="Remove step">×</button></div>
+                                </div>
+                            </template>
+                            <button type="button" data-add-step class="mt-3 rounded-lg border border-indigo-300 px-3 py-2 text-sm font-semibold text-indigo-700">+ Add course step</button>
+                        </div>
                         <div class="md:col-span-2"><button class="rounded-lg border border-indigo-300 px-4 py-2 text-sm font-semibold text-indigo-700">Save changes</button></div>
                     </form>
                 </details>
@@ -71,4 +97,37 @@
         {{ $paths->links() }}
     </section>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-learning-path-steps]').forEach((container) => {
+        const list = container.querySelector('[data-course-step-list]');
+        const template = container.querySelector('[data-course-step-template]');
+        const add = container.querySelector('[data-add-step]');
+        const renumber = () => list.querySelectorAll('[data-course-step]').forEach((row, index) => {
+            const number = row.querySelector('[data-step-number]');
+            if (number) number.textContent = String(index + 1);
+            const label = row.querySelector('label');
+            if (label && !number) label.childNodes[0].textContent = 'Step ' + (index + 1);
+        });
+        add?.addEventListener('click', () => {
+            const fragment = template.content.cloneNode(true);
+            list.appendChild(fragment);
+            renumber();
+        });
+        list.addEventListener('click', (event) => {
+            const row = event.target.closest('[data-course-step]');
+            if (!row) return;
+            if (event.target.closest('[data-move-up]') && row.previousElementSibling) {
+                list.insertBefore(row, row.previousElementSibling);
+            } else if (event.target.closest('[data-move-down]') && row.nextElementSibling) {
+                list.insertBefore(row.nextElementSibling, row);
+            } else if (event.target.closest('[data-remove-step]') && list.querySelectorAll('[data-course-step]').length > 2) {
+                row.remove();
+            }
+            renumber();
+        });
+        renumber();
+    });
+});
+</script>
 @endsection
