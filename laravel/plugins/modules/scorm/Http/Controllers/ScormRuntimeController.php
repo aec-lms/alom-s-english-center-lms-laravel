@@ -259,7 +259,7 @@ class ScormRuntimeController extends Controller
         $headers = [
             'X-Content-Type-Options' => 'nosniff',
             'Referrer-Policy' => 'no-referrer',
-            'Cross-Origin-Resource-Policy' => 'same-origin',
+            'Cross-Origin-Resource-Policy' => 'cross-origin',
             'Content-Security-Policy' => $this->contentSecurityPolicy(),
         ];
         if (in_array(strtolower(pathinfo($target, PATHINFO_EXTENSION)), ['html', 'htm'], true)) {
