@@ -507,10 +507,10 @@ class UniversalPaymentInvoiceSettlementTest extends TestCase
             ]);
 
             try {
-                app(\\Plugins\\Modules\\UniversalPayment\\Services\\StorefrontPaymentGatewayService::class)
+                app(\Plugins\Modules\UniversalPayment\Services\StorefrontPaymentGatewayService::class)
                     ->verifySslcommerz(['tran_id' => $transaction->reference]);
                 $this->fail("A {$status} payment must reject a replayed success callback.");
-            } catch (\\RuntimeException $exception) {
+            } catch (\RuntimeException $exception) {
                 $this->assertSame(
                     'A terminal payment cannot be re-verified or used to restore access.',
                     $exception->getMessage()
