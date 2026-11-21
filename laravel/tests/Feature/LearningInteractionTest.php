@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
+use Plugins\Modules\TeacherManagement\Models\Teacher;
 use Tests\TestCase;
 
 class LearningInteractionTest extends TestCase
