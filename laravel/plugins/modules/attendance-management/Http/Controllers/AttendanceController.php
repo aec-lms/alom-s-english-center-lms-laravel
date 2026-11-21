@@ -17,6 +17,7 @@ use Plugins\Modules\AttendanceManagement\Models\AttendanceEntry;
 use Plugins\Modules\AttendanceManagement\Models\AttendanceRecord;
 use Plugins\Modules\StudentManagement\Models\Student;
 use Plugins\Modules\StudentTracking\Services\StudentActivityTracker;
+use Plugins\Modules\LearningRewards\Services\LearningRewardsService;
 
 class AttendanceController extends Controller
 {
