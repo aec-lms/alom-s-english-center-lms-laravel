@@ -103,7 +103,7 @@ class BackupService
             'created_by' => $actorId,
         ]);
 
-        $this->audit->log('backup.created', 'backup', (string) $record->id, ['filename' => $record->filename], $actorId);
+        $this->audit->logRequired('backup.created', 'backup', (string) $record->id, ['filename' => $record->filename], $actorId);
 
         return $record;
     }
@@ -188,7 +188,7 @@ class BackupService
             @unlink($tempZip);
         }
 
-        $this->audit->log('backup.restored', 'backup', (string) $backup->id, [
+        $this->audit->logRequired('backup.restored', 'backup', (string) $backup->id, [
             'filename' => $backup->filename,
             'backup_format' => $magic === "AECBK02\n" ? 2 : 1,
         ], $actorId);
