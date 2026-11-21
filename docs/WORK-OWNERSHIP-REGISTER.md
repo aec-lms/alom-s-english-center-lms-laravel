@@ -399,3 +399,19 @@ The LMS ruleset was previously observed disabled with zero required approvals/st
 A fresh GitHub search of this repository returned 29 open pull requests. Each was individually fetched and confirmed `draft: false`; no open PR is currently in Draft. This is a visibility/status fact only, not an acceptance or merge claim. Continue doing implementation work directly on the relevant PR branch, keep the PR open and non-Draft, and record exact-head test/review blockers. Do not create a separate Draft PR for follow-up fixes.
 
 The CodeQL action pinning work is canonical in PR #388. Other PRs that still reference mutable action tags may fail CodeQL until the canonical pinning change is integrated; do not create duplicate workflow-pin changes in every feature PR. PR #397 must retain `.github/workflows/codeql.yml`; its accidental deletion was restored in commit `1dab0c76eb1444a6948afcbfbb03ac09e3ffcc02`.
+
+
+## 2026-11-21 continuation — current-mainline PR reconstruction
+
+| PR | Scope | Current status | Dependency / next gate |
+|---|---|---|---|
+| #399 | Teacher assessment grading: persisted teacher account/role/profile, assignment and branch revalidation | Open, Ready for Review; clean current-mainline reconstruction from #345 | Exact-head Laravel/Browser/Composer/CodeQL; CodeQL awaits #388 integration; independent review |
+| #400 | Live-class join/heartbeat: persisted student account/role/profile, enrollment, entitlement and branch locking | Open, Ready for Review; clean current-mainline reconstruction from #344 | Exact-head Laravel/Browser/Composer/CodeQL; CodeQL awaits #388 integration; independent review |
+| #401 | Referral payout concurrency regression suite | Open, Ready for Review; test-only current-mainline reconstruction from #339 | MySQL 8 concurrency suite must pass; exact-head CI and independent review |
+| #345 | Teacher grading security | Closed as superseded by #399; stale branch was 103 commits behind | Do not merge old branch |
+| #344 | Live-class account/profile/branch security | Closed as superseded by #400; stale branch was 103 commits behind | Do not merge old branch |
+| #339 | Referral payout concurrency tests | Closed as superseded by #401; stale branch was 103 commits behind | Do not merge old branch |
+| #388 | Repository-wide CodeQL full-SHA action pinning | Open, Ready for Review; exact-head Browser E2E, Composer, CodeQL and Laravel all passed | Independent formal approval required before integration; unblocks dependent CodeQL jobs |
+| #386 | SCORM 1.2 runtime | Open, Ready for Review; 145 ahead / 3 behind at last comparison | Browser E2E + Composer passed on `badab8a1`; Laravel still running; CodeQL fails on unpinned base workflow until #388 integrates; malicious-SCO browser test present; reviewer approval and cPanel rehearsal pending |
+
+**No-Draft rule:** every open PR is Open and Ready for Review; Draft is not used as a holding state. A Ready PR is not thereby complete or merge-authorized. Merge only after exact-head required CI, resolved review threads, independent approval, current-mainline compatibility and repository merge requirements are satisfied.
