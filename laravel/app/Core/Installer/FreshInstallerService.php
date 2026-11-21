@@ -83,7 +83,7 @@ class FreshInstallerService
      */
     private function persistGeneratedKeys(array $keys): void
     {
-        $envPath = base_path('.env');
+        $envPath = (string) config('lms.env_path', base_path('.env'));
         if (!is_file($envPath) || !is_writable($envPath)) {
             throw new RuntimeException('The Laravel .env file must exist and be writable so fresh encryption keys can be saved securely.');
         }
@@ -196,7 +196,233 @@ class FreshInstallerService
         }
     }
 
+    /**
+     * Atomically record the current installation phase for crash-safe recovery.
+     * The marker is diagnostic state, not proof that the application is installed.
+     */
+    private function writeInstallProgressMarker(string $phase): void
+    {
+        $installLockPath = (string) config('lms.install_lock_path');
+        $progressPath = $installLockPath . '.in-progress';
+        if (is_link($progressPath)) {
+            throw new RuntimeException('The installation progress marker must not be a symbolic link.');
+        }
+
+        $existingStat = @lstat($progressPath);
+        if ($existingStat !== false
+            && ((($existingStat['mode'] & 0170000) !== 0100000) || ($existingStat['nlink'] ?? 1) !== 1)
+        ) {
+            throw new RuntimeException('The installation progress marker must be a private, regular, non-linked file.');
+        }
+
+        $existingPayload = [];
+        if ($existingStat !== false) {
+            $existingContents = file_get_contents($progressPath);
+            $decoded = $existingContents === false ? null : json_decode($existingContents, true);
+            if (is_array($decoded)) {
+                $existingPayload = $decoded;
+            }
+        }
+
+        $payload = json_encode([
+            'started_at' => $existingPayload['started_at'] ?? now()->toIso8601String(),
+            'updated_at' => now()->toIso8601String(),
+            'phase' => $phase,
+            'core_version' => config('lms.core_version'),
+            'process_id' => getmypid(),
+        ], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
+
+        $temporaryPath = tempnam(dirname($progressPath), '.aec-install-progress-');
+        if ($temporaryPath === false) {
+            throw new RuntimeException('Unable to allocate the installation progress marker.');
+        }
+
+        try {
+            if (file_put_contents($temporaryPath, $payload, LOCK_EX) === false) {
+                throw new RuntimeException('Unable to write the installation progress marker.');
+            }
+            @chmod($temporaryPath, 0600);
+            if (!rename($temporaryPath, $progressPath)) {
+                throw new RuntimeException('Unable to atomically update the installation progress marker.');
+            }
+            if (!@chmod($progressPath, 0600)) {
+                throw new RuntimeException('Unable to restrict installation progress marker permissions to its owner.');
+            }
+            $finalStat = @lstat($progressPath);
+            if ($finalStat === false
+                || (($finalStat['mode'] & 0170000) !== 0100000)
+                || ($finalStat['nlink'] ?? 1) !== 1
+                || (($finalStat['mode'] & 0077) !== 0)
+            ) {
+                throw new RuntimeException('The installation progress marker is not a private, regular file.');
+            }
+        } finally {
+            if (is_file($temporaryPath)) {
+                @unlink($temporaryPath);
+            }
+        }
+    }
+
+    /**
+     * A previous attempt may leave committed DDL without the final installed lock.
+     * Resume only when the database is still empty; otherwise fail closed and
+     * require a backed-up/replaced empty database rather than dropping user data.
+     */
+    private function recoverInterruptedInstallIfSafe(): void
+    {
+        $installLockPath = (string) config('lms.install_lock_path');
+        $progressPath = $installLockPath . '.in-progress';
+        if (is_link($progressPath)) {
+            throw new RuntimeException('The installation progress marker must not be a symbolic link.');
+        }
+        if (!file_exists($progressPath)) {
+            return;
+        }
+
+        $progressStat = @lstat($progressPath);
+        if ($progressStat === false
+            || (($progressStat['mode'] & 0170000) !== 0100000)
+            || ($progressStat['nlink'] ?? 1) !== 1
+            || (($progressStat['mode'] & 0077) !== 0)
+        ) {
+            throw new RuntimeException('The installation progress marker must be a private, regular, non-linked file.');
+        }
+
+        $contents = file_get_contents($progressPath);
+        if ($contents === false) {
+            throw new RuntimeException('Unable to read the interrupted installation progress marker.');
+        }
+        $progress = json_decode($contents, true);
+        $phase = is_array($progress) ? (string) ($progress['phase'] ?? 'unknown') : 'unknown';
+
+        $pdo = DB::connection()->getPdo();
+        try {
+            $this->assertFreshEmptyDatabase(
+                $pdo,
+                (string) DB::connection()->getDatabaseName(),
+                DB::connection()->getDriverName()
+            );
+        } catch (RuntimeException $exception) {
+            throw new RuntimeException(
+                "A previous fresh installation was interrupted during phase '{$phase}', and this database now contains tables. "
+                . 'The installer will not drop or truncate existing data. Back up this database, provision or restore a completely empty database, then retry installation.',
+                0,
+                $exception
+            );
+        }
+
+        if (!@unlink($progressPath)) {
+            throw new RuntimeException('The previous installation marker could not be cleared from the empty database; retry is unsafe.');
+        }
+    }
+
+    /**
+     * Serialize fresh installation across PHP workers on the same filesystem.
+     *
+     * flock() is released by the operating system when a worker exits or crashes,
+     * so the persistent mutex inode is safe to reuse and cannot become a stale lock.
+     */
     public function installFresh(array $config): array
+    {
+        $installLockPath = trim((string) config('lms.install_lock_path'));
+        if ($installLockPath === '') {
+            throw new RuntimeException('The installer lock path is not configured.');
+        }
+
+        $lockDirectory = dirname($installLockPath);
+        if (is_link($lockDirectory)) {
+            throw new RuntimeException('The installation lock directory must not be a symbolic link.');
+        }
+        if (!is_dir($lockDirectory) && !mkdir($lockDirectory, 0750, true) && !is_dir($lockDirectory)) {
+            throw new RuntimeException('Unable to create the installation lock directory.');
+        }
+
+        // Resolve the directory after creation: a symlink in any path component
+        // must not silently redirect the mutex to an attacker-controlled location.
+        $realLockDirectory = realpath($lockDirectory);
+        if ($realLockDirectory === false || $realLockDirectory !== rtrim($lockDirectory, DIRECTORY_SEPARATOR)) {
+            throw new RuntimeException('The installation lock directory path must resolve without symbolic-link redirection.');
+        }
+        $lockDirectoryStat = @stat($realLockDirectory);
+        if ($lockDirectoryStat === false
+            || (($lockDirectoryStat['mode'] & 0170000) !== 0040000)
+            || (($lockDirectoryStat['mode'] & 0022) !== 0)
+        ) {
+            throw new RuntimeException('The installation lock directory must not be writable by group or other users.');
+        }
+
+        $mutexPath = $installLockPath . '.mutex';
+        if (is_link($mutexPath)) {
+            throw new RuntimeException('The installation mutex must not be a symbolic link.');
+        }
+
+        $mutex = @fopen($mutexPath, 'c');
+        if ($mutex === false) {
+            throw new RuntimeException('Unable to open the installation mutex.');
+        }
+
+        try {
+            // Verify the opened inode still matches the path and is a private regular
+            // file. This also rejects hard-linked mutex files and symlink swap races.
+            $openedStat = fstat($mutex);
+            $pathStat = @lstat($mutexPath);
+            if ($openedStat === false
+                || $pathStat === false
+                || (($openedStat['mode'] & 0170000) !== 0100000)
+                || (($pathStat['mode'] & 0170000) !== 0100000)
+                || $openedStat['dev'] !== $pathStat['dev']
+                || $openedStat['ino'] !== $pathStat['ino']
+                || ($openedStat['nlink'] ?? 1) !== 1
+            ) {
+                throw new RuntimeException('The installation mutex must be a private, regular, non-linked file.');
+            }
+
+            if (!@chmod($mutexPath, 0600)) {
+                throw new RuntimeException('Unable to restrict installation mutex permissions to its owner.');
+            }
+            $securedMutexStat = fstat($mutex);
+            if ($securedMutexStat === false || (($securedMutexStat['mode'] & 0077) !== 0)) {
+                throw new RuntimeException('The installation mutex must be accessible only by its owner.');
+            }
+            if (!flock($mutex, LOCK_EX)) {
+                throw new RuntimeException('Unable to acquire the exclusive installation mutex.');
+            }
+
+            // Revalidate both the path and directory after acquiring the lock. This
+            // closes the window where an attacker swaps the mutex path while this
+            // worker is blocked in flock().
+            $lockedStat = fstat($mutex);
+            $currentPathStat = @lstat($mutexPath);
+            $currentLockDirectory = realpath($lockDirectory);
+            if ($lockedStat === false
+                || $currentPathStat === false
+                || (($lockedStat['mode'] & 0170000) !== 0100000)
+                || (($currentPathStat['mode'] & 0170000) !== 0100000)
+                || $lockedStat['dev'] !== $currentPathStat['dev']
+                || $lockedStat['ino'] !== $currentPathStat['ino']
+                || ($lockedStat['nlink'] ?? 1) !== 1
+                || $currentLockDirectory === false
+                || $currentLockDirectory !== $realLockDirectory
+            ) {
+                throw new RuntimeException('The installation mutex or lock directory changed while acquiring the lock.');
+            }
+
+            // Another worker may have completed installation while this worker waited.
+            if ($this->isInstalled()) {
+                throw new RuntimeException('AEC LMS is already installed and locked.');
+            }
+
+            $this->recoverInterruptedInstallIfSafe();
+            return $this->performInstallFresh($config);
+        } finally {
+            if (is_resource($mutex)) {
+                @flock($mutex, LOCK_UN);
+                fclose($mutex);
+            }
+        }
+    }
+
+    private function performInstallFresh(array $config): array
     {
         if ($this->isInstalled()) {
             throw new RuntimeException('AEC LMS is already installed and locked.');
@@ -250,6 +476,7 @@ class FreshInstallerService
         $dbName = (string) DB::connection()->getDatabaseName();
 
         $this->assertFreshEmptyDatabase($pdo, $dbName, $driver);
+        $this->writeInstallProgressMarker('preparing');
 
         $this->preparePrivateStorageDirectories();
 
@@ -268,7 +495,9 @@ class FreshInstallerService
         ]);
         config(['app.timezone' => $timezone, 'app.locale' => $locale]);
 
+        $this->writeInstallProgressMarker('migrations');
         $this->callArtisanOrFail('migrate', ['--force' => true], 'Core database migrations');
+        $this->writeInstallProgressMarker('seeding_and_admin_creation');
 
         $admin = DB::transaction(function () use ($adminName, $adminEmail, $adminPassword, $appName, $appUrl, $countryCode, $locale, $timezone, $currency): User {
             $this->callArtisanOrFail('db:seed', ['--class' => CoreRolesAndPermissionsSeeder::class, '--force' => true], 'Core roles and permissions seeding');
@@ -297,6 +526,8 @@ class FreshInstallerService
 
             return $admin;
         });
+
+        $this->writeInstallProgressMarker('writing_installed_marker');
 
         $lockPayload = json_encode([
             'installed_at' => now()->toIso8601String(),
@@ -328,6 +559,10 @@ class FreshInstallerService
                 @unlink($temporaryLockPath);
             }
         }
+
+        // The installed marker is authoritative. Remove the diagnostic progress
+        // marker only after the final marker is atomically in place.
+        @unlink($lockPath . '.in-progress');
 
         $this->audit->log('core.installed', 'system', 'fresh_install', ['legacy_records_imported' => false], $admin->id);
 

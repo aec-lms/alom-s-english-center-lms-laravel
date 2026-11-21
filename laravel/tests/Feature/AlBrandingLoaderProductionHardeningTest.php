@@ -84,6 +84,21 @@ final class AlBrandingLoaderProductionHardeningTest extends TestCase
         }
     }
 
+    public function test_loader_settings_migration_rollback_never_drops_persisted_configuration(): void
+    {
+        $migrationPath = base_path('plugins/modules/al-branding-loader/Database/Migrations/2026_11_18_000001_create_alom_english_center_loader_settings.php');
+        $migration = file_get_contents($migrationPath);
+
+        $this->assertIsString($migration);
+        $this->assertMatchesRegularExpression('/public function down\\(\\): void\\s*\\{(?<body>.*?)\\n\\s*\\}/s', $migration);
+        preg_match('/public function down\\(\\): void\\s*\\{(?<body>.*?)\\n\\s*\\}/s', $migration, $matches);
+
+        $this->assertArrayHasKey('body', $matches);
+        $this->assertStringNotContainsString('Schema::drop', $matches['body']);
+        $this->assertStringNotContainsString('dropIfExists', $matches['body']);
+        $this->assertStringContainsString('rollback must preserve the table and its configuration', $matches['body']);
+    }
+
     public function test_model_never_renders_when_disabled(): void
     {
         $setting = new LoaderSetting(['enabled' => false]);
