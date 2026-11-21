@@ -69,6 +69,23 @@ class LearningRewardsController extends Controller
             ->havingRaw('SUM(ledger.points) > 0')
             ->orderByDesc('points')
             ->orderBy('users.name')
+            ->when(
+                app(PluginManager::class)->isEnabled('student-management') && Schema::hasTable('students'),
+                function ($q): void {
+                    $q->whereExists(function ($students): void {
+                        $students->selectRaw('1')
+                            ->from('students')
+                            ->whereColumn('students.user_id', 'users.id');
+                        if (Schema::hasColumn('students', 'status')) {
+                            $students->where('students.status', 'active');
+                        }
+                        if (Schema::hasColumn('students', 'deleted_at')) {
+                            $students->whereNull('students.deleted_at');
+                        }
+                    });
+                },
+                fn ($q) => $q->whereRaw('1 = 0')
+            )
             ->paginate(25)
             ->withQueryString();
 
