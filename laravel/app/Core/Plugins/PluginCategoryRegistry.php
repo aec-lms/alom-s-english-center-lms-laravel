@@ -31,7 +31,7 @@ final class PluginCategoryRegistry
             'assignment-management', 'attendance-management', 'batch-management',
             'board-question-solver', 'certificate-management', 'class-management',
             'course-assessments', 'course-content-studio', 'course-management',
-            'course-wishlist', 'exam-management', 'learn-and-earn', 'learning-rewards',
+            'course-wishlist', 'exam-management', 'learn-and-earn',
             'library-management', 'phonetics', 'question-bank', 'quiz-contest',
         ],
         'student-lifecycle' => [

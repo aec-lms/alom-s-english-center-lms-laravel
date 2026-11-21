@@ -1,8 +1,8 @@
 # Plugin Feature Acceptance Matrix
 
-Inventory checkpoint: `main` at `f288815876bdded6fac862d93c3d9362c43b7c58` (2026-11-21); this PR branch adds `learning-rewards` as manifest 61.
+Inventory checkpoint: `main` at `73722f154e5e3361de15320c9b3a9b3f68c71e7d` (2026-11-20).
 
-The current `main` contains **60 plugin manifests** under `laravel/plugins/modules`; this PR branch contains **61** after adding `learning-rewards`. The 60-slug count was established at `db493c6525f110cd4815024f7a8965c1da8baa22` and revalidated through the mainline delta: three existing manifest files changed, with no plugin manifest path added or removed. Regenerate the tree inventory before accepting a later commit. The data-provider suite `AllPluginsIndependentAcceptanceTest` discovers manifests dynamically, so new modules are included without maintaining a hard-coded slug list.
+The current repository contains **60 plugin manifests** under `laravel/plugins/modules`. The 60-slug count was established at `db493c6525f110cd4815024f7a8965c1da8baa22` and revalidated through the mainline delta: three existing manifest files changed, with no plugin manifest path added or removed. Regenerate the tree inventory before accepting a later commit. The data-provider suite `AllPluginsIndependentAcceptanceTest` discovers manifests dynamically, so new modules are included without maintaining a hard-coded slug list.
 
 This matrix describes automated coverage that exists in the repository. It is a coverage map, not a claim that every third-party integration or production environment has been accepted.
 
@@ -94,7 +94,6 @@ The following rows close the missing-slug gap identified in issue #300. They doc
 | quiz-contest | `QuizContestPluginTest` | Targeted: standalone contest, one submission, answer-key privacy, branch isolation, ranking and lifecycle locking |
 | referral-income | `ReferralIncomePluginTest`, `ReferralIncomeCommerceSettlementTest`, `ReferralIncomeRedTeamHardeningTest`, `CourseCommercePaymentSettlementTest` | Targeted: attribution/commission idempotency, verified course-payment settlement gate, partial refund reversals, payout controls and branch isolation. First-paid-order attribution is serialized per buyer in the current service; remaining Issue #301 acceptance gaps are MySQL 8 two-connection payout/refund race tests, explicit over-refund/source-mismatch cases, fractional rounding and payout-committed recovery. |
 | support-center | `SupportCenterPluginTest` | Targeted: standalone install, ticket ownership, student replies, closed-ticket protection and admin workflow |
-| learning-rewards | `LearningRewardsPluginTest`, `CourseContentStudioPluginTest`, `AssignmentManagementPluginTest`, `AttendanceRegisterWorkflowTest`, `CourseAssessmentsPluginTest` | Targeted: non-cash XP ledger, daily caps/idempotency, streaks, reversals, privacy-aware leaderboard and verified lesson/assignment/attendance/auto-graded assessment adapters. Manual-grading integration deferred under PR #345 ownership; external load/staging not covered. |
 
 ## Verification boundaries
 

@@ -15,7 +15,6 @@ use Illuminate\View\View;
 use Plugins\Modules\CourseContentStudio\Models\CourseContentPost;
 use Plugins\Modules\CourseContentStudio\Models\CourseContentProgress;
 use Plugins\Modules\CourseContentStudio\Models\CourseCurriculumItem;
-use Plugins\Modules\LearningRewards\Services\LearningRewardsService;
 
 class CourseContentLearningController extends Controller
 {
@@ -84,34 +83,7 @@ class CourseContentLearningController extends Controller
         $content=CourseContentPost::published()->where('slug',$post)->firstOrFail();
         $item=CourseCurriculumItem::query()->where('course_id',$courseRow->id)->where('course_content_post_id',$content->id)->where('is_active',true)->firstOrFail();
         abort_if($item->is_preview,403,'Preview lessons do not count toward completion.');
-        DB::transaction(function () use ($student, $item): void {
-            $lockedStudent = DB::table('users')->where('id', $student->id)->lockForUpdate()->first();
-            abort_unless($lockedStudent, 404);
-            $progress = CourseContentProgress::query()
-                ->where('user_id', $student->id)
-                ->where('course_curriculum_item_id', $item->id)
-                ->lockForUpdate()
-                ->first();
-
-            $wasCompleted = $progress?->completed_at !== null;
-            $progress ??= new CourseContentProgress([
-                'user_id' => $student->id,
-                'course_curriculum_item_id' => $item->id,
-            ]);
-            $progress->last_viewed_at = now();
-            $progress->completed_at = now();
-            $progress->save();
-
-            if (!$wasCompleted && app(PluginManager::class)->isEnabled('learning-rewards')) {
-                app(LearningRewardsService::class)->awardVerifiedActivity(
-                    (int) $student->id,
-                    'lesson_completed',
-                    'course_lesson',
-                    (int) $item->id,
-                );
-            }
-        });
-
+        CourseContentProgress::query()->updateOrCreate(['user_id'=>$student->id,'course_curriculum_item_id'=>$item->id],['last_viewed_at'=>now(),'completed_at'=>now()]);
         return back()->with('status','Lesson marked as complete.');
     }
 
