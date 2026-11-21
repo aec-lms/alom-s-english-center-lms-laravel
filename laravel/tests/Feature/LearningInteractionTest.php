@@ -114,6 +114,47 @@ class LearningInteractionTest extends TestCase
         ]);
     }
 
+    public function test_assigned_instructor_can_open_live_class_control_room(): void
+    {
+        [, $courseId] = $this->createCourseLesson('active');
+        $teacher = $this->createUserWithRole('teacher');
+        $liveClassId = $this->createLiveClass($courseId, $teacher->name);
+
+        $this->actingAs($teacher)
+            ->get(route('plugins.live-classes.instructor', $liveClassId))
+            ->assertOk()
+            ->assertSee('Instructor Live Control')
+            ->assertSee('Student Questions');
+    }
+
+    public function test_only_assigned_instructor_can_publish_pinned_live_announcements(): void
+    {
+        [, $courseId] = $this->createCourseLesson('active');
+        $teacher = $this->createUserWithRole('teacher');
+        $otherTeacher = $this->createUserWithRole('teacher');
+        $liveClassId = $this->createLiveClass($courseId, $teacher->name);
+        $route = route('plugins.learning-interactions.live.announcements.store', $liveClassId);
+
+        $this->actingAs($otherTeacher)
+            ->postJson($route, ['body' => 'Please review the homework before class.'])
+            ->assertForbidden();
+
+        $response = $this->actingAs($teacher)
+            ->postJson($route, ['body' => 'Please review the homework before class.'])
+            ->assertCreated()
+            ->assertJsonPath('message', 'Instructor announcement published.');
+
+        $this->assertDatabaseHas('live_class_discussions', [
+            'id' => $response->json('announcement_id'),
+            'live_class_id' => $liveClassId,
+            'user_id' => $teacher->id,
+            'parent_id' => null,
+            'body' => 'Please review the homework before class.',
+            'status' => 'visible',
+            'is_pinned' => true,
+        ]);
+    }
+
     public function test_course_access_uses_current_student_profile_branch_for_global_courses(): void
     {
         $this->activatePlugins(['branch-management', 'student-management', 'course-management']);
