@@ -143,6 +143,85 @@ class ExamAttemptEligibilityLockTest extends TestCase
         $this->assertFalse($unchanged->passed);
     }
 
+    public function test_exam_listing_and_history_fail_closed_for_ineligible_or_conflicting_student_profiles(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'student-management', 'exam-management']);
+
+        $branchA = Branch::query()->create([
+            'code' => 'READ-ACCESS-A-' . strtoupper(bin2hex(random_bytes(3))),
+            'name' => 'Read Access Branch A',
+            'is_active' => true,
+        ]);
+        $branchB = Branch::query()->create([
+            'code' => 'READ-ACCESS-B-' . strtoupper(bin2hex(random_bytes(3))),
+            'name' => 'Read Access Branch B',
+            'is_active' => true,
+        ]);
+
+        $student = $this->createUserWithRole('student', (int) $branchA->id);
+        Student::query()->create([
+            'user_id' => $student->id,
+            'branch_id' => $branchB->id,
+            'student_code' => 'READ-ACCESS-' . strtoupper(bin2hex(random_bytes(4))),
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+        ]);
+        [$exam] = $this->createSnapshotFixture();
+        DB::table('exams')->where('id', $exam->id)->update(['branch_id' => $branchA->id]);
+
+        $controller = app(ExamController::class);
+        $assertReadDenied = function () use ($controller, $student, $exam): void {
+            $this->assertControllerAbort(
+                403,
+                fn () => $controller->apiIndex(
+                    $this->studentRequest('GET', '/api/v1/my/exams', $student, [], true)
+                )
+            );
+            $this->assertControllerAbort(
+                403,
+                fn () => $controller->history(
+                    $this->studentRequest('GET', '/exams/' . $exam->id . '/attempts', $student),
+                    $exam->fresh()
+                )
+            );
+        };
+
+        // Neither read path may choose the profile branch over a conflicting
+        // account branch and expose exams or grades from either identity.
+        $assertReadDenied();
+
+        DB::table('students')->where('user_id', $student->id)->update([
+            'branch_id' => $branchA->id,
+            'status' => 'inactive',
+        ]);
+        $assertReadDenied();
+
+        DB::table('students')->where('user_id', $student->id)->update([
+            'status' => 'active',
+            'deleted_at' => now(),
+        ]);
+        $assertReadDenied();
+
+        // Read paths must re-check persisted authorization even when the
+        // authenticated model has a cached Student role relation.
+        DB::table('students')->where('user_id', $student->id)->update([
+            'deleted_at' => null,
+        ]);
+        $student->load('roles');
+        $studentRoleId = DB::table('roles')->where('slug', 'student')->value('id');
+        $this->assertNotNull($studentRoleId);
+        DB::table('role_user')->where('user_id', $student->id)->where('role_id', $studentRoleId)->delete();
+        $assertReadDenied();
+
+        DB::table('role_user')->where('user_id', $student->id)->where('role_id', $studentRoleId)->insert([
+            'user_id' => $student->id,
+            'role_id' => $studentRoleId,
+        ]);
+        DB::table('users')->where('id', $student->id)->update(['is_active' => false]);
+        $assertReadDenied();
+    }
+
     public function test_api_submit_rechecks_student_branch_after_route_preflight(): void
     {
         $this->markSystemInstalled();
