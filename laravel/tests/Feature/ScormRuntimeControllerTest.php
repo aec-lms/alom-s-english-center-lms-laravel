@@ -106,18 +106,23 @@ class ScormRuntimeControllerTest extends TestCase
         $this->assertSame('in_progress', $attempt->completion_state);
         $this->assertSame(1, DB::table('scorm_attempt_sessions')->where('scorm_attempt_id', $attempt->id)->count());
 
+        $this->assertSame('lms.example.test', parse_url($playerUrl, PHP_URL_HOST));
         $player = $this->get($playerUrl);
-        $player->assertOk()->assertSee('window.API')->assertSee('LMSCommit')
-            ->assertSee('element.match(/^cmi\\.interactions\\.\\d+\\.(.+)$/)')
-            ->assertSee("if (field === 'time') return /^\\d{8}T\\d{6}(?:\\.\\d{1,2})?$/");
+        $player->assertOk()
+            ->assertSee('id="scorm-sco"')
+            ->assertSee('sandbox="allow-scripts allow-same-origin"');
 
         $contentUrl = route('plugins.scorm.content.file', [
             'attempt' => $attempt->id,
             'token' => $token,
             'path' => 'index.html',
         ]);
+        $this->assertSame('scorm.example.test', parse_url($contentUrl, PHP_URL_HOST));
         $contentResponse = $this->get($contentUrl);
-        $contentResponse->assertOk()->assertHeader('X-Content-Type-Options', 'nosniff');
+        $contentResponse->assertOk()->assertSee('window.API')->assertSee('LMSCommit')
+            ->assertSee('element.match(/^cmi\\.interactions\\.\\d+\\.(.+)$/)')
+            ->assertSee("if (field === 'time') return /^\\d{8}T\\d{6}(?:\\.\\d{1,2})?$/")
+            ->assertHeader('X-Content-Type-Options', 'nosniff');
         $cacheControl = strtolower((string) $contentResponse->headers->get('Cache-Control'));
         $this->assertStringContainsString('private', $cacheControl);
         $this->assertStringContainsString('no-store', $cacheControl);
