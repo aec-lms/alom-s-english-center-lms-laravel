@@ -4,26 +4,29 @@
 
 SCORM packages are uploaded HTML/JavaScript and must not execute in the authenticated LMS origin. The plugin serves the player and package files from a separate origin and uses a short-lived, attempt-scoped token to save runtime state back to the LMS.
 
-1. Create a dedicated HTTPS subdomain such as `scorm-content.example.com` in cPanel.
-2. Point its document root to the same Laravel `public/` directory as the LMS so the Laravel routes can resolve the content-host requests.
-3. Issue and enable a valid TLS certificate for that subdomain.
-4. Set `SCORM_CONTENT_ORIGIN=https://scorm-content.example.com` in the LMS environment and clear/rebuild Laravel configuration cache.
-5. Keep the Laravel session cookie host-only. Do not set `SESSION_DOMAIN=.example.com` or any parent domain that would send the LMS session cookie to the SCORM content host. The launch route deliberately refuses a shared session-cookie domain.
-6. Ensure the web server routes requests for the content subdomain through Laravel's `public/index.php`; do not expose `storage/app/scorm-packages` as a public alias or static directory.
+1. Create **two** dedicated HTTPS subdomains, for example `scorm-player.example.com` and `scorm-content.example.com`, in cPanel. They must both differ from the LMS host and from each other.
+2. Point both document roots to the Laravel `public/` directory so their domain routes resolve through Laravel. Do not add public aliases or static mappings for `storage/app/scorm-packages`.
+3. Issue and enable separate valid TLS certificates for both subdomains.
+4. Set `SCORM_PLAYER_ORIGIN=https://scorm-player.example.com` and `SCORM_CONTENT_ORIGIN=https://scorm-content.example.com` in the LMS environment, then clear/rebuild Laravel configuration cache.
+5. Keep the Laravel session cookie host-only. Do not set `SESSION_DOMAIN=.example.com` or any parent domain. The launch route rejects either isolated subdomain when it could receive the LMS session cookie.
+6. Ensure requests for both subdomains are routed through Laravel's `public/index.php`.
 
-The content origin must be different from the LMS origin and must use HTTPS whenever the LMS uses HTTPS. The runtime API accepts requests only from the exact configured origin and does not allow credentialed CORS.
+All three hosts—LMS, player and content—must be distinct. Both isolated origins must use HTTPS when the LMS uses HTTPS. The runtime API accepts requests only from the exact configured **player origin**; it does not use credentialed CORS.
 
 ## Player and SCO origin separation
 
-The trusted player shell is served from the normal LMS application origin. Only uploaded SCORM package files are served from `SCORM_CONTENT_ORIGIN`. The LMS player embeds each SCO in a cross-origin sandboxed iframe; the SCORM 1.2 adapter is injected into HTML package responses and runs inside the SCO origin. It sends attempt-scoped, versioned runtime commits to the LMS API using exact-origin CORS.
+The trusted player shell is served from `SCORM_PLAYER_ORIGIN`, separate from both the authenticated LMS and untrusted SCO content. Uploaded package files are served from `SCORM_CONTENT_ORIGIN`. The trusted player embeds each SCO in a cross-origin iframe with `sandbox="allow-scripts"` and deliberately omits `allow-same-origin`, giving the SCO an opaque origin. The SCORM 1.2 adapter runs in the SCO frame but never receives the attempt token. It communicates with the trusted player through a narrow `postMessage` bridge; only the player can send authenticated, attempt-scoped, versioned commits to the LMS API.
 
-- Keep `/scorm-player/{attempt}/{token}` on the LMS application host; do not proxy it onto the content host.
-- Keep `/scorm-content/{attempt}/{token}/{path}` on the dedicated content host.
-- The player-to-SCO iframe must remain cross-origin. Do not add a same-origin alias or wildcard cookie domain.
+- Keep `/scorm-player/{attempt}/{token}` on the dedicated player host, not the LMS or content host.
+- The player bootstraps `/scorm-bootstrap/{attempt}/{token}/{path}` on the content host. That one-time route exchanges the path token for short-lived, attempt-scoped, host-only `HttpOnly` cookies and redirects to a clean `/scorm-content/{attempt}/{path}` URL. The token is not present in the final SCO URL or injected adapter.
+- Keep `/scorm-content/{attempt}/{path}` on the dedicated content host. Do not create a same-origin alias, wildcard cookie domain, or static public package directory.
+- The outer LMS page embeds the trusted player. The player's inner SCO iframe must remain sandboxed with only `allow-scripts`; never add `allow-same-origin`, `allow-top-navigation`, `allow-forms`, or pop-up privileges.
+- The bridge validates the exact child `WindowProxy`, opaque `null` origin, message type, attempt identity, per-launch nonce, method allow-list, request ID, payload schema and size. The server separately validates the token hash, attempt/session state, entitlement and monotonic version under row locks. Arbitrary messages from any other frame/window are ignored.
+- The player keeps the short-lived token in its own trusted origin and sends runtime commits with `credentials: omit` over exact-origin CORS. The SCO has no token, no LMS DOM access, no player DOM access and no capability to remove its sandbox.
 - HTML SCO documents are limited to 10 MiB for runtime-adapter injection. Larger HTML entry documents are rejected rather than served without the SCORM API.
-- The trusted player uses a restrictive CSP that permits frames only from `SCORM_CONTENT_ORIGIN`. Untrusted SCO responses use a separate CSP: runtime `connect-src` is limited to the LMS origin, and arbitrary HTTPS script, image, media, font, frame and form egress is blocked to prevent attempt-token or learner-data exfiltration. Packages that depend on remote assets must vendor those assets into the ZIP.
-- The SCO response uses `frame-ancestors` to allow only the LMS player and `Cross-Origin-Resource-Policy: cross-origin` so the cross-origin frame can load. Runtime API CORS still permits only the exact configured content origin.
-- The attempt-scoped token is included only in the trusted LMS player’s dedicated content URL and the isolated SCO runtime request path; it is never exposed to the learner’s LMS session cookie or any unrelated origin. The player shell does not expose a `window.API` object to package code.
+- The trusted player CSP permits frames only from `SCORM_CONTENT_ORIGIN` and API connections only to the LMS. Untrusted SCO responses use a separate CSP with `connect-src 'self'`; cross-origin runtime messages are the only bridge to the LMS. Arbitrary remote script/image/media/font/frame/form egress is blocked to prevent token or learner-data exfiltration. Packages that depend on remote assets must vendor those assets into the ZIP.
+- SCO responses use `frame-ancestors SCORM_PLAYER_ORIGIN` and `Cross-Origin-Resource-Policy: cross-origin`. Runtime API CORS permits only `SCORM_PLAYER_ORIGIN`.
+- The content host receives only the scoped, attempt-specific HttpOnly cookie created by the bootstrap endpoint. The LMS session cookie is never shared with either isolated host.
 
 ## Import limits and package safety
 
