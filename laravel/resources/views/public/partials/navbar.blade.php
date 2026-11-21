@@ -13,7 +13,7 @@
         && app(\App\Core\Plugins\PluginManager::class)->isEnabled('course-management')
         && Route::has('learning-paths.catalog')) {
         $navLinks[] = [
-            'label' => 'Learning Paths',
+            'label' => __('Learning Paths'),
             'url' => route('learning-paths.catalog'),
             'active' => request()->routeIs('learning-paths.catalog', 'learning-paths.show'),
             'external' => false,
@@ -24,7 +24,7 @@
         && app(\App\Core\Plugins\PluginManager::class)->isEnabled('course-management')
         && Route::has('learning-paths.mine')) {
         $navLinks[] = [
-            'label' => 'My Learning Paths',
+            'label' => __('My Learning Paths'),
             'url' => route('learning-paths.mine'),
             'active' => request()->routeIs('learning-paths.mine'),
             'external' => false,
@@ -143,7 +143,7 @@
                 href="{{ $item['url'] }}" @if (!empty($item['external'])) target="_blank" rel="noopener noreferrer" @endif
                 class="block px-3 py-2.5 rounded-lg text-sm font-medium transition-colors {{ $item['active'] ? 'bg-[#EEF2FF] text-[#0284C7] font-semibold' : 'text-slate-600 hover:bg-slate-50 hover:text-[#0284C7]' }}"
             >
-                {{ $item['label'] }}
+                {{ __($item['label']) }}
             </a>
         @endforeach
         <div class="px-3 pt-3">@include('public.partials.language-switcher')</div>
