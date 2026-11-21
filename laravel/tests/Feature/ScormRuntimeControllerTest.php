@@ -17,7 +17,8 @@ class ScormRuntimeControllerTest extends TestCase
         URL::forceRootUrl('https://lms.example.test');
         config([
             'app.url' => 'https://lms.example.test',
-            'scorm.content_origin' => 'https://scorm.example.test',
+            'scorm.player_origin' => 'https://scorm-player.example.test',
+            'scorm.content_origin' => 'https://scorm-content.example.test',
             'scorm.launch_ttl_minutes' => 240,
             'session.domain' => null,
         ]);
@@ -107,39 +108,57 @@ class ScormRuntimeControllerTest extends TestCase
         $this->assertNotNull($attempt);
         $this->assertSame('in_progress', $attempt->completion_state);
         $this->assertSame(1, DB::table('scorm_attempt_sessions')->where('scorm_attempt_id', $attempt->id)->count());
+        $this->assertSame('scorm-player.example.test', parse_url($playerUrl, PHP_URL_HOST));
 
-        $this->assertSame('lms.example.test', parse_url($playerUrl, PHP_URL_HOST));
         $player = $this->get($playerUrl);
         $player->assertOk()
             ->assertSee('id="scorm-sco"')
-            ->assertSee('sandbox="allow-scripts allow-same-origin"');
+            ->assertSee('sandbox="allow-scripts"')
+            ->assertDontSee($token);
         $playerPolicy = (string) $player->headers->get('Content-Security-Policy');
-        $this->assertStringContainsString('frame-src https://scorm.example.test', $playerPolicy);
+        $this->assertStringContainsString('frame-src https://scorm-content.example.test', $playerPolicy);
+        $this->assertStringContainsString('frame-ancestors https://lms.example.test', $playerPolicy);
         $this->assertStringNotContainsString('https:;', $playerPolicy);
 
-        $contentUrl = route('plugins.scorm.content.file', [
-            'attempt' => $attempt->id,
-            'token' => $token,
-            'path' => 'index.html',
-        ]);
-        $this->assertSame('scorm.example.test', parse_url($contentUrl, PHP_URL_HOST));
-        $player->assertSee($contentUrl);
-        $contentResponse = $this->get($contentUrl);
+        $bootstrapUrl = (string) $player->viewData('launchUrl');
+        $this->assertSame('scorm-content.example.test', parse_url($bootstrapUrl, PHP_URL_HOST));
+        $this->assertStringContainsString('/scorm-bootstrap/' . $attempt->id . '/' . $token . '/', $bootstrapUrl);
+
+        $bootstrap = $this->get($bootstrapUrl);
+        $bootstrap->assertRedirect();
+        $cleanContentUrl = (string) $bootstrap->headers->get('Location');
+        $this->assertSame('scorm-content.example.test', parse_url($cleanContentUrl, PHP_URL_HOST));
+        $this->assertStringContainsString('/scorm-content/' . $attempt->id . '/index.html', $cleanContentUrl);
+        $this->assertStringNotContainsString($token, $cleanContentUrl);
+
+        $cookie = collect($bootstrap->headers->getCookies())->first(
+            fn ($candidate) => $candidate->getName() === 'aec_scorm_' . $attempt->id
+        );
+        $this->assertNotNull($cookie);
+        $this->assertTrue($cookie->isHttpOnly());
+        $this->assertSame('/scorm-content/' . $attempt->id . '/', $cookie->getPath());
+        $this->assertSame('none', strtolower((string) $cookie->getSameSite()));
+
+        $contentResponse = $this->withCookie($cookie->getName(), $cookie->getValue())->get($cleanContentUrl);
         $contentResponse->assertOk()->assertSee('window.API')->assertSee('LMSCommit')
+            ->assertDontSee($token)
+            ->assertSee('postMessage')
+            ->assertSee('bridge_nonce')
             ->assertHeaderMissing('Set-Cookie')
             ->assertHeader('Cross-Origin-Resource-Policy', 'cross-origin')
             ->assertSee('element.match(/^cmi\\.interactions\\.\\d+\\.(.+)$/)')
             ->assertSee("if (field === 'time') return /^\\d{8}T\\d{6}(?:\\.\\d{1,2})?$/")
             ->assertHeader('X-Content-Type-Options', 'nosniff');
         $contentPolicy = (string) $contentResponse->headers->get('Content-Security-Policy');
-        $this->assertStringContainsString("connect-src 'self' https://lms.example.test", $contentPolicy);
+        $this->assertStringContainsString("connect-src 'self'", $contentPolicy);
+        $this->assertStringContainsString('frame-ancestors https://scorm-player.example.test', $contentPolicy);
+        $this->assertStringNotContainsString('https://lms.example.test', $contentPolicy);
         $this->assertStringContainsString("form-action 'none'", $contentPolicy);
-        $this->assertStringNotContainsString('https:;', $contentPolicy);
         $cacheControl = strtolower((string) $contentResponse->headers->get('Cache-Control'));
         $this->assertStringContainsString('private', $cacheControl);
         $this->assertStringContainsString('no-store', $cacheControl);
 
-        $origin = ['HTTP_ORIGIN' => 'https://scorm.example.test', 'CONTENT_TYPE' => 'text/plain'];
+        $origin = ['HTTP_ORIGIN' => 'https://scorm-player.example.test', 'CONTENT_TYPE' => 'text/plain'];
         $firstPayload = $this->commitPayload($attempt->id, $token, 0, [
             'cmi.core.lesson_location' => 'unit-1/page-2',
             'cmi.core.lesson_status' => 'incomplete',
@@ -150,7 +169,7 @@ class ScormRuntimeControllerTest extends TestCase
             'cmi.suspend_data' => 'checkpoint-1',
         ]);
         $first = $this->call('POST', '/api/scorm-runtime/commit', [], [], [], $origin, $firstPayload);
-        $first->assertOk()->assertJsonPath('version', 1)->assertHeader('Access-Control-Allow-Origin', 'https://scorm.example.test');
+        $first->assertOk()->assertJsonPath('version', 1)->assertHeader('Access-Control-Allow-Origin', 'https://scorm-player.example.test');
         $replay = $this->call('POST', '/api/scorm-runtime/commit', [], [], [], $origin, $firstPayload);
         $replay->assertOk()->assertJsonPath('version', 1)->assertJsonPath('replayed', true);
         $this->assertDatabaseHas('scorm_attempts', ['id' => $attempt->id, 'total_time_seconds' => 10]);
@@ -181,7 +200,7 @@ class ScormRuntimeControllerTest extends TestCase
             'total_time_seconds' => 15,
         ]);
 
-        $this->get($contentUrl)->assertOk();
+        $this->withCookie($cookie->getName(), $cookie->getValue())->get($cleanContentUrl)->assertOk();
         $this->call('POST', '/api/scorm-runtime/commit', [], [], [], $origin,
             $this->commitPayload($attempt->id, $token, 2, ['cmi.core.lesson_location' => 'late-write']))
             ->assertStatus(409);
@@ -211,10 +230,10 @@ class ScormRuntimeControllerTest extends TestCase
             'lesson_location' => '',
         ]);
 
-        $trustedOrigin = ['HTTP_ORIGIN' => 'https://scorm.example.test'];
+        $trustedOrigin = ['HTTP_ORIGIN' => 'https://scorm-player.example.test'];
         $this->call('OPTIONS', '/api/scorm-runtime/commit', [], [], [], $trustedOrigin)
             ->assertNoContent()
-            ->assertHeader('Access-Control-Allow-Origin', 'https://scorm.example.test');
+            ->assertHeader('Access-Control-Allow-Origin', 'https://scorm-player.example.test');
 
         File::deleteDirectory($packageRoot);
     }
@@ -225,7 +244,7 @@ class ScormRuntimeControllerTest extends TestCase
         $response = $this->actingAs($student)->get(route('plugins.scorm.launch', $packageId));
         $token = $this->launchTokenFromUrl($response->viewData('playerUrl'));
         $attempt = DB::table('scorm_attempts')->where('scorm_package_id', $packageId)->first();
-        $origin = ['HTTP_ORIGIN' => 'https://scorm.example.test', 'CONTENT_TYPE' => 'text/plain'];
+        $origin = ['HTTP_ORIGIN' => 'https://scorm-player.example.test', 'CONTENT_TYPE' => 'text/plain'];
 
         $this->call('POST', '/api/scorm-runtime/commit', [], [], [], $origin,
             $this->commitPayload($attempt->id, $token, 0, ['cmi.core.lesson_location' => 'newer']))
@@ -249,7 +268,7 @@ class ScormRuntimeControllerTest extends TestCase
 
         DB::table('role_user')->where('user_id', $student->id)->delete();
         $this->call('POST', '/api/scorm-runtime/commit', [], [], [], [
-            'HTTP_ORIGIN' => 'https://scorm.example.test',
+            'HTTP_ORIGIN' => 'https://scorm-player.example.test',
             'CONTENT_TYPE' => 'text/plain',
         ], $this->commitPayload($attempt->id, $token, 0, ['cmi.core.lesson_location' => 'revoked']))
             ->assertStatus(403);
@@ -322,7 +341,6 @@ class ScormRuntimeControllerTest extends TestCase
         $attempt = DB::table('scorm_attempts')->where('scorm_package_id', $packageId)->first();
         $this->get(route('plugins.scorm.content.file', [
             'attempt' => $attempt->id,
-            'token' => str_repeat('0', 64),
             'path' => 'index.html',
         ]))->assertForbidden();
 
