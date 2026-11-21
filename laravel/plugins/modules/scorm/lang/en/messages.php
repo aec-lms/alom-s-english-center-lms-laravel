@@ -23,6 +23,7 @@ return [
     'completed' => 'Completed',
     'active' => 'Active',
     'average_score' => 'Average score',
+    'actions' => 'Actions',
     'status' => 'Status',
     'revision' => 'revision',
     'replaces' => 'Replaces package',
