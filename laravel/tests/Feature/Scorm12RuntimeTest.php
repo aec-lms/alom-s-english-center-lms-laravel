@@ -36,11 +36,14 @@ class Scorm12RuntimeTest extends TestCase
         $this->assertSame('unit-1/page-2', $runtime->getValue('cmi.core.lesson_location'));
         $this->assertSame('true', $runtime->setValue('cmi.core.lesson_status', 'incomplete'));
         $this->assertSame('true', $runtime->setValue('cmi.core.score.raw', '87.5'));
+        $this->assertSame('true', $runtime->setValue('cmi.core.score.min', '-100'));
+        $this->assertSame('true', $runtime->setValue('cmi.core.score.max', '1000'));
+        $this->assertSame('true', $runtime->setValue('cmi.core.score.raw', '875.25'));
         $this->assertSame('true', $runtime->setValue('cmi.suspend_data', 'checkpoint-1'));
 
         $this->assertSame('false', $runtime->setValue('cmi.core.student_id', 'forged-user'));
         $this->assertSame('403', $runtime->getLastError());
-        $this->assertSame('false', $runtime->setValue('cmi.core.score.raw', '999'));
+        $this->assertSame('false', $runtime->setValue('cmi.core.score.raw', 'not-a-number'));
         $this->assertSame('405', $runtime->getLastError());
         $this->assertSame('false', $runtime->setValue('cmi.core.lesson_status', 'approved'));
         $this->assertSame('405', $runtime->getLastError());
