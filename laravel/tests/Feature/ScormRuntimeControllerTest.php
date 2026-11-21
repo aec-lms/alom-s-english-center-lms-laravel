@@ -13,6 +13,7 @@ class ScormRuntimeControllerTest extends TestCase
 {
     private function setupRuntime(): array
     {
+        URL::forceRootUrl('https://lms.example.test');
         config([
             'app.url' => 'https://lms.example.test',
             'scorm.content_origin' => 'https://scorm.example.test',
@@ -106,7 +107,6 @@ class ScormRuntimeControllerTest extends TestCase
         $this->assertSame('in_progress', $attempt->completion_state);
         $this->assertSame(1, DB::table('scorm_attempt_sessions')->where('scorm_attempt_id', $attempt->id)->count());
 
-        $this->assertSame('lms.example.test', parse_url($playerUrl, PHP_URL_HOST));
         $this->assertSame('lms.example.test', parse_url($playerUrl, PHP_URL_HOST));
         $player = $this->get($playerUrl);
         $player->assertOk()
