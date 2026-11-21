@@ -219,11 +219,11 @@ class BackupService
                 }
 
                 $relative = substr($name, strlen('private-files/'));
-                $normalized = str_replace('\\\\', '/', $relative);
+                $normalized = str_replace('\\', '/', $relative);
                 $segments = explode('/', $normalized);
                 if ($relative === ''
                     || str_contains($relative, "\\0")
-                    || str_contains($relative, '\\\\')
+                    || str_contains($relative, '\\')
                     || str_starts_with($normalized, '/')
                     || preg_match('/^[a-zA-Z]:/', $normalized) === 1
                     || in_array('..', $segments, true)
