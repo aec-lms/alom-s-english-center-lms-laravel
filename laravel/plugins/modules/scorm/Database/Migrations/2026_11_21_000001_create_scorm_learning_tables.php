@@ -21,6 +21,7 @@ return new class extends Migration {
                 $table->string('version', 20)->default('1.2');
                 $table->unsignedInteger('revision_number')->default(1);
                 $table->foreignId('replaces_package_id')->nullable()->constrained('scorm_packages')->nullOnDelete();
+                $table->unique(['replaces_package_id', 'revision_number'], 'scorm_package_revision_unique');
                 $table->string('storage_directory', 64)->unique();
                 $table->string('launch_file', 512);
                 $table->string('manifest_file', 512)->default('imsmanifest.xml');
