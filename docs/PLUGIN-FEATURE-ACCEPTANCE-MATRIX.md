@@ -210,3 +210,22 @@ The candidate still has an actionable security blocker: `RefundSettlementService
 | Release / review | #341 has exact-head CI reported green but fresh formal financial/security approval is outstanding; #342 refund workflow is separately pending its own exact-head gates/review and external sandbox. | **BLOCKED** — close actor authorization race, prove complete browser journey, reconcile #341 then #342, obtain independent formal approval and real provider sandbox/live sign-off. |
 
 Do not mark `gateway-sslcommerz` Accepted because a hosted URL can be created or mocked validation passes. Acceptance requires the full integrated session reservation, callback, settlement, refund/reconciliation, user authorization, failure-recovery and real-provider evidence.
+
+
+## Initial implementation audit — `gateway-stripe` (2026-11-21)
+
+**Disposition: BLOCKED — not accepted.** Candidate source inspected on PR #341 branch at `9157c4e1fc2fb4d96b3ae5c3a22211ff30c05772`; refund adapter work is separately proposed in #342.
+
+| Gate | Evidence / result |
+|---|---|
+| Source / architecture | Manifest, provider, controller, service and admin view inspected. Uses Stripe PaymentIntents, Stripe.js PaymentMethod IDs, secret settings and invoice-wide reservation. **PARTIAL:** final refund composition remains pending. |
+| Routes / API | Admin index has auth, permission and central-admin middleware; checkout/return require auth; webhook is public with CSRF exemption and signed payload verification. **PARTIAL:** inactive-account and permission-revocation race coverage is missing. |
+| Permissions / scope | Invoice owner, finance operator and assigned branch manager are checked. **BLOCKED:** authorization is checked before reservation and not revalidated under the invoice lock. Account/permission revocation can race with checkout. See #341 comment **7058353705**. |
+| Database | Uses Payment Management transactions/metadata; #341 adds invoice-wide session reservation and hashed idempotency fingerprints. **PARTIAL:** upgrade/recovery/retention evidence remains. |
+| UI / accessibility | Admin view shows credential state, environment, webhook endpoint and recent transactions. **PARTIAL:** prove Stripe.js checkout, 3DS/action, return/pending states, keyboard/mobile accessibility in Browser E2E. |
+| Tests | FinanceAndPaymentGatewayTest and InvoicePaymentSessionReservationTest cover gateway workflows and reservation replay. **BLOCKED:** no immediate PaymentIntent `succeeded` case. Stripe stores this as local `pending`, but PaymentSettlementService accepts only `initiated` (or already `settled`), so the verified success webhook cannot settle that path. Add signed-webhook and replay tests. See #341 comment **7058366593**. |
+| Integrations | HMAC/timestamp, event type, PaymentIntent ID, transaction reference, amount and currency are checked. **BLOCKED:** real Stripe test-mode webhook and refund sandbox evidence not verified. |
+| Failure handling | Ambiguous provider outcomes are reserved; invalid signatures and mismatches fail closed. **PARTIAL:** verify timeout recovery, repeated/late events, monitoring and safe errors. |
+| Release / review | #341 CI was previously reported green; independent approval and #342 refund integration remain. **BLOCKED:** fix the two findings, rerun exact integrated checks and obtain formal approval/provider evidence. |
+
+Do not accept `gateway-stripe` until the immediate-success state transition, actor authorization race, complete browser/3DS journey, refund lifecycle and real provider evidence pass on the final integrated head.
