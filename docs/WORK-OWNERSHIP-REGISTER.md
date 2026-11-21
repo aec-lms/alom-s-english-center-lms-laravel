@@ -183,3 +183,12 @@ Before recommending merge, the primary owner must verify and record all of the f
 - Spoken English Practice integration: existing Issue [#289]; do not duplicate the plugin or Phonetics workflows.
 - Plugin functional acceptance: Issue [#300] remains open; 60 manifest rows exist, but per-plugin acceptance depth and external evidence remain incomplete.
 - External release acceptance: Issue [#14] remains a release blocker for real cPanel staging, restore/rollback, provider sandbox callbacks and authorized live-class capacity validation.
+
+
+### 2026-11-21 — SCORM 1.2 implementation ownership
+
+| Task / scope | Primary owner | Supporting / reviewer | Status | Issue / PR | Branch / head SHA | Ownership boundary / next action |
+|---|---|---|---|---|---|---|
+| Secure SCORM 1.2 package import, isolated learner runtime, attempt persistence and course entitlement checks | `Alomsenglishcenter` | `md-lalchand` offered bounded independent security review | In Progress / CI pending | [#379](https://github.com/aec-lms/alom-s-english-center-lms-laravel/issues/379) · PR to be opened from this branch | `feat/scorm-12-course-runtime` · `feeaaed125d87fe86d6eade8823cd8b564c0b6f3` | SCORM plugin owns only `laravel/plugins/modules/scorm/**`, its config and SCORM-specific tests/docs. Course Management remains the owner of enrollment/course completion contracts; no Core or sibling-plugin ownership is transferred. Next: open PR, exact-head SQLite/MySQL/Browser/Security/package CI, request the offered independent review, and resolve all acceptance gaps. |
+
+The SCORM issue owner confirmed in #379 that no parallel implementation should be created. The existing branch is the canonical implementation. The independent reviewer offered a bounded review of ZIP central-directory/extraction safety, XML parsing, launch authorization, attempt ownership, replay/concurrency and package replacement. The SCORM PR must link this review request and keep #379 open until every acceptance gate is evidenced.
