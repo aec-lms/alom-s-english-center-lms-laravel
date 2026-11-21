@@ -18,7 +18,7 @@ class LearningPathAccess
      */
     public function resolveStudentBranch(int $userId): ?int
     {
-        $account = DB::table('users')->where('id', $userId)->first();
+        $account = DB::table('users')->where('id', $userId)->lockForUpdate()->first();
         abort_unless($account, 403, 'Student account is unavailable.');
         if (Schema::hasColumn('users', 'is_active')) {
             abort_unless((bool) $account->is_active, 403, 'Student account is inactive.');
@@ -36,7 +36,7 @@ class LearningPathAccess
             if (Schema::hasColumn('students', 'deleted_at')) {
                 $profileQuery->whereNull('deleted_at');
             }
-            $profile = $profileQuery->first();
+            $profile = $profileQuery->lockForUpdate()->first();
             abort_unless($profile, 403, 'An active student profile is required for learning-path access.');
             if (Schema::hasColumn('students', 'status')) {
                 abort_unless($profile->status === 'active', 403, 'Student profile is inactive.');
