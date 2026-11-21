@@ -102,6 +102,7 @@ class FreshInstallerTest extends TestCase
 
             $this->assertSame(['admin_id', 'lock_path'], array_keys($result));
             $this->assertFileExists($this->tempLockPath);
+            $this->assertFileExists($this->tempLockPath . '.mutex', 'The OS-managed installer mutex must be created for serialized installs.');
             $this->assertDirectoryExists($privatePath);
             $this->assertTrue(is_writable($privatePath));
             $this->assertTrue(app(FreshInstallerService::class)->isInstalled());
