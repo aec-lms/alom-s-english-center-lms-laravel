@@ -303,7 +303,7 @@ class BackupService
             }
 
             return $stagingDir;
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             // A rejected archive may fail after earlier members were already staged.
             // Remove that partial tree so repeated restore attempts cannot fill storage.
             $this->deleteDirectoryTree($stagingDir);
