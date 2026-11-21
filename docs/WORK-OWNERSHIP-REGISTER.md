@@ -239,6 +239,7 @@ Old branches #345, #344, #339, #332 and #354 are closed as superseded by the cor
 | #405 | Invoice-wide payment-session reservation across PayPal, SSLCOMMERZ and Stripe | Open, Ready for Review; 9 ahead / 0 behind at initial CI | Exact-head Laravel/MySQL, Browser, Composer, CodeQL; #388 integration; independent finance/security approval |
 | #406 | Immutable exam attempt snapshots and serialized eligibility | Open, Ready for Review; 15 ahead / 0 behind | Exact-head Laravel/SQLite/MySQL and Browser; resolve any snapshot/eligibility failures; #388 integration; independent exam/security approval |
 | #409 | Provider-confirmed refund orchestration and ledger settlement | Open, Ready for Review; 24 ahead / 0 behind | Exact-head CI, MySQL refund concurrency, provider sandbox evidence and independent finance/security approval |
+| #411 | Flash Sale premium campaign + direct enrollment/unified commerce quote integration | Open, Ready for Review; 19 ahead / 0 behind at creation | Exact-head Laravel, Browser, Composer, CodeQL; #335 acceptance; independent security/commerce review and cPanel rehearsal |
 | #341 | Invoice payment session reservation | Closed; superseded by #405 | Do not merge stale branch |
 | #343 | Exam attempt snapshots | Closed; superseded by #406 | Do not merge stale branch |
 | #342 | Provider refund lifecycle | Closed; superseded by #409 | Do not merge stale branch |
