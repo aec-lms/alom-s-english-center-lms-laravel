@@ -606,4 +606,107 @@ final class CourseTeacherAssignmentSecurityTest extends TestCase
         $this->actingAs($teacher)->get('/dashboard')->assertForbidden();
     }
 
+    public function test_mysql_course_assignment_holds_permission_grant_until_commit_and_rejects_after_revocation(): void
+    {
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            $this->markTestSkipped('Course permission revocation serialization requires MySQL 8.');
+        }
+
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management', 'teacher-management', 'branch-management']);
+        $manager = $this->createUserWithRole('branch_manager');
+        $branchId = DB::table('branches')->insertGetId([
+            'code' => 'COURSE-PERMISSION-RACE',
+            'name' => 'Course Permission Race Branch',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $manager->forceFill(['branch_id' => $branchId])->save();
+
+        $roleId = (int) DB::table('roles')->where('slug', 'branch_manager')->value('id');
+        $permissionId = (int) DB::table('permissions')->where('slug', 'courses.manage')->value('id');
+        $this->assertGreaterThan(0, $roleId);
+        $this->assertGreaterThan(0, $permissionId);
+        DB::table('permission_role')->insertOrIgnore([
+            'role_id' => $roleId,
+            'permission_id' => $permissionId,
+        ]);
+
+        $teacher = $this->createUserWithRole('teacher');
+        $teacher->forceFill(['branch_id' => $branchId])->save();
+        $this->createTeacherProfile($teacher)->forceFill(['branch_id' => $branchId])->save();
+
+        $courses = [];
+        foreach (['PERMISSION-RACE-1', 'PERMISSION-RACE-2'] as $index => $code) {
+            $courses[] = Course::query()->create([
+                'code' => $code,
+                'title' => 'Permission Race Course ' . ($index + 1),
+                'slug' => strtolower($code),
+                'price' => 0,
+                'status' => 'draft',
+                'branch_id' => $branchId,
+            ]);
+        }
+
+        $default = DB::getDefaultConnection();
+        $secondaryName = 'course_permission_race_' . bin2hex(random_bytes(3));
+        config(['database.connections.' . $secondaryName => config('database.connections.' . $default)]);
+        DB::purge($secondaryName);
+        $primary = DB::connection($default);
+        $secondary = DB::connection($secondaryName);
+        $secondary->statement('SET SESSION innodb_lock_wait_timeout = 1');
+
+        $primary->beginTransaction();
+        try {
+            $this->actingAs($manager)->post('/admin/courses/teacher-assignments', [
+                'course_id' => $courses[0]->id,
+                'teacher_user_id' => $teacher->id,
+            ])->assertRedirect()->assertSessionHasNoErrors();
+
+            $secondary->beginTransaction();
+            try {
+                $secondary->table('permission_role')
+                    ->where('role_id', $roleId)
+                    ->where('permission_id', $permissionId)
+                    ->delete();
+                $this->fail('Permission revocation must wait while assignment holds the permission grant lock.');
+            } catch (QueryException $exception) {
+                $this->assertSame(1205, (int) ($exception->errorInfo[1] ?? 0), $exception->getMessage());
+            } finally {
+                if ($secondary->transactionLevel() > 0) {
+                    $secondary->rollBack();
+                }
+            }
+
+            $primary->commit();
+
+            $secondary->table('permission_role')
+                ->where('role_id', $roleId)
+                ->where('permission_id', $permissionId)
+                ->delete();
+
+            $this->actingAs($manager)->post('/admin/courses/teacher-assignments', [
+                'course_id' => $courses[1]->id,
+                'teacher_user_id' => $teacher->id,
+            ])->assertForbidden();
+
+            $this->assertDatabaseHas('course_teacher_assignments', [
+                'course_id' => $courses[0]->id,
+                'teacher_user_id' => $teacher->id,
+            ]);
+            $this->assertDatabaseMissing('course_teacher_assignments', [
+                'course_id' => $courses[1]->id,
+                'teacher_user_id' => $teacher->id,
+            ]);
+        } catch (\Throwable $exception) {
+            if ($primary->transactionLevel() > 0) {
+                $primary->rollBack();
+            }
+            throw $exception;
+        } finally {
+            DB::purge($secondaryName);
+        }
+    }
+
 }
