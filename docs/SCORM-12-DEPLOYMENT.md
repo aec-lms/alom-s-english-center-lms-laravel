@@ -2,7 +2,7 @@
 
 ## Separate content origin is mandatory
 
-SCORM packages are uploaded HTML/JavaScript and must not execute in the authenticated LMS origin. The plugin serves the player and package files from a separate origin and uses a short-lived, attempt-scoped token to save runtime state back to the LMS.
+SCORM packages are uploaded HTML/JavaScript and must not execute in the authenticated LMS origin. The trusted player shell is served from the LMS application origin; only untrusted SCO/package files are served from the dedicated content origin. The SCORM 1.2 API adapter is injected into the SCO document and communicates with the LMS runtime over a narrowly scoped, attempt-bound request.
 
 1. Create a dedicated HTTPS subdomain such as `scorm-content.example.com` in cPanel.
 2. Point its document root to the same Laravel `public/` directory as the LMS so the Laravel routes can resolve the content-host requests.
@@ -11,7 +11,7 @@ SCORM packages are uploaded HTML/JavaScript and must not execute in the authenti
 5. Keep the Laravel session cookie host-only. Do not set `SESSION_DOMAIN=.example.com` or any parent domain that would send the LMS session cookie to the SCORM content host. The launch route deliberately refuses a shared session-cookie domain.
 6. Ensure the web server routes requests for the content subdomain through Laravel's `public/index.php`; do not expose `storage/app/scorm-packages` as a public alias or static directory.
 
-The content origin must be different from the LMS origin and must use HTTPS whenever the LMS uses HTTPS. The runtime API accepts requests only from the exact configured origin and does not allow credentialed CORS.
+The content origin must be different from the LMS/player origin and must use HTTPS whenever the LMS uses HTTPS. The player shell route remains on APP_URL; only the package-file route is bound to SCORM_CONTENT_ORIGIN. The runtime API accepts requests only from the exact configured content origin and does not allow credentialed CORS. The SCO iframe is sandboxed; because the SCO and trusted player are cross-origin, the SCO cannot inspect the player DOM or its parent window. The attempt token is available only inside that attempt's SCO document and is never placed in the LMS page's DOM.
 
 ## Import limits and package safety
 
