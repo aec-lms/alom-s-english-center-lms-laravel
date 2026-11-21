@@ -305,6 +305,33 @@ class CourseCommercePaymentSettlementTest extends TestCase
         $this->assertDatabaseHas('fee_invoices', ['id' => $voucher->invoice_id, 'status' => 'paid']);
     }
 
+    public function test_all_terminal_payment_states_reject_course_commerce_settlement(): void
+    {
+        $student = $this->createUserWithRole('student');
+        $terminalStatuses = ['failed', 'cancelled', 'refunded', 'reversed', 'rejected', 'chargeback'];
+
+        foreach ($terminalStatuses as $index => $status) {
+            $transaction = $this->transaction($student->id, 500, ['purpose' => 'course_cart']);
+            $transaction->update(['status' => $status]);
+
+            try {
+                app(CourseCommercePaymentSettlementService::class)->settle(
+                    $transaction->fresh(),
+                    'BANK-TERMINAL-' . $index,
+                    ['validation_status' => 'VALID']
+                );
+                $this->fail("A {$status} course-commerce payment must never be settled again.");
+            } catch (\\RuntimeException $exception) {
+                $this->assertSame('A terminal course-commerce payment cannot be settled again.', $exception->getMessage());
+            }
+
+            $this->assertDatabaseHas('universal_payment_transactions', [
+                'id' => $transaction->id,
+                'status' => $status,
+            ]);
+        }
+    }
+
     public function test_late_callback_cannot_resettle_a_refunded_course_cart_transaction(): void
     {
         $student = $this->createUserWithRole('student');
