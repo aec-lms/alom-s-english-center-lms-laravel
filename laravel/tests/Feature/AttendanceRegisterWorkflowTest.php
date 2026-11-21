@@ -103,6 +103,23 @@ class AttendanceRegisterWorkflowTest extends TestCase
             'source_type' => 'reward_reversal',
             'points' => -5,
         ]);
+
+        // Re-marking the same attendance row as present must not mint a
+        // second award after its original award has already been reversed.
+        $payload['records'][0]['status'] = 'present';
+        $payload['records'][0]['edit_reason'] = 'Teacher restored the original status';
+        $this->actingAs($admin)->post('/admin/attendance', $payload)->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame(1, DB::table('learning_reward_ledger')
+            ->where('user_id', $studentUser->id)
+            ->where('activity_key', 'attendance_present')
+            ->where('points', 5)
+            ->count());
+        $this->assertSame(1, DB::table('learning_reward_ledger')
+            ->where('user_id', $studentUser->id)
+            ->where('activity_key', 'reversal')
+            ->where('points', -5)
+            ->count());
+        $this->assertSame(0, (int) DB::table('learning_reward_ledger')->where('user_id', $studentUser->id)->sum('points'));
     }
 
     public function test_offline_sync_is_idempotent_and_records_offline_source(): void
