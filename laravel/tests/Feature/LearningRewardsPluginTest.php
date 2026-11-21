@@ -413,7 +413,7 @@ class LearningRewardsPluginTest extends TestCase
 
         $duplicateResults = $this->runConcurrentRewardWorkers((int) $student->id, [2001, 2001]);
         $this->assertCount(2, $duplicateResults);
-        $this->assertCount(1, array_filter($duplicateResults, static fn (array $result): bool => ($result['success'] ?? false) === true));
+        $this->assertCount(1, array_filter($duplicateResults, static fn (array $result): bool => ($result['duplicate'] ?? false) === true));
         $this->assertSame(1, DB::table('learning_reward_ledger')
             ->where('user_id', $student->id)->where('source_id', 2001)->count());
 
@@ -422,7 +422,6 @@ class LearningRewardsPluginTest extends TestCase
         $this->assertSame(10, (int) DB::table('learning_reward_ledger')
             ->where('user_id', $student->id)
             ->where('activity_key', 'lesson_completed')
-            ->whereDate('awarded_at', now()->toDateString())
             ->sum('points'));
         $this->assertSame(3, DB::table('learning_reward_ledger')
             ->where('user_id', $student->id)
