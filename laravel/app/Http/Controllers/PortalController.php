@@ -146,45 +146,40 @@ class PortalController extends Controller
             ];
         } elseif ($role === 'teacher') {
             $teacher = Schema::hasTable('teachers')
-                ? DB::table('teachers')->where('user_id', $user->id)->first()
+                ? DB::table('teachers')->where('user_id', $user->id)
+                    ->when(Schema::hasColumn('teachers', 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'))
+                    ->first()
                 : null;
-            if (Schema::hasTable('courses')) {
-                $hasTeacherAssignmentTable = Schema::hasTable('course_teacher_assignments');
-                $assignedCourseIds = $hasTeacherAssignmentTable
-                    ? DB::table('course_teacher_assignments')
-                        ->where('teacher_user_id', $user->id)
-                        ->pluck('course_id')
-                    : collect();
+            $assignedCourseIds = Schema::hasTable('course_teacher_assignments')
+                ? DB::table('course_teacher_assignments')
+                    ->where('teacher_user_id', $user->id)
+                    ->pluck('course_id')
+                    ->filter()
+                    ->unique()
+                    ->values()
+                : collect();
 
+            if ($assignedCourseIds->isNotEmpty() && Schema::hasTable('courses')) {
                 $courses = DB::table('courses')
-                    ->where(function ($query) use ($user, $assignedCourseIds, $hasTeacherAssignmentTable): void {
-                        if ($hasTeacherAssignmentTable) {
-                            $query->whereIn('id', $assignedCourseIds)
-                                ->orWhere(function ($legacy) use ($user): void {
-                                    // Keep legacy name-based assignments only when the course
-                                    // has no normalized teacher assignment.
-                                    $legacy->where('instructor_name', $user->name)
-                                        ->whereNotExists(function ($assignment): void {
-                                            $assignment->selectRaw('1')
-                                                ->from('course_teacher_assignments')
-                                                ->whereColumn('course_teacher_assignments.course_id', 'courses.id');
-                                        });
-                                });
-                        } else {
-                            $query->where('instructor_name', $user->name);
-                        }
-                    })
-                    ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
-                    ->orderBy('title')->get();
+                    ->whereIn('id', $assignedCourseIds)
+                    ->when($branchId !== null, fn ($query) => $query->where('branch_id', $branchId))
+                    ->orderBy('title')
+                    ->get();
             }
-            if (Schema::hasTable('live_classes')) {
+
+            if (Schema::hasTable('live_classes') && Schema::hasTable('course_teacher_assignments')) {
                 $liveClasses = DB::table('live_classes')
                     ->join('courses', 'live_classes.course_id', '=', 'courses.id')
-                    ->where('live_classes.instructor_name', $user->name)
-                    ->when($branchId !== null, fn ($q) => $q->where('courses.branch_id', $branchId))
+                    ->join('course_teacher_assignments', 'course_teacher_assignments.course_id', '=', 'courses.id')
+                    ->where('course_teacher_assignments.teacher_user_id', $user->id)
+                    ->when($branchId !== null, fn ($query) => $query->where('courses.branch_id', $branchId))
                     ->select('live_classes.*')
-                    ->orderBy('live_classes.starts_at')->limit(20)->get();
+                    ->distinct()
+                    ->orderBy('live_classes.starts_at')
+                    ->limit(20)
+                    ->get();
             }
+
             $activeStudents = $courses->isNotEmpty() && Schema::hasTable('enrollments')
                 ? (int) DB::table('enrollments')
                     ->whereIn('course_id', $courses->pluck('id'))
