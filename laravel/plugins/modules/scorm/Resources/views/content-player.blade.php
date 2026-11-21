@@ -19,7 +19,7 @@
 <div class="player">
     <header class="player__header">
         <h1 class="player__title">{{ $title }}</h1>
-        <span id="runtime-status" class="player__status" role="status" aria-live="polite">Ready</span>
+        <span id="runtime-status" class="player__status" role="status" aria-live="polite">{{ __('plugins.scorm::messages.ready') }}</span>
     </header>
     <iframe
         id="scorm-sco"
@@ -150,11 +150,11 @@
             stateVersion = response.version;
             pendingRequest = null;
             lastError = '0';
-            document.getElementById('runtime-status').textContent = wasFinish ? 'Saved' : 'Progress saved';
+            document.getElementById('runtime-status').textContent = wasFinish ? @json(__('plugins.scorm::messages.saved')) : @json(__('plugins.scorm::messages.progress_saved'));
             return { ok: true, dataSnapshot, wasFinish };
         } catch (error) {
             lastError = '101';
-            document.getElementById('runtime-status').textContent = 'Connection error — progress may not be saved';
+            document.getElementById('runtime-status').textContent = @json(__('plugins.scorm::messages.connection_error'));
             return { ok: false };
         }
     }
@@ -258,7 +258,7 @@
     window.API = api;
     window.addEventListener('message', event => {
         if (event.source === document.getElementById('scorm-sco').contentWindow && event.data === 'scorm:ready') {
-            document.getElementById('runtime-status').textContent = 'Course loaded';
+            document.getElementById('runtime-status').textContent = @json(__('plugins.scorm::messages.course_loaded'));
         }
     });
 })();
