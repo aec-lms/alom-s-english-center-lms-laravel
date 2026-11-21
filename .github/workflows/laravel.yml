@@ -188,6 +188,8 @@ jobs:
       QUEUE_CONNECTION: sync
       MAIL_MAILER: array
       AEC_TEST_EXPLICIT_PLUGIN_BOOT: "1"
+      AEC_TEST_MYSQL_ADMIN_USERNAME: root
+      AEC_TEST_MYSQL_ADMIN_PASSWORD: root
     defaults:
       run:
         working-directory: laravel
