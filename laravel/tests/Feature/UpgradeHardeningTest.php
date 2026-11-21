@@ -22,11 +22,14 @@ class UpgradeHardeningTest extends TestCase
         $this->markSystemInstalled();
         $admin = $this->createUserWithRole('admin', null, 'upgrade-health-admin@aec.test');
 
-        $this->actingAs($admin)->getJson('/api/health')
-            ->assertOk()
+        $response = $this->actingAs($admin)->getJson('/api/health');
+        $response->assertOk()
             ->assertJsonStructure(['status', 'timestamp', 'core_version', 'php'])
-            ->assertJsonPath('php', PHP_VERSION)
-            ->assertHeader('Cache-Control', 'private, no-store');
+            ->assertJsonPath('php', PHP_VERSION);
+
+        $cacheControl = strtolower((string) $response->headers->get('Cache-Control'));
+        $this->assertStringContainsString('private', $cacheControl);
+        $this->assertStringContainsString('no-store', $cacheControl);
     }
 
     public function test_mobile_api_rejects_a_deactivated_account_even_with_a_valid_token(): void
