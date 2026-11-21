@@ -612,22 +612,26 @@ class ScormRuntimeController extends Controller
             : null;
         $profileBranchId = null;
 
-        if (app(PluginManager::class)->isEnabled('student-management')
-            && Schema::hasTable('students')
-            && Schema::hasColumn('students', 'branch_id')) {
+        if (app(PluginManager::class)->isEnabled('student-management')) {
+            abort_unless(
+                Schema::hasTable('students') && Schema::hasColumn('students', 'user_id'),
+                503,
+                'Student profile authorization storage is unavailable.'
+            );
             $profileQuery = DB::table('students')->where('user_id', (int) $user->id);
             if ($lockProfile) {
                 $profileQuery->lockForUpdate();
             }
             $profile = $profileQuery->first();
+            abort_unless($profile !== null, 403, 'An active Student profile is required for SCORM access.');
 
-            if ($profile !== null) {
-                if (Schema::hasColumn('students', 'deleted_at')) {
-                    abort_unless($profile->deleted_at === null, 403, 'Student profile is no longer active.');
-                }
-                if (Schema::hasColumn('students', 'status')) {
-                    abort_unless($profile->status === 'active', 403, 'Student profile is inactive.');
-                }
+            if (Schema::hasColumn('students', 'deleted_at')) {
+                abort_unless($profile->deleted_at === null, 403, 'Student profile is no longer active.');
+            }
+            if (Schema::hasColumn('students', 'status')) {
+                abort_unless($profile->status === 'active', 403, 'Student profile is inactive.');
+            }
+            if (Schema::hasColumn('students', 'branch_id')) {
                 $profileBranchId = $profile->branch_id !== null ? (int) $profile->branch_id : null;
             }
         }

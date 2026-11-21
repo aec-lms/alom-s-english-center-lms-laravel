@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\URL;
 use Plugins\Modules\BranchManagement\Models\Branch;
@@ -452,6 +453,38 @@ class ScormRuntimeControllerTest extends TestCase
         DB::table('users')->where('id', $student->id)->update(['is_active' => false]);
         $this->actingAs($student)->get(route('plugins.scorm.launch', $packageId))->assertForbidden();
         File::deleteDirectory($packageRoot);
+    }
+
+
+    public function test_student_management_requires_an_active_student_profile_for_scorm_launch(): void
+    {
+        [$student, $courseId, $enrollmentId, $packageId] = $this->setupRuntime();
+        $this->activatePlugins(['student-management']);
+
+        $this->actingAs($student)
+            ->get(route('plugins.scorm.launch', $packageId))
+            ->assertForbidden();
+
+        $this->assertDatabaseMissing('scorm_attempts', [
+            'user_id' => $student->id,
+            'scorm_package_id' => $packageId,
+        ]);
+    }
+
+    public function test_scorm_fails_closed_when_student_profile_storage_is_missing(): void
+    {
+        [$student, $courseId, $enrollmentId, $packageId] = $this->setupRuntime();
+        $this->activatePlugins(['student-management']);
+        Schema::dropIfExists('students');
+
+        $this->actingAs($student)
+            ->get(route('plugins.scorm.launch', $packageId))
+            ->assertStatus(503);
+
+        $this->assertDatabaseMissing('scorm_attempts', [
+            'user_id' => $student->id,
+            'scorm_package_id' => $packageId,
+        ]);
     }
 
 }
