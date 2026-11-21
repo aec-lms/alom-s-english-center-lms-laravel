@@ -9,6 +9,25 @@
             'external' => false,
         ];
     }
+    if (app(\App\Core\Plugins\PluginManager::class)->isEnabled('learning-paths')
+        && Route::has('learning-paths.catalog')) {
+        $navLinks[] = [
+            'label' => 'Learning Paths',
+            'url' => route('learning-paths.catalog'),
+            'active' => request()->routeIs('learning-paths.catalog', 'learning-paths.show'),
+            'external' => false,
+        ];
+    }
+    if (auth()->check() && auth()->user()->hasRole('student')
+        && app(\App\Core\Plugins\PluginManager::class)->isEnabled('learning-paths')
+        && Route::has('learning-paths.mine')) {
+        $navLinks[] = [
+            'label' => 'My Learning Paths',
+            'url' => route('learning-paths.mine'),
+            'active' => request()->routeIs('learning-paths.mine'),
+            'external' => false,
+        ];
+    }
     if (auth()->check() && auth()->user()->hasRole('student')
         && app(\App\Core\Plugins\PluginManager::class)->isEnabled('course-wishlist')
         && app(\App\Core\Plugins\PluginManager::class)->isEnabled('course-management')
