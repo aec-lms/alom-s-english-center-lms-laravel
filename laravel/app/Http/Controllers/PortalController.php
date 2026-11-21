@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Core\Plugins\PluginManager;
+use App\Core\Security\BranchAccess;
 use Illuminate\Http\Request;
 use Plugins\Modules\RoleAiAssistant\Services\AiAssistantService;
 use Illuminate\Http\RedirectResponse;
@@ -25,7 +26,10 @@ class PortalController extends Controller
 
         $role = collect(['student', 'teacher', 'guardian', 'branch_manager', 'accountant'])
             ->first(fn (string $candidate) => $user->hasRole($candidate)) ?? 'user';
-        $branchId = $user->branch_id;
+        $branchAccess = app(BranchAccess::class);
+        $branchId = $role === 'branch_manager'
+            ? $branchAccess->assignedBranchId($user)
+            : $branchAccess->contextBranchId($user);
         $boardQuestionSolverAvailable = false;
         if ($role === 'student') {
             $pluginManager = app(PluginManager::class);

@@ -13,6 +13,7 @@ use RuntimeException;
 
 class StorefrontPaymentGatewayService
 {
+    private const TERMINAL_PAYMENT_STATUSES = ['failed', 'cancelled', 'refunded', 'reversed', 'rejected', 'chargeback'];
     public function __construct(private readonly PluginManager $plugins) {}
 
     public function initiateSslcommerz(UniversalPaymentTransaction $transaction, object $item, object $user, string $payerContact, array $context = []): string
@@ -97,6 +98,9 @@ class StorefrontPaymentGatewayService
             ->firstOrFail();
 
         if ($transaction->status === 'verified') return $transaction;
+        if (in_array($transaction->status, self::TERMINAL_PAYMENT_STATUSES, true)) {
+            throw new RuntimeException('A terminal payment cannot be re-verified or used to restore access.');
+        }
 
         $storeId = (string) $this->plugins->getSetting('gateway-sslcommerz', 'store_id', '');
         $storePassword = (string) $this->plugins->getSetting('gateway-sslcommerz', 'store_password', '');
@@ -180,6 +184,9 @@ class StorefrontPaymentGatewayService
         return DB::transaction(function () use ($transaction, $externalReference, $providerDetails): UniversalPaymentTransaction {
             $locked = UniversalPaymentTransaction::query()->whereKey($transaction->id)->lockForUpdate()->firstOrFail();
             if ($locked->status === 'verified') return $locked;
+            if (in_array($locked->status, self::TERMINAL_PAYMENT_STATUSES, true)) {
+                throw new RuntimeException('A terminal payment cannot be re-verified or used to restore access.');
+            }
 
             if (!$locked->learn_earn_exam_id || !$locked->user_id) {
                 throw new RuntimeException('This payment is not linked to a registered paid-exam student.');
@@ -246,6 +253,9 @@ class StorefrontPaymentGatewayService
         return DB::transaction(function () use ($transaction, $externalReference, $providerDetails): UniversalPaymentTransaction {
             $locked = UniversalPaymentTransaction::query()->whereKey($transaction->id)->lockForUpdate()->firstOrFail();
             if ($locked->status === 'verified') return $locked;
+            if (in_array($locked->status, self::TERMINAL_PAYMENT_STATUSES, true)) {
+                throw new RuntimeException('A terminal payment cannot be re-verified or used to restore access.');
+            }
 
             if (!$locked->storefront_item_id || !$locked->user_id) {
                 throw new RuntimeException('This payment is not linked to a registered e-book buyer.');

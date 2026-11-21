@@ -39,6 +39,77 @@ class BranchContextIsolationTest extends TestCase
     }
 
 
+    public function test_teacher_portal_uses_current_teacher_profile_branch_not_stale_user_branch(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'teacher-management', 'course-management']);
+
+        $branchA = DB::table('branches')->insertGetId([
+            'code' => 'PORTAL-TEACH-A-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'name' => 'Teacher Account Branch',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $branchB = DB::table('branches')->insertGetId([
+            'code' => 'PORTAL-TEACH-B-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'name' => 'Teacher Profile Branch',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $teacher = $this->createUserWithRole('teacher', (int) $branchA);
+        DB::table('teachers')->insert([
+            'user_id' => $teacher->id,
+            'branch_id' => $branchB,
+            'employee_code' => 'PORTAL-TEACH-' . strtoupper(substr(bin2hex(random_bytes(4)), 0, 8)),
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $courseA = Course::query()->create([
+            'branch_id' => $branchA,
+            'code' => 'PORTAL-COURSE-A-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'title' => 'Stale Account Branch Course',
+            'slug' => 'stale-account-branch-' . uniqid(),
+            'instructor_name' => $teacher->name,
+            'price' => 0,
+            'status' => 'published',
+        ]);
+        $courseB = Course::query()->create([
+            'branch_id' => $branchB,
+            'code' => 'PORTAL-COURSE-B-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'title' => 'Current Teacher Profile Course',
+            'slug' => 'current-teacher-profile-' . uniqid(),
+            'instructor_name' => $teacher->name,
+            'price' => 0,
+            'status' => 'published',
+        ]);
+
+        foreach ([[$courseA, 'Stale Account Branch Live Class'], [$courseB, 'Current Profile Branch Live Class']] as [$course, $title]) {
+            DB::table('live_classes')->insert([
+                'course_id' => $course->id,
+                'title' => $title,
+                'instructor_name' => $teacher->name,
+                'platform' => 'zoom',
+                'meeting_url' => 'https://example.test/' . $course->slug,
+                'recording_url' => null,
+                'starts_at' => now()->addHour(),
+                'status' => 'upcoming',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $this->actingAs($teacher)
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertViewHas('courses', fn ($courses) => $courses->pluck('id')->all() === [$courseB->id])
+            ->assertViewHas('liveClasses', fn ($classes) => $classes->pluck('title')->all() === ['Current Profile Branch Live Class']);
+    }
+
     public function test_mobile_course_catalog_is_limited_to_the_authenticated_branch(): void
     {
         $this->markSystemInstalled();
