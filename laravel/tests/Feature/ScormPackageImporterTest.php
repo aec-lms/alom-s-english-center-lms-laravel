@@ -35,11 +35,11 @@ class ScormPackageImporterTest extends TestCase
     private function validManifest(string $href = 'index.html'): string
     {
         return '<?xml version="1.0" encoding="UTF-8"?>'
-            . '<manifest xmlns="http://www.imsproject.org/xsd/imscp_rootv1p1p2" identifier="MANIFEST">'
+            . '<manifest xmlns="http://www.imsproject.org/xsd/imscp_rootv1p1p2" xmlns:adlcp="http://www.adlnet.org/xsd/adlcp_rootv1p2" identifier="MANIFEST">'
             . '<organizations default="ORG"><organization identifier="ORG"><title>English Module</title>'
             . '<item identifier="ITEM" identifierref="RES"><title>Unit One</title></item>'
             . '</organization></organizations><resources>'
-            . '<resource identifier="RES" type="webcontent" href="' . htmlspecialchars($href, ENT_XML1) . '" />'
+            . '<resource identifier="RES" type="webcontent" adlcp:scormtype="sco" href="' . htmlspecialchars($href, ENT_XML1) . '" />'
             . '</resources></manifest>';
     }
 
