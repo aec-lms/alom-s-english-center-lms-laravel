@@ -77,11 +77,21 @@ class UniversalUpdateService
                 throw new RuntimeException('Update archive exceeds the allowed uncompressed size.');
             }
 
-            $attributes = (int) ($stat['external_attributes'] ?? 0);
-            $fileType = ($attributes >> 16) & 0xF000;
-            if ($fileType === 0xA000) {
-                $zip->close();
-                throw new RuntimeException("Symlink entry rejected in update ZIP: {$entryName}");
+            $opsys = 0;
+            $externalAttributes = 0;
+            if ($zip->getExternalAttributesIndex($i, $opsys, $externalAttributes)
+                && $opsys === ZipArchive::OPSYS_UNIX
+            ) {
+                // statIndex() does not expose Unix external attributes.
+                $fileType = ($externalAttributes >> 16) & 0170000;
+                if ($fileType === 0120000) {
+                    $zip->close();
+                    throw new RuntimeException("Symlink entry rejected in update ZIP: {$entryName}");
+                }
+                if ($fileType !== 0 && $fileType !== 0100000 && $fileType !== 0040000) {
+                    $zip->close();
+                    throw new RuntimeException("Special file entry rejected in update ZIP: {$entryName}");
+                }
             }
         }
 
@@ -138,15 +148,38 @@ class UniversalUpdateService
             }
         }
 
-        // Create encrypted pre-update backup
-        $backup = $this->backups->createEncryptedBackup($actorId, false);
-        $stagingDir = storage_path('app/update-staging/' . Str::uuid()->toString());
-        $snapshotDir = storage_path('app/update-snapshots/' . Str::slug($targetSlug) . '-' . Str::uuid()->toString());
+        $stagingDir = $this->createPrivateStorageDirectory('update-staging');
+        $packageSnapshotPath = $stagingDir . '.signed.zip';
+        $snapshotDir = $this->createPrivateStorageDirectory(
+            'update-snapshots',
+            Str::slug($targetSlug) . '-' . Str::uuid()->toString()
+        );
 
-        Artisan::call('down');
+        // Pin and re-verify before taking a database backup or entering maintenance
+        // mode. A replaced upload must fail without restoring an old DB snapshot.
+        $pinnedManifest = $this->createVerifiedPackageSnapshot(
+            $packagePath,
+            $expectedSha256,
+            $signatureHex,
+            $packageSnapshotPath
+        );
+        if ($pinnedManifest !== $manifest) {
+            @unlink($packageSnapshotPath);
+            throw new RuntimeException('Update package changed between initial verification and staging.');
+        }
 
         try {
-            $this->extractToStaging($packagePath, $stagingDir);
+            $backup = $this->backups->createEncryptedBackup($actorId, false);
+            Artisan::call('down');
+        } catch (\Throwable $exception) {
+            if (is_file($packageSnapshotPath) && !is_link($packageSnapshotPath)) {
+                @unlink($packageSnapshotPath);
+            }
+            throw $exception;
+        }
+
+        try {
+            $this->extractToStaging($packageSnapshotPath, $stagingDir);
 
             $targetDir = $this->resolveTargetDirectory($targetType, $targetSlug);
 
@@ -235,6 +268,9 @@ class UniversalUpdateService
             throw new RuntimeException($failureMessage, previous: $e);
         } finally {
             $this->deleteDirectory($stagingDir);
+            if (is_file($packageSnapshotPath) && !is_link($packageSnapshotPath)) {
+                @unlink($packageSnapshotPath);
+            }
             Artisan::call('up');
         }
     }
@@ -401,36 +437,211 @@ class UniversalUpdateService
         }
     }
 
+    /**
+     * Copy an uploaded package into a private, exclusive file and verify that copy.
+     * All subsequent ZIP reads must use this pinned artifact, never the mutable
+     * caller-supplied path that was used for the initial signature check.
+     *
+     * @return array<string, mixed>
+     */
+    private function createVerifiedPackageSnapshot(
+        string $packagePath,
+        string $expectedSha256,
+        string $signatureHex,
+        string $snapshotPath,
+    ): array {
+        $directory = dirname($snapshotPath);
+        if (is_link($directory)) {
+            throw new RuntimeException('Update package staging directory must not be a symbolic link.');
+        }
+        if (!is_dir($directory) && !mkdir($directory, 0700, true) && !is_dir($directory)) {
+            throw new RuntimeException('Unable to create private update package staging directory.');
+        }
+
+        $input = @fopen($packagePath, 'rb');
+        $output = @fopen($snapshotPath, 'xb');
+        if ($input === false || $output === false) {
+            if (is_resource($input)) fclose($input);
+            if (is_resource($output)) fclose($output);
+            throw new RuntimeException('Unable to create a private snapshot of the signed update package.');
+        }
+
+        try {
+            if (stream_copy_to_stream($input, $output) === false || !fflush($output)) {
+                throw new RuntimeException('Unable to copy the signed update package into private staging.');
+            }
+            @chmod($snapshotPath, 0600);
+        } catch (\Throwable $exception) {
+            fclose($input);
+            fclose($output);
+            @unlink($snapshotPath);
+            throw $exception;
+        }
+
+        fclose($input);
+        fclose($output);
+
+        try {
+            return $this->verifySignedPackage($snapshotPath, $expectedSha256, $signatureHex);
+        } catch (\Throwable $exception) {
+            @unlink($snapshotPath);
+            throw $exception;
+        }
+    }
+
+
+    private function createPrivateStorageDirectory(string $rootName, ?string $childName = null): string
+    {
+        abort_unless(in_array($rootName, ['update-staging', 'update-snapshots'], true), 500,
+            'Invalid private update storage directory.');
+        $storagePath = storage_path('app');
+        $storageRoot = realpath($storagePath);
+        if ($storageRoot === false || is_link($storagePath)) {
+            throw new RuntimeException('Private update storage root is unavailable or redirected.');
+        }
+
+        $root = $storageRoot . DIRECTORY_SEPARATOR . $rootName;
+        if (is_link($root)) {
+            throw new RuntimeException('Private update storage root must not be a symbolic link.');
+        }
+        if (!is_dir($root) && !@mkdir($root, 0700) && !is_dir($root)) {
+            throw new RuntimeException('Unable to create private update storage root.');
+        }
+        if (!@chmod($root, 0700)) {
+            throw new RuntimeException('Unable to restrict private update storage root permissions.');
+        }
+
+        $resolvedRoot = realpath($root);
+        $rootStat = $resolvedRoot !== false ? @stat($resolvedRoot) : false;
+        if ($resolvedRoot === false || dirname($resolvedRoot) !== $storageRoot || $rootStat === false
+            || (($rootStat['mode'] & 0170000) !== 0040000) || (($rootStat['mode'] & 0077) !== 0)) {
+            throw new RuntimeException('Private update storage root must be a private real directory under storage/app.');
+        }
+
+        $childName = $childName ?? Str::uuid()->toString();
+        if ($childName === '' || basename($childName) !== $childName || $childName === '.' || $childName === '..') {
+            throw new RuntimeException('Invalid private update staging directory name.');
+        }
+        $child = $resolvedRoot . DIRECTORY_SEPARATOR . $childName;
+        if (is_link($child) || !@mkdir($child, 0700)) {
+            throw new RuntimeException('Unable to create isolated private update staging directory.');
+        }
+        $resolvedChild = realpath($child);
+        $childStat = $resolvedChild !== false ? @stat($resolvedChild) : false;
+        if ($resolvedChild === false || dirname($resolvedChild) !== $resolvedRoot || is_link($child)
+            || $childStat === false || (($childStat['mode'] & 0170000) !== 0040000)
+            || (($childStat['mode'] & 0077) !== 0)) {
+            throw new RuntimeException('Private update staging directory failed its filesystem safety checks.');
+        }
+
+        return $resolvedChild;
+    }
+
+    private function assertPrivateStorageChild(string $directory, string $rootName): string
+    {
+        abort_unless(in_array($rootName, ['update-staging', 'update-snapshots'], true), 500,
+            'Invalid private update storage directory.');
+        $storagePath = storage_path('app');
+        $storageRoot = realpath($storagePath);
+        if ($storageRoot === false || is_link($storagePath)) {
+            throw new RuntimeException('Private update storage root is unavailable or redirected.');
+        }
+        $root = $storageRoot . DIRECTORY_SEPARATOR . $rootName;
+        if (is_link($root)) {
+            throw new RuntimeException('Private update storage root must not be a symbolic link.');
+        }
+        $resolvedRoot = realpath($root);
+        $rootStat = $resolvedRoot !== false ? @stat($resolvedRoot) : false;
+        if ($resolvedRoot === false || dirname($resolvedRoot) !== $storageRoot || $rootStat === false
+            || (($rootStat['mode'] & 0170000) !== 0040000) || (($rootStat['mode'] & 0077) !== 0)) {
+            throw new RuntimeException('Private update storage root failed its filesystem safety checks.');
+        }
+
+        if (is_link($directory)) {
+            throw new RuntimeException('Private update staging directory must not be a symbolic link.');
+        }
+        $resolvedDirectory = realpath($directory);
+        $directoryStat = $resolvedDirectory !== false ? @stat($resolvedDirectory) : false;
+        if ($resolvedDirectory === false || dirname($resolvedDirectory) !== $resolvedRoot
+            || $directoryStat === false || (($directoryStat['mode'] & 0170000) !== 0040000)
+            || (($directoryStat['mode'] & 0077) !== 0)) {
+            throw new RuntimeException('Private update staging directory failed its filesystem safety checks.');
+        }
+
+        return $resolvedDirectory;
+    }
+
     private function extractToStaging(string $packagePath, string $stagingDir): void
     {
-        if (!is_dir($stagingDir)) {
-            mkdir($stagingDir, 0755, true);
-        }
+        $stagingDir = $this->assertPrivateStorageChild($stagingDir, 'update-staging');
         $zip = new ZipArchive();
         if ($zip->open($packagePath) !== true) {
             throw new RuntimeException('Unable to open signed update ZIP for staging.');
         }
 
-        for ($i = 0; $i < $zip->numFiles; $i++) {
-            $entry = (string) $zip->getNameIndex($i);
-            $this->assertSafeZipEntryPath($entry);
-            $dest = $stagingDir . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $entry);
-            if (str_ends_with($entry, '/')) {
-                if (!is_dir($dest)) {
-                    mkdir($dest, 0755, true);
+        $totalBytes = 0;
+        try {
+            for ($i = 0; $i < $zip->numFiles; $i++) {
+                $entry = (string) $zip->getNameIndex($i);
+                $this->assertSafeZipEntryPath($entry);
+
+                $opsys = 0;
+                $externalAttributes = 0;
+                if ($zip->getExternalAttributesIndex($i, $opsys, $externalAttributes)
+                    && $opsys === ZipArchive::OPSYS_UNIX
+                ) {
+                    $fileType = ($externalAttributes >> 16) & 0170000;
+                    if ($fileType === 0120000
+                        || ($fileType !== 0 && $fileType !== 0100000 && $fileType !== 0040000)) {
+                        throw new RuntimeException("Unsafe special file entry in update ZIP: {$entry}");
+                    }
                 }
-                continue;
+
+                $stat = $zip->statIndex($i);
+                $size = (int) ($stat['size'] ?? 0);
+                $totalBytes += $size;
+                if ($size > 268435456 || $totalBytes > 1073741824) {
+                    throw new RuntimeException('Update archive exceeds the allowed uncompressed size.');
+                }
+
+                $dest = $stagingDir . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $entry);
+                if (str_ends_with($entry, '/')) {
+                    if (!is_dir($dest) && !mkdir($dest, 0700, true) && !is_dir($dest)) {
+                        throw new RuntimeException("Unable to create update staging directory for {$entry}");
+                    }
+                    continue;
+                }
+                $parent = dirname($dest);
+                if (!is_dir($parent) && !mkdir($parent, 0700, true) && !is_dir($parent)) {
+                    throw new RuntimeException("Unable to create update staging directory for {$entry}");
+                }
+
+                // Avoid materializing large ZIP members in PHP memory. Release
+                // archives allow up to 256 MiB per entry, which exceeds many cPanel
+                // memory_limit configurations.
+                $input = $zip->getStream($entry);
+                if (!is_resource($input)) {
+                    throw new RuntimeException("Unable to open update archive entry: {$entry}");
+                }
+                $output = fopen($dest, 'xb');
+                if ($output === false) {
+                    fclose($input);
+                    throw new RuntimeException("Unable to create staged update file: {$entry}");
+                }
+                try {
+                    $copied = stream_copy_to_stream($input, $output, $size + 1);
+                    if ($copied !== $size || !fflush($output)) {
+                        throw new RuntimeException("Unable to stage update file completely: {$entry}");
+                    }
+                } finally {
+                    fclose($input);
+                    fclose($output);
+                }
+                @chmod($dest, 0600);
             }
-            $parent = dirname($dest);
-            if (!is_dir($parent)) {
-                mkdir($parent, 0755, true);
-            }
-            $contents = $zip->getFromIndex($i);
-            if ($contents !== false) {
-                file_put_contents($dest, $contents);
-            }
+        } finally {
+            $zip->close();
         }
-        $zip->close();
     }
 
     private function resolveTargetDirectory(string $targetType, string $targetSlug): ?string
@@ -452,9 +663,7 @@ class UniversalUpdateService
         if (!is_dir($sourceDir) || $targetDir === '') {
             throw new RuntimeException('Update payload or target directory is unavailable.');
         }
-        if (!is_dir($snapshotDir) && !mkdir($snapshotDir, 0700, true) && !is_dir($snapshotDir)) {
-            throw new RuntimeException('Unable to create private pre-update snapshot directory.');
-        }
+        $snapshotDir = $this->assertPrivateStorageChild($snapshotDir, 'update-snapshots');
 
         $entries = [];
         $iterator = new RecursiveIteratorIterator(
@@ -496,6 +705,7 @@ class UniversalUpdateService
 
     private function restorePayloadSnapshot(string $snapshotDir): void
     {
+        $snapshotDir = $this->assertPrivateStorageChild($snapshotDir, 'update-snapshots');
         $manifestPath = $snapshotDir . DIRECTORY_SEPARATOR . 'snapshot.json';
         $manifest = json_decode((string) file_get_contents($manifestPath), true, 512, JSON_THROW_ON_ERROR);
         $targetDir = (string) ($manifest['target_dir'] ?? '');
@@ -593,9 +803,14 @@ class UniversalUpdateService
 
     private function deleteDirectory(string $dir): void
     {
-        if (!is_dir($dir)) {
+        $storageRoot = realpath(storage_path('app'));
+        $stagingRoot = $storageRoot !== false ? realpath($storageRoot . DIRECTORY_SEPARATOR . 'update-staging') : false;
+        $resolvedDirectory = realpath($dir);
+        if (!is_dir($dir) || is_link($dir) || $stagingRoot === false
+            || $resolvedDirectory === false || dirname($resolvedDirectory) !== $stagingRoot) {
             return;
         }
+        $dir = $resolvedDirectory;
         $iterator = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
             RecursiveIteratorIterator::CHILD_FIRST
