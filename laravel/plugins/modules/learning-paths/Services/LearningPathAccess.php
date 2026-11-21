@@ -85,13 +85,14 @@ class LearningPathAccess
             ->join('learning_path_enrollments as path_enrollment', 'path_enrollment.learning_path_id', '=', 'current.learning_path_id')
             ->join('learning_paths as path', 'path.id', '=', 'current.learning_path_id')
             ->where('path_enrollment.user_id', $userId)
-            ->where('path_enrollment.status', 'active')
+            ->whereIn('path_enrollment.status', ['active', 'completed'])
             ->where('current.course_id', $courseId)
             ->orderBy('path.id')
             ->get([
                 'path.id as path_id',
                 'path.branch_id as path_branch_id',
                 'path_enrollment.branch_id as enrollment_branch_id',
+                'path_enrollment.status as enrollment_status',
                 'current.position',
             ]);
 
@@ -106,6 +107,9 @@ class LearningPathAccess
             if ($expectedBranchId !== null) {
                 abort_unless($currentBranchId !== null && $currentBranchId === $expectedBranchId,
                     403, 'This learning path is outside your current student branch.');
+            }
+            if ($membership->enrollment_status !== 'active') {
+                continue;
             }
 
             $previousCourseIds = DB::table('learning_path_courses')
