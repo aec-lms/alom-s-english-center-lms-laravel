@@ -52,6 +52,9 @@ class FreshInstallerTest extends TestCase
         $originalEnv = $hadEnv ? file_get_contents($envPath) : null;
         $originalMode = $hadEnv ? (fileperms($envPath) & 0777) : 0600;
         $privatePath = sys_get_temp_dir() . '/aec-installer-private-' . uniqid('', true);
+        $lockDirectory = sys_get_temp_dir() . '/aec-installer-lock-' . bin2hex(random_bytes(8));
+        mkdir($lockDirectory, 0700, true);
+        $this->tempLockPath = $lockDirectory . '/installed.lock';
 
         if (!$hadEnv) {
             file_put_contents($envPath, "APP_KEY=\n");
@@ -127,6 +130,7 @@ class FreshInstallerTest extends TestCase
         } finally {
             DB::disconnect('installer_test');
             @rmdir($privatePath);
+            @rmdir($lockDirectory);
             DB::setDefaultConnection($originalDefault);
             config([
                 'database.default' => $originalDefault,
