@@ -53,6 +53,7 @@ final class PhoneticsLearningController extends Controller
             'bar_percent' => 0,
         ]);
         $weakWords = collect();
+        $reviewQueue = collect();
         $accentAccuracy = ['uk' => null, 'us' => null];
 
         if ($entries->isNotEmpty()) {
@@ -92,7 +93,7 @@ final class PhoneticsLearningController extends Controller
             });
 
             $wordStats = (clone $progressQuery)
-                ->selectRaw('entry_id, COUNT(*) as attempts, SUM(CASE WHEN is_correct = 1 THEN 1 ELSE 0 END) as correct')
+                ->selectRaw('entry_id, COUNT(*) as attempts, SUM(CASE WHEN is_correct = 1 THEN 1 ELSE 0 END) as correct, MAX(created_at) as last_attempt_at')
                 ->groupBy('entry_id')
                 ->get();
             $wordProgress = $wordStats->map(function ($row) use ($entries): array {
@@ -105,8 +106,51 @@ final class PhoneticsLearningController extends Controller
                     'category' => (string) ($entry?->category ?? 'Vocabulary'),
                     'attempts' => $attempts,
                     'accuracy' => $attempts > 0 ? (int) round(($correct / $attempts) * 100) : 0,
+                    'last_attempt_at' => $row->last_attempt_at,
                 ];
             })->filter(fn (array $item): bool => $item['entry_id'] > 0)->values();
+
+            // Transparent spaced-review intervals: low accuracy returns sooner.
+            // New assigned words are immediately available; no synthetic score is used.
+            $wordProgressById = $wordProgress->keyBy('entry_id');
+            $reviewQueue = $entries->map(function ($entry) use ($wordProgressById): array {
+                $stats = $wordProgressById->get((int) $entry->id);
+                if (!$stats) {
+                    return [
+                        'entry_id' => (int) $entry->id,
+                        'word' => (string) $entry->word,
+                        'category' => (string) ($entry->category ?? 'Vocabulary'),
+                        'attempts' => 0,
+                        'accuracy' => null,
+                        'due_at' => now(),
+                        'reason' => 'New word — start learning',
+                        'is_due' => true,
+                    ];
+                }
+
+                $intervalDays = match (true) {
+                    $stats['accuracy'] < 50 => 1,
+                    $stats['accuracy'] < 70 => 3,
+                    $stats['accuracy'] < 85 => 7,
+                    default => 14,
+                };
+                $dueAt = IlluminateSupportCarbon::parse($stats['last_attempt_at'])->addDays($intervalDays);
+                return [
+                    'entry_id' => (int) $entry->id,
+                    'word' => (string) $entry->word,
+                    'category' => (string) ($entry->category ?? 'Vocabulary'),
+                    'attempts' => $stats['attempts'],
+                    'accuracy' => $stats['accuracy'],
+                    'due_at' => $dueAt,
+                    'reason' => $stats['accuracy'] < 70
+                        ? 'Needs reinforcement — '.$intervalDays.'-day review interval'
+                        : 'Retention check — '.$intervalDays.'-day review interval',
+                    'is_due' => $dueAt->lte(now()),
+                ];
+            })->filter(fn (array $item): bool => $item['is_due'])
+              ->sortBy('due_at')
+              ->take(8)
+              ->values();
 
             // Recommendations use only server-graded IPA quiz attempts. Three
             // attempts are required before identifying a weak item.
@@ -186,6 +230,7 @@ final class PhoneticsLearningController extends Controller
             'progress' => $progress,
             'dailyActivity' => $dailyActivity,
             'weakWords' => $weakWords,
+            'reviewQueue' => $reviewQueue,
             'accentAccuracy' => $accentAccuracy,
             'exams' => $exams,
             'challenge' => $challenge,
