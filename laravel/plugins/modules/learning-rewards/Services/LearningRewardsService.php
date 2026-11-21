@@ -52,27 +52,25 @@ class LearningRewardsService
                     return ['awarded' => false, 'duplicate' => true, 'points' => (int) $existing->points, 'ledger_id' => (int) $existing->id];
                 }
 
-                $rule = DB::table('learning_reward_rules')->where('activity_key', $activityKey)->lockForUpdate()->first();
-                if (!$rule || !$rule->is_enabled || (int) $rule->points < 1) {
-                    return ['awarded' => false, 'duplicate' => false, 'points' => 0, 'ledger_id' => null];
-                }
-
                 $timezone = (string) config('app.timezone', 'Asia/Dhaka');
                 $today = Carbon::now($timezone)->toDateString();
-                $dayStart = Carbon::parse($today, $timezone)->startOfDay()->utc();
-                $dayEnd = Carbon::parse($today, $timezone)->endOfDay()->utc();
+                $rule = DB::table('learning_reward_rules')->where('activity_key', $activityKey)->lockForUpdate()->first();
+                $points = 0;
 
-                $earnedToday = (int) DB::table('learning_reward_ledger')
-                    ->where('user_id', $userId)
-                    ->where('activity_key', $activityKey)
-                    ->whereBetween('awarded_at', [$dayStart, $dayEnd])
-                    ->sum('points');
-                $points = min((int) $rule->points, max(0, (int) $rule->daily_cap - $earnedToday));
-                if ($points < 1) {
-                    return ['awarded' => false, 'duplicate' => false, 'points' => 0, 'ledger_id' => null];
+                if ($rule && $rule->is_enabled && (int) $rule->points > 0) {
+                    $dayStart = Carbon::parse($today, $timezone)->startOfDay()->utc();
+                    $dayEnd = Carbon::parse($today, $timezone)->endOfDay()->utc();
+                    $earnedToday = (int) DB::table('learning_reward_ledger')
+                        ->where('user_id', $userId)
+                        ->where('activity_key', $activityKey)
+                        ->whereBetween('awarded_at', [$dayStart, $dayEnd])
+                        ->sum('points');
+                    $points = min((int) $rule->points, max(0, (int) $rule->daily_cap - $earnedToday));
                 }
 
                 $now = now();
+                // Zero-point entries still make a verified activity idempotent and preserve learning streaks
+                // when an admin disables XP or the daily point cap has been reached.
                 $ledgerId = DB::table('learning_reward_ledger')->insertGetId([
                     'user_id' => $userId,
                     'branch_id' => $user->branch_id,
@@ -88,12 +86,14 @@ class LearningRewardsService
                 ]);
 
                 $this->updateStreak($userId, $today, $timezone, $now);
-                $this->unlockEligibleBadges($userId, $now);
-                $this->audit->log('learning_rewards.points_awarded', 'learning_reward_ledger', (string) $ledgerId, [
-                    'activity' => $activityKey, 'points' => $points, 'source_type' => $sourceType, 'source_id' => $sourceId,
-                ], $userId);
+                if ($points > 0) {
+                    $this->unlockEligibleBadges($userId, $now);
+                    $this->audit->log('learning_rewards.points_awarded', 'learning_reward_ledger', (string) $ledgerId, [
+                        'activity' => $activityKey, 'points' => $points, 'source_type' => $sourceType, 'source_id' => $sourceId,
+                    ], $userId);
+                }
 
-                return ['awarded' => true, 'duplicate' => false, 'points' => $points, 'ledger_id' => $ledgerId];
+                return ['awarded' => $points > 0, 'duplicate' => false, 'points' => $points, 'ledger_id' => $ledgerId];
             }, 3);
         } catch (QueryException $exception) {
             if (str_contains(strtolower($exception->getMessage()), 'unique')
