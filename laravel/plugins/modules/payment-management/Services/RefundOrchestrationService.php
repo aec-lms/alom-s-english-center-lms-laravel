@@ -352,10 +352,14 @@ class RefundOrchestrationService
         $invoiceId = PaymentTransaction::query()->whereKey($transactionId)->value('invoice_id');
 
         $updated = DB::transaction(function () use ($refund, $transactionId, $invoiceId, $status, $providerReference, $providerStatus, $metadata, $reconciled, $actorId): PaymentRefund {
+            $lockedInvoice = null;
             if ($invoiceId !== null && Schema::hasTable('fee_invoices')) {
-                FeeInvoice::query()->whereKey($invoiceId)->lockForUpdate()->first();
+                $lockedInvoice = FeeInvoice::query()->whereKey($invoiceId)->lockForUpdate()->first();
             }
             $lockedTx = PaymentTransaction::query()->whereKey($transactionId)->lockForUpdate()->firstOrFail();
+            if ($lockedInvoice) {
+                $this->assertTransactionInvoiceBinding($lockedTx, $lockedInvoice);
+            }
             $locked = PaymentRefund::query()->whereKey($refund->id)->lockForUpdate()->firstOrFail();
             $this->assertRefundTransactionBinding($locked, $lockedTx);
 
