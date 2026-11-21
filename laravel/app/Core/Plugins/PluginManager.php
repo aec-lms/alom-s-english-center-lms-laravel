@@ -837,7 +837,8 @@ class PluginManager
             || is_link($sourceCandidate) || !$source || dirname($source) !== $trashRoot || !is_dir($source)) {
             throw new RuntimeException('Recycled plugin package is missing or outside the protected recycle-bin directory.');
         }
-        $metadata = json_decode(File::get($metadataPath), true, 512, JSON_THROW_ON_ERROR);
+        $metadataContents = File::get($metadataPath);
+        $metadata = json_decode($metadataContents, true, 512, JSON_THROW_ON_ERROR);
         $slug = (string) ($metadata['slug'] ?? '');
         $sourceChecksums = $this->pluginDirectoryChecksums($source);
         if (($metadata['archive'] ?? null) !== $archiveName
@@ -884,11 +885,31 @@ class PluginManager
             throw new RuntimeException('Private backup was created, but the recycle-bin package could not be removed.');
         }
         @unlink($metadataPath);
-        $this->audit->logRequired('plugin.permanently_deleted', 'plugin', $slug, [
-            'package_files_removed_from_recycle_bin' => true,
-            'private_backup_id' => $archiveName,
-            'database_records_preserved' => true,
-        ], $actorId);
+        try {
+            $this->audit->logRequired('plugin.permanently_deleted', 'plugin', $slug, [
+                'package_files_removed_from_recycle_bin' => true,
+                'private_backup_id' => $archiveName,
+                'database_records_preserved' => true,
+            ], $actorId);
+        } catch (Throwable $exception) {
+            // The verified private snapshot is the recovery source if durable audit
+            // storage fails after the recycle-bin copy has been removed.
+            if (!is_dir($source) && !File::copyDirectory($backupPath, $source)) {
+                throw new RuntimeException(
+                    'Permanent-delete audit failed and the package could not be restored from its verified private snapshot.',
+                    previous: $exception,
+                );
+            }
+            if (!is_file($metadataPath)
+                && File::put($metadataPath, $metadataContents) === false) {
+                throw new RuntimeException(
+                    'Permanent-delete audit failed; package files were restored but recycle metadata could not be recreated.',
+                    previous: $exception,
+                );
+            }
+            @chmod($metadataPath, 0600);
+            throw $exception;
+        }
     }
 
     /** @return array<string, string> */
