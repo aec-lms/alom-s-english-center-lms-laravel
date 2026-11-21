@@ -23,8 +23,17 @@ class ScormRuntimeController extends Controller
     public function studentIndex(Request $request, PluginManager $plugins): View
     {
         $actor = $request->user();
-        abort_unless($actor && $actor->is_active && $actor->hasRole('student'), 403, 'An active student account is required.');
+        abort_unless($actor, 403, 'An active student account is required.');
+        $currentUser = DB::table('users')->where('id', $actor->id)->first();
+        abort_unless($currentUser && (bool) $currentUser->is_active, 403, 'Student account is inactive.');
+        $studentRole = DB::table('role_user')
+            ->join('roles', 'roles.id', '=', 'role_user.role_id')
+            ->where('role_user.user_id', $actor->id)
+            ->where('roles.slug', 'student')
+            ->exists();
+        abort_unless($studentRole, 403, 'Current student role is required.');
         abort_unless($plugins->isEnabled('course-management') && Schema::hasTable('courses') && Schema::hasTable('enrollments'), 503, 'Enable Course Management to browse SCORM activities.');
+        $branchId = $this->currentStudentBranchId($currentUser);
 
         $packages = DB::table('scorm_packages as p')
             ->join('courses as c', 'c.id', '=', 'p.course_id')
@@ -34,9 +43,12 @@ class ScormRuntimeController extends Controller
             ->where('p.status', 'published')
             ->where('c.status', 'published')
             ->whereIn('e.status', ['active', 'completed'])
-            ->when($actor->branch_id !== null, fn ($query) => $query->where(function ($scope) use ($actor): void {
-                $scope->whereNull('p.branch_id')->orWhere('p.branch_id', $actor->branch_id);
+            ->when($branchId !== null, fn ($query) => $query->where(function ($scope) use ($branchId): void {
+                $scope->whereNull('p.branch_id')->orWhere('p.branch_id', $branchId);
+            })->where(function ($scope) use ($branchId): void {
+                $scope->whereNull('c.branch_id')->orWhere('c.branch_id', $branchId);
             }))
+            ->when($branchId === null, fn ($query) => $query->whereNull('p.branch_id')->whereNull('c.branch_id'))
             ->orderBy('c.title')
             ->orderBy('p.title')
             ->select('p.id', 'p.course_id', 'p.branch_id', 'p.title', 'p.version', 'c.title as course_title')
@@ -112,10 +124,13 @@ class ScormRuntimeController extends Controller
 
             $lockedCourse = DB::table('courses')->where('id', $lockedPackage->course_id)->lockForUpdate()->first();
             abort_unless($lockedCourse && $lockedCourse->status === 'published', 403, 'The linked course is no longer published.');
+            $branchId = $this->currentStudentBranchId($lockedUser, true);
+            abort_unless($lockedEnrollment->branch_id === null
+                || ($branchId !== null && (int) $lockedEnrollment->branch_id === $branchId), 403, 'Enrollment is outside the current student branch.');
             abort_unless($lockedPackage->branch_id === null
-                || (int) $lockedPackage->branch_id === (int) ($lockedUser->branch_id ?? $lockedEnrollment->branch_id ?? 0), 403, 'SCORM package is outside the student branch.');
+                || ($branchId !== null && (int) $lockedPackage->branch_id === $branchId), 403, 'SCORM package is outside the student branch.');
             abort_unless($lockedCourse->branch_id === null
-                || (int) $lockedCourse->branch_id === (int) ($lockedUser->branch_id ?? $lockedEnrollment->branch_id ?? 0), 403, 'Course is outside the student branch.');
+                || ($branchId !== null && (int) $lockedCourse->branch_id === $branchId), 403, 'Course is outside the student branch.');
             if ((float) $lockedCourse->price > 0) {
                 abort_unless(Schema::hasTable('fee_invoices') && Schema::hasColumn('enrollments', 'invoice_id')
                     && $lockedEnrollment->invoice_id !== null, 403, 'Paid course invoice is required.');
@@ -513,6 +528,40 @@ class ScormRuntimeController extends Controller
         }
     }
 
+    private function currentStudentBranchId(object $user, bool $lockProfile = false): ?int
+    {
+        $userBranchId = Schema::hasColumn('users', 'branch_id') && $user->branch_id !== null
+            ? (int) $user->branch_id
+            : null;
+        $profileBranchId = null;
+
+        if (app(PluginManager::class)->isEnabled('student-management')
+            && Schema::hasTable('students')
+            && Schema::hasColumn('students', 'branch_id')) {
+            $profileQuery = DB::table('students')->where('user_id', (int) $user->id);
+            if ($lockProfile) {
+                $profileQuery->lockForUpdate();
+            }
+            $profile = $profileQuery->first();
+
+            if ($profile !== null) {
+                if (Schema::hasColumn('students', 'deleted_at')) {
+                    abort_unless($profile->deleted_at === null, 403, 'Student profile is no longer active.');
+                }
+                if (Schema::hasColumn('students', 'status')) {
+                    abort_unless($profile->status === 'active', 403, 'Student profile is inactive.');
+                }
+                $profileBranchId = $profile->branch_id !== null ? (int) $profile->branch_id : null;
+            }
+        }
+
+        if ($profileBranchId !== null && $userBranchId !== null) {
+            abort_unless($profileBranchId === $userBranchId, 403, 'Account and student profile branches do not match.');
+        }
+
+        return $profileBranchId ?? $userBranchId;
+    }
+
     private function eligibleEnrollment(object $actor, object $package): ?object
     {
         $query = DB::table('enrollments as e')
@@ -532,16 +581,21 @@ class ScormRuntimeController extends Controller
             return null;
         }
 
-        if ($actor->branch_id !== null && $enrollment->course_branch_id !== null
-            && (int) $actor->branch_id !== (int) $enrollment->course_branch_id) {
+        $currentUser = DB::table('users')->where('id', $actor->id)->first();
+        if (!$currentUser || !(bool) $currentUser->is_active) {
             return null;
         }
-        if ($enrollment->branch_id !== null && $actor->branch_id !== null
-            && (int) $enrollment->branch_id !== (int) $actor->branch_id) {
+        $branchId = $this->currentStudentBranchId($currentUser);
+        if ($enrollment->course_branch_id !== null
+            && ($branchId === null || (int) $enrollment->course_branch_id !== $branchId)) {
+            return null;
+        }
+        if ($enrollment->branch_id !== null
+            && ($branchId === null || (int) $enrollment->branch_id !== $branchId)) {
             return null;
         }
         if ($package->branch_id !== null
-            && (int) $package->branch_id !== (int) ($actor->branch_id ?? $enrollment->branch_id ?? 0)) {
+            && ($branchId === null || (int) $package->branch_id !== $branchId)) {
             return null;
         }
 
@@ -594,24 +648,25 @@ class ScormRuntimeController extends Controller
             ->exists();
         abort_unless($studentRole, 403, 'Current student role is required.');
 
+        $branchId = $this->currentStudentBranchId($user, true);
         $enrollment = DB::table('enrollments')->where('id', $attempt->enrollment_id)->lockForUpdate()->first();
         abort_unless($enrollment && (int) $enrollment->user_id === (int) $user->id
             && in_array($enrollment->status, ['active', 'completed'], true), 403, 'Course enrollment is no longer eligible.');
 
         $course = DB::table('courses')->where('id', $enrollment->course_id)->lockForUpdate()->first();
         abort_unless($course && $course->status === 'published', 403, 'Course is no longer published.');
-        if ($user->branch_id !== null && $course->branch_id !== null) {
-            abort_unless((int) $user->branch_id === (int) $course->branch_id, 403, 'Course is outside the student branch.');
+        if ($course->branch_id !== null) {
+            abort_unless($branchId !== null && (int) $course->branch_id === $branchId, 403, 'Course is outside the student branch.');
         }
-        if ($enrollment->branch_id !== null && $user->branch_id !== null) {
-            abort_unless((int) $enrollment->branch_id === (int) $user->branch_id, 403, 'Enrollment is outside the student branch.');
+        if ($enrollment->branch_id !== null) {
+            abort_unless($branchId !== null && (int) $enrollment->branch_id === $branchId, 403, 'Enrollment is outside the student branch.');
         }
 
         $package = DB::table('scorm_packages')->where('id', $attempt->scorm_package_id)->lockForUpdate()->first();
         abort_unless($package && in_array($package->status, ['published', 'superseded'], true)
             && (int) $package->course_id === (int) $course->id, 403, 'SCORM package is no longer available.');
         if ($package->branch_id !== null) {
-            abort_unless((int) $package->branch_id === (int) ($user->branch_id ?? $enrollment->branch_id ?? 0), 403, 'SCORM package is outside the student branch.');
+            abort_unless($branchId !== null && (int) $package->branch_id === $branchId, 403, 'SCORM package is outside the student branch.');
         }
 
         if ((float) $course->price > 0) {
