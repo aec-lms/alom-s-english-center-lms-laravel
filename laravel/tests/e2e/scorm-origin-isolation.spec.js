@@ -2,8 +2,8 @@ const { test, expect } = require('@playwright/test');
 
 test('untrusted SCO cannot inspect LMS/player state and commits only through the trusted player bridge', async ({ page }) => {
   const appOrigin = 'http://127.0.0.1:8000';
-  const playerOrigin = 'https://scorm-player.e2e.invalid';
-  const contentOrigin = 'https://scorm-content.e2e.invalid';
+  const playerOrigin = 'http://scorm-player.e2e.invalid';
+  const contentOrigin = 'http://scorm-content.e2e.invalid';
   const playerToken = 'attempt-token-visible-only-to-trusted-player';
   const bridgeNonce = 'abcdef0123456789'.repeat(4);
   const lmsSecret = 'lms-session-secret';
