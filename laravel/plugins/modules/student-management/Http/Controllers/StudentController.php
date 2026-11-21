@@ -113,9 +113,21 @@ class StudentController extends Controller
                 'admission_date' => now()->toDateString(),
                 'status' => $validated['status'] ?? 'active',
             ];
-            $student = $code !== null
-                ? Student::query()->create($studentAttributes + ['student_code' => $code])
-                : $this->createStudentWithGeneratedCode($studentAttributes);
+            if ($code !== null) {
+                try {
+                    $student = Student::query()->create($studentAttributes + ['student_code' => $code]);
+                } catch (QueryException $exception) {
+                    if ($this->isStudentIdentityUniqueViolation($exception, 'student_code')) {
+                        throw ValidationException::withMessages([
+                            'student_code' => 'The student code has already been taken.',
+                        ]);
+                    }
+
+                    throw $exception;
+                }
+            } else {
+                $student = $this->createStudentWithGeneratedCode($studentAttributes);
+            }
 
             $this->audit->log('student.created', 'student', (string) $student->id, ['branch_id' => $student->branch_id]);
 
