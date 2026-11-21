@@ -381,11 +381,15 @@ api/*",
    'word'=>'analytics-water','category'=>'rhoticity','uk_ipa'=>'/ˈwɔːtə/','us_ipa'=>'/ˈwɔːtər/',
    'is_active'=>true,'sort_order'=>2,
   ]);
-  $unassigned=PhoneticEntry::query()->create([
-   'word'=>'hidden-learner-word','category'=>'vowels','uk_ipa'=>'/ɪ/','us_ipa'=>'/ɪ/',
+  $newWord=PhoneticEntry::query()->create([
+   'word'=>'analytics-new','category'=>'vowels','uk_ipa'=>'/e/','us_ipa'=>'/ɛ/',
    'is_active'=>true,'sort_order'=>3,
   ]);
-  foreach([$weak,$strong] as $index=>$entry){
+  $unassigned=PhoneticEntry::query()->create([
+   'word'=>'hidden-learner-word','category'=>'vowels','uk_ipa'=>'/ɪ/','us_ipa'=>'/ɪ/',
+   'is_active'=>true,'sort_order'=>4,
+  ]);
+  foreach([$weak,$strong,$newWord] as $index=>$entry){
    DB::table('phonetic_learning_assignments')->insert([
     'lms_driver'=>'aec','course_ref'=>(string)$courseId,'course_category_ref'=>null,
     'lesson_ref'=>null,'batch_ref'=>null,'word_id'=>$entry->id,'audience'=>'both',
@@ -423,8 +427,11 @@ api/*",
    ->assertSee('4 attempts in 7 days')
    ->assertSee('5 in 30 days')
    ->assertSee('60%')
-   ->assertSee('Recommended practice')
+   ->assertSee('Spaced review queue')
    ->assertSee('analytics-car')
+   ->assertSee('analytics-new')
+   ->assertSee('New word — start learning')
+   ->assertSee('Recommended practice')
    ->assertSee('33% accuracy')
    ->assertDontSee('hidden-learner-word');
  }
