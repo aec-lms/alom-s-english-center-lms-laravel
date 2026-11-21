@@ -83,7 +83,24 @@ class CourseContentLearningController extends Controller
         $content=CourseContentPost::published()->where('slug',$post)->firstOrFail();
         $item=CourseCurriculumItem::query()->where('course_id',$courseRow->id)->where('course_content_post_id',$content->id)->where('is_active',true)->firstOrFail();
         abort_if($item->is_preview,403,'Preview lessons do not count toward completion.');
-        CourseContentProgress::query()->updateOrCreate(['user_id'=>$student->id,'course_curriculum_item_id'=>$item->id],['last_viewed_at'=>now(),'completed_at'=>now()]);
+        $progress = CourseContentProgress::query()->firstOrNew([
+            'user_id' => $student->id,
+            'course_curriculum_item_id' => $item->id,
+        ]);
+        $wasCompleted = $progress->completed_at !== null;
+        $progress->last_viewed_at = now();
+        $progress->completed_at = now();
+        $progress->save();
+
+        if (!$wasCompleted && app(PluginManager::class)->isEnabled('learning-rewards')) {
+            app(LearningRewardsService::class)->awardVerifiedActivity(
+                (int) $student->id,
+                'lesson_completed',
+                'course_lesson',
+                (int) $item->id,
+            );
+        }
+
         return back()->with('status','Lesson marked as complete.');
     }
 
