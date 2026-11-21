@@ -11,6 +11,8 @@ Route::middleware(['web', 'installed', 'plugin:scorm'])->group(function (): void
         ->middleware('auth')->name('plugins.scorm.student.index');
     Route::get('/my-learning/scorm/{package}', [ScormRuntimeController::class, 'launch'])
         ->whereNumber('package')->middleware('auth')->name('plugins.scorm.launch');
+    Route::get('/scorm-player/{attempt}/{token}', [ScormRuntimeController::class, 'contentPlayer'])
+        ->whereNumber('attempt')->name('plugins.scorm.content.player')->middleware('signed');
 
     Route::prefix('admin/scorm')->name('plugins.scorm.admin.')
         ->middleware(['auth', 'permission:scorm.manage'])
@@ -27,8 +29,6 @@ $contentHost = parse_url($contentOrigin, PHP_URL_HOST);
 $appHost = parse_url((string) config('app.url'), PHP_URL_HOST);
 if (is_string($contentHost) && $contentHost !== '' && $contentHost !== $appHost) {
     Route::domain($contentHost)->middleware(['web', 'installed', 'plugin:scorm'])->group(function (): void {
-        Route::get('/scorm-player/{attempt}/{token}', [ScormRuntimeController::class, 'contentPlayer'])
-            ->whereNumber('attempt')->name('plugins.scorm.content.player')->middleware('signed');
         Route::get('/scorm-content/{attempt}/{token}/{path?}', [ScormRuntimeController::class, 'contentFile'])
             ->whereNumber('attempt')->where('path', '.*')->name('plugins.scorm.content.file');
     });
