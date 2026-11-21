@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{ app()->getLocale() }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -144,7 +144,7 @@
             const response = JSON.parse(xhr.responseText || '{}');
             if (xhr.status < 200 || xhr.status >= 300 || response.ok !== true) {
                 lastError = '101';
-                document.getElementById('runtime-status').textContent = response.message || 'Save failed';
+                document.getElementById('runtime-status').textContent = response.message || @json(__('plugins.scorm::messages.save_failed'));
                 return { ok: false };
             }
             stateVersion = response.version;
