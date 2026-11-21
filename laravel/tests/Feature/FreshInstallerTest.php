@@ -144,6 +144,138 @@ class FreshInstallerTest extends TestCase
     }
 
 
+    public function test_two_real_php_workers_serialize_fresh_installation_against_one_sqlite_database(): void
+    {
+        if (!function_exists('proc_open') || !function_exists('proc_close')) {
+            $this->markTestSkipped('The PHP process control extension is required for the installer concurrency regression.');
+        }
+
+        $root = sys_get_temp_dir() . '/aec-installer-concurrency-' . bin2hex(random_bytes(8));
+        $lockDirectory = $root . '/locks';
+        $privateDirectory = $root . '/private';
+        $backupDirectory = $root . '/backups';
+        $databasePath = $root . '/shared.sqlite';
+        $envPath = $root . '/.env';
+        $gatePath = $root . '/start.gate';
+        $workerPath = base_path('tests/Support/fresh-installer-worker.php');
+        mkdir($lockDirectory, 0700, true);
+        file_put_contents($databasePath, '');
+        file_put_contents($envPath, "APP_KEY=\n");
+
+        $processes = [];
+        $pipesByWorker = [];
+        try {
+            $this->assertFileExists($workerPath, 'The real PHP installer worker must be present.');
+            $baseEnvironment = getenv();
+            if (!is_array($baseEnvironment)) {
+                $baseEnvironment = [];
+            }
+
+            for ($worker = 1; $worker <= 2; $worker++) {
+                $workerEnvironment = array_merge($baseEnvironment, [
+                    'APP_ENV' => 'testing',
+                    'APP_DEBUG' => 'false',
+                    'APP_URL' => 'https://aec-concurrent.test',
+                    'APP_KEY' => 'base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+                    'DB_CONNECTION' => 'sqlite',
+                    'DB_DATABASE' => $databasePath,
+                    'CACHE_STORE' => 'file',
+                    'CACHE_DRIVER' => 'file',
+                    'SESSION_DRIVER' => 'file',
+                    'QUEUE_CONNECTION' => 'sync',
+                    'AEC_INSTALL_LOCK_PATH' => $lockDirectory . '/installed.lock',
+                    'AEC_ENV_FILE_PATH' => $envPath,
+                    'AEC_PRIVATE_STORAGE_PATH' => $privateDirectory,
+                    'AEC_BACKUP_PATH' => $backupDirectory,
+                    'AEC_INSTALLER_READY_FILE' => $root . '/worker-' . $worker . '.ready',
+                    'AEC_INSTALLER_START_GATE' => $gatePath,
+                ]);
+
+                $pipes = [];
+                $process = proc_open(
+                    [PHP_BINARY, $workerPath],
+                    [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+                    $pipes,
+                    base_path(),
+                    $workerEnvironment
+                );
+                $this->assertIsResource($process, 'Unable to start a real PHP installer worker.');
+                fclose($pipes[0]);
+                $processes[] = $process;
+                $pipesByWorker[] = $pipes;
+            }
+
+            $readyDeadline = microtime(true) + 15;
+            while (microtime(true) < $readyDeadline) {
+                if (is_file($root . '/worker-1.ready') && is_file($root . '/worker-2.ready')) {
+                    break;
+                }
+                usleep(10000);
+            }
+            $this->assertFileExists($root . '/worker-1.ready', 'First PHP worker did not reach the shared start barrier.');
+            $this->assertFileExists($root . '/worker-2.ready', 'Second PHP worker did not reach the shared start barrier.');
+
+            // Release both independently bootstrapped PHP processes at the same instant.
+            file_put_contents($gatePath, 'go', LOCK_EX);
+
+            $outcomes = [];
+            foreach ($processes as $index => $process) {
+                $stdout = stream_get_contents($pipesByWorker[$index][1]);
+                $stderr = stream_get_contents($pipesByWorker[$index][2]);
+                fclose($pipesByWorker[$index][1]);
+                fclose($pipesByWorker[$index][2]);
+                $exitCode = proc_close($process);
+
+                $decoded = json_decode(trim((string) $stdout), true);
+                $this->assertSame(0, $exitCode, 'Installer worker exited abnormally: ' . (string) $stderr);
+                $this->assertIsArray($decoded, 'Installer worker did not return JSON. stdout=' . (string) $stdout . ' stderr=' . (string) $stderr);
+                $outcomes[] = $decoded;
+            }
+
+            $successful = array_values(array_filter($outcomes, static fn (array $outcome): bool => ($outcome['success'] ?? false) === true));
+            $rejected = array_values(array_filter($outcomes, static fn (array $outcome): bool => ($outcome['success'] ?? true) === false));
+
+            $this->assertCount(1, $successful, 'Exactly one real PHP worker must complete the fresh installation.');
+            $this->assertCount(1, $rejected, 'The competing PHP worker must be rejected after observing the completed install lock.');
+            $this->assertStringContainsString('already installed', strtolower((string) ($rejected[0]['message'] ?? '')));
+
+            $pdo = new PDO('sqlite:' . $databasePath);
+            $this->assertSame(1, (int) $pdo->query("SELECT COUNT(*) FROM users WHERE email = 'concurrent-admin@aec.test'")->fetchColumn());
+            $this->assertGreaterThan(0, (int) $pdo->query('SELECT COUNT(*) FROM migrations')->fetchColumn());
+            $this->assertFileExists($lockDirectory . '/installed.lock');
+            $this->assertFileExists($lockDirectory . '/installed.lock.mutex');
+        } finally {
+            foreach ($processes as $index => $process) {
+                if (is_resource($process)) {
+                    @proc_terminate($process);
+                    if (isset($pipesByWorker[$index])) {
+                        foreach ([1, 2] as $pipeIndex) {
+                            if (isset($pipesByWorker[$index][$pipeIndex]) && is_resource($pipesByWorker[$index][$pipeIndex])) {
+                                @fclose($pipesByWorker[$index][$pipeIndex]);
+                            }
+                        }
+                    }
+                    @proc_close($process);
+                }
+            }
+
+            foreach (glob($root . '/*') ?: [] as $entry) {
+                if (is_dir($entry) && !is_link($entry)) {
+                    foreach (glob($entry . '/*') ?: [] as $child) {
+                        if (is_file($child) || is_link($child)) {
+                            @unlink($child);
+                        }
+                    }
+                    @rmdir($entry);
+                } else {
+                    @unlink($entry);
+                }
+            }
+            @unlink($envPath);
+            @rmdir($root);
+        }
+    }
+
     public function test_fresh_installer_rejects_symlinked_lock_directory_and_mutex_file(): void
     {
         $targetDirectory = sys_get_temp_dir() . '/aec-installer-lock-target-' . uniqid('', true);
