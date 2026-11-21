@@ -282,7 +282,7 @@ PHP;
                 $results[] = json_decode((string) file_get_contents($entry['result']), true, 512, JSON_THROW_ON_ERROR);
             }
 
-            $this->assertSame(1, count(array_filter($results, static fn (array $result): bool => $result['success'] === true)));
+            $this->assertSame(1, count(array_filter($results, static fn (array $result): bool => $result['success'] === true)), 'Concurrent installer results: ' . json_encode($results));
             $this->assertSame(1, count(array_filter($results, static fn (array $result): bool => $result['success'] === false && str_contains((string) $result['error'], 'already installed and locked'))));
             $this->assertFileExists($installLockPath);
 
