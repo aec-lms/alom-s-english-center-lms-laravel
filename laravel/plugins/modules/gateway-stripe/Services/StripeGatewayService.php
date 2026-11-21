@@ -146,7 +146,11 @@ class StripeGatewayService
         foreach (explode(',', $signatureHeader) as $segment) {
             if (str_contains($segment, '=')) {
                 [$key, $value] = explode('=', trim($segment), 2);
-                $parts[$key] = $value;
+                if ($key === 'v1') {
+                    $parts['v1'][] = $value;
+                } else {
+                    $parts[$key] = $value;
+                }
             }
         }
         $timestamp = $parts['t'] ?? '';
@@ -156,7 +160,6 @@ class StripeGatewayService
 
         $expected = hash_hmac('sha256', $timestamp . '.' . $rawBody, $webhookSecret);
         $signatures = $parts['v1'] ?? [];
-        if (is_string($signatures)) $signatures = [$signatures];
         $valid = false;
         foreach ($signatures as $signature) {
             if (hash_equals($expected, strtolower((string) $signature))) $valid = true;
