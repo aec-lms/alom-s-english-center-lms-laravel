@@ -332,7 +332,7 @@ class CourseCommercePaymentSettlementTest extends TestCase
                 try {
                     $referral->recordSettledPurchase($student, 'course_cart_order', (string) $orderId, 1250, 'BDT');
                     $this->fail('Referral commission insertion must wait for the locked provider payment row.');
-                } catch (\\Illuminate\\Database\\QueryException $exception) {
+                } catch (\Illuminate\\Database\\QueryException $exception) {
                     $this->assertSame(1205, (int) ($exception->errorInfo[1] ?? 0), $exception->getMessage());
                 }
 
