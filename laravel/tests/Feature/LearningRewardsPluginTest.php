@@ -169,8 +169,18 @@ class LearningRewardsPluginTest extends TestCase
         $this->bootRewards();
         $studentA = $this->createUserWithRole('student');
         $studentB = $this->createUserWithRole('student');
+        $inactiveStudent = $this->createUserWithRole('student');
         app(LearningRewardsService::class)->awardVerifiedActivity((int) $studentA->id, 'lesson_completed', 'course_lesson', 1);
         app(LearningRewardsService::class)->awardVerifiedActivity((int) $studentB->id, 'quiz_passed', 'quiz_attempt', 2);
+        app(LearningRewardsService::class)->awardVerifiedActivity((int) $inactiveStudent->id, 'lesson_completed', 'course_lesson', 3);
+        DB::table('learning_reward_profiles')->insert([
+            'user_id' => $inactiveStudent->id,
+            'leaderboard_opt_out' => false,
+            'profile_public' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $inactiveStudent->forceFill(['is_active' => false])->save();
 
         $this->actingAs($studentA)->get('/my-learning-rewards')->assertOk()->assertSee('My Learning Rewards');
         // No privacy profile means no public leaderboard visibility until the
@@ -181,7 +191,7 @@ class LearningRewardsPluginTest extends TestCase
             'leaderboard_opt_out' => false,
             'profile_public' => true,
         ])->assertRedirect();
-        $this->actingAs($studentA)->get('/learning-leaderboard?period=month')->assertOk()->assertSee($studentA->name);
+        $this->actingAs($studentA)->get('/learning-leaderboard?period=month')->assertOk()->assertSee($studentA->name)->assertDontSee($inactiveStudent->name);
 
         $this->actingAs($studentB)->patch('/my-learning-rewards/privacy', [
             'leaderboard_opt_out' => true,
