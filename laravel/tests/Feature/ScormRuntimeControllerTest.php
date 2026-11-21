@@ -245,6 +245,18 @@ class ScormRuntimeControllerTest extends TestCase
             ->assertNoContent()
             ->assertHeader('Access-Control-Allow-Origin', 'https://scorm-player.example.test');
 
+        $this->call('POST', '/api/scorm-runtime/commit', [], [], [], $trustedOrigin + [
+            'CONTENT_TYPE' => 'text/plain',
+        ], str_repeat('x', 262145))
+            ->assertStatus(413)
+            ->assertHeader('Access-Control-Allow-Origin', 'https://scorm-player.example.test');
+
+        $this->assertDatabaseHas('scorm_attempts', [
+            'id' => $attempt->id,
+            'state_version' => 0,
+            'lesson_location' => '',
+        ]);
+
         File::deleteDirectory($packageRoot);
     }
 
