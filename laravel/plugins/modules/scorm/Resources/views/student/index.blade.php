@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="referrer" content="no-referrer">
-    <title>My SCORM Activities — Alom's English Center</title>
+    <title>{{ __('plugins.scorm::messages.student_title') }} — Alom's English Center</title>
     <style>
         * { box-sizing: border-box; }
         body { margin: 0; background: #f5f7fb; color: #172033; font-family: system-ui, sans-serif; }
@@ -22,12 +22,12 @@
 </head>
 <body>
 <main>
-    <h1>My SCORM Activities</h1>
-    <p class="intro">Interactive learning packages attached to courses where you are enrolled.</p>
+    <h1>{{ __('plugins.scorm::messages.student_title') }}</h1>
+    <p class="intro">{{ __('plugins.scorm::messages.student_intro') }}</p>
     @if ($packages->isEmpty())
         <div class="empty">
-            <h2>No SCORM activities yet</h2>
-            <p>Your teachers have not published any SCORM learning packages for your enrolled courses.</p>
+            <h2>{{ __('plugins.scorm::messages.no_activities') }}</h2>
+            <p>{{ __('plugins.scorm::messages.no_activities_help') }}</p>
         </div>
     @else
         <div class="grid">
@@ -36,7 +36,7 @@
                     <div class="course">{{ $package->course_title }}</div>
                     <h2>{{ $package->title }}</h2>
                     <div class="meta">SCORM {{ $package->version }}</div>
-                    <a class="open" href="{{ route('plugins.scorm.launch', $package->id) }}">Open activity</a>
+                    <a class="open" href="{{ route('plugins.scorm.launch', $package->id) }}">{{ __('plugins.scorm::messages.open_activity') }}</a>
                 </article>
             @endforeach
         </div>
