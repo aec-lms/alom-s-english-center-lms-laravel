@@ -85,6 +85,7 @@ class ScormPluginAdminTest extends TestCase
         ])->assertRedirect();
 
         $package = DB::table('scorm_packages')->where('course_id', $courseId)->first();
+        $this->actingAs($admin)->patch(route('plugins.scorm.admin.publish', $package->id))->assertRedirect();
         $student = $this->createUserWithRole('student');
         DB::table('scorm_attempts')->insert([
             'scorm_package_id' => $package->id,
@@ -116,7 +117,7 @@ class ScormPluginAdminTest extends TestCase
         $this->actingAs($admin)
             ->patch(route('plugins.scorm.admin.archive', $package->id))
             ->assertStatus(409);
-        $this->assertDatabaseHas('scorm_packages', ['id' => $package->id, 'status' => 'draft']);
+        $this->assertDatabaseHas('scorm_packages', ['id' => $package->id, 'status' => 'published']);
     }
 
 
