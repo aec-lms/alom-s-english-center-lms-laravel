@@ -188,6 +188,37 @@ class ScormRuntimeControllerTest extends TestCase
         File::deleteDirectory($packageRoot);
     }
 
+    public function test_runtime_commit_and_preflight_reject_untrusted_origins(): void
+    {
+        [$student, , , $packageId, $packageRoot] = $this->setupRuntime();
+        $response = $this->actingAs($student)->get(route('plugins.scorm.launch', $packageId));
+        $token = $this->launchTokenFromUrl($response->viewData('playerUrl'));
+        $attempt = DB::table('scorm_attempts')->where('scorm_package_id', $packageId)->first();
+
+        $untrustedOrigin = ['HTTP_ORIGIN' => 'https://attacker.example.test', 'CONTENT_TYPE' => 'text/plain'];
+        $this->call('OPTIONS', '/api/scorm-runtime/commit', [], [], [], $untrustedOrigin)
+            ->assertForbidden()
+            ->assertHeaderMissing('Access-Control-Allow-Origin');
+
+        $this->call('POST', '/api/scorm-runtime/commit', [], [], [], $untrustedOrigin,
+            $this->commitPayload($attempt->id, $token, 0, ['cmi.core.lesson_location' => 'forged']))
+            ->assertForbidden()
+            ->assertHeaderMissing('Access-Control-Allow-Origin');
+
+        $this->assertDatabaseHas('scorm_attempts', [
+            'id' => $attempt->id,
+            'state_version' => 0,
+            'lesson_location' => '',
+        ]);
+
+        $trustedOrigin = ['HTTP_ORIGIN' => 'https://scorm.example.test'];
+        $this->call('OPTIONS', '/api/scorm-runtime/commit', [], [], [], $trustedOrigin)
+            ->assertNoContent()
+            ->assertHeader('Access-Control-Allow-Origin', 'https://scorm.example.test');
+
+        File::deleteDirectory($packageRoot);
+    }
+
     public function test_stale_runtime_version_cannot_overwrite_a_newer_commit(): void
     {
         [$student, , , $packageId, $packageRoot] = $this->setupRuntime();
