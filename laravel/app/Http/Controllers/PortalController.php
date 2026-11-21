@@ -169,12 +169,14 @@ class PortalController extends Controller
                         // but never let an editable instructor name override an
                         // explicit assignment belonging to another teacher.
                         $query->orWhere(function ($legacy) use ($user): void {
-                            $legacy->where('courses.instructor_name', $user->name)
-                                ->whereNotExists(function ($assignments): void {
+                            $legacy->where('courses.instructor_name', $user->name);
+                            if (Schema::hasTable('course_teacher_assignments')) {
+                                $legacy->whereNotExists(function ($assignments): void {
                                     $assignments->selectRaw('1')
                                         ->from('course_teacher_assignments')
                                         ->whereColumn('course_teacher_assignments.course_id', 'courses.id');
                                 });
+                            }
                         });
                     })
                     ->when($branchId !== null, fn ($query) => $query->where('branch_id', $branchId))
