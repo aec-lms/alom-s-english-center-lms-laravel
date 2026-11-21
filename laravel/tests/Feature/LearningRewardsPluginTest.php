@@ -254,6 +254,59 @@ class LearningRewardsPluginTest extends TestCase
         ]);
     }
 
+    public function test_student_management_profiles_must_be_active_for_rewards_and_leaderboard(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'student-management', 'learning-rewards']);
+        $branch = DB::table('branches')->insertGetId([
+            'code' => 'REWARD-PROFILE',
+            'name' => 'Rewards Profile Branch',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $active = $this->createUserWithRole('student', $branch);
+        $inactive = $this->createUserWithRole('student', $branch);
+
+        foreach ([[$active, 'REWARD-PROFILE-A'], [$inactive, 'REWARD-PROFILE-I']] as [$user, $code]) {
+            \\Plugins\\Modules\\StudentManagement\\Models\\Student::query()->create([
+                'user_id' => $user->id,
+                'branch_id' => $branch,
+                'student_code' => $code,
+                'admission_date' => now()->toDateString(),
+                'status' => 'active',
+            ]);
+        }
+
+        $service = app(LearningRewardsService::class);
+        $service->awardVerifiedActivity((int) $active->id, 'lesson_completed', 'course_lesson', 801);
+        $service->awardVerifiedActivity((int) $inactive->id, 'lesson_completed', 'course_lesson', 802);
+
+        foreach ([$active, $inactive] as $user) {
+            DB::table('learning_reward_profiles')->insert([
+                'user_id' => $user->id,
+                'leaderboard_opt_out' => false,
+                'profile_public' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        DB::table('students')->where('user_id', $inactive->id)->update(['status' => 'inactive']);
+
+        $this->actingAs($active)->get('/learning-leaderboard?period=all')
+            ->assertOk()
+            ->assertSee($active->name)
+            ->assertDontSee($inactive->name);
+
+        try {
+            $service->awardVerifiedActivity((int) $inactive->id, 'lesson_completed', 'course_lesson', 803);
+            $this->fail('Inactive student profiles must not earn learning rewards.');
+        } catch (\\Symfony\\Component\\HttpKernel\\Exception\\HttpException $exception) {
+            $this->assertSame(403, $exception->getStatusCode());
+        }
+    }
+
     public function test_admin_can_create_and_deactivate_achievement_badges(): void
     {
         $this->bootRewards();
