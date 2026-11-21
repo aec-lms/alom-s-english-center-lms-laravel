@@ -78,24 +78,13 @@ class EnrollmentController extends Controller
             abort(409, 'This course enrollment was previously closed. Contact the admissions office to reopen it.');
         }
 
-        $originalPrice = round((float) $course->price, 2);
-        $price = $originalPrice;
+        $quote = ['subtotal' => round((float) $course->price, 2), 'discount' => 0.0, 'total' => round((float) $course->price, 2)];
         if ($this->plugins->isEnabled('flash-sale') && Schema::hasTable('flash_sales')) {
-            $sale = DB::table('flash_sales')
-                ->where('course_id', $course->id)
-                ->where('is_published', true)
-                ->where('is_active', true)
-                ->where('starts_at', '<=', now())
-                ->where('ends_at', '>', now())
-                ->orderByDesc('id')
-                ->first();
-            if ($sale) {
-                $discount = $sale->discount_type === 'percent'
-                    ? $originalPrice * ((float) $sale->discount_value / 100)
-                    : (float) $sale->discount_value;
-                $price = round(max(0, $originalPrice - min($originalPrice, $discount)), 2);
-            }
+            $quote = app(\Plugins\Modules\FlashSale\Services\FlashSalePricingService::class)
+                ->quote((int) $course->id, $branchId !== null ? (int) $branchId : null);
         }
+        $originalPrice = (float) $quote['subtotal'];
+        $price = (float) $quote['total'];
         $paidCourse = $price > 0;
         if ($paidCourse && (!$this->plugins->isEnabled('fees-management') || !Schema::hasTable('fee_invoices'))) {
             abort(503, 'The Fees & Invoicing plugin must be enabled before paid course enrollment can be opened.');
