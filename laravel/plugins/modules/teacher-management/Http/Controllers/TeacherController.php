@@ -20,6 +20,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Plugins\Modules\TeacherManagement\Models\Teacher;
+use Throwable;
 
 class TeacherController extends Controller
 {
@@ -68,7 +69,8 @@ class TeacherController extends Controller
             ? $this->storePhoto($request->file('photo'))
             : ($validated['photo_url'] ?? null);
 
-        $teacher = DB::transaction(function () use ($validated, $request, $photoPath, $actorId): Teacher {
+        try {
+            $teacher = DB::transaction(function () use ($validated, $request, $photoPath, $actorId): Teacher {
             $actor = User::query()->whereKey($actorId)->lockForUpdate()->firstOrFail();
             abort_unless($actor->is_active, 403, 'Inactive accounts cannot manage teacher records.');
             $actorRolePivots = $this->lockActorRoleAssignments($actorId);
@@ -118,6 +120,16 @@ class TeacherController extends Controller
             );
 
             return $createdTeacher;
+            });
+        } catch (Throwable $exception) {
+            if ($request->hasFile('photo') && is_string($photoPath)
+                && str_starts_with($photoPath, '/uploads/instructors/')) {
+                $storedPhoto = public_path(ltrim($photoPath, '/'));
+                if (is_file($storedPhoto) && !is_link($storedPhoto)) {
+                    @unlink($storedPhoto);
+                }
+            }
+            throw $exception;
         });
 
         return back()->with('status', "Instructor '{$validated['name']}' added.");
