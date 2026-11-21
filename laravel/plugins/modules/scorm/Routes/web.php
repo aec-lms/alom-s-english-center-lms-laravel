@@ -2,17 +2,15 @@
 
 declare(strict_types=1);
 
-use Illuminate\Support\Facades\Route;
-use Plugins\Modules\Scorm\Http\Controllers\ScormPackageController;
-use Plugins\Modules\Scorm\Http\Controllers\ScormRuntimeController;
+use Illuminate\\Support\\Facades\\Route;
+use Plugins\\Modules\\Scorm\\Http\\Controllers\\ScormPackageController;
+use Plugins\\Modules\\Scorm\\Http\\Controllers\\ScormRuntimeController;
 
 Route::middleware(['web', 'installed', 'plugin:scorm'])->group(function (): void {
     Route::get('/my-learning/scorm', [ScormRuntimeController::class, 'studentIndex'])
         ->middleware('auth')->name('plugins.scorm.student.index');
     Route::get('/my-learning/scorm/{package}', [ScormRuntimeController::class, 'launch'])
         ->whereNumber('package')->middleware('auth')->name('plugins.scorm.launch');
-    Route::get('/scorm-player/{attempt}/{token}', [ScormRuntimeController::class, 'contentPlayer'])
-        ->whereNumber('attempt')->name('plugins.scorm.content.player')->middleware('signed');
 
     Route::prefix('admin/scorm')->name('plugins.scorm.admin.')
         ->middleware(['auth', 'permission:scorm.manage'])
@@ -24,12 +22,24 @@ Route::middleware(['web', 'installed', 'plugin:scorm'])->group(function (): void
         });
 });
 
-$contentOrigin = (string) config('scorm.content_origin', '');
-$contentHost = parse_url($contentOrigin, PHP_URL_HOST);
+$playerHost = parse_url((string) config('scorm.player_origin', ''), PHP_URL_HOST);
+$contentHost = parse_url((string) config('scorm.content_origin', ''), PHP_URL_HOST);
 $appHost = parse_url((string) config('app.url'), PHP_URL_HOST);
-if (is_string($contentHost) && $contentHost !== '' && $contentHost !== $appHost) {
+
+if (is_string($playerHost) && $playerHost !== '' && $playerHost !== $appHost && $playerHost !== $contentHost) {
+    Route::domain($playerHost)->middleware(['installed', 'plugin:scorm'])->group(function (): void {
+        Route::get('/scorm-player/{attempt}/{token}', [ScormRuntimeController::class, 'contentPlayer'])
+            ->whereNumber('attempt')->name('plugins.scorm.content.player')->middleware('signed');
+    });
+}
+
+if (is_string($contentHost) && $contentHost !== '' && $contentHost !== $appHost && $contentHost !== $playerHost) {
     Route::domain($contentHost)->middleware(['installed', 'plugin:scorm'])->group(function (): void {
-        Route::get('/scorm-content/{attempt}/{token}/{path?}', [ScormRuntimeController::class, 'contentFile'])
+        // Token is accepted only by the bootstrap route. It is exchanged for an
+        // HttpOnly, host-only cookie and then removed from the visible SCO URL.
+        Route::get('/scorm-bootstrap/{attempt}/{token}/{path?}', [ScormRuntimeController::class, 'contentBootstrap'])
+            ->whereNumber('attempt')->where('path', '.*')->name('plugins.scorm.content.bootstrap');
+        Route::get('/scorm-content/{attempt}/{path?}', [ScormRuntimeController::class, 'contentFile'])
             ->whereNumber('attempt')->where('path', '.*')->name('plugins.scorm.content.file');
     });
 }
