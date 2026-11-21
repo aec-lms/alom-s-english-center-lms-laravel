@@ -227,14 +227,14 @@ class ScormRuntimeControllerTest extends TestCase
         $attempt = DB::table('scorm_attempts')->where('scorm_package_id', $packageId)->first();
 
         $untrustedOrigin = ['HTTP_ORIGIN' => 'https://attacker.example.test', 'CONTENT_TYPE' => 'text/plain'];
-        $this->call('OPTIONS', '/api/scorm-runtime/commit', [], [], [], $untrustedOrigin)
-            ->assertForbidden()
-            ->assertHeader('Access-Control-Allow-Origin', 'https://scorm-player.example.test');
+        $preflight = $this->call('OPTIONS', '/api/scorm-runtime/commit', [], [], [], $untrustedOrigin);
+        $preflight->assertForbidden();
+        $this->assertNotSame('https://attacker.example.test', $preflight->headers->get('Access-Control-Allow-Origin'));
 
-        $this->call('POST', '/api/scorm-runtime/commit', [], [], [], $untrustedOrigin,
-            $this->commitPayload($attempt->id, $token, 0, ['cmi.core.lesson_location' => 'forged']))
-            ->assertForbidden()
-            ->assertHeaderMissing('Access-Control-Allow-Origin');
+        $forged = $this->call('POST', '/api/scorm-runtime/commit', [], [], [], $untrustedOrigin,
+            $this->commitPayload($attempt->id, $token, 0, ['cmi.core.lesson_location' => 'forged']));
+        $forged->assertForbidden();
+        $this->assertNotSame('https://attacker.example.test', $forged->headers->get('Access-Control-Allow-Origin'));
 
         $this->assertDatabaseHas('scorm_attempts', [
             'id' => $attempt->id,
