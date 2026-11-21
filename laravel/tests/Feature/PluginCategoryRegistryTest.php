@@ -10,12 +10,12 @@ use Tests\TestCase;
 
 class PluginCategoryRegistryTest extends TestCase
 {
-    public function test_all_sixty_current_plugin_slugs_have_one_canonical_category(): void
+    public function test_all_current_plugin_slugs_have_one_canonical_category(): void
     {
         $slugs = PluginCategoryRegistry::knownSlugs();
 
-        $this->assertCount(60, $slugs);
-        $this->assertCount(60, array_unique($slugs));
+        $this->assertCount(count($manifestSlugs = glob(base_path('plugins/modules/*/plugin.json')) ?: []), $slugs);
+        $this->assertCount(count($slugs), array_unique($slugs));
 
         $manifestSlugs = [];
         foreach (File::directories(base_path('plugins/modules')) as $directory) {
