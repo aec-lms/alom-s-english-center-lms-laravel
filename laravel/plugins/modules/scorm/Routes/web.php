@@ -28,7 +28,7 @@ $contentOrigin = (string) config('scorm.content_origin', '');
 $contentHost = parse_url($contentOrigin, PHP_URL_HOST);
 $appHost = parse_url((string) config('app.url'), PHP_URL_HOST);
 if (is_string($contentHost) && $contentHost !== '' && $contentHost !== $appHost) {
-    Route::domain($contentHost)->middleware(['web', 'installed', 'plugin:scorm'])->group(function (): void {
+    Route::domain($contentHost)->middleware(['installed', 'plugin:scorm'])->group(function (): void {
         Route::get('/scorm-content/{attempt}/{token}/{path?}', [ScormRuntimeController::class, 'contentFile'])
             ->whereNumber('attempt')->where('path', '.*')->name('plugins.scorm.content.file');
     });
