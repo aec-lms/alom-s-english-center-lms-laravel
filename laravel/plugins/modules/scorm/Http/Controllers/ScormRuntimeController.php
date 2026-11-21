@@ -200,7 +200,7 @@ class ScormRuntimeController extends Controller
         ]);
 
         return $response
-            ->header('Content-Security-Policy', $this->contentSecurityPolicy())
+            ->header('Content-Security-Policy', $this->playerSecurityPolicy())
             ->header('X-Content-Type-Options', 'nosniff')
             ->header('Referrer-Policy', 'no-referrer')
             ->header('Cache-Control', 'private, no-store');
@@ -579,11 +579,21 @@ class ScormRuntimeController extends Controller
         ];
     }
 
+    private function playerSecurityPolicy(): string
+    {
+        $contentOrigin = rtrim((string) config('scorm.content_origin', ''), '/');
+
+        return "default-src 'self' data: blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src {$contentOrigin}; frame-ancestors 'self'; form-action 'none'; object-src 'none'; base-uri 'self'";
+    }
+
     private function contentSecurityPolicy(): string
     {
         $appOrigin = rtrim((string) config('app.url'), '/');
 
-        return "default-src 'self' data: blob: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data: https:; connect-src 'self' {$appOrigin} https:; frame-src 'self' https:; frame-ancestors 'self' {$appOrigin}; object-src 'none'; base-uri 'self'";
+        // SCO packages are untrusted active content. Permit the LMS runtime API,
+        // but block arbitrary HTTPS egress that could leak the attempt token or
+        // learner data through fetch, images, media, frames, fonts or forms.
+        return "default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' {$appOrigin}; frame-src 'self'; frame-ancestors {$appOrigin}; form-action 'none'; object-src 'none'; base-uri 'self'";
     }
 
     private function parseScormTime(string $value): int
