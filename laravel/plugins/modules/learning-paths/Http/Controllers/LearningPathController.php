@@ -118,9 +118,10 @@ class LearningPathController extends Controller
         $actor = $request->user();
         $this->ensureBranchAssignment($actor);
         $validated = $request->validate(['status' => ['required', 'in:draft,published,archived']]);
+
         DB::transaction(function () use ($actor, $path, $validated): void {
-            // Enrollment takes this same parent-row lock before creating a learner
-            // snapshot. Recheck the active roster only after acquiring the lock.
+            // enroll() takes this same parent-row lock before creating an
+            // enrollment, so publish/archive decisions cannot race a learner join.
             $record = DB::table('learning_paths')
                 ->when($actor->hasRole('branch_manager'), fn ($query) => $query->where('branch_id', $actor->branch_id))
                 ->where('id', $path)
@@ -144,8 +145,7 @@ class LearningPathController extends Controller
             }
 
             DB::table('learning_paths')->where('id', $record->id)->update([
-                'status' => $validated['status'],
-                'updated_at' => now(),
+                'status' => $validated['status'], 'updated_at' => now(),
             ]);
         });
 
