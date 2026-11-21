@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Facades\\File;
-use Tests\\TestCase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
+use Tests\TestCase;
 
 class ScormRuntimeControllerTest extends TestCase
 {
