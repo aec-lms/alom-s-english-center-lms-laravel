@@ -3,6 +3,9 @@
 declare(strict_types=1);
 
 use App\Core\Security\AuditLogger;
+use App\Core\Plugins\PluginManager;
+use Plugins\Modules\PaymentManagement\Models\PaymentRefund;
+use Plugins\Modules\PaymentManagement\Services\RefundOrchestrationService;
 use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -57,3 +60,37 @@ Schedule::call(function (): void {
         }
     }, 3);
 })->name('cms-publish-scheduled-posts')->everyMinute()->withoutOverlapping();
+
+
+Schedule::call(function (): void {
+    if (!app(PluginManager::class)->isEnabled('payment-management')
+        || !Schema::hasTable('payment_refunds')
+        || !Schema::hasColumn('payment_refunds', 'status')
+        || !Schema::hasColumn('payment_refunds', 'provider_refund_reference')
+        || !Schema::hasColumn('payment_refunds', 'reconciled_at')) {
+        return;
+    }
+
+    // Only provider-pending rows with a provider reference are safe to poll.
+    // Ambiguous rows without a reference remain in manual review and are never
+    // resubmitted automatically.
+    PaymentRefund::query()
+        ->whereIn('status', ['submitted', 'pending'])
+        ->whereNotNull('provider_refund_reference')
+        ->orderByRaw('reconciled_at IS NULL DESC')
+        ->orderBy('reconciled_at')
+        ->orderBy('id')
+        ->limit(25)
+        ->get()
+        ->each(function (PaymentRefund $refund): void {
+            try {
+                app(RefundOrchestrationService::class)->reconcile($refund, null);
+            } catch (\Throwable $exception) {
+                // Do not log provider payloads, credentials or payer data.
+                logger()->warning('Provider refund reconciliation failed.', [
+                    'refund_id' => $refund->id,
+                    'exception_class' => get_class($exception),
+                ]);
+            }
+        });
+})->name('payment-reconcile-provider-refunds')->everyTenMinutes()->withoutOverlapping();
