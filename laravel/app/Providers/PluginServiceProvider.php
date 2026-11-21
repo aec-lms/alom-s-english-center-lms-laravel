@@ -39,7 +39,7 @@ class PluginServiceProvider extends ServiceProvider
     {
         // MySQL tests rebuild the schema per test and explicitly install the plugins
         // they exercise. Avoid booting providers from stale rows before migrate:fresh.
-        if ($this->app->environment('testing') && (bool) env('AEC_TEST_EXPLICIT_PLUGIN_BOOT', false)) {
+        if ($this->app->environment('testing') && (bool) config('plugins.explicit_test_boot', false)) {
             return;
         }
 

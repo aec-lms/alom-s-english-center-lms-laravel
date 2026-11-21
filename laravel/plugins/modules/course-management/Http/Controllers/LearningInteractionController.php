@@ -109,6 +109,29 @@ class LearningInteractionController extends Controller
         return view('course-management::live-class-instructor', compact('class', 'course'));
     }
 
+    public function postInstructorAnnouncement(Request $request, int $liveClass): JsonResponse
+    {
+        $class = $this->authorizedLiveClass($request, $liveClass);
+        abort_unless($this->canTeachLiveClass($request, $class), 403, 'Only the assigned instructor or an authorized course manager can publish an announcement.');
+        $data = $request->validate(['body' => ['required', 'string', 'min:3', 'max:2000']]);
+        $body = trim(strip_tags($data['body']));
+        abort_if(mb_strlen($body) < 3, 422, 'Please enter a clear announcement.');
+
+        $id = DB::table('live_class_discussions')->insertGetId([
+            'live_class_id' => $liveClass,
+            'user_id' => $request->user()->id,
+            'parent_id' => null,
+            'body' => $body,
+            'status' => 'visible',
+            'is_pinned' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return response()->json(['message' => 'Instructor announcement published.', 'announcement_id' => $id], 201)
+            ->header('Cache-Control', 'no-store');
+    }
+
     public function liveQuestions(Request $request, int $liveClass): JsonResponse
     {
         $class = $this->authorizedLiveClass($request, $liveClass);
