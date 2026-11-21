@@ -462,6 +462,7 @@ class RecycleBinTest extends TestCase
     }
 
 
+    // Delete and restore must acquire sorted User rows before role pivots and the Teacher profile on both connections.
     public function test_mysql_teacher_delete_serializes_with_concurrent_recycle_bin_restore(): void
     {
         if (DB::connection()->getDriverName() !== 'mysql') {
