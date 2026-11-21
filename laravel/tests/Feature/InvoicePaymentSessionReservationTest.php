@@ -230,6 +230,11 @@ class InvoicePaymentSessionReservationTest extends TestCase
             ->get();
         $this->assertSame($stripeProviderKeys[0], $stripeTransactions[0]->metadata['provider_idempotency_key']);
         $this->assertSame($stripeProviderKeys[1], $stripeTransactions[1]->metadata['provider_idempotency_key']);
+        $this->assertSame('pi_cross_invoice_secret_1', $stripeFirst['client_secret']);
+        $this->assertSame('pi_cross_invoice_secret_2', $stripeSecond['client_secret']);
+        foreach ($stripeTransactions as $stripeTransaction) {
+            $this->assertArrayNotHasKey('client_secret', $stripeTransaction->metadata);
+        }
 
         $this->assertSame(4, DB::table('payment_transactions')->count());
     }
