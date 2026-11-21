@@ -163,3 +163,10 @@ Before recommending merge, the primary owner must verify and record all of the f
 6. PR body, tests, docs and this register accurately reflect the final scope, owner, dependencies and verification evidence.
 
 **Notification flow:** when all gates pass, the primary owner posts a concise completion note on the PR with exact head SHA, CI links/results, independent reviewer, screenshots/evidence and any accepted non-blocking follow-ups; then notifies the project owner that the PR is ready to merge. The project owner/authorized maintainer performs or explicitly authorizes the merge using repository policy (required approvals, branch protection and merge queue if enabled). If any gate is unmet, keep the PR Draft/open and report the specific blocker—never claim complete or recommend merge.
+
+
+### 2026-11-21 — CI action pinning remediation
+
+| Task / scope | Primary owner | Supporting / reviewer | Status | Issue / PR | Branch / head SHA | Ownership boundary / next action |
+|---|---|---|---|---|---|---|
+| Pin CodeQL workflow actions to full commit SHAs to satisfy repository action policy | `Alomsenglishcenter` | Independent workflow/security review requested | In Review / CI pending | [PR #389](https://github.com/aec-lms/alom-s-english-center-lms-laravel/pull/389) · triggered by CodeQL setup failure on [PR #386](https://github.com/aec-lms/alom-s-english-center-lms-laravel/pull/386) | `fix/ci-pin-codeql-actions` · `87fe573d694c5789a8f5d22f370b7d756da08abd` | Only `.github/workflows/codeql.yml` is owned by this bounded fix. All nine main-branch workflow files were audited; CodeQL was the only workflow with unpinned actions. After merge, rerun CodeQL on affected PRs and verify no remaining policy failures. |
