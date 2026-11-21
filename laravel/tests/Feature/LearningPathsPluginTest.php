@@ -112,6 +112,54 @@ class LearningPathsPluginTest extends TestCase
             ->assertOk()->assertSee('English Foundations Journey')->assertSee('Grammar Foundations');
     }
 
+    public function test_store_rechecks_course_branch_after_preflight_before_writing_path(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'course-management', 'learning-paths']);
+        $admin = $this->createUserWithRole('admin');
+        $branchA = DB::table('branches')->insertGetId([
+            'code' => 'LP-TOCTOU-A-' . strtoupper(bin2hex(random_bytes(3))),
+            'name' => 'Learning Path TOCTOU A',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $branchB = DB::table('branches')->insertGetId([
+            'code' => 'LP-TOCTOU-B-' . strtoupper(bin2hex(random_bytes(3))),
+            'name' => 'Learning Path TOCTOU B',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $first = $this->course('LP-TOCTOU-ONE', 'TOCTOU First Course', (int) $branchA);
+        $second = $this->course('LP-TOCTOU-TWO', 'TOCTOU Second Course', (int) $branchA);
+
+        $reassigned = false;
+        DB::listen(function (\Illuminate\Database\Events\QueryExecuted $query) use (&$reassigned, $second, $branchB): void {
+            $sql = strtolower($query->sql);
+            if (!$reassigned && str_contains($sql, 'courses') && str_contains($sql, ' in (')) {
+                $reassigned = true;
+                DB::table('courses')->where('id', $second)->update([
+                    'branch_id' => $branchB,
+                    'updated_at' => now(),
+                ]);
+            }
+        });
+
+        $response = $this->actingAs($admin)->post('/admin/learning-paths', [
+            'title' => 'TOCTOU Branch Path',
+            'status' => 'published',
+            'branch_id' => $branchA,
+            'course_ids' => [$first, $second],
+        ]);
+
+        $this->assertTrue($reassigned, 'The test must move a selected course after request preflight and before the transaction recheck.');
+        $response->assertStatus(409);
+        $this->assertSame(0, DB::table('learning_paths')->where('slug', 'toctou-branch-path')->count());
+        $this->assertSame(0, DB::table('learning_path_courses')->whereIn('course_id', [$first, $second])->count());
+        $this->assertSame((int) $branchB, (int) DB::table('courses')->where('id', $second)->value('branch_id'));
+    }
+
     public function test_enrolled_path_curriculum_cannot_be_reordered_or_replaced(): void
     {
         $this->markSystemInstalled();
