@@ -116,7 +116,7 @@ class StripeGatewayService
                 'stripe_status' => $status,
                 'client_secret' => $intent['client_secret'] ?? null,
                 'payment_method_id' => null,
-            ], $status === 'succeeded' ? 'pending' : 'initiated', (string) $intent['id']);
+            ], 'initiated', (string) $intent['id']);
 
             return ['transaction' => $tx, 'client_secret' => $intent['client_secret'] ?? null, 'payment_intent_id' => $intent['id']];
         } catch (\Throwable $e) {
