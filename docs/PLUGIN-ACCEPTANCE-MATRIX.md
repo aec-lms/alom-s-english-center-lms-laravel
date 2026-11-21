@@ -1,7 +1,7 @@
 # Plugin implementation & acceptance matrix
 
 **Repository:** `aec-lms/alom-s-english-center-lms-laravel`  
-**Inventory source:** `main` tree at commit `2471a9a929d1b36684aa82f2f9889d4c75ecfb01`  
+**Inventory source:** `main` tree at commit `f288815876bdded6fac862d93c3d9362c43b7c58`; this PR branch adds `learning-rewards` (manifest 61)  
 **Review date:** 2026-11-16
 
 ## How to read this matrix
@@ -302,3 +302,29 @@ A recursive Git tree scan of **main** at exact commit `db493c6525f110cd4815024f7
 ## Mainline delta since the 60-manifest inventory snapshot (2026-11-20)
 
 The 60-slug inventory was first scanned at `db493c6525f110cd4815024f7a8965c1da8baa22`. A Git comparison through current main commit `73722f154e5e3361de15320c9b3a9b3f68c71e7d` reports 443 commits ahead and 65 changed files. Of those changes, the only plugin manifest files are updates to `cms-website/plugin.json`, `course-management/plugin.json`, and `payment-management/plugin.json`; no plugin manifest path was added or removed. The slug count therefore remains 60 at this checkpoint. The per-plugin tracked-file counts in the preceding table remain the earlier `db493...` snapshot and must be regenerated against `73722...` before using them as current file counts.
+
+
+## Supplemental acceptance mapping for newer manifests (PR branch inventory: 61)
+
+The original static inventory above predates the latest plugin additions. The following rows bring its functional test references up to the current 60-manifest mainline inventory plus the new Learning Rewards plugin in this PR. These are targeted test references, not production certifications.
+
+| Plugin | Focused feature-test evidence | Coverage / limitation |
+|---|---|---|
+| `al-branding-loader` | `AlBrandingLoaderProductionHardeningTest`, `AlomBrandingLoaderPhoneticsPluginTest` | Partial: safe branding assets, route exclusions, loader timeout and plugin independence |
+| `assignment-management` | `AssignmentManagementPluginTest` | Targeted: submission, grading, enrollment, branch isolation and private attachments; reward adapter covered in this PR |
+| `board-question-solver` | `BoardQuestionSolverPluginTest` | Targeted: private history, in-memory image handling, daily limits and disabled-provider behavior |
+| `commerce-cart` | `UnifiedCommerceCartTest`, `CourseGiftCommerceTest`, `CourseCommercePaymentSettlementTest` | Targeted: cart ownership, branch checks, gift/voucher redemption and settlement; provider reconciliation remains external |
+| `course-assessments` | `CourseAssessmentsPluginTest`, `CourseAssessmentsMobileApiTest` | Targeted: assessment snapshots, autosave, grading and branch checks; auto-graded pass reward adapter covered in this PR; manual grading reward adapter deferred to PR #345 owner |
+| `course-bundles` | `CourseBundlesPluginTest` | Targeted: standalone install, bundle purchase, branch visibility and invoice snapshots |
+| `course-content-studio` | `CourseContentStudioPluginTest` | Targeted: content creation, lesson progress, enrollment protection and private files; first-completion reward adapter covered in this PR |
+| `course-wishlist` | `CourseWishlistPluginTest` | Targeted: student ownership, unpublished/branch restrictions and mobile API |
+| `expense-management` | `ExpenseManagementPluginTest`, `ExpenseFinanceReportTest` | Targeted: private receipts, approval totals, branch isolation and finance reports |
+| `guardian-portal` | `GuardianPortalPluginTest` | Targeted: verified child links, read-only summaries and cross-branch denial |
+| `phonetics` | `AlomBrandingLoaderPhoneticsPluginTest` | Targeted: enrollment/branch gates, server-side grading and safe media; recording-review race remains tracked separately |
+| `push-notifications` | `PushNotificationDeliveryTest`, `MobilePushTokenLifecycleTest` | Targeted: FCM delivery, retry idempotency, invalid-device deactivation and token revocation |
+| `question-bank` | `QuestionBankPluginTest`, `LearnAndEarnQuestionBankTest` | Targeted: independent categories/types, immutable snapshots and random paper constraints |
+| `quiz-contest` | `QuizContestPluginTest` | Targeted: one submission, answer-key privacy, branch isolation, ranking and lifecycle locking |
+| `referral-income` | `ReferralIncomePluginTest`, `ReferralIncomeCommerceSettlementTest`, `ReferralIncomeRedTeamHardeningTest` | Targeted: attribution, settlement, refund reversals and payout controls; concurrency/rounding gates remain open |
+| `support-center` | `SupportCenterPluginTest` | Targeted: ticket ownership, student replies, closed-ticket protection and admin workflow |
+| `learning-rewards` | `LearningRewardsPluginTest`, plus course/assignment/attendance/assessment integration tests | New in PR #381: non-cash XP ledger, daily caps, idempotency, streaks, reversals, privacy and verified academic activity adapters; exact-head CI pending |
+
