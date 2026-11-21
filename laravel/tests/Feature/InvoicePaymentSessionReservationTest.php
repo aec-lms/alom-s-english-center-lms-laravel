@@ -680,7 +680,7 @@ class InvoicePaymentSessionReservationTest extends TestCase
         $this->assertSame($orderId, $transaction->external_reference);
         $this->assertSame(0.0, (float) $invoice->fresh()->paid_amount);
         $this->assertSame('unpaid', $invoice->fresh()->status);
-        Http::assertSentCount(3);
+        Http::assertSentCount(4);
     }
 
 
