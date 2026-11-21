@@ -34,13 +34,8 @@
 (() => {
     'use strict';
 
-    const runtimeUrl = @json($runtimeUrl);
-    const attemptId = @json($attemptId);
-    const token = @json($token);
-    let stateVersion = @json($stateVersion);
-    let initialized = false;
-    let finished = false;
-    let lastError = '0';
+    const contentOrigin = @json($contentOrigin);
+
     const readOnly = {
         'cmi._version': '3.4',
         'cmi.core.student_id': @json($studentId),
@@ -257,9 +252,10 @@
 
     window.API = api;
     window.addEventListener('message', event => {
-        if (event.source === document.getElementById('scorm-sco').contentWindow && event.data === 'scorm:ready') {
-            document.getElementById('runtime-status').textContent = @json(__('plugins.scorm::messages.course_loaded'));
-        }
+        const frame = document.getElementById('scorm-sco');
+        if (event.origin !== contentOrigin || event.source !== frame.contentWindow
+            || !event.data || typeof event.data !== 'object' || event.data.type !== 'scorm:status') return;
+        document.getElementById('runtime-status').textContent = String(event.data.message || '').slice(0, 160);
     });
 })();
 </script>
