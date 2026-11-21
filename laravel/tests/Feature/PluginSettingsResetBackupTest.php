@@ -29,7 +29,7 @@ class PluginSettingsResetBackupTest extends TestCase
         try {
             $manager->resetSettingsToDefaults('gateway-sslcommerz');
             $this->fail('Settings reset must stop when the recovery backup cannot be written.');
-        } catch (\\RuntimeException $exception) {
+        } catch (\RuntimeException $exception) {
             $this->assertStringContainsString('backup could not be written completely', $exception->getMessage());
         }
 
