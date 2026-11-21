@@ -98,7 +98,7 @@ class LearningRewardsPluginTest extends TestCase
         $student = $this->createUserWithRole('student');
         $student->forceFill(['is_active' => false])->save();
 
-        $this->expectException(\Symfony\\Component\\HttpKernel\\Exception\\HttpException::class);
+        $this->expectException(\Symfony\Component\HttpKernel\Exception\HttpException::class);
         app(LearningRewardsService::class)->awardVerifiedActivity((int) $student->id, 'lesson_completed', 'course_lesson', 102);
     }
 
