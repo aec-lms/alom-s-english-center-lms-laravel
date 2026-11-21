@@ -18,6 +18,7 @@ class PortalController extends Controller
     {
         $user = $request->user();
         abort_unless($user, 401);
+        abort_unless((bool) $user->is_active, 403, 'This account is inactive.');
 
         if ($user->hasRole('admin')) {
             return redirect()->route('admin.dashboard');
@@ -25,6 +26,23 @@ class PortalController extends Controller
 
         $role = collect(['student', 'teacher', 'guardian', 'branch_manager', 'accountant'])
             ->first(fn (string $candidate) => $user->hasRole($candidate)) ?? 'user';
+
+        if ($role === 'teacher'
+            && app(PluginManager::class)->isEnabled('teacher-management')
+            && Schema::hasTable('teachers')) {
+            $teacherProfileQuery = DB::table('teachers')->where('user_id', $user->id);
+            if (Schema::hasColumn('teachers', 'deleted_at')) {
+                $teacherProfileQuery->whereNull('deleted_at');
+            }
+            $teacherProfile = $teacherProfileQuery->first();
+            abort_unless(
+                $teacherProfile
+                    && (!Schema::hasColumn('teachers', 'is_active') || (bool) $teacherProfile->is_active),
+                403,
+                'An active teacher profile is required to access the teacher dashboard.'
+            );
+        }
+
         $branchId = $user->branch_id;
         $boardQuestionSolverAvailable = false;
         if ($role === 'student') {
