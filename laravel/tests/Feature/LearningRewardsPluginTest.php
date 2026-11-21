@@ -151,6 +151,41 @@ class LearningRewardsPluginTest extends TestCase
         ]);
     }
 
+    public function test_admin_can_create_and_deactivate_achievement_badges(): void
+    {
+        $this->bootRewards();
+        $admin = $this->createUserWithRole('admin');
+        $permission = Permission::query()->where('slug', 'gamification.manage')->firstOrFail();
+        Role::query()->where('slug', 'admin')->firstOrFail()->permissions()->syncWithoutDetaching([$permission->id]);
+
+        $this->actingAs($admin)->post('/admin/learning-rewards/badges', [
+            'slug' => 'grammar-master',
+            'name' => 'Grammar Master',
+            'description' => 'Complete grammar learning milestones.',
+            'icon' => 'book-check',
+            'points_threshold' => 250,
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $badgeId = (int) DB::table('learning_reward_badges')->where('slug', 'grammar-master')->value('id');
+        $this->assertGreaterThan(0, $badgeId);
+
+        $this->actingAs($admin)->put("/admin/learning-rewards/badges/{$badgeId}", [
+            'name' => 'Grammar Champion',
+            'description' => 'Reach the grammar learning milestone.',
+            'icon' => 'award',
+            'points_threshold' => 300,
+            'streak_threshold' => null,
+            'is_active' => false,
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('learning_reward_badges', [
+            'id' => $badgeId,
+            'name' => 'Grammar Champion',
+            'points_threshold' => 300,
+            'is_active' => 0,
+        ]);
+    }
+
     public function test_client_cannot_award_points_and_admin_rule_updates_are_permission_gated(): void
     {
         $this->bootRewards();
