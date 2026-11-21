@@ -461,4 +461,74 @@ class RecycleBinTest extends TestCase
         }
     }
 
+
+    public function test_mysql_teacher_delete_serializes_with_concurrent_recycle_bin_restore(): void
+    {
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            $this->markTestSkipped('Teacher delete/restore serialization requires MySQL 8.');
+        }
+
+        $this->markSystemInstalled();
+        $this->activatePlugins(['teacher-management']);
+        $admin = $this->createUserWithRole('admin');
+        $instructor = $this->createUserWithRole('teacher');
+        $teacher = Teacher::query()->create([
+            'user_id' => $instructor->id,
+            'branch_id' => null,
+            'employee_code' => 'RESTORE-RACE-' . strtoupper(substr(bin2hex(random_bytes(4)), 0, 8)),
+            'specialization' => 'English',
+            'is_active' => true,
+        ]);
+
+        $primaryName = DB::getDefaultConnection();
+        $primary = DB::connection($primaryName);
+        $secondaryName = 'teacher_delete_restore_' . bin2hex(random_bytes(3));
+        config(['database.connections.' . $secondaryName => config('database.connections.' . $primaryName)]);
+        DB::purge($secondaryName);
+        $secondary = DB::connection($secondaryName);
+        $secondary->statement('SET SESSION innodb_lock_wait_timeout = 1');
+
+        $primary->beginTransaction();
+        try {
+            // Execute the real delete lifecycle inside an outer transaction.
+            // Its nested transaction returns while account/profile locks remain held.
+            $this->actingAs($admin)
+                ->delete('/admin/teachers/' . $teacher->id)
+                ->assertRedirect();
+
+            DB::setDefaultConnection($secondaryName);
+            $this->withoutExceptionHandling();
+            try {
+                $this->actingAs($admin)
+                    ->post('/admin/recycle-bin/teachers/' . $teacher->id . '/restore');
+                $this->fail('Recycle Bin restore must wait while the concurrent teacher delete holds the canonical account/profile locks.');
+            } catch (\Illuminate\Database\QueryException $exception) {
+                $this->assertSame(1205, (int) ($exception->errorInfo[1] ?? 0), $exception->getMessage());
+            } finally {
+                $this->withExceptionHandling();
+            }
+
+            DB::setDefaultConnection($primaryName);
+            $primary->commit();
+
+            DB::setDefaultConnection($secondaryName);
+            $this->actingAs($admin)
+                ->post('/admin/recycle-bin/teachers/' . $teacher->id . '/restore')
+                ->assertRedirect()
+                ->assertSessionHasNoErrors();
+
+            $this->assertDatabaseHas('teachers', ['id' => $teacher->id, 'deleted_at' => null]);
+            $this->assertDatabaseHas('users', ['id' => $instructor->id, 'is_active' => false]);
+        } catch (\Throwable $exception) {
+            if ($primary->transactionLevel() > 0) {
+                $primary->rollBack();
+            }
+            throw $exception;
+        } finally {
+            DB::setDefaultConnection($primaryName);
+            DB::purge($secondaryName);
+        }
+    }
+
+
 }
