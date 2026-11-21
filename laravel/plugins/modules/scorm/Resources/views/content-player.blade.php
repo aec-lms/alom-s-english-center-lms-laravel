@@ -93,6 +93,8 @@
         'cmi.student_preference.speed', 'cmi.student_preference.text'
     ]);
     const dynamicPattern = /^cmi\.interactions\.\d+\.(?:id|type|time|weighting|student_response|result|latency|objectives\.\d+\.id|correct_responses\.\d+\.pattern)$/;
+    const objectivePattern = /^cmi\.objectives\.\d+\.(?:id|score\.(?:raw|min|max)|status)$/;
+    const readOnlyDynamicPattern = /^cmi\.interactions\.\d+\.(?:objectives|correct_responses)\._count$/;
     const setError = code => { lastError = code; return 'false'; };
     const isSessionTime = value => /^\d{4}:[0-5]\d:[0-5]\d(?:\.\d{1,2})?$/.test(value);
     const isScore = value => value !== '' && Number.isFinite(Number(value)) && Number(value) >= 0 && Number(value) <= 100;
@@ -145,7 +147,15 @@
             if (element === 'cmi.core.exit' || element === 'cmi.core.session_time') { lastError = '404'; return ''; }
             if (element === 'cmi.interactions._count') { lastError = '0'; return String(new Set(Object.keys(data).map(key => key.match(/^cmi\\.interactions\\.(\\d+)\\./)?.[1]).filter(Boolean)).size); }
             if (element === 'cmi.objectives._count') { lastError = '0'; return String(new Set(Object.keys(data).map(key => key.match(/^cmi\\.objectives\\.(\\d+)\\./)?.[1]).filter(Boolean)).size); }
-            if (readOnlyDynamicPattern.test(element)) { lastError = '0'; return '0'; }
+            if (readOnlyDynamicPattern.test(element)) {
+                const match = element.match(/^cmi\.interactions\.(\d+)\.(objectives|correct_responses)\._count$/);
+                const indexes = new Set(Object.keys(data).flatMap(key => {
+                    const item = key.match(/^cmi\.interactions\.(\d+)\.(objectives|correct_responses)\.(\d+)\./);
+                    return item && item[1] === match[1] && item[2] === match[2] ? [item[3]] : [];
+                }));
+                lastError = '0';
+                return String(indexes.size);
+            }
             if (Object.prototype.hasOwnProperty.call(readOnly, element)) { lastError = '0'; return String(readOnly[element]); }
             if (writable.has(element) || dynamicPattern.test(element) || objectivePattern.test(element)) {
                 lastError = '0';
