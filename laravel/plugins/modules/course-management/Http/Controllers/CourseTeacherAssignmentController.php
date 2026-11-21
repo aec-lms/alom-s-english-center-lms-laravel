@@ -95,6 +95,12 @@ class CourseTeacherAssignmentController extends Controller
                 ->lockForUpdate()
                 ->get();
 
+            // The route middleware is only an early gate. Revalidate the
+            // mutable permission grant under a row lock so revocation cannot
+            // race this privilege-granting assignment transaction.
+            $actorRolePivots = $lockedRolePivots->where('user_id', $actorId)->values();
+            $this->assertActorCanManageCourses($actor, $actorRolePivots);
+
             // BranchAccess::assignedBranchId re-queries the actor's role
             // pivot; those rows are already locked by this transaction.
             $branchId = $this->branches->assignedBranchId($actor);
@@ -144,16 +150,64 @@ class CourseTeacherAssignmentController extends Controller
         return back()->with('status', 'Teacher assigned to course.');
     }
 
+    /**
+     * Recheck the permission used by the route middleware while holding the
+     * role assignment and permission grant rows. Admin access is derived from
+     * the locked role pivot; non-admin grants are serialized against role
+     * permission edits via permission_role.
+     *
+     * @param \\Illuminate\\Support\\Collection<int, object> $actorRolePivots
+     */
+    private function assertActorCanManageCourses(User $actor, $actorRolePivots): void
+    {
+        $adminRoleId = Role::query()->where('slug', 'admin')->value('id');
+        if ($adminRoleId !== null && $actorRolePivots->contains(
+            fn ($pivot): bool => (int) $pivot->role_id === (int) $adminRoleId
+        )) {
+            return;
+        }
+
+        $permissionId = DB::table('permissions')->where('slug', 'courses.manage')->value('id');
+        if ($permissionId === null) {
+            abort(403, 'The course-management permission is not configured.');
+        }
+
+        $roleIds = $actorRolePivots->pluck('role_id')->map(static fn ($id): int => (int) $id)->all();
+        $grantedRoles = DB::table('permission_role')
+            ->whereIn('role_id', $roleIds)
+            ->where('permission_id', $permissionId)
+            ->orderBy('role_id')
+            ->lockForUpdate()
+            ->get(['role_id']);
+
+        abort_unless($grantedRoles->isNotEmpty(), 403, 'The acting account no longer has course-management permission.');
+    }
+
     public function destroy(Request $request, int $assignment): RedirectResponse
     {
-        $record = DB::table('course_teacher_assignments')
-            ->join('courses', 'courses.id', '=', 'course_teacher_assignments.course_id')
-            ->where('course_teacher_assignments.id', $assignment)
-            ->select('course_teacher_assignments.id', 'courses.branch_id')
-            ->first();
-        abort_unless($record, 404);
-        $this->branches->assertRecord($request->user(), $record);
-        DB::table('course_teacher_assignments')->where('id', $assignment)->delete();
+        $actorId = (int) $request->user()->getKey();
+
+        DB::transaction(function () use ($request, $assignment, $actorId): void {
+            $actor = User::query()->whereKey($actorId)->lockForUpdate()->firstOrFail();
+            abort_unless($actor->is_active, 403, 'Inactive accounts cannot manage course teachers.');
+            $actorRolePivots = DB::table('role_user')
+                ->where('user_id', $actorId)
+                ->orderBy('role_id')
+                ->lockForUpdate()
+                ->get(['role_id']);
+            $this->assertActorCanManageCourses($actor, $actorRolePivots);
+
+            $record = DB::table('course_teacher_assignments')
+                ->join('courses', 'courses.id', '=', 'course_teacher_assignments.course_id')
+                ->where('course_teacher_assignments.id', $assignment)
+                ->select('course_teacher_assignments.id', 'courses.branch_id')
+                ->lockForUpdate()
+                ->first();
+            abort_unless($record, 404);
+            $this->branches->assertRecord($actor, $record);
+            DB::table('course_teacher_assignments')->where('id', $assignment)->delete();
+        });
+
         return back()->with('status', 'Course teacher assignment removed.');
     }
 }
