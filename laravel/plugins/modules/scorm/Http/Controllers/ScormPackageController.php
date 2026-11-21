@@ -41,17 +41,17 @@ class ScormPackageController extends Controller
             ->orderByDesc('packages.created_at')
             ->paginate(20);
 
-        $replacementOptions = DB::table('scorm_packages as packages')
-            ->join('courses', 'courses.id', '=', 'packages.course_id')
-            ->where('packages.status', 'published')
-            ->where('courses.status', 'published')
-            ->when($actor?->hasRole('branch_manager'), fn ($query) => $query->where('packages.branch_id', $actor->branch_id))
-            ->orderBy('courses.title')
-            ->orderBy('packages.title')
-            ->get(['packages.id', 'packages.course_id', 'packages.title', 'packages.revision_number', 'courses.title as course_title']);
-
+        $replacementOptions = collect();
         $courses = collect();
         if ($plugins->isEnabled('course-management') && Schema::hasTable('courses')) {
+            $replacementOptions = DB::table('scorm_packages as packages')
+                ->join('courses', 'courses.id', '=', 'packages.course_id')
+                ->where('packages.status', 'published')
+                ->where('courses.status', 'published')
+                ->when($actor?->hasRole('branch_manager'), fn ($query) => $query->where('packages.branch_id', $actor->branch_id))
+                ->orderBy('courses.title')
+                ->orderBy('packages.title')
+                ->get(['packages.id', 'packages.course_id', 'packages.title', 'packages.revision_number', 'courses.title as course_title']);
             $courses = DB::table('courses')
                 ->where('status', 'published')
                 ->when($actor?->hasRole('branch_manager'), fn ($query) => $query->where(function ($scope) use ($actor): void {
