@@ -446,7 +446,7 @@ class RecycleBinTest extends TestCase
                 ->post('/admin/recycle-bin/teachers/' . $teachers[1]['id'] . '/restore')
                 ->assertForbidden();
 
-            $this->assertSoftDeleted('teachers', ['id' => $teachers[1]->id]);
+            $this->assertSoftDeleted('teachers', ['id' => $teachers[1]['id']]);
             $this->assertDatabaseHas('users', [
                 'id' => $teachers[1]['user_id'],
                 'is_active' => false,
