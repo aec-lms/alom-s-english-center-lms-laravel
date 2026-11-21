@@ -68,6 +68,8 @@ class BackupAndUpdateTest extends TestCase
     {
         $this->markSystemInstalled();
         $beforeCount = BackupRecord::query()->count();
+        $backupDirectory = rtrim((string) config('lms.backup_path'), DIRECTORY_SEPARATOR);
+        $beforeFiles = glob($backupDirectory . DIRECTORY_SEPARATOR . 'aec-backup-*.zip.enc') ?: [];
 
         AuditLog::creating(static function (): void {
             throw new RuntimeException('forced backup audit failure');
@@ -82,8 +84,8 @@ class BackupAndUpdateTest extends TestCase
             }
 
             $this->assertSame($beforeCount, BackupRecord::query()->count());
-            $backupFiles = glob(rtrim((string) config('lms.backup_path'), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'aec-backup-*.zip.enc') ?: [];
-            $this->assertSame([], $backupFiles);
+            $backupFiles = glob($backupDirectory . DIRECTORY_SEPARATOR . 'aec-backup-*.zip.enc') ?: [];
+            $this->assertSame($beforeFiles, $backupFiles);
         } finally {
             AuditLog::flushEventListeners();
         }
