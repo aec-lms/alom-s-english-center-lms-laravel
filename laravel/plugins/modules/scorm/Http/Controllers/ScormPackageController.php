@@ -49,6 +49,7 @@ class ScormPackageController extends Controller
 
         $validated = $request->validate([
             'course_id' => ['required', 'integer', 'exists:courses,id'],
+            'replace_package_id' => ['nullable', 'integer', 'exists:scorm_packages,id'],
             'package' => ['required', 'file', 'mimes:zip', 'max:204800'],
         ]);
 
@@ -62,32 +63,71 @@ class ScormPackageController extends Controller
         $archivePath = $request->file('package')?->getRealPath();
         abort_unless(is_string($archivePath) && $archivePath !== '', 422, 'Uploaded SCORM package is not readable.');
         $imported = $importer->import($archivePath);
+
         try {
-            DB::table('scorm_packages')->insert([
-                'course_id' => $course->id,
-                'branch_id' => $course->branch_id ?? $actor->branch_id,
-                'created_by' => $actor->id,
-                'title' => $imported['title'],
-                'identifier' => null,
-                'version' => '1.2',
-                'storage_directory' => basename($imported['directory']),
-                'launch_file' => $imported['launch_file'],
-                'manifest_file' => $imported['manifest'],
-                'package_sha256' => $imported['package_sha256'],
-                'file_count' => $imported['file_count'],
-                'expanded_bytes' => $imported['total_bytes'],
-                'status' => 'draft',
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
+            $packageId = DB::transaction(function () use ($validated, $course, $actor, $imported, $request): int {
+                $replacement = null;
+                $revisionNumber = 1;
+                if (!empty($validated['replace_package_id'])) {
+                    $replacement = DB::table('scorm_packages')
+                        ->where('id', $validated['replace_package_id'])
+                        ->lockForUpdate()
+                        ->first();
+                    abort_unless($replacement, 404, 'The package selected for replacement no longer exists.');
+                    $this->assertBranchAccess($request, $replacement);
+                    abort_unless((int) $replacement->course_id === (int) $course->id, 422, 'A replacement package must belong to the same course.');
+                    abort_unless($replacement->status === 'published', 409, 'Only a published package can be replaced.');
+                    $activeAttempts = DB::table('scorm_attempts')
+                        ->where('scorm_package_id', $replacement->id)
+                        ->whereIn('completion_state', ['in_progress', 'suspended'])
+                        ->lockForUpdate()
+                        ->get(['id']);
+                    abort_if($activeAttempts->isNotEmpty(), 409, 'This package has active learner attempts. Finish or suspend them before replacing the package.');
+                    $revisionNumber = (int) ($replacement->revision_number ?? 1) + 1;
+                }
+
+                $packageId = DB::table('scorm_packages')->insertGetId([
+                    'course_id' => $course->id,
+                    'branch_id' => $course->branch_id ?? $actor->branch_id,
+                    'created_by' => $actor->id,
+                    'title' => $imported['title'],
+                    'identifier' => null,
+                    'version' => '1.2',
+                    'revision_number' => $revisionNumber,
+                    'replaces_package_id' => $replacement?->id,
+                    'storage_directory' => basename($imported['directory']),
+                    'launch_file' => $imported['launch_file'],
+                    'manifest_file' => $imported['manifest'],
+                    'package_sha256' => $imported['package_sha256'],
+                    'file_count' => $imported['file_count'],
+                    'expanded_bytes' => $imported['total_bytes'],
+                    'status' => 'draft',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+
+                if ($replacement) {
+                    DB::table('scorm_packages')->where('id', $replacement->id)->update([
+                        'status' => 'archived',
+                        'archived_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                }
+
+                return $packageId;
+            });
         } catch (Throwable $exception) {
             if (is_dir($imported['directory']) && !is_link($imported['directory'])) {
-                \Illuminate\Support\Facades\File::deleteDirectory($imported['directory']);
+                \\Illuminate\\Support\\Facades\\File::deleteDirectory($imported['directory']);
             }
             throw $exception;
         }
 
-        return redirect()->route('plugins.scorm.admin.index')->with('status', 'SCORM 1.2 package imported and saved as draft. Review it before publishing.');
+        $message = $validated['replace_package_id'] ?? null
+            ? 'Replacement imported as revision ' . $revisionNumber . ' in draft state. The previous package is archived and its attempts are retained.'
+            : 'SCORM 1.2 package imported and saved as draft. Review it before publishing.';
+
+        return redirect()->route('plugins.scorm.admin.index')->with('status', $message);
     }
 
     public function publish(Request $request, int $package): RedirectResponse
