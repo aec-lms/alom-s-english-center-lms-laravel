@@ -20,7 +20,7 @@
             <label class="text-sm font-medium">Status<select name="status" class="mt-1 w-full rounded-lg border-slate-300"><option value="draft">Draft</option><option value="published">Published</option></select></label>
             <label class="text-sm font-medium md:col-span-2">Description<textarea name="description" rows="2" maxlength="5000" class="mt-1 w-full rounded-lg border-slate-300">{{ old('description') }}</textarea></label>
             @unless (auth()->user()->hasRole('branch_manager'))
-                <label class="text-sm font-medium">Branch ID (optional)<input type="number" min="1" name="branch_id" class="mt-1 w-full rounded-lg border-slate-300"></label>
+                <label class="text-sm font-medium">Branch (optional)<select name="branch_id" class="mt-1 w-full rounded-lg border-slate-300"><option value="">All branches</option>@foreach ($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select></label>
             @endunless
             <label class="text-sm font-medium md:col-span-2">Courses in sequence (Ctrl/Cmd-click to select at least 2)
                 <select name="course_ids[]" multiple required size="7" class="mt-1 w-full rounded-lg border-slate-300">
@@ -54,7 +54,7 @@
                         <label class="text-sm">Status<select name="status" class="mt-1 w-full rounded-lg border-slate-300"><option value="draft" @selected($path->status==='draft')>Draft</option><option value="published" @selected($path->status==='published')>Published</option><option value="archived" @selected($path->status==='archived')>Archived</option></select></label>
                         <label class="text-sm md:col-span-2">Description<textarea name="description" rows="2" class="mt-1 w-full rounded-lg border-slate-300">{{ $path->description }}</textarea></label>
                         @unless (auth()->user()->hasRole('branch_manager'))
-                            <label class="text-sm">Branch ID<input type="number" min="1" name="branch_id" value="{{ $path->branch_id }}" class="mt-1 w-full rounded-lg border-slate-300"></label>
+                            <label class="text-sm">Branch<select name="branch_id" class="mt-1 w-full rounded-lg border-slate-300"><option value="">All branches</option>@foreach ($branches as $branch)<option value="{{ $branch->id }}" @selected((int) $path->branch_id === (int) $branch->id)>{{ $branch->name }}</option>@endforeach</select></label>
                         @endunless
                         <label class="text-sm md:col-span-2">Course order (curriculum is locked once a learner joins)
                             <select name="course_ids[]" multiple required size="6" class="mt-1 w-full rounded-lg border-slate-300">
