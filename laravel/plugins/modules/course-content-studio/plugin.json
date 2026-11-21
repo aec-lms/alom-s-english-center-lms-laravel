@@ -9,7 +9,6 @@
   "dependencies": [],
   "optional_dependencies": [
     "course-management",
-    "learning-rewards",
     "learning-paths"
   ],
   "provider": "Plugins\\Modules\\CourseContentStudio\\Providers\\CourseContentStudioServiceProvider",
