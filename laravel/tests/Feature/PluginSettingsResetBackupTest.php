@@ -68,7 +68,9 @@ class PluginSettingsResetBackupTest extends TestCase
             'sandbox_mode' => '0',
         ], ['store_id', 'store_password']);
 
-        File::partialMock()->shouldReceive('put')->once()->andReturn(1);
+        $manager = \\Mockery::mock(PluginManager::class, [app(\\App\\Core\\Security\\AuditLogger::class)])->makePartial();
+        $manager->shouldAllowMockingProtectedMethods()
+            ->shouldReceive('writeAllBytesToHandle')->once()->andReturn(1);
 
         try {
             $manager->resetSettingsToDefaults('gateway-sslcommerz');
@@ -93,7 +95,9 @@ class PluginSettingsResetBackupTest extends TestCase
             'sandbox_mode' => '0',
         ], ['store_id', 'store_password']);
 
-        File::partialMock()->shouldReceive('put')->once()->andReturn(false);
+        $manager = \\Mockery::mock(PluginManager::class, [app(\\App\\Core\\Security\\AuditLogger::class)])->makePartial();
+        $manager->shouldAllowMockingProtectedMethods()
+            ->shouldReceive('writeAllBytesToHandle')->once()->andReturn(0);
 
         try {
             $manager->resetSettingsToDefaults('gateway-sslcommerz');
