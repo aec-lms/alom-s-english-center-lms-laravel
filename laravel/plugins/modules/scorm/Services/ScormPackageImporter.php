@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\Scorm\\Services;
+namespace Plugins\Modules\Scorm\Services;
 
 use DOMDocument;
 use DOMElement;
-use Illuminate\\Support\\Facades\\File;
+use Illuminate\Support\Facades\File;
 use RuntimeException;
 use ZipArchive;
 
@@ -70,7 +70,7 @@ class ScormPackageImporter
                 'file_count' => count($entries),
                 'total_bytes' => array_sum(array_column($entries, 'size')),
             ];
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             if ($directory !== null && is_dir($directory) && !is_link($directory)) {
                 File::deleteDirectory($directory);
             }
@@ -121,8 +121,8 @@ class ScormPackageImporter
                     if ($type !== 0 && !in_array($type, [0100000, 0040000], true)) {
                         throw new RuntimeException('SCORM archive contains a symbolic link or special filesystem entry.');
                     }
-                    if ($type === 0040000 && !str_ends_with($name, '/')) {
-                        throw new RuntimeException('SCORM directory entry has an inconsistent path.');
+                    if (($type === 0040000) !== str_ends_with($name, '/')) {
+                        throw new RuntimeException('SCORM entry type does not match its path.');
                     }
                 }
             }
@@ -149,10 +149,12 @@ class ScormPackageImporter
 
     private function normalizeEntryName(string $name): string
     {
-        if ($name === '' || str_contains($name, chr(0)) || str_contains($name, '\\\\')) {
+        if ($name === '' || str_contains($name, chr(0)) || str_contains($name, '\\')) {
             throw new RuntimeException('SCORM archive contains an invalid path.');
         }
-        $name = ltrim($name, './');
+        if (str_starts_with($name, './')) {
+            throw new RuntimeException('SCORM archive paths must be package-relative without dot prefixes.');
+        }
         if ($name === '' || str_starts_with($name, '/') || preg_match('/^[a-zA-Z]:/', $name) === 1) {
             throw new RuntimeException('SCORM archive contains an absolute path.');
         }
@@ -248,7 +250,7 @@ class ScormPackageImporter
 
     private function normalizeLaunchHref(string $href): string
     {
-        if ($href === '' || str_contains($href, chr(0)) || str_contains($href, '\\\\')
+        if ($href === '' || str_contains($href, chr(0)) || str_contains($href, '\\')
             || str_starts_with($href, '/') || preg_match('/^[a-zA-Z][a-zA-Z0-9+.-]*:/', $href) === 1
             || str_contains($href, '?') || str_contains($href, '#')) {
             throw new RuntimeException('SCORM manifest contains an unsafe launch URL.');
@@ -374,8 +376,8 @@ class ScormPackageImporter
     private function directoryChecksum(string $directory): string
     {
         $files = [];
-        $iterator = new \\RecursiveIteratorIterator(
-            new \\RecursiveDirectoryIterator($directory, \\FilesystemIterator::SKIP_DOTS)
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS)
         );
         foreach ($iterator as $file) {
             if (!$file->isFile() || $file->isLink()) {
