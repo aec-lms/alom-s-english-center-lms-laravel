@@ -92,8 +92,8 @@ class CourseAssessmentsPluginTest extends TestCase
     {
         $this->markSystemInstalled();
         $this->activatePlugins(['course-assessments', 'learning-rewards']);
-        $this->assertTrue(app(\\App\\Core\\Plugins\\PluginManager::class)->isEnabled('learning-rewards'));
-        $this->assertTrue(\\Illuminate\\Support\\Facades\\Schema::hasTable('learning_reward_rules'));
+        $this->assertTrue(app(\App\Core\Plugins\PluginManager::class)->isEnabled('learning-rewards'));
+        $this->assertTrue(\Illuminate\Support\Facades\Schema::hasTable('learning_reward_rules'));
         $this->assertSame(20, (int) DB::table('learning_reward_rules')->where('activity_key', 'quiz_passed')->value('points'));
         $student=$this->createUserWithRole('student');
         $set=$this->createSet();
