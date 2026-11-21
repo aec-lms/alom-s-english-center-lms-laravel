@@ -23,7 +23,7 @@
                 <label class="text-sm font-medium">{{ __('Branch (optional)') }}<select name="branch_id" class="mt-1 w-full rounded-lg border-slate-300"><option value="">{{ __('All branches') }}</option>@foreach ($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select></label>
             @endunless
 <div class="md:col-span-2" data-learning-path-steps>
-                <p class="mb-2 text-sm font-medium">{{ __('{{ __('Course sequence (use ↑ and ↓ to set the order)') }}') }}</p>
+                <p class="mb-2 text-sm font-medium">{{ __('Course sequence (use ↑ and ↓ to set the order)') }}</p>
                 <div class="space-y-3" data-course-step-list>
                     @foreach ([1, 2] as $stepNumber)
                         <div class="flex items-end gap-2" data-course-step>
@@ -49,7 +49,7 @@
         @forelse ($paths as $path)
             <article class="rounded-2xl border border-slate-200 bg-white p-5">
                 <div class="flex flex-wrap items-start justify-between gap-3">
-                    <div><h3 class="text-lg font-bold">{{ $path->title }}</h3><p class="text-sm text-slate-500">{{ $path->slug }} · {{ __(':count learners', ['count' => $path->learner_count]) }} · {{ __('Branch') }} {{ $path->branch_id ?? '{{ __('All branches') }}' }}</p></div>
+                    <div><h3 class="text-lg font-bold">{{ $path->title }}</h3><p class="text-sm text-slate-500">{{ $path->slug }} · {{ __(':count learners', ['count' => $path->learner_count]) }} · {{ __('Branch') }} {{ $path->branch_id ?? __('All branches') }}</p></div>
                     <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase">{{ $path->status }}</span>
                 </div>
                 <ol class="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -74,14 +74,14 @@
                             <div class="space-y-3" data-course-step-list>
                                 @foreach ($path->courses as $step)
                                     <div class="flex items-end gap-2" data-course-step>
-                                        <label class="flex-1 text-sm">Step {{ $step->position }}<select name="course_ids[]" required class="mt-1 w-full rounded-lg border-slate-300"><option value="">{{ __('Choose a course…') }}</option>@foreach ($courses as $course)<option value="{{ $course->id }}" @selected((int) $step->course_id === (int) $course->id)>{{ $course->title }} · #{{ $course->id }}</option>@endforeach</select></label>
+                                        <label class="flex-1 text-sm">{{ __('Step :number', ['number' => $step->position]) }}<select name="course_ids[]" required class="mt-1 w-full rounded-lg border-slate-300"><option value="">{{ __('Choose a course…') }}</option>@foreach ($courses as $course)<option value="{{ $course->id }}" @selected((int) $step->course_id === (int) $course->id)>{{ $course->title }} · #{{ $course->id }}</option>@endforeach</select></label>
                                         <div class="flex gap-1"><button type="button" data-move-up class="rounded border px-2 py-2 text-sm" aria-label="{{ __('Move step up') }}">↑</button><button type="button" data-move-down class="rounded border px-2 py-2 text-sm" aria-label="{{ __('Move step down') }}">↓</button><button type="button" data-remove-step class="rounded border px-2 py-2 text-sm" aria-label="{{ __('Remove step') }}">×</button></div>
                                     </div>
                                 @endforeach
                             </div>
                             <template data-course-step-template>
                                 <div class="flex items-end gap-2" data-course-step>
-                                    <label class="flex-1 text-sm">Step <span data-step-number>{{ $path->courses->count() + 1 }}</span><select name="course_ids[]" required class="mt-1 w-full rounded-lg border-slate-300"><option value="">{{ __('Choose a course…') }}</option>@foreach ($courses as $course)<option value="{{ $course->id }}">{{ $course->title }} · #{{ $course->id }}</option>@endforeach</select></label>
+                                    <label class="flex-1 text-sm">{{ __('Step') }} <span data-step-number>{{ $path->courses->count() + 1 }}</span><select name="course_ids[]" required class="mt-1 w-full rounded-lg border-slate-300"><option value="">{{ __('Choose a course…') }}</option>@foreach ($courses as $course)<option value="{{ $course->id }}">{{ $course->title }} · #{{ $course->id }}</option>@endforeach</select></label>
                                     <div class="flex gap-1"><button type="button" data-move-up class="rounded border px-2 py-2 text-sm" aria-label="{{ __('Move step up') }}">↑</button><button type="button" data-move-down class="rounded border px-2 py-2 text-sm" aria-label="{{ __('Move step down') }}">↓</button><button type="button" data-remove-step class="rounded border px-2 py-2 text-sm" aria-label="{{ __('Remove step') }}">×</button></div>
                                 </div>
                             </template>
