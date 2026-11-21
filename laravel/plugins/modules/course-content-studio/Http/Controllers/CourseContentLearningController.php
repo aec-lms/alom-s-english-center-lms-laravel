@@ -28,7 +28,7 @@ class CourseContentLearningController extends Controller
         $user=$request->user();
         $enrolled=$user && $user->hasRole('student') && DB::table('enrollments')->where('user_id',$user->id)->where('course_id',$courseRow->id)->whereIn('status',['active','completed'])->exists();
         if ($user && $user->hasRole('student')) {
-            app(\\Plugins\\Modules\\LearningPaths\\Services\\LearningPathAccess::class)->assertCourseUnlocked((int) $user->id, (int) $courseRow->id);
+            app(\Plugins\Modules\LearningPaths\Services\\LearningPathAccess::class)->assertCourseUnlocked((int) $user->id, (int) $courseRow->id);
         }
         $canManage=$this->canManageCourse($user,(int)$courseRow->id);
         $allowed=$content->access_type==='free' || $item->is_preview || $enrolled || $canManage;
@@ -66,7 +66,7 @@ class CourseContentLearningController extends Controller
         $user=$request->user();
         $enrolled=$user && $user->hasRole('student') && DB::table('enrollments')->where('user_id',$user->id)->where('course_id',$courseRow->id)->whereIn('status',['active','completed'])->exists();
         if ($user && $user->hasRole('student')) {
-            app(\\Plugins\\Modules\\LearningPaths\\Services\\LearningPathAccess::class)->assertCourseUnlocked((int) $user->id, (int) $courseRow->id);
+            app(\Plugins\Modules\LearningPaths\Services\\LearningPathAccess::class)->assertCourseUnlocked((int) $user->id, (int) $courseRow->id);
         }
         abort_unless($content->access_type==='free' || $item->is_preview || $enrolled || $this->canManageCourse($user,(int)$courseRow->id),403);
         abort_unless($content->content_file_path && Storage::disk('local')->exists($content->content_file_path),404);
@@ -86,7 +86,7 @@ class CourseContentLearningController extends Controller
         $this->ensureCourses();
         $courseRow=DB::table('courses')->where('slug',$course)->where('status','published')->firstOrFail();
         abort_unless(DB::table('enrollments')->where('user_id',$student->id)->where('course_id',$courseRow->id)->whereIn('status',['active','completed'])->exists(),403);
-        app(\\Plugins\\Modules\\LearningPaths\\Services\\LearningPathAccess::class)->assertCourseUnlocked((int) $student->id, (int) $courseRow->id);
+        app(\Plugins\Modules\LearningPaths\Services\\LearningPathAccess::class)->assertCourseUnlocked((int) $student->id, (int) $courseRow->id);
         $content=CourseContentPost::published()->where('slug',$post)->firstOrFail();
         $item=CourseCurriculumItem::query()->where('course_id',$courseRow->id)->where('course_content_post_id',$content->id)->where('is_active',true)->firstOrFail();
         abort_if($item->is_preview,403,'Preview lessons do not count toward completion.');
