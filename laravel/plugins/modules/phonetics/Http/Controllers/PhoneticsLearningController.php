@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Plugins\Modules\Phonetics\Http\Controllers;
 
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -134,7 +135,7 @@ final class PhoneticsLearningController extends Controller
                     $stats['accuracy'] < 85 => 7,
                     default => 14,
                 };
-                $dueAt = IlluminateSupportCarbon::parse($stats['last_attempt_at'])->addDays($intervalDays);
+                $dueAt = Carbon::parse($stats['last_attempt_at'])->addDays($intervalDays);
                 return [
                     'entry_id' => (int) $entry->id,
                     'word' => (string) $entry->word,
