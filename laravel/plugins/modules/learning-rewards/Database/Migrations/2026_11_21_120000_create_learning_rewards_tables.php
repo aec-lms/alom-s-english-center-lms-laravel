@@ -15,6 +15,7 @@ return new class extends Migration {
             $table->string('activity_key', 48)->unique();
             $table->unsignedSmallInteger('points')->default(0);
             $table->unsignedInteger('daily_cap')->default(0);
+            $table->unsignedSmallInteger('pass_percentage')->nullable();
             $table->boolean('is_enabled')->default(true);
             $table->timestamps();
         });
@@ -77,7 +78,7 @@ return new class extends Migration {
 
         DB::table('learning_reward_rules')->insert([
             ['activity_key' => 'lesson_completed', 'points' => 10, 'daily_cap' => 100, 'is_enabled' => true, 'created_at' => now(), 'updated_at' => now()],
-            ['activity_key' => 'quiz_passed', 'points' => 20, 'daily_cap' => 100, 'is_enabled' => true, 'created_at' => now(), 'updated_at' => now()],
+            ['activity_key' => 'quiz_passed', 'points' => 20, 'daily_cap' => 100, 'pass_percentage' => 60, 'is_enabled' => true, 'created_at' => now(), 'updated_at' => now()],
             ['activity_key' => 'assignment_accepted', 'points' => 25, 'daily_cap' => 100, 'is_enabled' => true, 'created_at' => now(), 'updated_at' => now()],
             ['activity_key' => 'attendance_present', 'points' => 5, 'daily_cap' => 20, 'is_enabled' => true, 'created_at' => now(), 'updated_at' => now()],
         ]);
