@@ -245,7 +245,17 @@ class FreshInstallerService
             if (!rename($temporaryPath, $progressPath)) {
                 throw new RuntimeException('Unable to atomically update the installation progress marker.');
             }
-            @chmod($progressPath, 0600);
+            if (!@chmod($progressPath, 0600)) {
+                throw new RuntimeException('Unable to restrict installation progress marker permissions to its owner.');
+            }
+            $finalStat = @lstat($progressPath);
+            if ($finalStat === false
+                || (($finalStat['mode'] & 0170000) !== 0100000)
+                || ($finalStat['nlink'] ?? 1) !== 1
+                || (($finalStat['mode'] & 0077) !== 0)
+            ) {
+                throw new RuntimeException('The installation progress marker is not a private, regular file.');
+            }
         } finally {
             if (is_file($temporaryPath)) {
                 @unlink($temporaryPath);
@@ -273,6 +283,7 @@ class FreshInstallerService
         if ($progressStat === false
             || (($progressStat['mode'] & 0170000) !== 0100000)
             || ($progressStat['nlink'] ?? 1) !== 1
+            || (($progressStat['mode'] & 0077) !== 0)
         ) {
             throw new RuntimeException('The installation progress marker must be a private, regular, non-linked file.');
         }
@@ -332,6 +343,13 @@ class FreshInstallerService
         if ($realLockDirectory === false || $realLockDirectory !== rtrim($lockDirectory, DIRECTORY_SEPARATOR)) {
             throw new RuntimeException('The installation lock directory path must resolve without symbolic-link redirection.');
         }
+        $lockDirectoryStat = @stat($realLockDirectory);
+        if ($lockDirectoryStat === false
+            || (($lockDirectoryStat['mode'] & 0170000) !== 0040000)
+            || (($lockDirectoryStat['mode'] & 0022) !== 0)
+        ) {
+            throw new RuntimeException('The installation lock directory must not be writable by group or other users.');
+        }
 
         $mutexPath = $installLockPath . '.mutex';
         if (is_link($mutexPath)) {
@@ -359,7 +377,13 @@ class FreshInstallerService
                 throw new RuntimeException('The installation mutex must be a private, regular, non-linked file.');
             }
 
-            @chmod($mutexPath, 0600);
+            if (!@chmod($mutexPath, 0600)) {
+                throw new RuntimeException('Unable to restrict installation mutex permissions to its owner.');
+            }
+            $securedMutexStat = fstat($mutex);
+            if ($securedMutexStat === false || (($securedMutexStat['mode'] & 0077) !== 0)) {
+                throw new RuntimeException('The installation mutex must be accessible only by its owner.');
+            }
             if (!flock($mutex, LOCK_EX)) {
                 throw new RuntimeException('Unable to acquire the exclusive installation mutex.');
             }
