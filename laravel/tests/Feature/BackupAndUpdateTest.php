@@ -487,7 +487,7 @@ class BackupAndUpdateTest extends TestCase
         $sha = hash_file('sha256', $packagePath);
         $signature = hash_hmac('sha256', $sha, 'test-plugin-signing-key');
         $service = app(UniversalUpdateService::class);
-        $pin = new \\ReflectionMethod(UniversalUpdateService::class, 'createVerifiedPackageSnapshot');
+        $pin = new \ReflectionMethod(UniversalUpdateService::class, 'createVerifiedPackageSnapshot');
         $pin->setAccessible(true);
 
         try {
