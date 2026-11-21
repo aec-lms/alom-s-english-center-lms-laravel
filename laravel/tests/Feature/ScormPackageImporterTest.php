@@ -178,4 +178,86 @@ class ScormPackageImporterTest extends TestCase
         }
     }
 
+
+    public function test_absolute_archive_paths_are_rejected(): void
+    {
+        $archive = $this->makeArchive([
+            'imsmanifest.xml' => $this->validManifest(),
+            'index.html' => 'ok',
+            '/etc/passwd' => 'must not escape',
+        ]);
+
+        try {
+            $this->expectException(RuntimeException::class);
+            app(ScormPackageImporter::class)->import($archive);
+        } finally {
+            @unlink($archive);
+        }
+    }
+
+    public function test_malformed_manifest_xml_is_rejected(): void
+    {
+        $archive = $this->makeArchive([
+            'imsmanifest.xml' => '<manifest><organizations><organization></manifest>',
+            'index.html' => 'ok',
+        ]);
+
+        try {
+            $this->expectException(RuntimeException::class);
+            app(ScormPackageImporter::class)->import($archive);
+        } finally {
+            @unlink($archive);
+        }
+    }
+
+    public function test_missing_launch_resource_is_rejected(): void
+    {
+        $archive = $this->makeArchive([
+            'imsmanifest.xml' => $this->validManifest('missing.html'),
+            'index.html' => 'not the declared launch file',
+        ]);
+
+        try {
+            $this->expectException(RuntimeException::class);
+            app(ScormPackageImporter::class)->import($archive);
+        } finally {
+            @unlink($archive);
+        }
+    }
+
+    public function test_special_filesystem_entries_are_rejected(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'aec-scorm-special-');
+        $zip = new ZipArchive();
+        $zip->open($path, ZipArchive::CREATE | ZipArchive::OVERWRITE);
+        $zip->addFromString('imsmanifest.xml', $this->validManifest());
+        $zip->addFromString('index.html', 'ok');
+        $zip->addFromString('named-pipe', '');
+        $zip->setExternalAttributesName('named-pipe', ZipArchive::OPSYS_UNIX, (0010666 << 16));
+        $zip->close();
+
+        try {
+            $this->expectException(RuntimeException::class);
+            app(ScormPackageImporter::class)->import($path);
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    public function test_suspicious_compression_ratio_is_rejected(): void
+    {
+        $archive = $this->makeArchive([
+            'imsmanifest.xml' => $this->validManifest(),
+            'index.html' => 'ok',
+            'compressed.txt' => str_repeat('A', 1024 * 1024),
+        ]);
+
+        try {
+            $this->expectException(RuntimeException::class);
+            app(ScormPackageImporter::class)->import($archive);
+        } finally {
+            @unlink($archive);
+        }
+    }
+
 }
