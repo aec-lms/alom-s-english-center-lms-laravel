@@ -229,3 +229,22 @@ Do not mark `gateway-sslcommerz` Accepted because a hosted URL can be created or
 | Release / review | #341 CI was previously reported green; independent approval and #342 refund integration remain. **BLOCKED:** fix the two findings, rerun exact integrated checks and obtain formal approval/provider evidence. |
 
 Do not accept `gateway-stripe` until the immediate-success state transition, actor authorization race, complete browser/3DS journey, refund lifecycle and real provider evidence pass on the final integrated head.
+
+
+## Initial implementation audit — `gateway-paypal` (2026-11-21)
+
+**Disposition: BLOCKED — not accepted.** Candidate source reviewed on PR #341 exact head `9157c4e1fc2fb4d96b3ae5c3a22211ff30c05772`; provider-confirmed refund support is separately proposed in #342.
+
+| Gate | Evidence / result |
+|---|---|
+| Source / architecture | Manifest, provider, controller, service and admin view inspected. Uses PayPal Orders v2, OAuth, provider request idempotency, trusted approval URL hosts, capture verification and server-side webhook signature verification. #341 adds invoice-wide session reservation. **PARTIAL:** verify final refund adapter composition after #342. |
+| Routes / API | Admin page has auth/permission/central-admin middleware; create order, return and cancel require auth; webhook is public with CSRF exemption and PayPal server-side signature verification. Raw card data is rejected. **PARTIAL:** test unauthorized/inactive actor and callback abuse paths. |
+| Permissions / scope | Invoice owner, finance operator and assigned branch manager are checked for create/capture. **BLOCKED:** authorization is checked before service transaction; actor account and role/permission assignments are not revalidated under lock. See #341 comment **7058381537**. |
+| Database | No PayPal-owned business tables; payment transactions/metadata and invoice reservation are owned by Payment Management. Provider idempotency key is scoped by invoice + gateway. **PARTIAL:** test reservation cleanup/reconciliation and retention for cancelled/ambiguous sessions. |
+| UI / accessibility | Admin page shows credential/environment state, webhook endpoint and recent transactions. Checkout is hosted by PayPal; no separate checkout Blade view exists in the plugin. **BLOCKED:** verify actual student journey, return/cancel/pending/error messaging, keyboard/mobile accessibility and browser screenshots. |
+| Tests | FinanceAndPaymentGatewayTest and InvoicePaymentSessionReservationTest cover gateway and cross-gateway reservation behavior. **PARTIAL:** add cancel-return and provider-verified cancellation tests, capture timeout/retry/replay tests, and account/permission revocation races on MySQL 8. |
+| Integrations | OAuth credentials, Orders v2 create/capture, trusted approval hosts, PayPal webhook verification API, event type, capture status, amount/currency and transaction identity checks are present. #342 proposes refund adapters. **BLOCKED:** real PayPal sandbox webhook/capture/refund acceptance and live merchant sign-off not evidenced. |
+| Failure handling | Provider request errors distinguish 4xx rejection from 5xx ambiguity during order creation; capture verifies one completed capture and exact amount/currency. **BLOCKED:** browser cancel currently only returns a JSON cancelled message and does not reconcile/release the local reservation; capture failures need explicit recoverable state and operator guidance. |
+| Release / review | #341 exact-head CI was previously reported green; formal independent approval remains pending; #342 is a dependent refund candidate. **BLOCKED:** close actor race and cancellation/capture recovery gaps, run exact integrated checks and obtain provider sandbox/finance approval. |
+
+Do not accept `gateway-paypal` until authorization serialization, provider-verified cancellation/reconciliation, capture failure recovery, refund lifecycle and real sandbox evidence pass on the final integrated head.
