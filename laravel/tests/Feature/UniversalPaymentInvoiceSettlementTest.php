@@ -575,6 +575,24 @@ class UniversalPaymentInvoiceSettlementTest extends TestCase
         $cancelledReturn = $gateway->markSslcommerzFailed(['tran_id' => $transaction->reference], 'cancelled');
         $this->assertSame('pending', $cancelledReturn->status);
 
+        // Exercise the actual browser-return routes, not only the service method:
+        // an untrusted redirect must communicate the ambiguity and leave the
+        // provider reservation pending for reconciliation.
+        $this->post('/universal-payment/sslcommerz/failed', [
+            'tran_id' => $transaction->reference,
+        ])->assertRedirect('/ebooks/')
+            ->assertSessionHasErrors([
+                'payment' => 'The provider return did not verify the payment. The transaction remains pending; do not retry until support reconciles its status.',
+            ]);
+
+        $this->post('/universal-payment/sslcommerz/cancelled', [
+            'tran_id' => $transaction->reference,
+        ])->assertRedirect('/ebooks/')
+            ->assertSessionHas(
+                'status',
+                'The browser return cannot confirm cancellation. The transaction remains pending; do not retry until support reconciles its status.'
+            );
+
         $this->assertDatabaseHas('universal_payment_transactions', [
             'id' => $transaction->id,
             'status' => 'pending',
