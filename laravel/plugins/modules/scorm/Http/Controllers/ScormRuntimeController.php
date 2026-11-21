@@ -19,6 +19,35 @@ use Symfony\Component\HttpFoundation\Response;
 
 class ScormRuntimeController extends Controller
 {
+    public function studentIndex(Request $request): View
+    {
+        $actor = $request->user();
+        abort_unless($actor && $actor->is_active && $actor->hasRole('student'), 403, 'An active student account is required.');
+        abort_unless(Schema::hasTable('courses') && Schema::hasTable('enrollments'), 503, 'Course Management is required to browse SCORM activities.');
+
+        $packages = DB::table('scorm_packages as p')
+            ->join('courses as c', 'c.id', '=', 'p.course_id')
+            ->join('enrollments as e', function ($join) use ($actor): void {
+                $join->on('e.course_id', '=', 'p.course_id')->where('e.user_id', '=', $actor->id);
+            })
+            ->where('p.status', 'published')
+            ->where('c.status', 'published')
+            ->whereIn('e.status', ['active', 'completed'])
+            ->when($actor->branch_id !== null, fn ($query) => $query->where(function ($scope) use ($actor): void {
+                $scope->whereNull('p.branch_id')->orWhere('p.branch_id', $actor->branch_id);
+            }))
+            ->orderBy('c.title')
+            ->orderBy('p.title')
+            ->select('p.id', 'p.course_id', 'p.branch_id', 'p.title', 'p.version', 'c.title as course_title')
+            ->paginate(12);
+
+        $packages->setCollection($packages->getCollection()->filter(
+            fn (object $package): bool => $this->eligibleEnrollment($actor, $package) !== null
+        )->values());
+
+        return view('scorm::student.index', compact('packages'));
+    }
+
     public function launch(Request $request, int $package): View
     {
         $actor = $request->user();
