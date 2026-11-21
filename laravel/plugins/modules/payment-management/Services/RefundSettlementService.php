@@ -33,6 +33,10 @@ class RefundSettlementService
                 ? FeeInvoice::query()->whereKey($invoiceId)->lockForUpdate()->firstOrFail()
                 : null;
             $lockedTx = PaymentTransaction::query()->whereKey($transaction->id)->lockForUpdate()->firstOrFail();
+            if ($invoice !== null) {
+                abort_unless((int) $lockedTx->invoice_id === (int) $invoice->id, 409,
+                    'Payment transaction invoice ownership changed during refund processing.');
+            }
 
             if ($lockedTx->status !== 'settled') {
                 throw new RuntimeException('Only settled transactions can be refunded.');
@@ -77,8 +81,16 @@ class RefundSettlementService
             }
             $invoice = FeeInvoice::query()->whereKey($invoiceId)->lockForUpdate()->firstOrFail();
             $lockedTx = PaymentTransaction::query()->whereKey($transactionId)->lockForUpdate()->firstOrFail();
-            $orders = $this->lockCommerceOrders($invoice?->id);
+            abort_unless((int) $lockedTx->invoice_id === (int) $invoice->id, 409,
+                'Payment transaction invoice ownership changed during refund processing.');
+            $orders = $this->lockCommerceOrders($invoice->id);
             $lockedRefund = PaymentRefund::query()->whereKey($refund->id)->lockForUpdate()->firstOrFail();
+            abort_unless(
+                (int) $lockedRefund->payment_transaction_id === (int) $lockedTx->id
+                    && hash_equals((string) $lockedTx->gateway_slug, (string) $lockedRefund->gateway_slug),
+                409,
+                'Refund ownership or gateway binding changed during provider settlement.'
+            );
 
             if ($lockedRefund->ledger_applied_at !== null) {
                 return $lockedRefund;
