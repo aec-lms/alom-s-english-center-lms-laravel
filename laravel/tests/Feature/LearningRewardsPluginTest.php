@@ -260,4 +260,49 @@ class LearningRewardsPluginTest extends TestCase
         Role::query()->where('slug', 'admin')->firstOrFail()->permissions()->syncWithoutDetaching([$permission->id]);
         $this->actingAs($admin)->get('/admin/learning-rewards')->assertOk();
     }
+
+    public function test_inactive_student_accounts_cannot_receive_learning_rewards(): void
+    {
+        $this->bootRewards();
+        $student = $this->createUserWithRole('student');
+        DB::table('users')->where('id', $student->id)->update(['is_active' => false]);
+
+        $this->expectException(\\Symfony\\Component\\HttpKernel\\Exception\\HttpException::class);
+        app(LearningRewardsService::class)->awardVerifiedActivity(
+            (int) $student->id,
+            'lesson_completed',
+            'course_lesson',
+            909,
+        );
+    }
+
+    public function test_streak_badges_unlock_even_when_xp_is_disabled(): void
+    {
+        $this->bootRewards();
+        $student = $this->createUserWithRole('student');
+        DB::table('learning_reward_rules')->where('activity_key', 'lesson_completed')->update(['is_enabled' => false]);
+        $service = app(LearningRewardsService::class);
+
+        Carbon::setTestNow(Carbon::parse('2026-11-15 12:00:00', 'Asia/Dhaka'));
+        try {
+            for ($day = 0; $day < 7; $day++) {
+                Carbon::setTestNow(Carbon::parse('2026-11-15 12:00:00', 'Asia/Dhaka')->addDays($day));
+                $result = $service->awardVerifiedActivity(
+                    (int) $student->id,
+                    'lesson_completed',
+                    'course_lesson',
+                    950 + $day,
+                );
+                $this->assertSame(0, $result['points']);
+            }
+        } finally {
+            Carbon::setTestNow();
+        }
+
+        $this->assertSame(7, (int) DB::table('learning_reward_streaks')->where('user_id', $student->id)->value('current_streak'));
+        $this->assertDatabaseHas('learning_reward_user_badges', [
+            'user_id' => $student->id,
+            'badge_id' => DB::table('learning_reward_badges')->where('slug', 'seven-day-streak')->value('id'),
+        ]);
+    }
 }
