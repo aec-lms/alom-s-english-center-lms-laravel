@@ -201,7 +201,7 @@ class FreshInstallerTest extends TestCase
             } catch (RuntimeException $exception) {
                 $this->assertStringContainsString('Core database migrations failed', $exception->getMessage());
             } finally {
-                \Illuminate\Support\Facades\Artisan::clearResolvedInstance('artisan');
+                \Illuminate\Support\Facades\Artisan::swap(app(\Illuminate\Contracts\Console\Kernel::class));
             }
 
             $this->assertFileDoesNotExist($lockPath, 'A failed migration must never create the installed marker.');
@@ -220,7 +220,7 @@ class FreshInstallerTest extends TestCase
             $this->assertSame(1, (int) User::query()->where('email', 'retry-admin@aec.test')->count());
             $this->assertSame(1, (int) $result['admin_id']);
         } finally {
-            \Illuminate\Support\Facades\Artisan::clearResolvedInstance('artisan');
+            \Illuminate\Support\Facades\Artisan::swap(app(\Illuminate\Contracts\Console\Kernel::class));
             DB::disconnect('installer_failure_test');
             DB::setDefaultConnection($originalDefault);
             config([
@@ -303,7 +303,7 @@ class FreshInstallerTest extends TestCase
             } catch (RuntimeException $exception) {
                 $this->assertStringContainsString('Core roles and permissions seeding failed', $exception->getMessage());
             } finally {
-                \Illuminate\Support\Facades\Artisan::clearResolvedInstance('artisan');
+                \Illuminate\Support\Facades\Artisan::swap(app(\Illuminate\Contracts\Console\Kernel::class));
             }
 
             $this->assertFileDoesNotExist($lockPath, 'A partially migrated database must never receive the installed marker.');
@@ -327,7 +327,7 @@ class FreshInstallerTest extends TestCase
             }
             $this->assertFileDoesNotExist($lockPath);
         } finally {
-            \Illuminate\Support\Facades\Artisan::clearResolvedInstance('artisan');
+            \Illuminate\Support\Facades\Artisan::swap(app(\Illuminate\Contracts\Console\Kernel::class));
             DB::disconnect('installer_seeder_failure_test');
             DB::setDefaultConnection($originalDefault);
             config([
