@@ -231,7 +231,9 @@ class LearningRewardsService
             if (Schema::hasColumn('students', 'deleted_at')) {
                 $profileQuery->whereNull('deleted_at');
             }
-            $profile = $profileQuery->first();
+            // Match Student Management's account-before-profile lock order so a concurrent
+            // branch/status reassignment cannot race the branch recorded in the ledger.
+            $profile = $profileQuery->lockForUpdate()->first();
             abort_unless($profile, 403, 'An active student profile is required to earn learning rewards.');
             if (Schema::hasColumn('students', 'status')) {
                 abort_unless($profile->status === 'active', 403, 'Inactive student profiles cannot earn learning rewards.');
@@ -249,7 +251,7 @@ class LearningRewardsService
         if ($branchId !== null) {
             abort_unless(app(PluginManager::class)->isEnabled('branch-management')
                 && Schema::hasTable('branches')
-                && DB::table('branches')->where('id', $branchId)->where('is_active', true)->exists(),
+                && DB::table('branches')->where('id', $branchId)->where('is_active', true)->lockForUpdate()->exists(),
                 403, 'Student branch is unavailable or inactive.');
         }
 
