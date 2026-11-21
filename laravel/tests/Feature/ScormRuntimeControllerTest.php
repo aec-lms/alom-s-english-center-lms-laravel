@@ -299,6 +299,49 @@ class ScormRuntimeControllerTest extends TestCase
         File::deleteDirectory($packageRoot);
     }
 
+    public function test_scorm_launch_fails_closed_for_conflicting_inactive_and_deleted_student_profiles(): void
+    {
+        [$student, , , $packageId, $packageRoot] = $this->setupRuntime();
+        $this->activatePlugins(['branch-management', 'student-management']);
+
+        $branchA = Branch::query()->create([
+            'code' => 'SCORM-A-' . strtoupper(bin2hex(random_bytes(3))),
+            'name' => 'SCORM Branch A',
+            'is_active' => true,
+        ]);
+        $branchB = Branch::query()->create([
+            'code' => 'SCORM-B-' . strtoupper(bin2hex(random_bytes(3))),
+            'name' => 'SCORM Branch B',
+            'is_active' => true,
+        ]);
+
+        DB::table('users')->where('id', $student->id)->update(['branch_id' => $branchA->id]);
+        Student::query()->create([
+            'user_id' => $student->id,
+            'branch_id' => $branchB->id,
+            'student_code' => 'SCORM-ST-' . strtoupper(bin2hex(random_bytes(4))),
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($student)->get(route('plugins.scorm.launch', $packageId))->assertForbidden();
+        $this->assertDatabaseCount('scorm_attempts', 0);
+
+        DB::table('users')->where('id', $student->id)->update(['branch_id' => $branchB->id]);
+        DB::table('students')->where('user_id', $student->id)->update(['status' => 'inactive']);
+        $this->actingAs($student)->get(route('plugins.scorm.launch', $packageId))->assertForbidden();
+        $this->assertDatabaseCount('scorm_attempts', 0);
+
+        DB::table('students')->where('user_id', $student->id)->update([
+            'status' => 'active',
+            'deleted_at' => now(),
+        ]);
+        $this->actingAs($student)->get(route('plugins.scorm.launch', $packageId))->assertForbidden();
+        $this->assertDatabaseCount('scorm_attempts', 0);
+
+        File::deleteDirectory($packageRoot);
+    }
+
     public function test_scorm_launch_refuses_shared_lms_session_cookie_domain(): void
     {
         [$student, , , $packageId, $packageRoot] = $this->setupRuntime();
