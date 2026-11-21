@@ -462,7 +462,7 @@ class UniversalUpdateService
                 throw new RuntimeException('Unable to copy the signed update package into private staging.');
             }
             @chmod($snapshotPath, 0600);
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             fclose($input);
             fclose($output);
             @unlink($snapshotPath);
@@ -474,7 +474,7 @@ class UniversalUpdateService
 
         try {
             return $this->verifySignedPackage($snapshotPath, $expectedSha256, $signatureHex);
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             @unlink($snapshotPath);
             throw $exception;
         }
