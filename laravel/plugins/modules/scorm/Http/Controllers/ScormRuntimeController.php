@@ -253,13 +253,18 @@ class ScormRuntimeController extends Controller
         abort_unless($target !== false && is_file($target)
             && str_starts_with($target, $root . DIRECTORY_SEPARATOR), 404);
 
-        return response()->file($target, [
-            'Cache-Control' => 'private, no-store',
+        $response = response()->file($target, [
             'X-Content-Type-Options' => 'nosniff',
             'Referrer-Policy' => 'no-referrer',
             'Cross-Origin-Resource-Policy' => 'same-origin',
             'Content-Security-Policy' => $this->contentSecurityPolicy(),
         ]);
+        // Symfony's BinaryFileResponse defaults to public caching unless the
+        // response is explicitly marked private after construction.
+        $response->setPrivate();
+        $response->headers->set('Cache-Control', 'private, no-store');
+
+        return $response;
     }
 
     public function preflight(Request $request): Response
