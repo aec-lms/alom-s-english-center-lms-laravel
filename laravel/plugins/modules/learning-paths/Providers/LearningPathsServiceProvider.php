@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\LearningPaths\\Providers;
+namespace Plugins\Modules\LearningPaths\Providers;
 
-use App\\Core\\Plugins\\BasePluginServiceProvider;
+use App\Core\Plugins\BasePluginServiceProvider;
 
 class LearningPathsServiceProvider extends BasePluginServiceProvider
 {
