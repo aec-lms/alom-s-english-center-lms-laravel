@@ -79,6 +79,41 @@ class PluginSettingsResetBackupTest extends TestCase
     }
 
 
+
+    public function test_permanent_delete_audit_failure_recreates_recycle_entry(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['gateway-sslcommerz']);
+
+        $manager = app(PluginManager::class);
+        $deleted = $manager->deleteToRecycleBin('gateway-sslcommerz');
+        $archive = $deleted['archive'];
+
+        AuditLog::creating(static function (AuditLog $log): void {
+            if ($log->action === 'plugin.permanently_deleted') {
+                throw new RuntimeException('forced permanent delete audit failure');
+            }
+        });
+
+        try {
+            try {
+                $manager->permanentlyDeleteFromRecycleBin($archive);
+                $this->fail('Permanent delete must fail when its required audit event cannot be persisted.');
+            } catch (RuntimeException $exception) {
+                $this->assertSame('forced permanent delete audit failure', $exception->getMessage());
+            }
+
+            $recycled = collect($manager->recycledPlugins())->firstWhere('archive', $archive);
+            $this->assertNotNull($recycled);
+            $this->assertFileExists(
+                storage_path('app/plugin-recycle-bin/' . $archive . '/plugin.json')
+            );
+        } finally {
+            AuditLog::flushEventListeners();
+        }
+    }
+
+
     public function test_restore_audit_failure_keeps_recycle_bin_metadata_and_returns_package(): void
     {
         $this->markSystemInstalled();
