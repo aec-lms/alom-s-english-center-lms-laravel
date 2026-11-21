@@ -137,8 +137,11 @@ class PluginSettingsResetBackupTest extends TestCase
                 $this->assertSame('forced restore audit failure', $exception->getMessage());
             }
 
-            $this->assertFileExists(
+            $this->assertFileDoesNotExist(
                 config('plugins.modules_path') . DIRECTORY_SEPARATOR . 'gateway-sslcommerz' . DIRECTORY_SEPARATOR . 'plugin.json'
+            );
+            $this->assertFileExists(
+                storage_path('app/plugin-recycle-bin/' . $archive . '/plugin.json')
             );
             $this->assertSame(
                 $archive,
