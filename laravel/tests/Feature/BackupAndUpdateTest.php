@@ -261,7 +261,7 @@ class BackupAndUpdateTest extends TestCase
         $archive = new ZipArchive();
         $this->assertTrue($archive->open($zipPath) === true);
         $service = app(BackupService::class);
-        $stage = new \\ReflectionMethod(BackupService::class, 'stagePrivateFiles');
+        $stage = new \ReflectionMethod(BackupService::class, 'stagePrivateFiles');
         $stage->setAccessible(true);
 
         try {
@@ -288,7 +288,7 @@ class BackupAndUpdateTest extends TestCase
         $archive = new ZipArchive();
         $this->assertTrue($archive->open($zipPath) === true);
         $service = app(BackupService::class);
-        $stage = new \\ReflectionMethod(BackupService::class, 'stagePrivateFiles');
+        $stage = new \ReflectionMethod(BackupService::class, 'stagePrivateFiles');
         $stage->setAccessible(true);
         $stagingPath = null;
 
@@ -302,7 +302,7 @@ class BackupAndUpdateTest extends TestCase
         } finally {
             $archive->close();
             if (is_string($stagingPath) && is_dir($stagingPath)) {
-                \\Illuminate\\Support\\Facades\\File::deleteDirectory($stagingPath);
+                \Illuminate\Support\Facades\File::deleteDirectory($stagingPath);
             }
             @unlink($zipPath);
         }
