@@ -240,6 +240,113 @@ class FreshInstallerTest extends TestCase
         }
     }
 
+    public function test_seeder_failure_never_marks_partial_schema_installed_and_requires_a_fresh_database_for_recovery(): void
+    {
+        $originalDefault = config('database.default');
+        $originalAppKey = config('app.key');
+        $originalSigningKey = config('lms.plugin_signing_key');
+        $originalBackupKey = config('lms.backup_encryption_key');
+        $root = sys_get_temp_dir() . '/aec-installer-seeder-failure-' . bin2hex(random_bytes(8));
+        mkdir($root, 0700, true);
+
+        $lockPath = $root . '/installed.lock';
+        $envPath = $root . '/.env';
+        $privatePath = $root . '/private';
+        $backupPath = $root . '/backups';
+        file_put_contents($envPath, "APP_KEY=\n");
+
+        config([
+            'database.connections.installer_seeder_failure_test' => [
+                'driver' => 'sqlite',
+                'database' => ':memory:',
+                'prefix' => '',
+                'foreign_key_constraints' => true,
+            ],
+            'database.default' => 'installer_seeder_failure_test',
+            'lms.install_lock_path' => $lockPath,
+            'lms.env_path' => $envPath,
+            'lms.private_storage_path' => $privatePath,
+            'lms.backup_path' => $backupPath,
+        ]);
+        DB::purge('installer_seeder_failure_test');
+        DB::setDefaultConnection('installer_seeder_failure_test');
+
+        $installConfig = [
+            'app_name' => 'AEC Seeder Failure Test',
+            'app_url' => 'https://aec-seeder-failure.test',
+            'admin_name' => 'Seeder Failure Admin',
+            'admin_email' => 'seeder-failure-admin@aec.test',
+            'admin_password' => 'SeederFailureStrongPassword!2026',
+            'country_code' => 'BD',
+            'locale' => 'en',
+            'timezone' => 'Asia/Dhaka',
+            'currency' => 'BDT',
+        ];
+
+        try {
+            \Illuminate\Support\Facades\Artisan::shouldReceive('call')
+                ->once()
+                ->with('migrate', ['--force' => true])
+                ->andReturnUsing(static function (string $command, array $parameters): int {
+                    return app(\Illuminate\Contracts\Console\Kernel::class)->call($command, $parameters);
+                });
+            \Illuminate\Support\Facades\Artisan::shouldReceive('call')
+                ->once()
+                ->with('db:seed', ['--class' => \Database\Seeders\CoreRolesAndPermissionsSeeder::class, '--force' => true])
+                ->andReturn(1);
+            \Illuminate\Support\Facades\Artisan::shouldReceive('output')
+                ->andReturn('simulated core seeder failure');
+
+            try {
+                app(FreshInstallerService::class)->installFresh($installConfig);
+                $this->fail('Installer unexpectedly completed after the core seeder reported failure.');
+            } catch (RuntimeException $exception) {
+                $this->assertStringContainsString('Core roles and permissions seeding failed', $exception->getMessage());
+            } finally {
+                \Illuminate\Support\Facades\Artisan::clearResolvedInstance('artisan');
+            }
+
+            $this->assertFileDoesNotExist($lockPath, 'A partially migrated database must never receive the installed marker.');
+            $this->assertGreaterThan(0, DB::table('migrations')->count());
+            $this->assertSame(0, User::query()->where('email', 'seeder-failure-admin@aec.test')->count());
+
+            $probe = fopen($lockPath . '.mutex', 'c');
+            $this->assertNotFalse($probe);
+            $this->assertTrue(flock($probe, LOCK_EX | LOCK_NB), 'The mutex must be released after a seeder failure.');
+            flock($probe, LOCK_UN);
+            fclose($probe);
+
+            // Core migrations may have committed DDL before seeding failed. The
+            // fresh-only policy must refuse an in-place retry rather than drop data.
+            try {
+                app(FreshInstallerService::class)->installFresh($installConfig);
+                $this->fail('Installer retried against a partially migrated non-empty database.');
+            } catch (RuntimeException $exception) {
+                $this->assertStringContainsString('already contains', $exception->getMessage());
+                $this->assertStringContainsString('empty fresh database is required', $exception->getMessage());
+            }
+            $this->assertFileDoesNotExist($lockPath);
+        } finally {
+            \Illuminate\Support\Facades\Artisan::clearResolvedInstance('artisan');
+            DB::disconnect('installer_seeder_failure_test');
+            DB::setDefaultConnection($originalDefault);
+            config([
+                'database.default' => $originalDefault,
+                'app.key' => $originalAppKey,
+                'lms.plugin_signing_key' => $originalSigningKey,
+                'lms.backup_encryption_key' => $originalBackupKey,
+            ]);
+
+            foreach ([$lockPath, $lockPath . '.mutex', $envPath] as $file) {
+                @unlink($file);
+            }
+            foreach ([$privatePath, $backupPath] as $directory) {
+                @rmdir($directory);
+            }
+            @rmdir($root);
+        }
+    }
+
     public function test_two_real_php_workers_serialize_fresh_installation_against_one_sqlite_database(): void
     {
         if (!function_exists('proc_open') || !function_exists('proc_close')) {
