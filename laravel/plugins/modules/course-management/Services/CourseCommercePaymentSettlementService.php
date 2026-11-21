@@ -17,14 +17,16 @@ use RuntimeException;
 
 class CourseCommercePaymentSettlementService
 {
+    private const TERMINAL_PAYMENT_STATUSES = ['failed', 'cancelled', 'refunded', 'reversed', 'rejected', 'chargeback'];
+
     public function __construct(private readonly PluginManager $plugins) {}
 
     public function settle(UniversalPaymentTransaction $transaction, string $validationId, array $providerDetails): UniversalPaymentTransaction
     {
         return DB::transaction(function () use ($transaction, $validationId, $providerDetails): UniversalPaymentTransaction {
             $locked = UniversalPaymentTransaction::query()->whereKey($transaction->id)->lockForUpdate()->firstOrFail();
-            if ($locked->status === 'refunded') {
-                throw new RuntimeException('A refunded course-commerce transaction cannot be settled again.');
+            if (in_array($locked->status, self::TERMINAL_PAYMENT_STATUSES, true)) {
+                throw new RuntimeException('A terminal course-commerce payment cannot be settled again.');
             }
             if ($locked->status === 'verified') {
                 return $locked;
