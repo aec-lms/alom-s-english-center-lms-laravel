@@ -195,17 +195,23 @@ class LearningPathController extends Controller
             abort_unless($hasFirstEnrollment, 409,
                 'Enroll in the first course before starting this learning path. Course purchases and fees remain separate.');
 
-            DB::table('learning_path_enrollments')->updateOrInsert(
-                ['learning_path_id' => $path->id, 'user_id' => $student->id],
-                [
+            $existingPathEnrollment = DB::table('learning_path_enrollments')
+                ->where('learning_path_id', $path->id)
+                ->where('user_id', $student->id)
+                ->lockForUpdate()
+                ->first();
+            if (!$existingPathEnrollment) {
+                DB::table('learning_path_enrollments')->insert([
+                    'learning_path_id' => $path->id,
+                    'user_id' => $student->id,
                     'branch_id' => $path->branch_id ?? $student->branch_id,
                     'status' => 'active',
                     'started_at' => now(),
                     'completed_at' => null,
-                    'updated_at' => now(),
                     'created_at' => now(),
-                ]
-            );
+                    'updated_at' => now(),
+                ]);
+            }
         });
 
         return redirect()->route('learning-paths.show', $slug)->with('status', 'You joined this learning path. Complete each course in order to unlock the next step.');
@@ -312,6 +318,19 @@ class LearningPathController extends Controller
             $enrollment = DB::table('enrollments')->where('user_id', $userId)->where('course_id', $course->course_id)
                 ->whereIn('status', ['active', 'completed'])->first();
             $completed = $enrollment?->status === 'completed';
+            if (!$completed && $this->plugins->isEnabled('course-content-studio')
+                && Schema::hasTable('course_curriculum_items')
+                && Schema::hasTable('course_content_progress')
+            ) {
+                $required = DB::table('course_curriculum_items')->where('course_id', $course->course_id)
+                    ->where('is_active', true)->where('is_preview', false)->count();
+                $done = DB::table('course_content_progress as progress')
+                    ->join('course_curriculum_items as item', 'item.id', '=', 'progress.course_curriculum_item_id')
+                    ->where('progress.user_id', $userId)->where('item.course_id', $course->course_id)
+                    ->where('item.is_active', true)->where('item.is_preview', false)
+                    ->whereNotNull('progress.completed_at')->count();
+                $completed = $required > 0 && $done >= $required;
+            }
             $step = (object) [
                 'course_id' => $course->course_id,
                 'course_title' => $course->course_title,
