@@ -52,7 +52,22 @@ class ScormRuntimeController extends Controller
             abort_unless($lockedPackage && $lockedPackage->status === 'published', 404, 'SCORM package is no longer published.');
 
             $lockedEnrollment = DB::table('enrollments')->where('id', $enrollment->id)->lockForUpdate()->first();
-            abort_unless($lockedEnrollment && in_array($lockedEnrollment->status, ['active', 'completed'], true), 403, 'Course enrollment is no longer active.');
+            abort_unless($lockedEnrollment && in_array($lockedEnrollment->status, ['active', 'completed'], true)
+                && (int) $lockedEnrollment->course_id === (int) $lockedPackage->course_id, 403, 'Course enrollment is no longer active.');
+
+            $lockedCourse = DB::table('courses')->where('id', $lockedPackage->course_id)->lockForUpdate()->first();
+            abort_unless($lockedCourse && $lockedCourse->status === 'published', 403, 'The linked course is no longer published.');
+            abort_unless($lockedPackage->branch_id === null
+                || (int) $lockedPackage->branch_id === (int) ($lockedUser->branch_id ?? $lockedEnrollment->branch_id ?? 0), 403, 'SCORM package is outside the student branch.');
+            abort_unless($lockedCourse->branch_id === null
+                || (int) $lockedCourse->branch_id === (int) ($lockedUser->branch_id ?? $lockedEnrollment->branch_id ?? 0), 403, 'Course is outside the student branch.');
+            if ((float) $lockedCourse->price > 0) {
+                abort_unless(Schema::hasTable('fee_invoices') && Schema::hasColumn('enrollments', 'invoice_id')
+                    && $lockedEnrollment->invoice_id !== null, 403, 'Paid course invoice is required.');
+                $lockedInvoice = DB::table('fee_invoices')->where('id', $lockedEnrollment->invoice_id)->lockForUpdate()->first();
+                abort_unless($lockedInvoice && $lockedInvoice->status === 'paid'
+                    && (float) $lockedInvoice->paid_amount + 0.01 >= (float) $lockedInvoice->net_amount, 403, 'Course invoice is not fully settled.');
+            }
 
             $latest = DB::table('scorm_attempts')
                 ->where('scorm_package_id', $lockedPackage->id)
@@ -63,6 +78,10 @@ class ScormRuntimeController extends Controller
 
             if ($latest && in_array($latest->completion_state, ['in_progress', 'suspended'], true)) {
                 $attemptId = $latest->id;
+                DB::table('scorm_attempts')->where('id', $attemptId)->update([
+                    'entry_mode' => 'resume',
+                    'updated_at' => now(),
+                ]);
             } else {
                 $attemptId = DB::table('scorm_attempts')->insertGetId([
                     'scorm_package_id' => $lockedPackage->id,
@@ -361,7 +380,10 @@ class ScormRuntimeController extends Controller
 
     private function isAllowedRuntimeOrigin(Request $request): bool
     {
-        return hash_equals(rtrim((string) config('scorm.content_origin', ''), '/'), rtrim((string) $request->headers->get('Origin', ''), '/'));
+        $allowed = rtrim((string) config('scorm.content_origin', ''), '/');
+        $origin = rtrim((string) $request->headers->get('Origin', ''), '/');
+
+        return $allowed !== '' && $origin !== '' && hash_equals($allowed, $origin);
     }
 
     private function corsHeaders(Request $request): array
