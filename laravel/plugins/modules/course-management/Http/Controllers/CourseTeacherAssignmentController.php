@@ -26,6 +26,10 @@ class CourseTeacherAssignmentController extends Controller
         $assignments = DB::table('course_teacher_assignments')
             ->join('courses', 'courses.id', '=', 'course_teacher_assignments.course_id')
             ->join('users', 'users.id', '=', 'course_teacher_assignments.teacher_user_id')
+            ->join('role_user as teacher_role_user', 'teacher_role_user.user_id', '=', 'users.id')
+            ->join('roles as teacher_roles', 'teacher_roles.id', '=', 'teacher_role_user.role_id')
+            ->where('users.is_active', true)
+            ->where('teacher_roles.slug', 'teacher')
             ->when($branchId !== null, fn ($q) => $q->where('courses.branch_id', $branchId)->where('users.branch_id', $branchId))
             ->select('course_teacher_assignments.*', 'courses.title as course_title', 'users.name as teacher_name', 'users.email as teacher_email')
             ->orderBy('courses.title')->paginate(30);
