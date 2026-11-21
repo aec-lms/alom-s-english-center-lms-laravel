@@ -159,11 +159,12 @@ class LearningPathsPluginTest extends TestCase
         $this->assertDatabaseMissing('learning_path_courses', ['learning_path_id' => $pathId, 'course_id' => $third]);
     }
 
-    public function test_course_content_studio_works_when_optional_learning_paths_plugin_is_not_installed(): void
+    public function test_course_content_studio_works_when_optional_learning_paths_plugin_is_disabled(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['course-management', 'course-content-studio']);
-        $this->assertFalse(app(PluginManager::class)->isInstalled('learning-paths'));
+        $this->activatePlugins(['course-management', 'course-content-studio', 'learning-paths']);
+        app(PluginManager::class)->disable('learning-paths');
+        $this->assertFalse(app(PluginManager::class)->isEnabled('learning-paths'));
         $teacher = $this->createUserWithRole('teacher');
         $student = $this->createUserWithRole('student');
         $course = $this->course('LP-OPTIONAL-OFF', 'Optional Integration Course');
