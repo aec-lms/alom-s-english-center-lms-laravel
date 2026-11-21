@@ -661,11 +661,21 @@ class PluginManager
                 @unlink($metadataPath);
             }
 
-            $restored = File::moveDirectory($destination, $source)
-                && is_dir($source)
-                && !is_dir($destination)
-                && $packageChecksums === $this->pluginDirectoryChecksums($source);
+            // A failed move can still have completed partially. Determine the
+            // actual on-disk disposition instead of trusting its boolean result.
+            File::moveDirectory($destination, $source);
+            $sourceExists = is_dir($source) && !is_link($source);
+            $destinationExists = is_dir($destination) && !is_link($destination);
+            $sourceIntegrityMatches = false;
+            if ($sourceExists) {
+                try {
+                    $sourceIntegrityMatches = $packageChecksums === $this->pluginDirectoryChecksums($source);
+                } catch (Throwable) {
+                    $sourceIntegrityMatches = false;
+                }
+            }
 
+            $restored = $sourceExists && !$destinationExists && $sourceIntegrityMatches;
             if ($restored && $wasInstalled) {
                 try {
                     $this->install($slug, $actorId);
@@ -680,9 +690,22 @@ class PluginManager
                 }
             }
 
-            $message = $restored
-                ? 'Plugin recycle-bin metadata could not be fully written and verified; the original package and lifecycle state were restored.'
-                : 'Plugin recycle-bin metadata could not be fully written and verified, and automatic package restoration failed; the archive remains in the protected recycle bin.';
+            if ($restored) {
+                $message = 'Plugin recycle-bin metadata could not be fully written and verified; the original package checksum was verified and its previous lifecycle state was restored where possible.';
+            } elseif ($sourceExists && !$sourceIntegrityMatches) {
+                // Do not reinstall or enable a package whose checksum changed
+                // during recovery. Keep the record disabled for operator review.
+                PluginRecord::query()->where('slug', $slug)->update([
+                    'is_installed' => false,
+                    'is_enabled' => false,
+                ]);
+                $message = 'Plugin recycle-bin metadata could not be written. The package is at its original modules path but failed checksum verification; it remains uninstalled and disabled and requires manual integrity review.';
+            } elseif ($destinationExists) {
+                $message = 'Plugin recycle-bin metadata could not be written. The package remains at its protected recycle-bin archive path without a committed metadata index; preserve it for manual recovery.';
+            } else {
+                $message = 'Plugin recycle-bin metadata could not be written and the package location is uncertain. Do not reinstall, delete, or modify either path; preserve storage/app and contact the maintainer for recovery.';
+            }
+
             throw new RuntimeException($message, previous: $writeError);
         }
         $this->audit->log('plugin.deleted_to_recycle_bin', 'plugin', $slug, [
