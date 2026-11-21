@@ -229,14 +229,29 @@ class ScormRuntimeController extends Controller
             return response()->json(['message' => 'SCORM runtime origin is not allowed.'], 403);
         }
 
-        $validated = $request->validate([
+        // The content origin uses a simple text/plain XHR so SCORM's synchronous
+        // JavaScript API does not depend on a credentialed CORS preflight.
+        $payload = json_decode($request->getContent(), true);
+        if (!is_array($payload)) {
+            return response()->json(['ok' => false, 'message' => 'Invalid SCORM runtime payload.'], 422)
+                ->withHeaders($this->corsHeaders($request));
+        }
+        $validator = Validator::make($payload, [
             'attempt_id' => ['required', 'integer', 'min:1'],
             'token' => ['required', 'string', 'size:64'],
             'version' => ['required', 'integer', 'min:0'],
             'data' => ['required', 'array', 'max:300'],
             'finish' => ['sometimes', 'boolean'],
         ]);
-        abort_unless(ctype_xdigit($validated['token']), 422, 'Invalid runtime token.');
+        if ($validator->fails()) {
+            return response()->json(['ok' => false, 'errors' => $validator->errors()], 422)
+                ->withHeaders($this->corsHeaders($request));
+        }
+        $validated = $validator->validated();
+        if (!ctype_xdigit($validated['token'])) {
+            return response()->json(['ok' => false, 'message' => 'Invalid runtime token.'], 422)
+                ->withHeaders($this->corsHeaders($request));
+        }
 
         try {
             $result = DB::transaction(function () use ($validated): array {
