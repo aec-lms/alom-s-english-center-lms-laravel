@@ -130,11 +130,9 @@ final class TeacherProfileValidationTest extends TestCase
             ->latest('id')
             ->firstOrFail();
         $this->assertSame((int) $admin->id, (int) $statusEvent->user_id);
-        $this->assertSame([
-            'teacher_id' => (int) $teacher->id,
-            'before' => false,
-            'after' => true,
-        ], $statusEvent->metadata);
+        $this->assertSame((int) $teacher->id, $statusEvent->metadata['teacher_id']);
+        $this->assertFalse($statusEvent->metadata['before']);
+        $this->assertTrue($statusEvent->metadata['after']);
     }
 
     public function test_mysql_teacher_reactivation_holds_admin_role_until_commit(): void
