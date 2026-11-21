@@ -95,6 +95,7 @@ class AttendanceRegisterWorkflowTest extends TestCase
         $this->assertDatabaseHas('learning_reward_ledger', [
             'user_id' => $studentUser->id,
             'activity_key' => 'attendance_present',
+            'source_type' => 'attendance_record',
             'points' => 5,
         ]);
         $this->assertDatabaseHas('learning_reward_ledger', [
