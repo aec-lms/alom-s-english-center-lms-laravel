@@ -110,15 +110,15 @@ class CourseContentLearningController extends Controller
             return;
         }
 
-        $previousCourseIds = DB::table('learning_path_courses as current')
-            ->join('learning_path_enrollments as path_enrollment', 'path_enrollment.learning_path_id', '=', 'current.learning_path_id')
+        $previousCourseIds = DB::table('learning_path_courses as path_item')
+            ->join('learning_path_enrollments as path_enrollment', 'path_enrollment.learning_path_id', '=', 'path_item.learning_path_id')
             ->join('learning_path_courses as previous', function ($join): void {
-                $join->on('previous.learning_path_id', '=', 'current.learning_path_id')
-                    ->whereColumn('previous.position', '<', 'current.position');
+                $join->on('previous.learning_path_id', '=', 'path_item.learning_path_id')
+                    ->whereColumn('previous.position', '<', 'path_item.position');
             })
             ->where('path_enrollment.user_id', $userId)
             ->where('path_enrollment.status', 'active')
-            ->where('current.course_id', $courseId)
+            ->where('path_item.course_id', $courseId)
             ->orderBy('previous.position')
             ->pluck('previous.course_id')
             ->unique();
