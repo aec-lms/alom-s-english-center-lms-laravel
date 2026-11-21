@@ -352,4 +352,87 @@ api/*",
   }
  }
 
+
+ public function test_phonetics_practice_analytics_are_course_user_and_assignment_scoped():void{
+  $this->markSystemInstalled();
+  $this->activatePlugins(['course-management','phonetics']);
+  $student=$this->createUserWithRole('student');
+  $otherStudent=$this->createUserWithRole('student');
+  $courseId=DB::table('courses')->insertGetId([
+   'code'=>'PHON-ANALYTICS-001','title'=>'British and American Phonetics',
+   'slug'=>'british-american-phonetics','description'=>'Practice analytics','price'=>0,
+   'status'=>'published','created_at'=>now(),'updated_at'=>now(),
+  ]);
+  DB::table('enrollments')->insert([
+   ['user_id'=>$student->id,'course_id'=>$courseId,'branch_id'=>null,'status'=>'active','created_at'=>now(),'updated_at'=>now()],
+   ['user_id'=>$otherStudent->id,'course_id'=>$courseId,'branch_id'=>null,'status'=>'active','created_at'=>now(),'updated_at'=>now()],
+  ]);
+  PhoneticSetting::query()->firstOrCreate(['id'=>1],[
+   'enabled'=>true,'course_slug'=>'british-american-phonetics','course_title'=>'British & American Phonetics',
+  ]);
+  PhoneticSetting::query()->whereKey(1)->update(['enabled'=>true,'course_slug'=>'british-american-phonetics']);
+  \Illuminate\Support\Facades\Cache::forget('phonetics.settings');
+
+  $weak=PhoneticEntry::query()->create([
+   'word'=>'analytics-car','category'=>'rhoticity','uk_ipa'=>'/kɑː/','us_ipa'=>'/kɑːr/',
+   'is_active'=>true,'sort_order'=>1,
+  ]);
+  $strong=PhoneticEntry::query()->create([
+   'word'=>'analytics-water','category'=>'rhoticity','uk_ipa'=>'/ˈwɔːtə/','us_ipa'=>'/ˈwɔːtər/',
+   'is_active'=>true,'sort_order'=>2,
+  ]);
+  $newWord=PhoneticEntry::query()->create([
+   'word'=>'analytics-new','category'=>'vowels','uk_ipa'=>'/e/','us_ipa'=>'/ɛ/',
+   'is_active'=>true,'sort_order'=>3,
+  ]);
+  $unassigned=PhoneticEntry::query()->create([
+   'word'=>'hidden-learner-word','category'=>'vowels','uk_ipa'=>'/ɪ/','us_ipa'=>'/ɪ/',
+   'is_active'=>true,'sort_order'=>4,
+  ]);
+  foreach([$weak,$strong,$newWord] as $index=>$entry){
+   DB::table('phonetic_learning_assignments')->insert([
+    'lms_driver'=>'aec','course_ref'=>(string)$courseId,'course_category_ref'=>null,
+    'lesson_ref'=>null,'batch_ref'=>null,'word_id'=>$entry->id,'audience'=>'both',
+    'sort_order'=>$index+1,'is_required'=>true,'created_at'=>now(),'updated_at'=>now(),
+   ]);
+  }
+
+  $insertAttempt=function(int $userId,int $entryId,string $accent,bool $correct,\Illuminate\Support\Carbon $createdAt,string $courseRef) : void {
+   DB::table('alom_english_center_phonetic_attempts')->insert([
+    'user_id'=>(string)$userId,'course_ref'=>$courseRef,'entry_id'=>$entryId,
+    'target_accent'=>$accent,'quiz_mode'=>'course-vocabulary',
+    'selected_answer'=>$correct?'/correct/':'/incorrect/','is_correct'=>$correct,
+    'created_at'=>$createdAt,'updated_at'=>$createdAt,
+   ]);
+  };
+  $twoDaysAgo=now()->subDays(2);
+  $insertAttempt($student->id,$weak->id,'uk',false,$twoDaysAgo,(string)$courseId);
+  $insertAttempt($student->id,$weak->id,'uk',false,$twoDaysAgo,(string)$courseId);
+  $insertAttempt($student->id,$weak->id,'uk',true,$twoDaysAgo,(string)$courseId);
+  $insertAttempt($student->id,$strong->id,'us',true,now()->subDays(10),(string)$courseId);
+  $insertAttempt($student->id,$strong->id,'us',true,now(),(string)$courseId);
+
+  // Another learner's high scores, an unassigned word, and a different
+  // course must never inflate this student's recommendations or totals.
+  for($i=0;$i<8;$i++){
+   $insertAttempt($otherStudent->id,$weak->id,'uk',true,now(),(string)$courseId);
+  }
+  $insertAttempt($student->id,$unassigned->id,'uk',false,now(),(string)$courseId);
+  $insertAttempt($student->id,$weak->id,'uk',true,now(),'999999');
+
+  $this->actingAs($student)->get('/courses/british-american-phonetics/phonetics-learning')
+   ->assertOk()
+   ->assertSee('Practice progress')
+   ->assertSee('Recent activity')
+   ->assertSee('4 attempts in 7 days')
+   ->assertSee('5 in 30 days')
+   ->assertSee('60%')
+   ->assertSee('Spaced review queue')
+   ->assertSee('analytics-car')
+   ->assertSee('analytics-new')
+   ->assertSee('New word — start learning')
+   ->assertSee('Recommended practice')
+   ->assertSee('33% accuracy')
+   ->assertDontSee('hidden-learner-word');
+ }
 }
