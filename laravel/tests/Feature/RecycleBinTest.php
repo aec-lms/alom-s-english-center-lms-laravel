@@ -24,7 +24,7 @@ class RecycleBinTest extends TestCase
     {
         $this->markSystemInstalled();
         $this->activatePlugins(['admin-boosting']);
-        $manager = \\Mockery::mock(app(PluginManager::class))
+        $manager = \Mockery::mock(app(PluginManager::class))
             ->makePartial()
             ->shouldAllowMockingProtectedMethods();
         $manager->shouldReceive('writePrivateFileExclusive')->once()->andReturn(1);
