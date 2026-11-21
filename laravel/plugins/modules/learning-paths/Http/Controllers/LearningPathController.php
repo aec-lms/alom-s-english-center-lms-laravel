@@ -114,24 +114,36 @@ class LearningPathController extends Controller
         $actor = $request->user();
         $this->ensureBranchAssignment($actor);
         $validated = $request->validate(['status' => ['required', 'in:draft,published,archived']]);
-        $record = DB::table('learning_paths')
-            ->when($actor->hasRole('branch_manager'), fn ($query) => $query->where('branch_id', $actor->branch_id))
-            ->where('id', $path)->first();
-        abort_unless($record, 404);
-        $hasActiveLearners = DB::table('learning_path_enrollments')
-            ->where('learning_path_id', $record->id)->where('status', 'active')->exists();
-        abort_if($hasActiveLearners && $validated['status'] !== 'published', 409,
-            'A path with active learners cannot be unpublished or archived until they finish.');
-        if ($validated['status'] === 'published') {
-            $items = $this->pathCourses((int) $record->id);
-            abort_unless($items->count() >= 2, 422, 'A published learning path needs at least two courses.');
-            abort_unless($items->every(fn ($item) => $item->course_status === 'published' && $item->course_deleted_at === null), 409,
-                'Every course in the path must remain published.');
-            $this->assertPathCourseBranches($record, $items);
-        }
-        DB::table('learning_paths')->where('id', $record->id)->update([
-            'status' => $validated['status'], 'updated_at' => now(),
-        ]);
+        DB::transaction(function () use ($actor, $path, $validated): void {
+            // Enrollment takes this same parent-row lock before creating a learner
+            // snapshot. Recheck the active roster only after acquiring the lock.
+            $record = DB::table('learning_paths')
+                ->when($actor->hasRole('branch_manager'), fn ($query) => $query->where('branch_id', $actor->branch_id))
+                ->where('id', $path)
+                ->lockForUpdate()
+                ->first();
+            abort_unless($record, 404);
+
+            $hasActiveLearners = DB::table('learning_path_enrollments')
+                ->where('learning_path_id', $record->id)
+                ->where('status', 'active')
+                ->exists();
+            abort_if($hasActiveLearners && $validated['status'] !== 'published', 409,
+                'A path with active learners cannot be unpublished or archived until they finish.');
+
+            if ($validated['status'] === 'published') {
+                $items = $this->pathCourses((int) $record->id);
+                abort_unless($items->count() >= 2, 422, 'A published learning path needs at least two courses.');
+                abort_unless($items->every(fn ($item) => $item->course_status === 'published' && $item->course_deleted_at === null), 409,
+                    'Every course in the path must remain published.');
+                $this->assertPathCourseBranches($record, $items);
+            }
+
+            DB::table('learning_paths')->where('id', $record->id)->update([
+                'status' => $validated['status'],
+                'updated_at' => now(),
+            ]);
+        });
 
         return back()->with('status', 'Learning path status updated.');
     }
