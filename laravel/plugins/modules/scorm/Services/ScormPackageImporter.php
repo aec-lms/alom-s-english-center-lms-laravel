@@ -153,14 +153,13 @@ class ScormPackageImporter
 
     private function normalizeEntryName(string $name): string
     {
-        if ($name === '' || str_contains($name, chr(0)) || str_contains($name, '\\')) {
+        if ($name === '' || preg_match('/[\x00-\x1F\x7F]/', $name) === 1
+            || str_contains($name, '\\') || str_contains($name, '%') || str_contains($name, ':')) {
             throw new RuntimeException('SCORM archive contains an invalid path.');
         }
-        if (str_starts_with($name, './')) {
-            throw new RuntimeException('SCORM archive paths must be package-relative without dot prefixes.');
-        }
-        if ($name === '' || str_starts_with($name, '/') || preg_match('/^[a-zA-Z]:/', $name) === 1) {
-            throw new RuntimeException('SCORM archive contains an absolute path.');
+        if (str_starts_with($name, './') || str_starts_with($name, '/')
+            || preg_match('/^[a-zA-Z]:/', $name) === 1) {
+            throw new RuntimeException('SCORM archive contains an absolute or ambiguous path.');
         }
 
         $directory = str_ends_with($name, '/');
@@ -255,9 +254,9 @@ class ScormPackageImporter
 
     private function normalizeLaunchHref(string $href): string
     {
-        if ($href === '' || str_contains($href, chr(0)) || str_contains($href, '\\')
-            || str_starts_with($href, '/') || preg_match('/^[a-zA-Z][a-zA-Z0-9+.-]*:/', $href) === 1
-            || str_contains($href, '?') || str_contains($href, '#')) {
+        if ($href === '' || preg_match('/[\x00-\x1F\x7F]/', $href) === 1
+            || str_contains($href, '\\') || str_contains($href, '%') || str_contains($href, ':')
+            || str_starts_with($href, '/') || str_contains($href, '?') || str_contains($href, '#')) {
             throw new RuntimeException('SCORM manifest contains an unsafe launch URL.');
         }
 
