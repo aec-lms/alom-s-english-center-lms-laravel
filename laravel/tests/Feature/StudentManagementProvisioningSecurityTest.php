@@ -228,10 +228,10 @@ class StudentManagementProvisioningSecurityTest extends TestCase
 
             $injected = true;
             Student::withoutEvents(function (): void {
-                $user = \\App\\Models\\User::query()->create([
+                $user = \App\Models\User::query()->create([
                     'name' => 'Concurrent Student',
                     'email' => 'concurrent.race@aec.test',
-                    'password' => \\Illuminate\\Support\\Facades\\Hash::make('StrongPassword123!'),
+                    'password' => \Illuminate\Support\Facades\Hash::make('StrongPassword123!'),
                     'is_active' => true,
                 ]);
 
