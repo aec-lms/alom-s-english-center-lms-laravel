@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Core\Plugins\PluginManager;
 use App\Models\Permission;
 use App\Models\Role;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Plugins\Modules\LearningRewards\Services\LearningRewardsService;
 use Tests\TestCase;
@@ -66,19 +67,19 @@ class LearningRewardsPluginTest extends TestCase
         $student = $this->createUserWithRole('student');
         $service = app(LearningRewardsService::class);
 
-        \\Illuminate\\Support\\Carbon::setTestNow(\\Illuminate\\Support\\Carbon::parse('2026-11-20 20:00:00', 'Asia/Dhaka'));
+        Carbon::setTestNow(Carbon::parse('2026-11-20 20:00:00', 'Asia/Dhaka'));
         try {
             $service->awardVerifiedActivity((int) $student->id, 'lesson_completed', 'course_lesson', 201);
             $service->awardVerifiedActivity((int) $student->id, 'quiz_passed', 'quiz_attempt', 202);
             $this->assertSame(1, (int) DB::table('learning_reward_streaks')->where('user_id', $student->id)->value('current_streak'));
 
-            \\Illuminate\\Support\\Carbon::setTestNow(\\Illuminate\\Support\\Carbon::parse('2026-11-21 20:00:00', 'Asia/Dhaka'));
+            Carbon::setTestNow(Carbon::parse('2026-11-21 20:00:00', 'Asia/Dhaka'));
             $service->awardVerifiedActivity((int) $student->id, 'lesson_completed', 'course_lesson', 203);
             $streak = DB::table('learning_reward_streaks')->where('user_id', $student->id)->first();
             $this->assertSame(2, (int) $streak->current_streak);
             $this->assertSame(2, (int) $streak->longest_streak);
         } finally {
-            \\Illuminate\\Support\\Carbon::setTestNow();
+            Carbon::setTestNow();
         }
     }
 
