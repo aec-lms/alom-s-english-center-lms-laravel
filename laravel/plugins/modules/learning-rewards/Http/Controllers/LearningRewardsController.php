@@ -100,18 +100,22 @@ class LearningRewardsController extends Controller
             'leaderboard_opt_out' => ['required', 'boolean'],
             'profile_public' => ['required', 'boolean'],
         ]);
-        $profile = DB::table('learning_reward_profiles')->where('user_id', $student->id)->exists();
         $values = [
             'leaderboard_opt_out' => $data['leaderboard_opt_out'],
             'profile_public' => $data['profile_public'],
             'updated_at' => now(),
         ];
-        DB::transaction(function () use ($profile, $values, $student, $audit): void {
-            if ($profile) {
-                DB::table('learning_reward_profiles')->where('user_id', $student->id)->update($values);
-            } else {
-                DB::table('learning_reward_profiles')->insert($values + ['user_id' => $student->id, 'created_at' => now()]);
-            }
+        DB::transaction(function () use ($values, $student, $audit): void {
+            // Insert-if-absent followed by update avoids a check-then-insert race
+            // when a learner saves privacy settings from two active sessions.
+            DB::table('learning_reward_profiles')->insertOrIgnore([
+                'user_id' => $student->id,
+                'leaderboard_opt_out' => true,
+                'profile_public' => false,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            DB::table('learning_reward_profiles')->where('user_id', $student->id)->update($values);
 
             $audit->logRequired('learning_rewards.privacy_updated', 'learning_reward_profile', (string) $student->id, [
                 'leaderboard_opt_out' => (bool) $values['leaderboard_opt_out'],
