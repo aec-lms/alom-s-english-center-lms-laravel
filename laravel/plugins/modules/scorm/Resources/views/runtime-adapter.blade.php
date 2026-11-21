@@ -2,17 +2,19 @@
 (() => {
     'use strict';
 
-    const runtimeUrl = @json($runtimeUrl);
-    const appOrigin = @json($appOrigin);
+    const playerOrigin = @json($playerOrigin);
     const attemptId = @json($attemptId);
-    const token = @json($token);
-    let stateVersion = @json($stateVersion);
+    const bridgeNonce = @json($bridgeNonce);
     let initialized = false;
     let finished = false;
     let lastError = '0';
     function notifyStatus(message) {
         if (window.parent !== window) {
-            window.parent.postMessage({ type: 'scorm:status', message: String(message || '').slice(0, 160) }, appOrigin);
+            window.parent.postMessage({
+                type: 'scorm:status',
+                bridge_nonce: bridgeNonce,
+                message: String(message || '').slice(0, 160)
+            }, playerOrigin);
         }
     }
     const readOnly = {
@@ -94,6 +96,7 @@
     }
 
     let pendingRequest = null;
+    let queuedRequest = null;
 
     function newRequestId() {
         if (window.crypto && typeof window.crypto.randomUUID === 'function') {
@@ -108,57 +111,74 @@
     }
 
     function sendPendingRequest() {
-        const payload = pendingRequest;
-        const dataSnapshot = JSON.stringify(payload.data);
-        const wasFinish = payload.finish;
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', runtimeUrl, false);
-        xhr.setRequestHeader('Content-Type', 'text/plain;charset=UTF-8');
+        if (!pendingRequest) return false;
         try {
-            xhr.send(JSON.stringify(payload));
-            const response = JSON.parse(xhr.responseText || '{}');
-            if (xhr.status < 200 || xhr.status >= 300 || response.ok !== true) {
-                lastError = '101';
-                notifyStatus(response.message || @json(__('plugins.scorm::messages.save_failed')));
-                return { ok: false };
-            }
-            stateVersion = response.version;
-            pendingRequest = null;
-            lastError = '0';
-            notifyStatus(wasFinish ? @json(__('plugins.scorm::messages.saved')) : @json(__('plugins.scorm::messages.progress_saved')));
-            return { ok: true, dataSnapshot, wasFinish };
+            window.parent.postMessage({
+                type: 'scorm:commit',
+                method: pendingRequest.finish ? 'LMSFinish' : 'LMSCommit',
+                attempt_id: attemptId,
+                bridge_nonce: bridgeNonce,
+                request_id: pendingRequest.request_id,
+                data: pendingRequest.data
+            }, playerOrigin);
+            return true;
         } catch (error) {
             lastError = '101';
             notifyStatus(@json(__('plugins.scorm::messages.connection_error')));
-            return { ok: false };
+            return false;
         }
     }
 
     function persist(finish) {
         const requestedFinish = Boolean(finish);
-        if (pendingRequest) {
-            const pendingResult = sendPendingRequest();
-            if (!pendingResult.ok) return false;
-            if (requestedFinish && !pendingResult.wasFinish) return persist(true);
-            if (JSON.stringify(data) !== pendingResult.dataSnapshot) return persist(requestedFinish);
-            if (requestedFinish) finished = true;
-            return true;
-        }
-
-        pendingRequest = {
+        const next = {
             request_id: newRequestId(),
-            attempt_id: attemptId,
-            token,
-            version: stateVersion,
             data: Object.assign({}, data),
             finish: requestedFinish
         };
-        const result = sendPendingRequest();
-        if (!result.ok) return false;
+
+        if (pendingRequest) {
+            queuedRequest = next;
+        } else {
+            pendingRequest = next;
+            if (!sendPendingRequest()) {
+                pendingRequest = null;
+                return false;
+            }
+        }
+
         if (requestedFinish) finished = true;
-        if (JSON.stringify(data) !== result.dataSnapshot) return persist(requestedFinish);
+        lastError = '0';
         return true;
     }
+
+    window.addEventListener('message', event => {
+        if (event.source !== window.parent || event.origin !== playerOrigin
+            || !event.data || typeof event.data !== 'object'
+            || event.data.type !== 'scorm:commit-result'
+            || event.data.bridge_nonce !== bridgeNonce) return;
+
+        if (!pendingRequest || event.data.request_id !== pendingRequest.request_id) return;
+
+        const completed = pendingRequest;
+        pendingRequest = null;
+        if (event.data.ok === true) {
+            lastError = '0';
+            notifyStatus(completed.finish ? @json(__('plugins.scorm::messages.saved')) : @json(__('plugins.scorm::messages.progress_saved')));
+        } else {
+            lastError = '101';
+            notifyStatus(event.data.message || @json(__('plugins.scorm::messages.save_failed')));
+        }
+
+        if (queuedRequest) {
+            pendingRequest = queuedRequest;
+            queuedRequest = null;
+            if (!sendPendingRequest()) {
+                lastError = '101';
+                pendingRequest = null;
+            }
+        }
+    });
 
     const api = {
         LMSInitialize(parameter) {
