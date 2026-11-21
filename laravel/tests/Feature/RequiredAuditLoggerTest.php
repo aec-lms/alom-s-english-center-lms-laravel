@@ -8,6 +8,7 @@ use App\Core\Security\AuditLogger;
 use App\Models\AuditLog;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 use Tests\TestCase;
@@ -35,7 +36,7 @@ class RequiredAuditLoggerTest extends TestCase
 
     public function test_required_audit_persists_actor_and_metadata(): void
     {
-        $actor = User::factory()->create();
+        $actor = $this->createAuditTestUser('Audit actor');
 
         app(AuditLogger::class)->logRequired(
             'security.test_event',
@@ -55,7 +56,7 @@ class RequiredAuditLoggerTest extends TestCase
 
     public function test_required_audit_write_failure_rolls_back_the_enclosing_business_transaction(): void
     {
-        $user = User::factory()->create(['name' => 'Before audit failure']);
+        $user = $this->createAuditTestUser('Before audit failure');
 
         AuditLog::creating(static function (): void {
             throw new RuntimeException('forced audit persistence failure');
@@ -76,6 +77,17 @@ class RequiredAuditLoggerTest extends TestCase
         } finally {
             AuditLog::flushEventListeners();
         }
+    }
+
+    private function createAuditTestUser(string $name): User
+    {
+        return User::query()->create([
+            'name' => $name,
+            'email' => 'audit-test-' . bin2hex(random_bytes(8)) . '@aec.test',
+            'password' => Hash::make('AuditTestPassword!2026'),
+            'is_active' => true,
+            'email_verified_at' => now(),
+        ]);
     }
 
 }
