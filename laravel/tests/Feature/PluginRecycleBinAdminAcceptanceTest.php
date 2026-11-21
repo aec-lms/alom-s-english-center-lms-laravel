@@ -313,9 +313,11 @@ class PluginRecycleBinAdminAcceptanceTest extends TestCase
             $manager->syncCatalog();
             $manager->install($slug);
 
+            $manager = \\Mockery::mock(PluginManager::class, [app(\\App\\Core\\Security\\AuditLogger::class)])->makePartial();
+            $manager->shouldAllowMockingProtectedMethods()
+                ->shouldReceive('writeAllBytesToHandle')->once()->andReturn(1);
             $moveCalls = 0;
             $file = File::partialMock();
-            $file->shouldReceive('put')->once()->andReturn(1);
             $file->shouldReceive('moveDirectory')->twice()->andReturnUsing(
                 function (string $from, string $to) use (&$moveCalls): bool {
                     $moveCalls++;
