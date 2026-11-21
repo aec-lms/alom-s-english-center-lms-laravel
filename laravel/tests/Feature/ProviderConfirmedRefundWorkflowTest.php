@@ -476,7 +476,7 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
 
         AuditLog::creating(static function (AuditLog $log): void {
             if ($log->action === 'payment.refund_requested') {
-                throw new \\RuntimeException('forced refund audit failure');
+                throw new \RuntimeException('forced refund audit failure');
             }
         });
 
@@ -490,7 +490,7 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
                     'refund-audit-rollback-001',
                 );
                 $this->fail('Refund request must roll back when its required audit event cannot be stored.');
-            } catch (\\RuntimeException $exception) {
+            } catch (\RuntimeException $exception) {
                 $this->assertSame('forced refund audit failure', $exception->getMessage());
             }
         } finally {
