@@ -595,4 +595,39 @@ class FlashSaleEnrollmentTest extends TestCase
         }
     }
 
+
+    public function test_unified_commerce_catalog_uses_the_same_flash_sale_quote_as_enrollment(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'student-management', 'fees-management', 'course-management', 'flash-sale', 'commerce-cart']);
+
+        $course = Course::query()->create([
+            'code' => 'FLASH-COMMERCE-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'title' => 'Unified Commerce Flash Course',
+            'slug' => 'unified-commerce-flash-' . bin2hex(random_bytes(3)),
+            'price' => 1200,
+            'status' => 'published',
+        ]);
+        DB::table('flash_sales')->insert([
+            'course_id' => $course->id,
+            'title' => 'Unified Cart Launch Offer',
+            'discount_type' => 'percent',
+            'discount_value' => 15,
+            'starts_at' => now()->subMinute(),
+            'ends_at' => now()->addDay(),
+            'is_published' => true,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $quote = app(\Plugins\Modules\CommerceCart\Services\CommerceCatalog::class)
+            ->resolve('course', (int) $course->id);
+
+        $this->assertEquals(1020.00, $quote['price']);
+        $this->assertSame('Unified Cart Launch Offer', $quote['metadata']['flash_sale']['campaign_title']);
+        $this->assertEquals(180.00, $quote['metadata']['flash_sale']['discount_amount']);
+    }
+
+
 }
