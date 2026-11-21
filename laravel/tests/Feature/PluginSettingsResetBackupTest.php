@@ -111,4 +111,42 @@ class PluginSettingsResetBackupTest extends TestCase
         $this->assertSame('0', $manager->getSetting('gateway-sslcommerz', 'sandbox_mode'));
     }
 
+
+    public function test_exclusive_backup_creation_rejects_existing_files_and_symlinks_without_touching_targets(): void
+    {
+        $this->markSystemInstalled();
+        $root = storage_path('app/plugin-setting-exclusive-probe-' . bin2hex(random_bytes(5)));
+        $target = storage_path('app/plugin-setting-exclusive-target-' . bin2hex(random_bytes(5)) . '.txt');
+        File::ensureDirectoryExists($root);
+        chmod($root, 0700);
+        file_put_contents($target, 'must-remain-unchanged');
+        $existingPath = $root . '/existing.json';
+        file_put_contents($existingPath, 'existing-backup-must-remain-unchanged');
+        $symlinkPath = $root . '/linked.json';
+
+        try {
+            $this->assertTrue(symlink($target, $symlinkPath));
+            $manager = app(PluginManager::class);
+            $writer = new \\ReflectionMethod(PluginManager::class, 'writeVerifiedPrivateJson');
+
+            foreach (['existing.json', 'linked.json'] as $filename) {
+                try {
+                    $writer->invoke($manager, $root, $filename, ['replacement' => true]);
+                    $this->fail('Exclusive backup creation must reject an existing destination.');
+                } catch (\\RuntimeException $exception) {
+                    $this->assertStringContainsString('created exclusively', $exception->getMessage());
+                }
+            }
+
+            $this->assertSame('existing-backup-must-remain-unchanged', file_get_contents($existingPath));
+            $this->assertSame('must-remain-unchanged', file_get_contents($target));
+            $this->assertTrue(is_link($symlinkPath));
+        } finally {
+            @unlink($symlinkPath);
+            @unlink($existingPath);
+            @unlink($target);
+            File::deleteDirectory($root);
+        }
+    }
+
 }
