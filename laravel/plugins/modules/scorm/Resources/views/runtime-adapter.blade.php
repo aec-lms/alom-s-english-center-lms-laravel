@@ -147,7 +147,6 @@
             }
         }
 
-        if (requestedFinish) finished = true;
         lastError = '0';
         return true;
     }
@@ -163,9 +162,11 @@
         const completed = pendingRequest;
         pendingRequest = null;
         if (event.data.ok === true) {
+            if (completed.finish) finished = true;
             lastError = '0';
             notifyStatus(completed.finish ? @json(__('plugins.scorm::messages.saved')) : @json(__('plugins.scorm::messages.progress_saved')));
         } else {
+            if (completed.finish) finished = false;
             lastError = '101';
             notifyStatus(event.data.message || @json(__('plugins.scorm::messages.save_failed')));
         }
