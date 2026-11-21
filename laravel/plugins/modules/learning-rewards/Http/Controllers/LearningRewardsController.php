@@ -128,4 +128,64 @@ class LearningRewardsController extends Controller
 
         return back()->with('status', 'Learning reward rules updated.');
     }
+
+    public function storeBadge(Request $request, AuditLogger $audit): RedirectResponse
+    {
+        $actor = $request->user();
+        abort_unless($actor && $actor->hasPermission('gamification.manage'), 403);
+        $data = $request->validate([
+            'slug' => ['required', 'string', 'max:64', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/', 'unique:learning_reward_badges,slug'],
+            'name' => ['required', 'string', 'max:100'],
+            'description' => ['required', 'string', 'max:240'],
+            'icon' => ['required', 'string', 'max:64', 'regex:/^[a-z0-9-]+$/'],
+            'points_threshold' => ['nullable', 'integer', 'min:1', 'max:1000000'],
+            'streak_threshold' => ['nullable', 'integer', 'min:1', 'max:3650'],
+        ]);
+        abort_if(empty($data['points_threshold']) && empty($data['streak_threshold']), 422, 'A badge needs a points or streak threshold.');
+
+        $id = DB::table('learning_reward_badges')->insertGetId([
+            'slug' => $data['slug'],
+            'name' => trim($data['name']),
+            'description' => trim($data['description']),
+            'icon' => $data['icon'],
+            'points_threshold' => $data['points_threshold'] ?? null,
+            'streak_threshold' => $data['streak_threshold'] ?? null,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $audit->log('learning_rewards.badge_created', 'learning_reward_badge', (string) $id, ['slug' => $data['slug']], $actor->id);
+
+        return back()->with('status', 'Achievement badge created.');
+    }
+
+    public function updateBadge(Request $request, int $badge, AuditLogger $audit): RedirectResponse
+    {
+        $actor = $request->user();
+        abort_unless($actor && $actor->hasPermission('gamification.manage'), 403);
+        $record = DB::table('learning_reward_badges')->where('id', $badge)->first();
+        abort_unless($record, 404);
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:100'],
+            'description' => ['required', 'string', 'max:240'],
+            'icon' => ['required', 'string', 'max:64', 'regex:/^[a-z0-9-]+$/'],
+            'points_threshold' => ['nullable', 'integer', 'min:1', 'max:1000000'],
+            'streak_threshold' => ['nullable', 'integer', 'min:1', 'max:3650'],
+            'is_active' => ['required', 'boolean'],
+        ]);
+        abort_if(empty($data['points_threshold']) && empty($data['streak_threshold']), 422, 'A badge needs a points or streak threshold.');
+
+        DB::table('learning_reward_badges')->where('id', $badge)->update([
+            'name' => trim($data['name']),
+            'description' => trim($data['description']),
+            'icon' => $data['icon'],
+            'points_threshold' => $data['points_threshold'] ?? null,
+            'streak_threshold' => $data['streak_threshold'] ?? null,
+            'is_active' => (bool) $data['is_active'],
+            'updated_at' => now(),
+        ]);
+        $audit->log('learning_rewards.badge_updated', 'learning_reward_badge', (string) $badge, ['slug' => $record->slug, 'is_active' => (bool) $data['is_active']], $actor->id);
+
+        return back()->with('status', 'Achievement badge updated.');
+    }
 }
