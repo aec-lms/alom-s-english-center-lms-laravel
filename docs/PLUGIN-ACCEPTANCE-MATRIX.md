@@ -1,64 +1,85 @@
 # Plugin implementation & acceptance matrix
 
 **Repository:** `aec-lms/alom-s-english-center-lms-laravel`  
-**Inventory source:** `main` tree at commit `f288815876bdded6fac862d93c3d9362c43b7c58`; this PR branch adds `learning-rewards` (manifest 61)  
-**Review date:** 2026-11-16
+**Main baseline:** `main` at `f288815876bdded6fac862d93c3d9362c43b7c58` (60 manifests)  
+**PR-branch inventory:** `feature/learning-rewards-gamification` at `29c3152ec1687b0f41abbe5b7e7514b68f9f71da` (61 manifests)  
+**Review date:** 2026-11-21
 
 ## How to read this matrix
 
-This first pass is a **static file inventory**, not a functional certification. “Present” means a matching file/directory exists in the plugin folder; it does not prove the feature works, is secure, or is production-ready. “Not present” means no matching file was found in that plugin directory and may be appropriate for an integration-only plugin. No module is marked functionally accepted until its acceptance tests pass.
+This is a file inventory and coverage index, **not a functional certification**. File presence or a named test does not prove every workflow is complete, secure or production-ready. The detailed per-plugin workflow evidence and limitations are maintained in [PLUGIN-FEATURE-ACCEPTANCE-MATRIX.md](PLUGIN-FEATURE-ACCEPTANCE-MATRIX.md). No plugin is production-certified by this document.
 
 | Plugin | Files inventoried | Inventory status | Functional acceptance |
 |---|---:|---|---|
-| `admin-boosting` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `admission-management` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `attendance-management` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `batch-management` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `branch-management` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `carousel-builder` | 8 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `certificate-management` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `class-management` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `cms-website` | 10 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `course-management` | 16 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `email-notifications` | 8 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `exam-management` | 9 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `fees-management` | 8 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `gateway-card` | 5 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `gateway-paypal` | 6 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `gateway-sslcommerz` | 5 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `gateway-stripe` | 6 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `gmail-marketing` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `google-console` | 5 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `guardian-management` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `hr-staff-management` | 8 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `library-management` | 8 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `marketing-management` | 8 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `meta-pixel` | 5 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `mobile-app-api` | 9 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `notice-board` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `notification-center` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `page-builder` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `payment-management` | 10 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `reports-analytics` | 5 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `role-ai-assistant` | 9 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `seo-manager` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `slider-builder` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `sms-gateway` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `storefront-catalog` | 8 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `student-management` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `teacher-management` | 8 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `universal-payment` | 8 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
-| `visitor-popup-ads` | 7 | Static inventory only; implementation not certified by file presence | Not yet functionally accepted |
+| `admin-boosting` | 10 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `admission-management` | 11 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `al-branding-loader` | 8 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `assignment-management` | 11 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `attendance-management` | 21 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `batch-management` | 8 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `board-question-solver` | 11 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `branch-management` | 8 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `carousel-builder` | 9 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `certificate-management` | 7 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `class-management` | 8 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `cms-website` | 17 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `commerce-cart` | 13 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `course-assessments` | 17 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `course-bundles` | 14 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `course-content-studio` | 14 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `course-management` | 48 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `course-wishlist` | 7 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `email-notifications` | 8 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `exam-management` | 17 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `expense-management` | 8 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `fees-management` | 10 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `flash-sale` | 7 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `gateway-card` | 5 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `gateway-paypal` | 6 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `gateway-sslcommerz` | 5 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `gateway-stripe` | 6 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `gmail-marketing` | 7 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `google-console` | 5 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `guardian-management` | 8 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `guardian-portal` | 5 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `hr-staff-management` | 10 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `learn-and-earn` | 11 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `learning-rewards` | 9 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | PR #381 targeted tests; exact-head CI and independent review pending |
+| `library-management` | 8 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `marketing-management` | 11 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `media-library` | 10 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `meta-pixel` | 5 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `mobile-app-api` | 10 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `notice-board` | 8 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `notification-center` | 11 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `page-builder` | 10 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `payment-management` | 11 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `phonetics` | 36 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `push-notifications` | 5 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `question-bank` | 12 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `quiz-contest` | 14 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `referral-income` | 11 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `reports-analytics` | 5 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `role-ai-assistant` | 13 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `seo-manager` | 7 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `slider-builder` | 9 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `sms-gateway` | 8 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `storefront-catalog` | 9 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `student-management` | 10 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `student-tracing` | 8 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `student-tracking` | 12 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `support-center` | 12 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `teacher-management` | 10 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `universal-payment` | 16 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
+| `visitor-popup-ads` | 8 | File count in PR-branch inventory at `29c3152ec168`; presence is not functional proof | See feature matrix for named tests; targeted coverage only, not full acceptance |
 
 ## Source-level dependency scan
 
-`PluginSiblingDependencyAuditTest` scans PHP files under all 39 plugin directories for direct `Plugins\\Modules\\...` namespace references and verifies that each sibling reference is declared in the plugin manifest as required or optional. The current policy keeps all sibling integrations optional. This scan does not prove standalone runtime behavior and does not yet detect every string-based table reference, dynamic service lookup, event coupling or external provider dependency; those remain part of each plugin's functional acceptance.
+`PluginSiblingDependencyAuditTest` scans PHP files under plugin directories discovered in the current checkout (60 on main; 61 on this PR branch) for direct `Plugins\\Modules\\...` namespace references and verifies that each sibling reference is declared in the plugin manifest as required or optional. The current policy keeps sibling integrations optional. This scan does not prove standalone runtime behavior and does not detect every string-based table reference, dynamic service lookup, event coupling or external provider dependency; those remain part of each plugin's functional acceptance.
 
 ## Targeted regression coverage (not full plugin acceptance)
 
-The current code candidate `02e3e31b111c62d734575c3816c247ed08d038ae` passed PHP 8.3 CI run [43858321888](https://github.com/aec-lms/alom-s-english-center-lms-laravel/actions/runs/43858321888): **129 tests / 1,011 assertions on SQLite and 129 tests / 1,011 assertions on MySQL 8**. PHP syntax lint, Composer security audit, cPanel package build and package verification also passed.
-
-Targeted automated regressions cover plugin lifecycle and ZIP safety, branch isolation, Batch/Class updates, payroll authorization, mobile API privacy and enrolled-lesson access, standalone Fees/Course enrollment, Universal Payment private receipt evidence, and Stripe/PayPal/SSLCOMMERZ checkout paths. These focused tests do **not** certify every plugin in the 39-plugin inventory; the per-plugin acceptance gate below remains mandatory.
+The feature matrix names the real test classes and limits for each of the 60 mainline plugins. PR #381 adds targeted Learning Rewards tests and integration assertions for lesson completion, assignment grading, attendance correction and auto-graded assessments. These tests are not a substitute for complete CRUD/RBAC/branch/rollback/lifecycle acceptance or exact-head CI.
 
 ## Required acceptance gate for every plugin
 
