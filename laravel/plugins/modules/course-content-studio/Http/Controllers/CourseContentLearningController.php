@@ -27,6 +27,9 @@ class CourseContentLearningController extends Controller
         $item=CourseCurriculumItem::query()->where('course_id',$courseRow->id)->where('course_content_post_id',$content->id)->where('is_active',true)->firstOrFail();
         $user=$request->user();
         $enrolled=$user && $user->hasRole('student') && DB::table('enrollments')->where('user_id',$user->id)->where('course_id',$courseRow->id)->whereIn('status',['active','completed'])->exists();
+        if ($enrolled) {
+            $this->assertLearningPathStepUnlocked((int) $user->id, (int) $courseRow->id);
+        }
         $canManage=$this->canManageCourse($user,(int)$courseRow->id);
         $allowed=$content->access_type==='free' || $item->is_preview || $enrolled || $canManage;
         abort_unless($allowed,403,'Enroll in this course to unlock this lesson.');
@@ -62,6 +65,9 @@ class CourseContentLearningController extends Controller
         $item=CourseCurriculumItem::query()->where('course_id',$courseRow->id)->where('course_content_post_id',$content->id)->where('is_active',true)->firstOrFail();
         $user=$request->user();
         $enrolled=$user && $user->hasRole('student') && DB::table('enrollments')->where('user_id',$user->id)->where('course_id',$courseRow->id)->whereIn('status',['active','completed'])->exists();
+        if ($enrolled) {
+            $this->assertLearningPathStepUnlocked((int) $user->id, (int) $courseRow->id);
+        }
         abort_unless($content->access_type==='free' || $item->is_preview || $enrolled || $this->canManageCourse($user,(int)$courseRow->id),403);
         abort_unless($content->content_file_path && Storage::disk('local')->exists($content->content_file_path),404);
         $mime=$content->content_file_mime?:'application/octet-stream';
@@ -80,11 +86,72 @@ class CourseContentLearningController extends Controller
         $this->ensureCourses();
         $courseRow=DB::table('courses')->where('slug',$course)->where('status','published')->firstOrFail();
         abort_unless(DB::table('enrollments')->where('user_id',$student->id)->where('course_id',$courseRow->id)->whereIn('status',['active','completed'])->exists(),403);
+        $this->assertLearningPathStepUnlocked((int) $student->id, (int) $courseRow->id);
         $content=CourseContentPost::published()->where('slug',$post)->firstOrFail();
         $item=CourseCurriculumItem::query()->where('course_id',$courseRow->id)->where('course_content_post_id',$content->id)->where('is_active',true)->firstOrFail();
         abort_if($item->is_preview,403,'Preview lessons do not count toward completion.');
         CourseContentProgress::query()->updateOrCreate(['user_id'=>$student->id,'course_curriculum_item_id'=>$item->id],['last_viewed_at'=>now(),'completed_at'=>now()]);
         return back()->with('status','Lesson marked as complete.');
+    }
+
+
+    /**
+     * An active learning path is a server-enforced prerequisite chain, not only
+     * a visual checklist. Every earlier course must be completed before content
+     * in a later course can be viewed, streamed, downloaded or marked complete.
+     */
+    private function assertLearningPathStepUnlocked(int $userId, int $courseId): void
+    {
+        $plugins = app(PluginManager::class);
+        if (!$plugins->isEnabled('learning-paths')
+            || !Schema::hasTable('learning_path_courses')
+            || !Schema::hasTable('learning_path_enrollments')
+        ) {
+            return;
+        }
+
+        $previousCourseIds = DB::table('learning_path_courses as current')
+            ->join('learning_path_enrollments as path_enrollment', 'path_enrollment.learning_path_id', '=', 'current.learning_path_id')
+            ->join('learning_path_courses as previous', function ($join): void {
+                $join->on('previous.learning_path_id', '=', 'current.learning_path_id')
+                    ->whereColumn('previous.position', '<', 'current.position');
+            })
+            ->where('path_enrollment.user_id', $userId)
+            ->where('path_enrollment.status', 'active')
+            ->where('current.course_id', $courseId)
+            ->orderBy('previous.position')
+            ->pluck('previous.course_id')
+            ->unique();
+
+        foreach ($previousCourseIds as $previousCourseId) {
+            $completed = DB::table('enrollments')
+                ->where('user_id', $userId)
+                ->where('course_id', $previousCourseId)
+                ->where('status', 'completed')
+                ->exists();
+
+            if (!$completed && $plugins->isEnabled('course-content-studio')
+                && Schema::hasTable('course_curriculum_items')
+                && Schema::hasTable('course_content_progress')
+            ) {
+                $requiredItems = DB::table('course_curriculum_items')
+                    ->where('course_id', $previousCourseId)
+                    ->where('is_active', true)
+                    ->where('is_preview', false)
+                    ->count();
+                $completedItems = DB::table('course_content_progress as progress')
+                    ->join('course_curriculum_items as item', 'item.id', '=', 'progress.course_curriculum_item_id')
+                    ->where('progress.user_id', $userId)
+                    ->where('item.course_id', $previousCourseId)
+                    ->where('item.is_active', true)
+                    ->where('item.is_preview', false)
+                    ->whereNotNull('progress.completed_at')
+                    ->count();
+                $completed = $requiredItems > 0 && $completedItems >= $requiredItems;
+            }
+
+            abort_unless($completed, 403, 'Complete the previous course in your active learning path before accessing this course.');
+        }
     }
 
     private function canManageCourse($user,int $courseId): bool
