@@ -115,6 +115,78 @@ class ScormPluginAdminTest extends TestCase
         $this->assertDatabaseHas('scorm_packages', ['id' => $package->id, 'status' => 'draft']);
     }
 
+
+    public function test_package_replacement_is_blocked_while_an_attempt_is_active(): void
+    {
+        [$admin, $courseId] = $this->setupScorm();
+        $this->actingAs($admin)->post(route('plugins.scorm.admin.store'), [
+            'course_id' => $courseId,
+            'package' => $this->packageUpload(),
+        ])->assertRedirect();
+
+        $package = DB::table('scorm_packages')->where('course_id', $courseId)->first();
+        $this->actingAs($admin)->patch(route('plugins.scorm.admin.publish', $package->id))->assertRedirect();
+        $student = $this->createUserWithRole('student');
+        DB::table('scorm_attempts')->insert([
+            'scorm_package_id' => $package->id,
+            'user_id' => $student->id,
+            'enrollment_id' => null,
+            'attempt_number' => 1,
+            'lesson_status' => 'incomplete',
+            'entry_mode' => 'ab-initio',
+            'lesson_location' => '',
+            'suspend_data' => null,
+            'score_raw' => null,
+            'score_min' => null,
+            'score_max' => null,
+            'total_time_seconds' => 0,
+            'session_time_seconds' => 0,
+            'cmi_data' => '{}',
+            'completion_state' => 'in_progress',
+            'started_at' => now(),
+            'last_commit_at' => null,
+            'finished_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($admin)->post(route('plugins.scorm.admin.store'), [
+            'course_id' => $courseId,
+            'replace_package_id' => $package->id,
+            'package' => $this->packageUpload(),
+        ])->assertStatus(409);
+
+        $this->assertDatabaseHas('scorm_packages', ['id' => $package->id, 'status' => 'published']);
+        $this->assertSame(1, DB::table('scorm_packages')->where('course_id', $courseId)->count());
+    }
+
+    public function test_replacement_creates_a_new_revision_and_preserves_the_previous_package(): void
+    {
+        [$admin, $courseId] = $this->setupScorm();
+        $this->actingAs($admin)->post(route('plugins.scorm.admin.store'), [
+            'course_id' => $courseId,
+            'package' => $this->packageUpload(),
+        ])->assertRedirect();
+
+        $previous = DB::table('scorm_packages')->where('course_id', $courseId)->first();
+        $previousDirectory = storage_path('app/scorm-packages/' . $previous->storage_directory);
+        $this->actingAs($admin)->patch(route('plugins.scorm.admin.publish', $previous->id))->assertRedirect();
+
+        $this->actingAs($admin)->post(route('plugins.scorm.admin.store'), [
+            'course_id' => $courseId,
+            'replace_package_id' => $previous->id,
+            'package' => $this->packageUpload(),
+        ])->assertRedirect()->assertSessionHas('status');
+
+        $replacement = DB::table('scorm_packages')->where('course_id', $courseId)->where('replaces_package_id', $previous->id)->first();
+        $this->assertNotNull($replacement);
+        $this->assertSame(2, (int) $replacement->revision_number);
+        $this->assertSame('draft', $replacement->status);
+        $this->assertDatabaseHas('scorm_packages', ['id' => $previous->id, 'status' => 'archived']);
+        $this->assertDirectoryExists($previousDirectory);
+        $this->assertDirectoryExists(storage_path('app/scorm-packages/' . $replacement->storage_directory));
+    }
+
     public function test_scorm_plugin_installs_without_course_management_and_keeps_optional_integration_disabled(): void
     {
         $this->markSystemInstalled();
