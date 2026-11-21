@@ -88,8 +88,8 @@ class LearningRewardsService
                 ]);
 
                 $this->updateStreak($userId, $today, $timezone, $now);
+                $this->unlockEligibleBadges($userId, $now);
                 if ($points > 0) {
-                    $this->unlockEligibleBadges($userId, $now);
                     $this->audit->log('learning_rewards.points_awarded', 'learning_reward_ledger', (string) $ledgerId, [
                         'activity' => $activityKey, 'points' => $points, 'source_type' => $sourceType, 'source_id' => $sourceId,
                     ], $userId);
