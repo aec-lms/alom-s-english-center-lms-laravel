@@ -73,10 +73,17 @@ class LearningRewardsController extends Controller
             'leaderboard_opt_out' => ['required', 'boolean'],
             'profile_public' => ['required', 'boolean'],
         ]);
-        DB::table('learning_reward_profiles')->updateOrInsert(
-            ['user_id' => $student->id],
-            ['leaderboard_opt_out' => $data['leaderboard_opt_out'], 'profile_public' => $data['profile_public'], 'updated_at' => now(), 'created_at' => now()],
-        );
+        $profile = DB::table('learning_reward_profiles')->where('user_id', $student->id)->exists();
+        $values = [
+            'leaderboard_opt_out' => $data['leaderboard_opt_out'],
+            'profile_public' => $data['profile_public'],
+            'updated_at' => now(),
+        ];
+        if ($profile) {
+            DB::table('learning_reward_profiles')->where('user_id', $student->id)->update($values);
+        } else {
+            DB::table('learning_reward_profiles')->insert($values + ['user_id' => $student->id, 'created_at' => now()]);
+        }
 
         return back()->with('status', 'Reward profile privacy settings updated.');
     }
