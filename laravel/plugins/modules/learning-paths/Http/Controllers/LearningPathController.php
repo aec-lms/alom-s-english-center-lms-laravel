@@ -148,12 +148,16 @@ class LearningPathController extends Controller
             }))
             ->when(!$actor || !$actor->hasRole('student'), fn ($query) => $query->whereNull('branch_id'))
             ->orderBy('title')->paginate(12);
-        foreach ($paths as $path) {
+        $visiblePaths = $paths->getCollection()->filter(function ($path) use ($actor): bool {
             $path->courses = $this->pathCourses((int) $path->id);
             $path->enrolled = $actor && $actor->hasRole('student')
                 ? DB::table('learning_path_enrollments')->where('learning_path_id', $path->id)->where('user_id', $actor->id)->exists()
                 : false;
-        }
+
+            return $path->courses->count() >= 2
+                && $path->courses->every(fn ($course) => $course->course_status === 'published' && $course->course_deleted_at === null);
+        })->values();
+        $paths->setCollection($visiblePaths);
 
         return view('learning-paths::catalog', compact('paths'));
     }
