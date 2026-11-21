@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use Illuminate\\Support\\Facades\\Route;
-use Plugins\\Modules\\Scorm\\Http\\Controllers\\ScormPackageController;
+use Illuminate\Support\Facades\Route;
+use Plugins\Modules\Scorm\Http\Controllers\ScormPackageController;
 
 Route::middleware(['web', 'installed', 'plugin:scorm'])->group(function (): void {
     Route::prefix('admin/scorm')->name('plugins.scorm.admin.')
