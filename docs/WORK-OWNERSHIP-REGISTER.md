@@ -286,3 +286,23 @@ This addendum supersedes earlier point-in-time status rows only where the exact 
 Additional coordination: #341 and #342 both edit `PaypalGatewayService`; after independent approval and exact-head CI, merge #341 first, then reconcile/rebase #342 and rerun its full matrix. Legacy counterparts #311, #312, #318, #319, #326 and #334 are closed without merge; their clean-mainline candidates are #343, #344, #346, #345, #341 and #347 respectively. #336 remains a separate legacy commerce handoff with a divergent base; do not merge it alongside #347 or #335.
 
 The repository LMS ruleset is still disabled with zero required approvals and zero required status checks. An authorized repository administrator must configure and verify branch protection. Green CI, Draft removal or mergeability metadata does not replace independent approval, external provider acceptance or release gates.
+
+
+## 2026-11-21 exact-head reconciliation (Bangladesh time)
+
+This update supersedes the 2026-11-20 point-in-time rows above for the PRs listed here. All results are tied to the exact SHA shown; a later commit requires fresh CI. No PR was merged or deployed in this reconciliation.
+
+| PR | Exact head | Current verified CI | Review / remaining gate |
+|---|---|---|---|
+| [#355](../pull/355) ownership register refresh | `c00ca3e1e4fe00b97b55f09d8e7e57946ba24c44` | Composer Security Audit and Browser E2E passed; Laravel SQLite job passed; Laravel MySQL 8 job is still running. | Independent review not yet recorded. Keep Draft until MySQL 8 and independent review complete. |
+| [#346](../pull/346) Course Assessment student authorization | `9ffe61ac6d9e2e9c6d3fa899b66b298a8cf83517` | Browser E2E and Composer Security Audit passed; Laravel workflow still running (SQLite job passed; MySQL 8 test job still running). | Independent review has comments on this head; prior CHANGES_REQUESTED review remains part of review history. Resolve every blocking finding and obtain fresh formal approval. |
+| [#357](../pull/357) teacher account reactivation security | `b073bfb92efee389410af206264757b6e011024d` | Laravel (including SQLite and MySQL 8), Browser E2E and Composer Security Audit passed. | Latest independent review is COMMENTED, not APPROVED. Fresh formal approval required. |
+| [#358](../pull/358) student identity normalization | `953ffecf4f497ccad251dcb240b19173384ef9a2` | Browser E2E and Composer Security Audit passed; Laravel workflow still running (SQLite passed; MySQL 8 still running). | Explicit student-code unique-index race handler and competing-insert rollback regression are present. Earlier CHANGES_REQUESTED reviews and latest COMMENTED follow-up are not formal approval; fresh approval required. |
+| [#359](../pull/359) active teacher course assignment | `2a38d53a41f0e240a5ba4748cf3cd99fb95faed3` | New exact-head workflows have not yet appeared in the PR-triggered run list. | Added a regression proving an existing assignment cannot authorize live-class question access or answers after account deactivation or teacher-role revocation. Verify new exact-head CI and obtain independent approval. |
+
+### Current ownership and merge controls
+
+- #358 is the canonical clean-mainline Student Management identity candidate; #352 and #353 are superseded and must not be merged.
+- #357 and #359 are separate security slices from the broader legacy teacher-management work; neither closes the remaining scope of #293.
+- #346, #357, #358 and #359 remain Draft. #355 also remains Draft while its MySQL run and independent review are outstanding.
+- The LMS repository ruleset was last verified disabled with zero required approvals and zero required status checks. An authorized repository administrator must enable and configure the intended protection. Do not merge any candidate based only on mergeable metadata or green CI.
