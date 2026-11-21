@@ -1,16 +1,24 @@
 const { test, expect } = require('@playwright/test');
 
 test('untrusted SCO cannot inspect LMS/player state and commits only through the trusted player bridge', async ({ page }) => {
-  const appOrigin = 'http://127.0.0.1:8000';
-  const playerOrigin = 'http://scorm-player.e2e.invalid';
-  const contentOrigin = 'http://scorm-content.e2e.invalid';
+  const appOrigin = 'https://lms.e2e.invalid';
+  const playerOrigin = 'https://scorm-player.e2e.invalid';
+  const contentOrigin = 'https://scorm-content.e2e.invalid';
   const playerToken = 'attempt-token-visible-only-to-trusted-player';
   const bridgeNonce = 'abcdef0123456789'.repeat(4);
   const lmsSecret = 'lms-session-secret';
   const playerSecret = 'trusted-player-secret';
   const capturedPayloads = [];
 
-  await page.goto('/');
+  // Simulate the three HTTPS origins used in production. A public HTTP
+  // player calling localhost would be blocked by Chromium's Private Network
+  // Access policy before our exact-origin CORS bridge could be exercised.
+  await page.route(`${appOrigin}/scorm-test-origin`, route => route.fulfill({
+    status: 200,
+    contentType: 'text/html; charset=utf-8',
+    body: '<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>',
+  }));
+  await page.goto(`${appOrigin}/scorm-test-origin`);
   await page.evaluate(secret => {
     document.cookie = 'lms_session=' + encodeURIComponent(secret) + '; path=/; SameSite=Lax';
     document.body.dataset.lmsSecret = secret;
@@ -117,14 +125,20 @@ test('untrusted SCO cannot inspect LMS/player state and commits only through the
           data: message.data,
           finish: message.method === 'LMSFinish',
         };
-        const response = await fetch(appOrigin + '/api/scorm-runtime/commit', {
-          method: 'POST',
-          mode: 'cors',
-          credentials: 'omit',
-          cache: 'no-store',
-          headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-          body: JSON.stringify(payload),
-        });
+        let response;
+        try {
+          response = await fetch(appOrigin + '/api/scorm-runtime/commit', {
+            method: 'POST',
+            mode: 'cors',
+            credentials: 'omit',
+            cache: 'no-store',
+            headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+            body: JSON.stringify(payload),
+          });
+        } catch (error) {
+          document.body.dataset.apiError = String(error && error.message || error);
+          return;
+        }
         const result = await response.json();
         if (!response.ok || result.ok !== true) return;
 
