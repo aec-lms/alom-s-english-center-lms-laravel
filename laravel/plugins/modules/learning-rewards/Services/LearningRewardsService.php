@@ -92,11 +92,18 @@ class LearningRewardsService
 
                 $this->updateStreak($userId, $today, $timezone, $now);
                 $this->unlockEligibleBadges($userId, $now);
-                if ($points > 0) {
-                    $this->audit->log('learning_rewards.points_awarded', 'learning_reward_ledger', (string) $ledgerId, [
-                        'activity' => $activityKey, 'points' => $points, 'source_type' => $sourceType, 'source_id' => $sourceId,
-                    ], $userId);
-                }
+                $this->audit->logRequired(
+                    $points > 0 ? 'learning_rewards.points_awarded' : 'learning_rewards.activity_recorded',
+                    'learning_reward_ledger',
+                    (string) $ledgerId,
+                    [
+                        'activity' => $activityKey,
+                        'points' => $points,
+                        'source_type' => $sourceType,
+                        'source_id' => $sourceId,
+                    ],
+                    $userId,
+                );
 
                 return ['awarded' => $points > 0, 'duplicate' => false, 'points' => $points, 'ledger_id' => $ledgerId];
             }, 3);
@@ -168,7 +175,7 @@ class LearningRewardsService
                 'created_at' => $now,
                 'updated_at' => $now,
             ]);
-            $this->audit->log('learning_rewards.points_reversed', 'learning_reward_ledger', (string) $id, [
+            $this->audit->logRequired('learning_rewards.points_reversed', 'learning_reward_ledger', (string) $id, [
                 'original_ledger_id' => $ledgerId, 'reason' => $reason,
             ], $actorId);
             return $id;
