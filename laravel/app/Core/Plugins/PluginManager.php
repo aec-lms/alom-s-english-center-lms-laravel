@@ -654,26 +654,37 @@ class PluginManager
             'files_sha256' => $packageChecksums,
         ];
         $metadataPath = $trashRoot . DIRECTORY_SEPARATOR . $archiveName . '.json';
-        if (file_exists($metadataPath) || is_link($metadataPath)) {
-            File::moveDirectory($destination, $source);
-            throw new RuntimeException('Recycle-bin metadata destination already exists; the plugin package was returned.');
-        }
-        $written = File::put($metadataPath, json_encode($metadata, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
-        if ($written === false) {
-            File::moveDirectory($destination, $source);
-            if ($wasInstalled) {
+        try {
+            $this->writeVerifiedPrivateJson($trashRoot, $archiveName . '.json', $metadata);
+        } catch (Throwable $writeError) {
+            if (is_file($metadataPath) && !is_link($metadataPath)) {
+                @unlink($metadataPath);
+            }
+
+            $restored = File::moveDirectory($destination, $source)
+                && is_dir($source)
+                && !is_dir($destination)
+                && $packageChecksums === $this->pluginDirectoryChecksums($source);
+
+            if ($restored && $wasInstalled) {
                 try {
                     $this->install($slug, $actorId);
                     if (!$wasEnabled) {
                         $this->disable($slug, $actorId);
                     }
                 } catch (Throwable) {
-                    PluginRecord::query()->where('slug', $slug)->update(['is_installed' => false, 'is_enabled' => false]);
+                    PluginRecord::query()->where('slug', $slug)->update([
+                        'is_installed' => false,
+                        'is_enabled' => false,
+                    ]);
                 }
             }
-            throw new RuntimeException('Plugin recycle-bin metadata could not be written; the package was returned to its original location.');
+
+            $message = $restored
+                ? 'Plugin recycle-bin metadata could not be fully written and verified; the original package and lifecycle state were restored.'
+                : 'Plugin recycle-bin metadata could not be fully written and verified, and automatic package restoration failed; the archive remains in the protected recycle bin.';
+            throw new RuntimeException($message, previous: $writeError);
         }
-        @chmod($metadataPath, 0600);
         $this->audit->log('plugin.deleted_to_recycle_bin', 'plugin', $slug, [
             'archive' => $archiveName,
             'business_data_preserved' => true,
@@ -971,6 +982,68 @@ class PluginManager
     }
 
     /** Reset only plugin configuration to manifest defaults; business data is never touched. */
+    /**
+     * Write JSON only inside a private child of storage/app and verify the exact
+     * bytes before a destructive plugin operation is allowed to continue.
+     *
+     * @param array<string, mixed> $payload
+     */
+    private function writeVerifiedPrivateJson(string $root, string $filename, array $payload): string
+    {
+        $storageRoot = realpath(storage_path('app'));
+        if (is_link($root)) {
+            throw new RuntimeException('Private plugin backup directory cannot be a symbolic link.');
+        }
+
+        File::ensureDirectoryExists($root);
+        @chmod($root, 0700);
+        $realRoot = realpath($root);
+        if ($storageRoot === false || $realRoot === false
+            || dirname($realRoot) !== $storageRoot
+            || !is_dir($realRoot)
+        ) {
+            throw new RuntimeException('Private plugin backup directory must be a real directory directly under storage/app.');
+        }
+
+        if (basename($filename) !== $filename || $filename === ''
+            || str_contains($filename, "\\0")
+        ) {
+            throw new RuntimeException('Invalid private plugin backup filename.');
+        }
+
+        $path = $realRoot . DIRECTORY_SEPARATOR . $filename;
+        if (file_exists($path) || is_link($path)) {
+            throw new RuntimeException('Private plugin backup destination already exists or is unsafe.');
+        }
+
+        $contents = json_encode($payload, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR);
+        $written = File::put($path, $contents);
+        if ($written !== strlen($contents) || is_link($path) || !is_file($path)) {
+            if (is_file($path) && !is_link($path)) {
+                @unlink($path);
+            }
+            throw new RuntimeException('Private plugin backup write was incomplete.');
+        }
+
+        $readBack = File::get($path);
+        if (!hash_equals(hash('sha256', $contents), hash('sha256', $readBack))) {
+            @unlink($path);
+            throw new RuntimeException('Private plugin backup integrity verification failed.');
+        }
+
+        @chmod($path, 0600);
+        if (is_link($path) || !is_file($path)
+            || !hash_equals(hash('sha256', $contents), (string) hash_file('sha256', $path))
+        ) {
+            if (is_file($path) && !is_link($path)) {
+                @unlink($path);
+            }
+            throw new RuntimeException('Private plugin backup changed during integrity verification.');
+        }
+
+        return $path;
+    }
+
     public function resetSettingsToDefaults(string $slug, ?int $actorId = null): void
     {
         $manifest = $this->discoverManifests()[$slug] ?? throw new RuntimeException("Unknown plugin: {$slug}");
@@ -1002,15 +1075,11 @@ class PluginManager
 
             $backupId = $slug . '-' . now()->format('YmdHis') . '-' . bin2hex(random_bytes(5));
             $backupRoot = storage_path('app/plugin-setting-backups');
-            File::ensureDirectoryExists($backupRoot);
-            @chmod($backupRoot, 0700);
-            $backupPath = $backupRoot . DIRECTORY_SEPARATOR . $backupId . '.json';
-            File::put($backupPath, json_encode([
+            $this->writeVerifiedPrivateJson($backupRoot, $backupId . '.json', [
                 'plugin_slug' => $slug,
                 'created_at' => now()->toIso8601String(),
                 'settings' => $backupRows,
-            ], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
-            @chmod($backupPath, 0600);
+            ]);
 
             PluginSetting::query()->where('plugin_slug', $slug)->delete();
 
