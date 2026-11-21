@@ -248,3 +248,22 @@ Do not accept `gateway-stripe` until the immediate-success state transition, act
 | Release / review | #341 exact-head CI was previously reported green; formal independent approval remains pending; #342 is a dependent refund candidate. **BLOCKED:** close actor race and cancellation/capture recovery gaps, run exact integrated checks and obtain provider sandbox/finance approval. |
 
 Do not accept `gateway-paypal` until authorization serialization, provider-verified cancellation/reconciliation, capture failure recovery, refund lifecycle and real sandbox evidence pass on the final integrated head.
+
+
+## Initial implementation audit — `gateway-card` (2026-11-21)
+
+**Disposition: BLOCKED — intentionally not a functioning payment processor.** Source inspected on current main: manifest, route, controller, service and provider.
+
+| Gate | Evidence / result |
+|---|---|
+| Source / architecture | The manifest explicitly says Visa/Mastercard are card networks and require a merchant acquirer/PSP adapter. `CardGatewayService` always throws rather than creating a fake transaction. **BLOCKED:** no acquirer-specific adapter is installed. |
+| Routes / API | Authenticated checkout route requires `gateway.card.use`; webhook is public and CSRF-exempt. Controller rejects raw PAN/CVV fields. **PARTIAL:** webhook currently only returns the explicit disabled error from the service; test rate/abuse behavior when a real adapter is added. |
+| Permissions / scope | Checkout requires auth and the gateway permission; controller allows only admin/accountant or invoice owner. **PARTIAL:** branch-manager support, current persisted account/permission revalidation, and branch-scoped invoice checks are not evidenced. |
+| Database | No gateway-card-owned schema; payment transaction schema belongs to Payment Management. Service intentionally creates no transaction. **N/A** for local gateway tables; adapter-specific storage/constraints must be designed and reviewed. |
+| UI / accessibility | No plugin-owned Resources/views directory was found. **BLOCKED:** no checkout UI or accessible tokenization component is supplied by this plugin; the app must use another configured processor or install a concrete adapter. |
+| Tests | `FinanceAndPaymentGatewayTest` asserts raw PAN/CVV rejection, HTTP 503 when no acquirer adapter exists, no payment transaction creation and no invoice mutation. **PARTIAL:** this proves fail-closed behavior only, not a successful payment journey. |
+| Integrations | Manifest lists Fees and Payment Management as optional dependencies. The service contains no actual acquirer integration. **BLOCKED:** select and install a named bank/PSP adapter and verify its sandbox contract, credentials, tokenization and signed callback. |
+| Failure handling | Missing adapter returns an explicit non-success response; no fake pending transaction or false settlement is created. **PASS for fail-closed behavior only;** successful-path/failure-recovery acceptance remains BLOCKED until an adapter exists. |
+| Release / review | The module description clearly discloses its adapter requirement. | **BLOCKED:** do not present Visa/Mastercard direct processing as available. Either keep the module visibly disabled with this limitation or add a specific acquiring-bank/PSP adapter and complete the full matrix. |
+
+This plugin is **not accepted as a working payment gateway**. Its current correct behavior is to refuse processing safely. Stripe may support card payments independently, but that does not satisfy acceptance for this separate gateway-card plugin.
