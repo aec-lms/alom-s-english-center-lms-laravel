@@ -22,10 +22,33 @@ class ScormPackageController extends Controller
     {
         abort_unless(Schema::hasTable('scorm_packages'), 503, 'SCORM storage is not installed.');
         $actor = $request->user();
-        $packages = DB::table('scorm_packages')
-            ->when($actor?->hasRole('branch_manager'), fn ($query) => $query->where('branch_id', $actor->branch_id))
-            ->orderByDesc('created_at')
+        $attemptStats = DB::table('scorm_attempts')
+            ->select('scorm_package_id')
+            ->selectRaw('COUNT(*) as attempts_count')
+            ->selectRaw("SUM(CASE WHEN completion_state = 'completed' THEN 1 ELSE 0 END) as completed_count")
+            ->selectRaw("SUM(CASE WHEN completion_state IN ('in_progress', 'suspended') THEN 1 ELSE 0 END) as active_count")
+            ->selectRaw('AVG(score_raw) as average_score')
+            ->groupBy('scorm_package_id');
+
+        $packages = DB::table('scorm_packages as packages')
+            ->leftJoinSub($attemptStats, 'attempt_stats', fn ($join) => $join->on('attempt_stats.scorm_package_id', '=', 'packages.id'))
+            ->when($actor?->hasRole('branch_manager'), fn ($query) => $query->where('packages.branch_id', $actor->branch_id))
+            ->select('packages.*')
+            ->selectRaw('COALESCE(attempt_stats.attempts_count, 0) as attempts_count')
+            ->selectRaw('COALESCE(attempt_stats.completed_count, 0) as completed_count')
+            ->selectRaw('COALESCE(attempt_stats.active_count, 0) as active_count')
+            ->selectRaw('attempt_stats.average_score as average_score')
+            ->orderByDesc('packages.created_at')
             ->paginate(20);
+
+        $replacementOptions = DB::table('scorm_packages as packages')
+            ->join('courses', 'courses.id', '=', 'packages.course_id')
+            ->where('packages.status', 'published')
+            ->where('courses.status', 'published')
+            ->when($actor?->hasRole('branch_manager'), fn ($query) => $query->where('packages.branch_id', $actor->branch_id))
+            ->orderBy('courses.title')
+            ->orderBy('packages.title')
+            ->get(['packages.id', 'packages.course_id', 'packages.title', 'packages.revision_number', 'courses.title as course_title']);
 
         $courses = collect();
         if ($plugins->isEnabled('course-management') && Schema::hasTable('courses')) {
@@ -38,7 +61,7 @@ class ScormPackageController extends Controller
                 ->get(['id', 'title', 'branch_id']);
         }
 
-        return view('scorm::admin.index', compact('packages', 'courses'));
+        return view('scorm::admin.index', compact('packages', 'courses', 'replacementOptions'));
     }
 
     public function store(Request $request, PluginManager $plugins, ScormPackageImporter $importer): RedirectResponse
