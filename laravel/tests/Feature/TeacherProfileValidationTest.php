@@ -13,6 +13,39 @@ use Tests\TestCase;
 
 final class TeacherProfileValidationTest extends TestCase
 {
+    public function test_teacher_creation_rolls_back_account_and_profile_when_required_audit_fails(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['teacher-management']);
+        $admin = $this->createUserWithRole('admin');
+
+        AuditLog::creating(static function (AuditLog $log): void {
+            if ($log->action === 'teacher.created') {
+                throw new \\RuntimeException('forced teacher audit failure');
+            }
+        });
+
+        try {
+            try {
+                $this->actingAs($admin)->post('/admin/teachers', [
+                    'name' => 'Audit Failure Teacher',
+                    'email' => 'audit.failure.teacher@aec.test',
+                    'employee_code' => 'AUDIT-FAIL-TEACHER-001',
+                    'specialization' => 'English Grammar',
+                    'is_active' => '1',
+                ]);
+                $this->fail('Teacher creation must fail when required audit storage fails.');
+            } catch (\\RuntimeException $exception) {
+                $this->assertSame('forced teacher audit failure', $exception->getMessage());
+            }
+        } finally {
+            AuditLog::flushEventListeners();
+        }
+
+        $this->assertDatabaseMissing('users', ['email' => 'audit.failure.teacher@aec.test']);
+        $this->assertDatabaseMissing('teachers', ['employee_code' => 'AUDIT-FAIL-TEACHER-001']);
+    }
+
     public function test_teacher_update_rejects_an_email_already_owned_by_another_user(): void
     {
         $this->markSystemInstalled();
