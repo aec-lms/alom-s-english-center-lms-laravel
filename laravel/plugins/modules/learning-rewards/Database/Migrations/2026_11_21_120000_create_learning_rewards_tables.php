@@ -16,7 +16,7 @@ return new class extends Migration {
             $table->unsignedSmallInteger('points')->default(0);
             $table->unsignedInteger('daily_cap')->default(0);
             $table->unsignedSmallInteger('pass_percentage')->nullable();
-            $table->boolean('is_enabled')->default(false);
+            $table->boolean('is_enabled')->default(true);
             $table->timestamps();
         });
 
@@ -72,7 +72,7 @@ return new class extends Migration {
             $table->id();
             $table->foreignId('user_id')->unique()->constrained('users')->cascadeOnDelete();
             $table->boolean('leaderboard_opt_out')->default(false);
-            $table->boolean('profile_public')->default(true);
+            $table->boolean('profile_public')->default(false);
             $table->timestamps();
         });
 
