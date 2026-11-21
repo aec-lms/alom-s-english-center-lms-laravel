@@ -7,7 +7,7 @@
   "description": "Reusable lesson posts, private lesson files, categories, course curriculum builder, previews and student learning progress.",
   "core_compatibility": "^2.0",
   "dependencies": [],
-  "optional_dependencies": ["course-management"],
+  "optional_dependencies": ["course-management", "learning-paths"],
   "provider": "Plugins\\Modules\\CourseContentStudio\\Providers\\CourseContentStudioServiceProvider",
   "permissions": [
     {"slug": "content-studio.manage", "name": "Manage Course Content Studio"}
