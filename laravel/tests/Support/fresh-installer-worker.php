@@ -10,6 +10,18 @@ require $root . '/vendor/autoload.php';
 $app = require $root . '/bootstrap/app.php';
 $app->make(Kernel::class)->bootstrap();
 
+// Explicitly pin the disposable process-test resources even if CI supplies a
+// cached config file; no production/default database or storage path is used.
+config([
+    'database.default' => 'sqlite',
+    'database.connections.sqlite.database' => (string) getenv('DB_DATABASE'),
+    'lms.install_lock_path' => (string) getenv('AEC_INSTALL_LOCK_PATH'),
+    'lms.env_path' => (string) getenv('AEC_ENV_FILE_PATH'),
+    'lms.private_storage_path' => (string) getenv('AEC_PRIVATE_STORAGE_PATH'),
+    'lms.backup_path' => (string) getenv('AEC_BACKUP_PATH'),
+]);
+\Illuminate\Support\Facades\DB::purge('sqlite');
+
 $readyFile = (string) getenv('AEC_INSTALLER_READY_FILE');
 $startGate = (string) getenv('AEC_INSTALLER_START_GATE');
 if ($readyFile === '' || $startGate === '') {
