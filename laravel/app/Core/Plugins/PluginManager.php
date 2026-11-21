@@ -1002,14 +1002,37 @@ class PluginManager
 
             $backupId = $slug . '-' . now()->format('YmdHis') . '-' . bin2hex(random_bytes(5));
             $backupRoot = storage_path('app/plugin-setting-backups');
+            if (is_link($backupRoot)) {
+                throw new RuntimeException('Plugin settings recovery directory cannot be a symbolic link.');
+            }
             File::ensureDirectoryExists($backupRoot);
-            @chmod($backupRoot, 0700);
-            $backupPath = $backupRoot . DIRECTORY_SEPARATOR . $backupId . '.json';
-            File::put($backupPath, json_encode([
+            $resolvedBackupRoot = realpath($backupRoot);
+            $storageAppRoot = realpath(storage_path('app'));
+            $publicRoot = realpath(public_path());
+            if ($resolvedBackupRoot === false || $storageAppRoot === false
+                || !str_starts_with($resolvedBackupRoot, rtrim($storageAppRoot, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR)
+                || ($publicRoot !== false && ($resolvedBackupRoot === $publicRoot
+                    || str_starts_with($resolvedBackupRoot, rtrim($publicRoot, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR)))) {
+                throw new RuntimeException('Plugin settings recovery directory is not a verified private storage path.');
+            }
+            @chmod($resolvedBackupRoot, 0700);
+            $backupPath = $resolvedBackupRoot . DIRECTORY_SEPARATOR . $backupId . '.json';
+            $backupContents = json_encode([
                 'plugin_slug' => $slug,
                 'created_at' => now()->toIso8601String(),
                 'settings' => $backupRows,
-            ], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
+            ], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR);
+            $writtenBytes = File::put($backupPath, $backupContents);
+            if ($writtenBytes !== strlen($backupContents) || !is_file($backupPath) || is_link($backupPath)) {
+                @unlink($backupPath);
+                throw new RuntimeException('Plugin settings recovery backup could not be written completely; reset was cancelled.');
+            }
+            $expectedChecksum = hash('sha256', $backupContents);
+            $actualChecksum = hash_file('sha256', $backupPath);
+            if (!is_string($actualChecksum) || !hash_equals($expectedChecksum, $actualChecksum)) {
+                @unlink($backupPath);
+                throw new RuntimeException('Plugin settings recovery backup failed integrity verification; reset was cancelled.');
+            }
             @chmod($backupPath, 0600);
 
             PluginSetting::query()->where('plugin_slug', $slug)->delete();
