@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
 use Plugins\Modules\CourseManagement\Models\Course;
 use Plugins\Modules\PaymentManagement\Services\PaymentSettlementService;
@@ -985,6 +986,59 @@ class PaymentSettlementStateMachineTest extends TestCase
             'commerce_order_item_id' => null,
         ]);
         $this->assertDatabaseHas('fee_invoices', ['id' => $invoice->id, 'status' => 'unpaid', 'paid_amount' => 0]);
+    }
+
+    public function test_missing_required_audit_table_rolls_back_payment_settlement(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management']);
+
+        $invoice = FeeInvoice::query()->create([
+            'invoice_number' => 'AUDIT-FAIL-CLOSED-' . strtoupper(bin2hex(random_bytes(4))),
+            'payer_name' => 'Audit Failure Buyer',
+            'payer_email' => 'audit-failure@aec.test',
+            'subtotal_amount' => 500,
+            'discount_amount' => 0,
+            'net_amount' => 500,
+            'paid_amount' => 0,
+            'currency' => 'BDT',
+            'status' => 'unpaid',
+        ]);
+        $transaction = PaymentTransaction::query()->create([
+            'transaction_ref' => 'AUDIT-FAIL-CLOSED-TXN-' . strtoupper(bin2hex(random_bytes(4))),
+            'invoice_id' => $invoice->id,
+            'gateway_slug' => 'offline',
+            'amount' => 500,
+            'currency' => 'BDT',
+            'status' => 'initiated',
+            'metadata' => [],
+        ]);
+
+        Schema::partialMock()
+            ->shouldReceive('hasTable')
+            ->with('audit_logs')
+            ->andReturn(false);
+
+        try {
+            app(PaymentSettlementService::class)->settleTransaction(
+                $transaction,
+                'AUDIT-FAIL-CLOSED-PROVIDER-REF',
+            );
+            $this->fail('Payment settlement must fail when its required audit event cannot be stored.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('Required audit logging is unavailable', $exception->getMessage());
+        }
+
+        $this->assertDatabaseHas('payment_transactions', [
+            'id' => $transaction->id,
+            'status' => 'initiated',
+            'external_reference' => null,
+        ]);
+        $this->assertDatabaseHas('fee_invoices', [
+            'id' => $invoice->id,
+            'paid_amount' => 0,
+            'status' => 'unpaid',
+        ]);
     }
 
 }
