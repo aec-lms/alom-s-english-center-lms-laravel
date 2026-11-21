@@ -68,7 +68,7 @@ class PluginSettingsResetBackupTest extends TestCase
         try {
             $manager->resetSettingsToDefaults('gateway-sslcommerz');
             $this->fail('A partial recovery backup write must abort settings reset.');
-        } catch (\\RuntimeException $exception) {
+        } catch (\RuntimeException $exception) {
             $this->assertStringContainsString('backup write was incomplete', $exception->getMessage());
         }
 
