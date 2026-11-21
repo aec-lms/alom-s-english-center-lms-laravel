@@ -50,17 +50,38 @@ class FlashSaleEnrollmentTest extends TestCase
             'status' => 'published',
         ]);
 
+        // Insert the higher-priority global campaign last so a latest-ID
+        // lookup would choose it incorrectly. The shared resolver must prefer
+        // the branch-specific offer even when its numeric priority is lower.
         DB::table('flash_sales')->insert([
-            'course_id' => $course->id,
-            'title' => 'Launch Week Discount',
-            'discount_type' => 'percent',
-            'discount_value' => 25,
-            'starts_at' => now()->subMinute(),
-            'ends_at' => now()->addDay(),
-            'is_published' => true,
-            'is_active' => true,
-            'created_at' => now(),
-            'updated_at' => now(),
+            [
+                'course_id' => $course->id,
+                'title' => 'Branch Launch Discount',
+                'discount_type' => 'percent',
+                'discount_value' => 25,
+                'priority' => 1,
+                'branch_id' => $branchId,
+                'starts_at' => now()->subMinute(),
+                'ends_at' => now()->addDay(),
+                'is_published' => true,
+                'is_active' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'course_id' => $course->id,
+                'title' => 'Higher Priority Global Discount',
+                'discount_type' => 'percent',
+                'discount_value' => 10,
+                'priority' => 999,
+                'branch_id' => null,
+                'starts_at' => now()->subMinute(),
+                'ends_at' => now()->addDay(),
+                'is_published' => true,
+                'is_active' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
         ]);
 
         $this->actingAs($studentUser)
