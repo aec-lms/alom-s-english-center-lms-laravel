@@ -212,7 +212,8 @@ class ScormPackageImporter
         }
 
         $root = $document->documentElement;
-        if (!$root instanceof DOMElement || $root->localName !== 'manifest') {
+        if (!$root instanceof DOMElement || $root->localName !== 'manifest'
+            || $root->namespaceURI !== 'http://www.imsproject.org/xsd/imscp_rootv1p1p2') {
             throw new RuntimeException('SCORM manifest root element is invalid.');
         }
 
@@ -224,7 +225,9 @@ class ScormPackageImporter
             }
             $id = trim($resource->getAttribute('identifier'));
             $href = trim($resource->getAttribute('href'));
-            if ($id !== '' && $href !== '') {
+            $resourceType = trim($resource->getAttribute('type'));
+            $scormType = trim($resource->getAttributeNS('http://www.adlnet.org/xsd/adlcp_rootv1p2', 'scormtype'));
+            if ($id !== '' && $href !== '' && $resourceType === 'webcontent' && $scormType === 'sco') {
                 $resourceById[$id] = $this->normalizeLaunchHref($href);
             }
         }
