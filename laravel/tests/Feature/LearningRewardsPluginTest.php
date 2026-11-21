@@ -153,7 +153,7 @@ class LearningRewardsPluginTest extends TestCase
 
         try {
             try {
-                $service->awardVerifiedActivity((int) $student->id, 'lesson_completed', 'course_lesson', 88001);
+                $service->awardVerifiedActivity((int) $student->id, 'assignment_accepted', 'assignment_submission', 88001);
                 $this->fail('Reward award must roll back when its required audit event cannot be written.');
             } catch (\RuntimeException $exception) {
                 $this->assertSame('forced reward award audit failure', $exception->getMessage());
@@ -168,7 +168,7 @@ class LearningRewardsPluginTest extends TestCase
         ]);
         $this->assertDatabaseMissing('learning_reward_streaks', ['user_id' => $student->id]);
 
-        $award = $service->awardVerifiedActivity((int) $student->id, 'lesson_completed', 'course_lesson', 88001);
+        $award = $service->awardVerifiedActivity((int) $student->id, 'assignment_accepted', 'assignment_submission', 88001);
         AuditLog::creating(static function (AuditLog $log): void {
             if ($log->action === 'learning_rewards.points_reversed') {
                 throw new \RuntimeException('forced reward reversal audit failure');
