@@ -132,6 +132,8 @@ class LearningInteractionTest extends TestCase
         [, $courseId] = $this->createCourseLesson('active');
         $teacher = $this->createUserWithRole('teacher');
         $otherTeacher = $this->createUserWithRole('teacher');
+        $teacher->forceFill(['name' => 'Assigned Live Instructor'])->save();
+        $otherTeacher->forceFill(['name' => 'Unassigned Live Instructor'])->save();
         $liveClassId = $this->createLiveClass($courseId, $teacher->name);
         $route = route('plugins.learning-interactions.live.announcements.store', $liveClassId);
 
