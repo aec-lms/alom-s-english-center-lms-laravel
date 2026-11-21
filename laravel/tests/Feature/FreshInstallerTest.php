@@ -144,6 +144,102 @@ class FreshInstallerTest extends TestCase
     }
 
 
+    public function test_failed_migration_releases_mutex_and_allows_a_clean_retry(): void
+    {
+        $originalDefault = config('database.default');
+        $originalAppKey = config('app.key');
+        $originalSigningKey = config('lms.plugin_signing_key');
+        $originalBackupKey = config('lms.backup_encryption_key');
+        $root = sys_get_temp_dir() . '/aec-installer-retry-' . bin2hex(random_bytes(8));
+        mkdir($root, 0700, true);
+
+        $lockPath = $root . '/installed.lock';
+        $envPath = $root . '/.env';
+        $privatePath = $root . '/private';
+        $backupPath = $root . '/backups';
+        file_put_contents($envPath, "APP_KEY=\n");
+
+        config([
+            'database.connections.installer_failure_test' => [
+                'driver' => 'sqlite',
+                'database' => ':memory:',
+                'prefix' => '',
+                'foreign_key_constraints' => true,
+            ],
+            'database.default' => 'installer_failure_test',
+            'lms.install_lock_path' => $lockPath,
+            'lms.env_path' => $envPath,
+            'lms.private_storage_path' => $privatePath,
+            'lms.backup_path' => $backupPath,
+        ]);
+        DB::purge('installer_failure_test');
+        DB::setDefaultConnection('installer_failure_test');
+
+        $installConfig = [
+            'app_name' => 'AEC Retry Test',
+            'app_url' => 'https://aec-retry.test',
+            'admin_name' => 'Retry Admin',
+            'admin_email' => 'retry-admin@aec.test',
+            'admin_password' => 'RetryStrongPassword!2026',
+            'country_code' => 'BD',
+            'locale' => 'en',
+            'timezone' => 'Asia/Dhaka',
+            'currency' => 'BDT',
+        ];
+
+        try {
+            \Illuminate\Support\Facades\Artisan::shouldReceive('call')
+                ->once()
+                ->with('migrate', ['--force' => true])
+                ->andReturn(1);
+            \Illuminate\Support\Facades\Artisan::shouldReceive('output')
+                ->andReturn('simulated migration failure');
+
+            try {
+                app(FreshInstallerService::class)->installFresh($installConfig);
+                $this->fail('Installer unexpectedly completed while the migration command reported failure.');
+            } catch (RuntimeException $exception) {
+                $this->assertStringContainsString('Core database migrations failed', $exception->getMessage());
+            } finally {
+                \Illuminate\Support\Facades\Artisan::clearResolvedInstance('artisan');
+            }
+
+            $this->assertFileDoesNotExist($lockPath, 'A failed migration must never create the installed marker.');
+            $this->assertFileExists($lockPath . '.mutex');
+
+            $probe = fopen($lockPath . '.mutex', 'c');
+            $this->assertNotFalse($probe);
+            $this->assertTrue(flock($probe, LOCK_EX | LOCK_NB), 'The OS mutex must be released after migration failure.');
+            flock($probe, LOCK_UN);
+            fclose($probe);
+
+            // The failed attempt did not write a success marker or retain the OS lock;
+            // retrying the same fresh database must complete normally.
+            $result = app(FreshInstallerService::class)->installFresh($installConfig);
+            $this->assertFileExists($lockPath);
+            $this->assertSame(1, (int) User::query()->where('email', 'retry-admin@aec.test')->count());
+            $this->assertSame(1, (int) $result['admin_id']);
+        } finally {
+            \Illuminate\Support\Facades\Artisan::clearResolvedInstance('artisan');
+            DB::disconnect('installer_failure_test');
+            DB::setDefaultConnection($originalDefault);
+            config([
+                'database.default' => $originalDefault,
+                'app.key' => $originalAppKey,
+                'lms.plugin_signing_key' => $originalSigningKey,
+                'lms.backup_encryption_key' => $originalBackupKey,
+            ]);
+
+            foreach ([$lockPath, $lockPath . '.mutex', $envPath] as $file) {
+                @unlink($file);
+            }
+            foreach ([$privatePath, $backupPath] as $directory) {
+                @rmdir($directory);
+            }
+            @rmdir($root);
+        }
+    }
+
     public function test_two_real_php_workers_serialize_fresh_installation_against_one_sqlite_database(): void
     {
         if (!function_exists('proc_open') || !function_exists('proc_close')) {
