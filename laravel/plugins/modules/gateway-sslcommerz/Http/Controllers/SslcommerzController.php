@@ -33,6 +33,7 @@ class SslcommerzController extends Controller
 
         $validated = $request->validate([
             'invoice_id' => ['required', 'integer', 'exists:fee_invoices,id'],
+            'idempotency_key' => ['nullable', 'string', 'max:120'],
         ]);
 
         $studentIntegration = $this->plugins->isEnabled('student-management') && Schema::hasTable('students');
@@ -54,12 +55,14 @@ class SslcommerzController extends Controller
         abort_unless($isInvoiceOwner || $isFinanceOperator || $isAssignedBranchManager, 403,
             'You are not authorized to pay this invoice.');
 
-        $session = $this->gateway->initiateHostedCheckout($invoice);
+        $session = $this->gateway->initiateHostedCheckout($invoice, $validated['idempotency_key'] ?? $request->header('Idempotency-Key'));
 
         return response()->json([
             'gateway' => 'gateway-sslcommerz',
             'transaction_ref' => $session['transaction']->transaction_ref,
             'redirect_url' => $session['hosted_endpoint'],
+            'status' => $session['transaction']->status,
+            'session_outcome' => $session['transaction']->metadata['session_outcome'] ?? null,
         ]);
     }
 
