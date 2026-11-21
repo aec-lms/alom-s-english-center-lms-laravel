@@ -1011,11 +1011,40 @@ class PluginManager
      *
      * @param array<string, mixed> $payload
      */
+    /**
+     * Write every byte to an already exclusively-created file handle.
+     * A short write is returned to the caller and treated as a hard failure.
+     *
+     * @param resource $handle
+     */
+    protected function writeAllBytesToHandle($handle, string $contents): int
+    {
+        $length = strlen($contents);
+        $offset = 0;
+        while ($offset < $length) {
+            $written = fwrite($handle, substr($contents, $offset));
+            if ($written === false || $written === 0) {
+                break;
+            }
+            $offset += $written;
+        }
+
+        return $offset;
+    }
+
+    /**
+     * Exclusively create and verify JSON inside a private child of storage/app.
+     * x+b maps to O_CREAT|O_EXCL: an existing file or symlink is never opened
+     * or truncated, eliminating the check-then-open overwrite race.
+     *
+     * @param array<string, mixed> $payload
+     */
     private function writeVerifiedPrivateJson(string $root, string $filename, array $payload): string
     {
-        $storageRoot = realpath(storage_path('app'));
-        if (is_link($root)) {
-            throw new RuntimeException('Private plugin backup directory cannot be a symbolic link.');
+        $storagePath = storage_path('app');
+        $storageRoot = realpath($storagePath);
+        if (is_link($storagePath) || $storageRoot === false || is_link($root)) {
+            throw new RuntimeException('Private plugin backup directory cannot be redirected through a symbolic link.');
         }
 
         File::ensureDirectoryExists($root);
@@ -1024,10 +1053,11 @@ class PluginManager
         }
         $realRoot = realpath($root);
         $rootStat = $realRoot !== false ? @stat($realRoot) : false;
-        if ($storageRoot === false || $realRoot === false
+        if ($realRoot === false
             || dirname($realRoot) !== $storageRoot
             || !is_dir($realRoot)
             || $rootStat === false
+            || (($rootStat['mode'] & 0170000) !== 0040000)
             || (($rootStat['mode'] & 0077) !== 0)
         ) {
             throw new RuntimeException('Private plugin backup directory must be a private real directory directly under storage/app.');
@@ -1040,56 +1070,98 @@ class PluginManager
         }
 
         $path = $realRoot . DIRECTORY_SEPARATOR . $filename;
-        if (file_exists($path) || is_link($path)) {
-            throw new RuntimeException('Private plugin backup destination already exists or is unsafe.');
-        }
-
         $contents = json_encode($payload, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR);
-        $written = File::put($path, $contents);
-        if ($written !== strlen($contents) || is_link($path) || !is_file($path)) {
-            if (is_file($path) && !is_link($path)) {
-                @unlink($path);
+        $handle = @fopen($path, 'x+b');
+        if ($handle === false) {
+            throw new RuntimeException('Private plugin backup destination already exists or could not be created exclusively.');
+        }
+
+        $keepFile = false;
+        $createdStat = @fstat($handle);
+        try {
+            $pathStat = @lstat($path);
+            if ($createdStat === false
+                || $pathStat === false
+                || (($createdStat['mode'] & 0170000) !== 0100000)
+                || (($pathStat['mode'] & 0170000) !== 0100000)
+                || $createdStat['dev'] !== $pathStat['dev']
+                || $createdStat['ino'] !== $pathStat['ino']
+                || ($createdStat['nlink'] ?? 1) !== 1
+            ) {
+                throw new RuntimeException('Private plugin backup file is not a newly created regular, non-linked file.');
             }
-            throw new RuntimeException('Private plugin backup write was incomplete.');
-        }
-        if (!@chmod($path, 0600)) {
-            @unlink($path);
-            throw new RuntimeException('Unable to restrict private plugin backup file permissions.');
-        }
-        clearstatcache(true, $path);
-        $fileStat = @lstat($path);
-        if ($fileStat === false
-            || (($fileStat['mode'] & 0170000) !== 0100000)
-            || ($fileStat['nlink'] ?? 1) !== 1
-            || (($fileStat['mode'] & 0077) !== 0)
-        ) {
-            @unlink($path);
-            throw new RuntimeException('Private plugin backup file is not a private, regular, non-linked file.');
-        }
 
-        $readBack = File::get($path);
-        if (!hash_equals(hash('sha256', $contents), hash('sha256', $readBack))) {
-            @unlink($path);
-            throw new RuntimeException('Private plugin backup integrity verification failed.');
-        }
-
-        clearstatcache(true, $path);
-        $verifiedStat = @lstat($path);
-        if ($verifiedStat === false
-            || (($verifiedStat['mode'] & 0170000) !== 0100000)
-            || ($verifiedStat['nlink'] ?? 1) !== 1
-            || (($verifiedStat['mode'] & 0077) !== 0)
-            || is_link($path)
-            || !is_file($path)
-            || !hash_equals(hash('sha256', $contents), (string) hash_file('sha256', $path))
-        ) {
-            if (is_file($path) && !is_link($path)) {
-                @unlink($path);
+            $written = $this->writeAllBytesToHandle($handle, $contents);
+            if ($written !== strlen($contents)) {
+                throw new RuntimeException('Private plugin backup write was incomplete.');
             }
-            throw new RuntimeException('Private plugin backup changed during integrity verification.');
-        }
+            if (!fflush($handle)) {
+                throw new RuntimeException('Private plugin backup could not be flushed to storage.');
+            }
+            if (function_exists('fsync') && !@fsync($handle)) {
+                throw new RuntimeException('Private plugin backup could not be synchronized to storage.');
+            }
+            if (!@chmod($path, 0600)) {
+                throw new RuntimeException('Unable to restrict private plugin backup file permissions.');
+            }
 
-        return $path;
+            clearstatcache(true, $path);
+            $openedStat = @fstat($handle);
+            $verifiedPathStat = @lstat($path);
+            if ($openedStat === false
+                || $verifiedPathStat === false
+                || (($openedStat['mode'] & 0170000) !== 0100000)
+                || (($verifiedPathStat['mode'] & 0170000) !== 0100000)
+                || $openedStat['dev'] !== $verifiedPathStat['dev']
+                || $openedStat['ino'] !== $verifiedPathStat['ino']
+                || ($openedStat['nlink'] ?? 1) !== 1
+                || (($openedStat['mode'] & 0077) !== 0)
+                || (($verifiedPathStat['mode'] & 0077) !== 0)
+            ) {
+                throw new RuntimeException('Private plugin backup file changed or is not owner-only.');
+            }
+
+            if (rewind($handle) === false) {
+                throw new RuntimeException('Private plugin backup could not be read back for verification.');
+            }
+            $readBack = stream_get_contents($handle);
+            if ($readBack === false || !hash_equals(hash('sha256', $contents), hash('sha256', $readBack))) {
+                throw new RuntimeException('Private plugin backup integrity verification failed.');
+            }
+
+            clearstatcache(true, $path);
+            $finalOpenedStat = @fstat($handle);
+            $finalPathStat = @lstat($path);
+            if ($finalOpenedStat === false
+                || $finalPathStat === false
+                || $finalOpenedStat['dev'] !== $finalPathStat['dev']
+                || $finalOpenedStat['ino'] !== $finalPathStat['ino']
+                || (($finalPathStat['mode'] & 0170000) !== 0100000)
+                || ($finalPathStat['nlink'] ?? 1) !== 1
+                || (($finalPathStat['mode'] & 0077) !== 0)
+            ) {
+                throw new RuntimeException('Private plugin backup path changed during integrity verification.');
+            }
+
+            $keepFile = true;
+            return $path;
+        } finally {
+            if (is_resource($handle)) {
+                fclose($handle);
+            }
+            if (!$keepFile && $createdStat !== false) {
+                clearstatcache(true, $path);
+                $currentPathStat = @lstat($path);
+                if ($currentPathStat !== false
+                    && $currentPathStat['dev'] === $createdStat['dev']
+                    && $currentPathStat['ino'] === $createdStat['ino']
+                    && (($currentPathStat['mode'] & 0170000) === 0100000)
+                    && ($currentPathStat['nlink'] ?? 1) === 1
+                ) {
+                    @unlink($path);
+                }
+            }
+        }
     }
 
     public function resetSettingsToDefaults(string $slug, ?int $actorId = null): void
