@@ -329,7 +329,7 @@ class BackupAndUpdateTest extends TestCase
 
         try {
             app(UniversalUpdateService::class)->rollbackUpdate(
-                \\App\\Models\\UpdateLog::query()->findOrFail($updateId)
+                \App\Models\UpdateLog::query()->findOrFail($updateId)
             );
 
             $this->assertDatabaseHas('update_logs', ['id' => $updateId, 'status' => 'rolled_back']);
@@ -342,8 +342,8 @@ class BackupAndUpdateTest extends TestCase
             $this->assertSame('previous version', file_get_contents($targetFile));
         } finally {
             @unlink($targetFile);
-            \\Illuminate\\Support\\Facades\\File::deleteDirectory($targetDir);
-            \\Illuminate\\Support\\Facades\\File::deleteDirectory($snapshotDir);
+            \Illuminate\Support\Facades\File::deleteDirectory($targetDir);
+            \Illuminate\Support\Facades\File::deleteDirectory($snapshotDir);
             @unlink($backup->storage_path);
             $backup->delete();
         }
