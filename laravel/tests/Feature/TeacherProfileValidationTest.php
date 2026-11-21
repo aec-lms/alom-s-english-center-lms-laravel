@@ -301,4 +301,90 @@ final class TeacherProfileValidationTest extends TestCase
 
         $this->assertDatabaseMissing('teachers', ['employee_code' => 'VALIDATE-TEACH-002']);
     }
+    public function test_mysql_teacher_creation_holds_permission_grant_until_commit_and_rejects_after_revocation(): void
+    {
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            $this->markTestSkipped('Teacher permission revocation serialization requires MySQL 8.');
+        }
+
+        $this->markSystemInstalled();
+        $this->activatePlugins(['teacher-management', 'branch-management']);
+        $manager = $this->createUserWithRole('branch_manager');
+        $branchId = DB::table('branches')->insertGetId([
+            'code' => 'TEACHER-PERMISSION-RACE',
+            'name' => 'Teacher Permission Race Branch',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $manager->forceFill(['branch_id' => $branchId])->save();
+
+        $roleId = (int) DB::table('roles')->where('slug', 'branch_manager')->value('id');
+        $permissionId = (int) DB::table('permissions')->where('slug', 'teachers.manage')->value('id');
+        $this->assertGreaterThan(0, $roleId);
+        $this->assertGreaterThan(0, $permissionId);
+        DB::table('permission_role')->insertOrIgnore([
+            'role_id' => $roleId,
+            'permission_id' => $permissionId,
+        ]);
+
+        $default = DB::getDefaultConnection();
+        $secondaryName = 'teacher_permission_race_' . bin2hex(random_bytes(3));
+        config(['database.connections.' . $secondaryName => config('database.connections.' . $default)]);
+        DB::purge($secondaryName);
+        $primary = DB::connection($default);
+        $secondary = DB::connection($secondaryName);
+        $secondary->statement('SET SESSION innodb_lock_wait_timeout = 1');
+
+        $primary->beginTransaction();
+        try {
+            $this->actingAs($manager)->post('/admin/teachers', [
+                'name' => 'Permission Locked Teacher',
+                'email' => 'permission.locked.teacher@aec.test',
+                'employee_code' => 'PERMISSION-LOCKED-TEACHER',
+                'specialization' => 'English',
+            ])->assertRedirect()->assertSessionHasNoErrors();
+
+            $secondary->beginTransaction();
+            try {
+                $secondary->table('permission_role')
+                    ->where('role_id', $roleId)
+                    ->where('permission_id', $permissionId)
+                    ->delete();
+                $this->fail('Teacher permission revocation must wait while creation holds the permission grant lock.');
+            } catch (QueryException $exception) {
+                $this->assertSame(1205, (int) ($exception->errorInfo[1] ?? 0), $exception->getMessage());
+            } finally {
+                if ($secondary->transactionLevel() > 0) {
+                    $secondary->rollBack();
+                }
+            }
+
+            $primary->commit();
+
+            $secondary->table('permission_role')
+                ->where('role_id', $roleId)
+                ->where('permission_id', $permissionId)
+                ->delete();
+
+            $this->actingAs($manager)->post('/admin/teachers', [
+                'name' => 'Permission Revoked Teacher',
+                'email' => 'permission.revoked.teacher@aec.test',
+                'employee_code' => 'PERMISSION-REVOKED-TEACHER',
+                'specialization' => 'English',
+            ])->assertForbidden();
+
+            $this->assertDatabaseHas('teachers', ['employee_code' => 'PERMISSION-LOCKED-TEACHER']);
+            $this->assertDatabaseMissing('users', ['email' => 'permission.revoked.teacher@aec.test']);
+            $this->assertDatabaseMissing('teachers', ['employee_code' => 'PERMISSION-REVOKED-TEACHER']);
+        } catch (\Throwable $exception) {
+            if ($primary->transactionLevel() > 0) {
+                $primary->rollBack();
+            }
+            throw $exception;
+        } finally {
+            DB::purge($secondaryName);
+        }
+    }
+
 }
