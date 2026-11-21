@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use Illuminate\\Support\\Facades\\Route;
-use Plugins\\Modules\\LearningPaths\\Http\\Controllers\\LearningPathController;
+use Illuminate\Support\Facades\Route;
+use Plugins\Modules\LearningPaths\Http\Controllers\LearningPathController;
 
 Route::middleware(['web', 'installed', 'plugin:learning-paths'])->group(function (): void {
     Route::get('/learning-paths', [LearningPathController::class, 'catalog'])->name('learning-paths.catalog');
