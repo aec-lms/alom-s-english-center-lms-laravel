@@ -214,5 +214,15 @@ jobs:
         run: php artisan key:generate
       - name: Verify backup runtime requirements
         run: php artisan lms:backup:requirements
+      - name: Grant MySQL test user read-only lock-wait visibility
+        run: |
+          php <<'PHP'
+          <?php
+          $pdo = new PDO('mysql:host=127.0.0.1;port=3306;dbname=mysql', 'root', 'root', [
+              PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+          ]);
+          $pdo->exec("GRANT SELECT ON performance_schema.data_lock_waits TO 'aec_lms'@'%'");
+          $pdo->exec("GRANT SELECT ON performance_schema.threads TO 'aec_lms'@'%'");
+          PHP
       - name: Execute Laravel tests on MySQL 8.0
         run: php artisan test
