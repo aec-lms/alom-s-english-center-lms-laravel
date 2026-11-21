@@ -479,7 +479,7 @@ class CourseCommercePaymentSettlementTest extends TestCase
                     ['validation_status' => 'VALID']
                 );
                 $this->fail("A {$status} course-commerce payment must never be settled again.");
-            } catch (\\RuntimeException $exception) {
+            } catch (\RuntimeException $exception) {
                 $this->assertSame('A terminal course-commerce payment cannot be settled again.', $exception->getMessage());
             }
 
