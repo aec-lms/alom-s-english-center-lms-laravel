@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', $path->title . ' — {{ __('{{ __('Learning Path') }}') }}')
+@section('title', $path->title . ' — ' . __('Learning Path'))
 
 @section('content')
 <div class="mx-auto max-w-4xl space-y-6 px-4 py-8">
@@ -25,14 +25,14 @@
             @php($step = $progress->firstWhere('course_id', $course->course_id))
             <article class="flex items-start gap-4 rounded-2xl border border-slate-200 bg-white p-5">
                 <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full {{ $step && $step->completed ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-50 text-indigo-700' }} font-bold">{{ $course->position }}</div>
-                <div class="min-w-0 flex-1"><h2 class="font-bold text-slate-900">{{ $course->course_title }}</h2><p class="mt-1 text-sm text-slate-500">{{ $step && $step->completed ? '{{ __('Completed') }}' : ($step && $step->unlocked ? '{{ __('Current step') }}' : '{{ __('Locked until previous course is completed') }}') }}</p>
+                <div class="min-w-0 flex-1"><h2 class="font-bold text-slate-900">{{ $course->course_title }}</h2><p class="mt-1 text-sm text-slate-500">{{ $step && $step->completed ? __('Completed') : ($step && $step->unlocked ? __('Current step') : __('Locked until previous course is completed')) }}</p>
                     @if ($step && $step->unlocked && $step->enrolled && $course->course_slug && $course->course_status === 'published' && $course->course_deleted_at === null)
                         <a class="mt-2 inline-flex text-sm font-semibold text-indigo-700" href="{{ route('public.courses.show', $course->course_slug) }}">{{ __('Open course →') }}</a>
                     @elseif ($step && $step->unlocked && !$step->enrolled)
                         <span class="mt-2 inline-block text-xs text-amber-700">{{ __('Enroll in this course separately to begin') }}</span>
                     @endif
                 </div>
-                @if ($step && $step->completed)<span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">{{ __('Done') }}</span>@elseif($step && $step->unlocked)<span class="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">{{ __('Unlocked') }}</span>@else<span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">Locked</span>@endif
+                @if ($step && $step->completed)<span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">{{ __('Done') }}</span>@elseif($step && $step->unlocked)<span class="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">{{ __('Unlocked') }}</span>@else<span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">{{ __('Locked') }}</span>@endif
             </article>
         @endforeach
     </section>
