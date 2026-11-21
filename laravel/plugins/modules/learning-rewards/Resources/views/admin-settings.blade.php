@@ -22,8 +22,37 @@
             </tbody>
         </table></div><div class="card-body"><button class="btn btn-primary" type="submit">Save reward rules</button></div></div>
     </form>
-    <div class="card mt-4"><div class="card-body"><h2 class="h5">Achievement badges</h2>
-        @foreach($badges as $badge)<div class="border-bottom py-2"><strong>{{ $badge->name }}</strong><div class="small text-muted">{{ $badge->description }} · @if($badge->points_threshold){{ $badge->points_threshold }} XP @else {{ $badge->streak_threshold }} day streak @endif</div></div>@endforeach
+    <div class="card mt-4"><div class="card-body">
+        <h2 class="h5">Create achievement badge</h2>
+        <form method="POST" action="{{ route('plugins.learning-rewards.admin.badges.store') }}" class="row g-2">
+            @csrf
+            <div class="col-md-3"><label class="form-label" for="badgeSlug">Slug</label><input class="form-control" id="badgeSlug" name="slug" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" maxlength="64" required></div>
+            <div class="col-md-3"><label class="form-label" for="badgeName">Name</label><input class="form-control" id="badgeName" name="name" maxlength="100" required></div>
+            <div class="col-md-3"><label class="form-label" for="badgeIcon">Icon key</label><input class="form-control" id="badgeIcon" name="icon" value="award" maxlength="64" required></div>
+            <div class="col-md-3"><label class="form-label" for="badgePoints">XP threshold</label><input class="form-control" id="badgePoints" type="number" min="1" max="1000000" name="points_threshold"></div>
+            <div class="col-md-3"><label class="form-label" for="badgeStreak">Streak days</label><input class="form-control" id="badgeStreak" type="number" min="1" max="3650" name="streak_threshold"></div>
+            <div class="col-md-9"><label class="form-label" for="badgeDescription">Description</label><input class="form-control" id="badgeDescription" name="description" maxlength="240" required></div>
+            <div class="col-12"><button class="btn btn-primary" type="submit">Create badge</button></div>
+        </form>
+    </div></div>
+    <div class="card mt-3"><div class="card-body">
+        <h2 class="h5">Manage achievement badges</h2>
+        @forelse($badges as $badge)
+            <form method="POST" action="{{ route('plugins.learning-rewards.admin.badges.update', $badge->id) }}" class="border-bottom py-3">
+                @csrf @method('PUT')
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-2"><label class="form-label">Name</label><input class="form-control" name="name" value="{{ $badge->name }}" maxlength="100" required></div>
+                    <div class="col-md-3"><label class="form-label">Description</label><input class="form-control" name="description" value="{{ $badge->description }}" maxlength="240" required></div>
+                    <div class="col-md-2"><label class="form-label">Icon key</label><input class="form-control" name="icon" value="{{ $badge->icon }}" maxlength="64" required></div>
+                    <div class="col-md-2"><label class="form-label">XP threshold</label><input class="form-control" type="number" min="1" max="1000000" name="points_threshold" value="{{ $badge->points_threshold }}"></div>
+                    <div class="col-md-1"><label class="form-label">Streak</label><input class="form-control" type="number" min="1" max="3650" name="streak_threshold" value="{{ $badge->streak_threshold }}"></div>
+                    <div class="col-md-1"><input type="hidden" name="is_active" value="0"><div class="form-check"><input class="form-check-input" type="checkbox" name="is_active" value="1" @checked($badge->is_active) id="badgeActive{{ $badge->id }}"><label class="form-check-label" for="badgeActive{{ $badge->id }}">Active</label></div></div>
+                    <div class="col-md-1"><button class="btn btn-outline-primary" type="submit">Save</button></div>
+                </div>
+            </form>
+        @empty
+            <p class="text-muted mb-0">No achievement badges have been configured.</p>
+        @endforelse
     </div></div>
 </div>
 @endsection
