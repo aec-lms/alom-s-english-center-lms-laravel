@@ -23,11 +23,11 @@
     <header>
         <div>
             <h1>{{ $title }}</h1>
-            <p>SCORM 1.2 learning activity · Attempt #{{ $attemptId }}</p>
+            <p>{{ __('plugins.scorm::messages.activity_attempt') }} #{{ $attemptId }}</p>
         </div>
-        <a href="{{ url('/my-learning') }}">Back to My Learning</a>
+        <a href="{{ url('/my-learning') }}">{{ __('plugins.scorm::messages.back_to_learning') }}</a>
     </header>
-    <div class="notice" role="status">Your progress is saved when the course sends a commit or finish request. Keep this page open until the activity confirms it has finished.</div>
+    <div class="notice" role="status">{{ __('plugins.scorm::messages.save_notice') }}</div>
     <iframe
         class="player"
         src="{{ $playerUrl }}"
