@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Plugins\Modules\LearningRewards\Services;
 
+use App\Core\Plugins\PluginManager;
 use App\Core\Security\AuditLogger;
 use App\Models\User;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use InvalidArgumentException;
 
 class LearningRewardsService
@@ -73,7 +75,7 @@ class LearningRewardsService
                 // when an admin disables XP or the daily point cap has been reached.
                 $ledgerId = DB::table('learning_reward_ledger')->insertGetId([
                     'user_id' => $userId,
-                    'branch_id' => $user->branch_id,
+                    'branch_id' => $this->resolveBranchId($user),
                     'activity_key' => $activityKey,
                     'source_type' => $sourceType,
                     'source_id' => $sourceId,
@@ -207,6 +209,22 @@ class LearningRewardsService
                 'user_id' => $userId, 'badge_id' => $badge->id, 'awarded_at' => $now,
             ]);
         }
+    }
+
+    private function resolveBranchId(User $user): ?int
+    {
+        $accountBranchId = $user->branch_id !== null ? (int) $user->branch_id : null;
+        if (app(PluginManager::class)->isEnabled('student-management')
+            && Schema::hasTable('students')
+            && Schema::hasColumn('students', 'branch_id')) {
+            $profileBranchId = DB::table('students')->where('user_id', $user->id)->value('branch_id');
+            if ($profileBranchId !== null) {
+                abort_unless($accountBranchId === null || $accountBranchId === (int) $profileBranchId, 403, 'Student branch assignments do not match.');
+                return (int) $profileBranchId;
+            }
+        }
+
+        return $accountBranchId;
     }
 
     private function descriptionFor(string $activityKey): string
