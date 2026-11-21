@@ -191,6 +191,8 @@ class ScormRuntimeController extends Controller
             'token' => $token,
             'path' => $package->launch_file,
         ]);
+        $contentOrigin = rtrim((string) config('scorm.content_origin', ''), '/');
+        abort_unless(parse_url($launchUrl, PHP_URL_HOST) === parse_url($contentOrigin, PHP_URL_HOST), 503, 'SCORM content files must resolve to the isolated content origin.');
         $user = DB::table('users')->where('id', $record->user_id)->first();
         $appOrigin = rtrim((string) config('app.url'), '/');
         $runtimeUrl = $appOrigin . '/api/scorm-runtime/commit';
@@ -213,6 +215,7 @@ class ScormRuntimeController extends Controller
             'entryMode' => $record->entry_mode,
             'totalTime' => $this->formatScormTime((int) $record->total_time_seconds),
             'savedData' => $savedData,
+            'contentOrigin' => $contentOrigin,
         ]);
 
         return $response
@@ -253,12 +256,44 @@ class ScormRuntimeController extends Controller
         abort_unless($target !== false && is_file($target)
             && str_starts_with($target, $root . DIRECTORY_SEPARATOR), 404);
 
-        $response = response()->file($target, [
+        $headers = [
             'X-Content-Type-Options' => 'nosniff',
             'Referrer-Policy' => 'no-referrer',
             'Cross-Origin-Resource-Policy' => 'same-origin',
             'Content-Security-Policy' => $this->contentSecurityPolicy(),
-        ]);
+        ];
+        if (in_array(strtolower(pathinfo($target, PATHINFO_EXTENSION)), ['html', 'htm'], true)) {
+            $size = filesize($target);
+            abort_unless($size !== false && $size <= 10485760, 413, 'SCORM HTML entry exceeds the 10 MiB runtime injection limit.');
+            $html = file_get_contents($target);
+            abort_unless(is_string($html), 404, 'SCORM HTML content could not be read.');
+            $user = DB::table('users')->where('id', $record->user_id)->first();
+            $savedData = json_decode((string) $record->cmi_data, true);
+            if (!is_array($savedData)) {
+                $savedData = [];
+            }
+            $savedData['cmi.core.session_time'] = '0000:00:00.00';
+            $adapter = view('scorm::runtime-adapter', [
+                'runtimeUrl' => rtrim((string) config('app.url'), '/') . '/api/scorm-runtime/commit',
+                'appOrigin' => rtrim((string) config('app.url'), '/'),
+                'attemptId' => $attempt,
+                'token' => $token,
+                'stateVersion' => (int) $record->state_version,
+                'studentId' => (string) $record->user_id,
+                'studentName' => (string) ($user->name ?? 'Learner'),
+                'entryMode' => $record->entry_mode,
+                'totalTime' => $this->formatScormTime((int) $record->total_time_seconds),
+                'savedData' => $savedData,
+            ])->render();
+            $injections = 0;
+            $html = preg_replace_callback('/<head\\b[^>]*>/i', static fn (array $match): string => $match[0] . $adapter, $html, 1, $injections) ?? $html;
+            if ($injections === 0) {
+                $html = $adapter . $html;
+            }
+            $response = response($html, 200, $headers + ['Content-Type' => 'text/html; charset=UTF-8']);
+        } else {
+            $response = response()->file($target, $headers);
+        }
         // Symfony's BinaryFileResponse defaults to public caching unless the
         // response is explicitly marked private after construction.
         $response->setPrivate();
