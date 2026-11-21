@@ -2,18 +2,18 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\Scorm\\Http\\Controllers;
+namespace Plugins\Modules\Scorm\Http\Controllers;
 
-use App\\Http\\Controllers\\Controller;
-use Illuminate\\Http\\JsonResponse;
-use Illuminate\\Http\\Request;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Facades\\Schema;
-use Illuminate\\Support\\Facades\\URL;
-use Illuminate\\View\\View;
-use Plugins\\Modules\\Scorm\\Services\\Scorm12Runtime;
+use App\Http\Controllers\Controller;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\URL;
+use Illuminate\View\View;
+use Plugins\Modules\Scorm\Services\Scorm12Runtime;
 use RuntimeException;
-use Symfony\\Component\\HttpFoundation\\Response;
+use Symfony\Component\HttpFoundation\Response;
 
 class ScormRuntimeController extends Controller
 {
@@ -346,7 +346,7 @@ class ScormRuntimeController extends Controller
 
     private function unsafeRelativePath(string $path): bool
     {
-        if ($path === '' || str_contains($path, chr(0)) || str_contains($path, '\\')
+        if ($path === '' || str_contains($path, chr(0)) || str_contains($path, '\')
             || str_contains($path, '%') || str_starts_with($path, '/')) {
             return true;
         }
@@ -384,7 +384,7 @@ class ScormRuntimeController extends Controller
 
     private function parseScormTime(string $value): int
     {
-        if (preg_match('/^(\\d{4}):([0-5]\\d):([0-5]\\d)(?:\\.(\\d{1,2}))?$/', $value, $matches) !== 1) {
+        if (preg_match('/^(\d{4}):([0-5]\d):([0-5]\d)(?:\.(\d{1,2}))?$/', $value, $matches) !== 1) {
             throw new RuntimeException('SCORM session time has an invalid format.');
         }
 
