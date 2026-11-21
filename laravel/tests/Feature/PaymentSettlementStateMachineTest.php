@@ -988,7 +988,7 @@ class PaymentSettlementStateMachineTest extends TestCase
         $this->assertDatabaseHas('fee_invoices', ['id' => $invoice->id, 'status' => 'unpaid', 'paid_amount' => 0]);
     }
 
-    public function test_missing_required_audit_table_rolls_back_payment_settlement(): void
+    public function test_audit_insert_failure_rolls_back_payment_settlement(): void
     {
         $this->markSystemInstalled();
         $this->activatePlugins(['fees-management', 'payment-management']);
