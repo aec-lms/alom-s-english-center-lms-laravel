@@ -15,6 +15,33 @@ use Tests\TestCase;
 
 class ExamAttemptSnapshotTest extends TestCase
 {
+    public function test_web_and_mobile_submission_bound_answer_payload_to_snapshot_limit(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['exam-management']);
+        $student = $this->createUserWithRole('student');
+        [$exam] = $this->createSnapshotFixture();
+
+        $page = $this->actingAs($student)->get("/exams/{$exam->id}/take")->assertOk();
+        preg_match('/name="attempt_id" value="([0-9]+)"/', $page->getContent(), $match);
+        $attemptId = (int) ($match[1] ?? 0);
+        $this->assertGreaterThan(0, $attemptId);
+
+        $answers = array_fill_keys(range(1, 501), 0);
+        $this->actingAs($student)->post("/exams/{$exam->id}/attempt", [
+            'attempt_id' => $attemptId,
+            'answers' => $answers,
+        ])->assertRedirect()->assertSessionHasErrors('answers');
+
+        $token = $student->createToken('bounded-exam-answer-payload')->plainTextToken;
+        $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson("/api/v1/my/exams/{$exam->id}/attempts/{$attemptId}/submit", [
+                'answers' => $answers,
+            ])->assertStatus(422);
+
+        $this->assertNull(ExamAttempt::query()->findOrFail($attemptId)->submitted_at);
+    }
+
     public function test_web_attempt_keeps_original_questions_marks_and_pass_rule_after_exam_is_edited(): void
     {
         $this->markSystemInstalled();
@@ -573,6 +600,40 @@ class ExamAttemptSnapshotTest extends TestCase
         $this->assertTrue(Schema::hasColumn('exam_attempts', 'exam_snapshot'));
         $this->assertSame($snapshot, $attempt->fresh()->exam_snapshot);
     }
+
+
+    public function test_exam_authoring_rejects_out_of_range_correct_option_indices(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['exam-management']);
+        $admin = $this->createUserWithRole('admin');
+        [$exam] = $this->createSnapshotFixture();
+
+        foreach ([-1, 2, 9] as $index) {
+            $this->actingAs($admin)->post("/admin/exams/{$exam->id}/questions", [
+                'prompt' => 'Invalid answer index question ' . $index,
+                'options' => ['Option A', 'Option B'],
+                'correct_option_index' => $index,
+                'marks' => 5,
+            ])->assertSessionHasErrors('correct_option_index');
+
+            $this->assertSame(1, ExamQuestion::query()->where('exam_id', $exam->id)->count());
+        }
+
+        $this->actingAs($admin)->post("/admin/exams/{$exam->id}/questions", [
+            'prompt' => 'Valid boundary answer index question',
+            'options' => ['Option A', 'Option B'],
+            'correct_option_index' => 1,
+            'marks' => 5,
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('exam_questions', [
+            'exam_id' => $exam->id,
+            'prompt' => 'Valid boundary answer index question',
+            'correct_option_index' => 1,
+        ]);
+    }
+
 
 
     private function createSnapshotFixture(): array
