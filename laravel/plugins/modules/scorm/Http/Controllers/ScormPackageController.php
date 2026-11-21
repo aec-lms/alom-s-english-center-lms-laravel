@@ -102,7 +102,8 @@ class ScormPackageController extends Controller
                     abort_unless((int) $replacement->course_id === (int) $course->id, 422, 'A replacement package must belong to the same course.');
                     abort_unless((int) ($replacement->branch_id ?? 0) === (int) (($course->branch_id ?? $actor->branch_id) ?? 0), 422, 'A replacement package must belong to the same branch.');
                     abort_unless($replacement->status === 'published', 409, 'Only a published package can be replaced.');
-                    $revisionNumber = (int) ($replacement->revision_number ?? 1) + 1;
+                    $latestRevision = (int) (DB::table('scorm_packages')->where('replaces_package_id', $replacement->id)->max('revision_number') ?? $replacement->revision_number ?? 1);
+                    $revisionNumber = max((int) $replacement->revision_number, $latestRevision) + 1;
                 }
 
                 $packageId = DB::table('scorm_packages')->insertGetId([
@@ -170,6 +171,15 @@ class ScormPackageController extends Controller
                     'superseded_at' => now(),
                     'updated_at' => now(),
                 ]);
+                DB::table('scorm_packages')
+                    ->where('replaces_package_id', $previous->id)
+                    ->where('id', '!=', $package)
+                    ->where('status', 'draft')
+                    ->update([
+                        'status' => 'archived',
+                        'archived_at' => now(),
+                        'updated_at' => now(),
+                    ]);
             }
 
             DB::table('scorm_packages')->where('id', $package)->update([
