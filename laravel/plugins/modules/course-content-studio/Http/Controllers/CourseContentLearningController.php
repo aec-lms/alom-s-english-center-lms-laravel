@@ -27,7 +27,7 @@ class CourseContentLearningController extends Controller
         $item=CourseCurriculumItem::query()->where('course_id',$courseRow->id)->where('course_content_post_id',$content->id)->where('is_active',true)->firstOrFail();
         $user=$request->user();
         $enrolled=$user && $user->hasRole('student') && DB::table('enrollments')->where('user_id',$user->id)->where('course_id',$courseRow->id)->whereIn('status',['active','completed'])->exists();
-        if ($enrolled) {
+        if ($user && $user->hasRole('student')) {
             $this->assertLearningPathStepUnlocked((int) $user->id, (int) $courseRow->id);
         }
         $canManage=$this->canManageCourse($user,(int)$courseRow->id);
@@ -65,7 +65,7 @@ class CourseContentLearningController extends Controller
         $item=CourseCurriculumItem::query()->where('course_id',$courseRow->id)->where('course_content_post_id',$content->id)->where('is_active',true)->firstOrFail();
         $user=$request->user();
         $enrolled=$user && $user->hasRole('student') && DB::table('enrollments')->where('user_id',$user->id)->where('course_id',$courseRow->id)->whereIn('status',['active','completed'])->exists();
-        if ($enrolled) {
+        if ($user && $user->hasRole('student')) {
             $this->assertLearningPathStepUnlocked((int) $user->id, (int) $courseRow->id);
         }
         abort_unless($content->access_type==='free' || $item->is_preview || $enrolled || $this->canManageCourse($user,(int)$courseRow->id),403);
@@ -124,13 +124,14 @@ class CourseContentLearningController extends Controller
             ->unique();
 
         foreach ($previousCourseIds as $previousCourseId) {
-            $completed = DB::table('enrollments')
+            $previousEnrollment = DB::table('enrollments')
                 ->where('user_id', $userId)
                 ->where('course_id', $previousCourseId)
-                ->where('status', 'completed')
-                ->exists();
+                ->whereIn('status', ['active', 'completed'])
+                ->first();
+            $completed = $previousEnrollment?->status === 'completed';
 
-            if (!$completed && $plugins->isEnabled('course-content-studio')
+            if ($previousEnrollment && !$completed && $plugins->isEnabled('course-content-studio')
                 && Schema::hasTable('course_curriculum_items')
                 && Schema::hasTable('course_content_progress')
             ) {
