@@ -639,7 +639,7 @@ class UniversalPaymentController extends Controller
                     ? 'Payment was already verified; your course or gift access remains available.'
                     : 'Payment requires manual review. No course or gift access has been granted yet.');
             }
-            return redirect('/student/course-commerce/cart')->withErrors(['payment' => 'Payment was not completed. Your cart is available to try again.']);
+            return redirect('/student/course-commerce/cart')->withErrors(['payment' => 'The provider return did not verify the payment. The transaction remains pending; do not retry until support reconciles its status.']);
         }
         if (in_array($transaction->status, ['verified', 'risk_review'], true)) {
             $message = $transaction->status === 'verified'
@@ -654,7 +654,7 @@ class UniversalPaymentController extends Controller
                 : redirect('/ebooks')->with('status', $message);
         }
         if ($transaction->learn_earn_exam_id) {
-            return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)->withErrors(['payment' => 'Payment was not completed. You can try again.']);
+            return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)->withErrors(['payment' => 'The provider return did not verify the payment. The transaction remains pending; do not retry until support reconciles its status.']);
         }
         $slug = DB::table('storefront_items')->where('id', $transaction->storefront_item_id)->value('slug');
         return redirect('/ebooks/' . rawurlencode((string) $slug))->withErrors(['payment' => 'Payment was not completed. You can try again.']);
@@ -670,7 +670,7 @@ class UniversalPaymentController extends Controller
                     ? 'Payment was already verified; your course or gift access remains available.'
                     : 'Payment requires manual review. No course or gift access has been granted yet.');
             }
-            return redirect('/student/course-commerce/cart')->with('status', 'Payment was cancelled. Your cart is available to try again.');
+            return redirect('/student/course-commerce/cart')->with('status', 'The browser return cannot confirm cancellation. The transaction remains pending; do not retry until support reconciles its status.');
         }
         if (in_array($transaction->status, ['verified', 'risk_review'], true)) {
             $message = $transaction->status === 'verified'
@@ -685,7 +685,7 @@ class UniversalPaymentController extends Controller
                 : redirect('/ebooks')->with('status', $message);
         }
         if ($transaction->learn_earn_exam_id) {
-            return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)->with('status', 'Payment was cancelled.');
+            return redirect('/learn-and-earn/exams/' . $transaction->learn_earn_exam_id)->with('status', 'The browser return cannot confirm cancellation. The transaction remains pending; do not retry until support reconciles its status.');
         }
         $slug = DB::table('storefront_items')->where('id', $transaction->storefront_item_id)->value('slug');
         return redirect('/ebooks/' . rawurlencode((string) $slug))->with('status', 'Payment was cancelled.');
