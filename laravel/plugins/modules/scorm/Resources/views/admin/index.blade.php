@@ -79,7 +79,7 @@
                         <td>{{ number_format($package->completed_count) }}</td>
                         <td>{{ number_format($package->active_count) }}</td>
                         <td>{{ $package->average_score === null ? '—' : number_format((float) $package->average_score, 1) . '%' }}</td>
-                        <td><span class="badge text-bg-{{ $package->status === 'published' ? 'success' : ($package->status === 'archived' ? 'secondary' : 'warning') }}">{{ __('plugins.scorm::messages.status_' . $package->status) }}</span></td>
+                        <td><span class="badge text-bg-{{ $package->status === 'published' ? 'success' :  (in_array($package->status, ['archived', 'superseded'], true) ? 'secondary' : 'warning') }}">{{ __('plugins.scorm::messages.status_' . $package->status) }}</span></td>
                         <td class="text-end">
                             @if ($package->status === 'draft')
                                 <form method="POST" action="{{ route('plugins.scorm.admin.publish', $package->id) }}" class="d-inline">
