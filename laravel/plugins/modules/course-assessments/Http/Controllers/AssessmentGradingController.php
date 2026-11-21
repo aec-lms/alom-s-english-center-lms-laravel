@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Plugins\Modules\CourseAssessments\Models\AssessmentAttempt;
+use Plugins\Modules\LearningRewards\Services\LearningRewardsService;
 
 class AssessmentGradingController extends Controller
 {
@@ -74,14 +75,48 @@ class AssessmentGradingController extends Controller
                 ]);
                 $manual += $score;
             }
+            $previouslyGraded = $locked->status === 'graded';
+            $previousFinalScore = (float) ($locked->final_score ?? 0);
+            $finalScore = (float) $locked->auto_score + $manual;
             $locked->update([
                 'manual_score' => $manual,
-                'final_score' => (float) $locked->auto_score + $manual,
+                'final_score' => $finalScore,
                 'status' => 'graded',
                 'graded_by' => $actor->id,
                 'graded_at' => now(),
                 'teacher_feedback' => $data['teacher_feedback'] ?? null,
             ]);
+
+            if (app(PluginManager::class)->isEnabled('learning-rewards')
+                && Schema::hasTable('learning_reward_rules')
+                && (float) $locked->max_score > 0) {
+                $passPercentage = (int) (DB::table('learning_reward_rules')
+                    ->where('activity_key', 'quiz_passed')
+                    ->value('pass_percentage') ?? 60);
+                $passed = ($finalScore / (float) $locked->max_score) * 100 >= $passPercentage;
+                $previouslyPassed = $previouslyGraded
+                    && $previousFinalScore / (float) $locked->max_score * 100 >= $passPercentage;
+                $rewards = app(LearningRewardsService::class);
+
+                if ($passed && !$previouslyPassed) {
+                    $rewards->awardVerifiedActivity(
+                        (int) $locked->student_id,
+                        'quiz_passed',
+                        'assessment_attempt',
+                        (int) $locked->id,
+                        $previouslyGraded ? 'regraded-' . $locked->updated_at?->format('Uu') : null,
+                    );
+                } elseif (!$passed && $previouslyPassed) {
+                    $rewards->reverseActivityAward(
+                        (int) $locked->student_id,
+                        'quiz_passed',
+                        'assessment_attempt',
+                        (int) $locked->id,
+                        (int) $actor->id,
+                        'Assessment score was regraded below the passing threshold.',
+                    );
+                }
+            }
         });
 
         $this->audit->log('course_assessment.graded', 'course_assessment_attempt', (string) $attempt->id, ['manual_score' => $manual]);
