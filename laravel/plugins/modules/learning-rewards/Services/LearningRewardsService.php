@@ -48,6 +48,9 @@ class LearningRewardsService
             return DB::transaction(function () use ($userId, $activityKey, $sourceType, $sourceId, $idempotencyKey): array {
                 $user = User::query()->lockForUpdate()->findOrFail($userId);
                 abort_unless($user->hasRole('student'), 403, 'Only active student accounts can earn learning rewards.');
+                if (Schema::hasColumn('users', 'is_active')) {
+                    abort_unless((bool) $user->is_active, 403, 'Inactive student accounts cannot earn learning rewards.');
+                }
 
                 $existing = DB::table('learning_reward_ledger')->where('idempotency_key', $idempotencyKey)->first();
                 if ($existing) {
@@ -219,17 +222,38 @@ class LearningRewardsService
     private function resolveBranchId(User $user): ?int
     {
         $accountBranchId = $user->branch_id !== null ? (int) $user->branch_id : null;
-        if (app(PluginManager::class)->isEnabled('student-management')
-            && Schema::hasTable('students')
-            && Schema::hasColumn('students', 'branch_id')) {
-            $profileBranchId = DB::table('students')->where('user_id', $user->id)->value('branch_id');
-            if ($profileBranchId !== null) {
-                abort_unless($accountBranchId === null || $accountBranchId === (int) $profileBranchId, 403, 'Student branch assignments do not match.');
-                return (int) $profileBranchId;
+        $profileBranchId = null;
+
+        if (app(PluginManager::class)->isEnabled('student-management')) {
+            abort_unless(Schema::hasTable('students') && Schema::hasColumn('students', 'user_id'),
+                403, 'An active student profile is required to earn learning rewards.');
+            $profileQuery = DB::table('students')->where('user_id', $user->id);
+            if (Schema::hasColumn('students', 'deleted_at')) {
+                $profileQuery->whereNull('deleted_at');
+            }
+            $profile = $profileQuery->first();
+            abort_unless($profile, 403, 'An active student profile is required to earn learning rewards.');
+            if (Schema::hasColumn('students', 'status')) {
+                abort_unless($profile->status === 'active', 403, 'Inactive student profiles cannot earn learning rewards.');
+            }
+            if (Schema::hasColumn('students', 'branch_id') && $profile->branch_id !== null) {
+                $profileBranchId = (int) $profile->branch_id;
             }
         }
 
-        return $accountBranchId;
+        if ($accountBranchId !== null && $profileBranchId !== null) {
+            abort_unless($accountBranchId === $profileBranchId, 403, 'Student branch assignments do not match.');
+        }
+
+        $branchId = $profileBranchId ?? $accountBranchId;
+        if ($branchId !== null) {
+            abort_unless(app(PluginManager::class)->isEnabled('branch-management')
+                && Schema::hasTable('branches')
+                && DB::table('branches')->where('id', $branchId)->where('is_active', true)->exists(),
+                403, 'Student branch is unavailable or inactive.');
+        }
+
+        return $branchId;
     }
 
     private function descriptionFor(string $activityKey): string
