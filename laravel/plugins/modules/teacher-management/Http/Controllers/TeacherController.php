@@ -97,7 +97,7 @@ class TeacherController extends Controller
             ]);
             $user->roles()->syncWithoutDetaching([$teacherRole->id]);
 
-            return Teacher::query()->create([
+            $createdTeacher = Teacher::query()->create([
                 'user_id' => $user->id,
                 'branch_id' => $branchId,
                 'employee_code' => strtoupper(trim($validated['employee_code'])),
@@ -109,9 +109,16 @@ class TeacherController extends Controller
                 'photo_path' => $photoPath,
                 'is_active' => $request->boolean('is_active', true),
             ]);
-        });
+            $this->audit->logRequired(
+                'teacher.created',
+                'teacher',
+                (string) $createdTeacher->id,
+                ['code' => $createdTeacher->employee_code],
+                $actorId,
+            );
 
-        $this->audit->log('teacher.created', 'teacher', (string) $teacher->id, ['code' => $teacher->employee_code]);
+            return $createdTeacher;
+        });
 
         return back()->with('status', "Instructor '{$validated['name']}' added.");
     }
@@ -230,14 +237,20 @@ class TeacherController extends Controller
 
             $updatedTeacher = $lockedTeacher->fresh();
             if ($accountWasActive !== $isActive) {
-                $this->audit->log('teacher.account_status_changed', 'user', (string) $linkedUser->id, [
+                $this->audit->logRequired('teacher.account_status_changed', 'user', (string) $linkedUser->id, [
                     'teacher_id' => (int) $updatedTeacher->id,
                     'before' => $accountWasActive,
                     'after' => $isActive,
                 ], $actorId);
             }
 
-            $this->audit->log('teacher.updated', 'teacher', (string) $updatedTeacher->id, ['code' => $updatedTeacher->employee_code]);
+            $this->audit->logRequired(
+                'teacher.updated',
+                'teacher',
+                (string) $updatedTeacher->id,
+                ['code' => $updatedTeacher->employee_code],
+                $actorId,
+            );
         });
 
         return back()->with('status', "Instructor '{$validated['name']}' updated.");
@@ -295,7 +308,7 @@ class TeacherController extends Controller
             $lockedTeacher->delete();
             $user->update(['is_active' => false]);
 
-            $this->audit->log('teacher.deleted', 'teacher', $id, [
+            $this->audit->logRequired('teacher.deleted', 'teacher', $id, [
                 'code' => $code,
                 'user_was_active' => $userWasActive,
             ], $actorId);
