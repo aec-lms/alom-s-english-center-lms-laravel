@@ -29,7 +29,7 @@ class LearningRewardsPluginTest extends TestCase
             'is_enabled' => 1,
         ]);
         $this->assertDatabaseHas('learning_reward_badges', ['slug' => 'first-steps']);
-        $this->assertDatabaseMissing('plugins', ['slug' => 'course-management']);
+        $this->assertFalse(app(PluginManager::class)->isEnabled('course-management'));
     }
 
     public function test_verified_learning_awards_are_idempotent_and_daily_capped(): void
@@ -57,6 +57,28 @@ class LearningRewardsPluginTest extends TestCase
             ->where('learning_reward_user_badges.user_id', $student->id)
             ->where('learning_reward_badges.slug', 'first-steps')
             ->count());
+    }
+
+    public function test_learning_streak_increments_once_per_local_calendar_day(): void
+    {
+        $this->bootRewards();
+        $student = $this->createUserWithRole('student');
+        $service = app(LearningRewardsService::class);
+
+        \\Illuminate\\Support\\Carbon::setTestNow(\\Illuminate\\Support\\Carbon::parse('2026-11-20 20:00:00', 'Asia/Dhaka'));
+        try {
+            $service->awardVerifiedActivity((int) $student->id, 'lesson_completed', 'course_lesson', 201);
+            $service->awardVerifiedActivity((int) $student->id, 'quiz_passed', 'quiz_attempt', 202);
+            $this->assertSame(1, (int) DB::table('learning_reward_streaks')->where('user_id', $student->id)->value('current_streak'));
+
+            \\Illuminate\\Support\\Carbon::setTestNow(\\Illuminate\\Support\\Carbon::parse('2026-11-21 20:00:00', 'Asia/Dhaka'));
+            $service->awardVerifiedActivity((int) $student->id, 'lesson_completed', 'course_lesson', 203);
+            $streak = DB::table('learning_reward_streaks')->where('user_id', $student->id)->first();
+            $this->assertSame(2, (int) $streak->current_streak);
+            $this->assertSame(2, (int) $streak->longest_streak);
+        } finally {
+            \\Illuminate\\Support\\Carbon::setTestNow();
+        }
     }
 
     public function test_non_student_accounts_cannot_receive_learning_rewards(): void
