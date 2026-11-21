@@ -9,6 +9,7 @@
 # the `language` matrix defined below to confirm you have the correct set of
 # supported CodeQL languages.
 #
+# AEC LMS action references are pinned to immutable full-length commit SHAs.
 name: "CodeQL Advanced"
 
 on:
