@@ -111,6 +111,10 @@ class PluginSettingsResetBackupTest extends TestCase
         } finally {
             AuditLog::flushEventListeners();
         }
+
+        // Filesystem state is shared across feature tests; return the recovered
+        // archive to its original installed location after asserting recovery.
+        $manager->restoreFromRecycleBin($archive);
     }
 
 
@@ -150,6 +154,9 @@ class PluginSettingsResetBackupTest extends TestCase
         } finally {
             AuditLog::flushEventListeners();
         }
+
+        // Restore the fixture package so later tests start from the same filesystem.
+        $manager->restoreFromRecycleBin($archive);
     }
 
 
