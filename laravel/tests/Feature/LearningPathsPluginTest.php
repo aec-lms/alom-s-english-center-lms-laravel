@@ -550,4 +550,73 @@ class LearningPathsPluginTest extends TestCase
         $this->actingAs($otherBranch)->get('/learning-paths/branch-a-journey')->assertNotFound();
         $this->actingAs($sameBranch)->get('/learning-paths/branch-a-journey')->assertOk()->assertSee('Branch A Journey');
     }
+
+    public function test_branch_path_access_is_revoked_after_student_branch_reassignment(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'course-management', 'course-content-studio', 'learning-paths']);
+
+        $admin = $this->createUserWithRole('admin');
+        $branchA = DB::table('branches')->insertGetId([
+            'code' => 'LP-REASSIGN-A', 'name' => 'Learning Path Reassignment A', 'is_active' => true,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $branchB = DB::table('branches')->insertGetId([
+            'code' => 'LP-REASSIGN-B', 'name' => 'Learning Path Reassignment B', 'is_active' => true,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $student = $this->createUserWithRole('student', $branchA);
+        $first = $this->course('LP-REASSIGN-1', 'Reassignment Prerequisite', $branchA);
+        $second = $this->course('LP-REASSIGN-2', 'Reassignment Locked Course', $branchA);
+
+        DB::table('enrollments')->insert([
+            [
+                'user_id' => $student->id, 'course_id' => $first, 'branch_id' => $branchA,
+                'status' => 'completed', 'created_at' => now(), 'updated_at' => now(),
+            ],
+            [
+                'user_id' => $student->id, 'course_id' => $second, 'branch_id' => $branchA,
+                'status' => 'active', 'created_at' => now(), 'updated_at' => now(),
+            ],
+        ]);
+
+        $pathId = DB::table('learning_paths')->insertGetId([
+            'branch_id' => $branchA, 'created_by' => $admin->id,
+            'title' => 'Branch-bound learning path', 'slug' => 'branch-bound-learning-path',
+            'status' => 'published', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        foreach ([$first, $second] as $index => $courseId) {
+            DB::table('learning_path_courses')->insert([
+                'learning_path_id' => $pathId,
+                'course_id' => $courseId,
+                'course_title' => DB::table('courses')->where('id', $courseId)->value('title'),
+                'position' => $index + 1,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+        DB::table('learning_path_enrollments')->insert([
+            'learning_path_id' => $pathId, 'user_id' => $student->id,
+            'branch_id' => $branchA, 'status' => 'active', 'started_at' => now(),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $postSlug = 'branch-reassignment-locked-lesson';
+        $postId = $this->contentPost($admin->id, $postSlug);
+        DB::table('course_curriculum_items')->insert([
+            'course_id' => $second, 'course_content_post_id' => $postId,
+            'position' => 1, 'is_preview' => false, 'is_active' => true,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->actingAs($student)
+            ->get('/courses/' . DB::table('courses')->where('id', $second)->value('slug') . '/content/' . $postSlug)
+            ->assertOk();
+
+        DB::table('users')->where('id', $student->id)->update(['branch_id' => $branchB]);
+
+        $this->actingAs($student)
+            ->get('/courses/' . DB::table('courses')->where('id', $second)->value('slug') . '/content/' . $postSlug)
+            ->assertForbidden();
+    }
 }
