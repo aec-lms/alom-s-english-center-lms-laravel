@@ -658,10 +658,16 @@ class PluginManager
             File::moveDirectory($destination, $source);
             throw new RuntimeException('Recycle-bin metadata destination already exists; the plugin package was returned.');
         }
-        $written = File::put($metadataPath, json_encode($metadata, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
-        if ($written === false) {
-            File::moveDirectory($destination, $source);
-            if ($wasInstalled) {
+        $metadataContents = json_encode($metadata, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR);
+        $written = File::put($metadataPath, $metadataContents);
+        $metadataChecksum = is_file($metadataPath) && !is_link($metadataPath)
+            ? hash_file('sha256', $metadataPath)
+            : false;
+        if ($written !== strlen($metadataContents) || !is_string($metadataChecksum)
+            || !hash_equals(hash('sha256', $metadataContents), $metadataChecksum)) {
+            @unlink($metadataPath);
+            $restored = File::moveDirectory($destination, $source);
+            if ($restored && $wasInstalled) {
                 try {
                     $this->install($slug, $actorId);
                     if (!$wasEnabled) {
@@ -671,7 +677,11 @@ class PluginManager
                     PluginRecord::query()->where('slug', $slug)->update(['is_installed' => false, 'is_enabled' => false]);
                 }
             }
-            throw new RuntimeException('Plugin recycle-bin metadata could not be written; the package was returned to its original location.');
+            $message = 'Plugin recycle-bin metadata could not be written and verified; ';
+            $message .= $restored
+                ? 'the package was returned to its original location.'
+                : 'the package remains in the protected recycle-bin directory and requires recovery.';
+            throw new RuntimeException($message);
         }
         @chmod($metadataPath, 0600);
         $this->audit->log('plugin.deleted_to_recycle_bin', 'plugin', $slug, [
