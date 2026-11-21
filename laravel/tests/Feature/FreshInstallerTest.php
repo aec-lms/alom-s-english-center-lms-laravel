@@ -102,6 +102,20 @@ class FreshInstallerTest extends TestCase
 
             $this->assertSame(['admin_id', 'lock_path'], array_keys($result));
             $this->assertFileExists($this->tempLockPath);
+
+            // The persistent mutex file is harmless; the kernel lock itself must
+            // be released after success so a retry/next worker is never stranded.
+            $mutexPath = $this->tempLockPath . '.mutex';
+            $this->assertFileExists($mutexPath);
+            $mutexHandle = fopen($mutexPath, 'c');
+            $this->assertNotFalse($mutexHandle);
+            try {
+                $this->assertTrue(flock($mutexHandle, LOCK_EX | LOCK_NB));
+                flock($mutexHandle, LOCK_UN);
+            } finally {
+                fclose($mutexHandle);
+            }
+
             $this->assertDirectoryExists($privatePath);
             $this->assertTrue(is_writable($privatePath));
             $this->assertTrue(app(FreshInstallerService::class)->isInstalled());
