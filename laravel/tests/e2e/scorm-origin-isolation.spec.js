@@ -22,6 +22,7 @@ test('untrusted SCORM content cannot inspect or escape the trusted LMS player', 
     parentCookieReadable: false,
     parentStorageReadable: false,
     parentSecret: null,
+    parentTokenReadable: false,
     frameElementAvailable: window.frameElement !== null,
     sandboxRemovalSucceeded: false,
     contentCookie: document.cookie
@@ -30,6 +31,10 @@ test('untrusted SCORM content cannot inspect or escape the trusted LMS player', 
   try {
     result.parentSecret = parent.document.querySelector('[data-lms-secret]').textContent;
     result.parentDocumentReadable = true;
+  } catch (error) {}
+  try {
+    parent.document.querySelector('#scorm-sco').getAttribute('src');
+    result.parentTokenReadable = true;
   } catch (error) {}
   try {
     parent.document.cookie;
@@ -84,6 +89,7 @@ test('untrusted SCORM content cannot inspect or escape the trusted LMS player', 
   expect(result.parentCookieReadable).toBe(false);
   expect(result.parentStorageReadable).toBe(false);
   expect(result.parentSecret).toBeNull();
+  expect(result.parentTokenReadable).toBe(false);
   expect(result.frameElementAvailable).toBe(false);
   expect(result.sandboxRemovalSucceeded).toBe(false);
   expect(result.contentCookie).toBe('');
