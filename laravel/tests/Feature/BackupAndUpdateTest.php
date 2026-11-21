@@ -434,6 +434,64 @@ class BackupAndUpdateTest extends TestCase
     }
 
 
+
+    public function test_signed_update_rejects_unix_symlink_entries_using_zip_external_attributes(): void
+    {
+        $this->markSystemInstalled();
+        config(['lms.plugin_signing_key' => 'test-plugin-signing-key']);
+
+        $zipPath = tempnam(sys_get_temp_dir(), 'aec_update_symlink_');
+        $zip = new ZipArchive();
+        $this->assertTrue($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true);
+        $this->assertTrue($zip->addFromString('update-manifest.json', json_encode([
+            'target_type' => 'core',
+            'target_slug' => 'aec-lms-core',
+            'version' => '2.0.1',
+        ], JSON_THROW_ON_ERROR)));
+        $this->assertTrue($zip->addFromString('files/link.php', 'target.php'));
+        $this->assertTrue($zip->setExternalAttributesName(
+            'files/link.php',
+            ZipArchive::OPSYS_UNIX,
+            0120777 << 16
+        ));
+        $this->assertTrue($zip->close());
+
+        $sha = hash_file('sha256', $zipPath);
+        $signature = hash_hmac('sha256', $sha, 'test-plugin-signing-key');
+
+        try {
+            $this->expectException(RuntimeException::class);
+            $this->expectExceptionMessage('Symlink entry rejected in update ZIP');
+            app(UniversalUpdateService::class)->verifySignedPackage($zipPath, $sha, $signature);
+        } finally {
+            @unlink($zipPath);
+        }
+    }
+
+    public function test_update_staging_streams_large_zip_entries_to_disk(): void
+    {
+        $zipPath = tempnam(sys_get_temp_dir(), 'aec_update_stream_');
+        $this->assertNotFalse($zipPath);
+        $zip = new ZipArchive();
+        $this->assertTrue($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true);
+        $payload = str_repeat('large-update-payload-', 180000);
+        $this->assertTrue($zip->addFromString('files/large.bin', $payload));
+        $this->assertTrue($zip->close());
+
+        $stagingDir = storage_path('app/test-update-stage-' . bin2hex(random_bytes(6)));
+        $extract = new \\ReflectionMethod(UniversalUpdateService::class, 'extractToStaging');
+        $extract->setAccessible(true);
+
+        try {
+            $extract->invoke(app(UniversalUpdateService::class), $zipPath, $stagingDir);
+            $this->assertSame(hash('sha256', $payload), hash_file('sha256', $stagingDir . '/files/large.bin'));
+        } finally {
+            \\Illuminate\\Support\\Facades\\File::deleteDirectory($stagingDir);
+            @unlink($zipPath);
+        }
+    }
+
+
     public function test_update_feed_rejects_insecure_and_private_hosts(): void
     {
         $this->markSystemInstalled();
