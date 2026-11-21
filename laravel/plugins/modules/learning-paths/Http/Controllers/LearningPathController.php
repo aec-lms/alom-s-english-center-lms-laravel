@@ -158,7 +158,17 @@ class LearningPathController extends Controller
     {
         $this->ensureCourses();
         $actor = $request->user();
-        $path = DB::table('learning_paths')->where('slug', $slug)->where('status', 'published')
+        $path = DB::table('learning_paths')->where('slug', $slug)
+            ->when($actor && $actor->hasRole('student'), fn ($query) => $query->where(function ($visibility) use ($actor): void {
+                $visibility->where('status', 'published')
+                    ->orWhereExists(function ($enrollment) use ($actor): void {
+                        $enrollment->selectRaw('1')->from('learning_path_enrollments')
+                            ->whereColumn('learning_path_enrollments.learning_path_id', 'learning_paths.id')
+                            ->where('learning_path_enrollments.user_id', $actor->id)
+                            ->whereIn('learning_path_enrollments.status', ['active', 'completed']);
+                    });
+            }))
+            ->when(!$actor || !$actor->hasRole('student'), fn ($query) => $query->where('status', 'published'))
             ->when($actor && $actor->hasRole('student'), fn ($query) => $query->where(function ($branch) use ($actor): void {
                 $branch->whereNull('branch_id');
                 if ($actor->branch_id !== null) $branch->orWhere('branch_id', $actor->branch_id);
@@ -166,13 +176,15 @@ class LearningPathController extends Controller
             ->when(!$actor || !$actor->hasRole('student'), fn ($query) => $query->whereNull('branch_id'))
             ->first();
         abort_unless($path, 404);
-        $courses = $this->pathCourses((int) $path->id);
-        abort_unless($courses->count() >= 2 && $courses->every(fn ($course) => $course->course_status === 'published'), 404);
-        $this->assertPathCourseBranches($path, $courses);
-
         $pathEnrollment = $actor && $actor->hasRole('student')
             ? DB::table('learning_path_enrollments')->where('learning_path_id', $path->id)->where('user_id', $actor->id)->first()
             : null;
+        $courses = $this->pathCourses((int) $path->id);
+        abort_unless($courses->count() >= 2, 404);
+        if (!$pathEnrollment) {
+            abort_unless($path->status === 'published' && $courses->every(fn ($course) => $course->course_status === 'published'), 404);
+            $this->assertPathCourseBranches($path, $courses);
+        }
         $firstCourse = $courses->first();
         $firstEnrollment = $actor && $actor->hasRole('student')
             ? DB::table('enrollments')->where('user_id', $actor->id)->where('course_id', $firstCourse->course_id)
