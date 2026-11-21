@@ -55,24 +55,35 @@ class ScormRuntimeController extends Controller
         abort_unless($actor && $actor->is_active && $actor->hasRole('student'), 403, 'An active student account is required.');
         abort_unless($plugins->isEnabled('course-management') && Schema::hasTable('courses') && Schema::hasTable('enrollments'), 503, 'Enable Course Management to launch SCORM content.');
 
-        $contentOrigin = rtrim((string) config('scorm.content_origin', ''), '/');
-        $contentHost = parse_url($contentOrigin, PHP_URL_HOST);
-        $contentScheme = parse_url($contentOrigin, PHP_URL_SCHEME);
-        $contentParts = parse_url($contentOrigin);
         $appOrigin = rtrim((string) config('app.url'), '/');
+        $playerOrigin = rtrim((string) config('scorm.player_origin', ''), '/');
+        $contentOrigin = rtrim((string) config('scorm.content_origin', ''), '/');
         $appHost = parse_url($appOrigin, PHP_URL_HOST);
         $appScheme = parse_url($appOrigin, PHP_URL_SCHEME);
-        abort_unless(is_array($contentParts) && in_array($contentScheme, ['http', 'https'], true)
-            && !isset($contentParts['user'], $contentParts['pass'], $contentParts['path'], $contentParts['query'], $contentParts['fragment'], $contentParts['port']), 503,
-            'SCORM_CONTENT_ORIGIN must be a scheme and hostname only (no path, credentials or port).');
-        abort_unless(is_string($contentHost) && $contentHost !== '' && $contentHost !== $appHost, 503,
-            'Configure SCORM_CONTENT_ORIGIN on a separate content subdomain before launching SCORM packages.');
-        abort_unless($appScheme !== 'https' || $contentScheme === 'https', 503,
-            'SCORM content origin must use HTTPS when the LMS uses HTTPS.');
+        $playerHost = parse_url($playerOrigin, PHP_URL_HOST);
+        $playerScheme = parse_url($playerOrigin, PHP_URL_SCHEME);
+        $contentHost = parse_url($contentOrigin, PHP_URL_HOST);
+        $contentScheme = parse_url($contentOrigin, PHP_URL_SCHEME);
+
+        foreach ([$playerOrigin, $contentOrigin] as $origin) {
+            $parts = parse_url($origin);
+            abort_unless(is_array($parts) && in_array($parts['scheme'] ?? null, ['http', 'https'], true)
+                && is_string($parts['host'] ?? null) && $parts['host'] !== ''
+                && !isset($parts['user'], $parts['pass'], $parts['path'], $parts['query'], $parts['fragment'], $parts['port']), 503,
+                'SCORM player/content origins must be scheme and hostname only (no path, credentials or port).');
+        }
+        abort_unless(is_string($playerHost) && is_string($contentHost)
+            && count(array_unique([$appHost, $playerHost, $contentHost])) === 3, 503,
+            'SCORM_PLAYER_ORIGIN and SCORM_CONTENT_ORIGIN must each use a different host from APP_URL and from each other.');
+        abort_unless($appScheme !== 'https' || ($playerScheme === 'https' && $contentScheme === 'https'), 503,
+            'SCORM player and content origins must use HTTPS when the LMS uses HTTPS.');
+
         $sessionDomain = ltrim((string) config('session.domain', ''), '.');
-        abort_unless($sessionDomain === ''
-            || !($contentHost === $sessionDomain || str_ends_with($contentHost, '.' . $sessionDomain)), 503,
-            'SCORM content host must not receive the LMS session cookie. Use a host-only SESSION_DOMAIN setting.');
+        foreach ([$playerHost, $contentHost] as $isolatedHost) {
+            abort_unless($sessionDomain === ''
+                || !($isolatedHost === $sessionDomain || str_ends_with($isolatedHost, '.' . $sessionDomain)), 503,
+                'SCORM isolated hosts must not receive the LMS session cookie. Use a host-only SESSION_DOMAIN setting.');
+        }
 
         $packageRecord = DB::table('scorm_packages')->where('id', $package)->where('status', 'published')->first();
         abort_unless($packageRecord, 404, 'Published SCORM package not found.');
@@ -183,20 +194,42 @@ class ScormRuntimeController extends Controller
     {
         $session = $this->validSession($attempt, $token);
         $record = DB::table('scorm_attempts')->where('id', $attempt)->first();
+        abort_unless($record, 404);
         $package = DB::table('scorm_packages')->where('id', $record->scorm_package_id)->first();
         abort_unless($package, 404);
 
-        $launchUrl = route('plugins.scorm.content.file', [
+        $bridgeNonce = bin2hex(random_bytes(32));
+        $launchUrl = route('plugins.scorm.content.bootstrap', [
             'attempt' => $attempt,
             'token' => $token,
             'path' => $package->launch_file,
+            'bridge_nonce' => $bridgeNonce,
         ]);
         $contentOrigin = rtrim((string) config('scorm.content_origin', ''), '/');
-        abort_unless(parse_url($launchUrl, PHP_URL_HOST) === parse_url($contentOrigin, PHP_URL_HOST), 503, 'SCORM content files must resolve to the isolated content origin.');
+        $appOrigin = rtrim((string) config('app.url', ''), '/');
+        abort_unless(parse_url($launchUrl, PHP_URL_HOST) === parse_url($contentOrigin, PHP_URL_HOST), 503, 'SCORM content bootstrap must resolve to the isolated content origin.');
+
+        $user = DB::table('users')->where('id', $record->user_id)->first();
+        $savedData = json_decode((string) $record->cmi_data, true);
+        if (!is_array($savedData)) {
+            $savedData = [];
+        }
+
         $response = response()->view('scorm::content-player', [
             'title' => $package->title,
             'launchUrl' => $launchUrl,
             'contentOrigin' => $contentOrigin,
+            'appOrigin' => $appOrigin,
+            'runtimeUrl' => $appOrigin . '/api/scorm-runtime/commit',
+            'attemptId' => $attempt,
+            'token' => $token,
+            'stateVersion' => (int) $record->state_version,
+            'bridgeNonce' => $bridgeNonce,
+            'savedData' => $savedData,
+            'studentId' => (string) $record->user_id,
+            'studentName' => (string) ($user->name ?? 'Learner'),
+            'entryMode' => (string) $record->entry_mode,
+            'totalTime' => $this->formatScormTime((int) $record->total_time_seconds),
         ]);
 
         return $response
@@ -206,10 +239,46 @@ class ScormRuntimeController extends Controller
             ->header('Cache-Control', 'private, no-store');
     }
 
-    public function contentFile(Request $request, int $attempt, string $token, ?string $path = null): Response
+    public function contentBootstrap(Request $request, int $attempt, string $token, ?string $path = null): Response
     {
         $session = $this->validSession($attempt, $token);
         abort_unless(is_string($path) && $path !== '' && !$this->unsafeRelativePath($path), 404);
+
+        $bridgeNonce = (string) $request->query('bridge_nonce', '');
+        abort_unless(ctype_xdigit($bridgeNonce) && strlen($bridgeNonce) === 64, 403, 'SCORM bridge state is invalid.');
+
+        $location = route('plugins.scorm.content.file', [
+            'attempt' => $attempt,
+            'path' => $path,
+            'bridge_nonce' => $bridgeNonce,
+        ]);
+        $secure = parse_url((string) config('scorm.content_origin', ''), PHP_URL_SCHEME) === 'https';
+        $cookie = cookie(
+            $this->contentSessionCookieName($attempt),
+            $token,
+            max(1, (int) config('scorm.launch_ttl_minutes', 240)),
+            '/scorm-content/' . $attempt . '/',
+            null,
+            $secure,
+            true,
+            false,
+            'none'
+        );
+
+        return redirect()->to($location, 302)
+            ->withCookie($cookie)
+            ->header('Referrer-Policy', 'no-referrer')
+            ->header('Cache-Control', 'private, no-store');
+    }
+
+    public function contentFile(Request $request, int $attempt, ?string $path = null): Response
+    {
+        $token = $request->cookie($this->contentSessionCookieName($attempt));
+        abort_unless(is_string($token) && $token !== '', 403, 'SCORM content session is missing.');
+        $session = $this->validSession($attempt, $token);
+        abort_unless(is_string($path) && $path !== '' && !$this->unsafeRelativePath($path), 404);
+        $bridgeNonce = (string) $request->query('bridge_nonce', '');
+        abort_unless(ctype_xdigit($bridgeNonce) && strlen($bridgeNonce) === 64, 403, 'SCORM bridge state is invalid.');
 
         $record = DB::table('scorm_attempts')->where('id', $attempt)->first();
         $package = DB::table('scorm_packages')->where('id', $record->scorm_package_id)->first();
@@ -255,11 +324,9 @@ class ScormRuntimeController extends Controller
             }
             $savedData['cmi.core.session_time'] = '0000:00:00.00';
             $adapter = view('scorm::runtime-adapter', [
-                'runtimeUrl' => rtrim((string) config('app.url'), '/') . '/api/scorm-runtime/commit',
-                'appOrigin' => rtrim((string) config('app.url'), '/'),
+                'playerOrigin' => rtrim((string) config('scorm.player_origin', ''), '/'),
                 'attemptId' => $attempt,
-                'token' => $token,
-                'stateVersion' => (int) $record->state_version,
+                'bridgeNonce' => $bridgeNonce,
                 'studentId' => (string) $record->user_id,
                 'studentName' => (string) ($user->name ?? 'Learner'),
                 'entryMode' => $record->entry_mode,
