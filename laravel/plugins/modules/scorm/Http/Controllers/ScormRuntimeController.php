@@ -185,12 +185,26 @@ class ScormRuntimeController extends Controller
         $package = DB::table('scorm_packages')->where('id', $record->scorm_package_id)->first();
         abort_unless($package, 404);
 
-        $rootCandidate = storage_path('app/scorm-packages/' . $package->storage_directory);
-        abort_if(is_link($rootCandidate), 404);
+        $storagePath = storage_path('app');
+        abort_if(is_link($storagePath), 404);
+        $storageRoot = realpath($storagePath);
+        $packagesCandidate = $storageRoot !== false ? $storageRoot . DIRECTORY_SEPARATOR . 'scorm-packages' : '';
+        abort_unless($packagesCandidate !== '' && !is_link($packagesCandidate), 404);
+        $packagesRoot = realpath($packagesCandidate);
+        abort_unless($packagesRoot !== false && dirname($packagesRoot) === $storageRoot, 404);
+
+        $rootCandidate = $packagesRoot . DIRECTORY_SEPARATOR . $package->storage_directory;
+        abort_if(is_link($rootCandidate) || basename($package->storage_directory) !== $package->storage_directory, 404);
         $root = realpath($rootCandidate);
-        $targetCandidate = $root !== false ? $root . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $path) : '';
-        $target = $targetCandidate !== '' ? realpath($targetCandidate) : false;
-        abort_unless($root !== false && $target !== false && is_file($target) && !is_link($target)
+        abort_unless($root !== false && dirname($root) === $packagesRoot && is_dir($root), 404);
+
+        $targetCandidate = $root;
+        foreach (explode('/', $path) as $segment) {
+            $targetCandidate .= DIRECTORY_SEPARATOR . $segment;
+            abort_if(is_link($targetCandidate), 404);
+        }
+        $target = realpath($targetCandidate);
+        abort_unless($target !== false && is_file($target)
             && str_starts_with($target, $root . DIRECTORY_SEPARATOR), 404);
 
         return response()->file($target, [
