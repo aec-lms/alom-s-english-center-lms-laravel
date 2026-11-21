@@ -360,7 +360,7 @@ class LearningInteractionController extends Controller
                 $teacherBranchId = $actor->branch_id !== null ? (int) $actor->branch_id : null;
             }
 
-            if ($course->branch_id !== null && $teacherBranchId !== null && $teacherBranchId !== (int) $course->branch_id) {
+            if ($course->branch_id !== null && ($teacherBranchId === null || $teacherBranchId !== (int) $course->branch_id)) {
                 return false;
             }
 
