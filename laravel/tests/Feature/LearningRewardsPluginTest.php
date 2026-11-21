@@ -533,6 +533,53 @@ class LearningRewardsPluginTest extends TestCase
             ->where('activity_key', 'lesson_completed')->count());
     }
 
+    public function test_mysql_concurrent_streak_threshold_awards_only_one_seven_day_badge(): void
+    {
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            $this->markTestSkipped('Concurrent streak/badge coverage runs only in the MySQL 8 CI job.');
+        }
+        if (!function_exists('proc_open') || !function_exists('proc_close')) {
+            $this->markTestSkipped('PHP process control is required for the MySQL reward concurrency regression.');
+        }
+
+        $this->bootRewards();
+        $student = $this->createUserWithRole('student');
+        $timezone = 'Asia/Dhaka';
+        $yesterday = Carbon::now($timezone)->subDay()->toDateString();
+        DB::table('learning_reward_rules')->where('activity_key', 'lesson_completed')->update([
+            'points' => 0,
+            'daily_cap' => 0,
+            'is_enabled' => false,
+        ]);
+        DB::table('learning_reward_streaks')->insert([
+            'user_id' => $student->id,
+            'current_streak' => 6,
+            'longest_streak' => 6,
+            'last_activity_date' => $yesterday,
+            'timezone' => $timezone,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $results = $this->runConcurrentRewardWorkers((int) $student->id, [99011, 99012]);
+        $this->assertCount(2, $results);
+        $this->assertSame(2, DB::table('learning_reward_ledger')
+            ->where('user_id', $student->id)
+            ->whereIn('source_id', [99011, 99012])
+            ->where('points', 0)
+            ->count());
+
+        $streak = DB::table('learning_reward_streaks')->where('user_id', $student->id)->first();
+        $this->assertNotNull($streak);
+        $this->assertSame(7, (int) $streak->current_streak);
+        $badgeId = DB::table('learning_reward_badges')->where('slug', 'seven-day-streak')->value('id');
+        $this->assertNotNull($badgeId);
+        $this->assertSame(1, DB::table('learning_reward_user_badges')
+            ->where('user_id', $student->id)
+            ->where('badge_id', $badgeId)
+            ->count());
+    }
+
     public function test_streak_badges_unlock_even_when_xp_is_disabled(): void
     {
         $this->bootRewards();
