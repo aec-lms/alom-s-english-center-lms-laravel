@@ -86,7 +86,7 @@ class CourseCommerceController extends Controller
             $existing = DB::table('course_cart_items')->where('cart_id', $cartId)->where('course_id', $course->id)->first();
             if ($existing) {
                 DB::table('course_cart_items')->where('id', $existing->id)->update([
-                    'unit_price' => round((float) $course->price, 2),
+                    'unit_price' => $this->currentCoursePrice($course, $student),
                     'updated_at' => now(),
                 ]);
                 return;
@@ -95,7 +95,7 @@ class CourseCommerceController extends Controller
             DB::table('course_cart_items')->insert([
                 'cart_id' => $cartId,
                 'course_id' => $course->id,
-                'unit_price' => round((float) $course->price, 2),
+                'unit_price' => $this->currentCoursePrice($course, $student),
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
@@ -677,7 +677,7 @@ class CourseCommerceController extends Controller
 
             foreach ($cartItems as $cartItem) {
                 $course = $courses->get($cartItem->course_id);
-                abort_if(abs((float) $course->price - (float) $cartItem->unit_price) > 0.01, 409, 'A course price changed. Review your cart before paying.');
+                abort_if(abs($this->currentCoursePrice($course, $student) - (float) $cartItem->unit_price) > 0.01, 409, 'A course price or Flash Sale offer changed. Review your cart before paying.');
                 $this->assertNoOpenBatch((int) $course->id);
                 abort_if(DB::table('enrollments')->where('user_id', $student->id)->where('course_id', $course->id)
                     ->whereIn('status', ['pending', 'active', 'completed'])->exists(), 409, 'You already have a pending or active enrollment in one of the selected courses.');
@@ -1074,6 +1074,17 @@ class CourseCommerceController extends Controller
             $assignedBranchId = $this->assignedBranchId($student);
             abort_unless($assignedBranchId !== null && $assignedBranchId === (int) $course->branch_id, 403, 'This course is outside your assigned branch.');
         }
+    }
+
+
+    /** Resolve the same server-side campaign price used by cart and unified checkout. */
+    private function currentCoursePrice(object $course, $student): float
+    {
+        $basePrice = round((float) ($course->price ?? 0), 2);
+        if (!app(PluginManager::class)->isEnabled('flash-sale') || !Schema::hasTable('flash_sales')) return $basePrice;
+        $branchId = $course->branch_id !== null ? (int) $course->branch_id : $this->assignedBranchId($student);
+        return (float) app(\Plugins\Modules\FlashSale\Services\FlashSalePricingService::class)
+            ->quote((int) $course->id, $branchId)['total'];
     }
 
     private function assignedBranchId($student): ?int
