@@ -394,6 +394,41 @@ class LearningRewardsPluginTest extends TestCase
         $this->actingAs($admin)->get('/admin/learning-rewards')->assertOk();
     }
 
+    public function test_mysql_concurrent_reward_awards_respect_daily_caps_and_idempotency(): void
+    {
+        if (config('database.default') !== 'mysql') {
+            $this->markTestSkipped('Concurrent reward worker coverage runs only in the MySQL 8 CI job.');
+        }
+        if (!function_exists('proc_open') || !function_exists('proc_close')) {
+            $this->markTestSkipped('PHP process control is required for the MySQL reward concurrency regression.');
+        }
+
+        $this->bootRewards();
+        $student = $this->createUserWithRole('student');
+        DB::table('learning_reward_rules')->where('activity_key', 'lesson_completed')->update([
+            'points' => 5,
+            'daily_cap' => 10,
+            'is_enabled' => true,
+        ]);
+
+        $duplicateResults = $this->runConcurrentRewardWorkers((int) $student->id, [2001, 2001]);
+        $this->assertCount(2, $duplicateResults);
+        $this->assertCount(1, array_filter($duplicateResults, static fn (array $result): bool => ($result['success'] ?? false) === true));
+        $this->assertSame(1, DB::table('learning_reward_ledger')
+            ->where('user_id', $student->id)->where('source_id', 2001)->count());
+
+        $capResults = $this->runConcurrentRewardWorkers((int) $student->id, [2002, 2003]);
+        $this->assertCount(2, $capResults);
+        $this->assertSame(10, (int) DB::table('learning_reward_ledger')
+            ->where('user_id', $student->id)
+            ->where('activity_key', 'lesson_completed')
+            ->whereDate('awarded_at', now()->toDateString())
+            ->sum('points'));
+        $this->assertSame(3, DB::table('learning_reward_ledger')
+            ->where('user_id', $student->id)
+            ->where('activity_key', 'lesson_completed')->count());
+    }
+
     public function test_streak_badges_unlock_even_when_xp_is_disabled(): void
     {
         $this->bootRewards();
@@ -423,4 +458,111 @@ class LearningRewardsPluginTest extends TestCase
             'badge_id' => DB::table('learning_reward_badges')->where('slug', 'seven-day-streak')->value('id'),
         ]);
     }
+    /**
+     * Start two independent Laravel PHP workers behind a shared gate so the
+     * service must serialize real concurrent transactions against MySQL.
+     */
+    private function runConcurrentRewardWorkers(int $userId, array $sourceIds): array
+    {
+        $root = sys_get_temp_dir() . '/aec-learning-rewards-race-' . bin2hex(random_bytes(8));
+        $gatePath = $root . '/start.gate';
+        $workerPath = base_path('tests/Support/learning-rewards-award-worker.php');
+        mkdir($root, 0700, true);
+
+        $connection = config('database.connections.mysql');
+        $baseEnvironment = [
+            'PATH' => (string) (getenv('PATH') ?: ''),
+            'HOME' => (string) (getenv('HOME') ?: sys_get_temp_dir()),
+        ];
+        $processes = [];
+        $pipesByWorker = [];
+
+        try {
+            $this->assertFileExists($workerPath, 'The MySQL reward worker script must exist.');
+            foreach ($sourceIds as $index => $sourceId) {
+                $workerNumber = $index + 1;
+                $environment = array_merge($baseEnvironment, [
+                    'APP_ENV' => 'testing',
+                    'APP_DEBUG' => 'false',
+                    'APP_URL' => 'https://aec-rewards-concurrency.test',
+                    'APP_KEY' => (string) config('app.key'),
+                    'DB_CONNECTION' => 'mysql',
+                    'DB_HOST' => (string) ($connection['host'] ?? '127.0.0.1'),
+                    'DB_PORT' => (string) ($connection['port'] ?? '3306'),
+                    'DB_DATABASE' => (string) ($connection['database'] ?? ''),
+                    'DB_USERNAME' => (string) ($connection['username'] ?? ''),
+                    'DB_PASSWORD' => (string) ($connection['password'] ?? ''),
+                    'CACHE_STORE' => 'file',
+                    'CACHE_DRIVER' => 'file',
+                    'SESSION_DRIVER' => 'file',
+                    'QUEUE_CONNECTION' => 'sync',
+                    'AEC_REWARD_USER_ID' => (string) $userId,
+                    'AEC_REWARD_ACTIVITY' => 'lesson_completed',
+                    'AEC_REWARD_SOURCE_ID' => (string) $sourceId,
+                    'AEC_REWARD_READY_FILE' => $root . '/worker-' . $workerNumber . '.ready',
+                    'AEC_REWARD_START_GATE' => $gatePath,
+                ]);
+                $pipes = [];
+                $process = proc_open(
+                    [PHP_BINARY, $workerPath],
+                    [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+                    $pipes,
+                    base_path(),
+                    $environment
+                );
+                $this->assertIsResource($process, 'Unable to start a real MySQL learning-rewards worker.');
+                fclose($pipes[0]);
+                $processes[] = $process;
+                $pipesByWorker[] = $pipes;
+            }
+
+            $readyDeadline = microtime(true) + 20;
+            while (microtime(true) < $readyDeadline) {
+                if (is_file($root . '/worker-1.ready') && is_file($root . '/worker-2.ready')) {
+                    break;
+                }
+                usleep(10000);
+            }
+            $this->assertFileExists($root . '/worker-1.ready', 'First MySQL reward worker did not reach the start barrier.');
+            $this->assertFileExists($root . '/worker-2.ready', 'Second MySQL reward worker did not reach the start barrier.');
+            file_put_contents($gatePath, 'go', LOCK_EX);
+
+            $outcomes = [];
+            foreach ($processes as $index => $process) {
+                $stdout = stream_get_contents($pipesByWorker[$index][1]);
+                $stderr = stream_get_contents($pipesByWorker[$index][2]);
+                fclose($pipesByWorker[$index][1]);
+                fclose($pipesByWorker[$index][2]);
+                $exitCode = proc_close($process);
+                $decoded = json_decode(trim((string) $stdout), true);
+                $this->assertSame(0, $exitCode, 'MySQL reward worker exited abnormally: ' . (string) $stderr);
+                $this->assertIsArray($decoded, 'MySQL reward worker did not return JSON. stdout=' . (string) $stdout . ' stderr=' . (string) $stderr);
+                $this->assertTrue($decoded['success'] ?? false, 'MySQL reward worker failed: ' . (string) ($decoded['message'] ?? 'unknown error'));
+                $outcomes[] = $decoded['result'];
+            }
+
+            return $outcomes;
+        } finally {
+            foreach ($processes as $index => $process) {
+                if (is_resource($process)) {
+                    @proc_terminate($process);
+                    if (isset($pipesByWorker[$index])) {
+                        foreach ([1, 2] as $pipeIndex) {
+                            if (isset($pipesByWorker[$index][$pipeIndex]) && is_resource($pipesByWorker[$index][$pipeIndex])) {
+                                @fclose($pipesByWorker[$index][$pipeIndex]);
+                            }
+                        }
+                    }
+                    @proc_close($process);
+                }
+            }
+            foreach (glob($root . '/*') ?: [] as $entry) {
+                if (is_file($entry) || is_link($entry)) {
+                    @unlink($entry);
+                }
+            }
+            @rmdir($root);
+        }
+    }
+
 }
