@@ -198,7 +198,6 @@ class AttendanceController extends Controller
                     ->whereDate('attendance_date', $validated['attendance_date'])
                     ->lockForUpdate()
                     ->first();
-                $oldEntryStatus = $entry?->status;
                 $entry ??= new AttendanceEntry();
                 $entry->fill([
                     'attendance_batch_mapping_id' => (int) $batchMappingId,
@@ -242,14 +241,14 @@ class AttendanceController extends Controller
 
                 if ($plugins->isEnabled('learning-rewards') && $student->user_id) {
                     $rewards = app(LearningRewardsService::class);
-                    if ($entry->status === 'present' && $oldEntryStatus !== 'present') {
+                    if ($entry->status === 'present' && (!$isEdit || $oldStatus !== 'present')) {
                         $rewards->awardVerifiedActivity(
                             (int) $student->user_id,
                             'attendance_present',
-                            'attendance_entry',
-                            (int) $entry->id,
+                            'attendance_record',
+                            (int) $record->id,
                         );
-                    } elseif ($oldEntryStatus === 'present' && $entry->status !== 'present') {
+                    } elseif ($isEdit && $oldStatus === 'present' && $entry->status !== 'present') {
                         $rewards->reverseActivityAward(
                             (int) $student->user_id,
                             'attendance_present',
