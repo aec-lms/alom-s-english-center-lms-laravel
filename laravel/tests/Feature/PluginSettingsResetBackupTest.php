@@ -43,6 +43,43 @@ class PluginSettingsResetBackupTest extends TestCase
         }
     }
 
+
+    public function test_restore_audit_failure_keeps_recycle_bin_metadata_and_returns_package(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['gateway-sslcommerz']);
+
+        $manager = app(PluginManager::class);
+        $deleted = $manager->deleteToRecycleBin('gateway-sslcommerz');
+        $archive = $deleted['archive'];
+
+        AuditLog::creating(static function (AuditLog $log): void {
+            if ($log->action === 'plugin.restored_from_recycle_bin') {
+                throw new RuntimeException('forced restore audit failure');
+            }
+        });
+
+        try {
+            try {
+                $manager->restoreFromRecycleBin($archive);
+                $this->fail('Restore must fail when its required audit event cannot be persisted.');
+            } catch (RuntimeException $exception) {
+                $this->assertSame('forced restore audit failure', $exception->getMessage());
+            }
+
+            $this->assertFileExists(
+                config('plugins.modules_path') . DIRECTORY_SEPARATOR . 'gateway-sslcommerz' . DIRECTORY_SEPARATOR . 'plugin.json'
+            );
+            $this->assertSame(
+                $archive,
+                collect($manager->recycledPlugins())->firstWhere('archive', $archive)['archive'] ?? null
+            );
+        } finally {
+            AuditLog::flushEventListeners();
+        }
+    }
+
+
     public function test_admin_reset_restores_manifest_defaults_and_retains_encrypted_private_backup(): void
     {
         $this->markSystemInstalled();
