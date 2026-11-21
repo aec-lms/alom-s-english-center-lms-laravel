@@ -1,0 +1,19 @@
+{
+  "slug": "learning-paths",
+  "name": "Learning Paths",
+  "version": "1.0.0",
+  "author": "Alom's English Center",
+  "category": "academic",
+  "description": "Ordered, branch-aware course journeys with learner enrollment, progress tracking and prerequisite gates.",
+  "core_compatibility": "^2.0",
+  "dependencies": [],
+  "optional_dependencies": ["course-management", "course-content-studio", "certificate-management", "notification-center"],
+  "provider": "Plugins\\\\Modules\\\\LearningPaths\\\\Providers\\\\LearningPathsServiceProvider",
+  "permissions": [
+    {"slug": "learning_paths.manage", "name": "Manage learning paths"}
+  ],
+  "settings_schema": [],
+  "admin_menu": [
+    {"group": "Academic Management", "label": "Learning Paths", "route": "plugins.learning-paths.admin.index", "order": 145, "permission": "learning_paths.manage"}
+  ]
+}
