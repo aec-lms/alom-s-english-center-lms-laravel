@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Core\Plugins\PluginManager;
 use App\Models\Permission;
 use App\Models\Role;
 use Illuminate\Support\Facades\DB;
