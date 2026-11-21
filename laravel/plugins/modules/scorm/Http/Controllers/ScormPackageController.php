@@ -101,12 +101,6 @@ class ScormPackageController extends Controller
                     $this->assertBranchAccess($request, $replacement);
                     abort_unless((int) $replacement->course_id === (int) $course->id, 422, 'A replacement package must belong to the same course.');
                     abort_unless($replacement->status === 'published', 409, 'Only a published package can be replaced.');
-                    $activeAttempts = DB::table('scorm_attempts')
-                        ->where('scorm_package_id', $replacement->id)
-                        ->whereIn('completion_state', ['in_progress', 'suspended'])
-                        ->lockForUpdate()
-                        ->get(['id']);
-                    abort_if($activeAttempts->isNotEmpty(), 409, 'This package has active learner attempts. Finish or suspend them before replacing the package.');
                     $revisionNumber = (int) ($replacement->revision_number ?? 1) + 1;
                 }
 
@@ -130,14 +124,6 @@ class ScormPackageController extends Controller
                     'updated_at' => now(),
                 ]);
 
-                if ($replacement) {
-                    DB::table('scorm_packages')->where('id', $replacement->id)->update([
-                        'status' => 'archived',
-                        'archived_at' => now(),
-                        'updated_at' => now(),
-                    ]);
-                }
-
                 return $packageId;
             });
         } catch (Throwable $exception) {
@@ -149,7 +135,7 @@ class ScormPackageController extends Controller
 
         $revisionNumber = (int) DB::table('scorm_packages')->where('id', $packageId)->value('revision_number');
         $message = !empty($validated['replace_package_id'])
-            ? 'Replacement imported as revision ' . $revisionNumber . ' in draft state. The previous package is archived and its attempts are retained.'
+            ? 'Replacement imported as revision ' . $revisionNumber . ' in draft state. The current published revision remains available until the replacement is approved and published.'
             : 'SCORM 1.2 package imported and saved as draft. Review it before publishing.';
 
         return redirect()->route('plugins.scorm.admin.index')->with('status', $message);
@@ -165,6 +151,25 @@ class ScormPackageController extends Controller
             abort_unless($record->course_id !== null && Schema::hasTable('courses')
                 && DB::table('courses')->where('id', $record->course_id)->where('status', 'published')->exists(),
                 422, 'The linked course must remain published.');
+
+            if ($record->replaces_package_id !== null) {
+                $previous = DB::table('scorm_packages')->where('id', $record->replaces_package_id)->lockForUpdate()->first();
+                abort_unless($previous && $previous->status === 'published'
+                    && (int) $previous->course_id === (int) $record->course_id
+                    && (int) $previous->branch_id === (int) $record->branch_id, 409,
+                    'The previous package is no longer the published revision for this course and branch.');
+                $activeAttempts = DB::table('scorm_attempts')
+                    ->where('scorm_package_id', $previous->id)
+                    ->whereIn('completion_state', ['in_progress', 'suspended'])
+                    ->lockForUpdate()
+                    ->get(['id']);
+                abort_if($activeAttempts->isNotEmpty(), 409, 'The previous revision still has active learner attempts. Finish or suspend them before publishing the replacement.');
+                DB::table('scorm_packages')->where('id', $previous->id)->update([
+                    'status' => 'superseded',
+                    'superseded_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
 
             DB::table('scorm_packages')->where('id', $package)->update([
                 'status' => 'published',
