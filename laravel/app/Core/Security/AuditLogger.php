@@ -38,7 +38,7 @@ class AuditLogger
         ?int $userId = null,
     ): void {
         if (!Schema::hasTable('audit_logs')) {
-            throw new \\RuntimeException(
+            throw new \RuntimeException(
                 'Required audit logging is unavailable: the audit_logs table does not exist.'
             );
         }
