@@ -155,6 +155,46 @@ class LearningPathsPluginTest extends TestCase
         $this->assertDatabaseMissing('learning_path_courses', ['learning_path_id' => $pathId, 'course_id' => $third]);
     }
 
+    public function test_course_in_active_learning_path_cannot_be_deleted(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management', 'learning-paths']);
+        $admin = $this->createUserWithRole('admin');
+        $student = $this->createUserWithRole('student');
+        $first = $this->course('LP-KEEP-A', 'Protected Path Course A');
+        $second = $this->course('LP-KEEP-B', 'Protected Path Course B');
+        $pathId = DB::table('learning_paths')->insertGetId([
+            'created_by' => $admin->id,
+            'title' => 'Protected Curriculum',
+            'slug' => 'protected-curriculum',
+            'status' => 'published',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        foreach ([$first, $second] as $index => $courseId) {
+            DB::table('learning_path_courses')->insert([
+                'learning_path_id' => $pathId,
+                'course_id' => $courseId,
+                'course_title' => DB::table('courses')->where('id', $courseId)->value('title'),
+                'position' => $index + 1,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+        DB::table('learning_path_enrollments')->insert([
+            'learning_path_id' => $pathId,
+            'user_id' => $student->id,
+            'status' => 'active',
+            'started_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($admin)->delete('/admin/courses/' . $first)->assertStatus(409);
+        $this->assertDatabaseHas('courses', ['id' => $first, 'status' => 'published']);
+        $this->assertDatabaseHas('learning_path_courses', ['learning_path_id' => $pathId, 'course_id' => $first]);
+    }
+
     public function test_active_learning_path_blocks_later_course_content_until_previous_course_is_completed(): void
     {
         $this->markSystemInstalled();
