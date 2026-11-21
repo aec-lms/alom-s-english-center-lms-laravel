@@ -7,6 +7,8 @@ use Plugins\Modules\Scorm\Http\Controllers\ScormPackageController;
 use Plugins\Modules\Scorm\Http\Controllers\ScormRuntimeController;
 
 Route::middleware(['web', 'installed', 'plugin:scorm'])->group(function (): void {
+    Route::get('/my-learning/scorm', [ScormRuntimeController::class, 'studentIndex'])
+        ->middleware('auth')->name('plugins.scorm.student.index');
     Route::get('/my-learning/scorm/{package}', [ScormRuntimeController::class, 'launch'])
         ->whereNumber('package')->middleware('auth')->name('plugins.scorm.launch');
 
