@@ -22,6 +22,50 @@
             <div class="rounded-lg bg-slate-50 p-3"><p class="text-xs text-slate-500">British practice</p><p class="mt-1 text-2xl font-extrabold">{{ $progress['uk_attempts'] }}</p></div>
             <div class="rounded-lg bg-slate-50 p-3"><p class="text-xs text-slate-500">American practice</p><p class="mt-1 text-2xl font-extrabold">{{ $progress['us_attempts'] }}</p></div>
         </div>
+        <div class="mt-5 grid gap-4 border-t pt-5 md:grid-cols-2">
+            <div>
+                <h3 class="font-bold">Recent activity</h3>
+                <p class="mt-1 text-xs text-slate-500">{{ $progress['recent_7_days'] }} attempts in 7 days · {{ $progress['recent_30_days'] }} in 30 days</p>
+                <div class="mt-3 grid grid-cols-7 gap-2" aria-label="Daily practice attempts over the last seven days">
+                    @foreach($dailyActivity as $day)
+                    <div class="min-w-0 text-center">
+                        <div class="flex h-16 items-end justify-center rounded bg-slate-50 p-1">
+                            <span class="block w-full rounded-t bg-blue-600" style="height:{{ $day['bar_percent'] }}%" aria-label="{{ $day['attempts'] }} attempts"></span>
+                        </div>
+                        <p class="mt-1 text-xs text-slate-500">{{ $day['label'] }}</p>
+                        <p class="text-xs font-semibold">{{ $day['attempts'] }}</p>
+                    </div>
+                    @endforeach
+                </div>
+            </div>
+            <div>
+                <h3 class="font-bold">Accent accuracy</h3>
+                <div class="mt-2 space-y-2 text-sm">
+                    <p>British English: <strong>{{ $accentAccuracy['uk'] === null ? 'Not enough practice yet' : $accentAccuracy['uk'].'%' }}</strong></p>
+                    <p>American English: <strong>{{ $accentAccuracy['us'] === null ? 'Not enough practice yet' : $accentAccuracy['us'].'%' }}</strong></p>
+                </div>
+                <h3 class="mt-4 font-bold">Teacher-reviewed speaking</h3>
+                <p class="mt-1 text-sm text-slate-600">{{ $progress['speaking_reviewed'] }} reviewed · {{ $progress['speaking_pending'] }} awaiting review</p>
+                <p class="text-sm text-slate-600">Average teacher score: <strong>{{ $progress['speaking_average_score'] === null ? 'No reviewed recordings' : $progress['speaking_average_score'].'/5' }}</strong></p>
+                <p class="mt-1 text-xs text-slate-500">Teacher scores are human assessments, separate from IPA quiz accuracy.</p>
+            </div>
+        </div>
+        <div class="mt-5 border-t pt-5">
+            <h3 class="font-bold">Recommended practice</h3>
+            <p class="mt-1 text-xs text-slate-500">Recommendations are based on at least three saved IPA quiz attempts per assigned word.</p>
+            @if($weakWords->isNotEmpty())
+                <ul class="mt-3 space-y-2">
+                    @foreach($weakWords as $item)
+                    <li class="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-amber-50 p-3">
+                        <div><a class="font-semibold text-blue-800 underline" href="#phonetics-word-{{ $item['entry_id'] }}">{{ $item['word'] }}</a><p class="text-xs text-slate-600">{{ $item['category'] }} · {{ $item['attempts'] }} attempts</p></div>
+                        <span class="text-sm font-bold">{{ $item['accuracy'] }}% accuracy</span>
+                    </li>
+                    @endforeach
+                </ul>
+            @else
+                <p class="mt-2 text-sm text-slate-600">No weak assigned words identified yet. Complete at least three attempts per word to receive targeted recommendations.</p>
+            @endif
+        </div>
     </section>
 
     @if($challenge)
@@ -42,7 +86,7 @@
 
     <section class="grid gap-4 md:grid-cols-2">
         @forelse($entries as $entry)
-        <article class="rounded-xl border bg-white p-5 shadow-sm">
+        <article id="phonetics-word-{{ $entry->id }}" class="rounded-xl border bg-white p-5 shadow-sm">
             <div class="flex items-start justify-between gap-3"><h2 class="text-xl font-extrabold">{{ $entry->word }}</h2><span class="rounded-full bg-slate-100 px-3 py-1 text-xs">{{ $entry->category }}</span></div>
             <div class="mt-4 grid grid-cols-2 gap-3">
                 <div class="rounded-lg bg-slate-50 p-3"><b>British English</b><p class="mt-1 text-lg">{{ $entry->uk_ipa }}</p>@if($entry->uk_audio_url)<audio class="mt-2 w-full" controls preload="none" src="{{ $entry->uk_audio_url }}"></audio>@endif@if($setting->show_articulatory_notes)<p class="mt-2 text-xs">{{ $entry->uk_note }}</p>@endif</div>
