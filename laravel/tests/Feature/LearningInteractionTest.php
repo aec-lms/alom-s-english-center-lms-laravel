@@ -76,7 +76,22 @@ class LearningInteractionTest extends TestCase
     public function test_assigned_instructor_can_answer_without_consuming_a_student_seat(): void
     {
         [$student, $courseId] = $this->createCourseLesson('active');
+        $this->activatePlugins(['course-management', 'teacher-management']);
         $teacher = $this->createUserWithRole('teacher');
+        Teacher::query()->create([
+            'user_id' => $teacher->id,
+            'branch_id' => $teacher->branch_id,
+            'employee_code' => 'LIVE-' . $teacher->id . '-' . bin2hex(random_bytes(3)),
+            'specialization' => 'English',
+            'is_active' => true,
+        ]);
+        DB::table('course_teacher_assignments')->insert([
+            'course_id' => $courseId,
+            'teacher_user_id' => $teacher->id,
+            'assigned_by' => $teacher->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
         $liveClassId = $this->createLiveClass($courseId, $teacher->name);
 
         $this->actingAs($student)->postJson(route('plugins.learning-interactions.live.questions.store', $liveClassId), ['body' => 'What is the correct form?'])
