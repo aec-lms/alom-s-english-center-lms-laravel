@@ -26,18 +26,15 @@ final class TeacherProfileValidationTest extends TestCase
         });
 
         try {
-            try {
-                $this->actingAs($admin)->post('/admin/teachers', [
-                    'name' => 'Audit Failure Teacher',
-                    'email' => 'audit.failure.teacher@aec.test',
-                    'employee_code' => 'AUDIT-FAIL-TEACHER-001',
-                    'specialization' => 'English Grammar',
-                    'is_active' => '1',
-                ]);
-                $this->fail('Teacher creation must fail when required audit storage fails.');
-            } catch (\RuntimeException $exception) {
-                $this->assertSame('forced teacher audit failure', $exception->getMessage());
-            }
+            // The HTTP kernel converts the model-event exception into a 500.
+            // Assert the externally observable failure and rollback.
+            $this->actingAs($admin)->post('/admin/teachers', [
+                'name' => 'Audit Failure Teacher',
+                'email' => 'audit.failure.teacher@aec.test',
+                'employee_code' => 'AUDIT-FAIL-TEACHER-001',
+                'specialization' => 'English Grammar',
+                'is_active' => '1',
+            ])->assertServerError();
         } finally {
             AuditLog::flushEventListeners();
         }
