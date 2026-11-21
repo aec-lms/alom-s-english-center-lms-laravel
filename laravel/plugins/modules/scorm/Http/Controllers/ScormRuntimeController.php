@@ -13,7 +13,8 @@ use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\View\View;
 use Plugins\Modules\Scorm\Services\Scorm12Runtime;
-use RuntimeException;
+use InvalidArgumentException;
+use Symfony\\Component\\HttpKernel\\Exception\\HttpExceptionInterface;
 use Symfony\Component\HttpFoundation\Response;
 
 class ScormRuntimeController extends Controller
@@ -292,7 +293,7 @@ class ScormRuntimeController extends Controller
 
                 foreach ($validated['data'] as $element => $value) {
                     if (!is_string($element) || !is_string($value) || $runtime->setValue($element, $value) !== 'true') {
-                        throw new RuntimeException('SCORM runtime rejected a data-model value: ' . (is_string($element) ? $element : 'invalid-key') . ' (error ' . $runtime->getLastError() . ').');
+                        throw new InvalidArgumentException('SCORM runtime rejected a data-model value: ' . (is_string($element) ? $element : 'invalid-key') . ' (error ' . $runtime->getLastError() . ').');
                     }
                 }
 
@@ -335,7 +336,10 @@ class ScormRuntimeController extends Controller
             });
 
             return response()->json(['ok' => true] + $result)->withHeaders($this->corsHeaders($request));
-        } catch (RuntimeException $exception) {
+        } catch (HttpExceptionInterface $exception) {
+            return response()->json(['ok' => false, 'message' => $exception->getMessage()], $exception->getStatusCode())
+                ->withHeaders($this->corsHeaders($request));
+        } catch (InvalidArgumentException $exception) {
             return response()->json(['ok' => false, 'message' => $exception->getMessage()], 422)
                 ->withHeaders($this->corsHeaders($request));
         }
@@ -377,7 +381,7 @@ class ScormRuntimeController extends Controller
             if (!Schema::hasTable('fee_invoices') || !$enrollment->invoice_id) {
                 return null;
             }
-            $invoice = DB::table('fee_invoices')->where('id', $enrollment->invoice_id)->first();
+            $invoice = DB::table('fee_invoices')->where('id', $enrollment->invoice_id)->lockForUpdate()->first();
             if (!$invoice || $invoice->status !== 'paid'
                 || (float) $invoice->paid_amount + 0.01 < (float) $invoice->net_amount) {
                 return null;
@@ -411,21 +415,22 @@ class ScormRuntimeController extends Controller
      */
     private function assertAttemptEntitled(object $attempt): array
     {
-        $user = DB::table('users')->where('id', $attempt->user_id)->first();
+        $user = DB::table('users')->where('id', $attempt->user_id)->lockForUpdate()->first();
         abort_unless($user && (bool) $user->is_active, 403, 'Student account is inactive.');
 
         $studentRole = DB::table('role_user')
             ->join('roles', 'roles.id', '=', 'role_user.role_id')
             ->where('role_user.user_id', $user->id)
             ->where('roles.slug', 'student')
+            ->lockForUpdate()
             ->exists();
         abort_unless($studentRole, 403, 'Current student role is required.');
 
-        $enrollment = DB::table('enrollments')->where('id', $attempt->enrollment_id)->first();
+        $enrollment = DB::table('enrollments')->where('id', $attempt->enrollment_id)->lockForUpdate()->first();
         abort_unless($enrollment && (int) $enrollment->user_id === (int) $user->id
             && in_array($enrollment->status, ['active', 'completed'], true), 403, 'Course enrollment is no longer eligible.');
 
-        $course = DB::table('courses')->where('id', $enrollment->course_id)->first();
+        $course = DB::table('courses')->where('id', $enrollment->course_id)->lockForUpdate()->first();
         abort_unless($course && $course->status === 'published', 403, 'Course is no longer published.');
         if ($user->branch_id !== null && $course->branch_id !== null) {
             abort_unless((int) $user->branch_id === (int) $course->branch_id, 403, 'Course is outside the student branch.');
@@ -434,7 +439,7 @@ class ScormRuntimeController extends Controller
             abort_unless((int) $enrollment->branch_id === (int) $user->branch_id, 403, 'Enrollment is outside the student branch.');
         }
 
-        $package = DB::table('scorm_packages')->where('id', $attempt->scorm_package_id)->first();
+        $package = DB::table('scorm_packages')->where('id', $attempt->scorm_package_id)->lockForUpdate()->first();
         abort_unless($package && $package->status === 'published'
             && (int) $package->course_id === (int) $course->id, 403, 'SCORM package is no longer available.');
         if ($package->branch_id !== null) {
@@ -496,7 +501,7 @@ class ScormRuntimeController extends Controller
     private function parseScormTime(string $value): int
     {
         if (preg_match('/^(\d{4}):([0-5]\d):([0-5]\d)(?:\.(\d{1,2}))?$/', $value, $matches) !== 1) {
-            throw new RuntimeException('SCORM session time has an invalid format.');
+            throw new InvalidArgumentException('SCORM session time has an invalid format.');
         }
 
         return ((int) $matches[1] * 3600) + ((int) $matches[2] * 60) + (int) $matches[3];
