@@ -37,7 +37,7 @@ class ScormPluginAdminTest extends TestCase
         $path = tempnam(sys_get_temp_dir(), 'aec-scorm-admin-');
         $zip = new ZipArchive();
         $zip->open($path, ZipArchive::CREATE | ZipArchive::OVERWRITE);
-        $zip->addFromString('imsmanifest.xml', '<?xml version="1.0"?><manifest xmlns="http://www.imsproject.org/xsd/imscp_rootv1p1p2"><organizations><organization><title>Admin Imported English Unit</title><item identifier="ITEM" identifierref="RES"/></organization></organizations><resources><resource identifier="RES" type="webcontent" href="index.html"/></resources></manifest>');
+        $zip->addFromString('imsmanifest.xml', '<?xml version="1.0"?><manifest xmlns="http://www.imsproject.org/xsd/imscp_rootv1p1p2" xmlns:adlcp="http://www.adlnet.org/xsd/adlcp_rootv1p2"><organizations><organization><title>Admin Imported English Unit</title><item identifier="ITEM" identifierref="RES"/></organization></organizations><resources><resource identifier="RES" type="webcontent" adlcp:scormtype="sco" href="index.html"/></resources></manifest>');
         $zip->addFromString('index.html', '<title>SCORM unit</title>');
         $zip->close();
 
