@@ -212,6 +212,56 @@ class StudentManagementProvisioningSecurityTest extends TestCase
         $this->assertSame(1, Student::query()->count());
     }
 
+    public function test_explicit_student_code_unique_index_race_returns_validation_error_and_rolls_back(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['student-management']);
+        $admin = $this->createUserWithRole('admin');
+        $dispatcher = Student::getEventDispatcher();
+        $event = 'eloquent.creating: ' . Student::class;
+        $injected = false;
+
+        $dispatcher->listen($event, function (Student $student) use (&$injected): void {
+            if ($injected || $student->student_code !== 'RACE-CODE-001') {
+                return;
+            }
+
+            $injected = true;
+            Student::withoutEvents(function (): void {
+                $user = \\App\\Models\\User::query()->create([
+                    'name' => 'Concurrent Student',
+                    'email' => 'concurrent.race@aec.test',
+                    'password' => \\Illuminate\\Support\\Facades\\Hash::make('StrongPassword123!'),
+                    'is_active' => true,
+                ]);
+
+                Student::query()->create([
+                    'user_id' => $user->id,
+                    'student_code' => 'RACE-CODE-001',
+                    'admission_date' => now()->toDateString(),
+                    'status' => 'active',
+                ]);
+            });
+        });
+
+        try {
+            $this->actingAs($admin)->post('/admin/students', [
+                'name' => 'Explicit Race Learner',
+                'email' => 'explicit.race@aec.test',
+                'password' => 'StrongPassword123!',
+                'student_code' => 'RACE-CODE-001',
+                'status' => 'active',
+            ])->assertSessionHasErrors('student_code');
+        } finally {
+            $dispatcher->forget($event);
+        }
+
+        $this->assertTrue($injected, 'The test must reach the database insert race after validation.');
+        $this->assertDatabaseMissing('users', ['email' => 'explicit.race@aec.test']);
+        $this->assertDatabaseMissing('users', ['email' => 'concurrent.race@aec.test']);
+        $this->assertDatabaseMissing('students', ['student_code' => 'RACE-CODE-001']);
+    }
+
     public function test_student_account_is_not_created_when_audit_storage_is_unavailable(): void
     {
         $this->markSystemInstalled();
