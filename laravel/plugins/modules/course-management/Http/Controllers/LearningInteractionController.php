@@ -318,6 +318,10 @@ class LearningInteractionController extends Controller
             return false;
         }
 
+        if ($actor->hasRole('admin')) {
+            return $actor->hasPermission('courses.manage');
+        }
+
         if ($actor->hasRole('branch_manager')) {
             return $actor->hasPermission('courses.manage')
                 && $actor->branch_id !== null
