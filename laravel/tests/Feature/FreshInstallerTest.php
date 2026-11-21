@@ -584,6 +584,7 @@ class FreshInstallerTest extends TestCase
         $symlinkDirectory = sys_get_temp_dir() . '/aec-installer-lock-link-' . uniqid('', true);
         $mutexDirectory = sys_get_temp_dir() . '/aec-installer-mutex-dir-' . uniqid('', true);
         $mutexTarget = sys_get_temp_dir() . '/aec-installer-mutex-target-' . uniqid('', true);
+        $hardLinkTarget = sys_get_temp_dir() . '/aec-installer-hardlink-target-' . uniqid('', true);
 
         mkdir($targetDirectory, 0700, true);
         mkdir($mutexDirectory, 0700, true);
@@ -612,10 +613,35 @@ class FreshInstallerTest extends TestCase
             }
 
             $this->assertSame('do-not-modify', file_get_contents($mutexTarget));
+
+            // A hard-linked mutex inode is also unsafe: another path could share
+            // the lock file and bypass the intended single-inode serialization.
+            @unlink($mutexPath);
+            file_put_contents($hardLinkTarget, 'preserve-hardlink-target');
+            $this->assertTrue(link($hardLinkTarget, $mutexPath));
+            try {
+                app(FreshInstallerService::class)->installFresh([]);
+                $this->fail('Installer accepted a hard-linked mutex file.');
+            } catch (RuntimeException $exception) {
+                $this->assertStringContainsString('non-linked file', $exception->getMessage());
+            }
+            $this->assertSame('preserve-hardlink-target', file_get_contents($hardLinkTarget));
+
+            // A pre-existing ordinary mutex file is valid and must not be truncated.
+            @unlink($mutexPath);
+            file_put_contents($mutexPath, 'preserve-existing-mutex');
+            try {
+                app(FreshInstallerService::class)->installFresh([]);
+                $this->fail('Installer unexpectedly passed invalid install configuration.');
+            } catch (RuntimeException $exception) {
+                $this->assertStringContainsString('Application name is required', $exception->getMessage());
+            }
+            $this->assertSame('preserve-existing-mutex', file_get_contents($mutexPath));
         } finally {
             @unlink($symlinkDirectory);
             @unlink($mutexDirectory . '/installed.lock.mutex');
             @unlink($mutexTarget);
+            @unlink($hardLinkTarget);
             @rmdir($targetDirectory);
             @rmdir($mutexDirectory);
             config(['lms.install_lock_path' => $this->tempLockPath]);
