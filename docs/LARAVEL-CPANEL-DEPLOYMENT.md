@@ -41,6 +41,19 @@ Open `https://YOUR-DOMAIN/install` in a browser. The installer checks PHP 8.3+, 
 
 Enter the application name, HTTPS URL, initial Admin name/email and a strong password in the installer form. The installer generates and privately persists the application, plugin-signing and backup-encryption keys, runs the core migrations, creates the Admin account and writes a permanent installation lock. After installation, `/install` is locked. Never remove the lock or run a fresh install against an existing database.
 
+## 4.1 Interrupted fresh-install recovery
+
+The installer uses a persistent OS-managed mutex file (`installed.lock.mutex`) and an atomic progress marker (`installed.lock.in-progress`). The mutex is held through migrations, core seeding, Admin creation, settings persistence and the final installed marker. The operating system releases the `flock()` lock automatically if a PHP worker exits; the mutex file itself may remain and is safe to reuse.
+
+The progress marker records the last installation phase. It is diagnostic state, not proof that the LMS is installed:
+
+- **Database still empty:** if an attempt stopped before any tables were created, the next installer request rechecks the database while holding the mutex, clears the stale progress marker and safely retries.
+- **Database contains tables but no final installed marker:** the installer refuses an in-place retry and retains the progress marker. This can happen when MySQL has committed some DDL before a migration or seeder failure. Do not delete the marker, drop/truncate tables, or repeatedly submit the installer form.
+- **Safe operator recovery:** first take and retain a backup of the partial staging database and any relevant private files/logs. Create a separate, completely empty database and dedicated DB user in cPanel, update the private application `.env` to point to that new database, and retry installation. Keep the original partial database untouched until its contents have been reviewed and any needed data has been recovered. The installer intentionally does not attempt destructive automatic cleanup or resumable seeding against an unknown partial schema.
+- **Final installed marker exists:** the installation is complete and `/install` must remain locked. Never remove `installed.lock` to force a fresh install on an existing database.
+
+Do not expose, manually edit, or place the mutex/progress marker in the public document root. If recovery is unclear, stop and preserve the database and logs for maintainer review.
+
 ## 5. Post-install verification
 
 - Sign in with the initial Admin account.
