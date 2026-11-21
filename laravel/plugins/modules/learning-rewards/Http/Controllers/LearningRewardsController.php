@@ -54,6 +54,14 @@ class LearningRewardsController extends Controller
             // and users who have not chosen public visibility stay private.
             ->where('profiles.leaderboard_opt_out', false)
             ->where('profiles.profile_public', true)
+            ->where('users.is_active', true)
+            ->whereExists(function ($roles): void {
+                $roles->selectRaw('1')
+                    ->from('role_user')
+                    ->join('roles', 'roles.id', '=', 'role_user.role_id')
+                    ->whereColumn('role_user.user_id', 'users.id')
+                    ->where('roles.slug', 'student');
+            })
             ->when($branchId !== null, fn ($q) => $q->where('ledger.branch_id', $branchId), fn ($q) => $q->whereNull('ledger.branch_id'))
             ->when($start !== null, fn ($q) => $q->where('ledger.awarded_at', '>=', $start))
             ->selectRaw('users.id as user_id, users.name as student_name, SUM(ledger.points) as points')
