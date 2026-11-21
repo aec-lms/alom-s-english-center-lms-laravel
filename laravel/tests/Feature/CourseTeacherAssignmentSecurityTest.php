@@ -53,6 +53,7 @@ final class CourseTeacherAssignmentSecurityTest extends TestCase
         $admin = $this->createUserWithRole('admin');
         $inactiveAdmin = $this->createUserWithRole('admin');
         $teacher = $this->createUserWithRole('teacher');
+        $this->createTeacherProfile($teacher);
         $course = Course::query()->create([
             'code' => 'INACTIVE-ACTOR-COURSE',
             'title' => 'Inactive Actor Assignment Course',
@@ -120,6 +121,7 @@ final class CourseTeacherAssignmentSecurityTest extends TestCase
 
         $admin = $this->createUserWithRole('admin');
         $teacher = $this->createUserWithRole('teacher');
+        $this->createTeacherProfile($teacher);
         $course = Course::query()->create([
             'code' => 'ACTIVE-TEACHER-COURSE',
             'title' => 'Active Teacher Assignment Course',
@@ -154,6 +156,7 @@ final class CourseTeacherAssignmentSecurityTest extends TestCase
         $this->activatePlugins(['course-management', 'teacher-management']);
         $admin = $this->createUserWithRole('admin');
         $teacher = $this->createUserWithRole('teacher');
+        $this->createTeacherProfile($teacher);
 
         $firstCourse = Course::query()->create([
             'code' => 'TEACHER-RACE-COURSE-1',
@@ -237,6 +240,7 @@ final class CourseTeacherAssignmentSecurityTest extends TestCase
         $this->activatePlugins(['course-management', 'teacher-management']);
         $admin = $this->createUserWithRole('admin');
         $teacher = $this->createUserWithRole('teacher');
+        $this->createTeacherProfile($teacher);
         $teacherRoleId = (int) DB::table('roles')->where('slug', 'teacher')->value('id');
         $this->assertGreaterThan(0, $teacherRoleId);
 
@@ -462,6 +466,18 @@ final class CourseTeacherAssignmentSecurityTest extends TestCase
         ]);
 
         return [$course, $liveClass, $questionId];
+    }
+
+
+    private function createTeacherProfile(object $teacher): Teacher
+    {
+        return Teacher::query()->create([
+            'user_id' => $teacher->id,
+            'branch_id' => $teacher->branch_id,
+            'employee_code' => 'ASSIGN-' . $teacher->id . '-' . bin2hex(random_bytes(3)),
+            'specialization' => 'English',
+            'is_active' => true,
+        ]);
     }
 
 }
