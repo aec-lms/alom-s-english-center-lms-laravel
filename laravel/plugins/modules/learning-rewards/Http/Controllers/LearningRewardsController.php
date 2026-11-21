@@ -17,8 +17,7 @@ class LearningRewardsController extends Controller
 {
     public function dashboard(Request $request): View
     {
-        $student = $request->user();
-        abort_unless($student && $student->hasRole('student'), 403);
+        $student = $this->currentActiveStudent($request);
         $points = (int) DB::table('learning_reward_ledger')->where('user_id', $student->id)->sum('points');
         $streak = DB::table('learning_reward_streaks')->where('user_id', $student->id)->first();
         $badges = DB::table('learning_reward_user_badges as owned')
@@ -35,8 +34,7 @@ class LearningRewardsController extends Controller
 
     public function leaderboard(Request $request): View
     {
-        $student = $request->user();
-        abort_unless($student && $student->hasRole('student'), 403);
+        $student = $this->currentActiveStudent($request);
         $period = $request->query('period', 'month');
         abort_unless(in_array($period, ['week', 'month', 'all'], true), 404);
         $timezone = (string) config('app.timezone', 'Asia/Dhaka');
@@ -94,8 +92,7 @@ class LearningRewardsController extends Controller
 
     public function updatePrivacy(Request $request, AuditLogger $audit): RedirectResponse
     {
-        $student = $request->user();
-        abort_unless($student && $student->hasRole('student'), 403);
+        $student = $this->currentActiveStudent($request);
         $data = $request->validate([
             'leaderboard_opt_out' => ['required', 'boolean'],
             'profile_public' => ['required', 'boolean'],
@@ -164,6 +161,59 @@ class LearningRewardsController extends Controller
         });
 
         return back()->with('status', 'Learning reward rules updated.');
+    }
+
+    /**
+     * Re-read the authenticated learner's persisted account and RBAC state.
+     * Cached Eloquent role relations must not keep an inactive/revoked learner
+     * authorized for private reward records or leaderboard preferences.
+     */
+    private function currentActiveStudent(Request $request): object
+    {
+        $actor = $request->user();
+        abort_unless($actor, 403, 'An active student account is required.');
+
+        $user = DB::table('users')->where('id', (int) $actor->id)->first();
+        abort_unless($user !== null, 403, 'Student account is no longer available.');
+        if (Schema::hasColumn('users', 'is_active')) {
+            abort_unless((bool) $user->is_active, 403, 'Inactive student accounts cannot access learning rewards.');
+        }
+
+        abort_unless(Schema::hasTable('roles') && Schema::hasTable('role_user'), 503, 'Student role authorization storage is unavailable.');
+        $studentRoleId = DB::table('roles')->where('slug', 'student')->value('id');
+        abort_unless($studentRoleId !== null, 503, 'Student role is not configured.');
+        abort_unless(
+            DB::table('role_user')
+                ->where('user_id', (int) $user->id)
+                ->where('role_id', $studentRoleId)
+                ->exists(),
+            403,
+            'An active student role is required.'
+        );
+
+        if (app(PluginManager::class)->isEnabled('student-management')) {
+            abort_unless(Schema::hasTable('students') && Schema::hasColumn('students', 'user_id'), 503, 'Student profile storage is unavailable.');
+            $profile = DB::table('students')->where('user_id', (int) $user->id)->first();
+            abort_unless($profile !== null, 403, 'An active student profile is required.');
+            if (Schema::hasColumn('students', 'deleted_at')) {
+                abort_unless($profile->deleted_at === null, 403, 'Deleted student profiles cannot access learning rewards.');
+            }
+            if (Schema::hasColumn('students', 'status')) {
+                abort_unless($profile->status === 'active', 403, 'Inactive student profiles cannot access learning rewards.');
+            }
+            if (Schema::hasColumn('students', 'branch_id')
+                && $profile->branch_id !== null
+                && Schema::hasColumn('users', 'branch_id')
+                && $user->branch_id !== null) {
+                abort_unless(
+                    (int) $profile->branch_id === (int) $user->branch_id,
+                    403,
+                    'Student account and profile branch assignments do not match.'
+                );
+            }
+        }
+
+        return $user;
     }
 
     private function resolveStudentBranch(object $student): ?int
