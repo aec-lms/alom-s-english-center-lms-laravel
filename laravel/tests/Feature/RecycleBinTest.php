@@ -24,14 +24,15 @@ class RecycleBinTest extends TestCase
     {
         $this->markSystemInstalled();
         $this->activatePlugins(['admin-boosting']);
-        $manager = app(PluginManager::class);
+        $manager = \\Mockery::mock(app(PluginManager::class))
+            ->makePartial()
+            ->shouldAllowMockingProtectedMethods();
+        $manager->shouldReceive('writePrivateFileExclusive')->once()->andReturn(1);
         $modulesRoot = (string) config('plugins.modules_path');
         $pluginPath = rtrim($modulesRoot, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'admin-boosting';
         $this->assertDirectoryExists($pluginPath);
         $this->assertTrue($manager->isInstalled('admin-boosting'));
         $this->assertTrue($manager->isEnabled('admin-boosting'));
-
-        File::partialMock()->shouldReceive('put')->once()->andReturn(1);
 
         try {
             $manager->deleteToRecycleBin('admin-boosting');
