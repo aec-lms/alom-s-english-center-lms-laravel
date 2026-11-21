@@ -159,26 +159,9 @@ class PortalController extends Controller
                     ->values()
                 : collect();
 
-            if (Schema::hasTable('courses')) {
+            if ($assignedCourseIds->isNotEmpty() && Schema::hasTable('courses')) {
                 $courses = DB::table('courses')
-                    ->where(function ($query) use ($assignedCourseIds, $user): void {
-                        if ($assignedCourseIds->isNotEmpty()) {
-                            $query->whereIn('courses.id', $assignedCourseIds);
-                        }
-                        // Keep unclaimed legacy courses visible during migration,
-                        // but never let an editable instructor name override an
-                        // explicit assignment belonging to another teacher.
-                        $query->orWhere(function ($legacy) use ($user): void {
-                            $legacy->where('courses.instructor_name', $user->name);
-                            if (Schema::hasTable('course_teacher_assignments')) {
-                                $legacy->whereNotExists(function ($assignments): void {
-                                    $assignments->selectRaw('1')
-                                        ->from('course_teacher_assignments')
-                                        ->whereColumn('course_teacher_assignments.course_id', 'courses.id');
-                                });
-                            }
-                        });
-                    })
+                    ->whereIn('id', $assignedCourseIds)
                     ->when($branchId !== null, fn ($query) => $query->where('branch_id', $branchId))
                     ->orderBy('title')
                     ->get();
