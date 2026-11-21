@@ -586,4 +586,99 @@ class LearningRewardsPluginTest extends TestCase
         }
     }
 
+
+    public function test_mysql_branch_reassignment_waits_for_reward_award_and_ledger_uses_committed_branch(): void
+    {
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            $this->markTestSkipped('Branch reassignment/reward serialization requires MySQL 8.');
+        }
+
+        $this->markSystemInstalled();
+        $this->activatePlugins(['learning-rewards', 'student-management', 'branch-management']);
+
+        $branchA = DB::table('branches')->insertGetId([
+            'code' => 'REWARD-BRANCH-A-' . strtoupper(bin2hex(random_bytes(3))),
+            'name' => 'Reward Branch A',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $branchB = DB::table('branches')->insertGetId([
+            'code' => 'REWARD-BRANCH-B-' . strtoupper(bin2hex(random_bytes(3))),
+            'name' => 'Reward Branch B',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $student = $this->createUserWithRole('student', (int) $branchA);
+        DB::table('students')->insert([
+            'user_id' => $student->id,
+            'branch_id' => $branchA,
+            'student_code' => 'REWARD-BRANCH-' . strtoupper(bin2hex(random_bytes(3))),
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $primaryName = DB::getDefaultConnection();
+        $primary = DB::connection($primaryName);
+        $secondaryName = 'learning_reward_branch_' . bin2hex(random_bytes(3));
+        config(['database.connections.' . $secondaryName => config('database.connections.' . $primaryName)]);
+        DB::purge($secondaryName);
+        $secondary = DB::connection($secondaryName);
+        $secondary->statement('SET SESSION innodb_lock_wait_timeout = 1');
+
+        $primary->beginTransaction();
+        try {
+            // Mirror Student Management's canonical account -> role -> profile order.
+            $primary->table('users')->where('id', $student->id)->lockForUpdate()->first();
+            $primary->table('role_user')->where('user_id', $student->id)->orderBy('role_id')->lockForUpdate()->get();
+            $primary->table('students')->where('user_id', $student->id)->lockForUpdate()->first();
+            $primary->table('users')->where('id', $student->id)->update(['branch_id' => $branchB, 'updated_at' => now()]);
+            $primary->table('students')->where('user_id', $student->id)->update(['branch_id' => $branchB, 'updated_at' => now()]);
+
+            DB::setDefaultConnection($secondaryName);
+            try {
+                app(LearningRewardsService::class)->awardVerifiedActivity(
+                    (int) $student->id,
+                    'lesson_completed',
+                    'course_lesson',
+                    99001,
+                );
+                $this->fail('A reward award must wait while the Student Management branch reassignment owns the account/profile locks.');
+            } catch (\Illuminate\Database\QueryException $exception) {
+                $this->assertSame(1205, (int) ($exception->errorInfo[1] ?? 0), $exception->getMessage());
+            }
+
+            DB::setDefaultConnection($primaryName);
+            $primary->commit();
+
+            DB::setDefaultConnection($secondaryName);
+            $result = app(LearningRewardsService::class)->awardVerifiedActivity(
+                (int) $student->id,
+                'lesson_completed',
+                'course_lesson',
+                99001,
+            );
+            $this->assertFalse($result['duplicate']);
+            $this->assertDatabaseHas('learning_reward_ledger', [
+                'id' => $result['ledger_id'],
+                'user_id' => $student->id,
+                'branch_id' => $branchB,
+                'source_id' => 99001,
+            ]);
+        } catch (\Throwable $exception) {
+            if ($primary->transactionLevel() > 0) {
+                $primary->rollBack();
+            }
+            throw $exception;
+        } finally {
+            DB::setDefaultConnection($primaryName);
+            DB::purge($secondaryName);
+        }
+    }
+
+
 }
