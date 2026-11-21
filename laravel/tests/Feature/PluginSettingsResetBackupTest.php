@@ -8,6 +8,7 @@ use App\Core\Plugins\PluginManager;
 use App\Models\AuditLog;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\File;
+use RuntimeException;
 use Tests\TestCase;
 
 class PluginSettingsResetBackupTest extends TestCase
