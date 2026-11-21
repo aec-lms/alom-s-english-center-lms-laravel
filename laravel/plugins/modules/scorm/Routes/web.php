@@ -27,14 +27,14 @@ $contentHost = parse_url((string) config('scorm.content_origin', ''), PHP_URL_HO
 $appHost = parse_url((string) config('app.url'), PHP_URL_HOST);
 
 if (is_string($playerHost) && $playerHost !== '' && $playerHost !== $appHost && $playerHost !== $contentHost) {
-    Route::domain($playerHost)->middleware(['installed', 'plugin:scorm'])->group(function (): void {
+    Route::domain($playerHost)->middleware(['web', 'installed', 'plugin:scorm'])->group(function (): void {
         Route::get('/scorm-player/{attempt}/{token}', [ScormRuntimeController::class, 'contentPlayer'])
             ->whereNumber('attempt')->name('plugins.scorm.content.player')->middleware('signed');
     });
 }
 
 if (is_string($contentHost) && $contentHost !== '' && $contentHost !== $appHost && $contentHost !== $playerHost) {
-    Route::domain($contentHost)->middleware(['installed', 'plugin:scorm'])->group(function (): void {
+    Route::domain($contentHost)->middleware(['web', 'installed', 'plugin:scorm'])->group(function (): void {
         // Token is accepted only by the bootstrap route. It is exchanged for an
         // HttpOnly, host-only cookie and then removed from the visible SCO URL.
         Route::get('/scorm-bootstrap/{attempt}/{token}/{path?}', [ScormRuntimeController::class, 'contentBootstrap'])
