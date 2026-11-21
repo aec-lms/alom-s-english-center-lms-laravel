@@ -89,3 +89,36 @@ The historical snapshot above is retained for audit history. The following is th
 
 **Merge discipline:** a green workflow is necessary, not sufficient. Keep Draft while a current-head Request Changes, missing human acceptance evidence, missing independent approval, stale ownership state or external financial/provider gate remains. Never dismiss another reviewer's request on their behalf.
 
+
+
+## Full-system red-team checkpoint — 2026-11-21
+
+**Snapshot basis:** current `main` was recursively inventoried; 60 plugin manifests were found under `laravel/plugins/modules`. Open issue and PR state was fetched from GitHub. This is a source/repository audit, not production penetration-test certification.
+
+### Core LMS / cross-cutting risks
+1. **Branch protection (#242):** repository LMS ruleset is disabled. Independent approval and required checks are not enforced; repository admin must enable the ruleset and configure required status checks.
+2. **Authorization TOCTOU:** security-sensitive mutations must re-read active account, persisted roles/permissions and branch assignment under the same transaction/lock that performs the mutation. Request-time authorization alone is insufficient.
+3. **Financial consistency (#301–#303):** require invoice session reservation, provider idempotency, signed callback verification, immutable ledger entries, partial/full refund limits, and replay/out-of-order reconciliation under MySQL 8 concurrency.
+4. **Course assessment (#304–#305):** student and teacher authorization must be revalidated against current role/account and branch ownership for web/API and grading mutations.
+5. **Exam integrity (#308):** attempt content/eligibility must be immutable and serialized against concurrent start, submission, expiry and source changes.
+6. **Live class (#309):** entitlement and seat capacity must be serialized against concurrent enrollment/cancellation and account/branch changes; the 300+ participant run is an external load gate.
+7. **Release/deployment (#14):** clean cPanel install/upgrade/rollback, production-sized backup restore and payment/provider sandbox validation require owner-controlled staging credentials and infrastructure.
+8. **Spoken English / Phonetics (#289–#290):** audio/recording, browser permissions, retention, privacy, mobile and external provider evidence remain separate acceptance gates.
+9. **Flash Sale (#335):** pricing, cart, enrollment, coupon/discount stacking and refund interactions require integrated tests; separate branches must not be merged without a combined mainline run.
+10. **Plugin acceptance (#300):** all 60 modules need evidence per gate (source, routes, permission, database, UI, tests, integration, failure/recovery), not merely a lifecycle test or manifest.
+
+### Current PR integration risks
+- Multiple active PRs are based on old commits and are diverged from current main. The five course/assessment/live-class/flash-sale branches #343–#347 compared against the then-current main were each behind by 80–98 commits and ahead by 7–20 commits.
+- #341 and #342 payment branches were diverged (14 and 45 commits ahead respectively, 98 behind at comparison time); #332 and #339 were also behind 98 commits.
+- #336 is especially stale (38 ahead / 648 behind at comparison time) and overlaps Flash Sale/cart/course-commerce files. Do not merge it by changing only the base pointer.
+- #355/#356/#354 documentation branches also require exact-head CI and review after current mainline updates.
+- #359 teacher-assignment security work must be reconciled with #357, which owns the shared teacher lifecycle controller and profile validation tests.
+
+### Focused plugin fixes / findings
+- PR #341 has a Stripe immediate-success webhook state mismatch and PayPal browser-cancel reconciliation gap recorded as blocking review findings.
+- PR #363 is a focused correction for unverified SSLCOMMERZ browser fail/cancel callbacks; keep it unaccepted until exact-head SQLite, MySQL 8, Browser E2E and Composer checks pass.
+- `gateway-card` is intentionally disabled without a configured acquirer adapter; no production card processing capability is claimed.
+- The repository's plugin matrix is a coverage map only. It is not proof of 60 completed functional acceptances.
+
+### Required proof before closure
+For each issue/PR: exact current head SHA; diff against current main; formal independent review; all applicable SQLite + MySQL 8 + Browser E2E + Composer Security + package checks; focused negative and concurrency tests; resolved review threads; and any external sandbox/staging/load-test sign-off. Keep issues open where evidence is missing. Do not close issues or merge PRs on a green badge alone.
