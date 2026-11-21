@@ -234,10 +234,10 @@ class LearningPathController extends Controller
         abort_unless($student && $student->hasRole('student'), 403, 'Student accounts only.');
         abort_unless((bool) $student->is_active, 403, 'An active student account is required.');
         $this->ensureCourses();
-        $studentBranchId = $this->learningPathAccess->resolveStudentBranch((int) $student->id);
 
-        DB::transaction(function () use ($student, $studentBranchId, $slug): void {
+        DB::transaction(function () use ($student, $slug): void {
             DB::table('users')->where('id', $student->id)->lockForUpdate()->first();
+            $studentBranchId = $this->learningPathAccess->resolveStudentBranch((int) $student->id);
             $path = DB::table('learning_paths')->where('slug', $slug)->where('status', 'published')->lockForUpdate()->first();
             abort_unless($path, 404);
             if ($path->branch_id !== null) {
