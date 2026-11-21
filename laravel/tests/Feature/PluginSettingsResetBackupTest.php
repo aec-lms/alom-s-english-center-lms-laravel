@@ -12,7 +12,7 @@ use Tests\TestCase;
 class PluginSettingsResetBackupTest extends TestCase
 {
 
-    public function test_reset_keeps_existing_settings_when_recovery_backup_write_fails(): void
+    public function test_reset_keeps_existing_settings_when_recovery_directory_preparation_fails(): void
     {
         $this->markSystemInstalled();
         $this->activatePlugins(['gateway-sslcommerz']);
@@ -24,18 +24,47 @@ class PluginSettingsResetBackupTest extends TestCase
             'sandbox_mode' => '0',
         ], ['store_id', 'store_password']);
 
-        File::partialMock()->shouldReceive('put')->once()->andReturn(false);
+        File::partialMock()->shouldReceive('ensureDirectoryExists')->once()->andThrow(new \\RuntimeException('simulated recovery directory failure'));
 
         try {
             $manager->resetSettingsToDefaults('gateway-sslcommerz');
             $this->fail('Settings reset must stop when the recovery backup cannot be written.');
         } catch (\RuntimeException $exception) {
-            $this->assertStringContainsString('backup could not be written completely', $exception->getMessage());
+            $this->assertStringContainsString('simulated recovery directory failure', $exception->getMessage());
         }
 
         $this->assertSame('AEC-STORE-RECOVERY-001', $manager->getSetting('gateway-sslcommerz', 'store_id'));
         $this->assertSame('recovery-password-secret', $manager->getSetting('gateway-sslcommerz', 'store_password'));
         $this->assertSame('0', $manager->getSetting('gateway-sslcommerz', 'sandbox_mode'));
+    }
+
+    public function test_exclusive_recovery_writer_refuses_symlink_destination_without_touching_target(): void
+    {
+        $manager = app(PluginManager::class);
+        $directory = sys_get_temp_dir() . '/aec-plugin-recovery-' . bin2hex(random_bytes(6));
+        mkdir($directory, 0700, true);
+        $target = $directory . '/outside.txt';
+        $link = $directory . '/recovery.json';
+        file_put_contents($target, 'must remain unchanged');
+        $this->assertTrue(symlink($target, $link));
+
+        try {
+            $writer = new ReflectionMethod(PluginManager::class, 'writePrivateFileExclusive');
+            try {
+                $writer->invoke($manager, $link, '{"secret":"must-not-write"}');
+                $this->fail('Exclusive recovery writer must refuse a pre-existing symlink.');
+            } catch (\\ReflectionException $exception) {
+                throw $exception;
+            } catch (\\RuntimeException $exception) {
+                $this->assertStringContainsString('could not be created exclusively', $exception->getMessage());
+            }
+
+            $this->assertSame('must remain unchanged', file_get_contents($target));
+        } finally {
+            @unlink($link);
+            @unlink($target);
+            @rmdir($directory);
+        }
     }
 
     public function test_admin_reset_restores_manifest_defaults_and_retains_encrypted_private_backup(): void
