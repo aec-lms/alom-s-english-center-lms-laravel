@@ -143,7 +143,7 @@ class ExamAttemptEligibilityLockTest extends TestCase
         $this->assertFalse($unchanged->passed);
     }
 
-    public function test_exam_listing_and_history_fail_closed_for_ineligible_or_conflicting_student_profiles(): void
+    public function test_exam_listing_and_history_respect_the_canonical_active_student_profile(): void
     {
         $this->markSystemInstalled();
         $this->activatePlugins(['branch-management', 'student-management', 'exam-management']);
@@ -159,6 +159,8 @@ class ExamAttemptEligibilityLockTest extends TestCase
             'is_active' => true,
         ]);
 
+        // The student profile is the canonical branch for read-only exam
+        // discovery and history, matching existing LMS enrollment behavior.
         $student = $this->createUserWithRole('student', (int) $branchA->id);
         Student::query()->create([
             'user_id' => $student->id,
@@ -167,59 +169,85 @@ class ExamAttemptEligibilityLockTest extends TestCase
             'admission_date' => now()->toDateString(),
             'status' => 'active',
         ]);
-        [$exam] = $this->createSnapshotFixture();
-        DB::table('exams')->where('id', $exam->id)->update(['branch_id' => $branchA->id]);
+        [$accountExam] = $this->createSnapshotFixture();
+        DB::table('exams')->where('id', $accountExam->id)->update(['branch_id' => $branchA->id]);
+        $profileExam = Exam::query()->create([
+            'branch_id' => $branchB->id,
+            'title' => 'Canonical Profile Branch Exam',
+            'duration_minutes' => 30,
+            'max_attempts' => 2,
+            'pass_marks' => 5,
+            'is_published' => true,
+        ]);
 
         $controller = app(ExamController::class);
-        $assertReadDenied = function () use ($controller, $student, $exam): void {
-            $this->assertControllerAbort(
-                403,
-                fn () => $controller->apiIndex(
-                    $this->studentRequest('GET', '/api/v1/my/exams', $student, [], true)
-                )
-            );
-            $this->assertControllerAbort(
-                403,
-                fn () => $controller->history(
-                    $this->studentRequest('GET', '/exams/' . $exam->id . '/attempts', $student),
-                    $exam->fresh()
-                )
-            );
-        };
+        $list = $controller->apiIndex(
+            $this->studentRequest('GET', '/api/v1/my/exams', $student, [], true)
+        );
+        $titles = array_column($list->getData(true)['data'], 'title');
+        $this->assertContains('Canonical Profile Branch Exam', $titles);
+        $this->assertNotContains('Snapshot Grammar Exam', $titles);
 
-        // Neither read path may choose the profile branch over a conflicting
-        // account branch and expose exams or grades from either identity.
-        $assertReadDenied();
+        $this->assertControllerAbort(
+            403,
+            fn () => $controller->history(
+                $this->studentRequest('GET', '/exams/' . $accountExam->id . '/attempts', $student),
+                $accountExam->fresh()
+            )
+        );
+        $controller->history(
+            $this->studentRequest('GET', '/exams/' . $profileExam->id . '/attempts', $student),
+            $profileExam->fresh()
+        );
 
-        DB::table('students')->where('user_id', $student->id)->update([
-            'branch_id' => $branchA->id,
-            'status' => 'inactive',
-        ]);
-        $assertReadDenied();
+        DB::table('students')->where('user_id', $student->id)->update(['status' => 'inactive']);
+        $this->assertControllerAbort(
+            403,
+            fn () => $controller->apiIndex(
+                $this->studentRequest('GET', '/api/v1/my/exams', $student, [], true)
+            )
+        );
+        $this->assertControllerAbort(
+            403,
+            fn () => $controller->history(
+                $this->studentRequest('GET', '/exams/' . $profileExam->id . '/attempts', $student),
+                $profileExam->fresh()
+            )
+        );
 
         DB::table('students')->where('user_id', $student->id)->update([
             'status' => 'active',
             'deleted_at' => now(),
         ]);
-        $assertReadDenied();
+        $this->assertControllerAbort(
+            403,
+            fn () => $controller->apiIndex(
+                $this->studentRequest('GET', '/api/v1/my/exams', $student, [], true)
+            )
+        );
+        $this->assertControllerAbort(
+            403,
+            fn () => $controller->history(
+                $this->studentRequest('GET', '/exams/' . $profileExam->id . '/attempts', $student),
+                $profileExam->fresh()
+            )
+        );
 
-        // Read paths must re-check persisted authorization even when the
-        // authenticated model has a cached Student role relation.
-        DB::table('students')->where('user_id', $student->id)->update([
-            'deleted_at' => null,
-        ]);
-        $student->load('roles');
-        $studentRoleId = DB::table('roles')->where('slug', 'student')->value('id');
-        $this->assertNotNull($studentRoleId);
-        DB::table('role_user')->where('user_id', $student->id)->where('role_id', $studentRoleId)->delete();
-        $assertReadDenied();
-
-        DB::table('role_user')->where('user_id', $student->id)->where('role_id', $studentRoleId)->insert([
-            'user_id' => $student->id,
-            'role_id' => $studentRoleId,
-        ]);
+        DB::table('students')->where('user_id', $student->id)->update(['deleted_at' => null]);
         DB::table('users')->where('id', $student->id)->update(['is_active' => false]);
-        $assertReadDenied();
+        $this->assertControllerAbort(
+            403,
+            fn () => $controller->apiIndex(
+                $this->studentRequest('GET', '/api/v1/my/exams', $student, [], true)
+            )
+        );
+        $this->assertControllerAbort(
+            403,
+            fn () => $controller->history(
+                $this->studentRequest('GET', '/exams/' . $profileExam->id . '/attempts', $student),
+                $profileExam->fresh()
+            )
+        );
     }
 
     public function test_api_submit_rechecks_student_branch_after_route_preflight(): void
