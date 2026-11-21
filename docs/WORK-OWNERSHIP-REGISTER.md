@@ -342,3 +342,23 @@ The following exact-head observations supersede earlier point-in-time rows for t
 **Shared-file arbitration:** #372 and #374 both modify `laravel/app/Core/Plugins/PluginManager.php` and overlapping feature tests. The coordinator must select one canonical owner/branch before any further shared-file edits. Do not merge either PR until the conflict is resolved and the combined exact-head checks pass.
 
 **External release gates remain open:** #242 (main branch protection) requires repository-admin settings access; #14 requires owner-authorized disposable cPanel/MySQL staging, provider sandbox credentials and authorized 300+ participant validation. These cannot be inferred from GitHub CI and are not marked complete.
+
+### 2026-11-21 live verification refresh (latest observed heads)
+
+This section corrects the earlier point-in-time table above. The older SHA rows and their Draft instructions are historical only; the project-owner Ready-for-Review rule above governs current state. These observations were re-fetched from GitHub during this refresh. CI states are exact-head observations, not acceptance or merge authorization.
+
+| PR | Exact head | Exact-head CI at refresh | Review state / next action |
+|---|---|---|---|
+| #355 | `9cc728977d568f6c97eae44c155ebc412cc647ff` | Composer and Browser E2E passed; Laravel SQLite passed; MySQL 8 running | Prior formal submissions are COMMENTED on an older head; no APPROVED review on current head. Refresh the register after the remaining CI completes. |
+| #361 | `380fc98907dfe2f7d00fd78ba831d6f777187a90` | Composer and Browser E2E passed; Laravel SQLite passed; MySQL 8 running | No formal review submission yet. Obtain independent review after exact-head CI. |
+| #362 | `0f8118f418427becd18e2179a8b64075bd1909b3` | Laravel, Browser E2E and Composer passed | No formal review submission yet. Route-level terminal-state replay regression is present; independent review remains required. |
+| #363 | `311a7ea3705a541aaf0b9c510c66a8f4389f0999` | Composer and Browser E2E passed; Laravel SQLite passed; MySQL 8 running | No formal review submission yet. Browser fail/cancel callback tests preserve pending state; provider reconciliation remains an external gate. |
+| #364 | `9d00fbe380f3ae8cfa70789ccffc592472b10faa` | Laravel, Browser E2E and Composer passed | No formal review submission yet. Red-team inventory is not 60-plugin functional acceptance. |
+| #365 | `4092af8fdcc40261325b92e7d561ee58e59808fc` | Composer and Browser E2E passed; Laravel SQLite passed; MySQL 8 running | No formal review submission yet. Controlled staging restore/rollback and cPanel evidence remain external gates. |
+| #367 | `644bf67fc02c9e2de3a0159f6159ee7cd185cea8` | Composer and Browser E2E passed; Laravel MySQL 8 running; SQLite job cancelled in the current run | No formal review submission yet. The SQLite job could not be rerun while the same workflow run was still active; recheck after the run completes, then rerun if still cancelled. |
+| #372 | `205dd082b1f5df9be378ba1ded9b677092d727a0` | Composer and Browser E2E passed; Laravel SQLite passed; MySQL 8 running | No formal review submission yet. Shared-file overlap with #374 remains; do not merge both. |
+| #374 | `1105a3fb9dd86096a828389be4ea31c7e1106791` | Composer and Browser E2E passed; Laravel SQLite passed; MySQL 8 running | No formal review submission yet. Prefer this branch as the canonical implementation candidate because it centralizes verified private JSON backup writing; port any unique #372 regression coverage before retiring the duplicate implementation. |
+
+**Current integration decision:** #372 and #374 both modify `PluginManager.php` and overlapping reset/recycle-bin tests. #374 is the stronger canonical candidate at this snapshot because its shared helper validates private storage containment, file permissions, regular-file status, complete writes and read-back checksums. Before integration, strengthen the helper against exclusive-create/TOCTOU concerns and preserve the distinct partial-write regression coverage from #372. Re-run the complete SQLite, MySQL 8, Browser E2E and Composer matrix on the final consolidated head, then obtain independent formal approval.
+
+**No completion claim:** none of these PRs is merged or accepted by this checkpoint. Branch protection (#242), provider/cPanel staging and live-class load evidence remain separate release gates.
