@@ -223,13 +223,13 @@ class StudentManagementProvisioningSecurityTest extends TestCase
         $event = 'eloquent.creating: ' . Student::class;
         $injected = false;
 
-        $dispatcher->listen($event, function (Student $student) use (&$injected): void {
+        $dispatcher->listen($event, function ($student) use (&$injected) {
             if ($injected || $student->student_code !== 'RACE-CODE-001') {
                 return;
             }
 
             $injected = true;
-            Student::withoutEvents(function (): void {
+            Student::withoutEvents(function () {
                 $user = User::query()->create([
                     'name' => 'Concurrent Student',
                     'email' => 'concurrent.race@aec.test',
