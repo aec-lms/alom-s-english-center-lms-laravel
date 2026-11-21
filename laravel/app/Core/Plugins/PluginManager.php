@@ -659,7 +659,7 @@ class PluginManager
             throw new RuntimeException('Recycle-bin metadata destination already exists; the plugin package was returned.');
         }
         $metadataContents = json_encode($metadata, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR);
-        $written = File::put($metadataPath, $metadataContents);
+        $written = $this->writePrivateFileExclusive($metadataPath, $metadataContents);
         $metadataChecksum = is_file($metadataPath) && !is_link($metadataPath)
             ? hash_file('sha256', $metadataPath)
             : false;
@@ -1032,7 +1032,7 @@ class PluginManager
                 'created_at' => now()->toIso8601String(),
                 'settings' => $backupRows,
             ], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR);
-            $writtenBytes = File::put($backupPath, $backupContents);
+            $writtenBytes = $this->writePrivateFileExclusive($backupPath, $backupContents);
             if ($writtenBytes !== strlen($backupContents) || !is_file($backupPath) || is_link($backupPath)) {
                 @unlink($backupPath);
                 throw new RuntimeException('Plugin settings recovery backup could not be written completely; reset was cancelled.');
@@ -1349,6 +1349,75 @@ class PluginManager
         }
 
         return $relative;
+    }
+
+    /**
+     * Create a private recovery artifact without following or replacing a path
+     * that may have been substituted with a symlink after a prior existence check.
+     */
+    private function writePrivateFileExclusive(string $path, string $contents): int
+    {
+        $previousUmask = umask(0077);
+        try {
+            $handle = @fopen($path, 'xb');
+        } finally {
+            umask($previousUmask);
+        }
+
+        if ($handle === false) {
+            throw new RuntimeException('Private recovery artifact could not be created exclusively.');
+        }
+
+        $createdStat = fstat($handle);
+        $pathStat = @lstat($path);
+        $sameInode = is_array($createdStat) && is_array($pathStat)
+            && (int) $createdStat['dev'] === (int) $pathStat['dev']
+            && (int) $createdStat['ino'] === (int) $pathStat['ino']
+            && (($pathStat['mode'] & 0170000) === 0100000)
+            && (($pathStat['mode'] & 0077) === 0);
+
+        if (!$sameInode) {
+            fclose($handle);
+            throw new RuntimeException('Private recovery artifact path changed during exclusive creation.');
+        }
+
+        $written = 0;
+        try {
+            $length = strlen($contents);
+            while ($written < $length) {
+                $bytes = fwrite($handle, substr($contents, $written));
+                if ($bytes === false || $bytes === 0) {
+                    throw new RuntimeException('Private recovery artifact could not be written completely.');
+                }
+                $written += $bytes;
+            }
+
+            if (!fflush($handle) || (function_exists('fsync') && !fsync($handle))) {
+                throw new RuntimeException('Private recovery artifact could not be flushed to storage.');
+            }
+
+            $finalStat = @lstat($path);
+            if (!is_array($finalStat)
+                || (int) $finalStat['dev'] !== (int) $createdStat['dev']
+                || (int) $finalStat['ino'] !== (int) $createdStat['ino']
+                || (($finalStat['mode'] & 0170000) !== 0100000)
+                || (($finalStat['mode'] & 0077) !== 0)
+                || $written !== $length) {
+                throw new RuntimeException('Private recovery artifact failed final inode or permission verification.');
+            }
+
+            return $written;
+        } catch (Throwable $exception) {
+            $current = @lstat($path);
+            if (is_array($current)
+                && (int) $current['dev'] === (int) $createdStat['dev']
+                && (int) $current['ino'] === (int) $createdStat['ino']) {
+                @unlink($path);
+            }
+            throw $exception;
+        } finally {
+            fclose($handle);
+        }
     }
 
     private function syncManifestPermissions(PluginManifest $manifest): void
