@@ -310,6 +310,7 @@ class CourseCommercePaymentSettlementTest extends TestCase
 
         DB::table('fee_invoices')->where('id', $invoiceId)->update(['paid_amount' => 1250]);
 
+        // The MySQL branch verifies that the provider-row lock is part of the commission proof.
         if (DB::connection()->getDriverName() === 'mysql') {
             $primaryName = DB::getDefaultConnection();
             $primary = DB::connection($primaryName);
