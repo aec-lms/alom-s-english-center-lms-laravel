@@ -32,7 +32,7 @@ final class PluginCategoryRegistry
             'board-question-solver', 'certificate-management', 'class-management',
             'course-assessments', 'course-content-studio', 'course-management',
             'course-wishlist', 'exam-management', 'learn-and-earn',
-            'learning-paths', 'learning-rewards', 'library-management', 'phonetics', 'question-bank', 'quiz-contest',
+            'learning-paths', 'library-management', 'phonetics', 'question-bank', 'quiz-contest',
         ],
         'student-lifecycle' => [
             'admission-management', 'guardian-management', 'guardian-portal',
