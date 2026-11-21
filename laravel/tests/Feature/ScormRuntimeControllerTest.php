@@ -107,6 +107,7 @@ class ScormRuntimeControllerTest extends TestCase
         $this->assertSame(1, DB::table('scorm_attempt_sessions')->where('scorm_attempt_id', $attempt->id)->count());
 
         $this->assertSame('lms.example.test', parse_url($playerUrl, PHP_URL_HOST));
+        $this->assertSame('lms.example.test', parse_url($playerUrl, PHP_URL_HOST));
         $player = $this->get($playerUrl);
         $player->assertOk()
             ->assertSee('id="scorm-sco"')
