@@ -71,7 +71,8 @@
     const readOnlyDynamicPattern = /^cmi\.interactions\.\d+\.(?:objectives|correct_responses)\._count$/;
     const setError = code => { lastError = code; return 'false'; };
     const isSessionTime = value => /^\d{4}:[0-5]\d:[0-5]\d(?:\.\d{1,2})?$/.test(value);
-    const isScore = value => value !== '' && Number.isFinite(Number(value)) && Number(value) >= 0 && Number(value) <= 100;
+    // SCORM 1.2 score.raw/min/max are numeric and are not limited to 0–100.
+    const isScore = value => value === '' || (Number.isFinite(Number(value)) && Math.abs(Number(value)) <= 99999.999);
 
     function isValidDynamicValue(element, value) {
         if (element.length > 255) return false;
