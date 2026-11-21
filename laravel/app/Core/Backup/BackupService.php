@@ -121,7 +121,7 @@ class BackupService
             && hash_equals(strtolower((string) $backup->checksum_sha256), strtolower($checksum));
     }
 
-    public function restoreEncryptedBackup(BackupRecord $backup, ?int $actorId = null): void
+    public function restoreEncryptedBackup(BackupRecord $backup, ?int $actorId = null, bool $preserveAuditHistory = false): void
     {
         if (!$this->verifyBackupIntegrity($backup)) {
             throw new RuntimeException('Backup integrity checksum verification failed.');
@@ -166,7 +166,7 @@ class BackupService
                 $jsonLinesStream = $zip->getStream('database.jsonl');
                 if (is_resource($jsonLinesStream)) {
                     try {
-                        $this->restoreDatabaseJsonLines($jsonLinesStream);
+                        $this->restoreDatabaseJsonLines($jsonLinesStream, $preserveAuditHistory);
                     } finally {
                         fclose($jsonLinesStream);
                     }
@@ -175,7 +175,7 @@ class BackupService
                     $dbRaw = $zip->getFromName('database.json');
                     if ($dbRaw === false) throw new RuntimeException('Backup archive missing database.json or database.jsonl.');
                     $dbSnapshot = json_decode($dbRaw, true, 512, JSON_THROW_ON_ERROR);
-                    $this->restoreLegacyDatabaseSnapshot($dbSnapshot);
+                    $this->restoreLegacyDatabaseSnapshot($dbSnapshot, $preserveAuditHistory);
                     unset($dbRaw, $dbSnapshot);
                 }
 
@@ -656,7 +656,7 @@ class BackupService
      *
      * @param resource $stream
      */
-    private function restoreDatabaseJsonLines($stream): void
+    private function restoreDatabaseJsonLines($stream, bool $preserveAuditHistory = false): void
     {
         $headerLine = fgets($stream);
         if ($headerLine === false) throw new RuntimeException('Streamed database snapshot is empty.');
@@ -672,11 +672,15 @@ class BackupService
             }
             $tables[] = $table;
         }
+        // Update rollback must restore application data without erasing the update
+        // history and audit events created after the pre-update backup was taken.
+        $preservedTables = $preserveAuditHistory ? ['update_logs', 'audit_logs'] : [];
+        $restoreTables = array_values(array_diff($tables, $preservedTables));
 
         Schema::disableForeignKeyConstraints();
         try {
-            DB::transaction(function () use ($stream, $tables): void {
-                foreach ($tables as $table) DB::table($table)->delete();
+            DB::transaction(function () use ($stream, $restoreTables, $preservedTables): void {
+                foreach ($restoreTables as $table) DB::table($table)->delete();
                 $currentTable = null;
                 $batch = [];
                 $batchSize = DB::connection()->getDriverName() === 'sqlite' ? 50 : 500;
@@ -685,7 +689,13 @@ class BackupService
                     $record = json_decode($line, true, 512, JSON_THROW_ON_ERROR);
                     $table = $record['table'] ?? null;
                     $row = $record['row'] ?? null;
-                    if (!is_string($table) || !in_array($table, $tables, true) || !is_array($row) || $row === []) {
+                    if (!is_string($table) || !is_array($row) || $row === []) {
+                        throw new RuntimeException('Streamed database snapshot contains an invalid row.');
+                    }
+                    if (in_array($table, $preservedTables, true)) {
+                        continue;
+                    }
+                    if (!in_array($table, $restoreTables, true)) {
                         throw new RuntimeException('Streamed database snapshot contains an invalid row.');
                     }
                     if ($currentTable !== null && $table !== $currentTable) {
@@ -708,13 +718,16 @@ class BackupService
     }
 
     /** Restore original full-JSON archives created before the streaming format. */
-    private function restoreLegacyDatabaseSnapshot(array $dbSnapshot): void
+    private function restoreLegacyDatabaseSnapshot(array $dbSnapshot, bool $preserveAuditHistory = false): void
     {
+        $preservedTables = $preserveAuditHistory ? ['update_logs', 'audit_logs'] : [];
         Schema::disableForeignKeyConstraints();
         try {
-            DB::transaction(function () use ($dbSnapshot): void {
+            DB::transaction(function () use ($dbSnapshot, $preservedTables): void {
                 foreach ((array) ($dbSnapshot['tables'] ?? []) as $table => $rows) {
-                    if (!is_string($table) || !Schema::hasTable($table) || in_array($table, ['migrations', 'backups'], true)) continue;
+                    if (!is_string($table) || !Schema::hasTable($table)
+                        || in_array($table, ['migrations', 'backups'], true)
+                        || in_array($table, $preservedTables, true)) continue;
                     DB::table($table)->delete();
                     foreach (array_chunk((array) $rows, DB::connection()->getDriverName() === 'sqlite' ? 50 : 200) as $chunk) {
                         if ($chunk !== []) DB::table($table)->insert($chunk);
