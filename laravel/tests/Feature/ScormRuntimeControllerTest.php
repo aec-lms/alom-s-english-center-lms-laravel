@@ -114,7 +114,9 @@ class ScormRuntimeControllerTest extends TestCase
             'token' => $token,
             'path' => 'index.html',
         ]);
-        $this->get($contentUrl)->assertOk()->assertSee('SCORM unit');
+        $this->get($contentUrl)->assertOk()
+            ->assertHeader('X-Content-Type-Options', 'nosniff')
+            ->assertHeader('Cache-Control', 'private, no-store');
 
         $origin = ['HTTP_ORIGIN' => 'https://scorm.example.test', 'CONTENT_TYPE' => 'text/plain'];
         $firstPayload = $this->commitPayload($attempt->id, $token, 0, [
