@@ -230,3 +230,17 @@ The CodeQL action pinning work is canonical in PR #388. Other PRs that still ref
 | #403 | Red-team inventory current-mainline refresh | Open, Ready for Review; successor to #354 | Exact-head docs CI and review |
 
 Old branches #345, #344, #339, #332 and #354 are closed as superseded by the corresponding current-mainline successors. #397 is itself superseded by this documentation-only current-mainline refresh because it carried a duplicate CodeQL workflow change; #388 remains the single canonical CodeQL action-pin PR. No Draft state is used. Ready for Review does not authorize merge.
+
+
+## 2026-11-21 payment, exam and refund reconstruction
+
+| PR | Work | Current state | Remaining gate |
+|---|---|---|---|
+| #405 | Invoice-wide payment-session reservation across PayPal, SSLCOMMERZ and Stripe | Open, Ready for Review; 9 ahead / 0 behind at initial CI | Exact-head Laravel/MySQL, Browser, Composer, CodeQL; #388 integration; independent finance/security approval |
+| #406 | Immutable exam attempt snapshots and serialized eligibility | Open, Ready for Review; 15 ahead / 0 behind | Exact-head Laravel/SQLite/MySQL and Browser; resolve any snapshot/eligibility failures; #388 integration; independent exam/security approval |
+| #409 | Provider-confirmed refund orchestration and ledger settlement | Open, Ready for Review; 24 ahead / 0 behind | Exact-head CI, MySQL refund concurrency, provider sandbox evidence and independent finance/security approval |
+| #341 | Invoice payment session reservation | Closed; superseded by #405 | Do not merge stale branch |
+| #343 | Exam attempt snapshots | Closed; superseded by #406 | Do not merge stale branch |
+| #342 | Provider refund lifecycle | Closed; superseded by #409 | Do not merge stale branch |
+
+The current-mainline successors were created only after verifying changed existing-file base blobs against main; files with newer mainline content were preserved or ported selectively. The duplicate CodeQL workflow in the old exam branch was excluded; #388 remains the canonical action-pin change. All active PRs remain Open and Ready for Review, never Draft. Ready for Review is not approval to merge.
