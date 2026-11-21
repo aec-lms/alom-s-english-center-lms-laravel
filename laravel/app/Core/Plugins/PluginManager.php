@@ -996,13 +996,18 @@ class PluginManager
         }
 
         File::ensureDirectoryExists($root);
-        @chmod($root, 0700);
+        if (!@chmod($root, 0700)) {
+            throw new RuntimeException('Unable to restrict private plugin backup directory permissions.');
+        }
         $realRoot = realpath($root);
+        $rootStat = $realRoot !== false ? @stat($realRoot) : false;
         if ($storageRoot === false || $realRoot === false
             || dirname($realRoot) !== $storageRoot
             || !is_dir($realRoot)
+            || $rootStat === false
+            || (($rootStat['mode'] & 0077) !== 0)
         ) {
-            throw new RuntimeException('Private plugin backup directory must be a real directory directly under storage/app.');
+            throw new RuntimeException('Private plugin backup directory must be a private real directory directly under storage/app.');
         }
 
         if (basename($filename) !== $filename || $filename === ''
@@ -1024,6 +1029,20 @@ class PluginManager
             }
             throw new RuntimeException('Private plugin backup write was incomplete.');
         }
+        if (!@chmod($path, 0600)) {
+            @unlink($path);
+            throw new RuntimeException('Unable to restrict private plugin backup file permissions.');
+        }
+        clearstatcache(true, $path);
+        $fileStat = @lstat($path);
+        if ($fileStat === false
+            || (($fileStat['mode'] & 0170000) !== 0100000)
+            || ($fileStat['nlink'] ?? 1) !== 1
+            || (($fileStat['mode'] & 0077) !== 0)
+        ) {
+            @unlink($path);
+            throw new RuntimeException('Private plugin backup file is not a private, regular, non-linked file.');
+        }
 
         $readBack = File::get($path);
         if (!hash_equals(hash('sha256', $contents), hash('sha256', $readBack))) {
@@ -1031,8 +1050,14 @@ class PluginManager
             throw new RuntimeException('Private plugin backup integrity verification failed.');
         }
 
-        @chmod($path, 0600);
-        if (is_link($path) || !is_file($path)
+        clearstatcache(true, $path);
+        $verifiedStat = @lstat($path);
+        if ($verifiedStat === false
+            || (($verifiedStat['mode'] & 0170000) !== 0100000)
+            || ($verifiedStat['nlink'] ?? 1) !== 1
+            || (($verifiedStat['mode'] & 0077) !== 0)
+            || is_link($path)
+            || !is_file($path)
             || !hash_equals(hash('sha256', $contents), (string) hash_file('sha256', $path))
         ) {
             if (is_file($path) && !is_link($path)) {
