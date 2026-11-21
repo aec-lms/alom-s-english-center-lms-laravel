@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Plugins\Modules\CourseAssessments\Http\Controllers;
 
 use App\Core\Plugins\PluginManager;
+use App\Models\User;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -14,14 +15,12 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 use Plugins\Modules\CourseAssessments\Models\AssessmentAttempt;
 use Plugins\Modules\CourseAssessments\Models\AssessmentSet;
-use Plugins\Modules\LearningRewards\Services\LearningRewardsService;
 
 class StudentAssessmentController extends Controller
 {
     public function index(Request $request): View
     {
-        $student = $request->user();
-        abort_unless($student && $student->hasRole('student'), 403);
+        $student = $this->requireStudent($request);
         $sets = $this->visibleSetsQuery($student)->latest()->paginate(20);
 
         return view('course-assessments::student-index', compact('sets'));
@@ -29,8 +28,7 @@ class StudentAssessmentController extends Controller
 
     public function apiIndex(Request $request): JsonResponse
     {
-        $student = $request->user();
-        abort_unless($student && $student->hasRole('student'), 403);
+        $student = $this->requireStudent($request);
         $sets = $this->visibleSetsQuery($student)->latest()->paginate(20);
 
         return response()->json([
@@ -57,14 +55,14 @@ class StudentAssessmentController extends Controller
 
     public function start(Request $request, AssessmentSet $set): RedirectResponse
     {
-        $attempt = $this->createOrResumeAttempt($request->user(), $set);
+        $attempt = $this->createOrResumeAttempt($request, $set);
 
         return redirect()->route('plugins.course-assessments.student.take', $attempt);
     }
 
     public function apiStart(Request $request, AssessmentSet $set): JsonResponse
     {
-        $attempt = $this->createOrResumeAttempt($request->user(), $set);
+        $attempt = $this->createOrResumeAttempt($request, $set);
         $attempt->load('questions');
 
         return response()->json([
@@ -75,12 +73,11 @@ class StudentAssessmentController extends Controller
 
     public function apiTake(Request $request, AssessmentAttempt $attempt): JsonResponse
     {
-        $student = $request->user();
-        abort_unless($student && $student->hasRole('student'), 403);
+        $student = $this->requireStudent($request);
         abort_unless((int) $attempt->student_id === (int) $student->id, 404);
 
         if ($attempt->status === 'in_progress' && $attempt->deadline_at && now()->greaterThanOrEqualTo($attempt->deadline_at)) {
-            $this->submitAttempt($attempt);
+            $this->submitAttempt($attempt, $student);
         }
 
         $attempt->refresh()->load('questions');
@@ -93,11 +90,10 @@ class StudentAssessmentController extends Controller
 
     public function apiSubmit(Request $request, AssessmentAttempt $attempt): JsonResponse
     {
-        $student = $request->user();
-        abort_unless($student && $student->hasRole('student'), 403);
+        $student = $this->requireStudent($request);
         abort_unless((int) $attempt->student_id === (int) $student->id, 404);
 
-        $this->submitAttempt($attempt);
+        $this->submitAttempt($attempt, $student);
         $attempt->refresh();
 
         return response()->json([
@@ -108,8 +104,7 @@ class StudentAssessmentController extends Controller
 
     public function apiHistory(Request $request): JsonResponse
     {
-        $student = $request->user();
-        abort_unless($student && $student->hasRole('student'), 403);
+        $student = $this->requireStudent($request);
         $attempts = AssessmentAttempt::query()
             ->with('assessmentSet')
             ->where('student_id', $student->id)
@@ -142,13 +137,13 @@ class StudentAssessmentController extends Controller
         ]);
     }
 
-    public function take(Request $request,AssessmentAttempt $attempt): View
+    public function take(Request $request, AssessmentAttempt $attempt): View
     {
-        $student=$request->user();
-        abort_unless($attempt->student_id===$student->id,404);
+        $student = $this->requireStudent($request);
+        abort_unless((int) $attempt->student_id === (int) $student->id, 404);
         abort_if($attempt->status!=='in_progress',403,'This attempt has already been submitted.');
         if($attempt->deadline_at && now()->greaterThanOrEqualTo($attempt->deadline_at)){
-            $this->submitAttempt($attempt);
+            $this->submitAttempt($attempt, $student);
             return redirect()->route('plugins.course-assessments.student.history')->with('status','Time expired. Your answers were submitted.');
         }
         $attempt->load('questions');
@@ -161,14 +156,17 @@ class StudentAssessmentController extends Controller
 
     public function answer(Request $request, AssessmentAttempt $attempt, int $question): JsonResponse
     {
-        $student = $request->user();
-        abort_unless($student && $student->hasRole('student') && (int) $attempt->student_id === (int) $student->id, 404);
+        $student = $this->requireStudent($request);
+        abort_unless((int) $attempt->student_id === (int) $student->id, 404);
         $data = $request->validate([
             'selected_option' => ['nullable', 'integer', 'min:0', 'max:7'],
             'answer_text' => ['nullable', 'string', 'max:20000'],
         ]);
 
         DB::transaction(function () use ($attempt, $question, $student, $data): void {
+            $lockedStudent = User::query()->whereKey($student->id)->lockForUpdate()->firstOrFail();
+            $this->assertStudentRoleLocked($lockedStudent);
+            abort_unless(!Schema::hasColumn('users', 'is_active') || (bool) $lockedStudent->is_active, 403, 'An active student account is required.');
             $lockedAttempt = AssessmentAttempt::query()->whereKey($attempt->id)->lockForUpdate()->firstOrFail();
             abort_unless((int) $lockedAttempt->student_id === (int) $student->id, 404);
             abort_unless($lockedAttempt->status === 'in_progress', 409, 'Attempt is not active.');
@@ -190,17 +188,60 @@ class StudentAssessmentController extends Controller
         return response()->json(['saved' => true, 'saved_at' => now()->toIso8601String()]);
     }
 
-    public function submit(Request $request,AssessmentAttempt $attempt): RedirectResponse
+    public function submit(Request $request, AssessmentAttempt $attempt): RedirectResponse
     {
-        abort_unless($attempt->student_id===$request->user()->id,404);
-        $this->submitAttempt($attempt);
+        $student = $this->requireStudent($request);
+        abort_unless((int) $attempt->student_id === (int) $student->id, 404);
+        $this->submitAttempt($attempt, $student);
         return redirect()->route('plugins.course-assessments.student.history')->with('status','Assessment submitted.');
     }
 
     public function history(Request $request): View
     {
-        $attempts=AssessmentAttempt::query()->with('questions')->where('student_id',$request->user()->id)->latest()->paginate(20);
-        return view('course-assessments::history',compact('attempts'));
+        $student = $this->requireStudent($request);
+        $attempts = AssessmentAttempt::query()
+            ->with('questions')
+            ->where('student_id', $student->id)
+            ->latest()
+            ->paginate(20);
+
+        return view('course-assessments::history', compact('attempts'));
+    }
+
+    private function requireStudent(Request $request): object
+    {
+        $student = $request->user();
+        abort_unless(
+            $student && $student->hasRole('student') && (!Schema::hasColumn('users', 'is_active') || (bool) $student->is_active),
+            403,
+            'An active student role and account are required.'
+        );
+
+        return $student;
+    }
+
+    /**
+     * Lock the actual role pivot as well as the account row. A User-row lock
+     * alone does not serialize a concurrent DELETE from role_user.
+     */
+    private function assertStudentRoleLocked(User $student): void
+    {
+        abort_unless(
+            Schema::hasTable('roles') && Schema::hasTable('role_user'),
+            503,
+            'Student role authorization storage is unavailable.'
+        );
+
+        $roleId = DB::table('roles')->where('slug', 'student')->value('id');
+        abort_unless($roleId !== null, 503, 'The student role is not configured.');
+
+        $assignment = DB::table('role_user')
+            ->where('user_id', $student->id)
+            ->where('role_id', $roleId)
+            ->lockForUpdate()
+            ->first();
+
+        abort_unless($assignment, 403, 'An active student role is required.');
     }
 
     private function visibleSetsQuery($student)
@@ -228,11 +269,15 @@ class StudentAssessmentController extends Controller
             });
     }
 
-    private function createOrResumeAttempt($student, AssessmentSet $set): AssessmentAttempt
+    private function createOrResumeAttempt(Request $request, AssessmentSet $set): AssessmentAttempt
     {
-        abort_unless($student && $student->hasRole('student'), 403);
+        $student = $this->requireStudent($request);
 
         return DB::transaction(function () use ($set, $student): AssessmentAttempt {
+            $lockedStudent = User::query()->whereKey($student->id)->lockForUpdate()->firstOrFail();
+            $this->assertStudentRoleLocked($lockedStudent);
+            abort_unless(!Schema::hasColumn('users', 'is_active') || (bool) $lockedStudent->is_active, 403, 'An active student account is required.');
+            $student = $lockedStudent;
             $lockedSet = AssessmentSet::query()->whereKey($set->id)->lockForUpdate()->firstOrFail();
             abort_unless($lockedSet->status === 'published', 404);
             abort_if($lockedSet->available_from && now()->lessThan($lockedSet->available_from), 403, 'Assessment is not available yet.');
@@ -342,10 +387,18 @@ class StudentAssessmentController extends Controller
         ];
     }
 
-    private function submitAttempt(AssessmentAttempt $attempt): void
+    private function submitAttempt(AssessmentAttempt $attempt, User $student): void
     {
-        DB::transaction(function()use($attempt){
-            $locked=AssessmentAttempt::query()->whereKey($attempt->id)->lockForUpdate()->firstOrFail();
+        DB::transaction(function () use ($attempt, $student): void {
+            $lockedStudent = User::query()->whereKey($student->id)->lockForUpdate()->firstOrFail();
+            $this->assertStudentRoleLocked($lockedStudent);
+            abort_unless(
+                !Schema::hasColumn('users', 'is_active') || (bool) $lockedStudent->is_active,
+                403,
+                'An active student account is required.'
+            );
+            $locked = AssessmentAttempt::query()->whereKey($attempt->id)->lockForUpdate()->firstOrFail();
+            abort_unless((int) $locked->student_id === (int) $lockedStudent->id, 404);
             if($locked->status!=='in_progress')return;
             $auto=0.0;$manual=0.0;$hasManual=false;
             foreach($locked->questions as $q){
@@ -356,22 +409,6 @@ class StudentAssessmentController extends Controller
                 }else{$hasManual=true;}
             }
             $locked->update(['auto_score'=>$auto,'manual_score'=>$manual,'final_score'=>$hasManual?null:$auto,'status'=>$hasManual?'pending_review':'submitted','submitted_at'=>now()]);
-
-            if (!$hasManual && (float) $locked->max_score > 0
-                && app(PluginManager::class)->isEnabled('learning-rewards')
-                && Schema::hasTable('learning_reward_rules')) {
-                $passPercentage = (int) (DB::table('learning_reward_rules')
-                    ->where('activity_key', 'quiz_passed')
-                    ->value('pass_percentage') ?? 60);
-                if (($auto / (float) $locked->max_score) * 100 >= $passPercentage) {
-                    app(LearningRewardsService::class)->awardVerifiedActivity(
-                        (int) $locked->student_id,
-                        'quiz_passed',
-                        'assessment_attempt',
-                        (int) $locked->id,
-                    );
-                }
-            }
         });
     }
 
