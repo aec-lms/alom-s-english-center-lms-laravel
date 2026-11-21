@@ -16,7 +16,7 @@ class AttendanceRegisterWorkflowTest extends TestCase
     public function test_batch_attendance_is_audited_and_edits_require_a_reason(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['branch-management', 'student-management', 'course-management', 'batch-management', 'guardian-management', 'attendance-management']);
+        $this->activatePlugins(['branch-management', 'student-management', 'course-management', 'batch-management', 'guardian-management', 'attendance-management', 'learning-rewards']);
 
         $branch = DB::table('branches')->insertGetId(['code' => 'ATT-REG-01', 'name' => 'Attendance Register', 'created_at' => now(), 'updated_at' => now()]);
         $admin = $this->createUserWithRole('admin', $branch);
@@ -91,6 +91,16 @@ class AttendanceRegisterWorkflowTest extends TestCase
         $this->actingAs($admin)->post('/admin/attendance', $payload)->assertRedirect()->assertSessionHasNoErrors();
         $this->assertDatabaseHas('attendance_records', ['student_id' => $student->id, 'status' => 'late', 'edited_reason' => 'Teacher corrected register']);
         $this->assertDatabaseHas('attendance_audit_logs', ['new_status' => 'late', 'event' => 'updated', 'reason' => 'Teacher corrected register']);
+        $this->assertDatabaseHas('learning_reward_ledger', [
+            'user_id' => $studentUser->id,
+            'activity_key' => 'attendance_present',
+            'points' => 5,
+        ]);
+        $this->assertDatabaseHas('learning_reward_ledger', [
+            'user_id' => $studentUser->id,
+            'activity_key' => 'reversal',
+            'points' => -5,
+        ]);
     }
 
     public function test_offline_sync_is_idempotent_and_records_offline_source(): void
