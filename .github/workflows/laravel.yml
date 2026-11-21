@@ -165,7 +165,6 @@ jobs:
         image: mysql:8.0
         env:
           MYSQL_ROOT_PASSWORD: root
-          MYSQL_ROOT_HOST: '%'
           MYSQL_DATABASE: aec_lms_test
           MYSQL_USER: aec_lms
           MYSQL_PASSWORD: aec_lms_test_password
@@ -215,14 +214,5 @@ jobs:
         run: php artisan key:generate
       - name: Verify backup runtime requirements
         run: php artisan lms:backup:requirements
-      - name: Grant MySQL lock-inspection privilege to test user
-        run: |
-          php <<'PHP'
-          <?php
-          $pdo = new PDO('mysql:host=127.0.0.1;port=3306;dbname=mysql', 'root', 'root', [
-              PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-          ]);
-          $pdo->exec("GRANT PROCESS ON *.* TO 'aec_lms'@'%'");
-          PHP
       - name: Execute Laravel tests on MySQL 8.0
         run: php artisan test
