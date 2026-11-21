@@ -765,11 +765,16 @@ class PluginManager
                     $this->disable($slug, $actorId);
                 }
             }
-            @unlink($metadataPath);
+            // Keep the recovery metadata until the required audit event is durable.
+            // If audit storage fails, the catch block can return the package to the
+            // recycle bin and the original metadata remains discoverable.
             $this->audit->logRequired('plugin.restored_from_recycle_bin', 'plugin', $slug, [
                 'archive' => $archiveName,
                 'business_data_preserved' => true,
             ], $actorId);
+            if (!@unlink($metadataPath)) {
+                throw new RuntimeException('Plugin was restored and audited, but recycle-bin metadata could not be removed; manual reconciliation is required.');
+            }
             return $record;
         } catch (Throwable $e) {
             // If installation succeeded but restoring the previous enabled state failed,
