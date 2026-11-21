@@ -80,18 +80,22 @@ class PaypalRefundAdapter implements RefundProviderAdapter
     {
         $amount = is_array($payload) ? ($payload['amount'] ?? []) : [];
         $upLink = is_array($payload) ? (collect($payload['links'] ?? [])->firstWhere('rel', 'up')['href'] ?? '') : '';
-        $upHost = strtolower((string) parse_url((string) $upLink, PHP_URL_HOST));
-        $upPath = (string) parse_url((string) $upLink, PHP_URL_PATH);
-        $relatedCaptureId = basename($upPath);
+        $upParts = is_string($upLink) ? parse_url($upLink) : false;
+        $upScheme = strtolower((string) ($upParts['scheme'] ?? ''));
+        $upHost = strtolower((string) ($upParts['host'] ?? ''));
+        $upPath = (string) ($upParts['path'] ?? '');
         $expectedHost = $this->plugins->getSetting('gateway-paypal', 'sandbox_mode', '1') === '1'
             ? 'api-m.sandbox.paypal.com'
             : 'api-m.paypal.com';
+        $expectedCapturePath = '/v2/payments/captures/' . (string) $transaction->external_reference;
         if (!is_array($payload)
             || trim((string) ($payload['id'] ?? '')) === ''
             || (string) ($payload['invoice_id'] ?? '') !== (string) $transaction->transaction_ref
             || (string) ($payload['custom_id'] ?? '') !== 'refund-' . $refund->id
+            || $upScheme !== 'https'
             || $upHost !== $expectedHost
-            || $relatedCaptureId !== (string) $transaction->external_reference
+            || isset($upParts['port']) || isset($upParts['user']) || isset($upParts['pass'])
+            || $upPath !== $expectedCapturePath
             || round((float) ($amount['value'] ?? 0), 2) !== round((float) $refund->amount, 2)
             || strtoupper((string) ($amount['currency_code'] ?? '')) !== strtoupper((string) $transaction->currency)) {
             return new RefundProviderResult(
