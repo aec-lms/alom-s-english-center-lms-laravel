@@ -109,3 +109,26 @@ The following rows close the missing-slug gap identified in issue #300. They doc
 This document does not store a stale CI snapshot. Before merge or release, inspect the latest workflow runs for the exact commit and require all applicable jobs to finish successfully: SQLite Laravel tests, MySQL 8 Laravel tests, Browser E2E, Composer Security Audit, and cPanel release-package verification. A queued, pending, cancelled, skipped, or in-progress job is not a pass.
 
 Do not merge or deploy solely on the basis of this document. Refresh CI status and close all environment/provider-specific gates before release.
+
+
+## Full-system red-team checkpoint — 2026-11-21
+
+**Snapshot:** current main at the time this audit branch was cut. A recursive repository tree scan found 60 plugin manifests under `laravel/plugins/modules`. The matrix above enumerates the current modules and their automated coverage; that inventory is not acceptance evidence for every user journey.
+
+### System-wide release gates
+- **Core authorization:** every student/teacher/guardian/branch-manager/admin route must enforce persisted account status, role, permission and branch scope at the point of mutation—not only from a stale request User object. Race tests must use MySQL 8 and two independent connections.
+- **Payment integrity:** invoice-level gateway reservation, provider idempotency, signed webhook verification, amount/currency/reference binding, duplicate/out-of-order event handling, refunds and ledger reversals must be tested together. A browser redirect is not provider proof.
+- **Exam integrity:** freeze attempt content and eligibility at start; serialize concurrent starts/submissions; reject expired, revoked, changed-source and cross-branch access; preserve immutable snapshots and audit history.
+- **Live-class integrity:** serialize entitlement/capacity checks against concurrent enrollment, cancellation and branch/account changes; demonstrate the required 300+ participant load run separately.
+- **Data and release safety:** additive migrations, rollback/forward-recovery behavior, private file storage, backup restore, cPanel package contents and document-root configuration require separate evidence.
+- **Operational readiness:** alerting/logging, retry/reconciliation, queue/scheduler health, secrets rotation and provider outage playbooks must be demonstrated; successful unit tests do not prove operations.
+
+### Confirmed plugin-level findings from focused source review
+- **gateway-stripe:** immediate PaymentIntent `succeeded` is recorded locally as `pending`, while the settlement service expects `initiated`; a valid success webhook can fail to settle. The focused reservation suite lacks this immediate-success regression. Finding recorded on PR #341.
+- **gateway-paypal:** browser cancel return only emits a cancellation response; it does not provider-verify or reconcile/release the local reservation. Capture timeout/replay and actor-revocation race coverage is still required. Finding recorded on PR #341.
+- **gateway-card:** intentionally has no acquirer adapter and fails closed. It is not a usable Visa/Mastercard processor; never describe it as an active card gateway until a named PSP/acquirer adapter and its sandbox proof exist.
+- **universal-payment:** unauthenticated SSLCOMMERZ browser fail/cancel callbacks were able to mutate a pending storefront transaction. A focused corrective PR #363 now keeps such returns pending and adds a regression test. That PR is not yet accepted until exact-head SQLite, MySQL 8, Browser E2E and Composer checks pass.
+- **universal-payment:** actor status/role/permission revalidation under transaction locks, provider dependency readiness, external reference races and end-to-end storefront/browser accessibility remain open acceptance gates.
+
+### Evidence discipline
+A green check on an old head, a mock provider response, a manifest, a route declaration or an issue closure is not acceptance. Record exact commit SHA, test command/run ID, environment, result and remaining limitation for each gate. Never claim live provider, cPanel, production restore or 300+ participant acceptance without owner-authorized external evidence.
