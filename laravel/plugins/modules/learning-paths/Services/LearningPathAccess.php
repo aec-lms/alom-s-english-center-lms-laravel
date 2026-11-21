@@ -126,6 +126,7 @@ class LearningPathAccess
         // locks. A reassignment or enrollment mutation cannot race this gate.
         $course = DB::table('courses')->where('id', $courseId)->lockForUpdate()->first();
         abort_unless($course !== null, 404, 'Course is unavailable.');
+        abort_unless($course->status === 'published', 404, 'Course is no longer published.');
         if ($course->branch_id !== null) {
             abort_unless($currentBranchId !== null && (int) $currentBranchId === (int) $course->branch_id,
                 403, 'Course is outside your current student branch.');
@@ -146,6 +147,11 @@ class LearningPathAccess
         if ($lockedPaths === []) {
             return;
         }
+
+        // A path enrollment alone is not enough to bypass the course's own
+        // enrollment entitlement. Revalidate both under the same locked gate
+        // after the path rows have serialized publication/curriculum changes.
+        abort_unless($currentEnrollment !== null, 403, 'An active course enrollment is required.');
 
         $pathEnrollments = DB::table('learning_path_enrollments')
             ->whereIn('learning_path_id', array_keys($lockedPaths))

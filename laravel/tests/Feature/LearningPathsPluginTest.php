@@ -665,4 +665,73 @@ class LearningPathsPluginTest extends TestCase
             ->get('/courses/' . DB::table('courses')->where('id', $second)->value('slug') . '/content/' . $postSlug)
             ->assertForbidden();
     }
+    public function test_path_access_rechecks_current_enrollment_and_course_publication_under_the_gate(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management', 'learning-paths']);
+        $admin = $this->createUserWithRole('admin');
+        $student = $this->createUserWithRole('student');
+        $course = $this->course('LP-ENTITLEMENT-RECHECK', 'Entitlement Recheck Course');
+        DB::table('enrollments')->insert([
+            'user_id' => $student->id,
+            'course_id' => $course,
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $pathId = DB::table('learning_paths')->insertGetId([
+            'created_by' => $admin->id,
+            'title' => 'Entitlement Recheck',
+            'slug' => 'entitlement-recheck',
+            'status' => 'published',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('learning_path_courses')->insert([
+            'learning_path_id' => $pathId,
+            'course_id' => $course,
+            'course_title' => 'Entitlement Recheck Course',
+            'position' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('learning_path_enrollments')->insert([
+            'learning_path_id' => $pathId,
+            'user_id' => $student->id,
+            'status' => 'active',
+            'started_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $access = app(\Plugins\Modules\LearningPaths\Services\LearningPathAccess::class);
+        $access->assertCourseUnlocked((int) $student->id, $course);
+
+        DB::table('enrollments')->where('user_id', $student->id)->where('course_id', $course)->update([
+            'status' => 'cancelled',
+            'updated_at' => now(),
+        ]);
+        try {
+            $access->assertCourseUnlocked((int) $student->id, $course);
+            $this->fail('An active path enrollment must not bypass a revoked course enrollment.');
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) {
+            $this->assertSame(403, $exception->getStatusCode());
+        }
+
+        DB::table('enrollments')->where('user_id', $student->id)->where('course_id', $course)->update([
+            'status' => 'active',
+            'updated_at' => now(),
+        ]);
+        DB::table('courses')->where('id', $course)->update([
+            'status' => 'archived',
+            'updated_at' => now(),
+        ]);
+        try {
+            $access->assertCourseUnlocked((int) $student->id, $course);
+            $this->fail('A course archived after route preflight must not remain accessible.');
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) {
+            $this->assertSame(404, $exception->getStatusCode());
+        }
+    }
+
 }
