@@ -24,6 +24,7 @@ class ExamAttemptSnapshotTest extends TestCase
 
         $page = $this->actingAs($student)->get("/exams/{$exam->id}/take")
             ->assertOk()
+            ->assertSee('Original exam title')
             ->assertSee('Original question text')
             ->assertSee('Original option B')
             ->assertSee('<fieldset', false)
@@ -43,6 +44,7 @@ class ExamAttemptSnapshotTest extends TestCase
             'negative_marks' => 0,
         ]);
         DB::table('exams')->where('id', $exam->id)->update([
+            'title' => 'Changed exam title',
             'duration_minutes' => 5,
             'pass_marks' => 100,
         ]);
@@ -56,6 +58,8 @@ class ExamAttemptSnapshotTest extends TestCase
 
         $resumed = $this->actingAs($student)->get("/exams/{$exam->id}/take")
             ->assertOk()
+            ->assertSee('Original exam title')
+            ->assertDontSee('Changed exam title')
             ->assertSee('Original question text')
             ->assertSee('Original option B')
             ->assertDontSee('Changed question text')
@@ -72,6 +76,7 @@ class ExamAttemptSnapshotTest extends TestCase
         $this->assertSame(5.0, (float) $attempt->score_obtained);
         $this->assertSame(5.0, (float) $attempt->total_marks);
         $this->assertTrue($attempt->passed);
+        $this->assertSame('Original exam title', $attempt->exam_snapshot['title']);
         $this->assertSame('Original question text', $attempt->exam_snapshot['questions'][0]['prompt']);
         $this->assertSame(['Original option A', 'Original option B'], $attempt->exam_snapshot['questions'][0]['options']);
         $this->assertSame(1, $attempt->exam_snapshot['questions'][0]['correct_option_index']);
@@ -79,6 +84,7 @@ class ExamAttemptSnapshotTest extends TestCase
 
         $futureAttemptPage = $this->actingAs($student)->get("/exams/{$exam->id}/take")
             ->assertOk()
+            ->assertSee('Changed exam title')
             ->assertSee('Changed question text')
             ->assertSee('Question added after attempt start')
             ->assertSee('5 minutes')
@@ -88,6 +94,7 @@ class ExamAttemptSnapshotTest extends TestCase
         $this->assertGreaterThan(0, $futureAttemptId);
         $futureSnapshot = ExamAttempt::query()->findOrFail($futureAttemptId)->exam_snapshot;
         $this->assertCount(2, $futureSnapshot['questions']);
+        $this->assertSame('Changed exam title', $futureSnapshot['title']);
         $this->assertSame('Changed question text', $futureSnapshot['questions'][0]['prompt']);
         $this->assertSame(5, $futureSnapshot['duration_minutes']);
         $this->assertSame(100.0, (float) $futureSnapshot['pass_marks']);
@@ -106,6 +113,7 @@ class ExamAttemptSnapshotTest extends TestCase
         $start = $this->withHeader('Authorization', 'Bearer ' . $token)
             ->postJson("/api/v1/my/exams/{$exam->id}/attempts")
             ->assertOk()
+            ->assertJsonPath('exam.title', 'Original exam title')
             ->assertJsonPath('questions.0.prompt', 'Original question text')
             ->assertJsonMissingPath('questions.0.correct_option_index')
             ->assertJsonMissingPath('questions.0.negative_marks');
@@ -215,6 +223,7 @@ class ExamAttemptSnapshotTest extends TestCase
 
         $validSnapshot = [
             'version' => 1,
+            'title' => 'Original exam title',
             'duration_minutes' => 30,
             'pass_marks' => 5.0,
             'questions' => [[
@@ -237,6 +246,8 @@ class ExamAttemptSnapshotTest extends TestCase
         unset($missingCorrectIndex['questions'][0]['correct_option_index']);
         $missingMarks = $validSnapshot;
         unset($missingMarks['questions'][0]['marks']);
+        $missingTitle = $validSnapshot;
+        unset($missingTitle['title']);
         $missingDuration = $validSnapshot;
         unset($missingDuration['duration_minutes']);
         $missingPassMarks = $validSnapshot;
@@ -247,8 +258,7 @@ class ExamAttemptSnapshotTest extends TestCase
         $associativeQuestions['questions'] = [1 => $associativeQuestions['questions'][0]];
         $emptyQuestions = $validSnapshot;
         $emptyQuestions['questions'] = [];
-        $duplicateQuestionId = $validSnapshot;
-        $duplicateQuestionId['questions'][] = $duplicateQuestionId['questions'][0];
+        $duplicateQuestionId = $validSnapshot;        $duplicateQuestionId['questions'][] = $duplicateQuestionId['questions'][0];
         $associativeOptions = $validSnapshot;
         $associativeOptions['questions'][0]['options'] = [1 => 'Only one option'];
         $tooFewOptions = $validSnapshot;
@@ -320,6 +330,7 @@ class ExamAttemptSnapshotTest extends TestCase
             'missing options' => $missingOptions,
             'missing correct option index' => $missingCorrectIndex,
             'missing marks' => $missingMarks,
+            'missing title' => $missingTitle,
             'missing duration' => $missingDuration,
             'missing pass marks' => $missingPassMarks,
             'missing questions collection' => $missingQuestions,
