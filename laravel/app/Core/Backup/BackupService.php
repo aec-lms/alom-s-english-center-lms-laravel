@@ -236,12 +236,23 @@ class BackupService
             }
             $seen[$normalized] = true;
 
-            $stat = $zip->statIndex($i);
-            $attributes = (int) ($stat['external_attributes'] ?? 0);
-            if ((($attributes >> 16) & 0xF000) === 0xA000) {
-                throw new RuntimeException("Symlink entry rejected in backup: {$name}");
+            $opsys = 0;
+            $externalAttributes = 0;
+            if ($zip->getExternalAttributesIndex($i, $opsys, $externalAttributes)
+                && $opsys === ZipArchive::OPSYS_UNIX
+            ) {
+                // statIndex() does not expose Unix external attributes. Read the
+                // actual ZIP entry attributes so symlinks and special files fail closed.
+                $fileType = ($externalAttributes >> 16) & 0170000;
+                if ($fileType === 0120000) {
+                    throw new RuntimeException("Symlink entry rejected in backup: {$name}");
+                }
+                if ($fileType !== 0 && $fileType !== 0100000 && $fileType !== 0040000) {
+                    throw new RuntimeException("Special file entry rejected in backup: {$name}");
+                }
             }
 
+            $stat = $zip->statIndex($i);
             $size = (int) ($stat['size'] ?? 0);
             $totalBytes += $size;
             if (++$fileCount > 5000 || $size > 268435456 || $totalBytes > 1073741824) {
@@ -252,18 +263,32 @@ class BackupService
                 continue;
             }
 
-            $contents = $zip->getFromIndex($i);
-            if ($contents === false || strlen($contents) !== $size) {
-                throw new RuntimeException("Unable to read private file from backup: {$name}");
-            }
-
             $destination = $stagingDir . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $normalized);
             $parent = dirname($destination);
             if (!is_dir($parent) && !mkdir($parent, 0700, true) && !is_dir($parent)) {
                 throw new RuntimeException('Unable to create private restore staging directory.');
             }
-            if (file_put_contents($destination, $contents, LOCK_EX) === false) {
-                throw new RuntimeException("Unable to stage private file from backup: {$name}");
+
+            // Stream ZIP members directly to disk. getFromIndex() materializes the
+            // entire entry in PHP memory and can exhaust the memory limit on large
+            // private uploads (the archive permits entries up to 256 MiB).
+            $input = $zip->getStream($name);
+            if (!is_resource($input)) {
+                throw new RuntimeException("Unable to open private file from backup: {$name}");
+            }
+            $output = fopen($destination, 'xb');
+            if ($output === false) {
+                fclose($input);
+                throw new RuntimeException("Unable to create staged private file from backup: {$name}");
+            }
+            try {
+                $copied = stream_copy_to_stream($input, $output, $size + 1);
+                if ($copied !== $size || !fflush($output)) {
+                    throw new RuntimeException("Unable to stage private file completely from backup: {$name}");
+                }
+            } finally {
+                fclose($input);
+                fclose($output);
             }
             @chmod($destination, 0600);
         }
