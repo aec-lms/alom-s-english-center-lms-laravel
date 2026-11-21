@@ -189,13 +189,22 @@ class LearningRewardsPluginTest extends TestCase
         ]);
         $studentA = $this->createUserWithRole('student', $branchA);
         $studentB = $this->createUserWithRole('student', $branchB);
+        $unassignedStudent = $this->createUserWithRole('student');
         $service = app(LearningRewardsService::class);
         $service->awardVerifiedActivity((int) $studentA->id, 'lesson_completed', 'course_lesson', 301);
         $service->awardVerifiedActivity((int) $studentB->id, 'lesson_completed', 'course_lesson', 302);
+        $service->awardVerifiedActivity((int) $unassignedStudent->id, 'lesson_completed', 'course_lesson', 303);
 
         $this->actingAs($studentA)->get('/learning-leaderboard?period=all')
             ->assertOk()
             ->assertSee($studentA->name)
+            ->assertDontSee($studentB->name)
+            ->assertDontSee($unassignedStudent->name);
+
+        $this->actingAs($unassignedStudent)->get('/learning-leaderboard?period=all')
+            ->assertOk()
+            ->assertSee($unassignedStudent->name)
+            ->assertDontSee($studentA->name)
             ->assertDontSee($studentB->name);
 
         $this->assertDatabaseHas('learning_reward_ledger', [
