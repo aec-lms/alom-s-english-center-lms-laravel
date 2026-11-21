@@ -185,6 +185,7 @@ class ScormRuntimeControllerTest extends TestCase
         File::deleteDirectory($packageRoot);
     }
 
+    // A stale launch/session must not let a revoked Student role commit SCORM progress.
     public function test_runtime_rejects_commit_after_student_role_is_revoked(): void
     {
         [$student, , , $packageId, $packageRoot] = $this->setupRuntime();
