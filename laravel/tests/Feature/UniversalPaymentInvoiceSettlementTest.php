@@ -580,14 +580,14 @@ class UniversalPaymentInvoiceSettlementTest extends TestCase
         // provider reservation pending for reconciliation.
         $this->post('/universal-payment/sslcommerz/failed', [
             'tran_id' => $transaction->reference,
-        ])->assertRedirect('/ebooks/')
+        ])->assertRedirect('/ebooks')
             ->assertSessionHasErrors([
                 'payment' => 'The provider return did not verify the payment. The transaction remains pending; do not retry until support reconciles its status.',
             ]);
 
         $this->post('/universal-payment/sslcommerz/cancelled', [
             'tran_id' => $transaction->reference,
-        ])->assertRedirect('/ebooks/')
+        ])->assertRedirect('/ebooks')
             ->assertSessionHas(
                 'status',
                 'The browser return cannot confirm cancellation. The transaction remains pending; do not retry until support reconciles its status.'
