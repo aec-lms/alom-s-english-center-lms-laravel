@@ -115,7 +115,7 @@ class BackupService
 
                 return $record;
             });
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             @unlink($encryptedPath);
             throw $exception;
         }
