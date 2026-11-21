@@ -11,12 +11,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class ExamAttempt extends Model
 {
     protected $fillable = [
-        'exam_id', 'user_id', 'started_at', 'submitted_answers', 'score_obtained',
+        'exam_id', 'user_id', 'started_at', 'submitted_answers', 'exam_snapshot', 'score_obtained',
         'total_marks', 'passed', 'submitted_at',
     ];
 
     protected $casts = [
         'submitted_answers' => 'array',
+        'exam_snapshot' => 'array',
         'passed' => 'boolean',
         'started_at' => 'datetime',
         'submitted_at' => 'datetime',
