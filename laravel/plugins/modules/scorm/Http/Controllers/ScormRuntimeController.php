@@ -284,6 +284,7 @@ class ScormRuntimeController extends Controller
         $validator = Validator::make($payload, [
             'attempt_id' => ['required', 'integer', 'min:1'],
             'token' => ['required', 'string', 'size:64'],
+            'request_id' => ['required', 'uuid'],
             'version' => ['required', 'integer', 'min:0'],
             'data' => ['required', 'array', 'max:300'],
             'finish' => ['sometimes', 'boolean'],
@@ -307,6 +308,19 @@ class ScormRuntimeController extends Controller
                     ->lockForUpdate()
                     ->first();
                 abort_unless($session, 403, 'SCORM launch session expired or is invalid.');
+
+                $payloadHash = hash('sha256', json_encode($validated, JSON_THROW_ON_ERROR));
+                $cachedRequest = DB::table('scorm_runtime_requests')
+                    ->where('scorm_attempt_session_id', $session->id)
+                    ->where('request_id', $validated['request_id'])
+                    ->first();
+                if ($cachedRequest) {
+                    abort_unless(hash_equals($cachedRequest->payload_sha256, $payloadHash), 409, 'SCORM request identifier was reused with different content.');
+                    $cachedResponse = json_decode((string) $cachedRequest->response_body, true);
+                    abort_unless(is_array($cachedResponse), 500, 'Stored SCORM request response is invalid.');
+
+                    return $cachedResponse + ['replayed' => true];
+                }
 
                 $attempt = DB::table('scorm_attempts')->where('id', $validated['attempt_id'])->lockForUpdate()->first();
                 abort_unless($attempt && in_array($attempt->completion_state, ['in_progress', 'suspended'], true), 409, 'SCORM attempt is no longer writable.');
@@ -367,10 +381,25 @@ class ScormRuntimeController extends Controller
                     'updated_at' => now(),
                 ]);
 
-                return ['version' => $version, 'completion_state' => $completionState, 'lesson_status' => $lessonStatus];
+                $responseBody = [
+                    'ok' => true,
+                    'version' => $version,
+                    'completion_state' => $completionState,
+                    'lesson_status' => $lessonStatus,
+                ];
+                DB::table('scorm_runtime_requests')->insert([
+                    'scorm_attempt_session_id' => $session->id,
+                    'request_id' => $validated['request_id'],
+                    'payload_sha256' => $payloadHash,
+                    'response_body' => json_encode($responseBody, JSON_THROW_ON_ERROR),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+
+                return $responseBody;
             });
 
-            return response()->json(['ok' => true] + $result)->withHeaders($this->corsHeaders($request));
+            return response()->json($result)->withHeaders($this->corsHeaders($request));
         } catch (HttpExceptionInterface $exception) {
             return response()->json(['ok' => false, 'message' => $exception->getMessage()], $exception->getStatusCode())
                 ->withHeaders($this->corsHeaders($request));
