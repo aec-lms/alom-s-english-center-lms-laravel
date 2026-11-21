@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use Illuminate\\Http\\UploadedFile;
-use Illuminate\\Support\\Facades\\DB;
-use Tests\\TestCase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
+use Tests\TestCase;
 use ZipArchive;
 
 class ScormPluginAdminTest extends TestCase
@@ -44,7 +44,7 @@ class ScormPluginAdminTest extends TestCase
         $bytes = file_get_contents($path);
         @unlink($path);
         if (!is_string($bytes)) {
-            throw new \\RuntimeException('Unable to read generated SCORM test package.');
+            throw new \RuntimeException('Unable to read generated SCORM test package.');
         }
 
         return UploadedFile::fake()->createWithContent('english-unit.zip', $bytes);
