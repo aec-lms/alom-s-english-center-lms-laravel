@@ -92,7 +92,7 @@
                 </details>
             </article>
         @empty
-            <div class="rounded-2xl border border-dashed p-8 text-center text-sm text-slate-500">{{ __('{{ __('No learning paths created yet.') }}') }}</div>
+            <div class="rounded-2xl border border-dashed p-8 text-center text-sm text-slate-500">{{ __('No learning paths created yet.') }}</div>
         @endforelse
         {{ $paths->links() }}
     </section>
