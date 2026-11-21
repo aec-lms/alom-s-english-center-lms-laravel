@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Core\Plugins\PluginManager;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Plugins\Modules\StudentManagement\Models\Student;
 use Plugins\Modules\TeacherManagement\Models\Teacher;
 use Plugins\Modules\CourseManagement\Models\Course;
@@ -34,7 +36,7 @@ class RecycleBinTest extends TestCase
         try {
             $manager->deleteToRecycleBin('admin-boosting');
             $this->fail('A partial recycle-bin metadata write must not commit the package move.');
-        } catch (\\RuntimeException $exception) {
+        } catch (\RuntimeException $exception) {
             $this->assertStringContainsString('metadata could not be written and verified', $exception->getMessage());
         }
 
