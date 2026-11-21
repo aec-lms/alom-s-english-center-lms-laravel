@@ -115,7 +115,7 @@ The historical snapshot above is retained for audit history. The following is th
 - #359 teacher-assignment security work must be reconciled with #357, which owns the shared teacher lifecycle controller and profile validation tests.
 
 ### Focused plugin fixes / findings
-- PR #341 has a Stripe immediate-success webhook state mismatch and PayPal browser-cancel reconciliation gap recorded as blocking review findings.
+- PR #341 candidate now preserves Stripe's immediate-success reservation as `initiated` and adds a verified-webhook regression; the current-main `pending` mismatch is addressed only after this stale-base PR is safely refreshed, exact-head SQLite/MySQL checks pass, independent review approves, and it is merged. PayPal browser-cancel still leaves an unverified reservation held pending provider reconciliation; add a provider-status verification/reconciliation path or explicitly document the operator recovery flow.
 - PR #363 is a focused correction for unverified SSLCOMMERZ browser fail/cancel callbacks; keep it unaccepted until exact-head SQLite, MySQL 8, Browser E2E and Composer checks pass.
 - `gateway-card` is intentionally disabled without a configured acquirer adapter; no production card processing capability is claimed.
 - The repository's plugin matrix is a coverage map only. It is not proof of 60 completed functional acceptances.
