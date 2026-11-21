@@ -253,6 +253,44 @@ class ScormRuntimeController extends Controller
         abort_unless($target !== false && is_file($target)
             && str_starts_with($target, $root . DIRECTORY_SEPARATOR), 404);
 
+        $extension = strtolower(pathinfo($target, PATHINFO_EXTENSION));
+        if (in_array($extension, ['html', 'htm'], true)) {
+            $html = file_get_contents($target);
+            abort_unless(is_string($html), 404, 'SCORM launch document could not be read.');
+
+            $user = DB::table('users')->where('id', $record->user_id)->first();
+            $appOrigin = rtrim((string) config('app.url'), '/');
+            $runtimeUrl = $appOrigin . '/api/scorm-runtime/commit';
+            $savedData = json_decode((string) $record->cmi_data, true);
+            $adapter = view('scorm::runtime-adapter', [
+                'runtimeUrl' => $runtimeUrl,
+                'appOrigin' => $appOrigin,
+                'attemptId' => $attempt,
+                'token' => $token,
+                'stateVersion' => (int) $record->state_version,
+                'studentId' => (string) $record->user_id,
+                'studentName' => (string) ($user->name ?? 'Learner'),
+                'entryMode' => $record->entry_mode,
+                'totalTime' => $this->formatScormTime((int) $record->total_time_seconds),
+                'savedData' => is_array($savedData) ? $savedData : [],
+            ])->render();
+
+            if (preg_match('/<head\\b[^>]*>/i', $html) === 1) {
+                $html = preg_replace('/(<head\\b[^>]*>)/i', '$1' . $adapter, $html, 1);
+            } else {
+                $html = $adapter . $html;
+            }
+
+            return response($html, 200, [
+                'Content-Type' => 'text/html; charset=UTF-8',
+                'X-Content-Type-Options' => 'nosniff',
+                'Referrer-Policy' => 'no-referrer',
+                'Cross-Origin-Resource-Policy' => 'same-origin',
+                'Content-Security-Policy' => $this->contentSecurityPolicy(),
+                'Cache-Control' => 'private, no-store',
+            ]);
+        }
+
         $response = response()->file($target, [
             'X-Content-Type-Options' => 'nosniff',
             'Referrer-Policy' => 'no-referrer',
