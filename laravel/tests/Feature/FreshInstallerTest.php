@@ -102,6 +102,7 @@ class FreshInstallerTest extends TestCase
 
             $this->assertSame(['admin_id', 'lock_path'], array_keys($result));
             $this->assertFileExists($this->tempLockPath);
+            $this->assertFileDoesNotExist($this->tempLockPath . '.in-progress', 'A successful install must clear its progress marker.');
             $this->assertFileExists($this->tempLockPath . '.mutex', 'The OS-managed installer mutex must be created for serialized installs.');
             $this->assertDirectoryExists($privatePath);
             $this->assertTrue(is_writable($privatePath));
@@ -206,6 +207,7 @@ class FreshInstallerTest extends TestCase
             }
 
             $this->assertFileDoesNotExist($lockPath, 'A failed migration must never create the installed marker.');
+            $this->assertFileExists($lockPath . '.in-progress', 'A failed migration must retain its durable phase marker.');
             $this->assertFileExists($lockPath . '.mutex');
 
             $probe = fopen($lockPath . '.mutex', 'c');
@@ -218,6 +220,7 @@ class FreshInstallerTest extends TestCase
             // retrying the same fresh database must complete normally.
             $result = app(FreshInstallerService::class)->installFresh($installConfig);
             $this->assertFileExists($lockPath);
+            $this->assertFileDoesNotExist($lockPath . '.in-progress', 'A clean retry must remove the interrupted-attempt marker.');
             $this->assertSame(1, (int) User::query()->where('email', 'retry-admin@aec.test')->count());
             $this->assertSame(1, (int) $result['admin_id']);
         } finally {
@@ -231,7 +234,7 @@ class FreshInstallerTest extends TestCase
                 'lms.backup_encryption_key' => $originalBackupKey,
             ]);
 
-            foreach ([$lockPath, $lockPath . '.mutex', $envPath] as $file) {
+            foreach ([$lockPath, $lockPath . '.mutex', $lockPath . '.in-progress', $envPath] as $file) {
                 @unlink($file);
             }
             foreach ([$privatePath, $backupPath] as $directory) {
@@ -309,6 +312,7 @@ class FreshInstallerTest extends TestCase
             }
 
             $this->assertFileDoesNotExist($lockPath, 'A partially migrated database must never receive the installed marker.');
+            $this->assertFileExists($lockPath . '.in-progress', 'The interrupted phase marker must survive a seeder failure.');
             $this->assertGreaterThan(0, DB::table('migrations')->count());
             $this->assertSame(0, User::query()->where('email', 'seeder-failure-admin@aec.test')->count());
 
@@ -324,10 +328,11 @@ class FreshInstallerTest extends TestCase
                 app(FreshInstallerService::class)->installFresh($installConfig);
                 $this->fail('Installer retried against a partially migrated non-empty database.');
             } catch (RuntimeException $exception) {
-                $this->assertStringContainsString('already contains', $exception->getMessage());
-                $this->assertStringContainsString('empty fresh database is required', $exception->getMessage());
+                $this->assertStringContainsString('previous fresh installation was interrupted', $exception->getMessage());
+                $this->assertStringContainsString('will not drop or truncate existing data', $exception->getMessage());
             }
             $this->assertFileDoesNotExist($lockPath);
+            $this->assertFileExists($lockPath . '.in-progress', 'The interrupted marker must remain until the operator provisions a fresh empty database.');
         } finally {
             \Illuminate\Support\Facades\Artisan::swap($consoleKernel);
             DB::disconnect('installer_seeder_failure_test');
@@ -451,6 +456,7 @@ class FreshInstallerTest extends TestCase
             $this->assertSame(1, (int) $pdo->query("SELECT COUNT(*) FROM users WHERE email = 'concurrent-admin@aec.test'")->fetchColumn());
             $this->assertGreaterThan(0, (int) $pdo->query('SELECT COUNT(*) FROM migrations')->fetchColumn());
             $this->assertFileExists($lockDirectory . '/installed.lock');
+            $this->assertFileDoesNotExist($lockDirectory . '/installed.lock.in-progress');
             $this->assertFileExists($lockDirectory . '/installed.lock.mutex');
         } finally {
             foreach ($processes as $index => $process) {
