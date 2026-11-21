@@ -197,6 +197,7 @@ class CourseController extends Controller
             'seo_title' => ['nullable', 'string', 'max:180'],
             'seo_description' => ['nullable', 'string', 'max:320'],
         ]);
+        $this->assertCoursePathIntegrity((int) $course->id, false, (string) $validated['status']);
 
         $categoryName = $validated['category'] ?? $course->category ?? 'General';
         $categoryId = $validated['category_id'] ?? $course->category_id;
@@ -241,7 +242,6 @@ class CourseController extends Controller
             ? $this->parseSyllabusLines((string) $validated['syllabus_lines'])
             : $course->syllabus_json;
 
-        $this->assertCoursePathIntegrity((int) $course->id, false, (string) $validated['status']);
         $course->update([
             'code' => strtoupper(trim($validated['code'])),
             'title' => $validated['title'],
