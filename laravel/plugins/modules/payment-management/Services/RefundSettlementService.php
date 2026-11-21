@@ -440,7 +440,7 @@ class RefundSettlementService
         $event = $refund->gateway_slug === 'offline'
             ? 'payment.refunded'
             : 'payment.refund_provider_confirmed';
-        $this->audit->log($event, 'payment_transaction', (string) $transaction->id, [
+        $this->audit->logRequired($event, 'payment_transaction', (string) $transaction->id, [
             'refund_id' => $refund->id,
             'amount' => $refund->amount,
             'gateway' => $refund->gateway_slug,
