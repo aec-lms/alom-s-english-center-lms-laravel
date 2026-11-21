@@ -955,19 +955,21 @@ class PluginManager
             $validated[$key] = $value;
         }
 
-        foreach ($validated as $key => $val) {
-            $isSecret = in_array($key, $secretKeys, true) || in_array($key, $manifestSecretKeys, true);
-            $stringVal = is_scalar($val) ? (string) $val : json_encode($val, JSON_THROW_ON_ERROR);
-            PluginSetting::query()->updateOrCreate(
-                ['plugin_slug' => $slug, 'setting_key' => (string) $key],
-                [
-                    'setting_value' => $isSecret && $stringVal !== '' ? Crypt::encryptString($stringVal) : $stringVal,
-                    'is_encrypted' => $isSecret && $stringVal !== '',
-                ]
-            );
-        }
+        DB::transaction(function () use ($validated, $secretKeys, $manifestSecretKeys, $slug, $actorId): void {
+            foreach ($validated as $key => $val) {
+                $isSecret = in_array($key, $secretKeys, true) || in_array($key, $manifestSecretKeys, true);
+                $stringVal = is_scalar($val) ? (string) $val : json_encode($val, JSON_THROW_ON_ERROR);
+                PluginSetting::query()->updateOrCreate(
+                    ['plugin_slug' => $slug, 'setting_key' => (string) $key],
+                    [
+                        'setting_value' => $isSecret && $stringVal !== '' ? Crypt::encryptString($stringVal) : $stringVal,
+                        'is_encrypted' => $isSecret && $stringVal !== '',
+                    ]
+                );
+            }
 
-        $this->audit->logRequired('plugin.configured', 'plugin', $slug, ['keys' => array_keys($validated)], $actorId);
+            $this->audit->logRequired('plugin.configured', 'plugin', $slug, ['keys' => array_keys($validated)], $actorId);
+        });
     }
 
     /** Reset only plugin configuration to manifest defaults; business data is never touched. */
