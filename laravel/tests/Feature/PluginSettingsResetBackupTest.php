@@ -63,7 +63,7 @@ class PluginSettingsResetBackupTest extends TestCase
             'sandbox_mode' => '0',
         ], ['store_id', 'store_password']);
 
-        File::shouldReceive('put')->once()->andReturn(1);
+        File::partialMock()->shouldReceive('put')->once()->andReturn(1);
 
         try {
             $manager->resetSettingsToDefaults('gateway-sslcommerz');
