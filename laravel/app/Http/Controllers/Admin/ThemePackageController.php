@@ -19,6 +19,7 @@ class ThemePackageController extends Controller
         return view('admin.appearance.themes',[
             'themes'=>$themes->installed(),
             'activeSlug'=>$themes->activeSlug(),
+            'rollbackAvailable'=>array_fill_keys(array_keys($themes->installed()),false),
         ]);
     }
 
@@ -41,6 +42,17 @@ class ThemePackageController extends Controller
         }
 
         return view('admin.appearance.theme-preview',compact('theme'));
+    }
+
+    public function rollback(string $slug,ThemePackageManager $themes,AuditLogger $audit): RedirectResponse
+    {
+        try {
+            $theme=$themes->rollback($slug,auth()->id());
+            $audit->log('appearance.theme_rolled_back','theme',$slug,['version'=>$theme['version']]);
+            return back()->with('status',"Theme '{$slug}' rolled back to v{$theme['version']}.");
+        } catch (Throwable $e) {
+            return back()->withErrors(['theme'=>$e->getMessage()]);
+        }
     }
 
     public function activate(string $slug,ThemePackageManager $themes,AuditLogger $audit): RedirectResponse
