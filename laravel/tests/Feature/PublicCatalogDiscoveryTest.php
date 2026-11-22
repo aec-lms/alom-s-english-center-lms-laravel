@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use Plugins\Modules\CertificateManagement\Models\CertificateRecord;
 use Plugins\Modules\CourseManagement\Models\Course;
 use Plugins\Modules\ExamManagement\Models\Exam;
 use Plugins\Modules\StorefrontCatalog\Models\StorefrontItem;
@@ -111,6 +112,7 @@ class PublicCatalogDiscoveryTest extends TestCase
             ->assertSee('IELTS Speaking Workbook')
             ->assertDontSee('Phonetics Flashcards');
     }
+
     public function test_verified_certificate_renders_a_printable_achievement_card_but_revoked_certificate_does_not(): void
     {
         $this->markSystemInstalled();
