@@ -58,6 +58,7 @@ class UniversalPaymentGatewayToggleTest extends TestCase
         ]);
 
         $admin = $this->createUserWithRole('admin');
+        $this->grantUniversalPaymentManagePermission($admin);
         $this->actingAs($admin)->post('/plugins/universal-payment/transactions', [
             'payer_name' => 'Disabled Gateway Test',
             'payer_contact' => '01712345678',
@@ -109,6 +110,7 @@ class UniversalPaymentGatewayToggleTest extends TestCase
         app(PluginManager::class)->saveSettings('gateway-bank-transfer', ['enabled' => '0']);
 
         $admin = $this->createUserWithRole('admin');
+        $this->grantUniversalPaymentManagePermission($admin);
         $payload = [
             'payer_name' => 'Manual Payment Test',
             'payer_contact' => '01712345678',
@@ -143,6 +145,7 @@ class UniversalPaymentGatewayToggleTest extends TestCase
         ]);
 
         $admin = $this->createUserWithRole('admin');
+        $this->grantUniversalPaymentManagePermission($admin);
         $this->actingAs($admin)->post('/plugins/universal-payment/transactions', [
             'payer_name' => 'Uninstalled Method',
             'item_title' => 'Tuition fee',
