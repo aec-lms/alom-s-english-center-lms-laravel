@@ -22,6 +22,18 @@
                 </div>
             </div>
 
+            <form method="GET" action="{{ route('public.instructors') }}" class="max-w-2xl mx-auto flex gap-2 rounded-2xl bg-white p-3 shadow-sm border border-slate-200">
+                <label class="sr-only" for="instructor-search">{{ __('Search instructors') }}</label>
+                <input id="instructor-search" type="search" name="q" value="{{ $searchTerm }}" maxlength="100" placeholder="{{ __('Search by instructor, subject or qualification') }}" class="min-w-0 flex-1 rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
+                <button type="submit" class="rounded-xl bg-[#0077CC] px-5 py-3 text-sm font-bold text-white hover:bg-[#0060A8]">{{ __('Search') }}</button>
+            </form>
+
+            @if ($instructors->isEmpty())
+                <section class="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
+                    <h2 class="text-lg font-bold text-slate-800">{{ __('No instructors found') }}</h2>
+                    <p class="mt-2 text-sm text-slate-500">{{ __('Try another name, subject or qualification.') }}</p>
+                </section>
+            @else
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-7">
                 @foreach ($instructors as $inst)
                     <article class="rounded-2xl bg-white shadow-[0_14px_35px_-12px_rgba(15,23,42,0.12)] border border-slate-100/90 overflow-hidden flex flex-col items-center text-center pb-7 hover:-translate-y-1 hover:shadow-xl transition-all duration-200">
@@ -56,6 +68,7 @@
                     </article>
                 @endforeach
             </div>
+            @endif
         </div>
     </main>
 
