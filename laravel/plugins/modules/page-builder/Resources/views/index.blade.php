@@ -163,7 +163,7 @@
                             @endforeach
                         </div>
                         <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
-                            <div class="flex flex-wrap items-center gap-3"><button type="button" data-add-block class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700">＋ Add block</button><label class="flex items-center gap-2 text-xs font-semibold"><input type="checkbox" name="is_published" value="1" @checked($page->is_published)> Published</label></div>
+                            <div class="flex flex-wrap items-center gap-3"><select data-reusable-select class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs" aria-label="Choose reusable block"><option value="">Insert reusable block…</option>@foreach(($reusableBlocks ?? []) as $saved)<option value="{{ $saved['id'] }}">{{ $saved['title'] }}</option>@endforeach</select><button type="button" data-insert-reusable class="rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs font-bold text-violet-700">Insert</button><button type="button" data-add-block class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700">＋ Add block</button><label class="flex items-center gap-2 text-xs font-semibold"><input type="checkbox" name="is_published" value="1" @checked($page->is_published)> Published</label></div>
                             <button type="submit" class="rounded-lg bg-slate-900 px-4 py-2.5 text-xs font-bold text-white">Save changes</button>
                         </div>
                     </form>
