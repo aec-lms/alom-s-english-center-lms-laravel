@@ -114,6 +114,18 @@ class FreshInstallerTest extends TestCase
             $admin = User::query()->where('email', 'fresh-admin@aec.test')->firstOrFail();
             $this->assertTrue(Hash::check('FreshStrongPassword!2026', $admin->password));
             $this->assertTrue($admin->hasRole('admin'));
+            $this->assertDatabaseHas('audit_logs', [
+                'action' => 'core.installed',
+                'entity_type' => 'system',
+                'entity_id' => 'fresh_install',
+                'user_id' => $admin->id,
+            ]);
+            $this->assertSame(1, DB::table('audit_logs')
+                ->where('action', 'core.installed')
+                ->where('entity_type', 'system')
+                ->where('entity_id', 'fresh_install')
+                ->where('user_id', $admin->id)
+                ->count(), 'A fresh installation must emit exactly one required audit event.');
             $this->assertSame('false', SystemSetting::query()->where('key', 'legacy_records_imported')->value('value'));
             $this->assertSame('US', SystemSetting::query()->where('key', 'institution.country_code')->value('value'));
             $this->assertSame('en', SystemSetting::query()->where('key', 'localization.locale')->value('value'));
