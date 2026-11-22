@@ -15,7 +15,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Plugins\Modules\PageBuilder\Models\BuilderPage;
-use Plugins\Modules\PageBuilder\Models\BuilderPageRevision;
+use Plugins\Modules\PageBuilder\Models\BuilderPageRevision;\nuse Plugins\Modules\PageBuilder\Services\ReusableBlockLibrary;
 
 class PageBuilderController extends Controller
 {
@@ -23,7 +23,7 @@ class PageBuilderController extends Controller
 
     public function __construct(private readonly AuditLogger $audit) {}
 
-    public function index(): View
+    public function index(ReusableBlockLibrary $reusableBlocks): View
     {
         $pages = Schema::hasTable('cms_pages')
             ? BuilderPage::query()->with([
@@ -32,7 +32,7 @@ class PageBuilderController extends Controller
             ])->latest()->get()
             : collect();
 
-        return view('page-builder::index', compact('pages'));
+        $reusableBlocks = $reusableBlocks->all();\n        return view('page-builder::index', compact('pages', 'reusableBlocks'));
     }
 
     public function store(Request $request): RedirectResponse
