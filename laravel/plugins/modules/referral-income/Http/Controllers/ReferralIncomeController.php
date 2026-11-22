@@ -140,7 +140,7 @@ class ReferralIncomeController extends Controller
                     'updated_at' => now(),
                 ]);
 
-                $this->audit->log('referral_income.rules_updated', 'referral_income_rule', $type, [
+                $this->audit->logRequired('referral_income.rules_updated', 'referral_income_rule', $type, [
                     'before' => $before,
                     'after' => $after,
                 ], (int) $request->user()->id);
@@ -174,7 +174,7 @@ class ReferralIncomeController extends Controller
                 'updated_at' => now(),
             ]);
 
-            $this->audit->log('referral_income.commission_reviewed', 'referral_commission', (string) $commission, [
+            $this->audit->logRequired('referral_income.commission_reviewed', 'referral_commission', (string) $commission, [
                 'from' => 'pending',
                 'to' => $data['status'],
                 'reason' => isset($data['admin_note']) ? trim($data['admin_note']) : null,
@@ -209,7 +209,7 @@ class ReferralIncomeController extends Controller
                 'updated_at' => now(),
             ]);
 
-            $this->audit->log('referral_income.recovery_reviewed', 'referral_commission_reversal', (string) $reversal, [
+            $this->audit->logRequired('referral_income.recovery_reviewed', 'referral_commission_reversal', (string) $reversal, [
                 'from' => 'recovery_due',
                 'to' => $data['status'],
                 'reason' => isset($data['admin_note']) ? trim($data['admin_note']) : null,
@@ -261,7 +261,7 @@ class ReferralIncomeController extends Controller
                     ->update(['status' => 'payout_approved', 'updated_at' => now()]);
             }
 
-            $this->audit->log('referral_income.payout_reviewed', 'referral_payout_request', (string) $payout, [
+            $this->audit->logRequired('referral_income.payout_reviewed', 'referral_payout_request', (string) $payout, [
                 'from' => $record->status,
                 'to' => $data['status'],
                 'amount' => (string) $record->amount,
