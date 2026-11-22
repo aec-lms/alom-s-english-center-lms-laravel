@@ -438,12 +438,13 @@ class PublicHomeController extends Controller
         ]);
     }
 
-    public function learn(): View
+    public function learn(Request $request): View
     {
+        $searchTerm = mb_substr(trim((string) $request->query('q', '')), 0, 100);
         $lessons = [];
         if (Schema::hasTable('cms_posts')) {
             // Use the SoftDeletes model scope so recycled posts never appear publicly.
-            $posts = CmsPost::query()->where('is_published', true)->orderByDesc('id')->get();
+            $posts = CmsPost::query()->where('is_published', true)->orderByDesc('id')->limit(250)->get();
             foreach ($posts as $post) {
                 $lessons[] = [
                     'slug' => $post->slug,
@@ -458,7 +459,19 @@ class PublicHomeController extends Controller
             }
         }
 
-        return view('public.learn', compact('lessons'));
+        if ($searchTerm !== '') {
+            $needle = mb_strtolower($searchTerm);
+            $lessons = array_values(array_filter($lessons, function (array $lesson) use ($needle): bool {
+                $haystack = mb_strtolower(implode(' ', [
+                    (string) ($lesson['title'] ?? ''),
+                    (string) ($lesson['category'] ?? ''),
+                    (string) ($lesson['instructor'] ?? ''),
+                ]));
+                return str_contains($haystack, $needle);
+            }));
+        }
+
+        return view('public.learn', compact('lessons', 'searchTerm'));
     }
 
     public function learnShow(string $slug): View
@@ -581,11 +594,24 @@ class PublicHomeController extends Controller
         $allBooks = $this->catalogEbooks();
         $activeCategory = trim((string) $request->query('category', 'all'));
         $priceFilter = trim((string) $request->query('type', 'all'));
+        $searchTerm = mb_substr(trim((string) $request->query('q', '')), 0, 100);
 
         $categories = $allBooks->pluck('category')->unique()->values();
         $catFiltered = $activeCategory === 'all' || $activeCategory === ''
             ? $allBooks
-            : $allBooks->filter(fn ($b) => strcasecmp($b['category'], $activeCategory) === 0)->values();
+            : $allBooks->filter(fn ($book) => strcasecmp((string) $book['category'], $activeCategory) === 0)->values();
+
+        if ($searchTerm !== '') {
+            $needle = mb_strtolower($searchTerm);
+            $catFiltered = $catFiltered->filter(function ($book) use ($needle): bool {
+                $haystack = mb_strtolower(implode(' ', [
+                    (string) ($book['title'] ?? ''),
+                    (string) ($book['category'] ?? ''),
+                    (string) ($book['summary'] ?? ''),
+                ]));
+                return str_contains($haystack, $needle);
+            })->values();
+        }
 
         $freeCount = $catFiltered->where('is_free', true)->count();
         $premiumCount = $catFiltered->where('is_free', false)->count();
@@ -604,7 +630,8 @@ class PublicHomeController extends Controller
             'catFiltered',
             'freeCount',
             'premiumCount',
-            'visibleBooks'
+            'visibleBooks',
+            'searchTerm'
         ));
     }
 
