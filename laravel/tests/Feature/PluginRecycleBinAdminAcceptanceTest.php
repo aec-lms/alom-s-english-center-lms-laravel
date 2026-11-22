@@ -347,4 +347,124 @@ class PluginRecycleBinAdminAcceptanceTest extends TestCase
         }
     }
 
+    public function test_delete_audit_failure_restores_package_and_previous_lifecycle_state(): void
+    {
+        $this->markSystemInstalled();
+        $slug = 'delete-audit-failure-' . strtolower(substr(bin2hex(random_bytes(4)), 0, 8));
+        $modulePath = $this->createProbePlugin($slug);
+
+        try {
+            $realManager = app(PluginManager::class);
+            $realManager->syncCatalog();
+            $realManager->install($slug);
+
+            $audit = \\Mockery::mock(AuditLogger::class);
+            $audit->shouldReceive('log')->zeroOrMoreTimes();
+            $audit->shouldReceive('logRequired')->once()->andThrow(new RuntimeException('audit storage unavailable'));
+            $manager = new PluginManager($audit);
+
+            try {
+                $manager->deleteToRecycleBin($slug);
+                $this->fail('A recycle-bin delete must fail when its required audit cannot be persisted.');
+            } catch (RuntimeException $exception) {
+                $this->assertStringContainsString('audit storage unavailable', $exception->getMessage());
+            }
+
+            $this->assertDirectoryExists($modulePath);
+            $this->assertTrue($realManager->isInstalled($slug));
+            $this->assertTrue($realManager->isEnabled($slug));
+            $this->assertFalse(collect($realManager->recycledPlugins())->contains(fn (array $item): bool => ($item['slug'] ?? null) === $slug));
+        } finally {
+            File::deleteDirectory($modulePath);
+        }
+    }
+
+    public function test_restore_audit_failure_keeps_archive_metadata_and_returns_package_to_recycle_bin(): void
+    {
+        $this->markSystemInstalled();
+        $slug = 'restore-audit-failure-' . strtolower(substr(bin2hex(random_bytes(4)), 0, 8));
+        $modulePath = $this->createProbePlugin($slug);
+        $archivePath = null;
+
+        try {
+            $realManager = app(PluginManager::class);
+            $realManager->syncCatalog();
+            $realManager->install($slug);
+            $realManager->deleteToRecycleBin($slug);
+            $archive = collect($realManager->recycledPlugins())->firstWhere('slug', $slug);
+            $this->assertNotNull($archive);
+            $archiveName = $archive['archive'];
+            $archivePath = storage_path('app/plugin-recycle-bin/' . $archiveName);
+            $metadataPath = $archivePath . '.json';
+
+            $audit = \\Mockery::mock(AuditLogger::class);
+            $audit->shouldReceive('log')->zeroOrMoreTimes();
+            $audit->shouldReceive('logRequired')->once()->andThrow(new RuntimeException('audit storage unavailable'));
+            $manager = new PluginManager($audit);
+
+            try {
+                $manager->restoreFromRecycleBin($archiveName);
+                $this->fail('A restore must fail when its required audit cannot be persisted.');
+            } catch (RuntimeException $exception) {
+                $this->assertStringContainsString('audit storage unavailable', $exception->getMessage());
+            }
+
+            $this->assertDirectoryDoesNotExist($modulePath);
+            $this->assertDirectoryExists($archivePath);
+            $this->assertFileExists($metadataPath);
+            $this->assertFalse($realManager->isInstalled($slug));
+            $this->assertTrue(collect($realManager->recycledPlugins())->contains(fn (array $item): bool => ($item['slug'] ?? null) === $slug));
+        } finally {
+            File::deleteDirectory($modulePath);
+            if ($archivePath && is_dir($archivePath)) File::deleteDirectory($archivePath);
+            if ($archivePath && is_file($archivePath . '.json')) @unlink($archivePath . '.json');
+        }
+    }
+
+    public function test_permanent_delete_audit_failure_preserves_archive_and_verified_recovery_snapshot(): void
+    {
+        $this->markSystemInstalled();
+        $slug = 'permanent-audit-failure-' . strtolower(substr(bin2hex(random_bytes(4)), 0, 8));
+        $modulePath = $this->createProbePlugin($slug);
+        $archivePath = null;
+        $backupPath = null;
+
+        try {
+            $realManager = app(PluginManager::class);
+            $realManager->syncCatalog();
+            $realManager->install($slug);
+            $realManager->deleteToRecycleBin($slug);
+            $archive = collect($realManager->recycledPlugins())->firstWhere('slug', $slug);
+            $this->assertNotNull($archive);
+            $archiveName = $archive['archive'];
+            $archivePath = storage_path('app/plugin-recycle-bin/' . $archiveName);
+            $backupPath = storage_path('app/plugin-permanent-delete-backups/' . $archiveName);
+
+            $audit = \\Mockery::mock(AuditLogger::class);
+            $audit->shouldReceive('log')->zeroOrMoreTimes();
+            $audit->shouldReceive('logRequired')->once()->andThrow(new RuntimeException('audit storage unavailable'));
+            $manager = new PluginManager($audit);
+
+            try {
+                $manager->permanentlyDeleteFromRecycleBin($archiveName);
+                $this->fail('A permanent delete must fail when its required audit cannot be persisted.');
+            } catch (RuntimeException $exception) {
+                $this->assertStringContainsString('audit storage unavailable', $exception->getMessage());
+            }
+
+            $this->assertDirectoryExists($archivePath);
+            $this->assertDirectoryExists($backupPath);
+            $this->assertFileExists($archivePath . '.json');
+            $this->assertSame(
+                hash_file('sha256', $archivePath . '/plugin.json'),
+                hash_file('sha256', $backupPath . '/plugin.json')
+            );
+        } finally {
+            File::deleteDirectory($modulePath);
+            if ($archivePath && is_dir($archivePath)) File::deleteDirectory($archivePath);
+            if ($archivePath && is_file($archivePath . '.json')) @unlink($archivePath . '.json');
+            if ($backupPath && is_dir($backupPath)) File::deleteDirectory($backupPath);
+        }
+    }
+
 }
