@@ -195,6 +195,7 @@ Route::middleware('installed')->group(function (): void {
             Route::get('/themes/{slug}/preview', [ThemePackageController::class, 'preview'])->name('themes.preview');
             Route::post('/themes/upload', [ThemePackageController::class, 'upload'])->name('themes.upload');
             Route::post('/themes/{slug}/activate', [ThemePackageController::class, 'activate'])->name('themes.activate');
+            Route::post('/themes/{slug}/rollback', [ThemePackageController::class, 'rollback'])->name('themes.rollback');
             Route::post('/themes/deactivate', [ThemePackageController::class, 'deactivate'])->name('themes.deactivate');
             Route::delete('/themes/{slug}', [ThemePackageController::class, 'uninstall'])->name('themes.uninstall');
         });
