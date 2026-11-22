@@ -111,4 +111,41 @@ class PublicCatalogDiscoveryTest extends TestCase
             ->assertSee('IELTS Speaking Workbook')
             ->assertDontSee('Phonetics Flashcards');
     }
+    public function test_verified_certificate_renders_a_printable_achievement_card_but_revoked_certificate_does_not(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['certificate-management']);
+
+        CertificateRecord::query()->create([
+            'verification_code' => 'AEC-CERT-CARD-001',
+            'student_name' => 'Achievement Card Student',
+            'student_code' => 'AEC-STU-001',
+            'course_title' => 'Advanced English Communication',
+            'grade_or_band' => 'Band 8.0',
+            'issued_at' => now()->toDateString(),
+            'status' => 'issued',
+        ]);
+
+        $this->get('/result?code=AEC-CERT-CARD-001')
+            ->assertOk()
+            ->assertSee('Achievement Card')
+            ->assertSee('Achievement Card Student')
+            ->assertSee('Print / Save PDF')
+            ->assertSee('window.print()');
+
+        CertificateRecord::query()->create([
+            'verification_code' => 'AEC-CERT-REVOKED-001',
+            'student_name' => 'Revoked Achievement Student',
+            'course_title' => 'Advanced English Communication',
+            'grade_or_band' => 'Completed',
+            'issued_at' => now()->toDateString(),
+            'status' => 'revoked',
+        ]);
+
+        $this->get('/result?code=AEC-CERT-REVOKED-001')
+            ->assertOk()
+            ->assertSee('has been revoked')
+            ->assertDontSee('id="achievement-card"');
+    }
+
 }
