@@ -224,7 +224,7 @@ class AttendanceController extends Controller
                     'occurred_at' => now(),
                 ]);
 
-                DB::table('attendance_audit_logs')->insert([
+                $attendanceTransitionId = DB::table('attendance_audit_logs')->insertGetId([
                     'attendance_record_id' => $record->id,
                     'actor_id' => $actor->id,
                     'event' => $isEdit ? ($changed ? 'updated' : 'reconfirmed') : 'created',
@@ -247,6 +247,7 @@ class AttendanceController extends Controller
                             'attendance_present',
                             'attendance_record',
                             (int) $record->id,
+                            (string) $attendanceTransitionId,
                         );
                     } elseif ($isEdit && $oldStatus === 'present' && $entry->status !== 'present') {
                         $rewards->reverseActivityAward(
