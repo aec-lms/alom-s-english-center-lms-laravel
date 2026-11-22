@@ -155,7 +155,7 @@ class BackupService
         if ($tempZip === false) throw new RuntimeException('Unable to allocate temporary restore archive.');
 
         try {
-            if ($magic === "AECBK02\n") {
+            if ($magic === "AECBK02\\n") {
                 $this->decryptArchiveStream($safeBackupPath, $tempZip, $key);
             } else {
                 // Legacy AES-CBC backups are authenticated in a first streaming pass,
@@ -167,53 +167,77 @@ class BackupService
             if ($zip->open($tempZip) !== true) throw new RuntimeException('Invalid decrypted backup archive.');
 
             $stagedPrivateFiles = null;
+            $privateFileRollback = null;
             try {
                 // SQLite cannot toggle PRAGMA foreign_keys from inside a transaction.
                 // Disable before the outer transaction so nested restore helpers can
                 // safely retain their existing disable/enable guards.
                 Schema::disableForeignKeyConstraints();
                 try {
-                    DB::transaction(function () use ($zip, &$stagedPrivateFiles, $backup, $actorId, $magic): void {
-                    $manifestRaw = $zip->getFromName('manifest.json');
-                    if ($manifestRaw === false) {
-                        throw new RuntimeException('Backup archive missing manifest.json.');
-                    }
-                    $manifest = json_decode($manifestRaw, true, 512, JSON_THROW_ON_ERROR);
-                    if (($manifest['core_version'] ?? '') !== (string) config('lms.core_version', '2.0.0')) {
-                        throw new RuntimeException('Backup core version mismatch.');
-                    }
+                    try {
+                        DB::transaction(function () use ($zip, &$stagedPrivateFiles, &$privateFileRollback, $backup, $actorId, $magic): void {
+                            $manifestRaw = $zip->getFromName('manifest.json');
+                            if ($manifestRaw === false) {
+                                throw new RuntimeException('Backup archive missing manifest.json.');
+                            }
+                            $manifest = json_decode($manifestRaw, true, 512, JSON_THROW_ON_ERROR);
+                            if (($manifest['core_version'] ?? '') !== (string) config('lms.core_version', '2.0.0')) {
+                                throw new RuntimeException('Backup core version mismatch.');
+                            }
 
-                    $stagedPrivateFiles = $this->stagePrivateFiles($zip, $manifest);
-                    $jsonLinesStream = $zip->getStream('database.jsonl');
-                    if (is_resource($jsonLinesStream)) {
-                        try {
-                            $this->restoreDatabaseJsonLines($jsonLinesStream);
-                        } finally {
-                            fclose($jsonLinesStream);
+                            $stagedPrivateFiles = $this->stagePrivateFiles($zip, $manifest);
+                            $jsonLinesStream = $zip->getStream('database.jsonl');
+                            if (is_resource($jsonLinesStream)) {
+                                try {
+                                    $this->restoreDatabaseJsonLines($jsonLinesStream);
+                                } finally {
+                                    fclose($jsonLinesStream);
+                                }
+                            } else {
+                                // Legacy JSON snapshots remain restorable; new backups use the streaming format.
+                                $dbRaw = $zip->getFromName('database.json');
+                                if ($dbRaw === false) {
+                                    throw new RuntimeException('Backup archive missing database.json or database.jsonl.');
+                                }
+                                $dbSnapshot = json_decode($dbRaw, true, 512, JSON_THROW_ON_ERROR);
+                                $this->restoreLegacyDatabaseSnapshot($dbSnapshot);
+                                unset($dbRaw, $dbSnapshot);
+                            }
+
+                            // Persist the required audit row before touching live private files.
+                            // If audit storage is unavailable, neither database nor filesystem state changes.
+                            $this->audit->logRequired('backup.restored', 'backup', (string) $backup->id, [
+                                'filename' => $backup->filename,
+                                'backup_format' => $magic === "AECBK02\\n" ? 2 : 1,
+                            ], $actorId);
+
+                            if ($stagedPrivateFiles !== null) {
+                                // Keep a per-file rollback journal until the database commit
+                                // succeeds. This compensates partial file writes and commit failures.
+                                $privateFileRollback = $this->restoreStagedPrivateFiles($stagedPrivateFiles);
+                            }
+                        });
+                    } catch (\\Throwable $exception) {
+                        if ($privateFileRollback !== null) {
+                            try {
+                                $this->rollbackRestoredPrivateFiles($privateFileRollback);
+                                $privateFileRollback = null;
+                            } catch (\\Throwable $rollbackException) {
+                                throw new RuntimeException(
+                                    'Backup database restore failed and private files could not be fully rolled back; manual recovery is required. Original error: ' . $exception->getMessage(),
+                                    previous: $rollbackException,
+                                );
+                            }
                         }
-                    } else {
-                        // Legacy JSON snapshots remain restorable; new backups use the streaming format.
-                        $dbRaw = $zip->getFromName('database.json');
-                        if ($dbRaw === false) {
-                            throw new RuntimeException('Backup archive missing database.json or database.jsonl.');
-                        }
-                        $dbSnapshot = json_decode($dbRaw, true, 512, JSON_THROW_ON_ERROR);
-                        $this->restoreLegacyDatabaseSnapshot($dbSnapshot);
-                        unset($dbRaw, $dbSnapshot);
+                        throw $exception;
                     }
 
-                    // Persist the required audit row before touching live private files.
-                    // If audit storage is unavailable, the database restore rolls back
-                    // without partially overwriting the filesystem.
-                    $this->audit->logRequired('backup.restored', 'backup', (string) $backup->id, [
-                        'filename' => $backup->filename,
-                        'backup_format' => $magic === "AECBK02\n" ? 2 : 1,
-                    ], $actorId);
-
-                    if ($stagedPrivateFiles !== null) {
-                        $this->restoreStagedPrivateFiles($stagedPrivateFiles);
+                    // The DB transaction has committed; the restored files are now
+                    // authoritative too, so discard the compensation copies.
+                    if ($privateFileRollback !== null) {
+                        $this->deleteDirectoryTree($privateFileRollback['backup_dir']);
+                        $privateFileRollback = null;
                     }
-                    });
                 } finally {
                     Schema::enableForeignKeyConstraints();
                 }
@@ -226,7 +250,6 @@ class BackupService
         } finally {
             @unlink($tempZip);
         }
-
     }
 
     /**
@@ -317,67 +340,229 @@ class BackupService
     /**
      * Merge staged private files into the private storage root without following symlinks.
      */
-    private function restoreStagedPrivateFiles(string $stagingDir): void
+    /**
+     * Merge staged private files into private storage while retaining compensation
+     * copies until the surrounding database transaction has committed.
+     *
+     * @return array{backup_dir: string, files: array<int, array{path: string, existed: bool, backup: ?string, mode: int}>, created_directories: array<int, string>}
+     */
+    private function restoreStagedPrivateFiles(string $stagingDir): array
     {
         $privateDir = (string) config('lms.private_storage_path');
         if ($privateDir === '' || is_link($privateDir)) {
             throw new RuntimeException('Private storage path is invalid or is a symbolic link.');
         }
-        if (!is_dir($privateDir) && !mkdir($privateDir, 0700, true) && !is_dir($privateDir)) {
-            throw new RuntimeException('Unable to create private storage directory.');
+
+        $rollbackRoot = storage_path('app/restore-rollback');
+        if (is_link($rollbackRoot)) {
+            throw new RuntimeException('Private restore rollback directory cannot be a symbolic link.');
+        }
+        if (!is_dir($rollbackRoot) && !mkdir($rollbackRoot, 0700, true) && !is_dir($rollbackRoot)) {
+            throw new RuntimeException('Unable to create private restore rollback directory.');
+        }
+        $backupDir = $rollbackRoot . DIRECTORY_SEPARATOR . Str::uuid()->toString();
+        if (!mkdir($backupDir, 0700, true)) {
+            throw new RuntimeException('Unable to create private restore compensation directory.');
         }
 
-        $realPrivateDir = realpath($privateDir);
-        if ($realPrivateDir === false) {
-            throw new RuntimeException('Unable to resolve private storage directory.');
-        }
+        $journal = [
+            'backup_dir' => $backupDir,
+            'files' => [],
+            'created_directories' => [],
+        ];
 
-        $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($stagingDir, \FilesystemIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::SELF_FIRST
-        );
+        $ensureDirectory = function (string $directory) use (&$journal): void {
+            if (is_dir($directory)) {
+                return;
+            }
+            if (file_exists($directory) || is_link($directory)) {
+                throw new RuntimeException('Private restore path conflicts with an existing non-directory.');
+            }
+            $parent = dirname($directory);
+            if (!is_dir($parent)) {
+                $this->ensurePrivateRestoreDirectory($parent, $journal);
+            }
+            if (!mkdir($directory, 0700) && !is_dir($directory)) {
+                throw new RuntimeException('Unable to create private storage subdirectory.');
+            }
+            $journal['created_directories'][] = $directory;
+        };
 
-        foreach ($iterator as $item) {
-            $relative = ltrim(str_replace($stagingDir, '', $item->getPathname()), DIRECTORY_SEPARATOR);
-            $segments = explode(DIRECTORY_SEPARATOR, $relative);
-            $current = $realPrivateDir;
-            foreach ($segments as $index => $segment) {
-                $current .= DIRECTORY_SEPARATOR . $segment;
-                if (is_link($current)) {
-                    throw new RuntimeException('Refusing to restore through a symbolic link in private storage.');
+        try {
+            $ensureDirectory($privateDir);
+            $realPrivateDir = realpath($privateDir);
+            if ($realPrivateDir === false) {
+                throw new RuntimeException('Unable to resolve private storage directory.');
+            }
+
+            $iterator = new \\RecursiveIteratorIterator(
+                new \\RecursiveDirectoryIterator($stagingDir, \\FilesystemIterator::SKIP_DOTS),
+                \\RecursiveIteratorIterator::SELF_FIRST
+            );
+
+            foreach ($iterator as $item) {
+                $relative = ltrim(str_replace($stagingDir, '', $item->getPathname()), DIRECTORY_SEPARATOR);
+                $segments = explode(DIRECTORY_SEPARATOR, $relative);
+                $current = $realPrivateDir;
+                foreach ($segments as $index => $segment) {
+                    $current .= DIRECTORY_SEPARATOR . $segment;
+                    if (is_link($current)) {
+                        throw new RuntimeException('Refusing to restore through a symbolic link in private storage.');
+                    }
+                    if ($index < count($segments) - 1 && file_exists($current) && !is_dir($current)) {
+                        throw new RuntimeException('Private restore path conflicts with an existing file.');
+                    }
                 }
-                if ($index < count($segments) - 1 && file_exists($current) && !is_dir($current)) {
-                    throw new RuntimeException('Private restore path conflicts with an existing file.');
+
+                if ($item->isDir()) {
+                    $ensureDirectory($current);
+                    continue;
+                }
+
+                $parent = dirname($current);
+                $ensureDirectory($parent);
+                if (is_link($current) || (file_exists($current) && !is_file($current))) {
+                    throw new RuntimeException('Private restore destination is not a regular file.');
+                }
+
+                $existed = is_file($current);
+                $backupPath = null;
+                $mode = 0600;
+                if ($existed) {
+                    $backupPath = $backupDir . DIRECTORY_SEPARATOR . count($journal['files']) . '.bak';
+                    if (!copy($current, $backupPath)) {
+                        throw new RuntimeException('Unable to preserve existing private file before restore.');
+                    }
+                    $permissions = fileperms($current);
+                    $mode = $permissions === false ? 0600 : ($permissions & 0777);
+                }
+
+                // Record before replacing so even a failed rename can be compensated.
+                $journal['files'][] = [
+                    'path' => $current,
+                    'existed' => $existed,
+                    'backup' => $backupPath,
+                    'mode' => $mode,
+                ];
+
+                $temporary = tempnam($parent, '.aec-restore-');
+                if ($temporary === false) {
+                    throw new RuntimeException('Unable to allocate temporary private restore file.');
+                }
+                try {
+                    if (!copy($item->getPathname(), $temporary) || !rename($temporary, $current)) {
+                        throw new RuntimeException('Unable to atomically restore private file.');
+                    }
+                    @chmod($current, 0600);
+                } finally {
+                    if (is_file($temporary)) {
+                        @unlink($temporary);
+                    }
                 }
             }
 
-            if ($item->isDir()) {
-                if (!is_dir($current) && !mkdir($current, 0700, true) && !is_dir($current)) {
-                    throw new RuntimeException('Unable to create private storage subdirectory.');
-                }
+            return $journal;
+        } catch (\\Throwable $exception) {
+            try {
+                $this->rollbackRestoredPrivateFiles($journal);
+            } catch (\\Throwable $rollbackException) {
+                throw new RuntimeException(
+                    'Private file restore failed and its partial changes could not be fully rolled back; manual recovery is required. Original error: ' . $exception->getMessage(),
+                    previous: $rollbackException,
+                );
+            }
+            throw $exception;
+        }
+    }
+
+    /**
+     * Ensure a private restore directory exists and journal every newly-created path.
+     *
+     * @param array{backup_dir: string, files: array<int, array{path: string, existed: bool, backup: ?string, mode: int}>, created_directories: array<int, string>} $journal
+     */
+    private function ensurePrivateRestoreDirectory(string $directory, array &$journal): void
+    {
+        if (is_dir($directory)) {
+            return;
+        }
+        if (file_exists($directory) || is_link($directory)) {
+            throw new RuntimeException('Private restore path conflicts with an existing non-directory.');
+        }
+        $parent = dirname($directory);
+        if (!is_dir($parent)) {
+            $this->ensurePrivateRestoreDirectory($parent, $journal);
+        }
+        if (!mkdir($directory, 0700) && !is_dir($directory)) {
+            throw new RuntimeException('Unable to create private storage subdirectory.');
+        }
+        $journal['created_directories'][] = $directory;
+    }
+
+    /**
+     * Restore every overwritten file and remove newly-created files/directories.
+     *
+     * @param array{backup_dir: string, files: array<int, array{path: string, existed: bool, backup: ?string, mode: int}>, created_directories: array<int, string>} $journal
+     */
+    private function rollbackRestoredPrivateFiles(array $journal): void
+    {
+        $failures = [];
+        foreach (array_reverse($journal['files']) as $file) {
+            $path = $file['path'];
+            if (is_link($path)) {
+                $failures[] = 'Refusing to roll back through a symbolic link: ' . $path;
                 continue;
             }
 
-            $parent = dirname($current);
-            if (!is_dir($parent) && !mkdir($parent, 0700, true) && !is_dir($parent)) {
-                throw new RuntimeException('Unable to create private storage directory.');
-            }
-
-            $temporary = tempnam($parent, '.aec-restore-');
-            if ($temporary === false) {
-                throw new RuntimeException('Unable to allocate temporary private restore file.');
-            }
-            try {
-                if (!copy($item->getPathname(), $temporary) || !rename($temporary, $current)) {
-                    throw new RuntimeException('Unable to atomically restore private file.');
+            if ($file['existed']) {
+                $backup = $file['backup'];
+                if (!is_string($backup) || !is_file($backup)) {
+                    $failures[] = 'Private restore compensation copy is missing for: ' . $path;
+                    continue;
                 }
-                @chmod($current, 0600);
-            } finally {
-                if (is_file($temporary)) {
-                    @unlink($temporary);
+                $parent = dirname($path);
+                if (!is_dir($parent)) {
+                    $failures[] = 'Private restore parent directory is missing for: ' . $path;
+                    continue;
                 }
+                $temporary = tempnam($parent, '.aec-rollback-');
+                if ($temporary === false) {
+                    $failures[] = 'Unable to allocate private restore rollback file for: ' . $path;
+                    continue;
+                }
+                try {
+                    if (!copy($backup, $temporary) || !rename($temporary, $path)) {
+                        $failures[] = 'Unable to restore original private file: ' . $path;
+                        continue;
+                    }
+                    @chmod($path, $file['mode']);
+                } finally {
+                    if (is_file($temporary)) {
+                        @unlink($temporary);
+                    }
+                }
+            } elseif (is_file($path) && !@unlink($path)) {
+                $failures[] = 'Unable to remove newly restored private file: ' . $path;
+            } elseif (file_exists($path) && !is_file($path)) {
+                $failures[] = 'Unexpected non-file blocks private restore rollback: ' . $path;
             }
         }
+
+        foreach (array_reverse($journal['created_directories']) as $directory) {
+            if (is_link($directory)) {
+                $failures[] = 'Refusing to remove a symbolic link during private restore rollback: ' . $directory;
+                continue;
+            }
+            if (is_dir($directory) && !@rmdir($directory)) {
+                // Non-empty directories may contain unrelated files created concurrently;
+                // leave them in place rather than deleting data outside this restore.
+            }
+        }
+
+        if ($failures !== []) {
+            throw new RuntimeException(implode(' ', $failures));
+        }
+
+        $this->deleteDirectoryTree($journal['backup_dir']);
     }
 
     private function deleteDirectoryTree(string $directory): void
