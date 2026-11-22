@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Admin;
 
+use App\Core\Security\AuditLogger;
 use App\Http\Controllers\Controller;
-use App\Models\AuditLog;
 use App\Models\Permission;
 use App\Models\Role;
 use Illuminate\Http\RedirectResponse;
@@ -15,6 +15,8 @@ use Illuminate\View\View;
 
 class RolePermissionController extends Controller
 {
+    public function __construct(private readonly AuditLogger $audit) {}
+
     public function index(): View
     {
         $roles = Role::query()->with('permissions')->orderBy('name')->get();
@@ -31,14 +33,24 @@ class RolePermissionController extends Controller
             'description' => ['nullable', 'string', 'max:500'],
         ]);
 
-        $role = Role::query()->create([
-            'name' => trim($validated['name']),
-            'slug' => strtolower($validated['slug']),
-            'description' => $validated['description'] ?? null,
-            'is_system' => false,
-        ]);
+        $role = DB::transaction(function () use ($validated, $request): Role {
+            $role = Role::query()->create([
+                'name' => trim($validated['name']),
+                'slug' => strtolower($validated['slug']),
+                'description' => $validated['description'] ?? null,
+                'is_system' => false,
+            ]);
 
-        $this->audit('admin.role.created', $role, ['slug' => $role->slug]);
+            $this->audit->logRequired(
+                'admin.role.created',
+                'role',
+                (string) $role->id,
+                ['slug' => $role->slug],
+                (int) $request->user()->getAuthIdentifier(),
+            );
+
+            return $role;
+        });
 
         return redirect()->route('admin.roles.index')->with('status', 'Custom role created. Assign permissions below.');
     }
@@ -70,26 +82,21 @@ class RolePermissionController extends Controller
             ->exists()) {
             abort(403, 'Only an existing Administrator may grant protected Core permissions.');
         }
-        DB::transaction(function () use ($role, $permissionIds): void {
+        DB::transaction(function () use ($role, $permissionIds, $actor): void {
             $role->permissions()->sync($permissionIds);
-            $this->audit('admin.role.permissions.updated', $role, [
-                'permission_ids' => $permissionIds,
-                'permission_count' => count($permissionIds),
-            ]);
+            $this->audit->logRequired(
+                'admin.role.permissions.updated',
+                'role',
+                (string) $role->id,
+                [
+                    'permission_ids' => $permissionIds,
+                    'permission_count' => count($permissionIds),
+                ],
+                (int) $actor->getAuthIdentifier(),
+            );
         });
 
         return redirect()->route('admin.roles.index')->with('status', "Permissions updated for {$role->name}.");
     }
 
-    private function audit(string $action, Role $role, array $metadata): void
-    {
-        AuditLog::query()->create([
-            'user_id' => auth()->id(),
-            'action' => $action,
-            'entity_type' => 'role',
-            'entity_id' => (string) $role->id,
-            'ip_address' => request()->ip(),
-            'metadata' => $metadata,
-        ]);
-    }
 }

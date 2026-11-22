@@ -165,7 +165,7 @@ class PluginManager
                     }
                 }
 
-                $this->audit->log('plugin.installed', 'plugin', $manifest->slug, ['version' => $manifest->version], $actorId);
+                $this->audit->logRequired('plugin.installed', 'plugin', $manifest->slug, ['version' => $manifest->version], $actorId);
 
                 return $record;
             });
@@ -256,7 +256,7 @@ class PluginManager
                     hash('sha256', json_encode($manifest->toArray(), JSON_THROW_ON_ERROR))
                 );
 
-                $this->audit->log('plugin.updated', 'plugin', $manifest->slug, [
+                $this->audit->logRequired('plugin.updated', 'plugin', $manifest->slug, [
                     'from_version' => $fromVersion,
                     'to_version' => $manifest->version,
                 ], $actorId);
@@ -383,7 +383,7 @@ class PluginManager
                     'signature_checksums_sha256' => $signatureMetadata['checksums_sha256'],
                     'signature_verified_at' => $signatureMetadata['verified_at'],
                 ])->save();
-                $this->audit->log('plugin.signature_verified', 'plugin', $manifest->slug, [
+                $this->audit->logRequired('plugin.signature_verified', 'plugin', $manifest->slug, [
                     'key_id' => $signatureMetadata['key_id'],
                     'algorithm' => $signatureMetadata['algorithm'],
                     'checksums_sha256' => $signatureMetadata['checksums_sha256'],
@@ -426,7 +426,7 @@ class PluginManager
                     'Automatic rollback triggered: ' . $e->getMessage() . $rollbackError,
                     $actorId
                 );
-                $this->audit->log('plugin.rollback', 'plugin', $manifest->slug, [
+                $this->audit->logRequired('plugin.rollback', 'plugin', $manifest->slug, [
                     'error' => $e->getMessage(),
                     'rollback_error' => $rollbackError,
                 ], $actorId);
@@ -459,7 +459,7 @@ class PluginManager
                 $provider->onEnable();
             }
 
-            $this->audit->log('plugin.enabled', 'plugin', $slug, [], $actorId);
+            $this->audit->logRequired('plugin.enabled', 'plugin', $slug, [], $actorId);
 
             return $record->fresh();
         });
@@ -477,7 +477,7 @@ class PluginManager
                 $locked = PluginRecord::query()->where('slug', $slug)->lockForUpdate()->first();
                 if ($locked && $locked->is_installed) {
                     $locked->update(['is_enabled' => false]);
-                    $this->audit->log('plugin.enable_rolled_back', 'plugin', $slug, [
+                    $this->audit->logRequired('plugin.enable_rolled_back', 'plugin', $slug, [
                         'reason' => $exception->getMessage(),
                     ], $actorId);
                 }
@@ -513,7 +513,7 @@ class PluginManager
                 $this->resolvePluginInstance($this->discoverManifests()[$slug])?->onDisable();
             }
             $record->update(['is_enabled' => false]);
-            $this->audit->log('plugin.disabled', 'plugin', $slug, [], $actorId);
+            $this->audit->logRequired('plugin.disabled', 'plugin', $slug, [], $actorId);
 
             return $record->fresh();
         });
@@ -548,7 +548,7 @@ class PluginManager
             }
 
             $record->update(['is_installed' => false, 'is_enabled' => false]);
-            $this->audit->log('plugin.uninstalled', 'plugin', $slug, ['purge_requested' => $confirmedPurgePluginData], $actorId);
+            $this->audit->logRequired('plugin.uninstalled', 'plugin', $slug, ['purge_requested' => $confirmedPurgePluginData], $actorId);
 
             return $record->fresh();
         });
@@ -674,10 +674,35 @@ class PluginManager
             throw new RuntimeException('Plugin recycle-bin metadata could not be written; the package was returned to its original location.');
         }
         @chmod($metadataPath, 0600);
-        $this->audit->log('plugin.deleted_to_recycle_bin', 'plugin', $slug, [
-            'archive' => $archiveName,
-            'business_data_preserved' => true,
-        ], $actorId);
+        try {
+            $this->audit->logRequired('plugin.deleted_to_recycle_bin', 'plugin', $slug, [
+                'archive' => $archiveName,
+                'business_data_preserved' => true,
+            ], $actorId);
+        } catch (Throwable $exception) {
+            // A failed required audit must not strand a plugin in the recycle bin.
+            // Restore the original package and lifecycle state where possible.
+            if (is_dir($destination) && !file_exists($source)) {
+                File::moveDirectory($destination, $source);
+            }
+            if (is_file($metadataPath)) {
+                @unlink($metadataPath);
+            }
+            if ($wasInstalled && is_dir($source)) {
+                try {
+                    $this->install($slug, $actorId);
+                    if (!$wasEnabled) {
+                        $this->disable($slug, $actorId);
+                    }
+                } catch (Throwable) {
+                    PluginRecord::query()->where('slug', $slug)->update([
+                        'is_installed' => false,
+                        'is_enabled' => false,
+                    ]);
+                }
+            }
+            throw $exception;
+        }
 
         return $metadata;
     }
@@ -727,7 +752,8 @@ class PluginManager
             throw new RuntimeException('Recycled plugin package is missing or outside the protected recycle-bin directory.');
         }
 
-        $metadata = json_decode(File::get($metadataPath), true, 512, JSON_THROW_ON_ERROR);
+        $metadataContents = File::get($metadataPath);
+        $metadata = json_decode($metadataContents, true, 512, JSON_THROW_ON_ERROR);
         $slug = (string) ($metadata['slug'] ?? '');
         if (preg_match('/^[a-z0-9][a-z0-9-]{1,79}$/', $slug) !== 1
             || ($metadata['archive'] ?? null) !== $archiveName
@@ -765,8 +791,13 @@ class PluginManager
                     $this->disable($slug, $actorId);
                 }
             }
-            @unlink($metadataPath);
-            $this->audit->log('plugin.restored_from_recycle_bin', 'plugin', $slug, [
+            // Remove the index before writing the success audit. If the audit
+            // fails, the catch path recreates this exact metadata after returning
+            // the package to the recycle bin, avoiding a false success event.
+            if (!@unlink($metadataPath) && is_file($metadataPath)) {
+                throw new RuntimeException('Could not remove recycle-bin metadata; plugin restore was rolled back.');
+            }
+            $this->audit->logRequired('plugin.restored_from_recycle_bin', 'plugin', $slug, [
                 'archive' => $archiveName,
                 'business_data_preserved' => true,
             ], $actorId);
@@ -786,6 +817,16 @@ class PluginManager
             }
             if (is_dir($target)) {
                 File::moveDirectory($target, $source);
+            }
+            if (!is_file($metadataPath)) {
+                $written = File::put($metadataPath, $metadataContents);
+                if ($written === false) {
+                    throw new RuntimeException(
+                        'Plugin restore failed and recycle-bin metadata could not be recreated; manual recovery is required.',
+                        previous: $e,
+                    );
+                }
+                @chmod($metadataPath, 0600);
             }
             throw $e;
         }
@@ -807,7 +848,8 @@ class PluginManager
             || is_link($sourceCandidate) || !$source || dirname($source) !== $trashRoot || !is_dir($source)) {
             throw new RuntimeException('Recycled plugin package is missing or outside the protected recycle-bin directory.');
         }
-        $metadata = json_decode(File::get($metadataPath), true, 512, JSON_THROW_ON_ERROR);
+        $metadataContents = File::get($metadataPath);
+        $metadata = json_decode($metadataContents, true, 512, JSON_THROW_ON_ERROR);
         $slug = (string) ($metadata['slug'] ?? '');
         $sourceChecksums = $this->pluginDirectoryChecksums($source);
         if (($metadata['archive'] ?? null) !== $archiveName
@@ -854,11 +896,31 @@ class PluginManager
             throw new RuntimeException('Private backup was created, but the recycle-bin package could not be removed.');
         }
         @unlink($metadataPath);
-        $this->audit->log('plugin.permanently_deleted', 'plugin', $slug, [
-            'package_files_removed_from_recycle_bin' => true,
-            'private_backup_id' => $archiveName,
-            'database_records_preserved' => true,
-        ], $actorId);
+        try {
+            $this->audit->logRequired('plugin.permanently_deleted', 'plugin', $slug, [
+                'package_files_removed_from_recycle_bin' => true,
+                'private_backup_id' => $archiveName,
+                'database_records_preserved' => true,
+            ], $actorId);
+        } catch (Throwable $exception) {
+            // The verified private snapshot is the recovery source if durable audit
+            // storage fails after the recycle-bin copy has been removed.
+            if (!is_dir($source) && !File::copyDirectory($backupPath, $source)) {
+                throw new RuntimeException(
+                    'Permanent-delete audit failed and the package could not be restored from its verified private snapshot.',
+                    previous: $exception,
+                );
+            }
+            if (!is_file($metadataPath)
+                && File::put($metadataPath, $metadataContents) === false) {
+                throw new RuntimeException(
+                    'Permanent-delete audit failed; package files were restored but recycle metadata could not be recreated.',
+                    previous: $exception,
+                );
+            }
+            @chmod($metadataPath, 0600);
+            throw $exception;
+        }
     }
 
     /** @return array<string, string> */
@@ -955,19 +1017,21 @@ class PluginManager
             $validated[$key] = $value;
         }
 
-        foreach ($validated as $key => $val) {
-            $isSecret = in_array($key, $secretKeys, true) || in_array($key, $manifestSecretKeys, true);
-            $stringVal = is_scalar($val) ? (string) $val : json_encode($val, JSON_THROW_ON_ERROR);
-            PluginSetting::query()->updateOrCreate(
-                ['plugin_slug' => $slug, 'setting_key' => (string) $key],
-                [
-                    'setting_value' => $isSecret && $stringVal !== '' ? Crypt::encryptString($stringVal) : $stringVal,
-                    'is_encrypted' => $isSecret && $stringVal !== '',
-                ]
-            );
-        }
+        DB::transaction(function () use ($validated, $secretKeys, $manifestSecretKeys, $slug, $actorId): void {
+            foreach ($validated as $key => $val) {
+                $isSecret = in_array($key, $secretKeys, true) || in_array($key, $manifestSecretKeys, true);
+                $stringVal = is_scalar($val) ? (string) $val : json_encode($val, JSON_THROW_ON_ERROR);
+                PluginSetting::query()->updateOrCreate(
+                    ['plugin_slug' => $slug, 'setting_key' => (string) $key],
+                    [
+                        'setting_value' => $isSecret && $stringVal !== '' ? Crypt::encryptString($stringVal) : $stringVal,
+                        'is_encrypted' => $isSecret && $stringVal !== '',
+                    ]
+                );
+            }
 
-        $this->audit->log('plugin.configured', 'plugin', $slug, ['keys' => array_keys($validated)], $actorId);
+            $this->audit->logRequired('plugin.configured', 'plugin', $slug, ['keys' => array_keys($validated)], $actorId);
+        });
     }
 
     /** Reset only plugin configuration to manifest defaults; business data is never touched. */
@@ -1029,7 +1093,7 @@ class PluginManager
             }
 
             $this->saveSettings($slug, $values, $secretKeys, $actorId);
-            $this->audit->log('plugin.settings_reset', 'plugin', $slug, [
+            $this->audit->logRequired('plugin.settings_reset', 'plugin', $slug, [
                 'setting_count' => count($values),
                 'backup_id' => $backupId,
                 'business_data_preserved' => true,

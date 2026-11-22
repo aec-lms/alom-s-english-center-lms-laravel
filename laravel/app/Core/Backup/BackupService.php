@@ -91,21 +91,34 @@ class BackupService
             @unlink($encryptedPath);
             throw new RuntimeException('Unable to calculate encrypted backup checksum.');
         }
-        $record = BackupRecord::query()->create([
-            'filename' => basename($encryptedPath),
-            'storage_path' => $encryptedPath,
-            'checksum_sha256' => $checksum,
-            'is_encrypted' => true,
-            'includes_files' => $includePrivateFiles,
-            'size_bytes' => filesize($encryptedPath) ?: 0,
-            'core_version' => (string) config('lms.core_version', '2.0.0'),
-            'metadata' => ['tables' => $tableNames, 'backup_format' => 2],
-            'created_by' => $actorId,
-        ]);
+        try {
+            return DB::transaction(function () use ($encryptedPath, $checksum, $includePrivateFiles, $tableNames, $actorId): BackupRecord {
+                $record = BackupRecord::query()->create([
+                    'filename' => basename($encryptedPath),
+                    'storage_path' => $encryptedPath,
+                    'checksum_sha256' => $checksum,
+                    'is_encrypted' => true,
+                    'includes_files' => $includePrivateFiles,
+                    'size_bytes' => filesize($encryptedPath) ?: 0,
+                    'core_version' => (string) config('lms.core_version', '2.0.0'),
+                    'metadata' => ['tables' => $tableNames, 'backup_format' => 2],
+                    'created_by' => $actorId,
+                ]);
 
-        $this->audit->log('backup.created', 'backup', (string) $record->id, ['filename' => $record->filename], $actorId);
+                $this->audit->logRequired(
+                    'backup.created',
+                    'backup',
+                    (string) $record->id,
+                    ['filename' => $record->filename],
+                    $actorId,
+                );
 
-        return $record;
+                return $record;
+            });
+        } catch (\Throwable $exception) {
+            @unlink($encryptedPath);
+            throw $exception;
+        }
     }
 
     public function verifyBackupIntegrity(BackupRecord $backup): bool
@@ -155,43 +168,62 @@ class BackupService
 
             $stagedPrivateFiles = null;
             try {
-                $manifestRaw = $zip->getFromName('manifest.json');
-                if ($manifestRaw === false) throw new RuntimeException('Backup archive missing manifest.json.');
-                $manifest = json_decode($manifestRaw, true, 512, JSON_THROW_ON_ERROR);
-                if (($manifest['core_version'] ?? '') !== (string) config('lms.core_version', '2.0.0')) {
-                    throw new RuntimeException('Backup core version mismatch.');
-                }
-
-                $stagedPrivateFiles = $this->stagePrivateFiles($zip, $manifest);
-                $jsonLinesStream = $zip->getStream('database.jsonl');
-                if (is_resource($jsonLinesStream)) {
-                    try {
-                        $this->restoreDatabaseJsonLines($jsonLinesStream);
-                    } finally {
-                        fclose($jsonLinesStream);
+                // SQLite cannot toggle PRAGMA foreign_keys from inside a transaction.
+                // Disable before the outer transaction so nested restore helpers can
+                // safely retain their existing disable/enable guards.
+                Schema::disableForeignKeyConstraints();
+                try {
+                    DB::transaction(function () use ($zip, &$stagedPrivateFiles, $backup, $actorId, $magic): void {
+                    $manifestRaw = $zip->getFromName('manifest.json');
+                    if ($manifestRaw === false) {
+                        throw new RuntimeException('Backup archive missing manifest.json.');
                     }
-                } else {
-                    // Legacy JSON snapshots remain restorable; new backups use the streaming format.
-                    $dbRaw = $zip->getFromName('database.json');
-                    if ($dbRaw === false) throw new RuntimeException('Backup archive missing database.json or database.jsonl.');
-                    $dbSnapshot = json_decode($dbRaw, true, 512, JSON_THROW_ON_ERROR);
-                    $this->restoreLegacyDatabaseSnapshot($dbSnapshot);
-                    unset($dbRaw, $dbSnapshot);
-                }
+                    $manifest = json_decode($manifestRaw, true, 512, JSON_THROW_ON_ERROR);
+                    if (($manifest['core_version'] ?? '') !== (string) config('lms.core_version', '2.0.0')) {
+                        throw new RuntimeException('Backup core version mismatch.');
+                    }
 
-                if ($stagedPrivateFiles !== null) $this->restoreStagedPrivateFiles($stagedPrivateFiles);
+                    $stagedPrivateFiles = $this->stagePrivateFiles($zip, $manifest);
+                    $jsonLinesStream = $zip->getStream('database.jsonl');
+                    if (is_resource($jsonLinesStream)) {
+                        try {
+                            $this->restoreDatabaseJsonLines($jsonLinesStream);
+                        } finally {
+                            fclose($jsonLinesStream);
+                        }
+                    } else {
+                        // Legacy JSON snapshots remain restorable; new backups use the streaming format.
+                        $dbRaw = $zip->getFromName('database.json');
+                        if ($dbRaw === false) {
+                            throw new RuntimeException('Backup archive missing database.json or database.jsonl.');
+                        }
+                        $dbSnapshot = json_decode($dbRaw, true, 512, JSON_THROW_ON_ERROR);
+                        $this->restoreLegacyDatabaseSnapshot($dbSnapshot);
+                        unset($dbRaw, $dbSnapshot);
+                    }
+
+                    if ($stagedPrivateFiles !== null) {
+                        $this->restoreStagedPrivateFiles($stagedPrivateFiles);
+                    }
+
+                    $this->audit->logRequired('backup.restored', 'backup', (string) $backup->id, [
+                        'filename' => $backup->filename,
+                        'backup_format' => $magic === "AECBK02\n" ? 2 : 1,
+                    ], $actorId);
+                    });
+                } finally {
+                    Schema::enableForeignKeyConstraints();
+                }
             } finally {
                 $zip->close();
-                if ($stagedPrivateFiles !== null) $this->deleteDirectoryTree($stagedPrivateFiles);
+                if ($stagedPrivateFiles !== null) {
+                    $this->deleteDirectoryTree($stagedPrivateFiles);
+                }
             }
         } finally {
             @unlink($tempZip);
         }
 
-        $this->audit->log('backup.restored', 'backup', (string) $backup->id, [
-            'filename' => $backup->filename,
-            'backup_format' => $magic === "AECBK02\n" ? 2 : 1,
-        ], $actorId);
     }
 
     /**

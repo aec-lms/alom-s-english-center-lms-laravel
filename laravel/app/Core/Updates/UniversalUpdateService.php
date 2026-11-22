@@ -12,6 +12,7 @@ use App\Models\PluginRecord;
 use App\Models\SystemSetting;
 use App\Models\UpdateLog;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -189,7 +190,7 @@ class UniversalUpdateService
                 ], JSON_THROW_ON_ERROR),
                 'executed_by' => $actorId,
             ]);
-            $this->audit->log('update.applied', $targetType, $targetSlug, ['to' => $toVersion], $actorId);
+            $this->audit->logRequired('update.applied', $targetType, $targetSlug, ['to' => $toVersion], $actorId);
 
             return $log;
         } catch (\Throwable $e) {
@@ -231,7 +232,7 @@ class UniversalUpdateService
                 ], JSON_THROW_ON_ERROR),
                 'executed_by' => $actorId,
             ]);
-            $this->audit->log('update.failed', $targetType, $targetSlug, ['error' => $failureMessage], $actorId);
+            $this->audit->logRequired('update.failed', $targetType, $targetSlug, ['error' => $failureMessage], $actorId);
             throw new RuntimeException($failureMessage, previous: $e);
         } finally {
             $this->deleteDirectory($stagingDir);
@@ -279,7 +280,7 @@ class UniversalUpdateService
                     'backup' => $backup->filename,
                 ], JSON_THROW_ON_ERROR),
             ]);
-            $this->audit->log('update.rolled_back', $log->target_type, $log->target_slug, ['backup' => $backup->filename], $actorId);
+            $this->audit->logRequired('update.rolled_back', $log->target_type, $log->target_slug, ['backup' => $backup->filename], $actorId);
         } finally {
             Artisan::call('up');
         }
@@ -298,11 +299,19 @@ class UniversalUpdateService
     public function saveRemoteFeedUrl(string $url, ?int $actorId = null): void
     {
         $parts = $this->assertSafeRemoteFeedUrl($url, false);
-        SystemSetting::query()->updateOrCreate(
-            ['key' => 'lms_update_feed_url'],
-            ['value' => trim($url), 'is_encrypted' => false, 'updated_by' => $actorId]
-        );
-        $this->audit->log('update.feed_configured', 'system_setting', 'lms_update_feed_url', ['host' => $parts['host']], $actorId);
+        DB::transaction(function () use ($url, $actorId, $parts): void {
+            SystemSetting::query()->updateOrCreate(
+                ['key' => 'lms_update_feed_url'],
+                ['value' => trim($url), 'is_encrypted' => false, 'updated_by' => $actorId]
+            );
+            $this->audit->logRequired(
+                'update.feed_configured',
+                'system_setting',
+                'lms_update_feed_url',
+                ['host' => $parts['host']],
+                $actorId,
+            );
+        });
     }
 
     public function checkRemoteFeed(): array

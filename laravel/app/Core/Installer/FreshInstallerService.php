@@ -524,6 +524,14 @@ class FreshInstallerService
             SystemSetting::query()->updateOrCreate(['key' => 'finance.default_currency'], ['value' => $currency]);
             SystemSetting::query()->updateOrCreate(['key' => 'legacy_records_imported'], ['value' => 'false']);
 
+            $this->audit->logRequired(
+                'core.installed',
+                'system',
+                'fresh_install',
+                ['legacy_records_imported' => false],
+                $admin->id,
+            );
+
             return $admin;
         });
 

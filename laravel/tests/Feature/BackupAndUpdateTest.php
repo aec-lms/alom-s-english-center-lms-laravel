@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use App\Core\Backup\BackupService;
 use App\Core\Updates\UniversalUpdateService;
+use App\Models\AuditLog;
 use App\Models\BackupRecord;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -63,6 +64,33 @@ class BackupAndUpdateTest extends TestCase
 
 
 
+    public function test_backup_record_and_archive_are_rolled_back_when_required_audit_write_fails(): void
+    {
+        $this->markSystemInstalled();
+        $beforeCount = BackupRecord::query()->count();
+        $backupDirectory = rtrim((string) config('lms.backup_path'), DIRECTORY_SEPARATOR);
+        $beforeFiles = glob($backupDirectory . DIRECTORY_SEPARATOR . 'aec-backup-*.zip.enc') ?: [];
+
+        AuditLog::creating(static function (): void {
+            throw new RuntimeException('forced backup audit failure');
+        });
+
+        try {
+            try {
+                app(BackupService::class)->createEncryptedBackup(null, false);
+                $this->fail('Backup creation must fail when required audit evidence cannot be stored.');
+            } catch (RuntimeException $exception) {
+                $this->assertSame('forced backup audit failure', $exception->getMessage());
+            }
+
+            $this->assertSame($beforeCount, BackupRecord::query()->count());
+            $backupFiles = glob($backupDirectory . DIRECTORY_SEPARATOR . 'aec-backup-*.zip.enc') ?: [];
+            $this->assertSame($beforeFiles, $backupFiles);
+        } finally {
+            AuditLog::flushEventListeners();
+        }
+    }
+
     public function test_production_size_database_backup_restores_with_bounded_streaming_batches(): void
     {
         $this->markSystemInstalled();
@@ -112,6 +140,53 @@ class BackupAndUpdateTest extends TestCase
             $this->assertSame('Production Restore Student 0', DB::table('users')->where('email', $prefix . '0@aec.test')->value('name'));
             $this->assertSame('Production Restore Student 11999', DB::table('users')->where('email', $prefix . '11999@aec.test')->value('name'));
             $this->assertFalse(DB::table('users')->where('email', $prefix . 'post-backup@aec.test')->exists());
+        } finally {
+            @unlink($record->storage_path);
+            $record->delete();
+        }
+    }
+
+    public function test_backup_restore_database_rolls_back_when_required_audit_write_fails(): void
+    {
+        $this->markSystemInstalled();
+
+        $email = 'backup-audit-rollback-' . bin2hex(random_bytes(6)) . '@aec.test';
+        $timestamp = now();
+        DB::table('users')->insert([
+            'name' => 'Before backup',
+            'email' => $email,
+            'password' => password_hash('NotARealPassword!2026', PASSWORD_BCRYPT),
+            'is_active' => true,
+            'created_at' => $timestamp,
+            'updated_at' => $timestamp,
+        ]);
+
+        $backups = app(BackupService::class);
+        $record = $backups->createEncryptedBackup(null, false);
+
+        try {
+            DB::table('users')->where('email', $email)->update(['name' => 'Current live value']);
+
+            AuditLog::creating(static function (AuditLog $log): void {
+                if ($log->action === 'backup.restored') {
+                    throw new RuntimeException('forced backup restore audit failure');
+                }
+            });
+
+            try {
+                $backups->restoreEncryptedBackup($record);
+                $this->fail('Backup restore must fail if its required audit event cannot be stored.');
+            } catch (RuntimeException $exception) {
+                $this->assertSame('forced backup restore audit failure', $exception->getMessage());
+            } finally {
+                AuditLog::flushEventListeners();
+            }
+
+            $this->assertSame(
+                'Current live value',
+                DB::table('users')->where('email', $email)->value('name'),
+                'Database restore must roll back with the required audit write.'
+            );
         } finally {
             @unlink($record->storage_path);
             $record->delete();
