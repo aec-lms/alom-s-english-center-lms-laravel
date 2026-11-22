@@ -181,6 +181,7 @@ class RoleDashboardLiveMetricsTest extends TestCase
                 'submitted_at' => now(),
                 'status' => 'graded',
                 'score' => 80,
+                'feedback' => null,
                 'graded_by' => $teacher->id,
                 'graded_at' => now(),
                 'created_at' => now(),
