@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Core\Plugins\PluginManager;
+use App\Models\Permission;
 use Tests\TestCase;
 
 class UniversalPaymentGatewayToggleTest extends TestCase
@@ -20,6 +21,7 @@ class UniversalPaymentGatewayToggleTest extends TestCase
         ]);
 
         $admin = $this->createUserWithRole('admin');
+        $this->grantUniversalPaymentManagePermission($admin);
         $this->grantUniversalPaymentManagePermission($admin);
         $this->actingAs($admin)->post('/plugins/universal-payment/transactions', [
             'payer_name' => 'Offline Disabled Test',
@@ -154,7 +156,7 @@ class UniversalPaymentGatewayToggleTest extends TestCase
         ]);
     }
 
-    private function grantUniversalPaymentManagePermission(\\App\\Models\\User $user): void
+    private function grantUniversalPaymentManagePermission(\App\Models\User $user): void
     {
         $permission = Permission::query()->firstOrCreate(
             ['slug' => 'payments.universal.manage'],
