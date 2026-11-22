@@ -14,8 +14,8 @@ class PluginCategoryRegistryTest extends TestCase
     {
         $slugs = PluginCategoryRegistry::knownSlugs();
 
-        $this->assertCount(60, $slugs);
-        $this->assertCount(60, array_unique($slugs));
+        $this->assertCount(63, $slugs);
+        $this->assertCount(63, array_unique($slugs));
 
         $manifestSlugs = [];
         foreach (File::directories(base_path('plugins/modules')) as $directory) {
