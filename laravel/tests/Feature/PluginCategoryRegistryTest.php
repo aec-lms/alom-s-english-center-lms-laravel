@@ -14,9 +14,6 @@ class PluginCategoryRegistryTest extends TestCase
     {
         $slugs = PluginCategoryRegistry::knownSlugs();
 
-        $this->assertCount(63, $slugs);
-        $this->assertCount(63, array_unique($slugs));
-
         $manifestSlugs = [];
         foreach (File::directories(base_path('plugins/modules')) as $directory) {
             $manifestPath = $directory . DIRECTORY_SEPARATOR . 'plugin.json';
@@ -24,6 +21,9 @@ class PluginCategoryRegistryTest extends TestCase
             $manifest = json_decode(File::get($manifestPath), true, 512, JSON_THROW_ON_ERROR);
             $manifestSlugs[] = (string) ($manifest['slug'] ?? basename($directory));
         }
+
+        $this->assertCount(count($manifestSlugs), $slugs);
+        $this->assertCount(count($manifestSlugs), array_unique($slugs));
         sort($manifestSlugs);
         $registeredSlugs = $slugs;
         sort($registeredSlugs);
@@ -88,7 +88,9 @@ class PluginCategoryRegistryTest extends TestCase
             ->assertSee('Content & Website CMS')
             ->assertSee('Platform Branding')
             ->assertSee('Course & Academic Management')
-            ->assertSee('Universal Payment Gateway Plugin');
+            ->assertSee('Universal Payment Gateway Plugin')
+            ->assertSee('Cash Desk Payment Method')
+            ->assertSee('Bank Transfer Payment Method');
     }
 
     public function test_category_resolution_does_not_rewrite_manifest_category_values(): void
