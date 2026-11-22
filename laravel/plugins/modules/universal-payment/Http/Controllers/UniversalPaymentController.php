@@ -32,7 +32,7 @@ class UniversalPaymentController extends Controller
     {
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
-        $enabledRaw = $this->plugins->getSetting('universal-payment', 'enabled_gateways', 'sslcommerz,bkash,nagad,rocket,card,bank_cash');
+        $enabledRaw = $this->plugins->getSetting('universal-payment', 'enabled_gateways', 'sslcommerz,bkash,nagad,rocket,card,paypal,cash,bank_transfer');
         $config = [
             'default_currency' => $this->plugins->getSetting('universal-payment', 'default_currency', (string) config('lms.default_currency', 'BDT')),
             'enabled_gateways' => array_filter(array_map('trim', explode(',', (string) $enabledRaw))),
@@ -56,7 +56,7 @@ class UniversalPaymentController extends Controller
         $validated = $request->validate([
             'default_currency' => ['required', 'string', 'regex:/^[A-Z]{3}$/'],
             'gateways' => ['nullable', 'array'],
-            'gateways.*' => ['string', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,bank_cash'],
+            'gateways.*' => ['string', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,cash,bank_transfer'],
             'allow_offline_payments' => ['nullable', 'boolean'],
         ]);
 
@@ -79,7 +79,7 @@ class UniversalPaymentController extends Controller
             'payer_name' => ['required', 'string', 'max:160'],
             'payer_contact' => ['nullable', 'string', 'max:120'],
             'item_title' => ['required', 'string', 'max:200'],
-            'gateway' => ['required', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,bank_cash'],
+            'gateway' => ['required', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,cash,bank_transfer'],
             'amount' => ['required', 'numeric', 'min:1'],
             'external_trx_id' => ['required', 'string', 'max:120'],
             'proof_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
@@ -88,7 +88,7 @@ class UniversalPaymentController extends Controller
         $this->assertGatewayEnabled($validated['gateway']);
 
         if ($request->hasFile('proof_file')) {
-            abort_unless(in_array($validated['gateway'], ['bank_cash', 'offline'], true), 422, 'Receipt evidence is accepted only for manual bank/cash payments.');
+            abort_unless(in_array($validated['gateway'], ['cash', 'bank_transfer', 'bank_cash', 'offline'], true), 422, 'Receipt evidence is accepted only for manual bank/cash payments.');
             abort_unless(Schema::hasColumn('universal_payment_transactions', 'proof_path')
                 && Schema::hasColumn('universal_payment_transactions', 'proof_mime')
                 && Schema::hasColumn('universal_payment_transactions', 'proof_size'), 503, 'Receipt evidence storage is not available until the payment migration is applied.');
@@ -188,7 +188,7 @@ class UniversalPaymentController extends Controller
             }
 
             abort_unless($lockedTransaction->status === 'pending'
-                && in_array($lockedTransaction->gateway, ['bank_cash', 'offline', 'bkash', 'nagad', 'rocket'], true),
+                && in_array($lockedTransaction->gateway, ['cash', 'bank_transfer', 'bank_cash', 'offline', 'bkash', 'nagad', 'rocket'], true),
                 422,
                 'Only pending manual receipts can be reviewed.'
             );
@@ -777,7 +777,14 @@ class UniversalPaymentController extends Controller
 
     private function assertGatewayEnabled(string $gateway): void
     {
-        if (in_array($gateway, ['bank_cash', 'offline'], true)) {
+        if (in_array($gateway, ['cash', 'bank_transfer', 'bank_cash', 'offline'], true)) {
+            $pluginSlug = $gateway === 'cash' ? 'gateway-cash' : 'gateway-bank-transfer';
+            abort_unless(
+                $this->plugins->isEnabled($pluginSlug)
+                    && (string) $this->plugins->getSetting($pluginSlug, 'enabled', '0') === '1',
+                422,
+                'The selected manual payment plugin is not installed, enabled, and configured.'
+            );
             abort_unless(
                 (string) $this->plugins->getSetting('universal-payment', 'allow_offline_payments', '1') === '1',
                 422,
