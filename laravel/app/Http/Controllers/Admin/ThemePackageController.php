@@ -19,7 +19,6 @@ class ThemePackageController extends Controller
         return view('admin.appearance.themes',[
             'themes'=>$themes->installed(),
             'activeSlug'=>$themes->activeSlug(),
-            'rollbackAvailable'=>array_fill_keys(array_keys($themes->installed()),false),
         ]);
     }
 
