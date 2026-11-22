@@ -628,7 +628,7 @@ final class ReferralIncomeRedTeamHardeningTest extends TestCase
         try {
             $service->reverseSettledPurchase($buyer, 'course_cart_order', $orderId, $refundOneId, 200, 'BDT');
             $this->fail('A course-cart refund must reject a missing original-payment invoice binding.');
-        } catch (\\RuntimeException $exception) {
+        } catch (\RuntimeException $exception) {
             $this->assertStringContainsString('verified Universal Payment transaction', $exception->getMessage());
         }
         $this->assertDatabaseCount('referral_commission_reversals', 0);
