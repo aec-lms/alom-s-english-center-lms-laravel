@@ -10,7 +10,7 @@ The settings reserve the merchant-issued Tokenized Checkout credentials: App Key
 
 ## Nagad and DBBL Rocket
 
-Only generic, optional credential slots are provided. The exact authentication scheme, required certificates/keys, endpoints, callback signatures, transaction query and refund behavior must come from the respective merchant onboarding documentation. Do not infer or invent these protocols.
+Only generic, optional credential slots are provided. The exact authentication scheme, required certificates/keys, endpoints, callback signatures, transaction query and refund behavior must come from the respective merchant onboarding documentation. Provider API hosts must be fixed to verified official endpoints in server-side code, never accepted as arbitrary admin-configured URLs. Do not infer or invent these protocols.
 
 ## Mandatory implementation and release gates
 
