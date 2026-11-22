@@ -230,7 +230,7 @@ class RecycleBinController extends Controller
                 $user->forceFill(['is_active' => false])->save();
             }
 
-            $this->audit->log('recycle_bin.teacher_restored', 'teacher', (string) $teacher->id, [
+            $this->audit->logRequired('recycle_bin.teacher_restored', 'teacher', (string) $teacher->id, [
                 'employee_code' => $teacher->employee_code,
                 'account_reactivated' => false,
             ], $actorId);
