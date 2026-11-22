@@ -444,7 +444,16 @@ class PublicHomeController extends Controller
         $lessons = [];
         if (Schema::hasTable('cms_posts')) {
             // Use the SoftDeletes model scope so recycled posts never appear publicly.
-            $posts = CmsPost::query()->where('is_published', true)->orderByDesc('id')->limit(250)->get();
+            $postQuery = CmsPost::query()->where('is_published', true);
+            if ($searchTerm !== '') {
+                $postQuery->where(function ($query) use ($searchTerm): void {
+                    foreach (['title', 'category', 'author', 'excerpt', 'content'] as $index => $column) {
+                        $method = $index === 0 ? 'where' : 'orWhere';
+                        $query->{$method}($column, 'like', '%' . $searchTerm . '%');
+                    }
+                });
+            }
+            $posts = $postQuery->orderByDesc('id')->limit(250)->get();
             foreach ($posts as $post) {
                 $lessons[] = [
                     'slug' => $post->slug,
@@ -457,18 +466,6 @@ class PublicHomeController extends Controller
                     'pdf_thumbnail' => $post->pdf_thumbnail ?? null,
                 ];
             }
-        }
-
-        if ($searchTerm !== '') {
-            $needle = mb_strtolower($searchTerm);
-            $lessons = array_values(array_filter($lessons, function (array $lesson) use ($needle): bool {
-                $haystack = mb_strtolower(implode(' ', [
-                    (string) ($lesson['title'] ?? ''),
-                    (string) ($lesson['category'] ?? ''),
-                    (string) ($lesson['instructor'] ?? ''),
-                ]));
-                return str_contains($haystack, $needle);
-            }));
         }
 
         return view('public.learn', compact('lessons', 'searchTerm'));
