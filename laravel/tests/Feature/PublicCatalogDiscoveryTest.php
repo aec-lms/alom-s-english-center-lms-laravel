@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use Plugins\\Modules\\CourseManagement\\Models\\Course;
-use Plugins\\Modules\\ExamManagement\\Models\\Exam;
-use Plugins\\Modules\\StorefrontCatalog\\Models\\StorefrontItem;
-use Plugins\\Modules\\TeacherManagement\\Models\\Teacher;
-use Tests\\TestCase;
+use Plugins\Modules\CourseManagement\Models\Course;
+use Plugins\Modules\ExamManagement\Models\Exam;
+use Plugins\Modules\StorefrontCatalog\Models\StorefrontItem;
+use Plugins\Modules\TeacherManagement\Models\Teacher;
+use Tests\TestCase;
 
 class PublicCatalogDiscoveryTest extends TestCase
 {
