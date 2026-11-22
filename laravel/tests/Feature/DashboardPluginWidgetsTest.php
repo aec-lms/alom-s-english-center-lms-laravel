@@ -58,17 +58,20 @@ class DashboardPluginWidgetsTest extends TestCase
     {
         $this->markSystemInstalled();
         $this->activatePlugins(['student-management']);
-        $admin = $this->createUserWithRole('admin');
-        $permissionId = DB::table('permissions')->where('slug', 'students.manage')->value('id');
-        $this->assertNotNull($permissionId);
-        $admin->roles()->first()->permissions()->detach([$permissionId]);
+        $viewer = $this->createUserWithRole('teacher');
+        $dashboardPermissionId = DB::table('permissions')->where('slug', 'core.dashboard.view')->value('id');
+        $studentPermissionId = DB::table('permissions')->where('slug', 'students.manage')->value('id');
+        $this->assertNotNull($dashboardPermissionId);
+        $this->assertNotNull($studentPermissionId);
+        $viewer->roles()->first()->permissions()->syncWithoutDetaching([$dashboardPermissionId]);
+        $viewer->roles()->first()->permissions()->detach([$studentPermissionId]);
 
-        $this->actingAs($admin)->get('/admin')
+        $this->actingAs($viewer)->get('/admin')
             ->assertOk()
             ->assertDontSee('value="student-management.overview"', false)
             ->assertDontSee('data-dashboard-widget="student-management.overview"', false);
 
-        $this->actingAs($admin)->from('/admin')->post('/admin/dashboard/widgets', [
+        $this->actingAs($viewer)->from('/admin')->post('/admin/dashboard/widgets', [
             'widgets' => ['student-management.overview'],
         ])->assertSessionHasErrors('widgets.0');
     }
