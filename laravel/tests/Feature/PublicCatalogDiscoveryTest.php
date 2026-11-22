@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use Plugins\Modules\CertificateManagement\Models\CertificateRecord;
+use Plugins\Modules\CmsWebsite\Models\CmsPost;
 use Plugins\Modules\CourseManagement\Models\Course;
 use Plugins\Modules\ExamManagement\Models\Exam;
 use Plugins\Modules\StorefrontCatalog\Models\StorefrontItem;
@@ -186,6 +187,36 @@ class PublicCatalogDiscoveryTest extends TestCase
             ->assertSee('IELTS Writing Guide')
             ->assertDontSee('Phonetics Reference Book')
             ->assertSee('name="q"');
+    }
+
+    public function test_public_learning_hub_searches_published_content_and_hides_unpublished_posts(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['cms-website']);
+
+        CmsPost::query()->create([
+            'slug' => 'ielts-speaking-fluency',
+            'title' => 'IELTS Speaking Fluency Guide',
+            'category' => 'IELTS',
+            'author' => 'Academic Team',
+            'excerpt' => 'Fluency practice and speaking drills',
+            'content' => 'Prepare for IELTS speaking with structured practice.',
+            'is_published' => true,
+        ]);
+
+        CmsPost::query()->create([
+            'slug' => 'private-grammar-draft',
+            'title' => 'Private Grammar Draft',
+            'category' => 'Grammar',
+            'author' => 'Editorial Team',
+            'content' => 'Unpublished content must stay hidden.',
+            'is_published' => false,
+        ]);
+
+        $this->get('/learn?q=IELTS')
+            ->assertOk()
+            ->assertSee('IELTS Speaking Fluency Guide')
+            ->assertDontSee('Private Grammar Draft');
     }
 
 }
