@@ -692,7 +692,7 @@ class PluginManager
             }
 
             if ($restored) {
-                $message = 'Plugin recycle-bin metadata could not be fully written and verified; the original package checksum was verified and its previous lifecycle state was restored where possible.';
+                $message = 'Plugin recycle-bin metadata or required audit could not be committed; the original package checksum was verified and its previous lifecycle state was restored where possible.';
             } elseif ($sourceExists && !$sourceIntegrityMatches) {
                 // Do not reinstall or enable a package whose checksum changed
                 // during recovery. Keep the record disabled for operator review.
@@ -700,11 +700,11 @@ class PluginManager
                     'is_installed' => false,
                     'is_enabled' => false,
                 ]);
-                $message = 'Plugin recycle-bin metadata could not be written. The package is at ' . $source . ' but failed checksum verification; it remains uninstalled and disabled and requires manual integrity review.';
+                $message = 'Plugin recycle-bin metadata or required audit could not be committed. The package is at ' . $source . ' but failed checksum verification; it remains uninstalled and disabled and requires manual integrity review.';
             } elseif ($destinationExists) {
-                $message = 'Plugin recycle-bin metadata could not be written. The package remains at ' . $destination . ' without a committed metadata index; preserve it for manual recovery.';
+                $message = 'Plugin recycle-bin metadata or required audit could not be committed. The package remains at ' . $destination . ' without a committed metadata index; preserve it for manual recovery.';
             } else {
-                $message = 'Plugin recycle-bin metadata could not be written and the package location is uncertain (source: ' . $source . ', archive: ' . $destination . '). Do not reinstall, delete, or modify either path; preserve storage/app and contact the maintainer for recovery.';
+                $message = 'Plugin recycle-bin metadata or required audit could not be committed and the package location is uncertain (source: ' . $source . ', archive: ' . $destination . '). Do not reinstall, delete, or modify either path; preserve storage/app and contact the maintainer for recovery.';
             }
 
             throw new RuntimeException($message, previous: $writeError);
