@@ -15,8 +15,14 @@
                 </p>
             </div>
 
+            <form method="GET" action="{{ route('public.learn') }}" class="mx-auto flex max-w-2xl flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:flex-row">
+                <label class="sr-only" for="learning-search">{{ __('Search learning resources') }}</label>
+                <input id="learning-search" type="search" name="q" value="{{ $searchTerm }}" maxlength="100" placeholder="{{ __('Search lessons, topics or instructors') }}" class="min-w-0 flex-1 rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
+                <button type="submit" class="rounded-xl bg-[#0284C7] px-5 py-3 text-sm font-bold text-white hover:bg-[#0369A1]">{{ __('Search') }}</button>
+            </form>
+
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-6">
-                @foreach ($lessons as $lesson)
+                @forelse ($lessons as $lesson)
                     <article id="{{ $lesson['slug'] }}" class="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-xs hover:shadow-xl transition-all duration-200 flex flex-col sm:flex-row">
                         <div class="sm:w-52 h-44 sm:h-auto relative bg-[#022D41] shrink-0 overflow-hidden">
                             <img src="{{ $lesson['thumbnail'] }}" alt="{{ $lesson['title'] }}" class="w-full h-full object-cover">
@@ -40,7 +46,12 @@
                             </div>
                         </div>
                     </article>
-                @endforeach
+                @empty
+                    <section class="col-span-full rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
+                        <h2 class="text-lg font-bold text-slate-800">{{ __('No learning resources found') }}</h2>
+                        <p class="mt-2 text-sm text-slate-500">{{ __('Try another topic, lesson title or instructor name.') }}</p>
+                    </section>
+                @endforelse
             </div>
         </div>
     </main>
