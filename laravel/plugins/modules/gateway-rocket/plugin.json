@@ -86,15 +86,6 @@
             "secret": true
         }
     ],
-    "admin_menu": [
-        {
-            "group": "Finance & Gateways",
-            "label": "Rocket Gateway",
-            "route": "plugins.rocket_gateway.index",
-            "order": 112,
-            "permission": "payments.rocket.manage"
-        }
-    ],
     "optional_dependencies": [
         "fees-management",
         "payment-management"
