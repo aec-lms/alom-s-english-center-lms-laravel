@@ -81,8 +81,9 @@ class ScormRuntimeController extends Controller
             $parts = parse_url($origin);
             abort_unless(is_array($parts) && in_array($parts['scheme'] ?? null, ['http', 'https'], true)
                 && is_string($parts['host'] ?? null) && $parts['host'] !== ''
-                && !isset($parts['user'], $parts['pass'], $parts['path'], $parts['query'], $parts['fragment'], $parts['port']), 503,
-                'SCORM player/content origins must be scheme and hostname only (no path, credentials or port).');
+                && !isset($parts['user'], $parts['pass'], $parts['path'], $parts['query'], $parts['fragment'])
+                && (!isset($parts['port']) || app()->environment('testing')), 503,
+                'SCORM player/content origins must be scheme and hostname only (no path or credentials; ports are test-only).');
         }
         abort_unless(is_string($playerHost) && is_string($contentHost)
             && count(array_unique([$appHost, $playerHost, $contentHost])) === 3, 503,
@@ -287,7 +288,7 @@ class ScormRuntimeController extends Controller
             $secure,
             true,
             false,
-            'none'
+            config('scorm.cookie_same_site', 'none')
         );
         $bridgeCookie = cookie(
             $this->contentBridgeCookieName($attempt),
@@ -298,7 +299,7 @@ class ScormRuntimeController extends Controller
             $secure,
             true,
             false,
-            'none'
+            config('scorm.cookie_same_site', 'none')
         );
 
         return redirect()->to($location, 302)
