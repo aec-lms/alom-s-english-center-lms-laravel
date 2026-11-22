@@ -20,6 +20,7 @@ class UniversalPaymentGatewayToggleTest extends TestCase
         ]);
 
         $admin = $this->createUserWithRole('admin');
+        $this->grantUniversalPaymentManagePermission($admin);
         $this->actingAs($admin)->post('/plugins/universal-payment/transactions', [
             'payer_name' => 'Offline Disabled Test',
             'payer_contact' => '01712345678',
@@ -151,6 +152,15 @@ class UniversalPaymentGatewayToggleTest extends TestCase
         $this->assertDatabaseMissing('universal_payment_transactions', [
             'external_trx_id' => 'CASH-PLUGIN-MISSING-001',
         ]);
+    }
+
+    private function grantUniversalPaymentManagePermission(\\App\\Models\\User $user): void
+    {
+        $permission = Permission::query()->firstOrCreate(
+            ['slug' => 'payments.universal.manage'],
+            ['name' => 'Manage Universal Payments', 'module' => 'universal-payment'],
+        );
+        $user->roles()->firstOrFail()->permissions()->syncWithoutDetaching([$permission->id]);
     }
 
 }
