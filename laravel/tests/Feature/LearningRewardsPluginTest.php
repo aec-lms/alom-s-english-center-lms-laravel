@@ -190,31 +190,39 @@ class LearningRewardsPluginTest extends TestCase
         $this->assertSame(25, (int) DB::table('learning_reward_ledger')->where('user_id', $student->id)->sum('points'));
     }
 
-    public function test_attendance_correction_cannot_be_farmed_by_present_absent_present_toggles(): void
+    public function test_attendance_present_absent_present_transitions_are_individually_idempotent(): void
     {
         $this->bootRewards();
         $student = $this->createUserWithRole('student');
         $admin = $this->createUserWithRole('admin');
         $service = app(LearningRewardsService::class);
 
-        $first = $service->awardVerifiedActivity((int) $student->id, 'attendance_present', 'attendance_entry', 7001);
+        // Each persisted attendance audit row identifies one real status transition.
+        $first = $service->awardVerifiedActivity((int) $student->id, 'attendance_present', 'attendance_record', 7001, 'transition-1');
         $this->assertSame(5, $first['points']);
+        $this->assertTrue($service->awardVerifiedActivity(
+            (int) $student->id, 'attendance_present', 'attendance_record', 7001, 'transition-1'
+        )['duplicate']);
 
         $service->reverseActivityAward(
             (int) $student->id,
             'attendance_present',
-            'attendance_entry',
+            'attendance_record',
             7001,
             (int) $admin->id,
             'Attendance was corrected to absent.',
         );
 
-        // A later present correction must not mint another award for the same attendance row.
-        $second = $service->awardVerifiedActivity((int) $student->id, 'attendance_present', 'attendance_entry', 7001);
-        $this->assertTrue($second['duplicate']);
+        // A new persisted present transition earns once; retries of that same transition do not.
+        $second = $service->awardVerifiedActivity((int) $student->id, 'attendance_present', 'attendance_record', 7001, 'transition-3');
+        $this->assertFalse($second['duplicate']);
         $this->assertSame(5, $second['points']);
-        $this->assertSame(2, DB::table('learning_reward_ledger')->where('user_id', $student->id)->count());
-        $this->assertSame(0, (int) DB::table('learning_reward_ledger')->where('user_id', $student->id)->sum('points'));
+        $this->assertTrue($service->awardVerifiedActivity(
+            (int) $student->id, 'attendance_present', 'attendance_record', 7001, 'transition-3'
+        )['duplicate']);
+
+        $this->assertSame(3, DB::table('learning_reward_ledger')->where('user_id', $student->id)->count());
+        $this->assertSame(5, (int) DB::table('learning_reward_ledger')->where('user_id', $student->id)->sum('points'));
     }
 
     public function test_student_dashboard_and_privacy_aware_branch_leaderboard_work(): void
