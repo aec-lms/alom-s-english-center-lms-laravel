@@ -25,6 +25,7 @@ final class PluginManifest
         public readonly bool $isCore = false,
         public readonly array $adminMenu = [],
         public readonly string $icon = 'puzzle',
+        public readonly array $dashboardWidgets = [],
     ) {}
 
     public static function fromDirectory(string $directory): self
@@ -88,7 +89,45 @@ final class PluginManifest
             isCore: (bool) ($data['is_core'] ?? false),
             adminMenu: array_values(array_filter((array) ($data['admin_menu'] ?? []), 'is_array')),
             icon: PluginIconRegistry::resolve($data['slug'], (string) ($data['category'] ?? 'general'), isset($data['icon']) && is_string($data['icon']) ? $data['icon'] : null),
+            dashboardWidgets: self::validatedDashboardWidgets($data['dashboard_widgets'] ?? []),
         );
+    }
+
+
+    /** @return list<array{id:string,label:string,description:string,permission:?string,route:?string}> */
+    private static function validatedDashboardWidgets(mixed $widgets): array
+    {
+        if (!is_array($widgets) || !array_is_list($widgets)) {
+            throw new InvalidArgumentException('Plugin dashboard_widgets must be a JSON array.');
+        }
+
+        $validated = [];
+        $seen = [];
+        foreach ($widgets as $widget) {
+            if (!is_array($widget)) {
+                throw new InvalidArgumentException('Each plugin dashboard widget must be an object.');
+            }
+            $id = $widget['id'] ?? null;
+            $label = $widget['label'] ?? null;
+            $permission = $widget['permission'] ?? null;
+            $route = $widget['route'] ?? null;
+            if (!is_string($id) || preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/', $id) !== 1
+                || isset($seen[$id]) || !is_string($label) || trim($label) === '' || mb_strlen($label) > 80
+                || ($permission !== null && (!is_string($permission) || preg_match('/^[a-zA-Z0-9.*_-]+$/', $permission) !== 1))
+                || ($route !== null && (!is_string($route) || preg_match('/^[a-zA-Z0-9._-]+$/', $route) !== 1))) {
+                throw new InvalidArgumentException('Plugin dashboard widget contains invalid id, label, permission, or route.');
+            }
+            $seen[$id] = true;
+            $validated[] = [
+                'id' => $id,
+                'label' => trim($label),
+                'description' => is_string($widget['description'] ?? null) ? mb_substr(trim($widget['description']), 0, 240) : '',
+                'permission' => $permission,
+                'route' => $route,
+            ];
+        }
+
+        return $validated;
     }
 
     /** @return list<string> */
@@ -135,6 +174,7 @@ final class PluginManifest
             'is_core' => $this->isCore,
             'admin_menu' => $this->adminMenu,
             'icon' => $this->icon,
+            'dashboard_widgets' => $this->dashboardWidgets,
         ];
     }
 }
