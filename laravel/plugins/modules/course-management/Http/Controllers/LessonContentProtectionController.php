@@ -7,6 +7,7 @@ namespace Plugins\Modules\CourseManagement\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Core\Plugins\PluginManager;
 use Plugins\Modules\StudentTracking\Services\StudentActivityTracker;
+use Plugins\Modules\LearningPaths\Services\LearningPathAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
@@ -115,6 +116,9 @@ class LessonContentProtectionController extends Controller
             $courseRow->branch_id !== null ? (int) $courseRow->branch_id : null,
             $enrollment
         );
+        if (app(PluginManager::class)->isEnabled('learning-paths')) {
+            app(LearningPathAccess::class)->assertCourseUnlocked((int) $request->user()->id, $course);
+        }
 
         $lessons = DB::table('course_lessons')
             ->where('course_id', $course)
@@ -259,6 +263,9 @@ class LessonContentProtectionController extends Controller
             $row->course_branch_id !== null ? (int) $row->course_branch_id : null,
             $enrollment
         );
+        if (app(PluginManager::class)->isEnabled('learning-paths')) {
+            app(LearningPathAccess::class)->assertCourseUnlocked((int) $request->user()->id, (int) $row->course_id);
+        }
         return $row;
     }
 
