@@ -97,6 +97,8 @@ class PluginCategoryRegistryTest extends TestCase
     {
         $this->assertSame('academic-learning', PluginCategoryRegistry::keyFor('course-management', 'academic'));
         $this->assertSame('payments', PluginCategoryRegistry::keyFor('universal-payment', 'finance'));
+        $this->assertSame('payments', PluginCategoryRegistry::keyFor('gateway-cash'));
+        $this->assertSame('payments', PluginCategoryRegistry::keyFor('gateway-bank-transfer'));
         $this->assertSame('Academic & Learning', PluginCategoryRegistry::labelFor('course-management', 'academic'));
         $this->assertSame('Payment Systems', PluginCategoryRegistry::labelFor('universal-payment', 'finance'));
         $this->assertSame('Payment Systems', PluginCategoryRegistry::labelFor('gateway-sslcommerz', 'payment-gateway'));
