@@ -2,15 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Database\\Seeders;
+namespace Database\Seeders;
 
-use App\\Core\\Plugins\\PluginManager;
-use App\\Models\\Role;
-use App\\Models\\User;
-use Illuminate\\Database\\Seeder;
-use Illuminate\\Support\\Facades\\DB;
-use Illuminate\\Support\\Facades\\Hash;
-use Plugins\\Modules\\Scorm\\Services\\ScormPackageImporter;
+use App\Core\Plugins\PluginManager;
+use App\Models\Role;
+use App\Models\User;
+use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Hash;
+use Plugins\Modules\Scorm\Services\ScormPackageImporter;
 use ZipArchive;
 
 class ScormE2EFixtureSeeder extends Seeder
@@ -60,7 +61,7 @@ class ScormE2EFixtureSeeder extends Seeder
         $zipPath = sys_get_temp_dir() . '/aec-scorm-e2e-' . bin2hex(random_bytes(8)) . '.zip';
         $zip = new ZipArchive();
         if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::EXCL) !== true) {
-            throw new \\RuntimeException('Unable to create the SCORM E2E package archive.');
+            throw new \RuntimeException('Unable to create the SCORM E2E package archive.');
         }
 
         $manifest = <<<'XML'
@@ -156,9 +157,9 @@ HTML;
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             if (isset($imported['directory']) && is_dir($imported['directory']) && !is_link($imported['directory'])) {
-                \\Illuminate\\Support\\Facades\\File::deleteDirectory($imported['directory']);
+                File::deleteDirectory($imported['directory']);
             }
             throw $exception;
         } finally {
