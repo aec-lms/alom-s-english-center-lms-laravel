@@ -360,7 +360,7 @@ class PluginRecycleBinAdminAcceptanceTest extends TestCase
             $realManager->syncCatalog();
             $realManager->install($slug);
 
-            $audit = \\Mockery::mock(AuditLogger::class);
+            $audit = \Mockery::mock(AuditLogger::class);
             $audit->shouldReceive('log')->zeroOrMoreTimes()->andReturnUsing(
                 static function (string $action): void {
                     if ($action === 'plugin.deleted_to_recycle_bin') {
@@ -404,7 +404,7 @@ class PluginRecycleBinAdminAcceptanceTest extends TestCase
             $archivePath = storage_path('app/plugin-recycle-bin/' . $archiveName);
             $metadataPath = $archivePath . '.json';
 
-            $audit = \\Mockery::mock(AuditLogger::class);
+            $audit = \Mockery::mock(AuditLogger::class);
             $audit->shouldReceive('log')->zeroOrMoreTimes()->andReturnUsing(
                 static function (string $action): void {
                     if ($action === 'plugin.restored_from_recycle_bin') {
@@ -452,7 +452,7 @@ class PluginRecycleBinAdminAcceptanceTest extends TestCase
             $archivePath = storage_path('app/plugin-recycle-bin/' . $archiveName);
             $backupPath = storage_path('app/plugin-permanent-delete-backups/' . $archiveName);
 
-            $audit = \\Mockery::mock(AuditLogger::class);
+            $audit = \Mockery::mock(AuditLogger::class);
             $audit->shouldReceive('log')->zeroOrMoreTimes()->andReturnUsing(
                 static function (string $action): void {
                     if ($action === 'plugin.permanent_delete_started') {
