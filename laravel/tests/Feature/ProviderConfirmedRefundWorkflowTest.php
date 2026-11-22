@@ -1265,7 +1265,7 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
             'provider_refund_reference' => 'EXPECTED-PAYPAL-REFUND-001',
         ]);
 
-        Http::fake(function (ClientRequest $request) use ($transaction): \Illuminate\Http\Client\Response {
+        Http::fake(function (ClientRequest $request) use ($transaction) {
             if (str_ends_with((string) parse_url($request->url(), PHP_URL_PATH), '/v1/oauth2/token')) {
                 return Http::response(['access_token' => 'paypal-reconcile-identity-token'], 200);
             }
