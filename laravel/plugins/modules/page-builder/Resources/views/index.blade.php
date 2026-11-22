@@ -215,7 +215,9 @@
     const template = document.getElementById('page-block-template');
     document.querySelectorAll('[data-block-list]').forEach((list) => {
         const form = list.closest('form');
-        const addButton = form?.querySelector('[data-add-block]');\n        const insertButton = form?.querySelector('[data-insert-reusable]');\n        const reusableSelect = form?.querySelector('[data-reusable-select]');
+        const addButton = form?.querySelector('[data-add-block]');
+        const insertButton = form?.querySelector('[data-insert-reusable]');
+        const reusableSelect = form?.querySelector('[data-reusable-select]');
         const status = document.querySelector('[data-block-status]');
         const announce = (message) => { if (status) status.textContent = message; };
         const sync = (block) => {
