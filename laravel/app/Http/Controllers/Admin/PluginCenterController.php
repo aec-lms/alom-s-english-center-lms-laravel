@@ -12,6 +12,7 @@ use App\Http\Controllers\Controller;
 use App\Models\PluginRecord;
 use App\Models\PluginArchive;
 use App\Models\PluginSetting;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
 use RuntimeException;
@@ -350,17 +351,49 @@ class PluginCenterController extends Controller
                 throw new RuntimeException('Private recovery snapshot was created, but the recycle-bin package could not be removed.');
             }
 
-            PluginSetting::query()->where('plugin_slug', $item->plugin_slug)->delete();
-            PluginRecord::query()->where('slug', $item->plugin_slug)->where('is_core', false)->delete();
             $slug = $item->plugin_slug;
-            $item->delete();
-            app(\App\Core\Security\AuditLogger::class)->log(
-                'plugin.archive_permanently_deleted',
-                'plugin',
-                $slug,
-                ['private_backup_id' => $backupId, 'package_files_removed_from_recycle_bin' => true],
-                auth()->id(),
-            );
+            try {
+                DB::transaction(function () use ($item, $slug, $backupId): void {
+                    PluginSetting::query()->where('plugin_slug', $slug)->delete();
+                    PluginRecord::query()->where('slug', $slug)->where('is_core', false)->delete();
+                    PluginArchive::query()->whereKey($item->getKey())->lockForUpdate()->firstOrFail()->delete();
+
+                    app(\App\Core\Security\AuditLogger::class)->logRequired(
+                        'plugin.archive_permanently_deleted',
+                        'plugin',
+                        $slug,
+                        ['private_backup_id' => $backupId, 'package_files_removed_from_recycle_bin' => true],
+                        auth()->id(),
+                    );
+                });
+            } catch (\Throwable $exception) {
+                // The database rows and audit event roll back together. Recreate the
+                // archive package from the verified private snapshot so the retained
+                // archive record remains usable after a failed required audit.
+                try {
+                    if (is_link($archivePath)) {
+                        throw new RuntimeException('Recycle-bin archive path became a symbolic link during recovery.');
+                    }
+                    if (is_dir($archivePath) && $this->directoryChecksums($archivePath) !== $sourceChecksums) {
+                        if (!File::deleteDirectory($archivePath)) {
+                            throw new RuntimeException('Could not clear the incomplete recycle-bin package during recovery.');
+                        }
+                    }
+                    if (!is_dir($archivePath) && !File::copyDirectory($backupPath, $archivePath)) {
+                        throw new RuntimeException('Could not restore the recycle-bin package from its verified private snapshot.');
+                    }
+                    if ($this->directoryChecksums($archivePath) !== $sourceChecksums) {
+                        throw new RuntimeException('Restored recycle-bin package failed its integrity check.');
+                    }
+                } catch (\Throwable $recoveryException) {
+                    throw new RuntimeException(
+                        'Permanent-delete audit failed and the archive package could not be restored; the verified private recovery snapshot was retained.',
+                        previous: $recoveryException,
+                    );
+                }
+
+                throw $exception;
+            }
 
             return back()->with('status', "Plugin '{$slug}' permanently deleted from Recycle Bin. A verified private recovery snapshot was retained.");
         } catch (\Throwable $e) {
