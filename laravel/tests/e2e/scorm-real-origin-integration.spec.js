@@ -53,9 +53,10 @@ test('real Laravel SCORM launch isolates an imported SCO and persists a legitima
   const bootstrapHeaders = await bootstrapResponse.allHeaders();
   expect(bootstrapHeaders['referrer-policy']).toBe('no-referrer');
   expect(bootstrapHeaders['cache-control']).toContain('no-store');
-  expect(bootstrapHeaders['set-cookie']).toContain('HttpOnly');
-  expect(bootstrapHeaders['set-cookie']).toContain('SameSite=Lax');
-  expect(bootstrapHeaders['set-cookie']).not.toContain('Domain=');
+  const scormSetCookie = String(bootstrapHeaders['set-cookie'] || '').toLowerCase();
+  expect(scormSetCookie).toContain('httponly');
+  expect(scormSetCookie).toContain('samesite=lax');
+  expect(scormSetCookie).not.toContain('domain=');
 
   const contentHeaders = await contentResponse.allHeaders();
   expect(contentHeaders['content-security-policy']).toContain('frame-ancestors ' + appOrigin + ' ' + playerOrigin);
