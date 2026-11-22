@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\PageBuilder\\Services;
+namespace Plugins\Modules\PageBuilder\Services;
 
-use App\\Models\\SystemSetting;
-use Illuminate\\Support\\Facades\\Schema;
-use Illuminate\\Support\\Str;
+use App\Models\SystemSetting;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 final class ReusableBlockLibrary
 {
