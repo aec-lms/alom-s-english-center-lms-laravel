@@ -265,6 +265,10 @@ class BackupAndUpdateTest extends TestCase
             unlink($blockedChild);
             rmdir($blockedDirectory);
             file_put_contents($blockedDirectory, 'blocking-live-file');
+            $restoredAuditCountBefore = DB::table('audit_logs')
+                ->where('action', 'backup.restored')
+                ->where('entity_id', (string) $record->id)
+                ->count();
 
             try {
                 app(BackupService::class)->restoreEncryptedBackup($record);
@@ -279,6 +283,14 @@ class BackupAndUpdateTest extends TestCase
                 'Earlier private file replacements must be rolled back when a later restore path fails.'
             );
             $this->assertSame('blocking-live-file', file_get_contents($blockedDirectory));
+            $this->assertSame(
+                $restoredAuditCountBefore,
+                DB::table('audit_logs')
+                    ->where('action', 'backup.restored')
+                    ->where('entity_id', (string) $record->id)
+                    ->count(),
+                'The required restore audit event must roll back with the database when filesystem restoration fails.'
+            );
         } finally {
             @unlink($firstFile);
             if (is_dir($blockedDirectory) && !is_link($blockedDirectory)) {
