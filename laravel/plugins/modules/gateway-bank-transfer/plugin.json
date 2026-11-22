@@ -1,0 +1,60 @@
+{
+    "slug": "gateway-bank-transfer",
+    "name": "Bank Transfer Payment",
+    "version": "1.0.0",
+    "author": "Alom's English Center",
+    "category": "payment-gateway",
+    "description": "Installable manual bank transfer method with configurable beneficiary details and private receipt review through Universal Payment.",
+    "core_compatibility": "^2.0",
+    "dependencies": [
+        "universal-payment"
+    ],
+    "provider": "Plugins\\Modules\\GatewayBankTransfer\\Providers\\GatewayBankTransferServiceProvider",
+    "permissions": [
+        {
+            "slug": "gateway.bank_transfer.submit",
+            "name": "Record Bank Transfer Payments"
+        }
+    ],
+    "settings_schema": [
+        {
+            "key": "bank_name",
+            "label": "Bank Name",
+            "type": "text",
+            "secret": false
+        },
+        {
+            "key": "account_name",
+            "label": "Account Holder Name",
+            "type": "text",
+            "secret": false
+        },
+        {
+            "key": "account_number",
+            "label": "Account Number",
+            "type": "text",
+            "secret": false
+        },
+        {
+            "key": "branch_name",
+            "label": "Bank Branch",
+            "type": "text",
+            "secret": false
+        },
+        {
+            "key": "routing_number",
+            "label": "Routing Number",
+            "type": "text",
+            "secret": false
+        },
+        {
+            "key": "instructions",
+            "label": "Transfer Instructions",
+            "type": "textarea",
+            "secret": false
+        }
+    ],
+    "optional_dependencies": [
+        "payment-management"
+    ]
+}
