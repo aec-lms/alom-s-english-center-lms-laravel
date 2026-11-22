@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 return [
     'modules_path' => base_path('plugins/modules'),
+    'explicit_test_boot' => (bool) env('AEC_TEST_EXPLICIT_PLUGIN_BOOT', false),
     'core_identifier' => 'aec-lms-core',
     'supported_core_constraint' => '^2.0',
     // JSON map of key_id => base64-encoded Ed25519 public key.

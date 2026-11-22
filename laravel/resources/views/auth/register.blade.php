@@ -26,12 +26,12 @@
                     <input name="email" type="email" required value="{{ old('email') }}" placeholder="you@example.com" class="w-full rounded-lg border border-slate-200 px-3.5 py-2.5 outline-none focus:border-[#0057FF] focus:ring-2 focus:ring-[#0057FF]/15">
                 </div>
                 <div>
-                    <label class="block text-xs font-semibold text-slate-700 mb-1">Password (min 8 chars)</label>
-                    <input name="password" type="password" required minlength="8" placeholder="Create password" class="w-full rounded-lg border border-slate-200 px-3.5 py-2.5 outline-none focus:border-[#0057FF] focus:ring-2 focus:ring-[#0057FF]/15">
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Password (min 10 chars; uppercase, lowercase & number)</label>
+                    <input name="password" type="password" required minlength="10" placeholder="Create password" class="w-full rounded-lg border border-slate-200 px-3.5 py-2.5 outline-none focus:border-[#0057FF] focus:ring-2 focus:ring-[#0057FF]/15">
                 </div>
                 <div>
                     <label class="block text-xs font-semibold text-slate-700 mb-1">Confirm Password</label>
-                    <input name="password_confirmation" type="password" required minlength="8" placeholder="Confirm password" class="w-full rounded-lg border border-slate-200 px-3.5 py-2.5 outline-none focus:border-[#0057FF] focus:ring-2 focus:ring-[#0057FF]/15">
+                    <input name="password_confirmation" type="password" required minlength="10" placeholder="Confirm password" class="w-full rounded-lg border border-slate-200 px-3.5 py-2.5 outline-none focus:border-[#0057FF] focus:ring-2 focus:ring-[#0057FF]/15">
                 </div>
                 <button type="submit" class="w-full py-2.5 rounded-lg bg-[#0057FF] hover:bg-[#0046CC] text-white font-bold shadow-sm transition-colors">
                     Register Now
