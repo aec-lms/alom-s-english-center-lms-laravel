@@ -17,6 +17,7 @@ use Plugins\Modules\AttendanceManagement\Models\AttendanceEntry;
 use Plugins\Modules\AttendanceManagement\Models\AttendanceRecord;
 use Plugins\Modules\StudentManagement\Models\Student;
 use Plugins\Modules\StudentTracking\Services\StudentActivityTracker;
+use Plugins\Modules\LearningRewards\Services\LearningRewardsService;
 
 class AttendanceController extends Controller
 {
@@ -223,7 +224,7 @@ class AttendanceController extends Controller
                     'occurred_at' => now(),
                 ]);
 
-                DB::table('attendance_audit_logs')->insert([
+                $attendanceTransitionId = DB::table('attendance_audit_logs')->insertGetId([
                     'attendance_record_id' => $record->id,
                     'actor_id' => $actor->id,
                     'event' => $isEdit ? ($changed ? 'updated' : 'reconfirmed') : 'created',
@@ -236,6 +237,28 @@ class AttendanceController extends Controller
 
                 if ($plugins->isEnabled('student-tracking')) {
                     app(StudentActivityTracker::class)->record((int) $student->user_id, 'attendance_marked', 'attendance', (int) $record->id, null, ['attendance_status' => $record->status, 'source' => $validated['source'] ?? 'online'], (int) $actor->id);
+                }
+
+                if ($plugins->isEnabled('learning-rewards') && $student->user_id) {
+                    $rewards = app(LearningRewardsService::class);
+                    if ($entry->status === 'present' && (!$isEdit || $oldStatus !== 'present')) {
+                        $rewards->awardVerifiedActivity(
+                            (int) $student->user_id,
+                            'attendance_present',
+                            'attendance_record',
+                            (int) $record->id,
+                            (string) $attendanceTransitionId,
+                        );
+                    } elseif ($isEdit && $oldStatus === 'present' && $entry->status !== 'present') {
+                        $rewards->reverseActivityAward(
+                            (int) $student->user_id,
+                            'attendance_present',
+                            'attendance_record',
+                            (int) $record->id,
+                            (int) $actor->id,
+                            'Attendance status was changed from present.',
+                        );
+                    }
                 }
 
                 $this->audit->log($isEdit ? 'attendance.updated' : 'attendance.marked', 'attendance', (string) $record->id, ['status' => $record->status, 'source' => $validated['source'] ?? 'online', 'reason' => $changed ? $reason : null]);

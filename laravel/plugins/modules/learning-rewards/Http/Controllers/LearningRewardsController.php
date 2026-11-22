@@ -1,0 +1,360 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Plugins\Modules\LearningRewards\Http\Controllers;
+
+use App\Core\Security\AuditLogger;
+use App\Core\Plugins\PluginManager;
+use App\Http\Controllers\Controller;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\View\View;
+
+class LearningRewardsController extends Controller
+{
+    public function dashboard(Request $request): View
+    {
+        $student = $this->currentActiveStudent($request);
+        $points = (int) DB::table('learning_reward_ledger')->where('user_id', $student->id)->sum('points');
+        $streak = DB::table('learning_reward_streaks')->where('user_id', $student->id)->first();
+        $badges = DB::table('learning_reward_user_badges as owned')
+            ->join('learning_reward_badges as badges', 'badges.id', '=', 'owned.badge_id')
+            ->where('owned.user_id', $student->id)
+            ->orderByDesc('owned.awarded_at')
+            ->get(['badges.name', 'badges.description', 'badges.icon', 'owned.awarded_at']);
+        $activity = DB::table('learning_reward_ledger')->where('user_id', $student->id)
+            ->latest('awarded_at')->limit(15)->get();
+        $profile = DB::table('learning_reward_profiles')->where('user_id', $student->id)->first();
+
+        return view('learning-rewards::student-dashboard', compact('points', 'streak', 'badges', 'activity', 'profile'));
+    }
+
+    public function leaderboard(Request $request): View
+    {
+        $student = $this->currentActiveStudent($request);
+        $period = $request->query('period', 'month');
+        abort_unless(in_array($period, ['week', 'month', 'all'], true), 404);
+        $timezone = (string) config('app.timezone', 'Asia/Dhaka');
+        $branchId = $this->resolveStudentBranch($student);
+        $start = match ($period) {
+            'week' => now($timezone)->startOfWeek()->utc(),
+            'month' => now($timezone)->startOfMonth()->utc(),
+            default => null,
+        };
+
+        $query = DB::table('learning_reward_ledger as ledger')
+            ->join('users', 'users.id', '=', 'ledger.user_id')
+            ->leftJoin('learning_reward_profiles as profiles', 'profiles.user_id', '=', 'users.id')
+            // Leaderboard visibility is explicit opt-in. Missing privacy rows
+            // and users who have not chosen public visibility stay private.
+            ->where('profiles.leaderboard_opt_out', false)
+            ->where('profiles.profile_public', true)
+            ->where('users.is_active', true)
+            ->whereExists(function ($roles): void {
+                $roles->selectRaw('1')
+                    ->from('role_user')
+                    ->join('roles', 'roles.id', '=', 'role_user.role_id')
+                    ->whereColumn('role_user.user_id', 'users.id')
+                    ->where('roles.slug', 'student');
+            })
+            ->when($branchId !== null, fn ($q) => $q->where('ledger.branch_id', $branchId), fn ($q) => $q->whereNull('ledger.branch_id'))
+            ->when($start !== null, fn ($q) => $q->where('ledger.awarded_at', '>=', $start))
+            ->selectRaw('users.id as user_id, users.name as student_name, SUM(ledger.points) as points')
+            ->groupBy('users.id', 'users.name')
+            ->havingRaw('SUM(ledger.points) > 0')
+            ->orderByDesc('points')
+            ->orderBy('users.name')
+            ;
+
+        if (app(PluginManager::class)->isEnabled('student-management')) {
+            abort_unless(Schema::hasTable('students') && Schema::hasColumn('students', 'user_id'),
+                403, 'Student profile storage is unavailable.');
+            $query->whereExists(function ($students): void {
+                $students->selectRaw('1')
+                    ->from('students')
+                    ->whereColumn('students.user_id', 'users.id');
+                if (Schema::hasColumn('students', 'status')) {
+                    $students->where('students.status', 'active');
+                }
+                if (Schema::hasColumn('students', 'deleted_at')) {
+                    $students->whereNull('students.deleted_at');
+                }
+            });
+        }
+
+        $query = $query->paginate(25)->withQueryString();
+
+        return view('learning-rewards::leaderboard', compact('query', 'period'));
+    }
+
+    public function updatePrivacy(Request $request, AuditLogger $audit): RedirectResponse
+    {
+        $student = $this->currentActiveStudent($request);
+        $data = $request->validate([
+            'leaderboard_opt_out' => ['required', 'boolean'],
+            'profile_public' => ['required', 'boolean'],
+        ]);
+        $values = [
+            'leaderboard_opt_out' => $data['leaderboard_opt_out'],
+            'profile_public' => $data['profile_public'],
+            'updated_at' => now(),
+        ];
+        DB::transaction(function () use ($values, $student, $audit): void {
+            $lockedUser = DB::table('users')->where('id', (int) $student->id)->lockForUpdate()->first();
+            abort_unless($lockedUser !== null
+                && (!Schema::hasColumn('users', 'is_active') || (bool) $lockedUser->is_active),
+                403,
+                'Student account is inactive.'
+            );
+            $studentRoleId = DB::table('roles')->where('slug', 'student')->value('id');
+            abort_unless($studentRoleId !== null, 503, 'Student role is not configured.');
+            abort_unless(
+                DB::table('role_user')->where('user_id', (int) $student->id)
+                    ->where('role_id', $studentRoleId)->lockForUpdate()->exists(),
+                403,
+                'An active student role is required.'
+            );
+            if (app(PluginManager::class)->isEnabled('student-management')) {
+                $profileQuery = DB::table('students')->where('user_id', (int) $student->id);
+                if (Schema::hasColumn('students', 'deleted_at')) {
+                    $profileQuery->whereNull('deleted_at');
+                }
+                $profile = $profileQuery->lockForUpdate()->first();
+                abort_unless($profile !== null, 403, 'An active student profile is required.');
+                if (Schema::hasColumn('students', 'status')) {
+                    abort_unless($profile->status === 'active', 403, 'Student profile is inactive.');
+                }
+            }
+
+            // Insert-if-absent followed by update avoids a check-then-insert race
+            // when a learner saves privacy settings from two active sessions.
+            DB::table('learning_reward_profiles')->insertOrIgnore([
+                'user_id' => $student->id,
+                'leaderboard_opt_out' => true,
+                'profile_public' => false,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            DB::table('learning_reward_profiles')->where('user_id', $student->id)->update($values);
+
+            $audit->logRequired('learning_rewards.privacy_updated', 'learning_reward_profile', (string) $student->id, [
+                'leaderboard_opt_out' => (bool) $values['leaderboard_opt_out'],
+                'profile_public' => (bool) $values['profile_public'],
+            ], $student->id);
+        });
+
+        return back()->with('status', 'Reward profile privacy settings updated.');
+    }
+
+    public function adminSettings(Request $request): View
+    {
+        abort_unless($request->user()?->hasPermission('gamification.manage'), 403);
+        $rules = DB::table('learning_reward_rules')->orderBy('activity_key')->get();
+        $badges = DB::table('learning_reward_badges')->orderBy('id')->get();
+        return view('learning-rewards::admin-settings', compact('rules', 'badges'));
+    }
+
+    public function updateRules(Request $request, AuditLogger $audit): RedirectResponse
+    {
+        $actor = $request->user();
+        abort_unless($actor && $actor->hasPermission('gamification.manage'), 403);
+        $data = $request->validate([
+            'rules' => ['required', 'array', 'min:1', 'max:4'],
+            'rules.*.activity_key' => ['required', 'in:lesson_completed,quiz_passed,assignment_accepted,attendance_present'],
+            'rules.*.points' => ['required', 'integer', 'min:0', 'max:500'],
+            'rules.*.daily_cap' => ['required', 'integer', 'min:0', 'max:5000'],
+            'rules.*.is_enabled' => ['nullable', 'boolean'],
+            'rules.*.pass_percentage' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        DB::transaction(function () use ($data, $audit, $actor): void {
+            $seen = [];
+            foreach ($data['rules'] as $rule) {
+                abort_if(isset($seen[$rule['activity_key']]), 422, 'Duplicate reward rule.');
+                $seen[$rule['activity_key']] = true;
+                DB::table('learning_reward_rules')->where('activity_key', $rule['activity_key'])->update([
+                    'points' => $rule['points'],
+                    'daily_cap' => $rule['daily_cap'],
+                    'pass_percentage' => $rule['pass_percentage'] ?? null,
+                    'is_enabled' => (bool) ($rule['is_enabled'] ?? false),
+                    'updated_at' => now(),
+                ]);
+            }
+            $audit->logRequired('learning_rewards.rules_updated', 'learning_reward_rules', 'all', ['activity_keys' => array_keys($seen)], $actor->id);
+        });
+
+        return back()->with('status', 'Learning reward rules updated.');
+    }
+
+    /**
+     * Re-read the authenticated learner's persisted account and RBAC state.
+     * Cached Eloquent role relations must not keep an inactive/revoked learner
+     * authorized for private reward records or leaderboard preferences.
+     */
+    private function currentActiveStudent(Request $request): object
+    {
+        $actor = $request->user();
+        abort_unless($actor, 403, 'An active student account is required.');
+
+        $user = DB::table('users')->where('id', (int) $actor->id)->first();
+        abort_unless($user !== null, 403, 'Student account is no longer available.');
+        if (Schema::hasColumn('users', 'is_active')) {
+            abort_unless((bool) $user->is_active, 403, 'Inactive student accounts cannot access learning rewards.');
+        }
+
+        abort_unless(Schema::hasTable('roles') && Schema::hasTable('role_user'), 503, 'Student role authorization storage is unavailable.');
+        $studentRoleId = DB::table('roles')->where('slug', 'student')->value('id');
+        abort_unless($studentRoleId !== null, 503, 'Student role is not configured.');
+        abort_unless(
+            DB::table('role_user')
+                ->where('user_id', (int) $user->id)
+                ->where('role_id', $studentRoleId)
+                ->exists(),
+            403,
+            'An active student role is required.'
+        );
+
+        if (app(PluginManager::class)->isEnabled('student-management')) {
+            abort_unless(Schema::hasTable('students') && Schema::hasColumn('students', 'user_id'), 503, 'Student profile storage is unavailable.');
+            $profile = DB::table('students')->where('user_id', (int) $user->id)->first();
+            abort_unless($profile !== null, 403, 'An active student profile is required.');
+            if (Schema::hasColumn('students', 'deleted_at')) {
+                abort_unless($profile->deleted_at === null, 403, 'Deleted student profiles cannot access learning rewards.');
+            }
+            if (Schema::hasColumn('students', 'status')) {
+                abort_unless($profile->status === 'active', 403, 'Inactive student profiles cannot access learning rewards.');
+            }
+            if (Schema::hasColumn('students', 'branch_id')
+                && $profile->branch_id !== null
+                && Schema::hasColumn('users', 'branch_id')
+                && $user->branch_id !== null) {
+                abort_unless(
+                    (int) $profile->branch_id === (int) $user->branch_id,
+                    403,
+                    'Student account and profile branch assignments do not match.'
+                );
+            }
+        }
+
+        return $user;
+    }
+
+    private function resolveStudentBranch(object $student): ?int
+    {
+        if (Schema::hasColumn('users', 'is_active')) {
+            abort_unless((bool) $student->is_active, 403, 'Inactive student accounts cannot view the leaderboard.');
+        }
+
+        $accountBranchId = $student->branch_id !== null ? (int) $student->branch_id : null;
+        $profileBranchId = null;
+        if (app(PluginManager::class)->isEnabled('student-management')) {
+            abort_unless(Schema::hasTable('students') && Schema::hasColumn('students', 'user_id'),
+                403, 'An active student profile is required to view the leaderboard.');
+            $profileQuery = DB::table('students')->where('user_id', $student->id);
+            if (Schema::hasColumn('students', 'deleted_at')) {
+                $profileQuery->whereNull('deleted_at');
+            }
+            $profile = $profileQuery->first();
+            abort_unless($profile, 403, 'An active student profile is required to view the leaderboard.');
+            if (Schema::hasColumn('students', 'status')) {
+                abort_unless($profile->status === 'active', 403, 'Inactive student profiles cannot view the leaderboard.');
+            }
+            if (Schema::hasColumn('students', 'branch_id') && $profile->branch_id !== null) {
+                $profileBranchId = (int) $profile->branch_id;
+            }
+        }
+
+        if ($accountBranchId !== null && $profileBranchId !== null) {
+            abort_unless($accountBranchId === $profileBranchId, 403, 'Student branch assignments do not match.');
+        }
+
+        $branchId = $profileBranchId ?? $accountBranchId;
+        if ($branchId !== null) {
+            abort_unless(app(PluginManager::class)->isEnabled('branch-management')
+                && Schema::hasTable('branches')
+                && DB::table('branches')->where('id', $branchId)->where('is_active', true)->exists(),
+                403, 'Student branch is unavailable or inactive.');
+        }
+
+        return $branchId;
+    }
+
+    public function storeBadge(Request $request, AuditLogger $audit): RedirectResponse
+    {
+        $actor = $request->user();
+        abort_unless($actor && $actor->hasPermission('gamification.manage'), 403);
+        $data = $request->validate([
+            'slug' => ['required', 'string', 'max:64', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/', 'unique:learning_reward_badges,slug'],
+            'name' => ['required', 'string', 'max:100'],
+            'description' => ['required', 'string', 'max:240'],
+            'icon' => ['required', 'string', 'max:64', 'regex:/^[a-z0-9-]+$/'],
+            'points_threshold' => ['nullable', 'integer', 'min:1', 'max:1000000'],
+            'streak_threshold' => ['nullable', 'integer', 'min:1', 'max:3650'],
+        ]);
+        abort_if(empty($data['points_threshold']) && empty($data['streak_threshold']), 422, 'A badge needs a points or streak threshold.');
+
+        DB::transaction(function () use ($data, $audit, $actor): void {
+            $id = DB::table('learning_reward_badges')->insertGetId([
+                'slug' => $data['slug'],
+                'name' => trim($data['name']),
+                'description' => trim($data['description']),
+                'icon' => $data['icon'],
+                'points_threshold' => $data['points_threshold'] ?? null,
+                'streak_threshold' => $data['streak_threshold'] ?? null,
+                'is_active' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            $audit->logRequired(
+                'learning_rewards.badge_created',
+                'learning_reward_badge',
+                (string) $id,
+                ['slug' => $data['slug']],
+                $actor->id,
+            );
+        });
+
+        return back()->with('status', 'Achievement badge created.');
+    }
+
+    public function updateBadge(Request $request, int $badge, AuditLogger $audit): RedirectResponse
+    {
+        $actor = $request->user();
+        abort_unless($actor && $actor->hasPermission('gamification.manage'), 403);
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:100'],
+            'description' => ['required', 'string', 'max:240'],
+            'icon' => ['required', 'string', 'max:64', 'regex:/^[a-z0-9-]+$/'],
+            'points_threshold' => ['nullable', 'integer', 'min:1', 'max:1000000'],
+            'streak_threshold' => ['nullable', 'integer', 'min:1', 'max:3650'],
+            'is_active' => ['required', 'boolean'],
+        ]);
+        abort_if(empty($data['points_threshold']) && empty($data['streak_threshold']), 422, 'A badge needs a points or streak threshold.');
+
+        DB::transaction(function () use ($data, $badge, $audit, $actor): void {
+            $record = DB::table('learning_reward_badges')->where('id', $badge)->lockForUpdate()->first();
+            abort_unless($record, 404);
+            DB::table('learning_reward_badges')->where('id', $badge)->update([
+                'name' => trim($data['name']),
+                'description' => trim($data['description']),
+                'icon' => $data['icon'],
+                'points_threshold' => $data['points_threshold'] ?? null,
+                'streak_threshold' => $data['streak_threshold'] ?? null,
+                'is_active' => (bool) $data['is_active'],
+                'updated_at' => now(),
+            ]);
+            $audit->logRequired(
+                'learning_rewards.badge_updated',
+                'learning_reward_badge',
+                (string) $badge,
+                ['slug' => $record->slug, 'is_active' => (bool) $data['is_active']],
+                $actor->id,
+            );
+        });
+
+        return back()->with('status', 'Achievement badge updated.');
+    }
+}

@@ -33,6 +33,9 @@
             @if ($role === 'student' && $boardQuestionSolverAvailable)
                 <a href="{{ route('student.board-solver.index') }}" class="rounded-xl border border-violet-200/40 bg-violet-400/15 px-4 py-2.5 text-sm font-bold text-violet-100 backdrop-blur transition hover:bg-violet-400/25">{{ __('Board Question Solver') }}</a>
             @endif
+            @if ($role === 'student' && Route::has('plugins.learning-rewards.dashboard'))
+                <a href="{{ route('plugins.learning-rewards.dashboard') }}" class="rounded-xl border border-amber-200/40 bg-amber-400/15 px-4 py-2.5 text-sm font-bold text-amber-100 backdrop-blur transition hover:bg-amber-400/25">{{ __('Learning Rewards') }}</a>
+            @endif
         </div></section>
 
         @if (session('status'))
