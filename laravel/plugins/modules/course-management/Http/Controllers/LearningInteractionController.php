@@ -314,6 +314,14 @@ class LearningInteractionController extends Controller
     private function canManageCourse(Request $request, object $course, ?string $instructorName = null): bool
     {
         $actor = $request->user();
+        if (!$actor || !$actor->is_active) {
+            return false;
+        }
+
+        if ($actor->hasRole('admin')) {
+            return $actor->hasPermission('courses.manage');
+        }
+
         if ($actor->hasRole('branch_manager')) {
             return $actor->hasPermission('courses.manage')
                 && $actor->branch_id !== null
@@ -322,27 +330,39 @@ class LearningInteractionController extends Controller
         }
 
         if ($actor->hasRole('teacher')) {
-            $teacherBranchId = null;
-            if (app(PluginManager::class)->isEnabled('teacher-management')
-                && Schema::hasTable('teachers')
-                && Schema::hasColumn('teachers', 'user_id')
-                && Schema::hasColumn('teachers', 'branch_id')) {
-                $teacherProfile = DB::table('teachers')->where('user_id', $actor->id)->first();
-                if ($teacherProfile) {
-                    $teacherBranchId = $teacherProfile->branch_id !== null ? (int) $teacherProfile->branch_id : null;
-                } else {
-                    $teacherBranchId = $actor->branch_id !== null ? (int) $actor->branch_id : null;
+            $teacherBranchId = $actor->branch_id !== null ? (int) $actor->branch_id : null;
+
+            if (app(PluginManager::class)->isEnabled('teacher-management') && Schema::hasTable('teachers')) {
+                $profileQuery = DB::table('teachers')->where('user_id', $actor->id);
+                if (Schema::hasColumn('teachers', 'deleted_at')) {
+                    $profileQuery->whereNull('deleted_at');
                 }
-            } else {
-                $teacherBranchId = $actor->branch_id !== null ? (int) $actor->branch_id : null;
+                $teacherProfile = $profileQuery->first();
+
+                // A teacher-management account must have a current, active profile.
+                if (!$teacherProfile
+                    || (Schema::hasColumn('teachers', 'is_active') && !(bool) $teacherProfile->is_active)) {
+                    return false;
+                }
+
+                $teacherBranchId = $teacherProfile->branch_id !== null
+                    ? (int) $teacherProfile->branch_id
+                    : $teacherBranchId;
             }
 
-            if ($course->branch_id !== null && $teacherBranchId !== null && $teacherBranchId !== (int) $course->branch_id) {
+            if ($course->branch_id !== null
+                && $teacherBranchId !== null
+                && $teacherBranchId !== (int) $course->branch_id) {
                 return false;
             }
 
-            return $actor->hasPermission('courses.manage')
-                || ($instructorName ?? (string) ($course->instructor_name ?? '')) === (string) $actor->name;
+            // Instructor display names are editable metadata, not authorization.
+            // Teaching privileges require a current normalized assignment.
+            return Schema::hasTable('course_teacher_assignments')
+                && DB::table('course_teacher_assignments')
+                    ->where('course_id', $course->id)
+                    ->where('teacher_user_id', $actor->id)
+                    ->exists();
         }
 
         return $actor->hasPermission('courses.manage');
