@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -251,6 +252,9 @@ class CourseAssessmentsPluginTest extends TestCase
     public function test_revoked_student_role_immediately_blocks_all_web_attempt_endpoints(): void
     {
         $this->markSystemInstalled();
+        // Rate-limit counters can be shared across repeated feature-test requests;
+        // this regression isolates authorization outcomes from throttle responses.
+        $this->withoutMiddleware(ThrottleRequests::class);
         $this->activatePlugins(['course-assessments']);
         $student = $this->createUserWithRole('student');
         $set = $this->createSet(['max_attempts' => 2]);
