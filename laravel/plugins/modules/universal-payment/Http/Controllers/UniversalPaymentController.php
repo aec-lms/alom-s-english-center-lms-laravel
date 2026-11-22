@@ -32,7 +32,7 @@ class UniversalPaymentController extends Controller
     {
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
-        $enabledRaw = $this->plugins->getSetting('universal-payment', 'enabled_gateways', 'sslcommerz,bkash,nagad,rocket,card,paypal,cash,bank_transfer');
+        $enabledRaw = $this->plugins->getSetting('universal-payment', 'enabled_gateways', 'sslcommerz,bkash,nagad,rocket,card,paypal,cash,bank_transfer,bank_cash');
         $config = [
             'default_currency' => $this->plugins->getSetting('universal-payment', 'default_currency', (string) config('lms.default_currency', 'BDT')),
             'enabled_gateways' => array_filter(array_map('trim', explode(',', (string) $enabledRaw))),
@@ -364,7 +364,7 @@ class UniversalPaymentController extends Controller
             'payer_name' => ['required', 'string', 'max:160'],
             'payer_contact' => ['required', 'string', 'max:120'],
             'item_title' => ['required', 'string', 'max:200'],
-            'gateway' => ['required', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,bank_cash'],
+            'gateway' => ['required', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,cash,bank_transfer,bank_cash'],
             'external_trx_id' => ['nullable', 'string', 'max:120'],
             'storefront_item_id' => ['nullable', 'integer'],
             'fee_invoice_id' => ['nullable', 'integer'],
@@ -390,7 +390,7 @@ class UniversalPaymentController extends Controller
                 && hash_equals(strtolower((string) $invoice->payer_email), strtolower((string) auth()->user()->email));
             abort_unless($isInvoiceOwner, 403, 'You can only pay an invoice issued to your account.');
             abort_unless(
-                in_array($validated['gateway'], ['bank_cash', 'bkash', 'nagad', 'rocket'], true),
+                in_array($validated['gateway'], ['cash', 'bank_transfer', 'bank_cash', 'bkash', 'nagad', 'rocket'], true),
                 422,
                 'Fee invoices accept manual bank, cash, bKash, Nagad or Rocket receipts here. Use the dedicated payment gateway checkout for automatic online gateways.'
             );
