@@ -56,7 +56,7 @@ class UniversalPaymentController extends Controller
         $validated = $request->validate([
             'default_currency' => ['required', 'string', 'regex:/^[A-Z]{3}$/'],
             'gateways' => ['nullable', 'array'],
-            'gateways.*' => ['string', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,bank_cash'],
+            'gateways.*' => ['string', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,bank_cash,cash,bank_transfer'],
             'allow_offline_payments' => ['nullable', 'boolean'],
         ]);
 
@@ -79,7 +79,7 @@ class UniversalPaymentController extends Controller
             'payer_name' => ['required', 'string', 'max:160'],
             'payer_contact' => ['nullable', 'string', 'max:120'],
             'item_title' => ['required', 'string', 'max:200'],
-            'gateway' => ['required', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,bank_cash'],
+            'gateway' => ['required', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,bank_cash,cash,bank_transfer'],
             'amount' => ['required', 'numeric', 'min:1'],
             'external_trx_id' => ['required', 'string', 'max:120'],
             'proof_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
@@ -88,7 +88,7 @@ class UniversalPaymentController extends Controller
         $this->assertGatewayEnabled($validated['gateway']);
 
         if ($request->hasFile('proof_file')) {
-            abort_unless(in_array($validated['gateway'], ['bank_cash', 'offline'], true), 422, 'Receipt evidence is accepted only for manual bank/cash payments.');
+            abort_unless(in_array($validated['gateway'], ['bank_cash', 'offline', 'cash', 'bank_transfer'], true), 422, 'Receipt evidence is accepted only for manual cash or bank-transfer payments.');
             abort_unless(Schema::hasColumn('universal_payment_transactions', 'proof_path')
                 && Schema::hasColumn('universal_payment_transactions', 'proof_mime')
                 && Schema::hasColumn('universal_payment_transactions', 'proof_size'), 503, 'Receipt evidence storage is not available until the payment migration is applied.');
@@ -188,7 +188,7 @@ class UniversalPaymentController extends Controller
             }
 
             abort_unless($lockedTransaction->status === 'pending'
-                && in_array($lockedTransaction->gateway, ['bank_cash', 'offline', 'bkash', 'nagad', 'rocket'], true),
+                && in_array($lockedTransaction->gateway, ['bank_cash', 'offline', 'cash', 'bank_transfer', 'bkash', 'nagad', 'rocket'], true),
                 422,
                 'Only pending manual receipts can be reviewed.'
             );
@@ -364,7 +364,7 @@ class UniversalPaymentController extends Controller
             'payer_name' => ['required', 'string', 'max:160'],
             'payer_contact' => ['required', 'string', 'max:120'],
             'item_title' => ['required', 'string', 'max:200'],
-            'gateway' => ['required', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,bank_cash'],
+            'gateway' => ['required', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,bank_cash,cash,bank_transfer'],
             'external_trx_id' => ['nullable', 'string', 'max:120'],
             'storefront_item_id' => ['nullable', 'integer'],
             'fee_invoice_id' => ['nullable', 'integer'],
@@ -390,7 +390,7 @@ class UniversalPaymentController extends Controller
                 && hash_equals(strtolower((string) $invoice->payer_email), strtolower((string) auth()->user()->email));
             abort_unless($isInvoiceOwner, 403, 'You can only pay an invoice issued to your account.');
             abort_unless(
-                in_array($validated['gateway'], ['bank_cash', 'bkash', 'nagad', 'rocket'], true),
+                in_array($validated['gateway'], ['bank_cash', 'cash', 'bank_transfer', 'bkash', 'nagad', 'rocket'], true),
                 422,
                 'Fee invoices accept manual bank, cash, bKash, Nagad or Rocket receipts here. Use the dedicated payment gateway checkout for automatic online gateways.'
             );
@@ -777,11 +777,24 @@ class UniversalPaymentController extends Controller
 
     private function assertGatewayEnabled(string $gateway): void
     {
-        if (in_array($gateway, ['bank_cash', 'offline'], true)) {
+        if (in_array($gateway, ['bank_cash', 'offline', 'cash', 'bank_transfer'], true)) {
             abort_unless(
                 (string) $this->plugins->getSetting('universal-payment', 'allow_offline_payments', '1') === '1',
                 422,
                 'Cash and bank transfer payments are disabled by the administrator.'
+            );
+        }
+
+        $requiredPlugin = match ($gateway) {
+            'cash' => 'gateway-cash',
+            'bank_transfer' => 'gateway-bank-transfer',
+            default => null,
+        };
+        if ($requiredPlugin !== null) {
+            abort_unless(
+                $this->plugins->isEnabled($requiredPlugin),
+                422,
+                'Install and enable the selected payment method in Plugin Manager before accepting payments.'
             );
         }
 
