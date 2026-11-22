@@ -68,4 +68,28 @@ class UniversalPaymentGatewayToggleTest extends TestCase
             'external_trx_id' => 'DISABLED-BANK-CASH-001',
         ]);
     }
+
+    public function test_bangladesh_merchant_plugins_fail_closed_until_provider_adapters_are_verified(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['universal-payment', 'gateway-bkash', 'gateway-nagad', 'gateway-rocket']);
+
+        app(PluginManager::class)->saveSettings('universal-payment', [
+            'enabled_gateways' => 'bkash,nagad,rocket',
+        ]);
+        app(PluginManager::class)->saveSettings('gateway-bkash', [
+            'app_key' => 'sandbox-app-key',
+            'app_secret' => 'sandbox-app-secret',
+            'username' => 'sandbox-user',
+            'password' => 'sandbox-password',
+        ]);
+
+        $statuses = app(\\Plugins\\Modules\\UniversalPayment\\Services\\UniversalPaymentOrchestrator::class)->gatewayStatus();
+
+        foreach (['gateway-bkash', 'gateway-nagad', 'gateway-rocket'] as $slug) {
+            $this->assertSame('processor_adapter_required', $statuses[$slug]['status']);
+            $this->assertFalse($statuses[$slug]['available']);
+        }
+        $this->assertSame([], $statuses['gateway-bkash']['missing_credentials']);
+    }
 }
