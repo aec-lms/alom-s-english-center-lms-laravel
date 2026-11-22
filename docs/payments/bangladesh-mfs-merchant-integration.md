@@ -25,3 +25,7 @@ Only generic, optional credential slots are provided. The exact authentication s
 9. Complete merchant sandbox testing and independent finance/security review before enabling live mode.
 
 The enabled setting is intentionally 0 for all gateways until these gates are complete.
+
+## Public Rocket merchant-flow clarification
+
+DBBL's public Rocket merchant-payment page describes an in-person flow in which the merchant initiates the payment from the merchant's mobile, issues a receipt, and the customer receives an SMS/IVR confirmation. It does not publish a web checkout API contract, API endpoints, authentication scheme or callback specification. Therefore this public flow must not be represented as an online LMS API integration. Obtain DBBL's separate corporate/e-commerce merchant API specification and sandbox access before implementing an automated Rocket checkout adapter. Reference: https://www.dutchbanglabank.com/rocket/merchant-payment.html.
