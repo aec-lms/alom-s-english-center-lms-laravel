@@ -50,7 +50,7 @@ class DashboardController extends Controller
             'php_version' => PHP_VERSION,
         ];
         $recentAudits = $isBranchManager ? collect() : AuditLog::query()->with('user')->latest()->limit(10)->get();
-        $pluginWidgets = app(\\App\\Core\\Plugins\\DashboardWidgetRegistry::class)->availableFor($actor);\n        $widgets = $this->widgetsFor($actor?->id, array_keys($pluginWidgets));
+        $pluginWidgets = app(\App\Core\Plugins\DashboardWidgetRegistry::class)->availableFor($actor);\n        $widgets = $this->widgetsFor($actor?->id, array_keys($pluginWidgets));
         if ($isBranchManager) {
             $widgets = array_values(array_intersect($widgets, ['users']));
         }
@@ -67,7 +67,7 @@ class DashboardController extends Controller
         if ($isBranchManager) {
             $this->ensureAssignedBranch($actor);
         }
-        $pluginWidgets = app(\\App\\Core\\Plugins\\DashboardWidgetRegistry::class)->availableFor($actor);\n        $allowedWidgets = $isBranchManager ? ['users'] : array_merge(self::WIDGETS, array_keys($pluginWidgets));
+        $pluginWidgets = app(\App\Core\Plugins\DashboardWidgetRegistry::class)->availableFor($actor);\n        $allowedWidgets = $isBranchManager ? ['users'] : array_merge(self::WIDGETS, array_keys($pluginWidgets));
         $validated = $request->validate([
             'widgets' => ['present', 'array', 'max:20'],
             'widgets.*' => ['required', 'string', 'distinct', 'in:' . implode(',', $allowedWidgets)],
