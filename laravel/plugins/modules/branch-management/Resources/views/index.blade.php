@@ -7,6 +7,7 @@
         <p class="text-xs text-slate-500">Add, edit, activate/deactivate, or safely delete campus branches without harming student or LMS records.</p>
     </div>
 
+    @unless (auth()->user()?->hasRole('branch_manager'))
     <form method="POST" action="{{ route('plugins.branches.store') }}" class="bg-white rounded-2xl border border-slate-200 p-5 grid sm:grid-cols-6 gap-3 text-xs">
         @csrf
         <input name="code" required placeholder="Code (DHK-01)" class="rounded-lg border border-slate-300 px-3 py-2 font-mono">
@@ -16,6 +17,7 @@
         <input name="address" placeholder="Address" class="rounded-lg border border-slate-300 px-3 py-2">
         <button class="rounded-lg bg-[#0057FF] hover:bg-blue-700 text-white font-bold px-4 py-2">Add Branch</button>
     </form>
+    @endunless
 
     <div class="space-y-3">
         @forelse ($branches as $branch)
@@ -28,6 +30,7 @@
                             {{ $branch->is_active ? 'Active' : 'Inactive' }}
                         </span>
                     </div>
+                    @unless (auth()->user()?->hasRole('branch_manager'))
                     <div class="flex items-center gap-2">
                         <form method="POST" action="{{ route('plugins.branches.toggle', $branch) }}">
                             @csrf
@@ -40,6 +43,7 @@
                             <button class="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-700 font-semibold hover:bg-rose-50">Delete</button>
                         </form>
                     </div>
+                    @endunless
                 </div>
 
                 <form method="POST" action="{{ route('plugins.branches.update', $branch) }}" class="grid sm:grid-cols-6 gap-2 pt-2 border-t border-slate-100">
