@@ -10,6 +10,7 @@ use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\View\View;
 
@@ -42,17 +43,27 @@ class UserRoleController extends Controller
             'Only an existing Administrator may grant the protected Administrator role.'
         );
 
-        $user = User::query()->create([
-            'name' => $validated['name'],
-            'email' => strtolower($validated['email']),
-            'password' => Hash::make($validated['password']),
-            'branch_id' => $validated['branch_id'] ?? null,
-            'is_active' => true,
-            'email_verified_at' => now(),
-        ]);
+        $user = DB::transaction(function () use ($validated, $request): User {
+            $user = User::query()->create([
+                'name' => $validated['name'],
+                'email' => strtolower($validated['email']),
+                'password' => Hash::make($validated['password']),
+                'branch_id' => $validated['branch_id'] ?? null,
+                'is_active' => true,
+                'email_verified_at' => now(),
+            ]);
 
-        $user->roles()->sync([(int) $validated['role_id']]);
-        $this->audit->log('user.created', 'user', (string) $user->id, ['role_id' => $validated['role_id']]);
+            $user->roles()->sync([(int) $validated['role_id']]);
+            $this->audit->logRequired(
+                'user.created',
+                'user',
+                (string) $user->id,
+                ['role_id' => $validated['role_id']],
+                (int) $request->user()->getAuthIdentifier(),
+            );
+
+            return $user;
+        });
 
         return back()->with('status', "User {$user->email} created.");
     }
