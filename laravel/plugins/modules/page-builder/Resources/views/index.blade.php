@@ -30,7 +30,7 @@
             <p class="mt-1 max-w-2xl text-sm text-slate-500">Create landing pages with reusable content blocks. No HTML or coding required.</p>
             <p data-block-status role="status" aria-live="polite" aria-atomic="true" class="mt-2 text-xs text-slate-500">Use drag-and-drop or the Up and Down controls to reorder blocks.</p>
         </div>
-        <a href="{{ route('home') }}" target="_blank" rel="noopener" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700">View Website ↗</a>
+        <div class="flex flex-wrap gap-2"><a href="{{ route('plugins.page_builder.reusable.index') }}" class="rounded-xl border border-violet-200 bg-white px-4 py-2.5 text-sm font-semibold text-violet-700">Reusable Blocks</a><a href="{{ route('home') }}" target="_blank" rel="noopener" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700">View Website ↗</a></div>
     </header>
 
     @if (session('status'))
