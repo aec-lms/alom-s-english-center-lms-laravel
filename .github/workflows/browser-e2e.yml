@@ -28,6 +28,7 @@ jobs:
       SCORM_PLAYER_ORIGIN: http://player.e2e.test:8000
       SCORM_CONTENT_ORIGIN: http://content.e2e.test:8000
       SCORM_COOKIE_SAME_SITE: lax
+      SESSION_SECURE_COOKIE: "false"
       DB_CONNECTION: sqlite
       DB_DATABASE: database/e2e.sqlite
       CACHE_STORE: file
