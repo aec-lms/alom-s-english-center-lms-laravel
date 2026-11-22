@@ -120,6 +120,14 @@ class UniversalPaymentController extends Controller
                 app(\Plugins\Modules\UniversalPayment\Services\ExternalTransactionReferenceRegistry::class)
                     ->claim($transaction->gateway, (string) $transaction->external_trx_id, (int) $transaction->id);
 
+                $this->audit->logRequired(
+                    'universal_payment.recorded',
+                    'universal_payment',
+                    $transaction->reference,
+                    ['amount' => $transaction->amount, 'gateway' => $transaction->gateway],
+                    $actor?->id,
+                );
+
                 return $transaction;
             });
         } catch (\Throwable $exception) {
@@ -128,8 +136,6 @@ class UniversalPaymentController extends Controller
             }
             throw $exception;
         }
-
-        $this->audit->log('universal_payment.recorded', 'universal_payment', $tx->reference, ['amount' => $tx->amount, 'gateway' => $tx->gateway]);
 
         return back()->with('status', "Transaction '{$tx->reference}' recorded ({$tx->gateway} · {$tx->status}).");
     }
@@ -161,12 +167,8 @@ class UniversalPaymentController extends Controller
 
     public function updateStatus(Request $request, UniversalPaymentTransaction $transaction): RedirectResponse
     {
-        $actor = $request->user();
-        $this->ensureAssignedBranch($actor);
-        if ($actor && $actor->hasRole('branch_manager')) {
-            abort_unless((int) ($actor->branch_id ?? 0) > 0
-                && (int) ($transaction->branch_id ?? 0) === (int) $actor->branch_id, 404);
-        }
+        $actorId = (int) ($request->user()?->getAuthIdentifier() ?? 0);
+        abort_unless($actorId > 0, 401);
 
         $validated = $request->validate([
             'status' => ['required', 'in:verified,rejected'],
@@ -176,7 +178,8 @@ class UniversalPaymentController extends Controller
         $reference = trim($validated['payment_reference']);
         abort_if($reference === '', 422, 'A bank receipt or cash voucher reference is required before verification.');
 
-        $transaction = DB::transaction(function () use ($transaction, $validated, $reference, $actor): UniversalPaymentTransaction {
+        $transaction = DB::transaction(function () use ($transaction, $validated, $reference, $actorId): UniversalPaymentTransaction {
+            $actor = $this->lockAndAuthorizePaymentManager($actorId);
             $lockedTransaction = UniversalPaymentTransaction::query()
                 ->whereKey($transaction->id)
                 ->lockForUpdate()
@@ -350,10 +353,16 @@ class UniversalPaymentController extends Controller
                 }
             }
 
+            $this->audit->logRequired(
+                'universal_payment.status_updated',
+                'universal_payment',
+                $lockedTransaction->reference,
+                ['status' => $validated['status']],
+                $actor?->id,
+            );
+
             return $lockedTransaction->fresh();
         });
-
-        $this->audit->log('universal_payment.status_updated', 'universal_payment', $transaction->reference, ['status' => $validated['status']]);
 
         return back()->with('status', "Transaction '{$transaction->reference}' marked {$validated['status']}.");
     }
@@ -797,6 +806,82 @@ class UniversalPaymentController extends Controller
             422,
             'The selected payment method is currently disabled by the administrator.'
         );
+    }
+
+    /**
+     * Re-read and lock the acting account, role grants, permission grant and
+     * branch before touching a payment ledger row. The route middleware is an
+     * early filter only; this transaction is the authorization boundary.
+     */
+    private function lockAndAuthorizePaymentManager(int $actorId): User
+    {
+        $actor = User::query()->whereKey($actorId)->lockForUpdate()->firstOrFail();
+        abort_unless((bool) $actor->is_active, 403, 'Inactive accounts cannot review payments.');
+        abort_unless(
+            Schema::hasTable('role_user') && Schema::hasTable('roles'),
+            503,
+            'Role authorization storage is unavailable.'
+        );
+
+        $roleIds = DB::table('role_user')
+            ->where('user_id', $actorId)
+            ->orderBy('role_id')
+            ->lockForUpdate()
+            ->pluck('role_id')
+            ->map(static fn ($id): int => (int) $id)
+            ->all();
+        abort_unless($roleIds !== [], 403, 'Current payment-management role is required.');
+
+        $roleSlugs = DB::table('roles')
+            ->whereIn('id', $roleIds)
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->pluck('slug')
+            ->all();
+
+        $isAdmin = in_array('admin', $roleSlugs, true);
+        if (!$isAdmin) {
+            abort_unless(
+                Schema::hasTable('permissions') && Schema::hasTable('permission_role'),
+                503,
+                'Permission authorization storage is unavailable.'
+            );
+
+            $permissionId = DB::table('permissions')
+                ->where('slug', 'payments.universal.manage')
+                ->value('id');
+            abort_unless($permissionId !== null, 403, 'Payment-management permission is not configured.');
+
+            $grants = DB::table('permission_role')
+                ->whereIn('role_id', $roleIds)
+                ->where('permission_id', $permissionId)
+                ->orderBy('role_id')
+                ->lockForUpdate()
+                ->get(['role_id']);
+            abort_unless($grants->isNotEmpty(), 403, 'Payment-management permission was revoked.');
+        }
+
+        if (in_array('branch_manager', $roleSlugs, true)) {
+            abort_unless(
+                $actor->branch_id !== null
+                    && $this->plugins->isEnabled('branch-management')
+                    && Schema::hasTable('branches'),
+                403,
+                'Branch manager must be assigned to an active branch.'
+            );
+
+            $branch = DB::table('branches')
+                ->where('id', $actor->branch_id)
+                ->lockForUpdate()
+                ->first();
+            abort_unless(
+                $branch !== null && (bool) $branch->is_active,
+                403,
+                'Branch manager access is disabled because the assigned branch is inactive.'
+            );
+        }
+
+        return $actor;
     }
 
     private function ensureAssignedBranch($actor): void
