@@ -183,9 +183,10 @@ class DashboardController extends Controller
         );
     }
 
-    private function widgetsFor(int|string|null $userId): array
+    private function widgetsFor(int|string|null $userId, array $pluginWidgetIds = []): array
     {
-        $defaults = self::WIDGETS;
+        $allowed = array_merge(self::WIDGETS, $pluginWidgetIds);
+        $defaults = $allowed;
         if (!$userId) {
             return $defaults;
         }
