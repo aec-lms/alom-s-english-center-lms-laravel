@@ -247,4 +247,61 @@ class CourseAssessmentsPluginTest extends TestCase
             ->assertForbidden();
     }
 
+
+    public function test_revoked_student_role_immediately_blocks_all_web_attempt_endpoints(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-assessments']);
+        $student = $this->createUserWithRole('student');
+        $set = $this->createSet(['max_attempts' => 2]);
+        $this->createQuestion($set);
+
+        $start = $this->actingAs($student)->post(route('plugins.course-assessments.student.start', $set));
+        $start->assertRedirect();
+        $attemptId = (int) basename(parse_url($start->headers->get('Location'), PHP_URL_PATH));
+        $questionId = (int) DB::table('course_assessment_attempt_questions')
+            ->where('attempt_id', $attemptId)
+            ->value('id');
+
+        $studentRoleId = DB::table('roles')->where('slug', 'student')->value('id');
+        $this->assertNotNull($studentRoleId);
+        DB::table('role_user')
+            ->where('user_id', $student->id)
+            ->where('role_id', $studentRoleId)
+            ->delete();
+
+        // Refresh the authenticated model so this regression proves persisted-role
+        // authorization rather than relying on a previously loaded role relation.
+        $revokedStudent = $student->fresh();
+
+        $this->actingAs($revokedStudent)
+            ->get(route('plugins.course-assessments.student.index'))
+            ->assertForbidden();
+        $this->actingAs($revokedStudent)
+            ->get(route('plugins.course-assessments.student.take', $attemptId))
+            ->assertForbidden();
+        $this->actingAs($revokedStudent)
+            ->putJson(route('plugins.course-assessments.student.answer', [$attemptId, $questionId]), [
+                'selected_option' => 1,
+            ])->assertForbidden();
+        $this->actingAs($revokedStudent)
+            ->post(route('plugins.course-assessments.student.submit', $attemptId))
+            ->assertForbidden();
+        $this->actingAs($revokedStudent)
+            ->get(route('plugins.course-assessments.student.history'))
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('course_assessment_attempts', [
+            'id' => $attemptId,
+            'student_id' => $student->id,
+            'status' => 'in_progress',
+            'submitted_at' => null,
+            'auto_score' => null,
+        ]);
+        $this->assertDatabaseHas('course_assessment_attempt_questions', [
+            'attempt_id' => $attemptId,
+            'id' => $questionId,
+            'selected_option' => null,
+        ]);
+    }
 }
