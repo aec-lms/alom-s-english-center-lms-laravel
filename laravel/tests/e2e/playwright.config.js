@@ -9,7 +9,10 @@ module.exports = defineConfig({
   workers: process.env.CI ? 2 : undefined,
   reporter: [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]],
   use: {
-    baseURL: 'http://127.0.0.1:8000',
+    launchOptions: {
+      args: ['--host-resolver-rules=MAP lms.e2e.test 127.0.0.1,MAP player.e2e.test 127.0.0.1,MAP content.e2e.test 127.0.0.1'],
+    },
+    baseURL: process.env.APP_URL || 'http://127.0.0.1:8000',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',

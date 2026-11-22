@@ -24,7 +24,11 @@ jobs:
     env:
       APP_ENV: testing
       APP_DEBUG: "false"
-      APP_URL: http://127.0.0.1:8000
+      APP_URL: http://lms.e2e.test:8000
+      SCORM_PLAYER_ORIGIN: http://player.e2e.test:8000
+      SCORM_CONTENT_ORIGIN: http://content.e2e.test:8000
+      SCORM_COOKIE_SAME_SITE: lax
+      SESSION_SECURE_COOKIE: "false"
       DB_CONNECTION: sqlite
       DB_DATABASE: database/e2e.sqlite
       CACHE_STORE: file
@@ -42,7 +46,7 @@ jobs:
         uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
         with:
           php-version: "8.3"
-          extensions: mbstring, dom, fileinfo, sqlite3, pdo_sqlite, xml, curl, ctype, tokenizer, bcmath
+          extensions: mbstring, dom, fileinfo, sqlite3, pdo_sqlite, xml, curl, ctype, tokenizer, bcmath, zip
           coverage: none
 
       - name: Setup Node.js
@@ -61,6 +65,7 @@ jobs:
           php artisan migrate:fresh --force
           php artisan db:seed --class=CoreRolesAndPermissionsSeeder --force
           php artisan db:seed --class=E2EBrowserUserSeeder --force
+          php artisan db:seed --class=ScormE2EFixtureSeeder --force
           if [ -f database/seeders/E2EExamFixtureSeeder.php ]; then
             php artisan db:seed --class=E2EExamFixtureSeeder --force
           fi

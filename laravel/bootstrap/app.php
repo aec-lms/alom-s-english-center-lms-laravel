@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Middleware\EnforceScormRuntimeCors;
 use App\Http\Middleware\EnsureCentralAdmin;
 use App\Http\Middleware\EnsureBranchContext;
 use App\Http\Middleware\EnsureDeviceSessionActive;
@@ -24,6 +25,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Run outside Laravel's generic HandleCors response wrapper, so SCORM's
+        // attempt-token endpoint always emits only its configured player origin.
+        $middleware->prepend(EnforceScormRuntimeCors::class);
         $middleware->web(append: [EnsureDeviceSessionActive::class, EnsureBranchContext::class, SetApplicationLocale::class]);
         $middleware->api(append: [EnsureBranchContext::class]);
         $middleware->alias([

@@ -1,0 +1,856 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Plugins\Modules\Scorm\Http\Controllers;
+
+use App\Core\Plugins\PluginManager;
+use App\Http\Controllers\Controller;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\View\View;
+use Plugins\Modules\Scorm\Services\Scorm12Runtime;
+use InvalidArgumentException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+use Symfony\Component\HttpFoundation\Response;
+
+class ScormRuntimeController extends Controller
+{
+    public function studentIndex(Request $request, PluginManager $plugins): View
+    {
+        $actor = $request->user();
+        abort_unless($actor, 403, 'An active student account is required.');
+        $currentUser = DB::table('users')->where('id', $actor->id)->first();
+        abort_unless($currentUser && (bool) $currentUser->is_active, 403, 'Student account is inactive.');
+        $studentRole = DB::table('role_user')
+            ->join('roles', 'roles.id', '=', 'role_user.role_id')
+            ->where('role_user.user_id', $actor->id)
+            ->where('roles.slug', 'student')
+            ->exists();
+        abort_unless($studentRole, 403, 'Current student role is required.');
+        abort_unless($plugins->isEnabled('course-management') && Schema::hasTable('courses') && Schema::hasTable('enrollments'), 503, 'Enable Course Management to browse SCORM activities.');
+        $branchId = $this->currentStudentBranchId($currentUser);
+
+        $packages = DB::table('scorm_packages as p')
+            ->join('courses as c', 'c.id', '=', 'p.course_id')
+            ->join('enrollments as e', function ($join) use ($actor): void {
+                $join->on('e.course_id', '=', 'p.course_id')->where('e.user_id', '=', $actor->id);
+            })
+            ->where('p.status', 'published')
+            ->where('c.status', 'published')
+            ->whereIn('e.status', ['active', 'completed'])
+            ->when($branchId !== null, fn ($query) => $query->where(function ($scope) use ($branchId): void {
+                $scope->whereNull('p.branch_id')->orWhere('p.branch_id', $branchId);
+            })->where(function ($scope) use ($branchId): void {
+                $scope->whereNull('c.branch_id')->orWhere('c.branch_id', $branchId);
+            }))
+            ->when($branchId === null, fn ($query) => $query->whereNull('p.branch_id')->whereNull('c.branch_id'))
+            ->orderBy('c.title')
+            ->orderBy('p.title')
+            ->select('p.id', 'p.course_id', 'p.branch_id', 'p.title', 'p.version', 'c.title as course_title')
+            ->paginate(12);
+
+        $packages->setCollection($packages->getCollection()->filter(
+            fn (object $package): bool => $this->eligibleEnrollment($actor, $package) !== null
+        )->values());
+
+        return view('scorm::student.index', compact('packages'));
+    }
+
+    public function launch(Request $request, PluginManager $plugins, int $package): View
+    {
+        $actor = $request->user();
+        abort_unless($actor && $actor->is_active && $actor->hasRole('student'), 403, 'An active student account is required.');
+        abort_unless($plugins->isEnabled('course-management') && Schema::hasTable('courses') && Schema::hasTable('enrollments'), 503, 'Enable Course Management to launch SCORM content.');
+
+        $appOrigin = rtrim((string) config('app.url'), '/');
+        $playerOrigin = rtrim((string) config('scorm.player_origin', ''), '/');
+        $contentOrigin = rtrim((string) config('scorm.content_origin', ''), '/');
+        $appHost = parse_url($appOrigin, PHP_URL_HOST);
+        $appScheme = parse_url($appOrigin, PHP_URL_SCHEME);
+        $playerHost = parse_url($playerOrigin, PHP_URL_HOST);
+        $playerScheme = parse_url($playerOrigin, PHP_URL_SCHEME);
+        $contentHost = parse_url($contentOrigin, PHP_URL_HOST);
+        $contentScheme = parse_url($contentOrigin, PHP_URL_SCHEME);
+
+        foreach ([$playerOrigin, $contentOrigin] as $origin) {
+            $parts = parse_url($origin);
+            abort_unless(is_array($parts) && in_array($parts['scheme'] ?? null, ['http', 'https'], true)
+                && is_string($parts['host'] ?? null) && $parts['host'] !== ''
+                && !isset($parts['user'], $parts['pass'], $parts['path'], $parts['query'], $parts['fragment'])
+                && (!isset($parts['port']) || app()->environment('testing')), 503,
+                'SCORM player/content origins must be scheme and hostname only (no path or credentials; ports are test-only).');
+        }
+        abort_unless(is_string($playerHost) && is_string($contentHost)
+            && count(array_unique([$appHost, $playerHost, $contentHost])) === 3, 503,
+            'SCORM_PLAYER_ORIGIN and SCORM_CONTENT_ORIGIN must each use a different host from APP_URL and from each other.');
+        abort_unless($appScheme !== 'https' || ($playerScheme === 'https' && $contentScheme === 'https'), 503,
+            'SCORM player and content origins must use HTTPS when the LMS uses HTTPS.');
+
+        $sessionDomain = ltrim((string) config('session.domain', ''), '.');
+        foreach ([$playerHost, $contentHost] as $isolatedHost) {
+            abort_unless($sessionDomain === ''
+                || !($isolatedHost === $sessionDomain || str_ends_with($isolatedHost, '.' . $sessionDomain)), 503,
+                'SCORM isolated hosts must not receive the LMS session cookie. Use a host-only SESSION_DOMAIN setting.');
+        }
+
+        $packageRecord = DB::table('scorm_packages')->where('id', $package)->where('status', 'published')->first();
+        abort_unless($packageRecord, 404, 'Published SCORM package not found.');
+
+        $enrollment = $this->eligibleEnrollment($actor, $packageRecord);
+        abort_unless($enrollment, 403, 'An active or completed enrollment with settled payment is required.');
+
+        [$attempt, $token] = DB::transaction(function () use ($actor, $packageRecord, $enrollment): array {
+            $lockedUser = DB::table('users')->where('id', $actor->id)->lockForUpdate()->first();
+            abort_unless($lockedUser && (bool) $lockedUser->is_active, 403, 'Student account is inactive.');
+
+            $studentRole = DB::table('role_user')
+                ->join('roles', 'roles.id', '=', 'role_user.role_id')
+                ->where('role_user.user_id', $actor->id)
+                ->where('roles.slug', 'student')
+                ->lockForUpdate()
+                ->exists();
+            abort_unless($studentRole, 403, 'Current student role is required.');
+
+            // Match the refresh/commit lock order: user -> role -> profile -> enrollment -> course -> package.
+            $branchId = $this->currentStudentBranchId($lockedUser, true);
+
+            $lockedEnrollment = DB::table('enrollments')->where('id', $enrollment->id)->lockForUpdate()->first();
+            abort_unless($lockedEnrollment && in_array($lockedEnrollment->status, ['active', 'completed'], true)
+                && (int) $lockedEnrollment->user_id === (int) $actor->id, 403, 'Course enrollment is no longer active.');
+
+            $lockedCourse = DB::table('courses')->where('id', $lockedEnrollment->course_id)->lockForUpdate()->first();
+            abort_unless($lockedCourse && $lockedCourse->status === 'published', 403, 'The linked course is no longer published.');
+
+            $lockedPackage = DB::table('scorm_packages')->where('id', $packageRecord->id)->lockForUpdate()->first();
+            abort_unless($lockedPackage && $lockedPackage->status === 'published'
+                && (int) $lockedPackage->course_id === (int) $lockedCourse->id, 404, 'SCORM package is no longer published.');
+
+            abort_unless($lockedEnrollment->branch_id === null
+                || ($branchId !== null && (int) $lockedEnrollment->branch_id === $branchId), 403, 'Enrollment is outside the current student branch.');
+            abort_unless($lockedPackage->branch_id === null
+                || ($branchId !== null && (int) $lockedPackage->branch_id === $branchId), 403, 'SCORM package is outside the student branch.');
+            abort_unless($lockedCourse->branch_id === null
+                || ($branchId !== null && (int) $lockedCourse->branch_id === $branchId), 403, 'Course is outside the student branch.');
+            if ((float) $lockedCourse->price > 0) {
+                abort_unless(Schema::hasTable('fee_invoices') && Schema::hasColumn('enrollments', 'invoice_id')
+                    && $lockedEnrollment->invoice_id !== null, 403, 'Paid course invoice is required.');
+                $lockedInvoice = DB::table('fee_invoices')->where('id', $lockedEnrollment->invoice_id)->lockForUpdate()->first();
+                abort_unless($lockedInvoice && $lockedInvoice->status === 'paid'
+                    && (float) $lockedInvoice->paid_amount + 0.01 >= (float) $lockedInvoice->net_amount, 403, 'Course invoice is not fully settled.');
+            }
+
+            $latest = DB::table('scorm_attempts')
+                ->where('scorm_package_id', $lockedPackage->id)
+                ->where('user_id', $actor->id)
+                ->orderByDesc('attempt_number')
+                ->lockForUpdate()
+                ->first();
+
+            if ($latest && in_array($latest->completion_state, ['in_progress', 'suspended'], true)) {
+                $attemptId = $latest->id;
+                DB::table('scorm_attempts')->where('id', $attemptId)->update([
+                    'entry_mode' => 'resume',
+                    'updated_at' => now(),
+                ]);
+            } else {
+                $attemptId = DB::table('scorm_attempts')->insertGetId([
+                    'scorm_package_id' => $lockedPackage->id,
+                    'user_id' => $actor->id,
+                    'enrollment_id' => $lockedEnrollment->id,
+                    'attempt_number' => (int) ($latest->attempt_number ?? 0) + 1,
+                    'state_version' => 0,
+                    'lesson_status' => 'not attempted',
+                    'entry_mode' => 'ab-initio',
+                    'lesson_location' => '',
+                    'suspend_data' => null,
+                    'score_raw' => null,
+                    'score_min' => null,
+                    'score_max' => null,
+                    'total_time_seconds' => 0,
+                    'session_time_seconds' => 0,
+                    'cmi_data' => '{}',
+                    'completion_state' => 'in_progress',
+                    'started_at' => now(),
+                    'last_commit_at' => null,
+                    'finished_at' => null,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+
+            $token = bin2hex(random_bytes(32));
+            DB::table('scorm_attempt_sessions')->insert([
+                'scorm_attempt_id' => $attemptId,
+                'token_sha256' => hash('sha256', $token),
+                'expires_at' => now()->addMinutes((int) config('scorm.launch_ttl_minutes', 240)),
+                'last_session_seconds' => 0,
+                'last_seen_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            return [DB::table('scorm_attempts')->where('id', $attemptId)->first(), $token];
+        });
+
+        $signedPlayerPath = URL::temporarySignedRoute(
+            'plugins.scorm.content.player',
+            now()->addMinutes((int) config('scorm.launch_ttl_minutes', 240)),
+            ['attempt' => $attempt->id, 'token' => $token],
+            false
+        );
+        $playerUrl = rtrim((string) config('scorm.player_origin', ''), '/') . $signedPlayerPath;
+
+        return view('scorm::launch', [
+            'title' => $packageRecord->title,
+            'playerUrl' => $playerUrl,
+            'attemptId' => $attempt->id,
+        ]);
+    }
+
+    public function contentPlayer(Request $request, int $attempt, string $token): Response
+    {
+        $this->assertConfiguredHost($request, 'scorm.player_origin');
+        $session = $this->validSession($attempt, $token);
+        $record = DB::table('scorm_attempts')->where('id', $attempt)->first();
+        abort_unless($record, 404);
+        $package = DB::table('scorm_packages')->where('id', $record->scorm_package_id)->first();
+        abort_unless($package, 404);
+
+        $bridgeNonce = bin2hex(random_bytes(32));
+        $contentOrigin = rtrim((string) config('scorm.content_origin', ''), '/');
+        $launchUrl = $contentOrigin . route('plugins.scorm.content.bootstrap', [
+            'attempt' => $attempt,
+            'token' => $token,
+            'path' => $package->launch_file,
+            'bridge_nonce' => $bridgeNonce,
+        ], false);
+        $appOrigin = rtrim((string) config('app.url', ''), '/');
+        abort_unless(parse_url($launchUrl, PHP_URL_HOST) === parse_url($contentOrigin, PHP_URL_HOST), 503, 'SCORM content bootstrap must resolve to the isolated content origin.');
+
+        $user = DB::table('users')->where('id', $record->user_id)->first();
+        $savedData = json_decode((string) $record->cmi_data, true);
+        if (!is_array($savedData)) {
+            $savedData = [];
+        }
+
+        $response = response()->view('scorm::content-player', [
+            'title' => $package->title,
+            'launchUrl' => $launchUrl,
+            'contentOrigin' => $contentOrigin,
+            'appOrigin' => $appOrigin,
+            'runtimeUrl' => $appOrigin . '/api/scorm-runtime/commit',
+            'attemptId' => $attempt,
+            'token' => $token,
+            'stateVersion' => (int) $record->state_version,
+            'bridgeNonce' => $bridgeNonce,
+            'savedData' => $savedData,
+            'studentId' => (string) $record->user_id,
+            'studentName' => (string) ($user->name ?? 'Learner'),
+            'entryMode' => (string) $record->entry_mode,
+            'totalTime' => $this->formatScormTime((int) $record->total_time_seconds),
+        ]);
+
+        return $response
+            ->header('Content-Security-Policy', $this->playerSecurityPolicy())
+            ->header('X-Content-Type-Options', 'nosniff')
+            ->header('Referrer-Policy', 'no-referrer')
+            ->header('Cache-Control', 'private, no-store');
+    }
+
+    public function contentBootstrap(Request $request, int $attempt, string $token, ?string $path = null): Response
+    {
+        $this->assertConfiguredHost($request, 'scorm.content_origin');
+        $session = $this->validSession($attempt, $token);
+        abort_unless(is_string($path) && $path !== '' && !$this->unsafeRelativePath($path), 404);
+
+        $bridgeNonce = (string) $request->query('bridge_nonce', '');
+        abort_unless(ctype_xdigit($bridgeNonce) && strlen($bridgeNonce) === 64, 403, 'SCORM bridge state is invalid.');
+
+        $contentOrigin = rtrim((string) config('scorm.content_origin', ''), '/');
+        $location = $contentOrigin . route('plugins.scorm.content.file', [
+            'attempt' => $attempt,
+            'path' => $path,
+        ], false);
+        $secure = parse_url((string) config('scorm.content_origin', ''), PHP_URL_SCHEME) === 'https';
+        $cookiePath = '/scorm-content/' . $attempt . '/';
+        $minutes = max(1, (int) config('scorm.launch_ttl_minutes', 240));
+        // Only the same-site HTTP integration fixture may use Lax; real isolated
+        // cross-site deployments always require Secure SameSite=None cookies.
+        $sameSite = app()->environment('testing') && config('scorm.cookie_same_site') === 'lax' ? 'lax' : 'none';
+        $sessionCookie = cookie(
+            $this->contentSessionCookieName($attempt),
+            $token,
+            $minutes,
+            $cookiePath,
+            null,
+            $secure,
+            true,
+            false,
+            $sameSite
+        );
+        $bridgeCookie = cookie(
+            $this->contentBridgeCookieName($attempt),
+            $bridgeNonce,
+            $minutes,
+            $cookiePath,
+            null,
+            $secure,
+            true,
+            false,
+            config('scorm.cookie_same_site', 'none')
+        );
+
+        return redirect()->to($location, 302)
+            ->withCookie($sessionCookie)
+            ->withCookie($bridgeCookie)
+            ->header('Referrer-Policy', 'no-referrer')
+            ->header('Cache-Control', 'private, no-store');
+    }
+
+    public function contentFile(Request $request, int $attempt, ?string $path = null): Response
+    {
+        $this->assertConfiguredHost($request, 'scorm.content_origin');
+        $token = $request->cookie($this->contentSessionCookieName($attempt));
+        abort_unless(is_string($token) && $token !== '', 403, 'SCORM content session is missing.');
+        $session = $this->validSession($attempt, $token);
+        abort_unless(is_string($path) && $path !== '' && !$this->unsafeRelativePath($path), 404);
+        $bridgeNonce = (string) $request->cookie($this->contentBridgeCookieName($attempt), '');
+        abort_unless(ctype_xdigit($bridgeNonce) && strlen($bridgeNonce) === 64, 403, 'SCORM bridge state is invalid.');
+
+        $record = DB::table('scorm_attempts')->where('id', $attempt)->first();
+        $package = DB::table('scorm_packages')->where('id', $record->scorm_package_id)->first();
+        abort_unless($package, 404);
+
+        $storagePath = storage_path('app');
+        abort_if(is_link($storagePath), 404);
+        $storageRoot = realpath($storagePath);
+        $packagesCandidate = $storageRoot !== false ? $storageRoot . DIRECTORY_SEPARATOR . 'scorm-packages' : '';
+        abort_unless($packagesCandidate !== '' && !is_link($packagesCandidate), 404);
+        $packagesRoot = realpath($packagesCandidate);
+        abort_unless($packagesRoot !== false && dirname($packagesRoot) === $storageRoot, 404);
+
+        $rootCandidate = $packagesRoot . DIRECTORY_SEPARATOR . $package->storage_directory;
+        abort_if(is_link($rootCandidate) || basename($package->storage_directory) !== $package->storage_directory, 404);
+        $root = realpath($rootCandidate);
+        abort_unless($root !== false && dirname($root) === $packagesRoot && is_dir($root), 404);
+
+        $targetCandidate = $root;
+        foreach (explode('/', $path) as $segment) {
+            $targetCandidate .= DIRECTORY_SEPARATOR . $segment;
+            abort_if(is_link($targetCandidate), 404);
+        }
+        $target = realpath($targetCandidate);
+        abort_unless($target !== false && is_file($target)
+            && str_starts_with($target, $root . DIRECTORY_SEPARATOR), 404);
+
+        $headers = [
+            'X-Content-Type-Options' => 'nosniff',
+            'Referrer-Policy' => 'no-referrer',
+            'Cross-Origin-Resource-Policy' => 'cross-origin',
+            'Content-Security-Policy' => $this->contentSecurityPolicy(),
+        ];
+        if (in_array(strtolower(pathinfo($target, PATHINFO_EXTENSION)), ['html', 'htm'], true)) {
+            $size = filesize($target);
+            abort_unless($size !== false && $size <= 10485760, 413, 'SCORM HTML entry exceeds the 10 MiB runtime injection limit.');
+            $html = file_get_contents($target);
+            abort_unless(is_string($html), 404, 'SCORM HTML content could not be read.');
+            $user = DB::table('users')->where('id', $record->user_id)->first();
+            $savedData = json_decode((string) $record->cmi_data, true);
+            if (!is_array($savedData)) {
+                $savedData = [];
+            }
+            $savedData['cmi.core.session_time'] = '0000:00:00.00';
+            $adapter = view('scorm::runtime-adapter', [
+                'playerOrigin' => rtrim((string) config('scorm.player_origin', ''), '/'),
+                'attemptId' => $attempt,
+                'bridgeNonce' => $bridgeNonce,
+                'studentId' => (string) $record->user_id,
+                'studentName' => (string) ($user->name ?? 'Learner'),
+                'entryMode' => $record->entry_mode,
+                'totalTime' => $this->formatScormTime((int) $record->total_time_seconds),
+                'savedData' => $savedData,
+            ])->render();
+            $injections = 0;
+            $html = preg_replace_callback('/<head\\b[^>]*>/i', static fn (array $match): string => $match[0] . $adapter, $html, 1, $injections) ?? $html;
+            if ($injections === 0) {
+                $html = $adapter . $html;
+            }
+            $response = response($html, 200, $headers + ['Content-Type' => 'text/html; charset=UTF-8']);
+        } else {
+            $response = response()->file($target, $headers);
+        }
+        // Symfony's BinaryFileResponse defaults to public caching unless the
+        // response is explicitly marked private after construction.
+        $response->setPrivate();
+        $response->headers->set('Cache-Control', 'private, no-store');
+
+        return $response;
+    }
+
+    public function preflight(Request $request): Response
+    {
+        abort_unless($this->isAllowedRuntimeOrigin($request), 403);
+
+        return response('', 204)->withHeaders($this->corsHeaders($request));
+    }
+
+    public function commit(Request $request): JsonResponse
+    {
+        if (!$this->isAllowedRuntimeOrigin($request)) {
+            return response()->json(['message' => 'SCORM runtime origin is not allowed.'], 403);
+        }
+
+        // The isolated SCO bridge caps serialized payload size before decoding
+        // so untrusted package data cannot force unbounded JSON allocation.
+        $rawPayload = $request->getContent();
+        if (strlen($rawPayload) > 262144) {
+            return response()->json(['ok' => false, 'message' => 'SCORM runtime payload exceeds the 256 KiB limit.'], 413)
+                ->withHeaders($this->corsHeaders($request));
+        }
+        $payload = json_decode($rawPayload, true);
+        if (!is_array($payload)) {
+            return response()->json(['ok' => false, 'message' => 'Invalid SCORM runtime payload.'], 422)
+                ->withHeaders($this->corsHeaders($request));
+        }
+        $validator = Validator::make($payload, [
+            'attempt_id' => ['required', 'integer', 'min:1'],
+            'token' => ['required', 'string', 'size:64'],
+            'request_id' => ['required', 'uuid'],
+            'version' => ['required', 'integer', 'min:0'],
+            'data' => ['required', 'array', 'max:300'],
+            'finish' => ['sometimes', 'boolean'],
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['ok' => false, 'errors' => $validator->errors()], 422)
+                ->withHeaders($this->corsHeaders($request));
+        }
+        $validated = $validator->validated();
+        if (!ctype_xdigit($validated['token'])) {
+            return response()->json(['ok' => false, 'message' => 'Invalid runtime token.'], 422)
+                ->withHeaders($this->corsHeaders($request));
+        }
+
+        try {
+            $result = DB::transaction(function () use ($validated): array {
+                $tokenHash = hash('sha256', $validated['token']);
+                $sessionIdentity = DB::table('scorm_attempt_sessions')
+                    ->where('scorm_attempt_id', $validated['attempt_id'])
+                    ->where('token_sha256', $tokenHash)
+                    ->where('expires_at', '>', now())
+                    ->first();
+                abort_unless($sessionIdentity, 403, 'SCORM launch session expired or is invalid.');
+
+                $attemptIdentity = DB::table('scorm_attempts')->where('id', $validated['attempt_id'])->first();
+                abort_unless($attemptIdentity, 404, 'SCORM attempt not found.');
+
+                // Match launch lock order to avoid an attempt/session vs entitlement deadlock:
+                // user -> role -> student profile -> enrollment -> course -> package -> invoice -> attempt -> session.
+                $lockedUser = DB::table('users')->where('id', $attemptIdentity->user_id)->lockForUpdate()->first();
+                abort_unless($lockedUser && (bool) $lockedUser->is_active, 403, 'Student account is inactive.');
+                $studentRole = DB::table('role_user')
+                    ->join('roles', 'roles.id', '=', 'role_user.role_id')
+                    ->where('role_user.user_id', $lockedUser->id)
+                    ->where('roles.slug', 'student')
+                    ->lockForUpdate()
+                    ->exists();
+                abort_unless($studentRole, 403, 'Current student role is required.');
+                $branchId = $this->currentStudentBranchId($lockedUser, true);
+
+                $lockedEnrollment = DB::table('enrollments')
+                    ->where('id', $attemptIdentity->enrollment_id)
+                    ->lockForUpdate()
+                    ->first();
+                abort_unless($lockedEnrollment && (int) $lockedEnrollment->user_id === (int) $lockedUser->id
+                    && in_array($lockedEnrollment->status, ['active', 'completed'], true), 403, 'Course enrollment is no longer eligible.');
+
+                $lockedCourse = DB::table('courses')->where('id', $lockedEnrollment->course_id)->lockForUpdate()->first();
+                abort_unless($lockedCourse && $lockedCourse->status === 'published', 403, 'Course is no longer published.');
+                $lockedPackage = DB::table('scorm_packages')->where('id', $attemptIdentity->scorm_package_id)->lockForUpdate()->first();
+                abort_unless($lockedPackage && in_array($lockedPackage->status, ['published', 'superseded'], true)
+                    && (int) $lockedPackage->course_id === (int) $lockedCourse->id, 403, 'SCORM package is no longer available.');
+
+                if ($lockedEnrollment->branch_id !== null) {
+                    abort_unless($branchId !== null && (int) $lockedEnrollment->branch_id === $branchId, 403, 'Enrollment is outside the student branch.');
+                }
+                if ($lockedCourse->branch_id !== null) {
+                    abort_unless($branchId !== null && (int) $lockedCourse->branch_id === $branchId, 403, 'Course is outside the student branch.');
+                }
+                if ($lockedPackage->branch_id !== null) {
+                    abort_unless($branchId !== null && (int) $lockedPackage->branch_id === $branchId, 403, 'SCORM package is outside the student branch.');
+                }
+
+                if ((float) $lockedCourse->price > 0) {
+                    abort_unless(Schema::hasTable('fee_invoices') && Schema::hasColumn('enrollments', 'invoice_id')
+                        && $lockedEnrollment->invoice_id !== null, 403, 'Paid course invoice is required.');
+                    $lockedInvoice = DB::table('fee_invoices')->where('id', $lockedEnrollment->invoice_id)->lockForUpdate()->first();
+                    abort_unless($lockedInvoice && $lockedInvoice->status === 'paid'
+                        && (float) $lockedInvoice->paid_amount + 0.01 >= (float) $lockedInvoice->net_amount, 403, 'Course invoice is no longer settled.');
+                }
+
+                $attempt = DB::table('scorm_attempts')->where('id', $validated['attempt_id'])->lockForUpdate()->first();
+                abort_unless($attempt
+                    && (int) $attempt->user_id === (int) $attemptIdentity->user_id
+                    && (int) $attempt->enrollment_id === (int) $attemptIdentity->enrollment_id
+                    && (int) $attempt->scorm_package_id === (int) $attemptIdentity->scorm_package_id,
+                    409,
+                    'SCORM attempt identity changed while committing.');
+                $session = DB::table('scorm_attempt_sessions')
+                    ->where('id', $sessionIdentity->id)
+                    ->where('scorm_attempt_id', $attempt->id)
+                    ->where('token_sha256', $tokenHash)
+                    ->where('expires_at', '>', now())
+                    ->lockForUpdate()
+                    ->first();
+                abort_unless($session, 403, 'SCORM launch session expired or is invalid.');
+
+                $payloadHash = hash('sha256', json_encode($validated, JSON_THROW_ON_ERROR));
+                $cachedRequest = DB::table('scorm_runtime_requests')
+                    ->where('scorm_attempt_session_id', $session->id)
+                    ->where('request_id', $validated['request_id'])
+                    ->first();
+                if ($cachedRequest) {
+                    abort_unless(hash_equals($cachedRequest->payload_sha256, $payloadHash), 409, 'SCORM request identifier was reused with different content.');
+                    $cachedResponse = json_decode((string) $cachedRequest->response_body, true);
+                    abort_unless(is_array($cachedResponse), 500, 'Stored SCORM request response is invalid.');
+
+                    return $cachedResponse + ['replayed' => true];
+                }
+
+                abort_unless(in_array($attempt->completion_state, ['in_progress', 'suspended'], true), 409, 'SCORM attempt is no longer writable.');
+                abort_unless((int) $attempt->state_version === (int) $validated['version'], 409, 'This SCORM attempt changed in another tab. Reload the learner session before continuing.');
+
+                [$user] = $this->assertAttemptEntitled($attempt);
+
+                $savedData = json_decode((string) $attempt->cmi_data, true);
+                $runtime = new Scorm12Runtime(
+                    (string) $user->id,
+                    (string) $user->name,
+                    '',
+                    (string) $attempt->entry_mode,
+                    'normal',
+                    $this->formatScormTime((int) $attempt->total_time_seconds),
+                    is_array($savedData) ? $savedData : []
+                );
+                abort_unless($runtime->initialize() === 'true', 409, 'SCORM runtime could not initialize.');
+
+                foreach ($validated['data'] as $element => $value) {
+                    if (!is_string($element) || !is_string($value) || $runtime->setValue($element, $value) !== 'true') {
+                        throw new InvalidArgumentException('SCORM runtime rejected a data-model value: ' . (is_string($element) ? $element : 'invalid-key') . ' (error ' . $runtime->getLastError() . ').');
+                    }
+                }
+
+                $data = $runtime->exportData();
+                $sessionSeconds = $this->parseScormTime((string) ($data['cmi.core.session_time'] ?? '0000:00:00.00'));
+                $previousSessionSeconds = (int) ($session->last_session_seconds ?? 0);
+                abort_if($sessionSeconds < $previousSessionSeconds, 422, 'SCORM session time cannot move backwards.');
+                $totalSeconds = (int) $attempt->total_time_seconds + ($sessionSeconds - $previousSessionSeconds);
+                $finish = (bool) ($validated['finish'] ?? false);
+                if ($finish) {
+                    abort_unless($runtime->finish() === 'true', 409, 'SCORM runtime could not finish.');
+                }
+
+                $lessonStatus = (string) ($data['cmi.core.lesson_status'] ?? 'not attempted');
+                $terminalStatus = in_array($lessonStatus, ['passed', 'completed', 'failed', 'browsed'], true);
+                $completionState = $finish ? ($terminalStatus ? 'completed' : 'suspended') : 'in_progress';
+                $version = (int) $attempt->state_version + 1;
+
+                DB::table('scorm_attempts')->where('id', $attempt->id)->update([
+                    'state_version' => $version,
+                    'lesson_status' => $lessonStatus,
+                    'lesson_location' => (string) ($data['cmi.core.lesson_location'] ?? ''),
+                    'suspend_data' => (string) ($data['cmi.suspend_data'] ?? ''),
+                    'score_raw' => is_numeric($data['cmi.core.score.raw'] ?? null) ? $data['cmi.core.score.raw'] : null,
+                    'score_min' => is_numeric($data['cmi.core.score.min'] ?? null) ? $data['cmi.core.score.min'] : null,
+                    'score_max' => is_numeric($data['cmi.core.score.max'] ?? null) ? $data['cmi.core.score.max'] : null,
+                    'total_time_seconds' => $totalSeconds,
+                    'session_time_seconds' => $sessionSeconds,
+                    'cmi_data' => json_encode($data, JSON_THROW_ON_ERROR),
+                    'completion_state' => $completionState,
+                    'last_commit_at' => now(),
+                    'finished_at' => $completionState === 'completed' ? now() : null,
+                    'updated_at' => now(),
+                ]);
+                DB::table('scorm_attempt_sessions')->where('id', $session->id)->update([
+                    'last_session_seconds' => $sessionSeconds,
+                    'last_seen_at' => now(),
+                    'updated_at' => now(),
+                ]);
+
+                $responseBody = [
+                    'ok' => true,
+                    'version' => $version,
+                    'completion_state' => $completionState,
+                    'lesson_status' => $lessonStatus,
+                ];
+                DB::table('scorm_runtime_requests')->insert([
+                    'scorm_attempt_session_id' => $session->id,
+                    'request_id' => $validated['request_id'],
+                    'payload_sha256' => $payloadHash,
+                    'response_body' => json_encode($responseBody, JSON_THROW_ON_ERROR),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+
+                return $responseBody;
+            });
+
+            return response()->json($result)->withHeaders($this->corsHeaders($request));
+        } catch (HttpExceptionInterface $exception) {
+            return response()->json(['ok' => false, 'message' => $exception->getMessage()], $exception->getStatusCode())
+                ->withHeaders($this->corsHeaders($request));
+        } catch (InvalidArgumentException $exception) {
+            return response()->json(['ok' => false, 'message' => $exception->getMessage()], 422)
+                ->withHeaders($this->corsHeaders($request));
+        }
+    }
+
+    private function currentStudentBranchId(object $user, bool $lockProfile = false): ?int
+    {
+        $userBranchId = Schema::hasColumn('users', 'branch_id') && $user->branch_id !== null
+            ? (int) $user->branch_id
+            : null;
+        $profileBranchId = null;
+
+        if (app(PluginManager::class)->isEnabled('student-management')) {
+            abort_unless(
+                Schema::hasTable('students') && Schema::hasColumn('students', 'user_id'),
+                503,
+                'Student profile authorization storage is unavailable.'
+            );
+            $profileQuery = DB::table('students')->where('user_id', (int) $user->id);
+            if ($lockProfile) {
+                $profileQuery->lockForUpdate();
+            }
+            $profile = $profileQuery->first();
+            abort_unless($profile !== null, 403, 'An active Student profile is required for SCORM access.');
+
+            if (Schema::hasColumn('students', 'deleted_at')) {
+                abort_unless($profile->deleted_at === null, 403, 'Student profile is no longer active.');
+            }
+            if (Schema::hasColumn('students', 'status')) {
+                abort_unless($profile->status === 'active', 403, 'Student profile is inactive.');
+            }
+            if (Schema::hasColumn('students', 'branch_id')) {
+                $profileBranchId = $profile->branch_id !== null ? (int) $profile->branch_id : null;
+            }
+        }
+
+        if ($profileBranchId !== null && $userBranchId !== null) {
+            abort_unless($profileBranchId === $userBranchId, 403, 'Account and student profile branches do not match.');
+        }
+
+        return $profileBranchId ?? $userBranchId;
+    }
+
+    private function eligibleEnrollment(object $actor, object $package): ?object
+    {
+        $query = DB::table('enrollments as e')
+            ->join('courses as c', 'c.id', '=', 'e.course_id')
+            ->where('e.user_id', $actor->id)
+            ->where('e.course_id', $package->course_id)
+            ->whereIn('e.status', ['active', 'completed']);
+        if (Schema::hasColumn('courses', 'deleted_at')) {
+            $query->whereNull('c.deleted_at');
+        }
+        $enrollment = $query->first([
+            'e.id', 'e.branch_id', 'e.status', 'c.branch_id as course_branch_id',
+            'c.price as course_price', 'c.status as course_status',
+            Schema::hasColumn('enrollments', 'invoice_id') ? 'e.invoice_id' : DB::raw('NULL as invoice_id'),
+        ]);
+        if (!$enrollment || $enrollment->course_status !== 'published') {
+            return null;
+        }
+
+        $currentUser = DB::table('users')->where('id', $actor->id)->first();
+        if (!$currentUser || !(bool) $currentUser->is_active) {
+            return null;
+        }
+        $branchId = $this->currentStudentBranchId($currentUser);
+        if ($enrollment->course_branch_id !== null
+            && ($branchId === null || (int) $enrollment->course_branch_id !== $branchId)) {
+            return null;
+        }
+        if ($enrollment->branch_id !== null
+            && ($branchId === null || (int) $enrollment->branch_id !== $branchId)) {
+            return null;
+        }
+        if ($package->branch_id !== null
+            && ($branchId === null || (int) $package->branch_id !== $branchId)) {
+            return null;
+        }
+
+        if ((float) $enrollment->course_price > 0) {
+            if (!Schema::hasTable('fee_invoices') || !$enrollment->invoice_id) {
+                return null;
+            }
+            $invoice = DB::table('fee_invoices')->where('id', $enrollment->invoice_id)->first();
+            if (!$invoice || $invoice->status !== 'paid'
+                || (float) $invoice->paid_amount + 0.01 < (float) $invoice->net_amount) {
+                return null;
+            }
+        }
+
+        return $enrollment;
+    }
+
+    private function validSession(int $attemptId, string $token): object
+    {
+        abort_unless(ctype_xdigit($token) && strlen($token) === 64, 403);
+        $session = DB::table('scorm_attempt_sessions')
+            ->where('scorm_attempt_id', $attemptId)
+            ->where('token_sha256', hash('sha256', $token))
+            ->where('expires_at', '>', now())
+            ->first();
+        abort_unless($session, 403, 'SCORM launch session expired or is invalid.');
+        $attemptRecord = DB::table('scorm_attempts')->where('id', $attemptId)->first();
+        abort_unless($attemptRecord, 404);
+        $this->assertAttemptEntitled($attemptRecord);
+
+        return $session;
+    }
+
+    /**
+     * Revalidate current learner, enrollment, branch, course and payment access
+     * whenever private package bytes or runtime writes are requested.
+     *
+     * @return array{0:object,1:object,2:object}
+     */
+    private function assertAttemptEntitled(object $attempt): array
+    {
+        $user = DB::table('users')->where('id', $attempt->user_id)->lockForUpdate()->first();
+        abort_unless($user && (bool) $user->is_active, 403, 'Student account is inactive.');
+
+        $studentRole = DB::table('role_user')
+            ->join('roles', 'roles.id', '=', 'role_user.role_id')
+            ->where('role_user.user_id', $user->id)
+            ->where('roles.slug', 'student')
+            ->lockForUpdate()
+            ->exists();
+        abort_unless($studentRole, 403, 'Current student role is required.');
+
+        $branchId = $this->currentStudentBranchId($user, true);
+        $enrollment = DB::table('enrollments')->where('id', $attempt->enrollment_id)->lockForUpdate()->first();
+        abort_unless($enrollment && (int) $enrollment->user_id === (int) $user->id
+            && in_array($enrollment->status, ['active', 'completed'], true), 403, 'Course enrollment is no longer eligible.');
+
+        $course = DB::table('courses')->where('id', $enrollment->course_id)->lockForUpdate()->first();
+        abort_unless($course && $course->status === 'published', 403, 'Course is no longer published.');
+        if ($course->branch_id !== null) {
+            abort_unless($branchId !== null && (int) $course->branch_id === $branchId, 403, 'Course is outside the student branch.');
+        }
+        if ($enrollment->branch_id !== null) {
+            abort_unless($branchId !== null && (int) $enrollment->branch_id === $branchId, 403, 'Enrollment is outside the student branch.');
+        }
+
+        $package = DB::table('scorm_packages')->where('id', $attempt->scorm_package_id)->lockForUpdate()->first();
+        abort_unless($package && in_array($package->status, ['published', 'superseded'], true)
+            && (int) $package->course_id === (int) $course->id, 403, 'SCORM package is no longer available.');
+        if ($package->branch_id !== null) {
+            abort_unless($branchId !== null && (int) $package->branch_id === $branchId, 403, 'SCORM package is outside the student branch.');
+        }
+
+        if ((float) $course->price > 0) {
+            abort_unless(Schema::hasTable('fee_invoices') && Schema::hasColumn('enrollments', 'invoice_id')
+                && $enrollment->invoice_id !== null, 403, 'Paid course invoice is required.');
+            $invoice = DB::table('fee_invoices')->where('id', $enrollment->invoice_id)->lockForUpdate()->first();
+            abort_unless($invoice && $invoice->status === 'paid'
+                && (float) $invoice->paid_amount + 0.01 >= (float) $invoice->net_amount, 403, 'Course invoice is no longer settled.');
+        }
+
+        return [$user, $course, $package];
+    }
+
+    private function unsafeRelativePath(string $path): bool
+    {
+        if ($path === '' || str_contains($path, chr(0)) || str_contains($path, '\\')
+            || str_contains($path, '%') || str_starts_with($path, '/')) {
+            return true;
+        }
+        foreach (explode('/', $path) as $segment) {
+            if ($segment === '' || $segment === '.' || $segment === '..') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function assertConfiguredHost(Request $request, string $originKey): void
+    {
+        $expectedHost = parse_url((string) config($originKey, ''), PHP_URL_HOST);
+        $requestHost = $request->getHost();
+        abort_unless(is_string($expectedHost) && $expectedHost !== ''
+            && hash_equals(strtolower($expectedHost), strtolower($requestHost)), 404);
+    }
+
+    private function isAllowedRuntimeOrigin(Request $request): bool
+    {
+        $allowed = rtrim((string) config('scorm.player_origin', ''), '/');
+        $origin = rtrim((string) $request->headers->get('Origin', ''), '/');
+
+        return $allowed !== '' && $origin !== '' && hash_equals($allowed, $origin);
+    }
+
+    private function corsHeaders(Request $request): array
+    {
+        return [
+            'Access-Control-Allow-Origin' => rtrim((string) config('scorm.player_origin', ''), '/'),
+            'Access-Control-Allow-Methods' => 'POST, OPTIONS',
+            'Access-Control-Allow-Headers' => 'Content-Type',
+            'Access-Control-Max-Age' => '600',
+            'Vary' => 'Origin',
+        ];
+    }
+
+    private function playerSecurityPolicy(): string
+    {
+        $contentOrigin = rtrim((string) config('scorm.content_origin', ''), '/');
+        $appOrigin = rtrim((string) config('app.url', ''), '/');
+
+        return "default-src 'self' data: blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src {$appOrigin}; frame-src {$contentOrigin}; frame-ancestors {$appOrigin}; form-action 'none'; object-src 'none'; base-uri 'self'";
+    }
+
+    private function contentSecurityPolicy(): string
+    {
+        $playerOrigin = rtrim((string) config('scorm.player_origin', ''), '/');
+
+        // SCO code has an opaque sandbox origin and cannot access player/LMS APIs
+        // except through the allow-listed postMessage bridge.
+        $appOrigin = rtrim((string) config('app.url', ''), '/');
+
+        return "default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; frame-ancestors {$appOrigin} {$playerOrigin}; form-action 'none'; object-src 'none'; base-uri 'self'";
+    }
+
+    private function contentSessionCookieName(int $attemptId): string
+    {
+        return 'aec_scorm_' . $attemptId;
+    }
+
+    private function contentBridgeCookieName(int $attemptId): string
+    {
+        return 'aec_scorm_bridge_' . $attemptId;
+    }
+
+    private function parseScormTime(string $value): int
+    {
+        if (preg_match('/^(\d{4}):([0-5]\d):([0-5]\d)(?:\.(\d{1,2}))?$/', $value, $matches) !== 1) {
+            throw new InvalidArgumentException('SCORM session time has an invalid format.');
+        }
+
+        return ((int) $matches[1] * 3600) + ((int) $matches[2] * 60) + (int) $matches[3];
+    }
+
+    private function formatScormTime(int $seconds): string
+    {
+        $hours = intdiv(max(0, $seconds), 3600);
+        $minutes = intdiv(max(0, $seconds) % 3600, 60);
+        $remaining = max(0, $seconds) % 60;
+
+        return sprintf('%04d:%02d:%02d.00', $hours, $minutes, $remaining);
+    }
+}
