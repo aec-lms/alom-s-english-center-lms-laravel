@@ -150,4 +150,42 @@ class PublicCatalogDiscoveryTest extends TestCase
             ->assertDontSee('id="achievement-card"');
     }
 
+    public function test_public_ebook_catalog_search_keeps_free_and_premium_filter_context(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['storefront-catalog']);
+
+        StorefrontItem::query()->create([
+            'type' => 'ebook',
+            'slug' => 'ielts-writing-guide',
+            'title' => 'IELTS Writing Guide',
+            'category' => 'IELTS',
+            'price' => 0,
+            'original_price' => 400,
+            'is_free' => true,
+            'pages' => 80,
+            'summary' => 'Task 1 and Task 2 writing practice',
+            'is_active' => true,
+        ]);
+
+        StorefrontItem::query()->create([
+            'type' => 'ebook',
+            'slug' => 'phonetics-reference',
+            'title' => 'Phonetics Reference Book',
+            'category' => 'Pronunciation',
+            'price' => 250,
+            'original_price' => 300,
+            'is_free' => false,
+            'pages' => 60,
+            'summary' => 'Sound and pronunciation reference',
+            'is_active' => true,
+        ]);
+
+        $this->get('/ebooks?q=IELTS&type=free')
+            ->assertOk()
+            ->assertSee('IELTS Writing Guide')
+            ->assertDontSee('Phonetics Reference Book')
+            ->assertSee('name="q"');
+    }
+
 }
