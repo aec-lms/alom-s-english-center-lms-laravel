@@ -378,6 +378,12 @@ class FinanceAndPaymentGatewayTest extends TestCase
         $this->actingAs($admin)->post('/admin/plugins/gateway-paypal/test-connection')
             ->assertSessionHas('status');
 
+        $plugins->saveSettings('gateway-card', [
+            'merchant_id' => 'CARD-MRC-TEST',
+            'api_secret' => 'card-acquirer-secret-test',
+            'webhook_secret' => 'card-webhook-secret-test',
+        ], ['api_secret', 'webhook_secret']);
+
         // Include the card method in the admin-selected list so this assertion
         // tests adapter readiness rather than the separate disabled-method state.
         $plugins->saveSettings('universal-payment', [
