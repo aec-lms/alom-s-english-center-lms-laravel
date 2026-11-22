@@ -84,7 +84,7 @@ class UniversalPaymentGatewayToggleTest extends TestCase
             'password' => 'sandbox-password',
         ]);
 
-        $statuses = app(\\Plugins\\Modules\\UniversalPayment\\Services\\UniversalPaymentOrchestrator::class)->gatewayStatus();
+        $statuses = app(\Plugins\Modules\UniversalPayment\Services\UniversalPaymentOrchestrator::class)->gatewayStatus();
 
         foreach (['gateway-bkash', 'gateway-nagad', 'gateway-rocket'] as $slug) {
             $this->assertSame('processor_adapter_required', $statuses[$slug]['status']);
