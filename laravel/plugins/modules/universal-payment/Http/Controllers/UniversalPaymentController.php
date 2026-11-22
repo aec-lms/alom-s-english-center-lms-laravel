@@ -785,10 +785,15 @@ class UniversalPaymentController extends Controller
                 422,
                 'The selected manual payment plugin is not installed, enabled, and configured.'
             );
+        }
+
+        // Keep the legacy bank_cash/offline identifiers subject to the same
+        // global offline-payment kill switch as the new manual payment plugins.
+        if (in_array($gateway, ['cash', 'bank_transfer', 'bank_cash', 'offline'], true)) {
             abort_unless(
                 (string) $this->plugins->getSetting('universal-payment', 'allow_offline_payments', '1') === '1',
                 422,
-                'Cash and bank transfer payments are disabled by the administrator.'
+                'Manual cash and bank payments are disabled by the administrator.'
             );
         }
 
