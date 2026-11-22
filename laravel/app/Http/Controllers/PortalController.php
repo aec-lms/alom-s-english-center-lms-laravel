@@ -189,7 +189,10 @@ class PortalController extends Controller
                     ->join('students', 'guardian_student.student_id', '=', 'students.id')
                     ->join('users', 'students.user_id', '=', 'users.id')
                     ->where('guardian_student.guardian_id', $guardian->id)
-                    ->where('students.branch_id', $guardian->branch_id)
+                    ->when($guardian->branch_id !== null, fn ($query) => $query->where(function ($branch) use ($guardian): void {
+                        $branch->whereNull('students.branch_id')
+                            ->orWhere('students.branch_id', $guardian->branch_id);
+                    }))
                     ->select('students.id', 'students.student_code', 'students.status', 'users.name', 'users.email')
                     ->get();
                 $studentIds = $children->pluck('id');
