@@ -40,7 +40,8 @@ final class PluginCategoryRegistry
         ],
         'finance-commerce' => [
             'commerce-cart', 'course-bundles', 'expense-management', 'fees-management',
-            'gateway-card', 'gateway-paypal', 'gateway-sslcommerz', 'gateway-stripe',
+            'gateway-bkash', 'gateway-card', 'gateway-nagad', 'gateway-paypal',
+            'gateway-rocket', 'gateway-sslcommerz', 'gateway-stripe',
             'payment-management', 'referral-income', 'storefront-catalog', 'universal-payment',
         ],
         'communication-support' => [
