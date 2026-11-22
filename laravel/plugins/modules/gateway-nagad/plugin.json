@@ -86,15 +86,6 @@
             "secret": true
         }
     ],
-    "admin_menu": [
-        {
-            "group": "Finance & Gateways",
-            "label": "Nagad Gateway",
-            "route": "plugins.nagad_gateway.index",
-            "order": 111,
-            "permission": "payments.nagad.manage"
-        }
-    ],
     "optional_dependencies": [
         "fees-management",
         "payment-management"
