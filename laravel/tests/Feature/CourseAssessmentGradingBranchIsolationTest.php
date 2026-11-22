@@ -310,7 +310,7 @@ final class CourseAssessmentGradingBranchIsolationTest extends TestCase
         $primary->beginTransaction();
         try {
             // The route's nested transaction grades under the outer transaction,
-            // keeping the attempt -> set -> course -> teacher -> user locks held.
+            // keeping attempt -> set -> course -> Teacher -> User -> role locks held.
             $this->actingAs($teacher)->patch(route('plugins.course-assessments.grading.update', $attemptId), [
                 'scores' => [$questionId => 4],
                 'feedback' => [$questionId => 'Graded before reassignment.'],
@@ -442,7 +442,7 @@ final class CourseAssessmentGradingBranchIsolationTest extends TestCase
         }
     }
 
-    // This two-session regression proves the role pivot stays serialized with the canonical User -> role -> Teacher profile grading lock order.
+    // This two-session regression proves the role pivot stays serialized with the canonical Teacher -> User -> role grading lock order.
     public function test_mysql_teacher_role_revocation_waits_for_grading_then_blocks_the_next_grade(): void
     {
         if (DB::connection()->getDriverName() !== 'mysql') {
