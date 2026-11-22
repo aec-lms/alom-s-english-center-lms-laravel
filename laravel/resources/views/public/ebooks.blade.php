@@ -16,10 +16,18 @@
                     <h1 class="text-2xl sm:text-3xl font-extrabold text-[#1E1B4B] tracking-tight">All E-Books</h1>
                 </div>
 
+                <form method="GET" action="{{ route('public.ebooks') }}" class="mx-auto flex max-w-2xl flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:flex-row">
+                    <label class="sr-only" for="ebook-search">{{ __('Search e-books') }}</label>
+                    <input id="ebook-search" type="search" name="q" value="{{ $searchTerm }}" maxlength="100" placeholder="{{ __('Search by title, subject or keyword') }}" class="min-w-0 flex-1 rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
+                    <input type="hidden" name="category" value="{{ $activeCategory }}">
+                    <input type="hidden" name="type" value="{{ $priceFilter }}">
+                    <button type="submit" class="rounded-xl bg-[#0284C7] px-5 py-3 text-sm font-bold text-white hover:bg-[#0369A1]">{{ __('Search') }}</button>
+                </form>
+
                 <!-- Primary Category Filter Pills -->
                 <div class="flex flex-wrap items-center justify-center gap-2.5">
                     <a
-                        href="{{ route('public.ebooks', ['category' => 'all', 'type' => $priceFilter]) }}"
+                        href="{{ route('public.ebooks', ['category' => 'all', 'type' => $priceFilter, 'q' => $searchTerm]) }}"
                         class="px-4 py-1.5 rounded-full text-xs font-bold inline-flex items-center gap-2 transition-all {{ $activeCategory === 'all' ? 'bg-gradient-to-r from-[#2563EB] to-[#4F46E5] text-white shadow-md' : 'bg-white text-slate-700 border border-slate-200 hover:border-blue-300' }}"
                     >
                         <span>All E-Books</span>
@@ -29,7 +37,7 @@
                     @foreach ($categories as $cat)
                         @php $isCat = strcasecmp($activeCategory, $cat) === 0; @endphp
                         <a
-                            href="{{ route('public.ebooks', ['category' => $cat, 'type' => $priceFilter]) }}"
+                            href="{{ route('public.ebooks', ['category' => $cat, 'type' => $priceFilter, 'q' => $searchTerm]) }}"
                             class="px-4 py-1.5 rounded-full text-xs font-semibold inline-flex items-center gap-2 transition-all {{ $isCat ? 'bg-gradient-to-r from-[#2563EB] to-[#4F46E5] text-white shadow-md font-bold' : 'bg-white text-slate-600 border border-slate-200 hover:border-blue-300' }}"
                         >
                             <span>{{ $cat }}</span>
@@ -48,7 +56,7 @@
                         ] as [$key, $label, $cnt])
                             @php $isType = $priceFilter === $key; @endphp
                             <a
-                                href="{{ route('public.ebooks', ['category' => $activeCategory, 'type' => $key]) }}"
+                                href="{{ route('public.ebooks', ['category' => $activeCategory, 'type' => $key, 'q' => $searchTerm]) }}"
                                 class="px-3 py-1 rounded-md text-[11px] font-bold inline-flex items-center gap-1.5 transition-colors {{ $isType ? 'bg-[#0284C7] text-white shadow-xs' : 'text-slate-600 hover:text-slate-900' }}"
                             >
                                 <span>{{ $label }}</span>
@@ -65,7 +73,7 @@
 
             <!-- 4-Column Portrait E-Book Grid -->
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 pt-2">
-                @foreach ($visibleBooks as $eb)
+                @forelse ($visibleBooks as $eb)
                     @php
                         $discount = (!$eb['is_free'] && $eb['original_price'] > $eb['price'])
                             ? (int) round((($eb['original_price'] - $eb['price']) / $eb['original_price']) * 100)
@@ -136,7 +144,12 @@
                             </span>
                         </div>
                     </a>
-                @endforeach
+                @empty
+                    <section class="col-span-full rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
+                        <h2 class="text-lg font-bold text-slate-800">{{ __('No e-books found') }}</h2>
+                        <p class="mt-2 text-sm text-slate-500">{{ __('Try another search term, category or price filter.') }}</p>
+                    </section>
+                @endforelse
             </div>
         </div>
     </main>
