@@ -101,7 +101,13 @@ XML;
     document.body.dataset.lmsDomBlocked = 'false';
     document.body.dataset.frameElementAvailable = String(window.frameElement !== null);
     document.body.dataset.sandboxRemovalSucceeded = 'false';
-    document.body.dataset.cookieReadable = document.cookie.length > 0 ? 'true' : 'false';
+    let cookieReadable = false;
+    try {
+        cookieReadable = document.cookie.length > 0;
+    } catch (error) {
+        // Opaque sandbox origins intentionally cannot access document.cookie.
+    }
+    document.body.dataset.cookieReadable = String(cookieReadable);
 
     try {
         void parent.document.documentElement;
