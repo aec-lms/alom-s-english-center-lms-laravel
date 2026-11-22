@@ -22,7 +22,7 @@ class UniversalPaymentGatewayToggleTest extends TestCase
 
         $admin = $this->createUserWithRole('admin');
         $this->grantUniversalPaymentManagePermission($admin);
-        $this->actingAs($admin)->post('/plugins/universal-payment/transactions', [
+        $this->actingAs($admin)->postJson('/plugins/universal-payment/transactions', [
             'payer_name' => 'Offline Disabled Test',
             'payer_contact' => '01712345678',
             'item_title' => 'Tuition receipt',
@@ -31,7 +31,7 @@ class UniversalPaymentGatewayToggleTest extends TestCase
             'external_trx_id' => 'OFFLINE-DISABLED-001',
         ])->assertStatus(422);
 
-        $this->actingAs($admin)->post('/universal-checkout', [
+        $this->actingAs($admin)->postJson('/universal-checkout', [
             'payer_name' => $admin->name,
             'payer_contact' => '01712345678',
             'item_title' => 'Tuition invoice',
