@@ -37,6 +37,18 @@
                 "0": "Live",
                 "1": "Sandbox"
             }
+        },
+        {
+            "key": "refunds_enabled",
+            "label": "Enable provider-confirmed refunds",
+            "type": "select",
+            "secret": false,
+            "default": "0",
+            "options": {
+                "0": "Disabled",
+                "1": "Enabled"
+            },
+            "help": "Refunds remain disabled until your SSLCOMMERZ sandbox refund and status-query flow is verified."
         }
     ],
     "optional_dependencies": [
