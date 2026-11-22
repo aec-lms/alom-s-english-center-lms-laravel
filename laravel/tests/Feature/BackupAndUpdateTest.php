@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use App\Core\Backup\BackupService;
 use App\Core\Updates\UniversalUpdateService;
+use App\Models\AuditLog;
 use App\Models\BackupRecord;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -63,6 +64,33 @@ class BackupAndUpdateTest extends TestCase
 
 
 
+    public function test_backup_record_and_archive_are_rolled_back_when_required_audit_write_fails(): void
+    {
+        $this->markSystemInstalled();
+        $beforeCount = BackupRecord::query()->count();
+        $backupDirectory = rtrim((string) config('lms.backup_path'), DIRECTORY_SEPARATOR);
+        $beforeFiles = glob($backupDirectory . DIRECTORY_SEPARATOR . 'aec-backup-*.zip.enc') ?: [];
+
+        AuditLog::creating(static function (): void {
+            throw new RuntimeException('forced backup audit failure');
+        });
+
+        try {
+            try {
+                app(BackupService::class)->createEncryptedBackup(null, false);
+                $this->fail('Backup creation must fail when required audit evidence cannot be stored.');
+            } catch (RuntimeException $exception) {
+                $this->assertSame('forced backup audit failure', $exception->getMessage());
+            }
+
+            $this->assertSame($beforeCount, BackupRecord::query()->count());
+            $backupFiles = glob($backupDirectory . DIRECTORY_SEPARATOR . 'aec-backup-*.zip.enc') ?: [];
+            $this->assertSame($beforeFiles, $backupFiles);
+        } finally {
+            AuditLog::flushEventListeners();
+        }
+    }
+
     public function test_production_size_database_backup_restores_with_bounded_streaming_batches(): void
     {
         $this->markSystemInstalled();
@@ -113,6 +141,164 @@ class BackupAndUpdateTest extends TestCase
             $this->assertSame('Production Restore Student 11999', DB::table('users')->where('email', $prefix . '11999@aec.test')->value('name'));
             $this->assertFalse(DB::table('users')->where('email', $prefix . 'post-backup@aec.test')->exists());
         } finally {
+            @unlink($record->storage_path);
+            $record->delete();
+        }
+    }
+
+    public function test_backup_restore_database_rolls_back_when_required_audit_write_fails(): void
+    {
+        $this->markSystemInstalled();
+
+        $email = 'backup-audit-rollback-' . bin2hex(random_bytes(6)) . '@aec.test';
+        $timestamp = now();
+        DB::table('users')->insert([
+            'name' => 'Before backup',
+            'email' => $email,
+            'password' => password_hash('NotARealPassword!2026', PASSWORD_BCRYPT),
+            'is_active' => true,
+            'created_at' => $timestamp,
+            'updated_at' => $timestamp,
+        ]);
+
+        $backups = app(BackupService::class);
+        $record = $backups->createEncryptedBackup(null, false);
+
+        try {
+            DB::table('users')->where('email', $email)->update(['name' => 'Current live value']);
+
+            AuditLog::creating(static function (AuditLog $log): void {
+                if ($log->action === 'backup.restored') {
+                    throw new RuntimeException('forced backup restore audit failure');
+                }
+            });
+
+            try {
+                $backups->restoreEncryptedBackup($record);
+                $this->fail('Backup restore must fail if its required audit event cannot be stored.');
+            } catch (RuntimeException $exception) {
+                $this->assertSame('forced backup restore audit failure', $exception->getMessage());
+            } finally {
+                AuditLog::flushEventListeners();
+            }
+
+            $this->assertSame(
+                'Current live value',
+                DB::table('users')->where('email', $email)->value('name'),
+                'Database restore must roll back with the required audit write.'
+            );
+        } finally {
+            @unlink($record->storage_path);
+            $record->delete();
+        }
+    }
+
+    public function test_private_files_are_not_replaced_when_required_restore_audit_fails(): void
+    {
+        $this->markSystemInstalled();
+
+        $privateDirectory = rtrim((string) config('lms.private_storage_path'), DIRECTORY_SEPARATOR);
+        if (!is_dir($privateDirectory) && !mkdir($privateDirectory, 0700, true) && !is_dir($privateDirectory)) {
+            $this->fail('Unable to prepare private storage fixture.');
+        }
+        $relativePath = 'audit-rollback-' . bin2hex(random_bytes(6)) . '.txt';
+        $privateFile = $privateDirectory . DIRECTORY_SEPARATOR . $relativePath;
+        file_put_contents($privateFile, 'before-backup');
+
+        $backups = app(BackupService::class);
+        $record = $backups->createEncryptedBackup(null, true);
+
+        try {
+            file_put_contents($privateFile, 'current-live-value');
+            AuditLog::creating(static function (AuditLog $log): void {
+                if ($log->action === 'backup.restored') {
+                    throw new RuntimeException('forced private restore audit failure');
+                }
+            });
+
+            try {
+                $backups->restoreEncryptedBackup($record);
+                $this->fail('Restore must fail when its required audit event cannot be stored.');
+            } catch (RuntimeException $exception) {
+                $this->assertSame('forced private restore audit failure', $exception->getMessage());
+            } finally {
+                AuditLog::flushEventListeners();
+            }
+
+            $this->assertSame(
+                'current-live-value',
+                file_get_contents($privateFile),
+                'Private files must not be replaced before required audit evidence is persisted.'
+            );
+        } finally {
+            AuditLog::flushEventListeners();
+            @unlink($privateFile);
+            @unlink($record->storage_path);
+            $record->delete();
+        }
+    }
+
+    public function test_private_file_restore_rolls_back_earlier_replacements_when_a_later_path_conflicts(): void
+    {
+        $this->markSystemInstalled();
+
+        $privateDirectory = rtrim((string) config('lms.private_storage_path'), DIRECTORY_SEPARATOR);
+        if (!is_dir($privateDirectory) && !mkdir($privateDirectory, 0700, true) && !is_dir($privateDirectory)) {
+            $this->fail('Unable to prepare private storage fixture.');
+        }
+
+        $suffix = bin2hex(random_bytes(6));
+        $firstRelative = 'a-restore-rollback-' . $suffix . '.txt';
+        $blockedDirectoryRelative = 'z-restore-rollback-' . $suffix;
+        $firstFile = $privateDirectory . DIRECTORY_SEPARATOR . $firstRelative;
+        $blockedDirectory = $privateDirectory . DIRECTORY_SEPARATOR . $blockedDirectoryRelative;
+        $blockedChild = $blockedDirectory . DIRECTORY_SEPARATOR . 'child.txt';
+
+        file_put_contents($firstFile, 'backup-first-file');
+        mkdir($blockedDirectory, 0700, true);
+        file_put_contents($blockedChild, 'backup-child-file');
+
+        $record = app(BackupService::class)->createEncryptedBackup(null, true);
+
+        try {
+            file_put_contents($firstFile, 'current-live-first-file');
+            unlink($blockedChild);
+            rmdir($blockedDirectory);
+            file_put_contents($blockedDirectory, 'blocking-live-file');
+            $restoredAuditCountBefore = DB::table('audit_logs')
+                ->where('action', 'backup.restored')
+                ->where('entity_id', (string) $record->id)
+                ->count();
+
+            try {
+                app(BackupService::class)->restoreEncryptedBackup($record);
+                $this->fail('Restore must fail when a later private path conflicts with an existing file.');
+            } catch (RuntimeException $exception) {
+                $this->assertStringContainsString('Private restore', $exception->getMessage());
+            }
+
+            $this->assertSame(
+                'current-live-first-file',
+                file_get_contents($firstFile),
+                'Earlier private file replacements must be rolled back when a later restore path fails.'
+            );
+            $this->assertSame('blocking-live-file', file_get_contents($blockedDirectory));
+            $this->assertSame(
+                $restoredAuditCountBefore,
+                DB::table('audit_logs')
+                    ->where('action', 'backup.restored')
+                    ->where('entity_id', (string) $record->id)
+                    ->count(),
+                'The required restore audit event must roll back with the database when filesystem restoration fails.'
+            );
+        } finally {
+            @unlink($firstFile);
+            if (is_dir($blockedDirectory) && !is_link($blockedDirectory)) {
+                @unlink($blockedChild);
+                @rmdir($blockedDirectory);
+            } else {
+                @unlink($blockedDirectory);
+            }
             @unlink($record->storage_path);
             $record->delete();
         }
