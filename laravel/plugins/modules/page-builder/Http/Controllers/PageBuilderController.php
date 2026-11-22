@@ -15,7 +15,8 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Plugins\Modules\PageBuilder\Models\BuilderPage;
-use Plugins\Modules\PageBuilder\Models\BuilderPageRevision;\nuse Plugins\Modules\PageBuilder\Services\ReusableBlockLibrary;
+use Plugins\Modules\PageBuilder\Models\BuilderPageRevision;
+use Plugins\Modules\PageBuilder\Services\ReusableBlockLibrary;
 
 class PageBuilderController extends Controller
 {
@@ -32,7 +33,8 @@ class PageBuilderController extends Controller
             ])->latest()->get()
             : collect();
 
-        $reusableBlocks = $reusableBlocks->all();\n        return view('page-builder::index', compact('pages', 'reusableBlocks'));
+        $reusableBlocks = $reusableBlocks->all();
+        return view('page-builder::index', compact('pages', 'reusableBlocks'));
     }
 
     public function store(Request $request): RedirectResponse
