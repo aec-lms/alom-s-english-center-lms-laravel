@@ -162,6 +162,7 @@ class CourseAssessmentsPluginTest extends TestCase
         $this->createQuestion($submittedSet);
         $start = $this->actingAs($student)->post(route('plugins.course-assessments.student.start', $submittedSet));
         $attemptId = (int) basename(parse_url($start->headers->get('Location'), PHP_URL_PATH));
+        $token = $student->createToken('revoked-course-assessment-role')->plainTextToken;
         $questionId = (int) DB::table('course_assessment_attempt_questions')->where('attempt_id', $attemptId)->value('id');
         $this->post(route('plugins.course-assessments.student.submit', $attemptId))->assertRedirect();
         $this->putJson(route('plugins.course-assessments.student.answer', [$attemptId, $questionId]), ['selected_option' => 1])
@@ -290,6 +291,25 @@ class CourseAssessmentsPluginTest extends TestCase
         $this->actingAs($revokedStudent)
             ->get(route('plugins.course-assessments.student.history'))
             ->assertForbidden();
+
+        // The same revoked identity must lose access through both supported API prefixes.
+        foreach (['api/v1', 'api/mobile'] as $prefix) {
+            $base = '/' . $prefix . '/my-learning/assessments';
+            app('auth')->forgetGuards();
+            $this->withToken($token)->getJson($base)->assertForbidden();
+            app('auth')->forgetGuards();
+            $this->withToken($token)->getJson($base . '/history')->assertForbidden();
+            app('auth')->forgetGuards();
+            $this->withToken($token)->postJson($base . '/' . $set . '/start')->assertForbidden();
+            app('auth')->forgetGuards();
+            $this->withToken($token)->getJson($base . '/attempts/' . $attemptId)->assertForbidden();
+            app('auth')->forgetGuards();
+            $this->withToken($token)->putJson($base . '/attempts/' . $attemptId . '/questions/' . $questionId, [
+                'selected_option' => 1,
+            ])->assertForbidden();
+            app('auth')->forgetGuards();
+            $this->withToken($token)->postJson($base . '/attempts/' . $attemptId . '/submit')->assertForbidden();
+        }
 
         $this->assertDatabaseHas('course_assessment_attempts', [
             'id' => $attemptId,
