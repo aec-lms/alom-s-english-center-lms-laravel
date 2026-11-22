@@ -62,15 +62,6 @@
             "secret": true
         }
     ],
-    "admin_menu": [
-        {
-            "group": "Finance & Gateways",
-            "label": "bKash Gateway",
-            "route": "plugins.bkash_gateway.index",
-            "order": 110,
-            "permission": "payments.bkash.manage"
-        }
-    ],
     "optional_dependencies": [
         "fees-management",
         "payment-management"
