@@ -78,4 +78,65 @@ class UniversalPaymentProofTest extends TestCase
         ]);
     }
 
+    public function test_payment_review_reloads_branch_assignment_after_authenticated_session_was_created(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'universal-payment']);
+
+        $branchA = DB::table('branches')->insertGetId([
+            'code' => 'UPAY-REVIEW-A',
+            'name' => 'Payment Review Branch A',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $branchB = DB::table('branches')->insertGetId([
+            'code' => 'UPAY-REVIEW-B',
+            'name' => 'Payment Review Branch B',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $manager = $this->createUserWithRole('branch_manager', (int) $branchA);
+        $permissionId = DB::table('permissions')->where('slug', 'payments.universal.manage')->value('id');
+        $this->assertNotNull($permissionId);
+        $manager->roles()->first()->permissions()->syncWithoutDetaching([(int) $permissionId]);
+
+        $transactionId = DB::table('universal_payment_transactions')->insertGetId([
+            'reference' => 'UPAY-STALE-BRANCH-' . $manager->id,
+            'payer_name' => 'Branch Review Payer',
+            'payer_contact' => '01700000000',
+            'item_title' => 'Branch scoped payment',
+            'gateway' => 'bank_cash',
+            'currency' => 'BDT',
+            'amount' => 500,
+            'external_trx_id' => 'UPAY-STALE-BRANCH-EXT-' . $manager->id,
+            'branch_id' => $branchA,
+            'status' => 'pending',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // Keep the authenticated model at branch A while the persisted account
+        // is reassigned to branch B, simulating a request with stale session state.
+        $this->actingAs($manager);
+        DB::table('users')->where('id', $manager->id)->update(['branch_id' => $branchB]);
+
+        $this->post('/plugins/universal-payment/transactions/' . $transactionId . '/status', [
+            'status' => 'verified',
+            'payment_reference' => 'UPAY-STALE-BRANCH-VERIFY-' . $manager->id,
+        ])->assertNotFound();
+
+        $this->assertDatabaseHas('universal_payment_transactions', [
+            'id' => $transactionId,
+            'status' => 'pending',
+            'verified_by' => null,
+        ]);
+        $this->assertDatabaseMissing('audit_logs', [
+            'action' => 'universal_payment.status_updated',
+            'entity_id' => (string) $transactionId,
+        ]);
+    }
+
 }
