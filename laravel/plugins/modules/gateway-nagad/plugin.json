@@ -1,0 +1,102 @@
+{
+    "slug": "gateway-nagad",
+    "name": "Nagad Merchant Gateway",
+    "version": "1.0.0",
+    "author": "Alom's English Center",
+    "category": "payment-gateway",
+    "description": "Admin credential configuration foundation for Nagad merchant checkout. Credential fields are generic until the official merchant integration specification is supplied; checkout remains unavailable until its adapter and sandbox verification are completed.",
+    "core_compatibility": "^2.0",
+    "dependencies": [],
+    "provider": "Plugins\\Modules\\GatewayNagad\\Providers\\GatewayNagadServiceProvider",
+    "permissions": [
+        {
+            "slug": "payments.nagad.manage",
+            "name": "Manage Nagad Merchant Gateway"
+        }
+    ],
+    "settings_schema": [
+        {
+            "key": "enabled",
+            "label": "Enable Nagad Checkout",
+            "type": "select",
+            "secret": false,
+            "default": "0",
+            "options": {
+                "0": "Disabled",
+                "1": "Enabled"
+            }
+        },
+        {
+            "key": "sandbox_mode",
+            "label": "Nagad Environment",
+            "type": "select",
+            "secret": false,
+            "default": "1",
+            "options": {
+                "0": "Live",
+                "1": "Sandbox"
+            }
+        },
+        {
+            "key": "merchant_id",
+            "label": "Merchant ID",
+            "type": "text",
+            "secret": false
+        },
+        {
+            "key": "api_base_url",
+            "label": "Provider API Base URL (from official merchant documentation)",
+            "type": "text",
+            "secret": false
+        },
+        {
+            "key": "api_key",
+            "label": "API Key / Client ID (if issued)",
+            "type": "password",
+            "secret": true
+        },
+        {
+            "key": "api_secret",
+            "label": "API Secret (if issued)",
+            "type": "password",
+            "secret": true
+        },
+        {
+            "key": "username",
+            "label": "API Username (if issued)",
+            "type": "password",
+            "secret": true
+        },
+        {
+            "key": "password",
+            "label": "API Password (if issued)",
+            "type": "password",
+            "secret": true
+        },
+        {
+            "key": "signing_private_key",
+            "label": "Signing Private Key (if required by provider)",
+            "type": "password",
+            "secret": true
+        },
+        {
+            "key": "provider_public_key",
+            "label": "Provider Public Key / Certificate (if required)",
+            "type": "password",
+            "secret": true
+        }
+    ],
+    "admin_menu": [
+        {
+            "group": "Finance & Gateways",
+            "label": "Nagad Gateway",
+            "route": "plugins.nagad_gateway.index",
+            "order": 111,
+            "permission": "payments.nagad.manage"
+        }
+    ],
+    "optional_dependencies": [
+        "fees-management",
+        "payment-management"
+    ]
+}
