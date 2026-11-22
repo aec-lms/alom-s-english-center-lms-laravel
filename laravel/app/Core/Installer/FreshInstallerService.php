@@ -572,7 +572,6 @@ class FreshInstallerService
         // marker only after the final marker is atomically in place.
         @unlink($lockPath . '.in-progress');
 
-        $this->audit->log('core.installed', 'system', 'fresh_install', ['legacy_records_imported' => false], $admin->id);
 
         // Never return generated encryption/signing secrets to the installer UI.
         return ['admin_id' => $admin->id, 'lock_path' => $lockPath];
