@@ -281,7 +281,12 @@ class BackupAndUpdateTest extends TestCase
             $this->assertSame('blocking-live-file', file_get_contents($blockedDirectory));
         } finally {
             @unlink($firstFile);
-            @unlink($blockedDirectory);
+            if (is_dir($blockedDirectory) && !is_link($blockedDirectory)) {
+                @unlink($blockedChild);
+                @rmdir($blockedDirectory);
+            } else {
+                @unlink($blockedDirectory);
+            }
             @unlink($record->storage_path);
             $record->delete();
         }
