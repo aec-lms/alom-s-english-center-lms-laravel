@@ -125,6 +125,12 @@
                 @endforelse
             </section>
         @elseif ($role === 'guardian')
+            @if (Route::has('plugins.guardian-portal.dashboard'))
+                <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-fuchsia-200 bg-fuchsia-50 p-4">
+                    <div><h2 class="font-bold text-fuchsia-950">Full Guardian Portal</h2><p class="text-sm text-fuchsia-800">View each linked child’s courses, learning activity, attendance, exam results, invoices and notices.</p></div>
+                    <a href="{{ route('plugins.guardian-portal.dashboard') }}" class="rounded-xl bg-fuchsia-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-fuchsia-800">Open Guardian Portal</a>
+                </div>
+            @endif
             <section class="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6 space-y-4">
                 <h2 class="text-lg font-black tracking-tight text-slate-900">Linked Students</h2>
                 @forelse ($children as $child)
