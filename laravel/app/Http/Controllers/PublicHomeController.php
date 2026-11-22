@@ -531,7 +531,7 @@ class PublicHomeController extends Controller
         return view('public.exams', compact('exams', 'categories', 'searchTerm', 'activeCategory'));
     }
 
-        public function products(Request $request): View
+    public function products(Request $request): View
     {
         $searchTerm = mb_substr(trim((string) $request->query('q', '')), 0, 100);
         $products = collect($this->catalogProducts());
