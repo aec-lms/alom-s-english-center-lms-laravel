@@ -212,6 +212,7 @@
 </template>
 <script>
 (function () {
+    const reusableLibrary = @json(($reusableBlocks ?? []), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT);
     const template = document.getElementById('page-block-template');
     document.querySelectorAll('[data-block-list]').forEach((list) => {
         const form = list.closest('form');
