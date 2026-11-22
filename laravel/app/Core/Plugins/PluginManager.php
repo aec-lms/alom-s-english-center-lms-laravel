@@ -644,6 +644,7 @@ class PluginManager
             'deleted_at' => now()->toIso8601String(),
             'files_sha256' => $packageChecksums,
         ];
+        $metadataPath = $trashRoot . DIRECTORY_SEPARATOR . $archiveName . '.json';
         $metadataWritten = false;
         try {
             $this->writeVerifiedPrivateJson($trashRoot, $archiveName . '.json', $metadata);
