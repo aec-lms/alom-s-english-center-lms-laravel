@@ -127,6 +127,70 @@ class RoleDashboardLiveMetricsTest extends TestCase
         $this->assertSame(500.0, $metrics['collected_revenue'], 'Branch managers must not see revenue from other branches.');
     }
 
+    public function test_teacher_dashboard_surfaces_only_the_teachers_assignment_workload(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['assignment-management', 'course-management']);
+
+        $teacher = $this->createUserWithRole('teacher', null, 'assignment-teacher-' . bin2hex(random_bytes(3)) . '@aec.test');
+        $otherTeacher = $this->createUserWithRole('teacher', null, 'assignment-other-' . bin2hex(random_bytes(3)) . '@aec.test');
+        $assignment = DB::table('assignment_tasks')->insertGetId([
+            'branch_id' => null,
+            'course_id' => null,
+            'created_by' => $teacher->id,
+            'title' => 'Teacher-owned assignment',
+            'instructions' => 'Complete the practice task.',
+            'due_at' => now()->addDays(2),
+            'max_score' => 100,
+            'allow_late' => false,
+            'status' => 'published',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('assignment_tasks')->insert([
+            'branch_id' => null,
+            'course_id' => null,
+            'created_by' => $otherTeacher->id,
+            'title' => 'Other teacher assignment',
+            'instructions' => 'Private to another teacher.',
+            'due_at' => now()->addDays(2),
+            'max_score' => 100,
+            'allow_late' => false,
+            'status' => 'published',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('assignment_submissions')->insert([
+            [
+                'assignment_id' => $assignment,
+                'student_id' => $this->createUserWithRole('student')->id,
+                'answer_text' => 'Submitted work',
+                'submitted_at' => now(),
+                'status' => 'submitted',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'assignment_id' => $assignment,
+                'student_id' => $this->createUserWithRole('student')->id,
+                'answer_text' => 'Already graded',
+                'submitted_at' => now(),
+                'status' => 'graded',
+                'score' => 80,
+                'graded_by' => $teacher->id,
+                'graded_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        $response = $this->actingAs($teacher)->get('/dashboard')->assertOk();
+        $this->assertSame(1, $response->viewData('metrics')['created_assignments']);
+        $this->assertSame(1, $response->viewData('metrics')['pending_submissions']);
+        $response->assertSee('Assignment Inbox')
+            ->assertSee(route('plugins.assignments.index'));
+    }
+
     private function createCourse(string $code, string $title, ?string $instructorName = null): int
     {
         $attributes = [
