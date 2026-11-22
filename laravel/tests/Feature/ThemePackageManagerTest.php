@@ -143,12 +143,12 @@ class ThemePackageManagerTest extends TestCase
         try {
             $this->actingAs($admin)->post(route('admin.appearance.themes.upload'),['theme_zip'=>$first])->assertRedirect()->assertSessionHas('status');
             $this->actingAs($admin)->post(route('admin.appearance.themes.upload'),['theme_zip'=>$second])->assertRedirect()->assertSessionHas('status');
-            $this->assertSame('1.1.0',app(\\App\\Core\\Appearance\\ThemePackageManager::class)->manifest('versioned-ocean')['version']);
-            $this->assertTrue(app(\\App\\Core\\Appearance\\ThemePackageManager::class)->hasRollback('versioned-ocean'));
+            $this->assertSame('1.1.0',app(\App\Core\Appearance\ThemePackageManager::class)->manifest('versioned-ocean')['version']);
+            $this->assertTrue(app(\App\Core\Appearance\ThemePackageManager::class)->hasRollback('versioned-ocean'));
 
             $this->actingAs($admin)->post(route('admin.appearance.themes.rollback','versioned-ocean'))
                 ->assertRedirect()->assertSessionHas('status');
-            $this->assertSame('1.0.0',app(\\App\\Core\\Appearance\\ThemePackageManager::class)->manifest('versioned-ocean')['version']);
+            $this->assertSame('1.0.0',app(\App\Core\Appearance\ThemePackageManager::class)->manifest('versioned-ocean')['version']);
             $this->assertDatabaseHas('system_settings',['key'=>'appearance.themes.installed']);
         } finally {
             @unlink($first->getRealPath());
