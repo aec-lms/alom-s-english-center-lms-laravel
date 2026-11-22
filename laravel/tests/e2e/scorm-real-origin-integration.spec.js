@@ -17,7 +17,8 @@ test('real Laravel SCORM launch isolates an imported SCO and persists a legitima
   await page.goto('/my-learning/scorm');
   const activityLink = page.locator('a.open').first();
   await expect(activityLink).toBeVisible();
-  const launchPath = await activityLink.getAttribute('href');
+  const launchUrl = new URL(await activityLink.getAttribute('href'), appOrigin);
+  const launchPath = launchUrl.pathname;
   expect(launchPath).toMatch(/^\/my-learning\/scorm\/\d+$/);
 
   const playerResponsePromise = page.waitForResponse(response =>
@@ -67,7 +68,7 @@ test('real Laravel SCORM launch isolates an imported SCO and persists a legitima
 
   const playerFrame = page.frameLocator('iframe.player');
   await expect(playerFrame.locator('#scorm-sco')).toHaveAttribute('sandbox', 'allow-scripts');
-  await expect(playerFrame.locator('#runtime-status')).not.toHaveText('');
+  await expect(playerFrame.locator('#runtime-status')).toContainText('Progress saved');
 
   const scoFrame = page.frames().find(frame => frame.url().startsWith(contentOrigin + '/scorm-content/'));
   expect(scoFrame).toBeTruthy();
