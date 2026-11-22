@@ -649,7 +649,7 @@ class PluginManager
             $this->writeVerifiedPrivateJson($trashRoot, $archiveName . '.json', $metadata);
             $metadataWritten = true;
             // Recycle-bin deletion is destructive and must have durable audit evidence.
-            $this->audit->logRequired('plugin.deleted_to_recycle_bin', 'plugin', $slug, [
+            $this->logRequiredAudit('plugin.deleted_to_recycle_bin', 'plugin', $slug, [
                 'archive' => $archiveName,
                 'business_data_preserved' => true,
             ], $actorId);
@@ -796,7 +796,7 @@ class PluginManager
             // Keep the archive index until the required audit row is durable.
             // If audit persistence fails, the catch below restores the package to
             // the recycle bin while the original metadata remains discoverable.
-            $this->audit->logRequired('plugin.restored_from_recycle_bin', 'plugin', $slug, [
+            $this->logRequiredAudit('plugin.restored_from_recycle_bin', 'plugin', $slug, [
                 'archive' => $archiveName,
                 'business_data_preserved' => true,
             ], $actorId);
@@ -874,7 +874,7 @@ class PluginManager
 
         // Persist the destructive-operation intent before removing the only
         // indexed archive copy. The verified private snapshot is the recovery source.
-        $this->audit->logRequired('plugin.permanent_delete_started', 'plugin', $slug, [
+        $this->logRequiredAudit('plugin.permanent_delete_started', 'plugin', $slug, [
             'archive' => $archiveName,
             'private_backup_id' => $archiveName,
             'package_sha256' => hash('sha256', json_encode($sourceChecksums, JSON_THROW_ON_ERROR)),
@@ -896,6 +896,27 @@ class PluginManager
             'private_backup_id' => $archiveName,
             'database_records_preserved' => true,
         ], $actorId);
+    }
+
+    /**
+     * Require durable audit storage for destructive plugin lifecycle transitions.
+     * This compatibility shim preserves the fail-closed contract while PR #370's
+     * shared AuditLogger::logRequired API is integrated into the mainline.
+     */
+    private function logRequiredAudit(
+        string $action,
+        string $entityType,
+        string $entityId,
+        array $metadata,
+        ?int $actorId,
+    ): void {
+        if (!Schema::hasTable('audit_logs')) {
+            throw new RuntimeException('Required audit log storage is unavailable; the operation cannot be completed safely.');
+        }
+
+        // AuditLogger::log propagates insert failures. The explicit table check
+        // prevents its legacy bootstrap no-op from silently accepting this event.
+        $this->audit->log($action, $entityType, $entityId, $metadata, $actorId);
     }
 
     /** @return array<string, string> */
