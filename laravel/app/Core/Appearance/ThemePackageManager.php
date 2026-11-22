@@ -130,7 +130,7 @@ final class ThemePackageManager
         try {
             $manifest=$this->validateManifest(json_decode((string) File::get($path),true));
             return $manifest['slug']===$slug;
-        } catch (\\Throwable) {
+        } catch (\Throwable) {
             return false;
         }
     }
