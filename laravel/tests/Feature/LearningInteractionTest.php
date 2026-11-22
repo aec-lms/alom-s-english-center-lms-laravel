@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
+use Plugins\Modules\TeacherManagement\Models\Teacher;
 use Tests\TestCase;
 
 class LearningInteractionTest extends TestCase
@@ -76,7 +77,22 @@ class LearningInteractionTest extends TestCase
     public function test_assigned_instructor_can_answer_without_consuming_a_student_seat(): void
     {
         [$student, $courseId] = $this->createCourseLesson('active');
+        $this->activatePlugins(['course-management', 'teacher-management']);
         $teacher = $this->createUserWithRole('teacher');
+        Teacher::query()->create([
+            'user_id' => $teacher->id,
+            'branch_id' => $teacher->branch_id,
+            'employee_code' => 'LIVE-' . $teacher->id . '-' . bin2hex(random_bytes(3)),
+            'specialization' => 'English',
+            'is_active' => true,
+        ]);
+        DB::table('course_teacher_assignments')->insert([
+            'course_id' => $courseId,
+            'teacher_user_id' => $teacher->id,
+            'assigned_by' => $teacher->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
         $liveClassId = $this->createLiveClass($courseId, $teacher->name);
 
         $this->actingAs($student)->postJson(route('plugins.learning-interactions.live.questions.store', $liveClassId), ['body' => 'What is the correct form?'])
@@ -111,6 +127,82 @@ class LearningInteractionTest extends TestCase
             'parent_id' => $questionId,
             'user_id' => $teacher->id,
             'body' => 'Use the present perfect here.',
+        ]);
+    }
+
+    public function test_existing_assignment_does_not_authorize_inactive_or_role_revoked_teacher(): void
+    {
+        [$student, $courseId] = $this->createCourseLesson('active');
+        $this->activatePlugins(['course-management', 'teacher-management']);
+        $teacher = $this->createUserWithRole('teacher');
+        Teacher::query()->create([
+            'user_id' => $teacher->id,
+            'branch_id' => $teacher->branch_id,
+            'employee_code' => 'LIFECYCLE-' . $teacher->id . '-' . bin2hex(random_bytes(3)),
+            'specialization' => 'English',
+            'is_active' => true,
+        ]);
+        DB::table('course_teacher_assignments')->insert([
+            'course_id' => $courseId,
+            'teacher_user_id' => $teacher->id,
+            'assigned_by' => $teacher->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $liveClassId = $this->createLiveClass($courseId, $teacher->name);
+        DB::table('live_class_participants')->insert([
+            'live_class_id' => $liveClassId,
+            'user_id' => $student->id,
+            'joined_at' => now(),
+            'last_seen_at' => now(),
+            'left_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $questionId = $this->actingAs($student)
+            ->postJson(route('plugins.learning-interactions.live.questions.store', $liveClassId), [
+                'body' => 'Please explain this grammar point.',
+            ])->assertCreated()->json('question.id');
+
+        $this->actingAs($teacher)
+            ->getJson(route('plugins.learning-interactions.live.questions.index', $liveClassId))
+            ->assertOk()
+            ->assertJsonPath('can_answer', true);
+
+        // An existing assignment must not preserve teaching access after deactivation.
+        $teacher->forceFill(['is_active' => false])->save();
+        $this->actingAs($teacher)
+            ->getJson(route('plugins.learning-interactions.live.questions.index', $liveClassId))
+            ->assertForbidden();
+        $this->actingAs($teacher)
+            ->postJson(route('plugins.learning-interactions.live.questions.answer', [$liveClassId, $questionId]), [
+                'body' => 'This answer must be rejected.',
+            ])->assertForbidden();
+
+        // Reactivation alone is insufficient after the current teacher role is revoked.
+        $teacher->forceFill(['is_active' => true])->save();
+        $teacher->roles()->detach();
+        $this->actingAs($teacher)
+            ->getJson(route('plugins.learning-interactions.live.questions.index', $liveClassId))
+            ->assertForbidden();
+        $this->actingAs($teacher)
+            ->postJson(route('plugins.learning-interactions.live.questions.answer', [$liveClassId, $questionId]), [
+                'body' => 'This answer must also be rejected.',
+            ])->assertForbidden();
+
+        $this->assertDatabaseHas('course_teacher_assignments', [
+            'course_id' => $courseId,
+            'teacher_user_id' => $teacher->id,
+        ]);
+        $this->assertDatabaseMissing('live_class_discussions', [
+            'live_class_id' => $liveClassId,
+            'parent_id' => $questionId,
+            'body' => 'This answer must be rejected.',
+        ]);
+        $this->assertDatabaseMissing('live_class_discussions', [
+            'live_class_id' => $liveClassId,
+            'parent_id' => $questionId,
+            'body' => 'This answer must also be rejected.',
         ]);
     }
 
