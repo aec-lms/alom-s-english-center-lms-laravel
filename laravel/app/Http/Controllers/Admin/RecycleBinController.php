@@ -140,17 +140,49 @@ class RecycleBinController extends Controller
             404
         );
 
-        DB::transaction(function () use ($studentId, $request): void {
-            // Shared lifecycle lock order: linked account -> student profile.
-            // Read the immutable link first, then lock both rows in that order.
-            $snapshot = Student::withTrashed()->findOrFail($studentId);
-            $user = $snapshot->user_id
-                ? User::query()->whereKey($snapshot->user_id)->lockForUpdate()->first()
-                : null;
-            abort_unless($snapshot->user_id === null || $user, 409, 'The linked student account is unavailable.');
+        $actorId = (int) $request->user()->getKey();
 
+        DB::transaction(function () use ($studentId, $actorId): void {
+            // Lock actor and linked account rows in numeric order, then the
+            // admin role pivots, and finally the student profile. This keeps
+            // restore authorization stable and avoids account/profile inversion.
+            $snapshot = Student::withTrashed()->findOrFail($studentId);
+            $linkedUserId = $snapshot->user_id !== null ? (int) $snapshot->user_id : null;
+            $userIds = array_values(array_unique(array_filter([$actorId, $linkedUserId])));
+            sort($userIds, SORT_NUMERIC);
+
+            $lockedUsers = [];
+            foreach ($userIds as $userId) {
+                $lockedUsers[$userId] = User::query()->whereKey($userId)->lockForUpdate()->first();
+                abort_unless(
+                    $lockedUsers[$userId],
+                    $userId === $linkedUserId ? 409 : 404,
+                    $userId === $linkedUserId
+                        ? 'The linked student account is unavailable.'
+                        : 'The acting account is unavailable.'
+                );
+            }
+
+            $actor = $lockedUsers[$actorId];
+            abort_unless($actor->is_active, 403, 'Inactive accounts cannot restore student records.');
+
+            $actorRolePivots = DB::table('role_user')
+                ->where('user_id', $actorId)
+                ->orderBy('role_id')
+                ->lockForUpdate()
+                ->get(['role_id']);
+            $adminRoleId = DB::table('roles')->where('slug', 'admin')->value('id');
+            abort_unless(
+                $adminRoleId !== null && $actorRolePivots->contains(
+                    fn ($pivot): bool => (int) $pivot->role_id === (int) $adminRoleId
+                ),
+                403,
+                'Only an active administrator may restore student records.'
+            );
+
+            $user = $linkedUserId !== null ? $lockedUsers[$linkedUserId] : null;
             $student = Student::withTrashed()->whereKey($studentId)->lockForUpdate()->firstOrFail();
-            abort_unless((int) $student->user_id === (int) $snapshot->user_id, 409, 'The linked student account changed during restore.');
+            abort_unless((int) $student->user_id === (int) $linkedUserId, 409, 'The linked student account changed during restore.');
             abort_unless($student->trashed(), 409, 'This student is not in the Recycle Bin.');
 
             $student->restore();
@@ -163,7 +195,7 @@ class RecycleBinController extends Controller
             $this->audit->logRequired('recycle_bin.student_restored', 'student', (string) $student->id, [
                 'student_code' => $student->student_code,
                 'account_reactivated' => false,
-            ], $request->user()->id);
+            ], $actorId);
         });
 
         return redirect()->route('admin.recycle-bin.index')->with('status', 'Student profile restored. Account access remains disabled; an administrator must explicitly reactivate it after a fresh security check.');
