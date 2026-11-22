@@ -644,7 +644,7 @@ class BackupService
 
         Schema::disableForeignKeyConstraints();
         try {
-            DB::transaction(function () use ($stream, $tables): void {
+            DB::transaction(function () use ($stream, $tables, $preservedHistoryTables): void {
                 foreach ($tables as $table) {
                     if (!in_array($table, $preservedHistoryTables, true)) {
                         DB::table($table)->delete();
@@ -688,7 +688,7 @@ class BackupService
     {
         Schema::disableForeignKeyConstraints();
         try {
-            DB::transaction(function () use ($dbSnapshot): void {
+            DB::transaction(function () use ($dbSnapshot, $preserveAuditHistory): void {
                 foreach ((array) ($dbSnapshot['tables'] ?? []) as $table => $rows) {
                     if (!is_string($table) || !Schema::hasTable($table) || in_array($table, ['migrations', 'backups'], true)) continue;
                     if ($preserveAuditHistory && in_array($table, ['update_logs', 'audit_logs'], true)) continue;
