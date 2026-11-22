@@ -73,6 +73,30 @@ class RecycleBinTest extends TestCase
     }
 
 
+    public function test_inactive_administrator_cannot_restore_student_record(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['student-management']);
+        $admin = $this->createUserWithRole('admin');
+        $learner = $this->createUserWithRole('student');
+        $student = Student::query()->create([
+            'user_id' => $learner->id,
+            'student_code' => 'RECYCLE-INACTIVE-ADMIN-001',
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($admin)->delete('/admin/students/' . $student->id)->assertRedirect();
+        $admin->forceFill(['is_active' => false])->save();
+
+        $this->actingAs($admin)
+            ->post('/admin/recycle-bin/students/' . $student->id . '/restore')
+            ->assertForbidden();
+
+        $this->assertSoftDeleted('students', ['id' => $student->id]);
+        $this->assertDatabaseHas('users', ['id' => $learner->id, 'is_active' => false]);
+    }
+
     public function test_student_restore_rolls_back_when_required_audit_storage_is_unavailable(): void
     {
         $this->markSystemInstalled();
