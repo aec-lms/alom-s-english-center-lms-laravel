@@ -296,7 +296,7 @@ class CourseAssessmentsPluginTest extends TestCase
             'student_id' => $student->id,
             'status' => 'in_progress',
             'submitted_at' => null,
-            'auto_score' => null,
+            'auto_score' => 0,
         ]);
         $this->assertDatabaseHas('course_assessment_attempt_questions', [
             'attempt_id' => $attemptId,
