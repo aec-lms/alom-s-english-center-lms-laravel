@@ -19,8 +19,6 @@ use Illuminate\View\View;
 
 class DashboardController extends Controller
 {
-    private const WIDGETS = ['users', 'plugins', 'backups', 'audit_trail', 'system_info'];
-
     private const MOTION_DEFAULTS = [
         'enabled' => true,
         'preset' => 'premium',
@@ -50,14 +48,12 @@ class DashboardController extends Controller
             'php_version' => PHP_VERSION,
         ];
         $recentAudits = $isBranchManager ? collect() : AuditLog::query()->with('user')->latest()->limit(10)->get();
-        $widgets = $this->widgetsFor($actor?->id);
-        if ($isBranchManager) {
-            $widgets = array_values(array_intersect($widgets, ['users']));
-        }
+        $widgetDefinitions = $this->widgetDefinitions($actor);
+        $widgets = $this->widgetsFor($actor?->id, $widgetDefinitions);
         $setupIncomplete = !$isBranchManager && SystemSetting::query()->where('key', 'setup.wizard.completed')->value('value') !== '1';
         $motionSettings = $this->motionSettings();
 
-        return view('admin.dashboard', compact('metrics', 'recentAudits', 'widgets', 'setupIncomplete', 'isBranchManager', 'motionSettings'));
+        return view('admin.dashboard', compact('metrics', 'recentAudits', 'widgets', 'widgetDefinitions', 'setupIncomplete', 'isBranchManager', 'motionSettings'));
     }
 
     public function saveWidgets(Request $request): RedirectResponse
@@ -67,13 +63,17 @@ class DashboardController extends Controller
         if ($isBranchManager) {
             $this->ensureAssignedBranch($actor);
         }
-        $allowedWidgets = $isBranchManager ? ['users'] : self::WIDGETS;
+        $widgetDefinitions = $this->widgetDefinitions($actor);
+        $allowedWidgets = array_keys($widgetDefinitions);
         $validated = $request->validate([
-            'widgets' => ['present', 'array', 'max:5'],
+            'widgets' => ['present', 'array', 'max:20'],
             'widgets.*' => ['required', 'string', 'distinct', 'in:' . implode(',', $allowedWidgets)],
         ]);
 
-        $widgets = array_values(array_unique(array_filter($validated['widgets'], fn ($widget) => in_array($widget, self::WIDGETS, true))));
+        $widgets = array_values(array_unique(array_filter(
+            $validated['widgets'],
+            fn ($widget) => in_array($widget, $allowedWidgets, true)
+        )));
         SystemSetting::query()->updateOrCreate(
             ['key' => $this->preferenceKey(auth()->id())],
             ['value' => json_encode($widgets, JSON_THROW_ON_ERROR), 'updated_by' => auth()->id(), 'is_encrypted' => false],
@@ -183,9 +183,55 @@ class DashboardController extends Controller
         );
     }
 
-    private function widgetsFor(int|string|null $userId): array
+    /**
+     * @return array<string, array{label:string,view:?string,default:bool}>
+     */
+    private function widgetDefinitions($actor): array
     {
-        $defaults = self::WIDGETS;
+        $definitions = [
+            'users' => ['label' => 'Registered Accounts', 'view' => null, 'default' => true],
+            'plugins' => ['label' => 'Plugin Overview', 'view' => null, 'default' => true],
+            'backups' => ['label' => 'Encrypted Backups', 'view' => null, 'default' => true],
+            'audit_trail' => ['label' => 'Security Audit Trail', 'view' => null, 'default' => true],
+            'system_info' => ['label' => 'System Information', 'view' => null, 'default' => true],
+        ];
+
+        if ($actor && $actor->hasRole('branch_manager')) {
+            return ['users' => $definitions['users']];
+        }
+
+        $manager = app(PluginManager::class);
+        $enabledSlugs = PluginRecord::query()
+            ->where('is_installed', true)
+            ->where('is_enabled', true)
+            ->pluck('slug')
+            ->flip();
+
+        foreach ($manager->discoverManifests() as $manifest) {
+            if (!$enabledSlugs->has($manifest->slug)) {
+                continue;
+            }
+
+            foreach ($manifest->dashboardWidgets as $widget) {
+                $permission = $widget['permission'];
+                if ($permission !== null && (!$actor || !$actor->hasPermission($permission))) {
+                    continue;
+                }
+
+                $definitions[$widget['key']] = [
+                    'label' => $widget['label'],
+                    'view' => $manifest->slug . '::' . $widget['view'],
+                    'default' => $widget['default'],
+                ];
+            }
+        }
+
+        return $definitions;
+    }
+
+    private function widgetsFor(int|string|null $userId, array $definitions): array
+    {
+        $defaults = array_keys(array_filter($definitions, fn (array $definition): bool => $definition['default']));
         if (!$userId) {
             return $defaults;
         }
@@ -205,7 +251,8 @@ class DashboardController extends Controller
             return $defaults;
         }
 
-        return array_values(array_unique(array_filter($stored, fn ($widget) => is_string($widget) && in_array($widget, self::WIDGETS, true))));
+        $allowedWidgets = array_keys($definitions);
+        return array_values(array_unique(array_filter($stored, fn ($widget) => is_string($widget) && in_array($widget, $allowedWidgets, true))));
     }
 
     private function preferenceKey(int|string $userId): string
