@@ -238,6 +238,55 @@ class BackupAndUpdateTest extends TestCase
         }
     }
 
+    public function test_private_file_restore_rolls_back_earlier_replacements_when_a_later_path_conflicts(): void
+    {
+        $this->markSystemInstalled();
+
+        $privateDirectory = rtrim((string) config('lms.private_storage_path'), DIRECTORY_SEPARATOR);
+        if (!is_dir($privateDirectory) && !mkdir($privateDirectory, 0700, true) && !is_dir($privateDirectory)) {
+            $this->fail('Unable to prepare private storage fixture.');
+        }
+
+        $suffix = bin2hex(random_bytes(6));
+        $firstRelative = 'a-restore-rollback-' . $suffix . '.txt';
+        $blockedDirectoryRelative = 'z-restore-rollback-' . $suffix;
+        $firstFile = $privateDirectory . DIRECTORY_SEPARATOR . $firstRelative;
+        $blockedDirectory = $privateDirectory . DIRECTORY_SEPARATOR . $blockedDirectoryRelative;
+        $blockedChild = $blockedDirectory . DIRECTORY_SEPARATOR . 'child.txt';
+
+        file_put_contents($firstFile, 'backup-first-file');
+        mkdir($blockedDirectory, 0700, true);
+        file_put_contents($blockedChild, 'backup-child-file');
+
+        $record = app(BackupService::class)->createEncryptedBackup(null, true);
+
+        try {
+            file_put_contents($firstFile, 'current-live-first-file');
+            unlink($blockedChild);
+            rmdir($blockedDirectory);
+            file_put_contents($blockedDirectory, 'blocking-live-file');
+
+            try {
+                app(BackupService::class)->restoreEncryptedBackup($record);
+                $this->fail('Restore must fail when a later private path conflicts with an existing file.');
+            } catch (RuntimeException $exception) {
+                $this->assertStringContainsString('Private restore', $exception->getMessage());
+            }
+
+            $this->assertSame(
+                'current-live-first-file',
+                file_get_contents($firstFile),
+                'Earlier private file replacements must be rolled back when a later restore path fails.'
+            );
+            $this->assertSame('blocking-live-file', file_get_contents($blockedDirectory));
+        } finally {
+            @unlink($firstFile);
+            @unlink($blockedDirectory);
+            @unlink($record->storage_path);
+            $record->delete();
+        }
+    }
+
     public function test_legacy_aes_encrypted_backup_restores_using_streamed_decryption(): void
     {
         $this->markSystemInstalled();
