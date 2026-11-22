@@ -29,3 +29,7 @@ The enabled setting is intentionally 0 for all gateways until these gates are co
 ## Public Rocket merchant-flow clarification
 
 DBBL's public Rocket merchant-payment page describes an in-person flow in which the merchant initiates the payment from the merchant's mobile, issues a receipt, and the customer receives an SMS/IVR confirmation. It does not publish a web checkout API contract, API endpoints, authentication scheme or callback specification. Therefore this public flow must not be represented as an online LMS API integration. Obtain DBBL's separate corporate/e-commerce merchant API specification and sandbox access before implementing an automated Rocket checkout adapter. Reference: https://www.dutchbanglabank.com/rocket/merchant-payment.html.
+
+## Separate manual payment methods
+
+Cash Desk and Bank Transfer are independent installable packages (`gateway-cash` and `gateway-bank-transfer`). Each method has its own Admin enable switch and instructions. These are manual receipt workflows: new submissions remain pending until an authorized reviewer verifies the evidence. The legacy `bank_cash` and `offline` transaction identifiers remain accepted for existing records and compatible workflows.
