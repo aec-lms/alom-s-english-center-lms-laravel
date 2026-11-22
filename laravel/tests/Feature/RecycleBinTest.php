@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Plugins\Modules\StudentManagement\Models\Student;
 use Plugins\Modules\TeacherManagement\Models\Teacher;
 use Plugins\Modules\CourseManagement\Models\Course;
@@ -104,6 +105,36 @@ class RecycleBinTest extends TestCase
             'action' => 'recycle_bin.teacher_restored',
             'entity_type' => 'teacher',
             'entity_id' => (string) $teacher->id,
+        ]);
+    }
+
+    public function test_teacher_restore_rolls_back_when_required_audit_storage_is_unavailable(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['teacher-management']);
+        $admin = $this->createUserWithRole('admin');
+        $instructor = $this->createUserWithRole('teacher');
+
+        $teacher = Teacher::query()->create([
+            'user_id' => $instructor->id,
+            'employee_code' => 'RECYCLE-AUDIT-FAIL-001',
+            'specialization' => 'English',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($admin)->delete('/admin/teachers/' . $teacher->id)->assertRedirect();
+        $this->assertSoftDeleted('teachers', ['id' => $teacher->id]);
+
+        Schema::drop('audit_logs');
+
+        $this->actingAs($admin)
+            ->post('/admin/recycle-bin/teachers/' . $teacher->id . '/restore')
+            ->assertServerError();
+
+        $this->assertSoftDeleted('teachers', ['id' => $teacher->id]);
+        $this->assertDatabaseHas('users', [
+            'id' => $instructor->id,
+            'is_active' => false,
         ]);
     }
 
