@@ -186,7 +186,7 @@ class PublicCatalogDiscoveryTest extends TestCase
             ->assertOk()
             ->assertSee('IELTS Writing Guide')
             ->assertDontSee('Phonetics Reference Book')
-            ->assertSee('name="q"');
+            ->assertSee('name="q"', false);
     }
 
     public function test_public_learning_hub_searches_published_content_and_hides_unpublished_posts(): void
@@ -218,5 +218,4 @@ class PublicCatalogDiscoveryTest extends TestCase
             ->assertSee('IELTS Speaking Fluency Guide')
             ->assertDontSee('Private Grammar Draft');
     }
-
 }
