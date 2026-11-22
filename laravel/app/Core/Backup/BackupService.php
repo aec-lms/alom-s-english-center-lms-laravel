@@ -202,14 +202,17 @@ class BackupService
                         unset($dbRaw, $dbSnapshot);
                     }
 
-                    if ($stagedPrivateFiles !== null) {
-                        $this->restoreStagedPrivateFiles($stagedPrivateFiles);
-                    }
-
+                    // Persist the required audit row before touching live private files.
+                    // If audit storage is unavailable, the database restore rolls back
+                    // without partially overwriting the filesystem.
                     $this->audit->logRequired('backup.restored', 'backup', (string) $backup->id, [
                         'filename' => $backup->filename,
                         'backup_format' => $magic === "AECBK02\n" ? 2 : 1,
                     ], $actorId);
+
+                    if ($stagedPrivateFiles !== null) {
+                        $this->restoreStagedPrivateFiles($stagedPrivateFiles);
+                    }
                     });
                 } finally {
                     Schema::enableForeignKeyConstraints();
