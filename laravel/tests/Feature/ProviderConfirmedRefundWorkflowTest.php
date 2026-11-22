@@ -1233,7 +1233,7 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
             ], 200),
         ]);
 
-        $result = app(\\Plugins\\Modules\\GatewayStripe\\Services\\StripeRefundAdapter::class)
+        $result = app(\Plugins\\Modules\\GatewayStripe\\Services\\StripeRefundAdapter::class)
             ->reconcile($transaction, $refund);
 
         $this->assertSame('requires_review', $result->status);
@@ -1265,7 +1265,7 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
             'provider_refund_reference' => 'EXPECTED-PAYPAL-REFUND-001',
         ]);
 
-        Http::fake(function (ClientRequest $request) use ($transaction): \\Illuminate\\Http\\Client\\Response {
+        Http::fake(function (ClientRequest $request) use ($transaction): \Illuminate\\Http\\Client\\Response {
             if (str_ends_with((string) parse_url($request->url(), PHP_URL_PATH), '/v1/oauth2/token')) {
                 return Http::response(['access_token' => 'paypal-reconcile-identity-token'], 200);
             }
@@ -1283,7 +1283,7 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
             ], 200);
         });
 
-        $result = app(\\Plugins\\Modules\\GatewayPaypal\\Services\\PaypalRefundAdapter::class)
+        $result = app(\Plugins\\Modules\\GatewayPaypal\\Services\\PaypalRefundAdapter::class)
             ->reconcile($transaction, $refund);
 
         $this->assertSame('requires_review', $result->status);
