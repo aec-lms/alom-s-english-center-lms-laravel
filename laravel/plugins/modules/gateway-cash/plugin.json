@@ -1,0 +1,48 @@
+{
+    "slug": "gateway-cash",
+    "name": "Cash Desk Payment Method",
+    "version": "1.0.0",
+    "author": "Alom's English Center",
+    "category": "payment-gateway",
+    "description": "Installable manual cash-desk payment method. Admin controls activation and receipt/voucher instructions; all submissions remain pending until an authorized reviewer verifies them.",
+    "core_compatibility": "^2.0",
+    "dependencies": [],
+    "provider": "Plugins\\Modules\\GatewayCash\\Providers\\GatewayCashServiceProvider",
+    "permissions": [
+        {
+            "slug": "payments.cash.manage",
+            "name": "Manage Cash Desk Payment Method"
+        }
+    ],
+    "settings_schema": [
+        {
+            "key": "enabled",
+            "label": "Enable this payment method",
+            "type": "select",
+            "secret": false,
+            "default": "0",
+            "options": {
+                "0": "Disabled",
+                "1": "Enabled"
+            }
+        },
+        {
+            "key": "display_name",
+            "label": "Checkout display name",
+            "type": "text",
+            "secret": false,
+            "default": "Cash Desk Payment Method"
+        },
+        {
+            "key": "instructions",
+            "label": "Cash desk instructions / voucher policy",
+            "type": "text",
+            "secret": false
+        }
+    ],
+    "optional_dependencies": [
+        "universal-payment",
+        "payment-management",
+        "fees-management"
+    ]
+}
