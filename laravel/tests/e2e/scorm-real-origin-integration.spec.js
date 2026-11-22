@@ -9,10 +9,12 @@ test('real Laravel SCORM launch isolates an imported SCO and persists a legitima
   await page.goto('/login');
   await page.locator('input[name="email"]').fill('scorm-e2e-student@aec.test');
   await page.locator('input[name="password"]').fill(password);
-  await Promise.all([
-    page.waitForURL(url => !url.pathname.endsWith('/login')),
-    page.getByRole('button', { name: 'Sign In' }).click(),
-  ]);
+  const loginResponsePromise = page.waitForResponse(response =>
+    response.url().endsWith('/login') && response.request().method() === 'POST');
+  await page.getByRole('button', { name: 'Sign In' }).click();
+  const loginResponse = await loginResponsePromise;
+  expect(loginResponse.status()).toBe(302);
+  await page.waitForURL(url => !url.pathname.endsWith('/login'));
 
   await page.goto('/my-learning/scorm');
   const activityLink = page.locator('a.open').first();
