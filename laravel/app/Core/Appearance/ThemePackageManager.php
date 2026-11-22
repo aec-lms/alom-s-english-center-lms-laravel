@@ -70,6 +70,13 @@ final class ThemePackageManager
 
         $directory=storage_path('app/aec-themes/'.$manifest['slug']);
         File::ensureDirectoryExists($directory);
+        // Keep the last validated package version before an upgrade overwrites it.
+        if (is_array($old)) {
+            $previousPath=$directory.'/versions/previous.json';
+            File::ensureDirectoryExists(dirname($previousPath));
+            $currentPath=$directory.'/theme.json';
+            if (is_file($currentPath)) File::copy($currentPath,$previousPath);
+        }
         File::put($directory.'/theme.json',json_encode($manifest,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR));
         $registry[$manifest['slug']]=[
             'slug'=>$manifest['slug'],'name'=>$manifest['name'],'version'=>$manifest['version'],
@@ -80,6 +87,52 @@ final class ThemePackageManager
         // If an active package is upgraded in place, apply its new validated tokens immediately.
         if($this->activeSlug()===$manifest['slug']) $this->activate($manifest['slug'],$userId);
         return $registry[$manifest['slug']];
+    }
+
+    public function rollback(string $slug, ?int $userId=null): array
+    {
+        $directory=storage_path('app/aec-themes/'.$slug);
+        $currentPath=$directory.'/theme.json';
+        $previousPath=$directory.'/versions/previous.json';
+        if (!is_file($currentPath) || !is_file($previousPath)) {
+            throw new RuntimeException('No previous theme version is available for rollback.');
+        }
+
+        $previous=$this->validateManifest(json_decode((string) File::get($previousPath), true));
+        $current=$this->validateManifest(json_decode((string) File::get($currentPath), true));
+        if ($previous['slug']!==$slug || $current['slug']!==$slug
+            || version_compare($previous['version'],$current['version'],'>=')) {
+            throw new RuntimeException('Previous theme package is invalid or is not an older version.');
+        }
+
+        $temporary=$directory.'/versions/current.json';
+        File::put($temporary,json_encode($current,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR));
+        File::put($currentPath,json_encode($previous,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR));
+        File::move($temporary,$previousPath);
+
+        $registry=$this->installed();
+        $registry[$slug]=[
+            'slug'=>$slug,'name'=>$previous['name'],'version'=>$previous['version'],
+            'description'=>$previous['description'],'author'=>$previous['author'],
+            'installed_at'=>now()->toIso8601String(),
+        ];
+        $this->writeSetting(self::REGISTRY_KEY,$registry,$userId);
+        if ($this->activeSlug()===$slug) $this->activate($slug,$userId);
+
+        return $registry[$slug];
+    }
+
+    public function hasRollback(string $slug): bool
+    {
+        if (!preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/',$slug)) return false;
+        $path=storage_path('app/aec-themes/'.$slug.'/versions/previous.json');
+        if (!is_file($path)) return false;
+        try {
+            $manifest=$this->validateManifest(json_decode((string) File::get($path),true));
+            return $manifest['slug']===$slug;
+        } catch (\\Throwable) {
+            return false;
+        }
     }
 
     public function activate(string $slug, ?int $userId=null): void
