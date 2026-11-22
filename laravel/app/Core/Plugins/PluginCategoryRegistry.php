@@ -40,7 +40,7 @@ final class PluginCategoryRegistry
             'student-management', 'student-tracing', 'student-tracking', 'teacher-management',
         ],
         'payments' => [
-            'gateway-bkash', 'gateway-card', 'gateway-nagad', 'gateway-paypal',
+            'gateway-bkash', 'gateway-bank-transfer', 'gateway-cash', 'gateway-card', 'gateway-nagad', 'gateway-paypal',
             'gateway-rocket', 'gateway-sslcommerz', 'gateway-stripe',
             'payment-management', 'universal-payment',
         ],
