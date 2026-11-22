@@ -658,8 +658,7 @@ class PluginManager
             File::moveDirectory($destination, $source);
             throw new RuntimeException('Recycle-bin metadata destination already exists; the plugin package was returned.');
         }
-        $written = File::put($metadataPath, json_encode($metadata, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
-        if ($written === false) {
+        if (!$this->writeVerifiedJsonFile($metadataPath, $metadata, 0600)) {
             File::moveDirectory($destination, $source);
             if ($wasInstalled) {
                 try {
@@ -1005,12 +1004,14 @@ class PluginManager
             File::ensureDirectoryExists($backupRoot);
             @chmod($backupRoot, 0700);
             $backupPath = $backupRoot . DIRECTORY_SEPARATOR . $backupId . '.json';
-            File::put($backupPath, json_encode([
+            $backupPayload = [
                 'plugin_slug' => $slug,
                 'created_at' => now()->toIso8601String(),
                 'settings' => $backupRows,
-            ], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
-            @chmod($backupPath, 0600);
+            ];
+            if (!$this->writeVerifiedJsonFile($backupPath, $backupPayload, 0600)) {
+                throw new RuntimeException('Plugin settings recovery backup could not be written and verified; reset was aborted.');
+            }
 
             PluginSetting::query()->where('plugin_slug', $slug)->delete();
 
@@ -1409,4 +1410,46 @@ class PluginManager
 
         return $instance;
     }
+    /**
+     * Atomically write JSON recovery metadata and verify the complete bytes before use.
+     * A short write or truncated/invalid JSON must never authorize destructive work.
+     */
+    private function writeVerifiedJsonFile(string $path, array $payload, int $mode): bool
+    {
+        $json = json_encode($payload, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR);
+        $temporaryPath = $path . '.tmp-' . bin2hex(random_bytes(8));
+
+        try {
+            $written = file_put_contents($temporaryPath, $json, LOCK_EX);
+            if ($written !== strlen($json)
+                || !is_file($temporaryPath)
+                || filesize($temporaryPath) !== strlen($json)
+                || !hash_equals(hash('sha256', $json), (string) hash_file('sha256', $temporaryPath))) {
+                return false;
+            }
+
+            $decoded = json_decode((string) file_get_contents($temporaryPath), true, 512, JSON_THROW_ON_ERROR);
+            if ($decoded !== $payload) {
+                return false;
+            }
+
+            @chmod($temporaryPath, $mode);
+            if (!rename($temporaryPath, $path)) {
+                return false;
+            }
+
+            return is_file($path)
+                && filesize($path) === strlen($json)
+                && hash_equals(hash('sha256', $json), (string) hash_file('sha256', $path))
+                && json_decode((string) file_get_contents($path), true, 512, JSON_THROW_ON_ERROR) === $payload;
+        } catch (Throwable) {
+            return false;
+        } finally {
+            if (is_file($temporaryPath)) {
+                @unlink($temporaryPath);
+            }
+        }
+    }
+
+
 }
