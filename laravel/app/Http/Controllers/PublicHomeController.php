@@ -472,11 +472,25 @@ class PublicHomeController extends Controller
         return view('public.learn-show', compact('post'));
     }
 
-    public function instructors(): View
+    public function instructors(Request $request): View
     {
-        $instructors = $this->catalogInstructors();
+        $searchTerm = mb_substr(trim((string) $request->query('q', '')), 0, 100);
+        $instructors = collect($this->catalogInstructors());
 
-        return view('public.instructors', compact('instructors'));
+        if ($searchTerm !== '') {
+            $needle = mb_strtolower($searchTerm);
+            $instructors = $instructors->filter(function ($instructor) use ($needle): bool {
+                $haystack = mb_strtolower(implode(' ', [
+                    (string) ($instructor['name'] ?? ''),
+                    (string) ($instructor['subject'] ?? ''),
+                    (string) ($instructor['role'] ?? ''),
+                    (string) ($instructor['credentials'] ?? ''),
+                ]));
+                return str_contains($haystack, $needle);
+            })->values();
+        }
+
+        return view('public.instructors', compact('instructors', 'searchTerm'));
     }
 
     public function instructorShow(string $id): View
@@ -489,20 +503,52 @@ class PublicHomeController extends Controller
         return view('public.instructor-show', compact('instructor', 'courses'));
     }
 
-    public function exams(): View
+    public function exams(Request $request): View
     {
+        $searchTerm = mb_substr(trim((string) $request->query('q', '')), 0, 100);
+        $activeCategory = mb_substr(trim((string) $request->query('category', 'all')), 0, 80);
+
         $exams = Schema::hasTable('exams')
             ? DB::table('exams')->where('is_published', true)->orderByDesc('id')->get()
             : collect();
 
-        return view('public.exams', compact('exams'));
+        $categories = $exams->pluck('category')->filter()->unique()->sort()->values();
+        if ($activeCategory !== '' && $activeCategory !== 'all') {
+            $exams = $exams->filter(fn ($exam): bool => strcasecmp((string) ($exam->category ?? ''), $activeCategory) === 0)->values();
+        }
+        if ($searchTerm !== '') {
+            $needle = mb_strtolower($searchTerm);
+            $exams = $exams->filter(function ($exam) use ($needle): bool {
+                $haystack = mb_strtolower(implode(' ', [
+                    (string) ($exam->title ?? ''),
+                    (string) ($exam->category ?? ''),
+                    strip_tags((string) ($exam->description ?? '')),
+                ]));
+                return str_contains($haystack, $needle);
+            })->values();
+        }
+
+        return view('public.exams', compact('exams', 'categories', 'searchTerm', 'activeCategory'));
     }
 
-        public function products(): View
+        public function products(Request $request): View
     {
-        $products = $this->catalogProducts();
+        $searchTerm = mb_substr(trim((string) $request->query('q', '')), 0, 100);
+        $products = collect($this->catalogProducts());
 
-        return view('public.products', compact('products'));
+        if ($searchTerm !== '') {
+            $needle = mb_strtolower($searchTerm);
+            $products = $products->filter(function ($product) use ($needle): bool {
+                $haystack = mb_strtolower(implode(' ', [
+                    (string) ($product['title'] ?? ''),
+                    (string) ($product['category'] ?? ''),
+                    (string) ($product['summary'] ?? ''),
+                ]));
+                return str_contains($haystack, $needle);
+            })->values();
+        }
+
+        return view('public.products', compact('products', 'searchTerm'));
     }
 
     public function productShow(string $slug): View
