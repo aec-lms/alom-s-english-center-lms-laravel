@@ -374,7 +374,7 @@ class PluginRecycleBinAdminAcceptanceTest extends TestCase
                 $manager->deleteToRecycleBin($slug);
                 $this->fail('A recycle-bin delete must fail when its required audit cannot be persisted.');
             } catch (RuntimeException $exception) {
-                $this->assertStringContainsString('audit storage unavailable', $exception->getMessage());
+                $this->assertStringContainsString('required audit could not be committed', $exception->getMessage());
             }
 
             $this->assertDirectoryExists($modulePath);
