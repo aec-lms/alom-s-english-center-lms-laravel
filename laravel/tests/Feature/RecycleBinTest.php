@@ -73,6 +73,36 @@ class RecycleBinTest extends TestCase
     }
 
 
+    public function test_student_restore_rolls_back_when_required_audit_storage_is_unavailable(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['student-management']);
+        $admin = $this->createUserWithRole('admin');
+        $learner = $this->createUserWithRole('student');
+
+        $student = Student::query()->create([
+            'user_id' => $learner->id,
+            'student_code' => 'RECYCLE-STUDENT-AUDIT-FAIL-001',
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($admin)->delete('/admin/students/' . $student->id)->assertRedirect();
+        $this->assertSoftDeleted('students', ['id' => $student->id]);
+
+        Schema::drop('audit_logs');
+
+        $this->actingAs($admin)
+            ->post('/admin/recycle-bin/students/' . $student->id . '/restore')
+            ->assertServerError();
+
+        $this->assertSoftDeleted('students', ['id' => $student->id]);
+        $this->assertDatabaseHas('users', [
+            'id' => $learner->id,
+            'is_active' => false,
+        ]);
+    }
+
     public function test_teacher_restore_does_not_reactivate_account_after_later_security_deactivation(): void
     {
         $this->markSystemInstalled();
