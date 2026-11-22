@@ -22,7 +22,6 @@ class UniversalPaymentGatewayToggleTest extends TestCase
 
         $admin = $this->createUserWithRole('admin');
         $this->grantUniversalPaymentManagePermission($admin);
-        $this->grantUniversalPaymentManagePermission($admin);
         $this->actingAs($admin)->post('/plugins/universal-payment/transactions', [
             'payer_name' => 'Offline Disabled Test',
             'payer_contact' => '01712345678',
