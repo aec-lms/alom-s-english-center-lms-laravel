@@ -361,8 +361,13 @@ class PluginRecycleBinAdminAcceptanceTest extends TestCase
             $realManager->install($slug);
 
             $audit = \\Mockery::mock(AuditLogger::class);
-            $audit->shouldReceive('log')->zeroOrMoreTimes();
-            $audit->shouldReceive('logRequired')->once()->andThrow(new RuntimeException('audit storage unavailable'));
+            $audit->shouldReceive('log')->zeroOrMoreTimes()->andReturnUsing(
+                static function (string $action): void {
+                    if ($action === 'plugin.deleted_to_recycle_bin') {
+                        throw new RuntimeException('audit storage unavailable');
+                    }
+                }
+            );
             $manager = new PluginManager($audit);
 
             try {
@@ -400,8 +405,13 @@ class PluginRecycleBinAdminAcceptanceTest extends TestCase
             $metadataPath = $archivePath . '.json';
 
             $audit = \\Mockery::mock(AuditLogger::class);
-            $audit->shouldReceive('log')->zeroOrMoreTimes();
-            $audit->shouldReceive('logRequired')->once()->andThrow(new RuntimeException('audit storage unavailable'));
+            $audit->shouldReceive('log')->zeroOrMoreTimes()->andReturnUsing(
+                static function (string $action): void {
+                    if ($action === 'plugin.restored_from_recycle_bin') {
+                        throw new RuntimeException('audit storage unavailable');
+                    }
+                }
+            );
             $manager = new PluginManager($audit);
 
             try {
@@ -443,8 +453,13 @@ class PluginRecycleBinAdminAcceptanceTest extends TestCase
             $backupPath = storage_path('app/plugin-permanent-delete-backups/' . $archiveName);
 
             $audit = \\Mockery::mock(AuditLogger::class);
-            $audit->shouldReceive('log')->zeroOrMoreTimes();
-            $audit->shouldReceive('logRequired')->once()->andThrow(new RuntimeException('audit storage unavailable'));
+            $audit->shouldReceive('log')->zeroOrMoreTimes()->andReturnUsing(
+                static function (string $action): void {
+                    if ($action === 'plugin.permanent_delete_started') {
+                        throw new RuntimeException('audit storage unavailable');
+                    }
+                }
+            );
             $manager = new PluginManager($audit);
 
             try {
