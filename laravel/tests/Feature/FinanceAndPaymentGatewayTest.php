@@ -378,6 +378,12 @@ class FinanceAndPaymentGatewayTest extends TestCase
         $this->actingAs($admin)->post('/admin/plugins/gateway-paypal/test-connection')
             ->assertSessionHas('status');
 
+        // Include the card method in the admin-selected list so this assertion
+        // tests adapter readiness rather than the separate disabled-method state.
+        $plugins->saveSettings('universal-payment', [
+            'enabled_gateways' => 'sslcommerz,stripe,paypal,card',
+        ]);
+
         $gatewayStatuses = app(UniversalPaymentOrchestrator::class)->gatewayStatus();
         $this->assertTrue($gatewayStatuses['gateway-stripe']['available']);
         $this->assertTrue($gatewayStatuses['gateway-paypal']['available']);
