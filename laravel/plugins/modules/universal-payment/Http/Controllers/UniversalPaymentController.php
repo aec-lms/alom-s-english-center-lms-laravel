@@ -56,7 +56,7 @@ class UniversalPaymentController extends Controller
         $validated = $request->validate([
             'default_currency' => ['required', 'string', 'regex:/^[A-Z]{3}$/'],
             'gateways' => ['nullable', 'array'],
-            'gateways.*' => ['string', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,cash,bank_transfer'],
+            'gateways.*' => ['string', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,cash,bank_transfer,bank_cash'],
             'allow_offline_payments' => ['nullable', 'boolean'],
         ]);
 
@@ -79,7 +79,7 @@ class UniversalPaymentController extends Controller
             'payer_name' => ['required', 'string', 'max:160'],
             'payer_contact' => ['nullable', 'string', 'max:120'],
             'item_title' => ['required', 'string', 'max:200'],
-            'gateway' => ['required', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,cash,bank_transfer'],
+            'gateway' => ['required', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,cash,bank_transfer,bank_cash'],
             'amount' => ['required', 'numeric', 'min:1'],
             'external_trx_id' => ['required', 'string', 'max:120'],
             'proof_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
