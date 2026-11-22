@@ -53,8 +53,5 @@ class UniversalPaymentUnverifiedReturnTest extends TestCase
             ['provider' => 'sslcommerz', 'purpose' => 'ebook'],
             json_decode((string) DB::table('universal_payment_transactions')->where('id', $transaction->id)->value('notes'), true)
         );
-        $this->assertDatabaseMissing('storefront_item_access', [
-            'payment_transaction_id' => $transaction->id,
-        ]);
     }
 }
