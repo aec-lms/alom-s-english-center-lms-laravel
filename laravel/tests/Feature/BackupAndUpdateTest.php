@@ -193,6 +193,51 @@ class BackupAndUpdateTest extends TestCase
         }
     }
 
+    public function test_private_files_are_not_replaced_when_required_restore_audit_fails(): void
+    {
+        $this->markSystemInstalled();
+
+        $privateDirectory = rtrim((string) config('lms.private_storage_path'), DIRECTORY_SEPARATOR);
+        if (!is_dir($privateDirectory) && !mkdir($privateDirectory, 0700, true) && !is_dir($privateDirectory)) {
+            $this->fail('Unable to prepare private storage fixture.');
+        }
+        $relativePath = 'audit-rollback-' . bin2hex(random_bytes(6)) . '.txt';
+        $privateFile = $privateDirectory . DIRECTORY_SEPARATOR . $relativePath;
+        file_put_contents($privateFile, 'before-backup');
+
+        $backups = app(BackupService::class);
+        $record = $backups->createEncryptedBackup(null, true);
+
+        try {
+            file_put_contents($privateFile, 'current-live-value');
+            AuditLog::creating(static function (AuditLog $log): void {
+                if ($log->action === 'backup.restored') {
+                    throw new RuntimeException('forced private restore audit failure');
+                }
+            });
+
+            try {
+                $backups->restoreEncryptedBackup($record);
+                $this->fail('Restore must fail when its required audit event cannot be stored.');
+            } catch (RuntimeException $exception) {
+                $this->assertSame('forced private restore audit failure', $exception->getMessage());
+            } finally {
+                AuditLog::flushEventListeners();
+            }
+
+            $this->assertSame(
+                'current-live-value',
+                file_get_contents($privateFile),
+                'Private files must not be replaced before required audit evidence is persisted.'
+            );
+        } finally {
+            AuditLog::flushEventListeners();
+            @unlink($privateFile);
+            @unlink($record->storage_path);
+            $record->delete();
+        }
+    }
+
     public function test_legacy_aes_encrypted_backup_restores_using_streamed_decryption(): void
     {
         $this->markSystemInstalled();
