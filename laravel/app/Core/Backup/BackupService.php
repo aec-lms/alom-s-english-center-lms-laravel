@@ -155,7 +155,7 @@ class BackupService
         if ($tempZip === false) throw new RuntimeException('Unable to allocate temporary restore archive.');
 
         try {
-            if ($magic === "AECBK02\\n") {
+            if ($magic === "AECBK02\n") {
                 $this->decryptArchiveStream($safeBackupPath, $tempZip, $key);
             } else {
                 // Legacy AES-CBC backups are authenticated in a first streaming pass,
@@ -208,7 +208,7 @@ class BackupService
                             // If audit storage is unavailable, neither database nor filesystem state changes.
                             $this->audit->logRequired('backup.restored', 'backup', (string) $backup->id, [
                                 'filename' => $backup->filename,
-                                'backup_format' => $magic === "AECBK02\\n" ? 2 : 1,
+                                'backup_format' => $magic === "AECBK02\n" ? 2 : 1,
                             ], $actorId);
 
                             if ($stagedPrivateFiles !== null) {
@@ -217,12 +217,12 @@ class BackupService
                                 $privateFileRollback = $this->restoreStagedPrivateFiles($stagedPrivateFiles);
                             }
                         });
-                    } catch (\\Throwable $exception) {
+                    } catch (\Throwable $exception) {
                         if ($privateFileRollback !== null) {
                             try {
                                 $this->rollbackRestoredPrivateFiles($privateFileRollback);
                                 $privateFileRollback = null;
-                            } catch (\\Throwable $rollbackException) {
+                            } catch (\Throwable $rollbackException) {
                                 throw new RuntimeException(
                                     'Backup database restore failed and private files could not be fully rolled back; manual recovery is required. Original error: ' . $exception->getMessage(),
                                     previous: $rollbackException,
@@ -395,9 +395,9 @@ class BackupService
                 throw new RuntimeException('Unable to resolve private storage directory.');
             }
 
-            $iterator = new \\RecursiveIteratorIterator(
-                new \\RecursiveDirectoryIterator($stagingDir, \\FilesystemIterator::SKIP_DOTS),
-                \\RecursiveIteratorIterator::SELF_FIRST
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($stagingDir, \FilesystemIterator::SKIP_DOTS),
+                \RecursiveIteratorIterator::SELF_FIRST
             );
 
             foreach ($iterator as $item) {
@@ -462,10 +462,10 @@ class BackupService
             }
 
             return $journal;
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             try {
                 $this->rollbackRestoredPrivateFiles($journal);
-            } catch (\\Throwable $rollbackException) {
+            } catch (\Throwable $rollbackException) {
                 throw new RuntimeException(
                     'Private file restore failed and its partial changes could not be fully rolled back; manual recovery is required. Original error: ' . $exception->getMessage(),
                     previous: $rollbackException,
