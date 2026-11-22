@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\GatewayCash\\Providers;
+namespace Plugins\Modules\GatewayCash\Providers;
 
-use Illuminate\\Support\\ServiceProvider;
+use Illuminate\Support\ServiceProvider;
 
 final class GatewayCashServiceProvider extends ServiceProvider
 {
