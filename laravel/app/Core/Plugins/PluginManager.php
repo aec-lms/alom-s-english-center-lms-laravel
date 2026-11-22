@@ -644,9 +644,21 @@ class PluginManager
             'deleted_at' => now()->toIso8601String(),
             'files_sha256' => $packageChecksums,
         ];
+        $metadataWritten = false;
         try {
             $this->writeVerifiedPrivateJson($trashRoot, $archiveName . '.json', $metadata);
+            $metadataWritten = true;
+            // Recycle-bin deletion is destructive and must have durable audit evidence.
+            $this->audit->logRequired('plugin.deleted_to_recycle_bin', 'plugin', $slug, [
+                'archive' => $archiveName,
+                'business_data_preserved' => true,
+            ], $actorId);
         } catch (Throwable $writeError) {
+            // If the required audit write failed after metadata creation, remove only
+            // the metadata file created by this invocation before verified rollback.
+            if ($metadataWritten && is_file($metadataPath) && !is_link($metadataPath)) {
+                @unlink($metadataPath);
+            }
             // The exclusive writer owns cleanup of any partial file it created.
             // Never unlink a pre-existing destination that caused O_EXCL to fail.
 
@@ -697,11 +709,6 @@ class PluginManager
 
             throw new RuntimeException($message, previous: $writeError);
         }
-        $this->audit->log('plugin.deleted_to_recycle_bin', 'plugin', $slug, [
-            'archive' => $archiveName,
-            'business_data_preserved' => true,
-        ], $actorId);
-
         return $metadata;
     }
 
@@ -786,11 +793,16 @@ class PluginManager
                     $this->disable($slug, $actorId);
                 }
             }
-            @unlink($metadataPath);
-            $this->audit->log('plugin.restored_from_recycle_bin', 'plugin', $slug, [
+            // Keep the archive index until the required audit row is durable.
+            // If audit persistence fails, the catch below restores the package to
+            // the recycle bin while the original metadata remains discoverable.
+            $this->audit->logRequired('plugin.restored_from_recycle_bin', 'plugin', $slug, [
                 'archive' => $archiveName,
                 'business_data_preserved' => true,
             ], $actorId);
+            if (is_file($metadataPath) && !is_link($metadataPath)) {
+                @unlink($metadataPath);
+            }
             return $record;
         } catch (Throwable $e) {
             // If installation succeeded but restoring the previous enabled state failed,
@@ -860,10 +872,25 @@ class PluginManager
             }
         }
 
+        // Persist the destructive-operation intent before removing the only
+        // indexed archive copy. The verified private snapshot is the recovery source.
+        $this->audit->logRequired('plugin.permanent_delete_started', 'plugin', $slug, [
+            'archive' => $archiveName,
+            'private_backup_id' => $archiveName,
+            'package_sha256' => hash('sha256', json_encode($sourceChecksums, JSON_THROW_ON_ERROR)),
+        ], $actorId);
+
         if (!File::deleteDirectory($source)) {
             throw new RuntimeException('Private backup was created, but the recycle-bin package could not be removed.');
         }
-        @unlink($metadataPath);
+        // Keep metadata if finalization fails so operators retain the archive identity.
+        if (!@unlink($metadataPath)) {
+            if (!File::copyDirectory($backupPath, $source)
+                || $sourceChecksums !== $this->pluginDirectoryChecksums($source)) {
+                throw new RuntimeException('Permanent delete finalization failed; the verified private recovery snapshot remains at ' . $backupPath . ' and the recycle-bin source requires manual recovery.');
+            }
+            throw new RuntimeException('Permanent delete finalization failed; the package was restored from its verified private snapshot.');
+        }
         $this->audit->log('plugin.permanently_deleted', 'plugin', $slug, [
             'package_files_removed_from_recycle_bin' => true,
             'private_backup_id' => $archiveName,
