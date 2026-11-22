@@ -777,7 +777,7 @@ class UniversalPaymentController extends Controller
 
     private function assertGatewayEnabled(string $gateway): void
     {
-        if (in_array($gateway, ['cash', 'bank_transfer', 'bank_cash', 'offline'], true)) {
+        if (in_array($gateway, ['cash', 'bank_transfer'], true)) {
             $pluginSlug = $gateway === 'cash' ? 'gateway-cash' : 'gateway-bank-transfer';
             abort_unless(
                 $this->plugins->isEnabled($pluginSlug)
@@ -795,7 +795,7 @@ class UniversalPaymentController extends Controller
         $enabledRaw = $this->plugins->getSetting(
             'universal-payment',
             'enabled_gateways',
-            'sslcommerz,bkash,nagad,rocket,card,bank_cash'
+            'sslcommerz,bkash,nagad,rocket,card,paypal,cash,bank_transfer,bank_cash'
         );
         $enabled = array_filter(array_map('trim', explode(',', (string) $enabledRaw)));
 
