@@ -88,7 +88,9 @@ class PaypalRefundAdapter implements RefundProviderAdapter
             ? 'api-m.sandbox.paypal.com'
             : 'api-m.paypal.com';
         $expectedCapturePath = '/v2/payments/captures/' . (string) $transaction->external_reference;
+        $storedReference = trim((string) ($refund->provider_refund_reference ?? ''));
         if (!is_array($payload)
+            || ($storedReference !== '' && !hash_equals($storedReference, (string) ($payload['id'] ?? '')))
             || trim((string) ($payload['id'] ?? '')) === ''
             || (string) ($payload['invoice_id'] ?? '') !== (string) $transaction->transaction_ref
             || (string) ($payload['custom_id'] ?? '') !== 'refund-' . $refund->id

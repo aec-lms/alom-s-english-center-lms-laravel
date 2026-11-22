@@ -1202,6 +1202,97 @@ class ProviderConfirmedRefundWorkflowTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_stripe_reconciliation_rejects_provider_refund_id_different_from_requested_reference(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'gateway-stripe']);
+        app(PluginManager::class)->saveSettings('gateway-stripe', [
+            'secret_key' => 'sk_test_reconcile_identity_123456',
+            'refunds_enabled' => '1',
+        ], ['secret_key']);
+
+        [$invoice, $transaction] = $this->createSettledPayment('gateway-stripe', 'pi_reconcile_identity_001');
+        $refund = new PaymentRefund();
+        $refund->forceFill([
+            'id' => 91001,
+            'amount' => 100,
+            'provider_refund_reference' => 're_expected_reconcile_001',
+        ]);
+
+        Http::fake([
+            'https://api.stripe.com/v1/refunds/*' => Http::response([
+                'id' => 're_wrong_reconcile_001',
+                'payment_intent' => 'pi_reconcile_identity_001',
+                'amount' => 10000,
+                'currency' => 'bdt',
+                'metadata' => [
+                    'transaction_ref' => $transaction->transaction_ref,
+                    'refund_id' => '91001',
+                ],
+                'status' => 'succeeded',
+            ], 200),
+        ]);
+
+        $result = app(\\Plugins\\Modules\\GatewayStripe\\Services\\StripeRefundAdapter::class)
+            ->reconcile($transaction, $refund);
+
+        $this->assertSame('requires_review', $result->status);
+        $this->assertSame('provider_response_mismatch', $result->providerStatus);
+        $this->assertSame(1000.0, (float) $invoice->fresh()->paid_amount);
+        $this->assertSame('paid', $invoice->fresh()->status);
+        $this->assertSame('settled', $transaction->fresh()->status);
+    }
+
+    public function test_paypal_reconciliation_rejects_provider_refund_id_different_from_requested_reference(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management', 'gateway-paypal']);
+        app(PluginManager::class)->saveSettings('gateway-paypal', [
+            'client_id' => 'paypal-reconcile-identity-client',
+            'client_secret' => 'paypal-reconcile-identity-secret',
+            'sandbox_mode' => '1',
+            'refunds_enabled' => '1',
+        ], ['client_secret']);
+
+        [$invoice, $transaction] = $this->createSettledPayment(
+            'gateway-paypal',
+            'PAYPAL-RECONCILE-CAPTURE-001',
+        );
+        $refund = new PaymentRefund();
+        $refund->forceFill([
+            'id' => 91002,
+            'amount' => 100,
+            'provider_refund_reference' => 'EXPECTED-PAYPAL-REFUND-001',
+        ]);
+
+        Http::fake(function (ClientRequest $request) use ($transaction): \\Illuminate\\Http\\Client\\Response {
+            if (str_ends_with((string) parse_url($request->url(), PHP_URL_PATH), '/v1/oauth2/token')) {
+                return Http::response(['access_token' => 'paypal-reconcile-identity-token'], 200);
+            }
+
+            return Http::response([
+                'id' => 'WRONG-PAYPAL-REFUND-001',
+                'invoice_id' => $transaction->transaction_ref,
+                'custom_id' => 'refund-91002',
+                'status' => 'COMPLETED',
+                'amount' => ['value' => '100.00', 'currency_code' => 'BDT'],
+                'links' => [[
+                    'rel' => 'up',
+                    'href' => 'https://api-m.sandbox.paypal.com/v2/payments/captures/PAYPAL-RECONCILE-CAPTURE-001',
+                ]],
+            ], 200);
+        });
+
+        $result = app(\\Plugins\\Modules\\GatewayPaypal\\Services\\PaypalRefundAdapter::class)
+            ->reconcile($transaction, $refund);
+
+        $this->assertSame('requires_review', $result->status);
+        $this->assertSame('provider_response_mismatch', $result->providerStatus);
+        $this->assertSame(1000.0, (float) $invoice->fresh()->paid_amount);
+        $this->assertSame('paid', $invoice->fresh()->status);
+        $this->assertSame('settled', $transaction->fresh()->status);
+    }
+
     private function createSettledPayment(
         string $gateway,
         string $externalReference,

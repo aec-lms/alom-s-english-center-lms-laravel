@@ -78,7 +78,9 @@ class StripeRefundAdapter implements RefundProviderAdapter
 
     private function normalize(mixed $payload, PaymentTransaction $transaction, PaymentRefund $refund): RefundProviderResult
     {
+        $storedReference = trim((string) ($refund->provider_refund_reference ?? ''));
         if (!is_array($payload)
+            || ($storedReference !== '' && !hash_equals($storedReference, (string) ($payload['id'] ?? '')))
             || !str_starts_with((string) ($payload['id'] ?? ''), 're_')
             || (string) ($payload['payment_intent'] ?? '') !== (string) $transaction->external_reference
             || (string) data_get($payload, 'metadata.transaction_ref', '') !== (string) $transaction->transaction_ref
