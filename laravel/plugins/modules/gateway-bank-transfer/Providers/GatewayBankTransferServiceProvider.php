@@ -4,12 +4,17 @@ declare(strict_types=1);
 
 namespace Plugins\Modules\GatewayBankTransfer\Providers;
 
-use Illuminate\Support\ServiceProvider;
+use App\Core\Plugins\BasePluginServiceProvider;
 
-final class GatewayBankTransferServiceProvider extends ServiceProvider
+final class GatewayBankTransferServiceProvider extends BasePluginServiceProvider
 {
-    public function register(): void
+    public function slug(): string
     {
-        // Payment method configuration is consumed by Universal Payment.
+        return 'gateway-bank-transfer';
+    }
+
+    protected function pluginPath(string $relative = ''): string
+    {
+        return dirname(__DIR__) . ($relative !== '' ? DIRECTORY_SEPARATOR . ltrim($relative, DIRECTORY_SEPARATOR) : '');
     }
 }
