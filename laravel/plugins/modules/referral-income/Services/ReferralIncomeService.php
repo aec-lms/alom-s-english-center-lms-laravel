@@ -358,10 +358,20 @@ class ReferralIncomeService
                     ->lockForUpdate()
                     ->first();
                 $originalNotes = $originalPayment ? json_decode((string) $originalPayment->notes, true) : null;
+                $hasInvoiceBinding = Schema::hasColumn('universal_payment_transactions', 'fee_invoice_id');
+                $walletCredit = Schema::hasColumn($sourceTable, 'wallet_credit_amount')
+                    ? round((float) ($orderSnapshot->wallet_credit_amount ?? 0), 2)
+                    : 0.0;
+                $gatewayPayable = round((float) $orderSnapshot->net_amount - $walletCredit, 2);
+
                 if (!$originalPayment
-                    || (Schema::hasColumn('universal_payment_transactions', 'fee_invoice_id')
-                        && $originalPayment->fee_invoice_id !== null
-                        && (int) $originalPayment->fee_invoice_id !== (int) $orderSnapshot->invoice_id)
+                    || !$hasInvoiceBinding
+                    || (int) ($originalPayment->fee_invoice_id ?? 0) !== (int) $orderSnapshot->invoice_id
+                    || $walletCredit < 0
+                    || $gatewayPayable <= 0
+                    || strtoupper(trim((string) $originalPayment->currency)) !== strtoupper(trim((string) $orderSnapshot->currency))
+                    || abs($gatewayPayable - (float) $originalPayment->amount) > 0.01
+                    || strtolower(trim((string) $originalPayment->gateway)) !== 'sslcommerz'
                     || $originalPayment->status !== 'verified'
                     || !is_array($originalNotes)
                     || ($originalNotes['purpose'] ?? null) !== 'course_cart'
