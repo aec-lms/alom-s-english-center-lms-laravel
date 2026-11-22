@@ -9,7 +9,8 @@
         'rocket' => 'Rocket DBBL',
         'card' => 'Visa / Mastercard (Stripe)',
         'paypal' => 'PayPal International',
-        'bank_cash' => 'Bank Transfer & Cash Desk',
+        'cash' => 'Cash Desk (Manual)',
+        'bank_transfer' => 'Bank Transfer (Manual)',
     ];
 @endphp
 <div class="space-y-6 max-w-6xl">
@@ -35,7 +36,7 @@
                 </div>
                 <label class="flex items-start gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900">
                     <input type="checkbox" name="allow_offline_payments" value="1" {{ $config['allow_offline_payments'] ? 'checked' : '' }} class="mt-0.5 rounded text-blue-600">
-                    <span><strong>Allow cash / bank transfer</strong><span class="block mt-0.5 text-[11px]">When disabled, new manual cash and bank-transfer submissions are rejected.</span></span>
+                    <span><strong>Allow manual payment submissions</strong><span class="block mt-0.5 text-[11px]">Master switch. Cash Desk and Bank Transfer must also be independently installed and enabled in Plugin Manager.</span></span>
                 </label>
             </div>
             <div class="space-y-3">
@@ -49,7 +50,7 @@
                 </div>
                 <div class="rounded-xl border border-blue-200 bg-blue-50 p-3 text-blue-900">
                     <strong>Gateway credentials are managed by their own plugins.</strong>
-                    <p class="mt-1">Install and configure the dedicated SSLCOMMERZ Gateway plugin under Plugin Manager. Secrets are never duplicated in this universal ledger.</p>
+                    <p class="mt-1">Install and configure each provider in Plugin Manager. Cash Desk and Bank Transfer are independent plugins with their own settings; online providers own their credentials. Secrets are never duplicated in this universal ledger.</p>
                 </div>
             </div>
             <button class="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold">Save Gateway Settings</button>
@@ -113,7 +114,7 @@
                                 @if ($tx->proof_path)
                                     <a href="{{ route('plugins.universal_payment.proof', $tx) }}" class="mr-2 text-blue-700 underline">View receipt</a>
                                 @endif
-                                @if (in_array($tx->gateway, ['bank_cash', 'offline', 'bkash', 'nagad', 'rocket'], true) && $tx->status === 'pending')
+                                @if (in_array($tx->gateway, ['bank_cash', 'offline', 'cash', 'bank_transfer', 'bkash', 'nagad', 'rocket'], true) && $tx->status === 'pending')
                                     <form method="POST" action="{{ route('plugins.universal_payment.status', $tx) }}" class="inline-flex items-center gap-1.5">
                                         @csrf
                                         <input name="payment_reference" required maxlength="120" value="{{ $tx->external_trx_id }}" aria-label="Verified bank receipt reference" class="w-36 rounded border border-slate-300 px-1.5 py-1 text-[11px] font-mono">
