@@ -77,7 +77,16 @@
                 <div class="border-t border-slate-100 pt-4">
                     <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
                         <div><h3 class="font-bold text-slate-900">Page content</h3><p class="text-xs text-slate-500">Add headings, text, images, buttons and spacing.</p></div>
-                        <button type="button" data-add-block class="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white">＋ Add block</button>
+                        <div class="flex flex-wrap gap-2">
+                            <select data-reusable-select class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs" aria-label="Choose reusable block">
+                                <option value="">Insert reusable block…</option>
+                                @foreach(($reusableBlocks ?? []) as $saved)
+                                    <option value="{{ $saved['id'] }}">{{ $saved['title'] }}</option>
+                                @endforeach
+                            </select>
+                            <button type="button" data-insert-reusable class="rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs font-bold text-violet-700">Insert</button>
+                            <button type="button" data-add-block class="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white">＋ Add block</button>
+                        </div>
                     </div>
                     <div data-block-list class="space-y-3">
                         <div data-block draggable="true" class="rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -206,7 +215,7 @@
     const template = document.getElementById('page-block-template');
     document.querySelectorAll('[data-block-list]').forEach((list) => {
         const form = list.closest('form');
-        const addButton = form?.querySelector('[data-add-block]');
+        const addButton = form?.querySelector('[data-add-block]');\n        const insertButton = form?.querySelector('[data-insert-reusable]');\n        const reusableSelect = form?.querySelector('[data-reusable-select]');
         const status = document.querySelector('[data-block-status]');
         const announce = (message) => { if (status) status.textContent = message; };
         const sync = (block) => {
@@ -302,6 +311,25 @@
             renumber();
         });
 
+        insertButton?.addEventListener('click', () => {
+            const id = reusableSelect?.value;
+            const saved = reusableLibrary.find((item) => item.id === id);
+            if (!saved) return;
+            const fragment = template.content.cloneNode(true);
+            const block = fragment.querySelector('[data-block]');
+            const typeSelect = block.querySelector('[data-block-type]');
+            if (!['heading', 'text', 'button'].includes(saved.type)) return;
+            typeSelect.value = saved.type;
+            const contentInput = block.querySelector('[data-field="content"] textarea');
+            if (contentInput) contentInput.value = saved.content || '';
+            const urlInput = block.querySelector('[data-field="url"] input');
+            if (urlInput) urlInput.value = saved.url || '';
+            list.appendChild(fragment);
+            renumber();
+            sync(block);
+            announce('Reusable block inserted. ' + list.querySelectorAll('[data-block]').length + ' blocks on this page.');
+            if (reusableSelect) reusableSelect.value = '';
+        });
         addButton?.addEventListener('click', () => {
             const fragment = template.content.cloneNode(true);
             const block = fragment.querySelector('[data-block]');
