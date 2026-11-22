@@ -657,7 +657,9 @@ class BackupAndUpdateTest extends TestCase
         $this->assertTrue($zip->addFromString('files/large.bin', $payload));
         $this->assertTrue($zip->close());
 
-        $stagingDir = storage_path('app/test-update-stage-' . bin2hex(random_bytes(6)));
+        $createPrivateStage = new \ReflectionMethod(UniversalUpdateService::class, 'createPrivateStorageDirectory');
+        $createPrivateStage->setAccessible(true);
+        $stagingDir = $createPrivateStage->invoke(app(UniversalUpdateService::class), 'update-staging');
         $extract = new \ReflectionMethod(UniversalUpdateService::class, 'extractToStaging');
         $extract->setAccessible(true);
 
