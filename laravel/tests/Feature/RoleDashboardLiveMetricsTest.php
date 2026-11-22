@@ -10,7 +10,7 @@ use Tests\TestCase;
 
 class RoleDashboardLiveMetricsTest extends TestCase
 {
-    public function test_teacher_dashboard_includes_explicit_course_assignments_and_legacy_assignments(): void
+    public function test_teacher_dashboard_includes_only_explicit_current_course_assignments(): void
     {
         $this->markSystemInstalled();
         $this->activatePlugins(['course-management']);
@@ -52,7 +52,7 @@ class RoleDashboardLiveMetricsTest extends TestCase
         $courseIds = $response->viewData('courses')->pluck('id')->all();
 
         $this->assertContains($assignedCourse, $courseIds, 'Explicit course-teacher assignments must appear even when the legacy instructor name differs.');
-        $this->assertContains($legacyCourse, $courseIds, 'Legacy instructor-name assignments must remain visible during migration.');
+        $this->assertNotContains($legacyCourse, $courseIds, 'Editable legacy instructor names must not grant course visibility without a normalized assignment.');
         $this->assertNotContains($unassignedCourse, $courseIds);
         $this->assertNotContains($assignedToOtherTeacher, $courseIds, 'A legacy name match must not override another teacher\'s normalized assignment.');
         $this->assertSame(2, $response->viewData('metrics')['active_students'], 'Active student counts must be distinct across the teacher\'s assigned courses and exclude pending enrollments.');
