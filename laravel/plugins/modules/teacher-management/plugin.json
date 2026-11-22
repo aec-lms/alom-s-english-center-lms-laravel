@@ -26,5 +26,14 @@
     ],
     "optional_dependencies": [
         "branch-management"
+    ],
+    "dashboard_widgets": [
+        {
+            "key": "overview",
+            "label": "Teacher Management",
+            "view": "dashboard.widget",
+            "permission": "teachers.manage",
+            "default": false
+        }
     ]
 }
