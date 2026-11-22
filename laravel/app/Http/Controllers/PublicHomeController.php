@@ -507,25 +507,41 @@ class PublicHomeController extends Controller
     {
         $searchTerm = mb_substr(trim((string) $request->query('q', '')), 0, 100);
         $activeCategory = mb_substr(trim((string) $request->query('category', 'all')), 0, 80);
+        $hasCategory = Schema::hasTable('exams') && Schema::hasColumn('exams', 'category');
 
-        $exams = Schema::hasTable('exams')
-            ? DB::table('exams')->where('is_published', true)->orderByDesc('id')->get()
+        $categories = $hasCategory
+            ? DB::table('exams')->where('is_published', true)->whereNotNull('category')
+                ->distinct()->orderBy('category')->limit(100)->pluck('category')
             : collect();
 
-        $categories = $exams->pluck('category')->filter()->unique()->sort()->values();
-        if ($activeCategory !== '' && $activeCategory !== 'all') {
-            $exams = $exams->filter(fn ($exam): bool => strcasecmp((string) ($exam->category ?? ''), $activeCategory) === 0)->values();
-        }
-        if ($searchTerm !== '') {
-            $needle = mb_strtolower($searchTerm);
-            $exams = $exams->filter(function ($exam) use ($needle): bool {
-                $haystack = mb_strtolower(implode(' ', [
-                    (string) ($exam->title ?? ''),
-                    (string) ($exam->category ?? ''),
-                    strip_tags((string) ($exam->description ?? '')),
-                ]));
-                return str_contains($haystack, $needle);
-            })->values();
+        $examQuery = Schema::hasTable('exams')
+            ? DB::table('exams')->where('is_published', true)
+            : null;
+
+        if ($examQuery !== null) {
+            if (Schema::hasColumn('exams', 'deleted_at')) {
+                $examQuery->whereNull('deleted_at');
+            }
+            if ($hasCategory && $activeCategory !== '' && $activeCategory !== 'all') {
+                $examQuery->where('category', $activeCategory);
+            }
+            if ($searchTerm !== '') {
+                $searchableColumns = ['title'];
+                foreach (['category', 'description'] as $column) {
+                    if (Schema::hasColumn('exams', $column)) {
+                        $searchableColumns[] = $column;
+                    }
+                }
+                $examQuery->where(function ($query) use ($searchableColumns, $searchTerm): void {
+                    foreach ($searchableColumns as $index => $column) {
+                        $method = $index === 0 ? 'where' : 'orWhere';
+                        $query->{$method}($column, 'like', '%' . $searchTerm . '%');
+                    }
+                });
+            }
+            $exams = $examQuery->orderByDesc('id')->limit(250)->get();
+        } else {
+            $exams = collect();
         }
 
         return view('public.exams', compact('exams', 'categories', 'searchTerm', 'activeCategory'));
