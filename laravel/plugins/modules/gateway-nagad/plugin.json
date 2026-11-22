@@ -39,13 +39,7 @@
         },
         {
             "key": "merchant_id",
-            "label": "Merchant ID",
-            "type": "text",
-            "secret": false
-        },
-        {
-            "key": "api_base_url",
-            "label": "Provider API Base URL (from official merchant documentation)",
+            "label": "Merchant ID (if issued)",
             "type": "text",
             "secret": false
         },
