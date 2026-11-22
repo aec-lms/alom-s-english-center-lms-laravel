@@ -1,0 +1,69 @@
+{
+    "slug": "gateway-bkash",
+    "name": "bKash Merchant Gateway",
+    "version": "1.0.0",
+    "author": "Alom's English Center",
+    "category": "payment-gateway",
+    "description": "Admin credential configuration foundation for bKash Tokenized Checkout. Hosted checkout remains unavailable until the provider adapter and merchant sandbox verification are completed.",
+    "core_compatibility": "^2.0",
+    "dependencies": [],
+    "provider": "Plugins\\Modules\\GatewayBkash\\Providers\\GatewayBkashServiceProvider",
+    "permissions": [
+        {
+            "slug": "payments.bkash.manage",
+            "name": "Manage bKash Merchant Gateway"
+        }
+    ],
+    "settings_schema": [
+        {
+            "key": "enabled",
+            "label": "Enable bKash Checkout",
+            "type": "select",
+            "secret": false,
+            "default": "0",
+            "options": {
+                "0": "Disabled",
+                "1": "Enabled"
+            }
+        },
+        {
+            "key": "sandbox_mode",
+            "label": "bKash Environment",
+            "type": "select",
+            "secret": false,
+            "default": "1",
+            "options": {
+                "0": "Live",
+                "1": "Sandbox"
+            }
+        },
+        {
+            "key": "app_key",
+            "label": "bKash App Key",
+            "type": "password",
+            "secret": true
+        },
+        {
+            "key": "app_secret",
+            "label": "bKash App Secret",
+            "type": "password",
+            "secret": true
+        },
+        {
+            "key": "username",
+            "label": "bKash API Username",
+            "type": "password",
+            "secret": true
+        },
+        {
+            "key": "password",
+            "label": "bKash API Password",
+            "type": "password",
+            "secret": true
+        }
+    ],
+    "optional_dependencies": [
+        "fees-management",
+        "payment-management"
+    ]
+}
