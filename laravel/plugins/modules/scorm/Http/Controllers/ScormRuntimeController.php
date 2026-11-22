@@ -279,6 +279,9 @@ class ScormRuntimeController extends Controller
         $secure = parse_url((string) config('scorm.content_origin', ''), PHP_URL_SCHEME) === 'https';
         $cookiePath = '/scorm-content/' . $attempt . '/';
         $minutes = max(1, (int) config('scorm.launch_ttl_minutes', 240));
+        // Only the same-site HTTP integration fixture may use Lax; real isolated
+        // cross-site deployments always require Secure SameSite=None cookies.
+        $sameSite = app()->environment('testing') && config('scorm.cookie_same_site') === 'lax' ? 'lax' : 'none';
         $sessionCookie = cookie(
             $this->contentSessionCookieName($attempt),
             $token,
@@ -288,7 +291,7 @@ class ScormRuntimeController extends Controller
             $secure,
             true,
             false,
-            config('scorm.cookie_same_site', 'none')
+            $sameSite
         );
         $bridgeCookie = cookie(
             $this->contentBridgeCookieName($attempt),
