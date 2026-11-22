@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Core\Plugins\PluginManager;
+use App\Core\Security\AuditLogger;
+use RuntimeException;
 use App\Models\PluginArchive;
 use Illuminate\Support\Facades\File;
 use Tests\TestCase;
