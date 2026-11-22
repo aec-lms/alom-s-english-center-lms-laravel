@@ -162,7 +162,6 @@ class CourseAssessmentsPluginTest extends TestCase
         $this->createQuestion($submittedSet);
         $start = $this->actingAs($student)->post(route('plugins.course-assessments.student.start', $submittedSet));
         $attemptId = (int) basename(parse_url($start->headers->get('Location'), PHP_URL_PATH));
-        $token = $student->createToken('revoked-course-assessment-role')->plainTextToken;
         $questionId = (int) DB::table('course_assessment_attempt_questions')->where('attempt_id', $attemptId)->value('id');
         $this->post(route('plugins.course-assessments.student.submit', $attemptId))->assertRedirect();
         $this->putJson(route('plugins.course-assessments.student.answer', [$attemptId, $questionId]), ['selected_option' => 1])
@@ -260,6 +259,7 @@ class CourseAssessmentsPluginTest extends TestCase
         $start = $this->actingAs($student)->post(route('plugins.course-assessments.student.start', $set));
         $start->assertRedirect();
         $attemptId = (int) basename(parse_url($start->headers->get('Location'), PHP_URL_PATH));
+        $token = $student->createToken('revoked-course-assessment-role')->plainTextToken;
         $questionId = (int) DB::table('course_assessment_attempt_questions')
             ->where('attempt_id', $attemptId)
             ->value('id');
