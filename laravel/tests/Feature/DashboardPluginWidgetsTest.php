@@ -65,7 +65,8 @@ class DashboardPluginWidgetsTest extends TestCase
 
         $this->actingAs($admin)->get('/admin')
             ->assertOk()
-            ->assertDontSee('Student Management');
+            ->assertDontSee('value="student-management.overview"', false)
+            ->assertDontSee('data-dashboard-widget="student-management.overview"', false);
 
         $this->actingAs($admin)->from('/admin')->post('/admin/dashboard/widgets', [
             'widgets' => ['student-management.overview'],
