@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\PageBuilder\\Http\\Controllers;
+namespace Plugins\Modules\PageBuilder\Http\Controllers;
 
-use App\\Core\\Security\\AuditLogger;
-use App\\Http\\Controllers\\Controller;
-use Illuminate\\Http\\RedirectResponse;
-use Illuminate\\Http\\Request;
-use Illuminate\\View\\View;
-use Plugins\\Modules\\PageBuilder\\Services\\ReusableBlockLibrary;
+use App\Core\Security\AuditLogger;
+use App\Http\Controllers\Controller;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\View\View;
+use Plugins\Modules\PageBuilder\Services\ReusableBlockLibrary;
 
 final class ReusableBlockController extends Controller
 {
@@ -24,7 +24,7 @@ final class ReusableBlockController extends Controller
             'type' => ['required', 'in:heading,text,button'],
             'title' => ['required', 'string', 'max:80'],
             'content' => ['required', 'string', 'max:12000'],
-            'url' => ['nullable', 'string', 'max:2048', 'regex:#^(https?://[^\\s]+|/(?!/)[^\\s]*)$#i'],
+            'url' => ['nullable', 'string', 'max:2048', 'regex:#^(https?://[^\s]+|/(?!/)[^\s]*)$#i'],
         ]);
         if ($data['type'] === 'button' && trim((string) ($data['url'] ?? '')) === '') {
             return back()->withErrors(['url' => 'A button block requires a destination URL.'])->withInput();
