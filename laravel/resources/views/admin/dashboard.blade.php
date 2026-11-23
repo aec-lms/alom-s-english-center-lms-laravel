@@ -17,23 +17,7 @@
             </div>
         </section>
     @endif
-    <section class="aec-dashboard-welcome relative isolate overflow-hidden rounded-3xl border border-blue-900/20 px-5 py-5 text-white shadow-lg sm:px-7 sm:py-6" aria-labelledby="aec-dashboard-welcome-title">
-        <div class="absolute inset-0 -z-10 bg-gradient-to-r from-[#10275d] via-[#1555a7] to-[#087f9b]"></div>
-        <div class="pointer-events-none absolute -right-10 -top-16 -z-10 h-56 w-56 rounded-full bg-cyan-300/25 blur-3xl"></div>
-        <div class="pointer-events-none absolute -bottom-20 left-1/3 -z-10 h-44 w-72 rounded-full bg-blue-300/20 blur-3xl"></div>
-        <div class="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-            <div class="max-w-3xl">
-                <span class="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[.18em] text-cyan-100">AEC LMS · Admin Workspace</span>
-                <h2 id="aec-dashboard-welcome-title" class="mt-3 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">Welcome back, {{ auth()->user()?->name ?? 'Administrator' }}</h2>
-                <p class="mt-1.5 max-w-2xl text-sm leading-relaxed text-blue-100">Your institution operations, platform health and learning services — together in one workspace.</p>
-            </div>
-            <div class="hidden shrink-0 rounded-2xl border border-white/20 bg-slate-950/15 px-5 py-3 text-right backdrop-blur-sm sm:block">
-                <div class="text-[10px] font-bold uppercase tracking-[.16em] text-cyan-100">Workspace</div>
-                <div class="mt-1 text-lg font-extrabold text-white">Overview</div>
-                <div class="text-xs text-blue-100">Live, permission-aware data</div>
-            </div>
-        </div>
-    </section>
+
     <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
             <h1 class="text-2xl font-extrabold text-slate-900">Dashboard</h1>
@@ -106,6 +90,23 @@
         </details>
     </div>
 
+    <section class="aec-dashboard-welcome relative isolate overflow-hidden rounded-3xl border border-blue-900/20 px-5 py-5 text-white shadow-lg sm:px-7 sm:py-6" aria-labelledby="aec-dashboard-welcome-title">
+        <div class="absolute inset-0 -z-10 bg-gradient-to-r from-[#10275d] via-[#1555a7] to-[#087f9b]"></div>
+        <div class="pointer-events-none absolute -right-10 -top-16 -z-10 h-56 w-56 rounded-full bg-cyan-300/25 blur-3xl"></div>
+        <div class="pointer-events-none absolute -bottom-20 left-1/3 -z-10 h-44 w-72 rounded-full bg-blue-300/20 blur-3xl"></div>
+        <div class="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+            <div class="max-w-3xl">
+                <span class="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[.18em] text-cyan-100">AEC LMS · Admin Workspace</span>
+                <h2 id="aec-dashboard-welcome-title" class="mt-3 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">Welcome back, {{ auth()->user()?->name ?? 'Administrator' }}</h2>
+                <p class="mt-1.5 max-w-2xl text-sm leading-relaxed text-blue-100">Your institution operations, platform health and learning services — together in one workspace.</p>
+            </div>
+            <div class="hidden shrink-0 rounded-2xl border border-white/20 bg-slate-950/15 px-5 py-3 text-right backdrop-blur-sm sm:block">
+                <div class="text-[10px] font-bold uppercase tracking-[.16em] text-cyan-100">Workspace</div>
+                <div class="mt-1 text-lg font-extrabold text-white">Overview</div>
+                <div class="text-xs text-blue-100">Live, permission-aware data</div>
+            </div>
+        </div>
+    </section>
     <style>
     body.aec-admin-dashboard-page { background:linear-gradient(180deg,#f8fafc 0%,#f1f5f9 100%) !important; }
     body.aec-admin-dashboard-page aside {
