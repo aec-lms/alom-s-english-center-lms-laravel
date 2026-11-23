@@ -292,6 +292,14 @@
                             </form>
                         </div>
 
+                        @if ($live->status === 'completed' && \Illuminate\Support\Facades\Schema::hasTable('class_session_records'))
+                            @php($settledSession = \Illuminate\Support\Facades\DB::table('class_session_records')->where('live_class_id', $live->id)->first())
+                            @if ($settledSession)
+                                <div class="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-800">
+                                    Settled {{ $settledSession->completed_at }} · Teacher payable ৳{{ number_format((float) $settledSession->teacher_rate, 2) }} · Student invoices ৳{{ number_format((float) $settledSession->student_fees_total, 2) }} ({{ $settledSession->enrolled_student_count }} students)
+                                </div>
+                            @endif
+                        @endif
                         @if (in_array($live->status, ['upcoming', 'live'], true) && $live->teacher_user_id)
                             <form method="POST" action="{{ route('plugins.courses.live.complete', $live) }}" onsubmit="return confirm('Complete this class and create teacher payable / student invoices from the configured per-class rates?')">
                                 @csrf
