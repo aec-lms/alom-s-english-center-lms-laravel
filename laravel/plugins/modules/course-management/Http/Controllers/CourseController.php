@@ -39,7 +39,21 @@ class CourseController extends Controller
         $cmsPosts = Schema::hasTable('cms_posts')
             ? DB::table('cms_posts')->orderByDesc('id')->limit(100)->get()
             : collect();
-        $teacherAssignments = Schema::hasTable('course_teacher_assignments')\n            ? DB::table('course_teacher_assignments')->join('users', 'users.id', '=', 'course_teacher_assignments.teacher_user_id')\n                ->select('course_teacher_assignments.course_id', 'course_teacher_assignments.teacher_user_id', 'users.name as teacher_name')\n                ->orderBy('users.name')->get()\n            : collect();\n        $teacherClassPayments = Schema::hasTable('teacher_class_payments')\n            ? DB::table('teacher_class_payments')->join('users', 'users.id', '=', 'teacher_class_payments.teacher_user_id')\n                ->join('class_session_records', 'class_session_records.id', '=', 'teacher_class_payments.session_record_id')\n                ->join('live_classes', 'live_classes.id', '=', 'class_session_records.live_class_id')\n                ->when($isBranchManager, fn ($q) => $q->where('teacher_class_payments.branch_id', $actor->branch_id))\n                ->select('teacher_class_payments.*', 'users.name as teacher_name', 'live_classes.title as class_title')\n                ->latest('teacher_class_payments.id')->limit(50)->get()\n            : collect();\n        $liveClasses = Schema::hasTable('live_classes')
+        $teacherAssignments = Schema::hasTable('course_teacher_assignments')
+            ? DB::table('course_teacher_assignments')->join('users', 'users.id', '=', 'course_teacher_assignments.teacher_user_id')
+                ->when($isBranchManager, fn ($q) => $q->where('users.branch_id', $actor->branch_id))
+                ->select('course_teacher_assignments.course_id', 'course_teacher_assignments.teacher_user_id', 'users.name as teacher_name')
+                ->orderBy('users.name')->get()
+            : collect();
+        $teacherClassPayments = Schema::hasTable('teacher_class_payments')
+            ? DB::table('teacher_class_payments')->join('users', 'users.id', '=', 'teacher_class_payments.teacher_user_id')
+                ->join('class_session_records', 'class_session_records.id', '=', 'teacher_class_payments.session_record_id')
+                ->join('live_classes', 'live_classes.id', '=', 'class_session_records.live_class_id')
+                ->when($isBranchManager, fn ($q) => $q->where('teacher_class_payments.branch_id', $actor->branch_id))
+                ->select('teacher_class_payments.*', 'users.name as teacher_name', 'live_classes.title as class_title')
+                ->latest('teacher_class_payments.id')->limit(50)->get()
+            : collect();
+        $liveClasses = Schema::hasTable('live_classes')
             ? LiveClass::query()->with('course')->when($isBranchManager, fn ($q) => $q->whereHas('course', fn ($courseQuery) => $courseQuery->where('branch_id', $actor->branch_id)))->latest('starts_at')->get()
             : collect();
 
@@ -479,7 +493,9 @@ class CourseController extends Controller
 
     private function parseSyllabusLines(string $raw): array
     {
-        $lines = array_values(array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', $raw) ?: [])));
+        $lines = array_values(array_filter(array_map('trim', preg_split('/\r
+|\r|
+/', $raw) ?: [])));
         $modules = [];
         foreach ($lines as $idx => $line) {
             $modules[] = [
