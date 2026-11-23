@@ -7,7 +7,7 @@
         'bkash' => 'bKash Merchant',
         'nagad' => 'Nagad Merchant',
         'rocket' => 'Rocket DBBL',
-        'card' => 'Visa / Mastercard (Stripe)',
+        'card' => 'Visa / Mastercard (SSLCOMMERZ Acquirer)',
         'paypal' => 'PayPal International',
         'cash' => 'Cash Desk',
         'bank_transfer' => 'Bank Transfer',
@@ -39,7 +39,7 @@
                 </div>
                 <label class="flex items-start gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900">
                     <input type="checkbox" name="allow_offline_payments" value="1" {{ $config['allow_offline_payments'] ? 'checked' : '' }} class="mt-0.5 rounded text-blue-600">
-                    <span><strong>Allow manual cash / bank transfer</strong><span class="block mt-0.5 text-[11px]">Cash Desk and Bank Transfer each require their own installed, enabled plugin and admin instructions.</span></span>
+                    <span><strong>Allow offline, manual cash / bank, cheque & wallet receipts</strong><span class="block mt-0.5 text-[11px]">Every manual receipt stays pending until an authorized reviewer verifies its reference and proof.</span></span>
                 </label>
             </div>
             <div class="space-y-3">
@@ -53,7 +53,7 @@
                 </div>
                 <div class="rounded-xl border border-blue-200 bg-blue-50 p-3 text-blue-900">
                     <strong>Gateway credentials are managed by their own plugins.</strong>
-                    <p class="mt-1">Install and configure each provider under Plugin Manager. Cash Desk and Bank Transfer are also separate plugins; this screen only controls which installed methods the ledger accepts.</p>
+                    <p class="mt-1">Install and configure each provider under Plugin Manager. Cash Desk and Bank Transfer use separate plugins. Card checkout is routed through the configured SSLCOMMERZ acquirer; bank/mobile-wallet receipts remain manual until verified.</p>
                 </div>
             </div>
             <button class="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold">Save Gateway Settings</button>
