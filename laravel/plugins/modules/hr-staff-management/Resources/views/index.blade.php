@@ -7,6 +7,22 @@
         <p class="text-xs text-slate-500 mt-0.5">Manage academic &amp; operational staff profiles, designations, and monthly payroll disbursements.</p>
     </div>
 
+
+    <div class="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+        <div><h2 class="text-sm font-bold text-slate-900">Staff Daily Attendance</h2><p class="text-xs text-slate-500">One attendance entry per staff member per day. Check-in/out timestamps are optional.</p></div>
+        <form method="POST" action="{{ route('plugins.hr.attendance.store') }}" class="grid md:grid-cols-6 gap-3 text-xs">
+            @csrf
+            <select name="staff_profile_id" required class="md:col-span-2 rounded-lg border border-slate-300 px-3 py-2 bg-white"><option value="">Select staff member...</option>@foreach ($staff as $member)<option value="{{ $member->id }}">{{ $member->full_name }} ({{ $member->employee_code }})</option>@endforeach</select>
+            <input type="date" name="attendance_date" required max="{{ now()->toDateString() }}" value="{{ now()->toDateString() }}" class="rounded-lg border border-slate-300 px-3 py-2">
+            <select name="status" required class="rounded-lg border border-slate-300 px-3 py-2 bg-white"><option value="present">Present</option><option value="late">Late</option><option value="absent">Absent</option><option value="leave">Leave</option></select>
+            <input type="datetime-local" name="check_in_at" aria-label="Check in" class="rounded-lg border border-slate-300 px-3 py-2">
+            <input type="datetime-local" name="check_out_at" aria-label="Check out" class="rounded-lg border border-slate-300 px-3 py-2">
+            <input name="remarks" maxlength="255" placeholder="Remarks (optional)" class="md:col-span-4 rounded-lg border border-slate-300 px-3 py-2">
+            <button type="submit" class="md:col-span-2 px-4 py-2 rounded-lg bg-[#0284C7] text-white font-bold">Save Attendance</button>
+        </form>
+        <div class="space-y-2">@forelse ($attendanceRecords as $record)<div class="flex items-center justify-between border-b border-slate-100 py-2 text-xs"><span class="font-semibold text-slate-800">{{ $record->staff?->full_name ?? 'Staff #'.$record->staff_profile_id }}</span><span class="text-slate-500">{{ $record->attendance_date?->format('Y-m-d') }} · {{ ucfirst($record->status) }} · {{ $record->check_in_at?->format('H:i') ?? '—' }} / {{ $record->check_out_at?->format('H:i') ?? '—' }}</span></div>@empty<p class="text-slate-400 text-xs">No staff attendance recorded yet.</p>@endforelse</div>
+    </div>
+
     <div class="grid md:grid-cols-2 gap-6">
         <div class="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
             <h2 class="text-sm font-bold text-slate-900">Register Staff Member</h2>
