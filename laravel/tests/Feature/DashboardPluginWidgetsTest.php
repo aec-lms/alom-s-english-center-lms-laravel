@@ -26,6 +26,7 @@ class DashboardPluginWidgetsTest extends TestCase
             ->assertSee('Teacher Management')
             ->assertSee('Guardian Management')
             ->assertSee('Branch Management')
+            ->assertSee('data-default-enabled="false"', false)
             ->assertDontSee('data-dashboard-widget="student-management.overview"', false);
 
         $this->actingAs($admin)->post('/admin/dashboard/widgets', [
