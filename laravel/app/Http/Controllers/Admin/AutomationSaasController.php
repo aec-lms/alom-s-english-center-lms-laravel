@@ -8,6 +8,9 @@ use App\Http\Controllers\Controller;
 use App\Models\AutomationAiAgent;
 use App\Models\AutomationContact;
 use App\Models\AutomationCampaign;
+use App\Models\AutomationConversation;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use App\Models\AutomationWorkflow;
 use App\Models\SaasTenant;
 use Illuminate\Http\RedirectResponse;
@@ -118,6 +121,87 @@ class AutomationSaasController extends Controller
             'failed_count' => 0,
         ]);
         return back()->with('success', 'Campaign draft saved. No messages are sent until a verified provider and consent-based audience are configured.');
+    }
+
+    private function authorizeTenant(Request $request, SaasTenant $tenant): void
+    {
+        abort_unless($request->user()->hasRole('admin') || (int) $tenant->owner_user_id === (int) $request->user()->id, 404);
+        abort_unless($tenant->status === 'active' || $tenant->status === 'trial', 403, 'Workspace is not active.');
+    }
+
+    public function storeChannel(Request $request, SaasTenant $tenant): RedirectResponse
+    {
+        $this->authorizeTenant($request, $tenant);
+        $data = $request->validate([
+            'provider' => ['required', Rule::in(['whatsapp', 'messenger', 'instagram', 'telegram', 'website_chat', 'email', 'sms'])],
+            'name' => ['required', 'string', 'max:120'],
+            'access_token' => ['nullable', 'string', 'max:8192'],
+            'configuration' => ['nullable', 'array'],
+        ]);
+        $tenant->channels()->create([
+            'provider' => $data['provider'],
+            'name' => $data['name'],
+            'status' => 'disconnected',
+            'credentials_encrypted' => $data['access_token'] ?? null,
+            'configuration' => $data['configuration'] ?? [],
+        ]);
+        return back()->with('success', 'Channel saved securely. It remains disconnected until provider verification succeeds.');
+    }
+
+    public function assignConversation(Request $request, SaasTenant $tenant, AutomationConversation $conversation): RedirectResponse
+    {
+        $this->authorizeTenant($request, $tenant);
+        abort_unless((int) $conversation->tenant_id === (int) $tenant->id, 404);
+        $data = $request->validate(['assigned_user_id' => ['nullable', 'integer', 'exists:users,id']]);
+        $conversation->update(['assigned_user_id' => $data['assigned_user_id'] ?? null]);
+        return back()->with('success', 'Conversation assignment updated.');
+    }
+
+    public function updateConversation(Request $request, SaasTenant $tenant, AutomationConversation $conversation): RedirectResponse
+    {
+        $this->authorizeTenant($request, $tenant);
+        abort_unless((int) $conversation->tenant_id === (int) $tenant->id, 404);
+        $data = $request->validate([
+            'status' => ['required', Rule::in(['open', 'pending', 'resolved', 'closed'])],
+            'priority' => ['required', Rule::in(['low', 'normal', 'high', 'urgent'])],
+        ]);
+        $conversation->update($data);
+        return back()->with('success', 'Conversation status and priority updated.');
+    }
+
+    public function replyConversation(Request $request, SaasTenant $tenant, AutomationConversation $conversation): RedirectResponse
+    {
+        $this->authorizeTenant($request, $tenant);
+        abort_unless((int) $conversation->tenant_id === (int) $tenant->id, 404);
+        $data = $request->validate(['body' => ['required', 'string', 'max:10000']]);
+        DB::transaction(function () use ($conversation, $request, $data): void {
+            $conversation->messages()->create([
+                'sender_user_id' => $request->user()->id,
+                'direction' => 'outbound',
+                'message_type' => 'text',
+                'body' => $data['body'],
+                'sent_at' => now(),
+            ]);
+            $conversation->update(['last_message_at' => now(), 'status' => 'open']);
+        });
+        return back()->with('success', 'Reply saved to the shared inbox. Provider delivery requires a verified channel adapter.');
+    }
+
+    public function storeWebhook(Request $request, SaasTenant $tenant): RedirectResponse
+    {
+        $this->authorizeTenant($request, $tenant);
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:120'],
+            'event_name' => ['required', Rule::in(['contact.created', 'conversation.opened', 'message.received', 'campaign.completed', 'workflow.completed'])],
+            'target_url' => ['required', 'url', 'max:2048', 'starts_with:https://'],
+        ]);
+        $host = strtolower((string) parse_url($data['target_url'], PHP_URL_HOST));
+        if ($host === '' || in_array($host, ['localhost', 'localhost.localdomain'], true) || filter_var($host, FILTER_VALIDATE_IP) && (!filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE))) {
+            return back()->withErrors(['target_url' => 'Webhook destination must use a public HTTPS host.'])->withInput();
+        }
+        $secret = Str::random(48);
+        $tenant->webhooks()->create($data + ['secret_encrypted' => $secret, 'is_active' => true]);
+        return back()->with('webhook_secret', $secret)->with('success', 'Webhook registered. Copy the signing secret now; it is stored encrypted.');
     }
 
     public function publishWorkflow(Request $request, SaasTenant $tenant, AutomationWorkflow $workflow): RedirectResponse
