@@ -7,14 +7,23 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class AutomationAiAgent extends Model
+class SaasTenantBranding extends Model
 {
-    protected $table = 'automation_ai_agents';
-    protected $fillable = ['tenant_id', 'name', 'slug', 'system_prompt', 'configuration', 'status'];
+    protected $table = 'saas_tenant_branding';
+
+    protected $fillable = [
+        'tenant_id',
+        'brand_name',
+        'logo_path',
+        'favicon_path',
+        'primary_color',
+        'accent_color',
+        'custom_css',
+    ];
 
     protected function casts(): array
     {
-        return ['configuration' => 'array'];
+        return ['custom_css' => 'array'];
     }
 
     public function tenant(): BelongsTo
