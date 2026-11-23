@@ -126,6 +126,11 @@ Route::middleware('installed')->group(function (): void {
             Route::post('/tenants/{tenant}/agents', [AutomationSaasController::class, 'storeAgent'])->name('agents.store');
             Route::post('/tenants/{tenant}/contacts', [AutomationSaasController::class, 'storeContact'])->name('contacts.store');
             Route::post('/tenants/{tenant}/campaigns', [AutomationSaasController::class, 'storeCampaign'])->name('campaigns.store');
+            Route::post('/tenants/{tenant}/channels', [AutomationSaasController::class, 'storeChannel'])->name('channels.store');
+            Route::post('/tenants/{tenant}/webhooks', [AutomationSaasController::class, 'storeWebhook'])->name('webhooks.store');
+            Route::post('/tenants/{tenant}/conversations/{conversation}/assign', [AutomationSaasController::class, 'assignConversation'])->name('conversations.assign');
+            Route::patch('/tenants/{tenant}/conversations/{conversation}', [AutomationSaasController::class, 'updateConversation'])->name('conversations.update');
+            Route::post('/tenants/{tenant}/conversations/{conversation}/replies', [AutomationSaasController::class, 'replyConversation'])->name('conversations.replies.store');
             Route::post('/tenants/{tenant}/workflows', [AutomationSaasController::class, 'storeWorkflow'])->name('workflows.store');
             Route::post('/tenants/{tenant}/workflows/{workflow}/publish', [AutomationSaasController::class, 'publishWorkflow'])->name('workflows.publish');
         });
