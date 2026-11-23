@@ -11,6 +11,39 @@ use Tests\TestCase;
 
 class BranchManagerFailClosedTest extends TestCase
 {
+    public function test_branch_manager_branch_screen_is_limited_to_assigned_branch_and_hides_global_controls(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management']);
+
+        $branchA = DB::table('branches')->insertGetId([
+            'code' => 'BRUI-A-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'name' => 'My Assigned Branch',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('branches')->insert([
+            'code' => 'BRUI-B-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'name' => 'Another Branch',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $manager = $this->createUserWithRole('branch_manager', $branchA);
+        $permissionId = DB::table('permissions')->where('slug', 'branches.manage')->value('id');
+        $this->assertNotNull($permissionId);
+        $manager->roles()->first()->permissions()->syncWithoutDetaching([$permissionId]);
+
+        $this->actingAs($manager)->get('/admin/branches')
+            ->assertOk()
+            ->assertSee('My Assigned Branch')
+            ->assertDontSee('Another Branch')
+            ->assertDontSee('Add Branch')
+            ->assertDontSee('Deactivate')
+            ->assertDontSee('Delete');
+    }
+
     public function test_unassigned_branch_manager_is_denied_teacher_guardian_and_hr_reads_and_writes(): void
     {
         $this->markSystemInstalled();

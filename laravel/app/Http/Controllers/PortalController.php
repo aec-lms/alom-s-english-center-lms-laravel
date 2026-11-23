@@ -183,6 +183,18 @@ class PortalController extends Controller
                 'active_students' => $activeStudents,
                 'scheduled_classes' => $liveClasses->where('status', 'upcoming')->count(),
             ];
+            if (app(PluginManager::class)->isEnabled('assignment-management')
+                && Schema::hasTable('assignment_tasks')
+                && Schema::hasTable('assignment_submissions')) {
+                $metrics['created_assignments'] = DB::table('assignment_tasks')
+                    ->where('created_by', $user->id)
+                    ->count();
+                $metrics['pending_submissions'] = DB::table('assignment_submissions')
+                    ->join('assignment_tasks', 'assignment_tasks.id', '=', 'assignment_submissions.assignment_id')
+                    ->where('assignment_tasks.created_by', $user->id)
+                    ->where('assignment_submissions.status', 'submitted')
+                    ->count();
+            }
         } elseif ($role === 'guardian') {
             $guardian = Schema::hasTable('guardians')
                 ? DB::table('guardians')->where('user_id', $user->id)->first()
@@ -193,7 +205,10 @@ class PortalController extends Controller
                     ->join('students', 'guardian_student.student_id', '=', 'students.id')
                     ->join('users', 'students.user_id', '=', 'users.id')
                     ->where('guardian_student.guardian_id', $guardian->id)
-                    ->where('students.branch_id', $guardian->branch_id)
+                    ->when($guardian->branch_id !== null, fn ($query) => $query->where(function ($branch) use ($guardian): void {
+                        $branch->whereNull('students.branch_id')
+                            ->orWhere('students.branch_id', $guardian->branch_id);
+                    }))
                     ->select('students.id', 'students.student_code', 'students.status', 'users.name', 'users.email')
                     ->get();
                 $studentIds = $children->pluck('id');
