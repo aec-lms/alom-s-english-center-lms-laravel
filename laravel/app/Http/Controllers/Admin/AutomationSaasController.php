@@ -151,6 +151,28 @@ class AutomationSaasController extends Controller
         abort_unless($tenant->status === 'active' || $tenant->status === 'trial', 403, 'Workspace is not active.');
     }
 
+    public function updateBranding(Request $request, SaasTenant $tenant): RedirectResponse
+    {
+        $this->authorizeTenant($request, $tenant);
+        $data = $request->validate([
+            'brand_name' => ['required', 'string', 'max:160'],
+            'primary_color' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'accent_color' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+        ]);
+        $tenant->branding()->updateOrCreate(['tenant_id' => $tenant->id], $data);
+        return back()->with('success', 'Workspace branding updated.');
+    }
+
+    public function storeDomain(Request $request, SaasTenant $tenant): RedirectResponse
+    {
+        $this->authorizeTenant($request, $tenant);
+        $data = $request->validate([
+            'domain' => ['required', 'string', 'max:253', 'regex:/^(?=.{1,253}$)(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,}$/', Rule::unique('saas_tenant_domains', 'domain')],
+        ]);
+        $tenant->domains()->create(['domain' => strtolower($data['domain']), 'is_primary' => !$tenant->domains()->exists()]);
+        return back()->with('success', 'Custom domain saved as pending verification. Configure the displayed DNS target before activation.');
+    }
+
     public function storeChannel(Request $request, SaasTenant $tenant): RedirectResponse
     {
         $this->authorizeTenant($request, $tenant);
