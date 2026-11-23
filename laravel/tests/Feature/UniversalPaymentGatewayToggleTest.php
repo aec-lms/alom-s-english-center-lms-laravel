@@ -87,6 +87,8 @@ class UniversalPaymentGatewayToggleTest extends TestCase
             'username' => 'sandbox-user',
             'password' => 'sandbox-password',
         ]);
+        app(PluginManager::class)->saveSettings('gateway-nagad', ['enabled' => '1']);
+        app(PluginManager::class)->saveSettings('gateway-rocket', ['enabled' => '1']);
 
         $statuses = app(\Plugins\Modules\UniversalPayment\Services\UniversalPaymentOrchestrator::class)->gatewayStatus();
 
