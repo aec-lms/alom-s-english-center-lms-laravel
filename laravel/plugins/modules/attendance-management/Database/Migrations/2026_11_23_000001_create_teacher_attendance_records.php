@@ -12,7 +12,7 @@ return new class extends Migration {
         if (!Schema::hasTable('teacher_attendance_records')) {
             Schema::create('teacher_attendance_records', function (Blueprint $table): void {
                 $table->id();
-                $table->foreignId('teacher_id')->constrained('teachers')->cascadeOnDelete();
+                $table->unsignedBigInteger('teacher_id')->index();
                 $table->unsignedBigInteger('branch_id')->nullable()->index();
                 $table->date('attendance_date');
                 $table->string('status', 20)->default('present');
