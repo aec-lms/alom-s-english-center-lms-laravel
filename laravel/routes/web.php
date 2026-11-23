@@ -11,6 +11,7 @@ use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\DeviceSessionController;
 use App\Http\Controllers\Admin\BackupController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\AutomationSaasController;
 use App\Http\Controllers\Admin\SetupWizardController;
 use App\Http\Controllers\Admin\RolePermissionController;
 use App\Http\Controllers\Admin\AdminMenuController;
@@ -93,6 +94,12 @@ Route::middleware('installed')->group(function (): void {
         Route::post('/dashboard/widgets', [DashboardController::class, 'saveWidgets'])
             ->name('dashboard.widgets')
             ->middleware('permission:core.dashboard.view');
+        Route::get('/dashboard/refresh', [DashboardController::class, 'refresh'])
+            ->name('dashboard.refresh')
+            ->middleware(['permission:core.dashboard.view', 'throttle:60,1']);
+        Route::post('/dashboard/widget-analytics', [DashboardController::class, 'trackWidget'])
+            ->name('dashboard.widget-analytics')
+            ->middleware(['permission:core.dashboard.view', 'throttle:30,1']);
         Route::post('/dashboard/motion', [DashboardController::class, 'saveMotionSettings'])
             ->name('dashboard.motion')
             ->middleware(['permission:core.settings.manage', 'central.admin']);
@@ -111,6 +118,23 @@ Route::middleware('installed')->group(function (): void {
         Route::prefix('site-navigation')->name('site-navigation.')->middleware(['permission:core.settings.manage', 'central.admin'])->group(function (): void {
             Route::get('/', [SiteNavigationController::class, 'index'])->name('index');
             Route::post('/', [SiteNavigationController::class, 'update'])->name('update');
+        });
+
+        Route::prefix('automation-saas')->name('automation-saas.')->middleware('permission:core.settings.manage')->group(function (): void {
+            Route::get('/', [AutomationSaasController::class, 'index'])->name('index');
+            Route::post('/tenants', [AutomationSaasController::class, 'storeTenant'])->name('tenants.store');
+            Route::post('/tenants/{tenant}/agents', [AutomationSaasController::class, 'storeAgent'])->name('agents.store');
+            Route::post('/tenants/{tenant}/contacts', [AutomationSaasController::class, 'storeContact'])->name('contacts.store');
+            Route::post('/tenants/{tenant}/campaigns', [AutomationSaasController::class, 'storeCampaign'])->name('campaigns.store');
+            Route::put('/tenants/{tenant}/branding', [AutomationSaasController::class, 'updateBranding'])->name('branding.update');
+            Route::post('/tenants/{tenant}/domains', [AutomationSaasController::class, 'storeDomain'])->name('domains.store');
+            Route::post('/tenants/{tenant}/channels', [AutomationSaasController::class, 'storeChannel'])->name('channels.store');
+            Route::post('/tenants/{tenant}/webhooks', [AutomationSaasController::class, 'storeWebhook'])->name('webhooks.store');
+            Route::post('/tenants/{tenant}/conversations/{conversation}/assign', [AutomationSaasController::class, 'assignConversation'])->name('conversations.assign');
+            Route::patch('/tenants/{tenant}/conversations/{conversation}', [AutomationSaasController::class, 'updateConversation'])->name('conversations.update');
+            Route::post('/tenants/{tenant}/conversations/{conversation}/replies', [AutomationSaasController::class, 'replyConversation'])->name('conversations.replies.store');
+            Route::post('/tenants/{tenant}/workflows', [AutomationSaasController::class, 'storeWorkflow'])->name('workflows.store');
+            Route::post('/tenants/{tenant}/workflows/{workflow}/publish', [AutomationSaasController::class, 'publishWorkflow'])->name('workflows.publish');
         });
 
         Route::prefix('plugins')->name('plugins.')->middleware(['permission:core.plugins.manage', 'central.admin'])->group(function (): void {
