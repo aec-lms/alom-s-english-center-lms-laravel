@@ -235,6 +235,7 @@
                                 <button type="submit" class="px-3 py-1.5 rounded-lg bg-slate-900 text-white font-bold">Save</button>
                             </div>
                         </form>
+                        @endif
                     </div>
                 @empty
                     <p class="text-xs text-slate-400">No categories added yet.</p>
@@ -285,11 +286,13 @@
                                 <div class="font-bold text-sm text-slate-900">{{ $live->title }}</div>
                                 <div class="text-slate-500">{{ $live->course?->title ?? 'Course' }} &middot; {{ strtoupper($live->platform) }} &middot; {{ $live->starts_at }} &middot; LMS capacity {{ $live->capacity }} &middot; <strong class="uppercase text-[#0284C7]">{{ $live->status }}</strong></div>
                             </div>
+                            @if ($live->status !== 'completed')
                             <form method="POST" action="{{ route('plugins.courses.live.destroy', $live) }}" onsubmit="return confirm('Delete this live session?')">
                                 @csrf
                                 @method('DELETE')
                                 <button type="submit" class="px-3 py-1 rounded-lg border border-rose-200 text-rose-700 font-bold">Delete</button>
                             </form>
+                            @endif
                         </div>
 
                         @if ($live->status === 'completed' && \Illuminate\Support\Facades\Schema::hasTable('class_session_records'))
@@ -306,6 +309,7 @@
                                 <button type="submit" class="rounded-lg bg-emerald-700 text-white px-3 py-2 font-bold">Complete Class &amp; Settle</button>
                             </form>
                         @endif
+                        @if ($live->status !== 'completed')
                         <form method="POST" action="{{ route('plugins.courses.live.update', $live) }}" class="grid sm:grid-cols-3 gap-2 pt-2 border-t border-slate-100">
                             @csrf
                             @method('PUT')
