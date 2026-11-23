@@ -105,7 +105,7 @@ class DashboardController extends Controller
         return redirect()->route('admin.dashboard')->with('status', 'Dashboard layout saved for your account.');
     }
 
-    public function refresh(Request $request): \Illuminate\\Http\\JsonResponse
+    public function refresh(Request $request): \Illuminate\Http\JsonResponse
     {
         $actor = $request->user();
         $isBranchManager = $actor->hasRole('branch_manager');
@@ -124,7 +124,7 @@ class DashboardController extends Controller
         ])->header('Cache-Control', 'no-store, private');
     }
 
-    public function trackWidget(Request $request): \Illuminate\\Http\\JsonResponse
+    public function trackWidget(Request $request): \Illuminate\Http\JsonResponse
     {
         $actor = $request->user();
         $definitions = $this->widgetDefinitions($actor);
