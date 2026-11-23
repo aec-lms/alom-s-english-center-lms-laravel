@@ -68,6 +68,46 @@ class BkashAdminCredentialTest extends TestCase
         ]);
     }
 
+    public function test_nagad_merchant_credentials_are_configurable_from_admin_and_encrypted(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['gateway-nagad']);
+
+        $admin = $this->createUserWithRole('admin');
+        $this->actingAs($admin)
+            ->get('/admin/plugins/gateway-nagad/configure')
+            ->assertOk()
+            ->assertSee('Merchant ID')
+            ->assertSee('Signing Private Key');
+
+        $this->actingAs($admin)
+            ->post('/admin/plugins/gateway-nagad/configure', [
+                'settings' => [
+                    'enabled' => '1',
+                    'sandbox_mode' => '1',
+                    'merchant_id' => 'NAGAD-MERCHANT-001',
+                    'api_key' => 'nagad-api-key',
+                    'api_secret' => 'nagad-api-secret',
+                    'username' => 'nagad-merchant-user',
+                    'password' => 'nagad-merchant-password',
+                    'signing_private_key' => 'merchant-private-key-material',
+                    'provider_public_key' => 'nagad-provider-public-key',
+                ],
+            ])
+            ->assertRedirect('/admin/plugins')
+            ->assertSessionHasNoErrors();
+
+        foreach (['api_key', 'api_secret', 'username', 'password', 'signing_private_key', 'provider_public_key'] as $key) {
+            $setting = PluginSetting::query()
+                ->where('plugin_slug', 'gateway-nagad')
+                ->where('setting_key', $key)
+                ->firstOrFail();
+            $this->assertTrue($setting->is_encrypted, $key . ' must be encrypted at rest.');
+        }
+
+        $this->assertSame('NAGAD-MERCHANT-001', app(PluginManager::class)->getSetting('gateway-nagad', 'merchant_id'));
+    }
+
     public function test_bkash_connection_test_fails_safely_when_credentials_are_missing_or_rejected(): void
     {
         $this->markSystemInstalled();
