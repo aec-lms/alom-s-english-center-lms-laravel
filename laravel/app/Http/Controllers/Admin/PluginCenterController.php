@@ -18,6 +18,7 @@ use RuntimeException;
 use Plugins\Modules\GatewayStripe\Services\StripeGatewayService;
 use Plugins\Modules\GatewayPaypal\Services\PaypalGatewayService;
 use Plugins\Modules\GatewaySslcommerz\Services\SslcommerzGatewayService;
+use Plugins\Modules\GatewayBkash\Services\BkashGatewayService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -429,6 +430,7 @@ class PluginCenterController extends Controller
                 'gateway-stripe' => app(StripeGatewayService::class)->testCredentials(),
                 'gateway-paypal' => app(PaypalGatewayService::class)->testCredentials(),
                 'gateway-sslcommerz' => app(SslcommerzGatewayService::class)->testCredentials(),
+                'gateway-bkash' => app(BkashGatewayService::class)->testCredentials(),
                 'gateway-card' => throw new \RuntimeException('Visa/Mastercard is a card network, not a processor. Connect an acquiring bank/PSP adapter or use the Stripe plugin for Visa/Mastercard processing.'),
                 default => throw new \RuntimeException('This plugin does not provide an automated payment credential test.'),
             };
