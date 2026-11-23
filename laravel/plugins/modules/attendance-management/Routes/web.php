@@ -12,7 +12,7 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:attendance-management', '
     ->prefix('admin/attendance')
     ->name('plugins.attendance.')
     ->group(function (): void {
-        Route::get('/', [AttendanceController::class, 'index'])->name('index');\n        Route::get('/teachers', [TeacherAttendanceController::class, 'index'])->name('teachers.index');\n        Route::post('/teachers', [TeacherAttendanceController::class, 'store'])->name('teachers.store');
+        Route::get('/', [AttendanceController::class, 'index'])->name('index');\n        Route::get('/reports', [AttendanceReportController::class, 'index'])->name('reports');\n        Route::get('/reports/export.csv', [AttendanceReportController::class, 'export'])->name('reports.export');\n        Route::get('/teachers', [TeacherAttendanceController::class, 'index'])->name('teachers.index');\n        Route::post('/teachers', [TeacherAttendanceController::class, 'store'])->name('teachers.store');
         Route::get('/audit', [AttendanceAuditController::class, 'index'])->name('audit');
         Route::get('/audit/export.csv', [AttendanceAuditController::class, 'export'])->name('audit.export');
         Route::post('/', [AttendanceController::class, 'store'])->name('store');
