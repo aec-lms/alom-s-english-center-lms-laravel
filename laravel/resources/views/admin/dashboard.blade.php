@@ -107,6 +107,20 @@
     </div>
 
     <style>
+    body.aec-admin-dashboard-page { background:linear-gradient(180deg,#f8fafc 0%,#f1f5f9 100%) !important; }
+    body.aec-admin-dashboard-page aside {
+        background:linear-gradient(180deg,#081638 0%,#101f49 100%) !important;
+        border-right-color:rgba(148,163,184,.16) !important;
+    }
+    body.aec-admin-dashboard-page aside > div:first-child {
+        background:transparent !important;
+        border-bottom-color:rgba(148,163,184,.16) !important;
+    }
+    body.aec-admin-dashboard-page header {
+        background:rgba(255,255,255,.94) !important;
+        border-bottom-color:#e2e8f0 !important;
+        box-shadow:0 8px 24px rgba(15,23,42,.045) !important;
+    }
     .aec-dashboard-welcome { isolation:isolate; background:#10275d; }
     #dashboard-widgets [data-dashboard-widget] {
         position:relative;
