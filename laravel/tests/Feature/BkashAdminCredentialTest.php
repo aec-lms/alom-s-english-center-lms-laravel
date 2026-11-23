@@ -106,6 +106,13 @@ class BkashAdminCredentialTest extends TestCase
         }
 
         $this->assertSame('NAGAD-MERCHANT-001', app(PluginManager::class)->getSetting('gateway-nagad', 'merchant_id'));
+
+        $this->actingAs($admin)
+            ->get('/admin/plugins/gateway-nagad/configure')
+            ->assertOk()
+            ->assertSee('Saved and encrypted')
+            ->assertDontSee('merchant-private-key-material')
+            ->assertDontSee('nagad-api-secret');
     }
 
     public function test_bkash_connection_test_fails_safely_when_credentials_are_missing_or_rejected(): void
