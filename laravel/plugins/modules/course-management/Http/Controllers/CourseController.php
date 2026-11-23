@@ -412,11 +412,12 @@ class CourseController extends Controller
             'meeting_url' => ['required', 'url', 'max:255'],
             'recording_url' => ['nullable', 'url', 'max:255'],
             'starts_at' => ['required', 'date'],
-            'status' => ['required', 'in:upcoming,live,completed,cancelled'],
+            'status' => ['required', 'in:upcoming,live,cancelled'],
             'capacity' => ['nullable', 'integer', 'min:1', 'max:2000'],
         ]);
 
         abort_unless(DB::table('course_teacher_assignments')->where('course_id', $liveClass->course_id)->where('teacher_user_id', $validated['teacher_user_id'])->exists(), 422, 'Assign this teacher to the course first.');
+        abort_if(DB::table('class_session_records')->where('live_class_id', $liveClass->id)->exists(), 409, 'Completed class records are immutable.');
         $validated['capacity'] = (int) ($validated['capacity'] ?? $liveClass->capacity ?? 300);
         $validated['teacher_rate_per_class'] = round((float) ($validated['teacher_rate_per_class'] ?? 0), 2);
         $validated['student_fee_per_class'] = round((float) ($validated['student_fee_per_class'] ?? 0), 2);
