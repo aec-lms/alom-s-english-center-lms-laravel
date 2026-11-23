@@ -4,7 +4,8 @@
 @php
     $allGateways = [
         'sslcommerz' => 'SSLCommerz',
-        'bkash' => 'bKash Merchant',
+        'bkash' => 'bKash Online Checkout',
+        'bkash_manual' => 'bKash Manual Transfer',
         'nagad' => 'Nagad Merchant',
         'rocket' => 'Rocket DBBL',
         'card' => 'Visa / Mastercard (SSLCOMMERZ Acquirer)',
