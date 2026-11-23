@@ -19,6 +19,8 @@ class DashboardCustomizationTest extends TestCase
             ->assertSee('Customize Dashboard')
             ->assertSee('System Information')
             ->assertSee('aec-edupro-dashboard', false)
+            ->assertSee('aec-admin-dashboard-page', false)
+            ->assertSee('aria-current="page"', false)
             ->assertSee('aec-dashboard-welcome', false)
             ->assertSee('Welcome back');
 
