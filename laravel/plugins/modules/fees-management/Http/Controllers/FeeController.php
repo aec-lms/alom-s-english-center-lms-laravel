@@ -12,6 +12,8 @@ use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Mail;
+use Throwable;
 use Plugins\Modules\FeesManagement\Models\FeeCategory;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\StudentManagement\Models\Student;
@@ -102,6 +104,86 @@ class FeeController extends Controller
         $this->audit->log('fees.invoice_created', 'fee_invoice', (string) $invoice->id, ['net_amount' => $net, 'student_id' => $student?->id]);
 
         return back()->with('status', "Invoice {$invoice->invoice_number} created.");
+    }
+
+
+    public function waiveInvoice(Request $request, FeeInvoice $invoice): RedirectResponse
+    {
+        $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
+        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $invoice->branch_id) abort(403, 'Branch isolation violation.');
+        $data = $request->validate([
+            'amount' => ['required', 'numeric', 'min:0.01'],
+            'reason' => ['required', 'string', 'max:255'],
+        ]);
+
+        $adjustment = DB::transaction(function () use ($invoice, $data, $actor) {
+            $locked = FeeInvoice::query()->whereKey($invoice->id)->lockForUpdate()->firstOrFail();
+            $remaining = round((float) $locked->net_amount - (float) $locked->paid_amount, 2);
+            $amount = round((float) $data['amount'], 2);
+            abort_if($locked->status === 'cancelled' || $remaining <= 0, 409, 'Only invoices with an outstanding balance can be waived.');
+            abort_if($amount > $remaining, 422, 'Waiver cannot exceed the unpaid invoice balance.');
+            $oldNet = round((float) $locked->net_amount, 2);
+            $newNet = round($oldNet - $amount, 2);
+            $locked->update([
+                'discount_amount' => round((float) $locked->discount_amount + $amount, 2),
+                'net_amount' => $newNet,
+                'status' => (float) $locked->paid_amount >= $newNet ? 'paid' : ((float) $locked->paid_amount > 0 ? 'partial' : 'unpaid'),
+            ]);
+            return DB::table('fee_invoice_adjustments')->insertGetId([
+                'fee_invoice_id' => $locked->id, 'approved_by' => $actor?->id,
+                'amount' => $amount, 'previous_net_amount' => $oldNet, 'new_net_amount' => $newNet,
+                'adjustment_type' => 'waiver', 'reason' => $data['reason'],
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+        });
+
+        $this->audit->log('fees.invoice_waived', 'fee_invoice_adjustment', (string) $adjustment, [
+            'invoice_id' => $invoice->id, 'amount' => round((float) $data['amount'], 2), 'reason' => $data['reason'],
+        ]);
+        return back()->with('status', 'Fee waiver applied and recorded in the adjustment ledger.');
+    }
+
+    public function sendDueReminder(Request $request, FeeInvoice $invoice): RedirectResponse
+    {
+        $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
+        if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $invoice->branch_id) abort(403, 'Branch isolation violation.');
+        abort_unless(in_array($invoice->status, ['unpaid', 'partial'], true), 409, 'Only unpaid or partially paid invoices can receive reminders.');
+        $email = trim((string) $invoice->payer_email);
+        abort_if($email === '', 422, 'The invoice has no payer email address.');
+        $balance = round((float) $invoice->net_amount - (float) $invoice->paid_amount, 2);
+        abort_if($balance <= 0, 409, 'This invoice has no outstanding balance.');
+
+        $body = "Payment reminder for invoice {$invoice->invoice_number}\n"
+            . "Outstanding balance: {$invoice->currency} " . number_format($balance, 2) . "\n"
+            . "Due date: " . ($invoice->due_date?->toDateString() ?? 'Please contact the office') . "\n"
+            . "Please contact Alom's English Center to arrange payment. If you have already paid, please ignore this reminder.";
+
+        try {
+            Mail::raw($body, function ($message) use ($email, $invoice): void {
+                $message->to($email)->subject('Payment reminder — ' . $invoice->invoice_number);
+            });
+            DB::table('fee_invoice_reminders')->insert([
+                'fee_invoice_id' => $invoice->id, 'sent_by' => $actor?->id,
+                'recipient_email' => $email, 'status' => 'sent', 'failure_reason' => null,
+                'sent_at' => now(), 'created_at' => now(), 'updated_at' => now(),
+            ]);
+        } catch (Throwable $exception) {
+            DB::table('fee_invoice_reminders')->insert([
+                'fee_invoice_id' => $invoice->id, 'sent_by' => $actor?->id,
+                'recipient_email' => $email, 'status' => 'failed',
+                'failure_reason' => mb_substr($exception->getMessage(), 0, 2000),
+                'sent_at' => null, 'created_at' => now(), 'updated_at' => now(),
+            ]);
+            report($exception);
+            return back()->withErrors(['reminder' => 'Reminder could not be sent. Check mail configuration and try again.']);
+        }
+
+        $this->audit->log('fees.due_reminder_sent', 'fee_invoice', (string) $invoice->id, [
+            'recipient_email' => $email, 'outstanding_balance' => $balance,
+        ]);
+        return back()->with('status', 'Payment reminder sent and logged.');
     }
 
     private function ensureAssignedBranch($actor): void
