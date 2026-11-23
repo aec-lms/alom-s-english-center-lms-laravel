@@ -28,7 +28,8 @@ class UniversalPaymentOrchestrator
         foreach ($this->gateways->definitions() as $slug => $definition) {
             $method = str_replace('-', '_', substr($slug, strlen('gateway-')));
             $methodEnabled = in_array($method, $enabledMethods, true);
-            $pluginEnabled = $this->plugins->isEnabled($slug);
+            $pluginEnabled = $this->plugins->isEnabled($slug)
+                && (string) $this->plugins->getSetting($slug, 'enabled', '1') === '1';
             $missing = [];
             $credentialKeys = $definition['manual'] ? [] : $definition['credentials'];
             foreach ($credentialKeys as $key) {
