@@ -17,7 +17,7 @@ class GatewayRocketServiceProvider extends BasePluginServiceProvider
         $this->app->afterResolving(PaymentGatewayRegistry::class, function (PaymentGatewayRegistry $registry): void {
             $registry->register('gateway-rocket', 'DBBL Rocket Merchant Gateway', ["api_key","api_secret","username","password"], function (array $input): array {
                 throw new \RuntimeException('Rocket checkout requires the official merchant API specification and verified callback adapter.');
-            }, false);
+            }, false, true);
         });
     }
 
