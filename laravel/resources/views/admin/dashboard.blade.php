@@ -66,7 +66,7 @@
                 <ol id="dashboard-widget-order" class="space-y-2">
                     @foreach ($widgetLabels as $key => $label)
                         @if (!$isBranchManager || $key === 'users')
-                            <li draggable="true" data-widget-row data-default-enabled="{{ !empty($widgetDefinitions[$key]['default']) ? 'true' : 'false' }}" class="flex items-center gap-2 rounded-lg border border-slate-200 p-2 cursor-move">
+                            <li draggable="true" data-widget-row data-default-enabled="{{ in_array($key, $roleDefaultWidgets, true) ? 'true' : 'false' }}" class="flex items-center gap-2 rounded-lg border border-slate-200 p-2 cursor-move">
                                 <span aria-hidden="true" class="text-slate-400">⠿</span>
                                 <label class="flex min-w-0 flex-1 items-center gap-2 text-sm text-slate-700">
                                     <input type="checkbox" name="widgets[]" value="{{ $key }}" @checked(in_array($key, $widgets, true)) class="rounded border-slate-300">
