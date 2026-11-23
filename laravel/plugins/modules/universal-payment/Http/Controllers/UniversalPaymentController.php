@@ -90,7 +90,7 @@ class UniversalPaymentController extends Controller
         $this->assertGatewayEnabled($validated['gateway']);
 
         if ($request->hasFile('proof_file')) {
-            abort_unless(in_array($validated['gateway'], ['cash', 'bank_transfer', 'bank_cash', 'offline', 'cheque'], true), 422, 'Receipt evidence is accepted only for manual bank/cash payments.');
+            abort_unless(in_array($validated['gateway'], ['cash', 'bank_transfer', 'bank_cash', 'offline', 'cheque', 'bkash', 'nagad', 'rocket'], true), 422, 'Receipt evidence is accepted only for manual wallet, bank or cash payments.');
             abort_unless(Schema::hasColumn('universal_payment_transactions', 'proof_path')
                 && Schema::hasColumn('universal_payment_transactions', 'proof_mime')
                 && Schema::hasColumn('universal_payment_transactions', 'proof_size'), 503, 'Receipt evidence storage is not available until the payment migration is applied.');
@@ -539,7 +539,10 @@ class UniversalPaymentController extends Controller
 
         if ($storefrontItem !== null) {
             try {
-                $gatewaySlug = 'gateway-' . str_replace('_', '-', $validated['gateway']);
+                $gatewaySlug = $validated['gateway'] === 'card' ? 'gateway-sslcommerz' : 'gateway-' . str_replace('_', '-', $validated['gateway']);
+                if ($validated['gateway'] === 'card') {
+                    $this->assertGatewayEnabled('sslcommerz');
+                }
                 $this->assertGatewayEnabled($validated['gateway']);
                 abort_unless($this->gatewayRegistry->supportsStorefront($gatewaySlug), 422, 'The selected gateway has no verified e-book storefront adapter yet.');
                 $checkout = $this->gatewayRegistry->initiate($gatewaySlug, [
