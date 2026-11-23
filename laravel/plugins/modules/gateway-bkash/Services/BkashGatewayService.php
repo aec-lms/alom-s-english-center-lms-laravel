@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Plugins\\Modules\\GatewayBkash\\Services;
+namespace Plugins\Modules\GatewayBkash\Services;
 
-use App\\Core\\Plugins\\PluginManager;
-use Illuminate\\Support\\Facades\\Http;
+use App\Core\Plugins\PluginManager;
+use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
 class BkashGatewayService
@@ -47,7 +47,7 @@ class BkashGatewayService
                     'app_key' => $appKey,
                     'app_secret' => $appSecret,
                 ]);
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             throw new RuntimeException('Could not reach the selected bKash environment. Check server connectivity and try again.', previous: $exception);
         }
 
