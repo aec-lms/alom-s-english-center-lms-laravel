@@ -100,7 +100,7 @@
         }
     </style>
 </head>
-<body class="bg-slate-100 text-slate-900 antialiased">
+<body class="bg-slate-100 text-slate-900 antialiased {{ request()->routeIs('admin.dashboard') ? 'aec-admin-dashboard-page' : '' }}">
 <div class="min-h-screen flex">
     <aside id="admin-sidebar" class="fixed inset-y-0 left-0 z-40 w-64 text-slate-200 flex flex-col shrink-0 border-r border-white/10 -translate-x-full transition-transform duration-200 shadow-2xl lg:static lg:translate-x-0 lg:shadow-none">
         <div class="px-5 py-4 border-b border-white/10">
@@ -122,7 +122,7 @@
         </div>
         <nav class="flex-1 p-3 space-y-1 text-sm overflow-y-auto">
             <div class="px-3 pt-1 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">{{ __('Protected Core') }}</div>
-            <a href="{{ route('admin.dashboard') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">{{ __('Dashboard') }}</a>
+            <a href="{{ route('admin.dashboard') }}" class="block rounded-xl px-3 py-2 transition-colors {{ request()->routeIs('admin.dashboard') ? 'bg-gradient-to-r from-blue-600 to-indigo-500 text-white shadow-lg shadow-blue-950/30' : 'text-slate-300 hover:bg-white/10 hover:text-white' }}" @if(request()->routeIs('admin.dashboard')) aria-current="page" @endif>{{ __('Dashboard') }}</a>
             @if (auth()->user()?->hasRole('admin') && auth()->user()?->hasPermission('core.settings.manage'))
                 <a href="{{ route('admin.automation-saas.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">AI Automation SaaS</a>
             @endif
