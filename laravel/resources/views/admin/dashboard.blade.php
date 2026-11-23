@@ -17,6 +17,23 @@
             </div>
         </section>
     @endif
+    <section class="aec-edupro-hero" aria-labelledby="aec-dashboard-welcome">
+        <div class="aec-edupro-hero__glow" aria-hidden="true"></div>
+        <div class="aec-edupro-hero__content">
+            <div>
+                <p class="aec-edupro-hero__eyebrow">ALOM'S ENGLISH CENTER · ADMIN WORKSPACE</p>
+                <h2 id="aec-dashboard-welcome">Welcome back, {{ auth()->user()?->name ?? 'Administrator' }} <span aria-hidden="true">✦</span></h2>
+                <p>Your learning platform at a glance. Review operations, activity and system health from one place.</p>
+            </div>
+            <div class="aec-edupro-hero__date">
+                <span aria-hidden="true">◷</span>
+                <span>{{ now()->format('l, d F Y') }}</span>
+            </div>
+        </div>
+        <div class="aec-edupro-hero__orb aec-edupro-hero__orb--one" aria-hidden="true"></div>
+        <div class="aec-edupro-hero__orb aec-edupro-hero__orb--two" aria-hidden="true"></div>
+    </section>
+
     <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
             <h1 class="text-2xl font-extrabold text-slate-900">Dashboard</h1>
@@ -319,6 +336,126 @@ body:has(#dashboard-widgets) main > header span { background:#303d51 !important;
  #dashboard-widgets [data-dashboard-widget] { transition:none !important; }
  #dashboard-widgets [data-dashboard-widget]:hover { transform:none; }
 }
+
+/* EDUPro-inspired admin dashboard skin. Kept local to this page so other portals and admin screens are unchanged. */
+body:has(#dashboard-widgets) { background:#111c2e !important; color:#e8eef7 !important; }
+body:has(#dashboard-widgets) main { background:#111c2e !important; }
+body:has(#dashboard-widgets) #admin-sidebar {
+    background:linear-gradient(180deg,#102344 0%,#0b1930 52%,#081426 100%) !important;
+    border-color:rgba(148,163,184,.14) !important;
+}
+body:has(#dashboard-widgets) #admin-sidebar > div:first-child {
+    background:linear-gradient(145deg,#17345b,#102443) !important;
+    border-color:rgba(148,163,184,.16) !important;
+}
+body:has(#dashboard-widgets) #admin-sidebar nav a {
+    margin-block:3px; border:1px solid transparent; border-radius:11px;
+    color:#c5d2e4 !important; transition:background .18s ease,border-color .18s ease,transform .18s ease;
+}
+body:has(#dashboard-widgets) #admin-sidebar nav a:hover {
+    background:rgba(96,165,250,.12) !important; border-color:rgba(96,165,250,.18) !important;
+    color:#fff !important; transform:translateX(2px);
+}
+body:has(#dashboard-widgets) main > header {
+    background:rgba(25,39,60,.94) !important; border-color:rgba(148,163,184,.16) !important;
+    color:#f8fafc !important; backdrop-filter:blur(16px);
+}
+body:has(#dashboard-widgets) main > header .text-slate-900 { color:#f8fafc !important; }
+body:has(#dashboard-widgets) main > header .text-slate-500,
+body:has(#dashboard-widgets) main > header .text-slate-400 { color:#a9bad0 !important; }
+body:has(#dashboard-widgets) main > header a:not(.bg-blue-600),
+body:has(#dashboard-widgets) main > header button:not(.bg-blue-600) {
+    background:#223550 !important; border-color:#3b5270 !important; color:#e8eef7 !important;
+}
+.aec-edupro-hero {
+    position:relative; isolation:isolate; overflow:hidden; min-height:158px;
+    display:flex; align-items:center; padding:1.6rem 1.8rem; border-radius:22px;
+    color:#fff; background:linear-gradient(112deg,#12345b 0%,#155b78 52%,#176f78 100%);
+    border:1px solid rgba(125,211,252,.24); box-shadow:0 18px 44px rgba(2,8,23,.2);
+}
+.aec-edupro-hero__content { position:relative; z-index:2; display:flex; width:100%; align-items:flex-end; justify-content:space-between; gap:1.5rem; }
+.aec-edupro-hero__eyebrow { margin:0 0 .45rem; color:#a5f3fc; font-size:.65rem; font-weight:800; letter-spacing:.16em; }
+.aec-edupro-hero h2 { margin:0; color:#fff; font-size:clamp(1.35rem,2.5vw,2rem); font-weight:850; letter-spacing:-.035em; }
+.aec-edupro-hero h2 span { color:#fcd34d; font-size:.8em; }
+.aec-edupro-hero__content p:not(.aec-edupro-hero__eyebrow) { margin:.45rem 0 0; max-width:42rem; color:#d7f4f7; font-size:.82rem; }
+.aec-edupro-hero__date { display:flex; flex:none; align-items:center; gap:.5rem; padding:.65rem .85rem; border:1px solid rgba(255,255,255,.22); border-radius:12px; background:rgba(7,24,48,.24); color:#e0f2fe; font-size:.72rem; font-weight:700; backdrop-filter:blur(10px); }
+.aec-edupro-hero__orb { position:absolute; z-index:1; border-radius:999px; pointer-events:none; filter:blur(1px); }
+.aec-edupro-hero__orb--one { width:230px; height:230px; right:12%; top:-155px; background:rgba(103,232,249,.13); box-shadow:0 0 80px rgba(103,232,249,.14); }
+.aec-edupro-hero__orb--two { width:150px; height:150px; right:2%; bottom:-105px; background:rgba(96,165,250,.2); }
+#dashboard-widgets { align-items:stretch; gap:1rem; }
+#dashboard-widgets [data-dashboard-widget] {
+    position:relative; min-width:0; overflow:hidden; color:#e8eef7 !important;
+    background:linear-gradient(145deg,#202f45 0%,#1a293e 100%) !important;
+    border:1px solid rgba(148,163,184,.2) !important; border-radius:17px !important;
+    box-shadow:0 12px 28px rgba(2,8,23,.16); padding:1.25rem !important;
+}
+#dashboard-widgets [data-dashboard-widget]::after {
+    content:""; position:absolute; width:120px; height:120px; right:-55px; top:-65px;
+    border-radius:50%; background:rgba(96,165,250,.09); pointer-events:none;
+}
+#dashboard-widgets [data-dashboard-widget="users"] {
+    background:linear-gradient(135deg,#2366a5,#244b87) !important;
+    border-color:rgba(125,211,252,.28) !important;
+}
+#dashboard-widgets [data-dashboard-widget="plugins"] {
+    background:linear-gradient(135deg,#087f83,#126b75) !important;
+    border-color:rgba(94,234,212,.25) !important;
+}
+#dashboard-widgets [data-dashboard-widget="backups"] {
+    background:linear-gradient(135deg,#594a9b,#3c477f) !important;
+    border-color:rgba(196,181,253,.25) !important;
+}
+#dashboard-widgets [data-dashboard-widget="users"]::after { background:rgba(191,219,254,.14); }
+#dashboard-widgets [data-dashboard-widget="plugins"]::after { background:rgba(153,246,228,.14); }
+#dashboard-widgets [data-dashboard-widget="backups"]::after { background:rgba(221,214,254,.15); }
+#dashboard-widgets [data-dashboard-widget="users"] .text-slate-500,
+#dashboard-widgets [data-dashboard-widget="plugins"] .text-slate-500,
+#dashboard-widgets [data-dashboard-widget="backups"] .text-slate-500 { color:rgba(255,255,255,.78) !important; }
+#dashboard-widgets [data-dashboard-widget="users"] .text-2xl,
+#dashboard-widgets [data-dashboard-widget="plugins"] .text-2xl,
+#dashboard-widgets [data-dashboard-widget="backups"] .text-2xl { color:#fff !important; font-size:2rem; letter-spacing:-.04em; }
+#dashboard-widgets [data-dashboard-widget] h1,
+#dashboard-widgets [data-dashboard-widget] h2,
+#dashboard-widgets [data-dashboard-widget] h3,
+#dashboard-widgets [data-dashboard-widget] strong,
+#dashboard-widgets [data-dashboard-widget] .text-slate-900 { color:#f8fafc !important; }
+#dashboard-widgets [data-dashboard-widget] .text-slate-700,
+#dashboard-widgets [data-dashboard-widget] .text-slate-600 { color:#d5deeb !important; }
+#dashboard-widgets [data-dashboard-widget] .text-slate-500,
+#dashboard-widgets [data-dashboard-widget] .text-slate-400 { color:#a9bad0 !important; }
+#dashboard-widgets [data-dashboard-widget] .border-slate-200,
+#dashboard-widgets [data-dashboard-widget] .border-slate-300,
+#dashboard-widgets [data-dashboard-widget] table tbody tr { border-color:rgba(148,163,184,.2) !important; }
+#dashboard-widgets [data-dashboard-widget] table thead { color:#b8c8dc !important; border-color:rgba(148,163,184,.2) !important; }
+#dashboard-widgets [data-dashboard-widget] table { color:#dce6f2; }
+#dashboard-widgets [data-dashboard-widget] a.bg-blue-600,
+#dashboard-widgets [data-dashboard-widget] button.bg-blue-600 { background:#20a89c !important; color:white !important; }
+#dashboard-widgets [data-dashboard-widget] input,
+#dashboard-widgets [data-dashboard-widget] select { background:#17263b !important; border-color:#43536b !important; color:#e8eef7 !important; }
+#dashboard-widgets [data-dashboard-widget][data-size=small] { min-height:8rem; }
+#dashboard-widgets [data-dashboard-widget][data-size=medium] { min-height:10rem; }
+#dashboard-widgets [data-dashboard-widget][data-size=large] { min-height:14rem; }
+@media (min-width:768px) {
+    #dashboard-widgets [data-dashboard-widget][data-size=small] { grid-column:span 1; }
+    #dashboard-widgets [data-dashboard-widget][data-size=medium] { grid-column:span 2; }
+    #dashboard-widgets [data-dashboard-widget][data-size=large] { grid-column:span 4; }
+}
+@media (max-width:767px) {
+    .aec-edupro-hero { min-height:0; padding:1.25rem; }
+    .aec-edupro-hero__content { align-items:flex-start; flex-direction:column; gap:1rem; }
+    .aec-edupro-hero__date { align-self:flex-start; }
+    #dashboard-widgets [data-dashboard-widget] { grid-column:1 / -1 !important; }
+    body:has(#dashboard-widgets) main { padding:1rem !important; }
+    body:has(#dashboard-widgets) main > header { margin:-1rem -1rem 1rem !important; padding:1rem !important; }
+}
+#dashboard-widgets [data-dashboard-widget] { transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease; }
+#dashboard-widgets [data-dashboard-widget]:hover { transform:translateY(-2px); border-color:#607795 !important; box-shadow:0 16px 34px rgba(2,8,23,.25); }
+@media (prefers-reduced-motion:reduce) {
+    #dashboard-widgets [data-dashboard-widget] { transition:none !important; }
+    #dashboard-widgets [data-dashboard-widget]:hover { transform:none; }
+    body:has(#dashboard-widgets) #admin-sidebar nav a { transition:none !important; }
+}
+
 </style>
 
 @endsection
