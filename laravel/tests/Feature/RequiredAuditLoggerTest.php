@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use App\\Core\\Security\\AuditLogger;
-use App\\Models\\AuditLog;
-use App\\Models\\User;
-use Illuminate\\Support\\Facades\\Hash;
-use Illuminate\\Support\\Facades\\Schema;
+use App\Core\Security\AuditLogger;
+use App\Models\AuditLog;
+use App\Models\User;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use RuntimeException;
-use Tests\\TestCase;
+use Tests\TestCase;
 
 class RequiredAuditLoggerTest extends TestCase
 {
