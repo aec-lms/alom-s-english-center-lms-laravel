@@ -25,15 +25,29 @@ class FeeController extends Controller
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
         $studentIntegrationEnabled = $this->studentIntegrationEnabled();
-        $invoices = FeeInvoice::query()
-            ->when($studentIntegrationEnabled, fn ($q) => $q->with('student.user'))
-            ->with('category')
+        $filters = $request->validate([
+            'status' => ['nullable', 'in:unpaid,partial,paid,overdue'],
+            'from' => ['nullable', 'date_format:Y-m-d'],
+            'to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:from'],
+            'q' => ['nullable', 'string', 'max:100'],
+        ]);
+        $base = FeeInvoice::query()
             ->when($actor && $actor->hasRole('branch_manager'), fn ($q) => $q->where('branch_id', $actor->branch_id))
-            ->latest()
-            ->paginate(25);
+            ->when($filters['from'] ?? null, fn ($q,$v) => $q->whereDate('created_at','>=',$v))
+            ->when($filters['to'] ?? null, fn ($q,$v) => $q->whereDate('created_at','<=',$v))
+            ->when($filters['q'] ?? null, function ($q,$v): void { $term='%'.$v.'%'; $q->where(fn($nested)=>$nested->where('invoice_number','like',$term)->orWhere('payer_name','like',$term)->orWhere('payer_email','like',$term)->orWhere('payer_phone','like',$term)); });
+        $query=(clone $base)->when(($filters['status'] ?? null)==='overdue',fn($q)=>$q->whereIn('status',['unpaid','partial'])->whereDate('due_date','<',now()->toDateString()))
+            ->when(!empty($filters['status']) && $filters['status']!=='overdue',fn($q)=>$q->where('status',$filters['status']));
+        $invoices = $query->when($studentIntegrationEnabled, fn ($q) => $q->with('student.user'))->with('category')->latest()->paginate(25)->withQueryString();
+        $totals = (clone $base)->selectRaw('COUNT(*) as invoice_count')
+            ->selectRaw('COALESCE(SUM(net_amount),0) as billed')
+            ->selectRaw('COALESCE(SUM(paid_amount),0) as collected')
+            ->selectRaw('COALESCE(SUM(GREATEST(net_amount-paid_amount,0)),0) as outstanding')
+            ->first();
+        $overdueCount = (clone $base)->whereIn('status',['unpaid','partial'])->whereDate('due_date','<',now()->toDateString())->count();
         $categories = FeeCategory::query()->orderBy('name')->get();
 
-        return view('fees-management::index', compact('invoices', 'categories', 'studentIntegrationEnabled'));
+        return view('fees-management::index', compact('invoices', 'categories', 'studentIntegrationEnabled', 'filters', 'totals', 'overdueCount'));
     }
 
     public function storeInvoice(Request $request): RedirectResponse
