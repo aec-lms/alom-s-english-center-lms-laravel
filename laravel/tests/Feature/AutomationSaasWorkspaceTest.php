@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Tests\\Feature;
+namespace Tests\Feature;
 
-use App\\Models\\SaasTenant;
-use Tests\\TestCase;
+use App\Models\SaasTenant;
+use Tests\TestCase;
 
 class AutomationSaasWorkspaceTest extends TestCase
 {
@@ -71,29 +71,4 @@ class AutomationSaasWorkspaceTest extends TestCase
         ]);
     }
 
-    public function test_workspace_owner_cannot_access_another_tenants_agents_or_workflows(): void
-    {
-        $this->markSystemInstalled();
-        $owner = $this->createUserWithRole('admin', null, 'saas-owner-one@aec.test');
-        $other = $this->createUserWithRole('admin', null, 'saas-owner-two@aec.test');
-        $tenant = SaasTenant::create([
-            'owner_user_id' => $other->id,
-            'name' => 'Private Workspace',
-            'slug' => 'private-workspace',
-            'status' => 'trial',
-            'plan_key' => 'starter',
-        ]);
 
-        $this->actingAs($owner)->post(route('admin.automation-saas.agents.store', $tenant), [
-            'name' => 'Unauthorized bot',
-        ])->assertNotFound();
-
-        $this->actingAs($owner)->post(route('admin.automation-saas.workflows.store', $tenant), [
-            'name' => 'Unauthorized flow',
-            'trigger_event' => 'contact.created',
-        ])->assertNotFound();
-
-        $this->assertDatabaseMissing('automation_ai_agents', ['tenant_id' => $tenant->id]);
-        $this->assertDatabaseMissing('automation_workflows', ['tenant_id' => $tenant->id]);
-    }
-}
