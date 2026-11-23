@@ -12,6 +12,7 @@ use App\Models\PluginRecord;
 use App\Models\SystemSetting;
 use App\Models\UpdateLog;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -293,11 +294,19 @@ class UniversalUpdateService
     public function saveRemoteFeedUrl(string $url, ?int $actorId = null): void
     {
         $parts = $this->assertSafeRemoteFeedUrl($url, false);
-        SystemSetting::query()->updateOrCreate(
-            ['key' => 'lms_update_feed_url'],
-            ['value' => trim($url), 'is_encrypted' => false, 'updated_by' => $actorId]
-        );
-        $this->audit->log('update.feed_configured', 'system_setting', 'lms_update_feed_url', ['host' => $parts['host']], $actorId);
+        DB::transaction(function () use ($url, $actorId, $parts): void {
+            SystemSetting::query()->updateOrCreate(
+                ['key' => 'lms_update_feed_url'],
+                ['value' => trim($url), 'is_encrypted' => false, 'updated_by' => $actorId]
+            );
+            $this->audit->logRequired(
+                'update.feed_configured',
+                'system_setting',
+                'lms_update_feed_url',
+                ['host' => $parts['host']],
+                $actorId,
+            );
+        });
     }
 
     public function checkRemoteFeed(): array
