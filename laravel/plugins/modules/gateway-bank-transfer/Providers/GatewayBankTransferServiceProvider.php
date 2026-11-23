@@ -17,7 +17,7 @@ final class GatewayBankTransferServiceProvider extends BasePluginServiceProvider
         $this->app->afterResolving(PaymentGatewayRegistry::class, function (PaymentGatewayRegistry $registry): void {
             $registry->register('gateway-bank-transfer', 'Bank Transfer Payment Method', [], static function (array $input): array {
                 throw new \RuntimeException('Manual payment submissions are recorded and settled through the Universal Payment review workflow.');
-            }, false);
+            }, false, true);
         });
     }
 
