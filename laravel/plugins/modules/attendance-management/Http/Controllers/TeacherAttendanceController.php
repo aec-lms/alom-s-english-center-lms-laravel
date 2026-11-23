@@ -64,16 +64,48 @@ class TeacherAttendanceController extends Controller
 
     public function punch(Request $request): RedirectResponse
     {
-        $actor=$request->user(); abort_unless($actor->hasRole('teacher'),403);
-        abort_unless(Schema::hasTable('teachers'),409);
-        $teacher=Teacher::query()->where('user_id',$actor->id)->where('is_active',true)->firstOrFail();
-        $now=now(); $record=TeacherAttendanceRecord::query()->firstOrNew(['teacher_id'=>$teacher->id,'attendance_date'=>$now->toDateString()]);
-        abort_if($record->exists && $record->check_out_at,409,'Today attendance is already checked out.');
-        if (!$record->exists) { $record->branch_id=$teacher->branch_id; $record->status='present'; $record->source='self'; $record->marked_by=$actor->id; $record->check_in_at=$now; }
-        else { abort_unless($record->check_in_at,409,'Check in before checking out.'); $record->check_out_at=$now; }
-        $record->save();
-        $this->audit->log('teacher_attendance.punch','teacher_attendance',(string)$record->id,['check_in_at'=>$record->check_in_at?->toISOString(),'check_out_at'=>$record->check_out_at?->toISOString()],$actor->id);
-        return back()->with('status',$record->check_out_at ? 'Check-out recorded.' : 'Check-in recorded.');
+        $actor = $request->user();
+        abort_unless($actor->hasRole('teacher'), 403);
+        abort_unless(app(PluginManager::class)->isEnabled('teacher-management') && Schema::hasTable('teachers'), 409, 'Teacher Management must be enabled.');
+
+        [$record, $checkedOut] = DB::transaction(function () use ($actor): array {
+            // Lock the teacher profile so two simultaneous first punches cannot
+            // race to create duplicate attendance rows for the same date.
+            $teacher = Teacher::query()->where('user_id', $actor->id)->where('is_active', true)->lockForUpdate()->firstOrFail();
+            $today = now()->toDateString();
+            $record = TeacherAttendanceRecord::query()
+                ->where('teacher_id', $teacher->id)
+                ->whereDate('attendance_date', $today)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$record) {
+                $record = new TeacherAttendanceRecord();
+                $record->fill([
+                    'teacher_id' => $teacher->id,
+                    'branch_id' => $teacher->branch_id,
+                    'attendance_date' => $today,
+                    'status' => 'present',
+                    'source' => 'self',
+                    'marked_by' => $actor->id,
+                    'check_in_at' => now(),
+                ]);
+                $record->save();
+                return [$record, false];
+            }
+
+            abort_if($record->check_out_at, 409, 'Today attendance is already checked out.');
+            abort_unless($record->check_in_at, 409, 'Check in before checking out.');
+            $record->update(['check_out_at' => now()]);
+            return [$record->fresh(), true];
+        });
+
+        $this->audit->log('teacher_attendance.punch', 'teacher_attendance', (string) $record->id, [
+            'check_in_at' => $record->check_in_at?->toISOString(),
+            'check_out_at' => $record->check_out_at?->toISOString(),
+        ], $actor->id);
+
+        return back()->with('status', $checkedOut ? 'Check-out recorded.' : 'Check-in recorded.');
     }
 
     private function ensureBranch($actor): void
