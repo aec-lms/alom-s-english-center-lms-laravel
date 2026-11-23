@@ -65,6 +65,20 @@ final class WorkflowDefinitionValidator
             foreach ($adjacency[$id] as $next) if (--$indegree[$next] === 0) $queue[] = $next;
         }
         if ($visited !== count($byId)) throw new InvalidArgumentException('Workflow connections cannot contain cycles.');
+
+        $triggerId = null;
+        foreach ($byId as $id => $node) if ($node['type'] === 'trigger') $triggerId = $id;
+        $reachable = [];
+        $pending = [$triggerId];
+        while ($pending !== []) {
+            $current = array_pop($pending);
+            if (isset($reachable[$current])) continue;
+            $reachable[$current] = true;
+            foreach ($adjacency[$current] as $next) $pending[] = $next;
+        }
+        if (count($reachable) !== count($byId)) {
+            throw new InvalidArgumentException('Every workflow node must be reachable from its trigger.');
+        }
         $definition['version'] = 1;
         return $definition;
     }
