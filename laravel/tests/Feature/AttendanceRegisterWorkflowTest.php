@@ -91,6 +91,11 @@ class AttendanceRegisterWorkflowTest extends TestCase
         $this->actingAs($admin)->post('/admin/attendance', $payload)->assertRedirect()->assertSessionHasNoErrors();
         $this->assertDatabaseHas('attendance_records', ['student_id' => $student->id, 'status' => 'late', 'edited_reason' => 'Teacher corrected register']);
         $this->assertDatabaseHas('attendance_audit_logs', ['new_status' => 'late', 'event' => 'updated', 'reason' => 'Teacher corrected register']);
+
+        $this->actingAs($admin)->get('/admin/attendance/reports?batch_id='.$mappingId)
+            ->assertOk()->assertSee('Student Attendance Reports')->assertSee('Attendance Test Batch');
+        $this->actingAs($admin)->get('/admin/attendance/reports/export.csv?batch_id='.$mappingId)
+            ->assertOk()->assertHeader('content-type', 'text/csv; charset=UTF-8');
     }
 
     public function test_offline_sync_is_idempotent_and_records_offline_source(): void
