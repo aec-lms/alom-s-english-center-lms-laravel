@@ -336,6 +336,7 @@
                                 <button type="submit" class="px-4 py-1.5 rounded-lg bg-slate-900 text-white font-bold">Update Live Class</button>
                             </div>
                         </form>
+                        @endif
                     </div>
                 @empty
                     <p class="text-xs text-slate-400">No live classes scheduled yet.</p>
