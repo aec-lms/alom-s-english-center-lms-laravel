@@ -883,7 +883,7 @@ class UniversalPaymentController extends Controller
 
         // Keep the legacy bank_cash/offline identifiers subject to the same
         // global offline-payment kill switch as the new manual payment plugins.
-        if (in_array($gateway, ['cash', 'bank_transfer', 'bank_cash', 'offline', 'cheque'], true)) {
+        if (in_array($gateway, ['cash', 'bank_transfer', 'bank_cash', 'offline', 'cheque', 'bkash_manual', 'nagad', 'rocket'], true)) {
             abort_unless(
                 (string) $this->plugins->getSetting('universal-payment', 'allow_offline_payments', '1') === '1',
                 422,
