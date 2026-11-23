@@ -1,10 +1,10 @@
 {
     "slug": "gateway-bkash",
     "name": "bKash Merchant Gateway",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "author": "Alom's English Center",
     "category": "payment-gateway",
-    "description": "Admin-managed bKash Tokenized Checkout merchant credentials with encrypted storage and non-charging sandbox/live token authentication test. Checkout activation follows provider sandbox/UAT verification.",
+    "description": "Admin-managed bKash Tokenized Checkout plugin with hosted payment initiation, authenticated callback reconciliation, server-side payment status verification, execution, replay protection and settlement through the Universal Payment Core. Merchant credentials are encrypted at rest; live processing requires merchant-issued production credentials and successful UAT.",
     "core_compatibility": "^2.0",
     "dependencies": [],
     "provider": "Plugins\\Modules\\GatewayBkash\\Providers\\GatewayBkashServiceProvider",
