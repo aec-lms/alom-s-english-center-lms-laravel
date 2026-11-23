@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace App\\Core\\Security;
+namespace App\Core\Security;
 
-use App\\Models\\AuditLog;
-use Illuminate\\Support\\Facades\\Auth;
-use Illuminate\\Support\\Facades\\Schema;
+use App\Models\AuditLog;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 
 class AuditLogger
