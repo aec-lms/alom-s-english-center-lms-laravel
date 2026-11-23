@@ -15,6 +15,7 @@ use Illuminate\View\View;
 use Plugins\Modules\HrStaffManagement\Models\StaffPayroll;
 use Plugins\Modules\HrStaffManagement\Models\StaffProfile;
 use Plugins\Modules\HrStaffManagement\Models\StaffAttendanceRecord;
+use Plugins\Modules\HrStaffManagement\Services\AttendancePayrollCalculator;
 
 class HrController extends Controller
 {
@@ -116,37 +117,61 @@ class HrController extends Controller
         $this->ensureAssignedBranch($actor);
         $validated = $request->validate([
             'staff_profile_id' => ['required', 'integer', 'exists:staff_profiles,id'],
-            'payroll_month' => ['required', 'string', 'max:16'],
+            'payroll_month' => ['required', 'regex:/^\\d{4}-(0[1-9]|1[0-2])$/'],
             'bonus' => ['nullable', 'numeric', 'min:0'],
             'deductions' => ['nullable', 'numeric', 'min:0'],
+            'late_deduction_per_day' => ['nullable', 'numeric', 'min:0', 'max:100000'],
         ]);
 
-        $member = StaffProfile::query()->findOrFail($validated['staff_profile_id']);
-        if ($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null && (int) $member->branch_id !== (int) $actor->branch_id) {
-            abort(403, 'Branch isolation violation.');
-        }
+        abort_unless(Schema::hasTable('staff_attendance_records'), 409, 'Staff attendance must be installed before attendance-based payroll.');
+        $payroll = DB::transaction(function () use ($validated, $actor) {
+            $member = StaffProfile::query()->whereKey($validated['staff_profile_id'])->lockForUpdate()->firstOrFail();
+            if ($actor && $actor->hasRole('branch_manager') && (int) $member->branch_id !== (int) $actor->branch_id) {
+                abort(403, 'Branch isolation violation.');
+            }
+            $duplicate = StaffPayroll::query()->where('staff_profile_id', $member->id)
+                ->where('payroll_month', $validated['payroll_month'])->lockForUpdate()->exists();
+            abort_if($duplicate, 409, 'Payroll already exists for this staff member and month.');
 
-        $gross = (float) $member->base_salary;
-        $bonus = (float) ($validated['bonus'] ?? 0);
-        $deductions = (float) ($validated['deductions'] ?? 0);
-        $netPaid = max(0.0, round($gross + $bonus - $deductions, 2));
+            $calculation = app(AttendancePayrollCalculator::class)->calculate(
+                $member,
+                $validated['payroll_month'],
+                (float) ($validated['late_deduction_per_day'] ?? 0),
+            );
+            $bonus = round((float) ($validated['bonus'] ?? 0), 2);
+            $manualDeduction = round((float) ($validated['deductions'] ?? 0), 2);
+            $totalDeductions = round($calculation['deductions'] + $manualDeduction, 2);
+            $netPaid = max(0, round($calculation['gross_salary'] + $bonus - $totalDeductions, 2));
 
-        $payroll = StaffPayroll::query()->create([
-            'staff_profile_id' => $member->id,
-            'branch_id' => $member->branch_id,
-            'payroll_month' => $validated['payroll_month'],
-            'gross_salary' => $gross,
-            'bonus' => $bonus,
-            'deductions' => $deductions,
-            'net_paid' => $netPaid,
-            'status' => 'pending',
-            'paid_at' => null,
-            'payment_reference' => null,
+            return StaffPayroll::query()->create([
+                'staff_profile_id' => $member->id,
+                'branch_id' => $member->branch_id,
+                'payroll_month' => $validated['payroll_month'],
+                'gross_salary' => $calculation['gross_salary'],
+                'bonus' => $bonus,
+                'deductions' => $totalDeductions,
+                'net_paid' => $netPaid,
+                'present_days' => $calculation['present_days'],
+                'late_days' => $calculation['late_days'],
+                'absent_days' => $calculation['absent_days'],
+                'paid_leave_days' => $calculation['paid_leave_days'],
+                'unpaid_leave_days' => $calculation['unpaid_leave_days'],
+                'attendance_deduction' => $calculation['attendance_deduction'],
+                'late_deduction' => $calculation['late_deduction'],
+                'late_deduction_per_day' => (float) ($validated['late_deduction_per_day'] ?? 0),
+                'status' => 'pending',
+                'paid_at' => null,
+                'payment_reference' => null,
+            ]);
+        });
+
+        $this->audit->log('hr.payroll_recorded', 'staff_payroll', (string) $payroll->id, [
+            'net_paid' => $payroll->net_paid,
+            'attendance_deduction' => $payroll->attendance_deduction,
+            'late_deduction' => $payroll->late_deduction,
         ]);
 
-        $this->audit->log('hr.payroll_recorded', 'staff_payroll', (string) $payroll->id, ['net_paid' => $netPaid]);
-
-        return back()->with('status', "Payroll prepared for {$member->full_name} ({$validated['payroll_month']}); confirm disbursement after payment.");
+        return back()->with('status', "Attendance-based payroll prepared for {$payroll->staff?->full_name} ({$validated['payroll_month']}). Confirm disbursement after payment.");
     }
 
     public function markPayrollPaid(Request $request, StaffPayroll $payroll): RedirectResponse
