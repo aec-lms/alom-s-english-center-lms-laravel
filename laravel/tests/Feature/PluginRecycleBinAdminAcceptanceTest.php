@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Core\Plugins\PluginManager;
+use App\Core\Security\AuditLogger;
 use App\Models\PluginArchive;
 use Illuminate\Support\Facades\File;
 use Tests\TestCase;
@@ -114,6 +115,52 @@ class PluginRecycleBinAdminAcceptanceTest extends TestCase
             }
         }
     }
+    public function test_permanent_delete_restores_archive_and_database_when_required_audit_fails(): void
+    {
+        $this->markSystemInstalled();
+        $slug = 'audit-failure-permanent-delete-' . strtolower(substr(bin2hex(random_bytes(4)), 0, 8));
+        $modulePath = $this->createProbePlugin($slug);
+        $archivePath = null;
+        $backupPath = null;
+
+        try {
+            $manager = app(PluginManager::class);
+            $manager->syncCatalog();
+            $manager->install($slug);
+            $manager->saveSettings($slug, ['probe_setting' => 'must-survive']);
+            $admin = $this->createUserWithRole('admin');
+
+            $this->actingAs($admin)->post('/admin/plugins/' . $slug . '/delete')->assertSessionHas('status');
+            $archive = PluginArchive::query()->where('plugin_slug', $slug)->firstOrFail();
+            $archivePath = $archive->archive_path;
+            $backupId = 'archive-' . (int) $archive->id . '-' . substr(hash('sha256', $slug), 0, 12);
+            $backupPath = storage_path('app/plugin-permanent-delete-backups/' . $backupId);
+
+            $audit = \\Mockery::mock(AuditLogger::class);
+            $audit->shouldReceive('logRequired')->once()->andThrow(new \\RuntimeException('audit persistence unavailable'));
+            $this->app->instance(AuditLogger::class, $audit);
+
+            $this->actingAs($admin)
+                ->post('/admin/plugins/recycle-bin/' . $archive->id . '/permanent-delete')
+                ->assertSessionHasErrors('plugin');
+
+            $this->assertDirectoryExists($archivePath);
+            $this->assertFileExists($archivePath . '/plugin.json');
+            $this->assertDirectoryDoesNotExist($backupPath);
+            $this->assertDatabaseHas('plugin_archives', ['id' => $archive->id]);
+            $this->assertDatabaseHas('plugins', ['slug' => $slug]);
+            $this->assertDatabaseHas('plugin_settings', ['plugin_slug' => $slug]);
+            $this->assertDatabaseMissing('audit_logs', [
+                'action' => 'plugin.archive_permanently_deleted',
+                'entity_id' => $slug,
+            ]);
+        } finally {
+            File::deleteDirectory($modulePath);
+            if ($archivePath && is_dir($archivePath)) File::deleteDirectory($archivePath);
+            if ($backupPath && is_dir($backupPath)) File::deleteDirectory($backupPath);
+        }
+    }
+
     public function test_permanent_delete_rejects_a_tampered_archive_without_creating_a_recovery_copy(): void
     {
         $this->markSystemInstalled();

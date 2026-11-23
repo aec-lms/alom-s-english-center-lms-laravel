@@ -12,6 +12,7 @@ use App\Http\Controllers\Controller;
 use App\Models\PluginRecord;
 use App\Models\PluginArchive;
 use App\Models\PluginSetting;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
 use RuntimeException;
@@ -347,21 +348,62 @@ class PluginCenterController extends Controller
                 throw new RuntimeException('Permanent deletion cancelled: private recovery snapshot failed integrity verification.');
             }
 
-            if (!File::deleteDirectory($archivePath)) {
-                throw new RuntimeException('Private recovery snapshot was created, but the recycle-bin package could not be removed.');
-            }
-
-            PluginSetting::query()->where('plugin_slug', $item->plugin_slug)->delete();
-            PluginRecord::query()->where('slug', $item->plugin_slug)->where('is_core', false)->delete();
             $slug = $item->plugin_slug;
-            $item->delete();
-            app(\App\Core\Security\AuditLogger::class)->log(
-                'plugin.archive_permanently_deleted',
-                'plugin',
-                $slug,
-                ['private_backup_id' => $backupId, 'package_files_removed_from_recycle_bin' => true],
-                auth()->id(),
-            );
+            try {
+                if (!File::deleteDirectory($archivePath)) {
+                    throw new RuntimeException('Private recovery snapshot was created, but the recycle-bin package could not be removed.');
+                }
+
+                DB::transaction(function () use ($item, $slug, $backupId): void {
+                    PluginSetting::query()->where('plugin_slug', $slug)->delete();
+                    PluginRecord::query()->where('slug', $slug)->where('is_core', false)->delete();
+                    $item->delete();
+
+                    app(\\App\\Core\\Security\\AuditLogger::class)->logRequired(
+                        'plugin.archive_permanently_deleted',
+                        'plugin',
+                        $slug,
+                        ['private_backup_id' => $backupId, 'package_files_removed_from_recycle_bin' => true],
+                        auth()->id(),
+                    );
+                });
+            } catch (\\Throwable $e) {
+                // Filesystem deletion and the database transaction cannot be one
+                // atomic resource. Restore the verified archive if the DB/audit
+                // transaction fails, and retain the private snapshot if recovery
+                // itself cannot be verified.
+                $archiveIsIntact = false;
+                try {
+                    $archiveIsIntact = is_dir($archivePath)
+                        && $this->directoryChecksums($archivePath) === $sourceChecksums;
+                } catch (\\Throwable) {
+                    $archiveIsIntact = false;
+                }
+
+                if (!$archiveIsIntact) {
+                    if (is_dir($archivePath)) {
+                        File::deleteDirectory($archivePath);
+                    }
+                    try {
+                        if (!File::copyDirectory($backupPath, $archivePath)) {
+                            throw new RuntimeException('Could not copy the verified private snapshot back into the recycle bin.');
+                        }
+                        @chmod($archivePath, 0700);
+                        if ($this->directoryChecksums($archivePath) !== $sourceChecksums) {
+                            throw new RuntimeException('Restored recycle-bin archive failed checksum verification.');
+                        }
+                        File::deleteDirectory($backupPath);
+                    } catch (\\Throwable $recoveryError) {
+                        report($recoveryError);
+                        throw new RuntimeException(
+                            "Permanent deletion failed and the archive could not be restored. The verified private recovery snapshot remains at {$backupPath}.",
+                            previous: $e,
+                        );
+                    }
+                }
+
+                throw $e;
+            }
 
             return back()->with('status', "Plugin '{$slug}' permanently deleted from Recycle Bin. A verified private recovery snapshot was retained.");
         } catch (\Throwable $e) {
