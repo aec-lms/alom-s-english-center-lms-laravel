@@ -104,7 +104,7 @@ class DashboardController extends Controller
         return redirect()->route('admin.dashboard')->with('status', 'Dashboard layout saved for your account.');
     }
 
-    public function refresh(Request $request): \\Illuminate\\Http\\JsonResponse
+    public function refresh(Request $request): \Illuminate\\Http\\JsonResponse
     {
         $actor = $request->user();
         $isBranchManager = $actor->hasRole('branch_manager');
@@ -123,7 +123,7 @@ class DashboardController extends Controller
         ])->header('Cache-Control', 'no-store, private');
     }
 
-    public function trackWidget(Request $request): \\Illuminate\\Http\\JsonResponse
+    public function trackWidget(Request $request): \Illuminate\\Http\\JsonResponse
     {
         $actor = $request->user();
         $definitions = $this->widgetDefinitions($actor);
@@ -135,7 +135,7 @@ class DashboardController extends Controller
             $setting = SystemSetting::query()->where('key', $key)->lockForUpdate()->first();
             $analytics = [];
             if ($setting && is_string($setting->value)) {
-                try { $analytics = json_decode($setting->value, true, 512, JSON_THROW_ON_ERROR); } catch (\\JsonException) { $analytics = []; }
+                try { $analytics = json_decode($setting->value, true, 512, JSON_THROW_ON_ERROR); } catch (\JsonException) { $analytics = []; }
             }
             if (!is_array($analytics)) $analytics = [];
             $widget = $validated['widget'];
@@ -338,7 +338,7 @@ class DashboardController extends Controller
         if (!$userId) return [];
         $value = SystemSetting::query()->where('key', 'admin.dashboard.analytics.user.' . $userId)->value('value');
         if (!is_string($value) || $value === '') return [];
-        try { $data = json_decode($value, true, 512, JSON_THROW_ON_ERROR); } catch (\\JsonException) { return []; }
+        try { $data = json_decode($value, true, 512, JSON_THROW_ON_ERROR); } catch (\JsonException) { return []; }
         if (!is_array($data)) return [];
         return array_map(static fn ($count): int => max(0, (int) $count), $data);
     }
@@ -350,7 +350,7 @@ class DashboardController extends Controller
         if (!$userId) return $sizes;
         $value = SystemSetting::query()->where('key', $this->sizePreferenceKey($userId))->value('value');
         if (!is_string($value) || $value === '') return $sizes;
-        try { $stored = json_decode($value, true, 512, JSON_THROW_ON_ERROR); } catch (\\JsonException) { return $sizes; }
+        try { $stored = json_decode($value, true, 512, JSON_THROW_ON_ERROR); } catch (\JsonException) { return $sizes; }
         if (!is_array($stored)) return $sizes;
         foreach ($stored as $key => $size) {
             if (array_key_exists($key, $sizes) && in_array($size, ['small', 'medium', 'large'], true)) $sizes[$key] = $size;
