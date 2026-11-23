@@ -106,7 +106,9 @@ class UniversalPaymentInvoiceSettlementTest extends TestCase
     public function test_configured_bkash_and_nagad_manual_invoice_receipts_can_be_verified(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['student-management', 'fees-management', 'universal-payment']);
+        $this->activatePlugins(['student-management', 'fees-management', 'universal-payment', 'gateway-bkash', 'gateway-nagad']);
+        app(\\App\\Core\\Plugins\\PluginManager::class)->saveSettings('gateway-bkash', ['enabled' => '1']);
+        app(\\App\\Core\\Plugins\\PluginManager::class)->saveSettings('gateway-nagad', ['enabled' => '1']);
         $studentUser = $this->createUserWithRole('student');
         $admin = $this->createUserWithRole('admin');
 
