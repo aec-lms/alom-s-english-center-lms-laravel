@@ -101,6 +101,10 @@ final class PluginManifest
             throw new InvalidArgumentException('Plugin dashboard_widgets must be a JSON array.');
         }
 
+        if (count($widgets) > 20) {
+            throw new InvalidArgumentException('A plugin may register at most 20 dashboard widgets.');
+        }
+
         $validated = [];
         $keys = [];
         foreach ($widgets as $widget) {
@@ -130,11 +134,15 @@ final class PluginManifest
                 throw new InvalidArgumentException('Plugin dashboard widget default must be a boolean.');
             }
 
-            $viewPath = rtrim($directory, DIRECTORY_SEPARATOR)
-                . DIRECTORY_SEPARATOR . 'Resources' . DIRECTORY_SEPARATOR . 'views'
-                . DIRECTORY_SEPARATOR . str_replace('.', DIRECTORY_SEPARATOR, $view) . '.blade.php';
-            if (!is_file($viewPath)) {
-                throw new InvalidArgumentException("Plugin dashboard widget view '{$view}' does not exist.");
+            $viewsRoot = rtrim($directory, DIRECTORY_SEPARATOR)
+                . DIRECTORY_SEPARATOR . 'Resources' . DIRECTORY_SEPARATOR . 'views';
+            $viewPath = $viewsRoot . DIRECTORY_SEPARATOR
+                . str_replace('.', DIRECTORY_SEPARATOR, $view) . '.blade.php';
+            $realViewsRoot = realpath($viewsRoot);
+            $realViewPath = realpath($viewPath);
+            if ($realViewsRoot === false || $realViewPath === false || !is_file($realViewPath)
+                || !str_starts_with($realViewPath, $realViewsRoot . DIRECTORY_SEPARATOR)) {
+                throw new InvalidArgumentException("Plugin dashboard widget view '{$view}' must resolve to a file inside the plugin's views directory.");
             }
 
             $keys[] = $key;
