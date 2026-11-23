@@ -2,16 +2,9 @@
 @section('title', 'Dashboard — AEC LMS')
 @section('content')
 @php
-    $widgetLabels = [
-        'users' => 'Registered Accounts',
-        'plugins' => 'Plugin Overview',
-        'backups' => 'Encrypted Backups',
-        'audit_trail' => 'Security Audit Trail',
-        'system_info' => 'System Information',
-    ];
-    if (auth()->user()?->hasRole('branch_manager')) {
-        $widgetLabels = array_intersect_key($widgetLabels, ['users' => true]);
-    }
+    $widgetLabels = collect($widgetDefinitions)->mapWithKeys(
+        fn (array $definition, string $key): array => [$key => $definition['label']]
+    )->all();
 @endphp
 <div class="space-y-6">
     @if($setupIncomplete)
@@ -154,6 +147,10 @@
                         </table>
                     </div>
                 </section>
+            @else
+                @if (!empty($widgetDefinitions[$widget]['view']))
+                    @include($widgetDefinitions[$widget]['view'], ['metrics' => $metrics, 'actor' => auth()->user()])
+                @endif
             @endif
         @endforeach
         @if (count($widgets) === 0)
