@@ -25,7 +25,7 @@ class AuditLogger
             return;
         }
 
-        $this->write($action, $entityType, $entityId, $metadata, $userId);
+        $this->write($action, $entityType, $entityId, $metadata, $userId, false);
     }
 
     /**
@@ -45,7 +45,7 @@ class AuditLogger
             );
         }
 
-        $this->write($action, $entityType, $entityId, $metadata, $userId);
+        $this->write($action, $entityType, $entityId, $metadata, $userId, true);
     }
 
     private function write(
@@ -54,6 +54,7 @@ class AuditLogger
         ?string $entityId,
         array $metadata,
         ?int $userId,
+        bool $required,
     ): void {
         $entry = new AuditLog([
             'user_id' => $userId ?? Auth::id(),
@@ -65,7 +66,7 @@ class AuditLogger
         ]);
 
         // Model events can veto save(); required evidence must be verified.
-        if (!$entry->save()) {
+        if (!$entry->save() && $required) {
             throw new RuntimeException(
                 'Required audit log entry could not be persisted; the operation cannot be completed safely.'
             );
