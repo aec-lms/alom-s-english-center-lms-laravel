@@ -91,7 +91,7 @@ class HrController extends Controller
         $filters = $request->validate([
             'month' => ['required', 'regex:/^\\d{4}-(0[1-9]|1[0-2])$/'],
         ]);
-        $start = \\Carbon\\CarbonImmutable::createFromFormat('!Y-m', $filters['month'])->startOfMonth();
+        $start = \Carbon\CarbonImmutable::createFromFormat('!Y-m', $filters['month'])->startOfMonth();
         $end = $start->endOfMonth();
         $query = DB::table('staff_attendance_records')
             ->join('staff_profiles', 'staff_profiles.id', '=', 'staff_attendance_records.staff_profile_id')
