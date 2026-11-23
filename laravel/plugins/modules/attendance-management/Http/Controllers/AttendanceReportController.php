@@ -72,7 +72,7 @@ class AttendanceReportController extends Controller
     {
         abort_unless($actor && ($actor->hasRole('admin') || $actor->hasRole('branch_manager')),403);
         if($actor->hasRole('branch_manager')) abort_unless((int)($actor->branch_id??0)>0 && app(PluginManager::class)->isEnabled('branch-management') && Schema::hasTable('branches') && DB::table('branches')->where('id',$actor->branch_id)->where('is_active',true)->exists(),403,'Active branch assignment required.');
-        abort_unless(Schema::hasTable('attendance_entries') && Schema::hasTable('attendance_batch_mappings'),409,'Attendance reporting dependencies are unavailable.');
+        abort_unless(Schema::hasTable('attendance_entries') && Schema::hasTable('attendance_batch_mappings') && Schema::hasTable('students'),409,'Attendance reporting dependencies are unavailable.');
     }
 
     private function safe(string $value): string
