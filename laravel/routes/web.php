@@ -125,6 +125,7 @@ Route::middleware('installed')->group(function (): void {
             Route::post('/tenants', [AutomationSaasController::class, 'storeTenant'])->name('tenants.store');
             Route::post('/tenants/{tenant}/agents', [AutomationSaasController::class, 'storeAgent'])->name('agents.store');
             Route::post('/tenants/{tenant}/workflows', [AutomationSaasController::class, 'storeWorkflow'])->name('workflows.store');
+            Route::post('/tenants/{tenant}/workflows/{workflow}/publish', [AutomationSaasController::class, 'publishWorkflow'])->name('workflows.publish');
         });
 
         Route::prefix('plugins')->name('plugins.')->middleware(['permission:core.plugins.manage', 'central.admin'])->group(function (): void {
