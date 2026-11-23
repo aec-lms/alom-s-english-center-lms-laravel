@@ -21,7 +21,8 @@ class GatewayStripeServiceProvider extends BasePluginServiceProvider
                     $result = app(StripeGatewayService::class)->initiateTokenizedCheckout(
                         $input['invoice'],
                         (string) ($input['payment_method_id'] ?? ''),
-                        $input['idempotency_key'] ?? null
+                        $input['idempotency_key'] ?? null,
+                        isset($input['amount']) ? (float) $input['amount'] : null
                     );
                     return ['gateway' => 'gateway-stripe', 'transaction_ref' => $result['transaction']->transaction_ref, 'payment_intent_id' => $result['payment_intent_id'], 'client_secret' => $result['client_secret']];
                 }
