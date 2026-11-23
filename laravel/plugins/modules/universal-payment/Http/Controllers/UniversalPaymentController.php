@@ -56,7 +56,7 @@ class UniversalPaymentController extends Controller
         $validated = $request->validate([
             'default_currency' => ['required', 'string', 'regex:/^[A-Z]{3}$/'],
             'gateways' => ['nullable', 'array'],
-            'gateways.*' => ['string', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,cash,bank_transfer,bank_cash'],
+            'gateways.*' => ['string', 'in:sslcommerz,stripe,paypal,bkash,nagad,rocket,card,cash,bank_transfer,bank_cash,offline,cheque'],
             'allow_offline_payments' => ['nullable', 'boolean'],
         ]);
 
@@ -79,7 +79,7 @@ class UniversalPaymentController extends Controller
             'payer_name' => ['required', 'string', 'max:160'],
             'payer_contact' => ['nullable', 'string', 'max:120'],
             'item_title' => ['required', 'string', 'max:200'],
-            'gateway' => ['required', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,cash,bank_transfer,bank_cash'],
+            'gateway' => ['required', 'in:sslcommerz,stripe,paypal,bkash,nagad,rocket,card,cash,bank_transfer,bank_cash,offline,cheque'],
             'amount' => ['required', 'numeric', 'min:1'],
             'external_trx_id' => ['required', 'string', 'max:120'],
             'proof_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
@@ -364,7 +364,7 @@ class UniversalPaymentController extends Controller
             'payer_name' => ['required', 'string', 'max:160'],
             'payer_contact' => ['required', 'string', 'max:120'],
             'item_title' => ['required', 'string', 'max:200'],
-            'gateway' => ['required', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,cash,bank_transfer,bank_cash'],
+            'gateway' => ['required', 'in:sslcommerz,stripe,paypal,bkash,nagad,rocket,card,cash,bank_transfer,bank_cash,offline,cheque'],
             'external_trx_id' => ['nullable', 'string', 'max:120'],
             'storefront_item_id' => ['nullable', 'integer'],
             'fee_invoice_id' => ['nullable', 'integer'],
@@ -420,8 +420,9 @@ class UniversalPaymentController extends Controller
         abort_unless($invoice !== null || $storefrontItem !== null, 422, 'Choose an invoice or paid e-book to continue checkout.');
         abort_if($invoice !== null && $storefrontItem !== null, 422, 'Choose one checkout item at a time.');
 
-        if ($storefrontItem !== null && $validated['gateway'] !== 'sslcommerz') {
-            return back()->withErrors(['gateway' => 'Choose SSLCOMMERZ for secure automatic e-book checkout.'])->withInput();
+        $manualMethods = ['cash', 'bank_transfer', 'bank_cash', 'offline', 'cheque'];
+        if ($storefrontItem !== null && in_array($validated['gateway'], $manualMethods, true)) {
+            return back()->withErrors(['gateway' => 'Manual payment methods are available for invoice/receipt submission; e-book checkout requires a verified online gateway.'])->withInput();
         }
 
         if ($storefrontItem !== null && DB::table('storefront_item_access')
@@ -536,7 +537,17 @@ class UniversalPaymentController extends Controller
 
         if ($storefrontItem !== null) {
             try {
-                $checkoutUrl = $this->storefrontGateway->initiateSslcommerz($tx, $storefrontItem, auth()->user(), $validated['payer_contact']);
+                $gatewaySlug = 'gateway-' . str_replace('_', '-', $validated['gateway']);
+                $this->assertGatewayEnabled($validated['gateway']);
+                $checkout = $this->gatewayRegistry->initiate($gatewaySlug, [
+                    'universal_transaction' => $tx,
+                    'storefront_item' => $storefrontItem,
+                    'user' => auth()->user(),
+                    'payer_contact' => $validated['payer_contact'],
+                    'context' => ['purpose' => 'ebook'],
+                ]);
+                $checkoutUrl = (string) ($checkout['redirect_url'] ?? '');
+                abort_unless($checkoutUrl !== '' && strtolower((string) parse_url($checkoutUrl, PHP_URL_SCHEME)) === 'https', 502, 'The selected payment gateway did not return a secure checkout URL.');
                 return redirect()->away($checkoutUrl);
             } catch (\Throwable $exception) {
                 report($exception);
