@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Core\Plugins\PluginManager;
+use App\Models\PluginSetting;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -187,6 +188,77 @@ class CourseBundlesPluginTest extends TestCase
 
         $this->assertDatabaseHas('course_bundles', ['id' => $bundleId, 'status' => 'archived']);
         $this->assertDatabaseHas('course_bundle_orders', ['bundle_id' => $bundleId, 'bundle_title' => 'Historical Bundle']);
+    }
+
+    public function test_paid_bundle_only_shows_manual_receipt_form_when_bank_cash_is_enabled(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management', 'fees-management', 'universal-payment', 'course-bundles']);
+
+        $admin = $this->createUserWithRole('admin');
+        $student = $this->createUserWithRole('student');
+        $first = $this->createPublishedCourse('Gateway Setting Course A');
+        $second = $this->createPublishedCourse('Gateway Setting Course B');
+        $bundleId = DB::table('course_bundles')->insertGetId([
+            'created_by' => $admin->id,
+            'title' => 'Gateway Setting Bundle',
+            'slug' => 'gateway-setting-bundle',
+            'price' => 1200,
+            'status' => 'published',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->attachCourses($bundleId, [$first, $second]);
+
+        $this->actingAs($student)->post('/course-bundles/gateway-setting-bundle/checkout')
+            ->assertRedirect()->assertSessionHasNoErrors();
+
+        $order = DB::table('course_bundle_orders')->where('user_id', $student->id)->first();
+        $this->assertNotNull($order);
+
+        PluginSetting::query()->updateOrCreate(
+            ['plugin_slug' => 'universal-payment', 'setting_key' => 'enabled_gateways'],
+            ['setting_value' => 'sslcommerz', 'is_encrypted' => false]
+        );
+        PluginSetting::query()->updateOrCreate(
+            ['plugin_slug' => 'universal-payment', 'setting_key' => 'allow_offline_payments'],
+            ['setting_value' => '0', 'is_encrypted' => false]
+        );
+
+        $url = '/my-bundle-orders/' . $order->id;
+        $this->actingAs($student)->get($url)
+            ->assertOk()
+            ->assertDontSee('Submit payment receipt')
+            ->assertSee('Manual bank/cash receipt payments are currently disabled');
+
+        // The public checkout endpoint must enforce gateway settings even when a
+        // client bypasses the hidden/disabled receipt form and submits directly.
+        $invoice = DB::table('fee_invoices')->where('id', $order->invoice_id)->first();
+        $this->actingAs($student)->post('/universal-checkout', [
+            'payer_name' => $student->name,
+            'payer_contact' => $student->phone ?: $student->email,
+            'item_title' => 'Gateway Setting Bundle',
+            'gateway' => 'bank_cash',
+            'external_trx_id' => 'BANK-CASH-DISABLED-' . $order->id,
+            'fee_invoice_id' => $order->invoice_id,
+        ])->assertStatus(422);
+        $this->assertDatabaseMissing('universal_payment_transactions', [
+            'fee_invoice_id' => $order->invoice_id,
+            'external_trx_id' => 'BANK-CASH-DISABLED-' . $order->id,
+        ]);
+
+        PluginSetting::query()->updateOrCreate(
+            ['plugin_slug' => 'universal-payment', 'setting_key' => 'enabled_gateways'],
+            ['setting_value' => 'sslcommerz,bank_cash', 'is_encrypted' => false]
+        );
+        PluginSetting::query()->updateOrCreate(
+            ['plugin_slug' => 'universal-payment', 'setting_key' => 'allow_offline_payments'],
+            ['setting_value' => '1', 'is_encrypted' => false]
+        );
+
+        $this->actingAs($student)->get($url)
+            ->assertOk()
+            ->assertSee('Submit payment receipt');
     }
 
     private function createPublishedCourse(string $title): int
