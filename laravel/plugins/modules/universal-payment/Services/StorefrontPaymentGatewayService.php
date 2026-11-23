@@ -179,6 +179,22 @@ class StorefrontPaymentGatewayService
     }
 
  
+    public function settleVerifiedGatewayPayment(UniversalPaymentTransaction $transaction, string $externalReference, array $providerDetails = []): UniversalPaymentTransaction
+    {
+        $notes = json_decode((string) $transaction->notes, true);
+        $purpose = is_array($notes) ? ($notes['purpose'] ?? null) : null;
+
+        if (in_array($purpose, ['course_cart', 'course_gift', 'course_gift_voucher'], true)) {
+            return app(CourseCommercePaymentSettlementService::class)->settle($transaction, $externalReference, $providerDetails);
+        }
+
+        if ($transaction->learn_earn_exam_id) {
+            return $this->grantExamAccess($transaction, $externalReference, $providerDetails);
+        }
+
+        return $this->grantEbookAccess($transaction, $externalReference, $providerDetails);
+    }
+
     private function grantExamAccess(UniversalPaymentTransaction $transaction, string $externalReference, array $providerDetails): UniversalPaymentTransaction
     {
         return DB::transaction(function () use ($transaction, $externalReference, $providerDetails): UniversalPaymentTransaction {
