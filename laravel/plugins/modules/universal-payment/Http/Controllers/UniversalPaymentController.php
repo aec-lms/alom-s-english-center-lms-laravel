@@ -578,13 +578,13 @@ class UniversalPaymentController extends Controller
     public function bkashCallback(Request $request): RedirectResponse
     {
         try {
-            $transaction = app(\\Plugins\\Modules\\GatewayBkash\\Services\\BkashGatewayService::class)
+            $transaction = app(\Plugins\Modules\GatewayBkash\Services\BkashGatewayService::class)
                 ->verifyUniversalCallback((string) $request->query('paymentID', ''));
             $slug = $this->storefrontSlugFor($transaction);
             return $slug
                 ? redirect('/ebooks/' . rawurlencode($slug))->with('status', 'bKash payment verified. Your e-book is now available.')
                 : redirect('/ebooks')->with('status', 'bKash payment verified. Contact support if your purchase is not visible.');
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             report($exception);
             return redirect('/ebooks')->withErrors(['payment' => 'bKash payment could not yet be verified. No download access has been granted; contact support before retrying.']);
         }
