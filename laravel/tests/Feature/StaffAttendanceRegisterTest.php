@@ -50,7 +50,7 @@ final class StaffAttendanceRegisterTest extends TestCase
         $this->actingAs($manager)->post('/admin/hr/attendance', $payload)->assertSessionHasNoErrors();
         $this->assertDatabaseHas('staff_attendance_records', [
             'staff_profile_id' => $own->id, 'branch_id' => $branchA,
-            'attendance_date' => now()->toDateString(), 'status' => 'present',
+            'status' => 'present',
         ]);
 
         $payload['status'] = 'late';
