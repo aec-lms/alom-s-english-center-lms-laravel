@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Models\AuditLog;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Illuminate\Support\Facades\DB;
 use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
@@ -985,6 +986,63 @@ class PaymentSettlementStateMachineTest extends TestCase
             'commerce_order_item_id' => null,
         ]);
         $this->assertDatabaseHas('fee_invoices', ['id' => $invoice->id, 'status' => 'unpaid', 'paid_amount' => 0]);
+    }
+
+
+    public function test_payment_settlement_rolls_back_invoice_and_transaction_when_required_audit_fails(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management']);
+
+        $invoice = FeeInvoice::query()->create([
+            'invoice_number' => 'AUDIT-FAIL-SETTLEMENT-' . strtoupper(uniqid()),
+            'payer_name' => 'Audit Failure Student',
+            'payer_email' => 'audit.failure@aec.test',
+            'subtotal_amount' => 750,
+            'discount_amount' => 0,
+            'net_amount' => 750,
+            'paid_amount' => 0,
+            'currency' => 'BDT',
+            'status' => 'unpaid',
+        ]);
+        $transaction = PaymentTransaction::query()->create([
+            'transaction_ref' => 'AUDIT-FAIL-TXN-' . strtoupper(uniqid()),
+            'invoice_id' => $invoice->id,
+            'gateway_slug' => 'offline',
+            'amount' => 750,
+            'currency' => 'BDT',
+            'status' => 'initiated',
+            'metadata' => [],
+        ]);
+
+        AuditLog::creating(static function (): void {
+            throw new RuntimeException('forced payment settlement audit failure');
+        });
+
+        try {
+            try {
+                app(PaymentSettlementService::class)->settleTransaction(
+                    $transaction,
+                    'AUDIT-FAIL-PROVIDER-REFERENCE',
+                );
+                $this->fail('Settlement must fail closed when its required audit record cannot be persisted.');
+            } catch (RuntimeException $exception) {
+                $this->assertSame('forced payment settlement audit failure', $exception->getMessage());
+            }
+
+            $this->assertDatabaseHas('payment_transactions', [
+                'id' => $transaction->id,
+                'status' => 'initiated',
+                'external_reference' => null,
+            ]);
+            $this->assertDatabaseHas('fee_invoices', [
+                'id' => $invoice->id,
+                'paid_amount' => 0,
+                'status' => 'unpaid',
+            ]);
+        } finally {
+            AuditLog::flushEventListeners();
+        }
     }
 
 }
