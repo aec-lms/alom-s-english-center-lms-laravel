@@ -38,7 +38,7 @@ class ClassSessionSettlementController extends Controller
             $studentRate = round((float) $lockedClass->student_fee_per_class, 2);
             $enrollments = collect();
             if ($studentRate > 0) {
-                abort_unless(app(PluginManager::class)->isEnabled('student-management') && Schema::hasTable('students') && Schema::hasTable('enrollments') && Schema::hasTable('fee_invoices'), 409, 'Student Management, Course Management and Fees Management must be enabled for per-class student billing.');
+                abort_unless(app(PluginManager::class)->isEnabled('student-management') && app(PluginManager::class)->isEnabled('fees-management') && Schema::hasTable('students') && Schema::hasTable('enrollments') && Schema::hasTable('fee_invoices'), 409, 'Student Management, Course Management and Fees Management must be enabled for per-class student billing.');
                 $enrollments = DB::table('enrollments')
                     ->join('students', 'students.user_id', '=', 'enrollments.user_id')
                     ->join('users', 'users.id', '=', 'enrollments.user_id')
