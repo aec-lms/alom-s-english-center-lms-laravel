@@ -79,6 +79,23 @@
                             <form method="POST" action="{{ route('admin.automation-saas.agents.store', $tenant) }}" class="flex flex-wrap gap-2">@csrf<input name="name" required maxlength="120" aria-label="AI agent name" placeholder="New AI agent name" class="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-xs"><button class="rounded-lg border border-violet-300 px-3 py-2 text-xs font-bold text-violet-700">Add agent</button></form>
                             <form method="POST" action="{{ route('admin.automation-saas.workflows.store', $tenant) }}" class="flex flex-wrap gap-2">@csrf<input name="name" required maxlength="160" aria-label="Workflow name" placeholder="New workflow name" class="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-xs"><select name="trigger_event" aria-label="Workflow trigger" class="rounded-lg border border-slate-300 px-2 py-2 text-xs"><option value="contact.created">Contact created</option><option value="conversation.opened">Conversation opened</option><option value="message.received">Message received</option><option value="form.submitted">Form submitted</option><option value="order.created">Order created</option></select><button class="rounded-lg border border-emerald-300 px-3 py-2 text-xs font-bold text-emerald-700">Add workflow</button></form>
                         </div>
+                        @if($tenant->workflows->isNotEmpty())
+                            <div class="mt-4 space-y-3">
+                                <h3 class="text-xs font-bold uppercase tracking-wide text-slate-500">Workflow builder · JSON graph editor</h3>
+                                @foreach($tenant->workflows as $workflow)
+                                    <form method="POST" action="{{ route('admin.automation-saas.workflows.publish', [$tenant, $workflow]) }}" class="rounded-lg border border-slate-200 p-3">
+                                        @csrf
+                                        <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+                                            <span class="text-sm font-semibold text-slate-800">{{ $workflow->name }} · v{{ $workflow->version }}</span>
+                                            <span class="rounded-full bg-slate-100 px-2 py-1 text-xs">{{ ucfirst($workflow->status) }}</span>
+                                        </div>
+                                        <textarea name="definition" required rows="8" spellcheck="false" aria-label="Workflow graph JSON" class="w-full rounded-lg border border-slate-300 p-3 font-mono text-xs">{{ json_encode($workflow->definition ?: ['version' => 1, 'nodes' => [['id' => 'trigger', 'type' => 'trigger', 'config' => ['event' => $workflow->trigger_event]], ['id' => 'action', 'type' => 'action', 'config' => ['action' => 'notify_admin']]], 'edges' => [['source' => 'trigger', 'target' => 'action']]], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) }}</textarea>
+                                        <p class="mt-1 text-xs text-slate-500">Supported nodes: trigger, condition, action, delay. Cycles, unknown actions and invalid connections are rejected.</p>
+                                        <button class="mt-2 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white">Validate &amp; publish workflow</button>
+                                    </form>
+                                @endforeach
+                            </div>
+                        @endif
                     @endif
                 </div>
             @empty
