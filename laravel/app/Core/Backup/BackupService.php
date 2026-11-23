@@ -170,28 +170,21 @@ class BackupService
                 }
 
                 $stagedPrivateFiles = $this->stagePrivateFiles($zip, $manifest);
-                DB::transaction(function () use ($zip, $backup, $actorId, $magic): void {
-                    $jsonLinesStream = $zip->getStream('database.jsonl');
-                    if (is_resource($jsonLinesStream)) {
-                        try {
-                            $this->restoreDatabaseJsonLines($jsonLinesStream);
-                        } finally {
-                            fclose($jsonLinesStream);
-                        }
-                    } else {
-                        // Legacy JSON snapshots remain restorable; new backups use the streaming format.
-                        $dbRaw = $zip->getFromName('database.json');
-                        if ($dbRaw === false) throw new RuntimeException('Backup archive missing database.json or database.jsonl.');
-                        $dbSnapshot = json_decode($dbRaw, true, 512, JSON_THROW_ON_ERROR);
-                        $this->restoreLegacyDatabaseSnapshot($dbSnapshot);
-                        unset($dbRaw, $dbSnapshot);
+                $jsonLinesStream = $zip->getStream('database.jsonl');
+                if (is_resource($jsonLinesStream)) {
+                    try {
+                        $this->restoreDatabaseJsonLines($jsonLinesStream, $backup, $actorId, $magic === "AECBK02\\n" ? 2 : 1);
+                    } finally {
+                        fclose($jsonLinesStream);
                     }
-
-                    $this->audit->logRequired('backup.restored', 'backup', (string) $backup->id, [
-                        'filename' => $backup->filename,
-                        'backup_format' => $magic === "AECBK02\\n" ? 2 : 1,
-                    ], $actorId);
-                });
+                } else {
+                    // Legacy JSON snapshots remain restorable; new backups use the streaming format.
+                    $dbRaw = $zip->getFromName('database.json');
+                    if ($dbRaw === false) throw new RuntimeException('Backup archive missing database.json or database.jsonl.');
+                    $dbSnapshot = json_decode($dbRaw, true, 512, JSON_THROW_ON_ERROR);
+                    $this->restoreLegacyDatabaseSnapshot($dbSnapshot, $backup, $actorId, $magic === "AECBK02\\n" ? 2 : 1);
+                    unset($dbRaw, $dbSnapshot);
+                }
 
                 if ($stagedPrivateFiles !== null) $this->restoreStagedPrivateFiles($stagedPrivateFiles);
             } finally {
@@ -634,7 +627,7 @@ class BackupService
      *
      * @param resource $stream
      */
-    private function restoreDatabaseJsonLines($stream): void
+    private function restoreDatabaseJsonLines($stream, BackupRecord $backup, ?int $actorId, int $backupFormat): void
     {
         $headerLine = fgets($stream);
         if ($headerLine === false) throw new RuntimeException('Streamed database snapshot is empty.');
@@ -653,7 +646,7 @@ class BackupService
 
         Schema::disableForeignKeyConstraints();
         try {
-            DB::transaction(function () use ($stream, $tables): void {
+            DB::transaction(function () use ($stream, $tables, $backup, $actorId, $backupFormat): void {
                 foreach ($tables as $table) DB::table($table)->delete();
                 $currentTable = null;
                 $batch = [];
@@ -679,6 +672,11 @@ class BackupService
                 }
                 if (!feof($stream)) throw new RuntimeException('Unable to read streamed database snapshot completely.');
                 if ($currentTable !== null && $batch !== []) DB::table($currentTable)->insert($batch);
+
+                $this->audit->logRequired('backup.restored', 'backup', (string) $backup->id, [
+                    'filename' => $backup->filename,
+                    'backup_format' => $backupFormat,
+                ], $actorId);
             });
         } finally {
             Schema::enableForeignKeyConstraints();
@@ -686,11 +684,11 @@ class BackupService
     }
 
     /** Restore original full-JSON archives created before the streaming format. */
-    private function restoreLegacyDatabaseSnapshot(array $dbSnapshot): void
+    private function restoreLegacyDatabaseSnapshot(array $dbSnapshot, BackupRecord $backup, ?int $actorId, int $backupFormat): void
     {
         Schema::disableForeignKeyConstraints();
         try {
-            DB::transaction(function () use ($dbSnapshot): void {
+            DB::transaction(function () use ($dbSnapshot, $backup, $actorId, $backupFormat): void {
                 foreach ((array) ($dbSnapshot['tables'] ?? []) as $table => $rows) {
                     if (!is_string($table) || !Schema::hasTable($table) || in_array($table, ['migrations', 'backups'], true)) continue;
                     DB::table($table)->delete();
@@ -698,6 +696,11 @@ class BackupService
                         if ($chunk !== []) DB::table($table)->insert($chunk);
                     }
                 }
+
+                $this->audit->logRequired('backup.restored', 'backup', (string) $backup->id, [
+                    'filename' => $backup->filename,
+                    'backup_format' => $backupFormat,
+                ], $actorId);
             });
         } finally {
             Schema::enableForeignKeyConstraints();
