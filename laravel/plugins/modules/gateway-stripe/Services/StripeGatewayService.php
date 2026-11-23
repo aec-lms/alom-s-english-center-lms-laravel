@@ -18,7 +18,7 @@ class StripeGatewayService
         private readonly PaymentSettlementService $settlement,
     ) {}
 
-    public function initiateTokenizedCheckout(FeeInvoice $invoice, string $paymentToken, ?string $idempotencyKey = null): array
+    public function initiateTokenizedCheckout(FeeInvoice $invoice, string $paymentToken, ?string $idempotencyKey = null, ?float $requestedAmount = null): array
     {
         $secretKey = (string) $this->plugins->getSetting('gateway-stripe', 'secret_key', '');
         if ($secretKey === '') {
@@ -47,7 +47,8 @@ class StripeGatewayService
         }
 
         $remaining = round((float) $invoice->net_amount - (float) $invoice->paid_amount, 2);
-        if ($remaining <= 0) {
+        $chargeAmount = round($requestedAmount ?? $remaining, 2);
+        if ($remaining <= 0 || $chargeAmount < 1 || $chargeAmount > $remaining) {
             throw new RuntimeException('Invoice is already fully settled.');
         }
 
@@ -56,14 +57,14 @@ class StripeGatewayService
             'invoice_id' => $invoice->id,
             'branch_id' => $invoice->branch_id,
             'gateway_slug' => 'gateway-stripe',
-            'amount' => $remaining,
+            'amount' => $chargeAmount,
             'currency' => strtoupper($invoice->currency),
             'status' => 'initiated',
             'metadata' => ['idempotency_key' => $idempotencyKey, 'payment_method_id' => $paymentToken],
         ]);
 
         try {
-            $amountMinor = (int) round($remaining * 100);
+            $amountMinor = (int) round($chargeAmount * 100);
             $response = Http::asForm()
                 ->withBasicAuth($secretKey, '')
                 ->withHeaders($idempotencyKey ? ['Idempotency-Key' => $idempotencyKey] : [])

@@ -7,6 +7,7 @@ use Plugins\Modules\CourseManagement\Http\Controllers\CourseController;
 use Plugins\Modules\CourseManagement\Http\Controllers\CourseTeacherAssignmentController;
 use Plugins\Modules\CourseManagement\Http\Controllers\LessonContentProtectionController;
 use Plugins\Modules\CourseManagement\Http\Controllers\LiveClassAccessController;
+use Plugins\Modules\CourseManagement\Http\Controllers\ClassSessionSettlementController;
 use Plugins\Modules\CourseManagement\Http\Controllers\LearningInteractionController;
 
 Route::middleware(['web', 'installed', 'auth', 'plugin:course-management', 'permission:courses.manage'])
@@ -34,6 +35,8 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:course-management', 'perm
         Route::post('/live-classes', [CourseController::class, 'storeLiveClass'])->name('live.store');
         Route::put('/live-classes/{liveClass}', [CourseController::class, 'updateLiveClass'])->name('live.update');
         Route::delete('/live-classes/{liveClass}', [CourseController::class, 'destroyLiveClass'])->name('live.destroy');
+        Route::post('/live-classes/{liveClass}/complete-session', [ClassSessionSettlementController::class, 'complete'])->name('live.complete');
+        Route::post('/teacher-class-payments/{payment}/mark-paid', [ClassSessionSettlementController::class, 'markTeacherPaid'])->whereNumber('payment')->name('teacher-class-payments.paid');
     });
 
 Route::middleware(['web', 'installed', 'auth', 'plugin:course-management'])

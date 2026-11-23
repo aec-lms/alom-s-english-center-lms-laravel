@@ -10,12 +10,31 @@
 
     @if (str_starts_with($manifest->slug, 'gateway-'))
         <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-            <strong>Payment safety:</strong> Keep Sandbox Mode enabled until a successful test payment and webhook verification are complete. Live payments require merchant credentials and a verified HTTPS callback URL.
+            <strong>Payment safety:</strong> Keep Sandbox Mode enabled until a successful sandbox payment and callback verification are complete. Secret credentials are encrypted server-side and are never exposed to checkout pages.
         </div>
-        <form method="POST" action="{{ route('admin.plugins.test-connection', $manifest->slug) }}">
-            @csrf
-            <button class="px-4 py-2 rounded-lg border border-sky-600 text-sky-700 text-sm font-bold hover:bg-sky-50">Test Gateway Connection</button>
-        </form>
+        @if ($manifest->slug === 'gateway-bkash')
+            <div class="rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900 space-y-1">
+                <strong>bKash Tokenized Checkout setup</strong>
+                <p>Enter the App Key, App Secret, API Username and API Password issued for this merchant. Choose Sandbox first; select Live only after bKash production onboarding.</p>
+                <p>Admin connection test requests a bKash access token only. It does not create a charge.</p>
+                <p>Official merchant onboarding: <a class="underline font-semibold" href="https://developer.bka.sh/docs" target="_blank" rel="noopener noreferrer">bKash Developer Portal</a>.</p>
+            </div>
+            <form method="POST" action="{{ route('admin.plugins.test-connection', $manifest->slug) }}">
+                @csrf
+                <button class="px-4 py-2 rounded-lg border border-sky-600 text-sky-700 text-sm font-bold hover:bg-sky-50">Test bKash Credentials (No Charge)</button>
+            </form>
+        @elseif ($manifest->slug === 'gateway-nagad')
+            <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 space-y-1">
+                <strong>Nagad merchant setup</strong>
+                <p>Save the Merchant ID, API credentials and signing keys issued for your specific Nagad merchant integration. These values are encrypted at rest.</p>
+                <p>Nagad integration profiles can differ by merchant/acquirer. Checkout and connection testing remain disabled until the official API specification and sandbox profile supplied to this merchant are implemented and verified.</p>
+            </div>
+        @else
+            <form method="POST" action="{{ route('admin.plugins.test-connection', $manifest->slug) }}">
+                @csrf
+                <button class="px-4 py-2 rounded-lg border border-sky-600 text-sky-700 text-sm font-bold hover:bg-sky-50">Test Gateway Connection</button>
+            </form>
+        @endif
     @endif
 
     <form method="POST" action="{{ route('admin.plugins.configure.save', $manifest->slug) }}" class="bg-white rounded-2xl border border-slate-200 p-6 space-y-4">

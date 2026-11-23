@@ -1,10 +1,10 @@
 {
     "slug": "gateway-bkash",
     "name": "bKash Merchant Gateway",
-    "version": "1.0.0",
+    "version": "1.2.0",
     "author": "Alom's English Center",
     "category": "payment-gateway",
-    "description": "Admin credential configuration foundation for bKash Tokenized Checkout. Hosted checkout remains unavailable until the provider adapter and merchant sandbox verification are completed.",
+    "description": "Admin-managed bKash Tokenized Checkout plugin with hosted payment initiation, authenticated callback reconciliation, server-side payment status verification, execution, replay protection and settlement through the Universal Payment Core. Merchant credentials are encrypted at rest; live processing requires merchant-issued production credentials and successful UAT.",
     "core_compatibility": "^2.0",
     "dependencies": [],
     "provider": "Plugins\\Modules\\GatewayBkash\\Providers\\GatewayBkashServiceProvider",
@@ -35,35 +35,41 @@
             "options": {
                 "0": "Live",
                 "1": "Sandbox"
-            }
+            },
+            "help": "Use Sandbox until provider UAT is complete. Live mode uses production bKash endpoints."
         },
         {
             "key": "app_key",
             "label": "bKash App Key",
             "type": "password",
-            "secret": true
+            "secret": true,
+            "help": "Merchant App Key issued by bKash during Tokenized Checkout onboarding. Encrypted at rest."
         },
         {
             "key": "app_secret",
             "label": "bKash App Secret",
             "type": "password",
-            "secret": true
+            "secret": true,
+            "help": "Merchant App Secret issued by bKash. Encrypted at rest and never returned to the browser."
         },
         {
             "key": "username",
             "label": "bKash API Username",
             "type": "password",
-            "secret": true
+            "secret": true,
+            "help": "bKash API username for this merchant environment. Encrypted at rest."
         },
         {
             "key": "password",
             "label": "bKash API Password",
             "type": "password",
-            "secret": true
+            "secret": true,
+            "help": "bKash API password for this merchant environment. Encrypted at rest."
         }
     ],
     "optional_dependencies": [
         "fees-management",
-        "payment-management"
+        "payment-management",
+        "universal-payment"
     ]
 }

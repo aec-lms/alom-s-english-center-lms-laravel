@@ -4,16 +4,21 @@ declare(strict_types=1);
 
 namespace Plugins\Modules\GatewayCard\Providers;
 
+use App\Core\Payments\PaymentGatewayRegistry;
 use App\Core\Plugins\BasePluginServiceProvider;
-use Plugins\Modules\GatewayCard\Services\CardGatewayService;
 
 class GatewayCardServiceProvider extends BasePluginServiceProvider
 {
     public function slug(): string { return 'gateway-card'; }
 
-    public function register(): void
+    public function boot(): void
     {
-        $this->app->singleton(CardGatewayService::class);
+        parent::boot();
+        $this->app->afterResolving(PaymentGatewayRegistry::class, function (PaymentGatewayRegistry $registry): void {
+            $registry->register('gateway-card', 'Visa / Mastercard Acquirer Adapter', ["merchant_id","api_secret","webhook_secret"], function (array $input): array {
+                throw new \RuntimeException('A bank/acquirer-specific card adapter must be installed before card checkout can be enabled.');
+            }, false);
+        });
     }
 
     protected function pluginPath(string $relative = ''): string

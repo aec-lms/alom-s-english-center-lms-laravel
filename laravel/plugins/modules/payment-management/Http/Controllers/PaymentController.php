@@ -10,6 +10,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
@@ -29,13 +30,90 @@ class PaymentController extends Controller
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
         $invoiceIntegrationEnabled = $this->invoiceIntegrationEnabled();
-        $transactions = PaymentTransaction::query()
+        $filters = $request->validate([
+            'from' => ['nullable', 'date_format:Y-m-d'],
+            'to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:from'],
+            'gateway' => ['nullable', 'string', 'max:64'],
+            'status' => ['nullable', 'in:initiated,settled,failed,refunded'],
+        ]);
+        $transactionQuery = PaymentTransaction::query()
             ->when($invoiceIntegrationEnabled, fn ($q) => $q->with('invoice'))
             ->when($actor && $actor->hasRole('branch_manager'), fn ($q) => $q->where('branch_id', $actor->branch_id))
-            ->latest()
-            ->paginate(25);
+            ->when($filters['from'] ?? null, fn ($q, $v) => $q->whereDate('settled_at', '>=', $v))
+            ->when($filters['to'] ?? null, fn ($q, $v) => $q->whereDate('settled_at', '<=', $v))
+            ->when($filters['gateway'] ?? null, fn ($q, $v) => $q->where('gateway_slug', $v))
+            ->when($filters['status'] ?? null, fn ($q, $v) => $q->where('status', $v));
+        $transactions = (clone $transactionQuery)->latest()->paginate(25)->withQueryString();
+        $openInvoices = $invoiceIntegrationEnabled
+            ? FeeInvoice::query()->whereIn('status', ['unpaid', 'partial'])
+                ->when($actor && $actor->hasRole('branch_manager'), fn ($q) => $q->where('branch_id', $actor->branch_id))
+                ->orderBy('due_date')->limit(500)->get()
+            : collect();
+        $settledBase = PaymentTransaction::query()->where('status', 'settled')->whereNotNull('settled_at')
+            ->when($actor && $actor->hasRole('branch_manager'), fn ($q) => $q->where('branch_id', $actor->branch_id));
+        $settledQuery = (clone $settledBase)
+            ->when($filters['from'] ?? null, fn ($q, $v) => $q->whereDate('settled_at', '>=', $v))
+            ->when($filters['to'] ?? null, fn ($q, $v) => $q->whereDate('settled_at', '<=', $v));
+        $collectionTotals = [
+            'today' => round((float) (clone $settledBase)->whereDate('settled_at', now()->toDateString())->sum('amount'), 2),
+            'period' => round((float) (clone $settledQuery)->sum('amount'), 2),
+            'outstanding' => round((float) $openInvoices->sum(fn ($invoice) => max(0, (float) $invoice->net_amount - (float) $invoice->paid_amount)), 2),
+            'overdue' => $openInvoices->filter(fn ($invoice) => $invoice->due_date && $invoice->due_date->isPast())->count(),
+            'partial' => $openInvoices->where('status', 'partial')->count(),
+            'unpaid' => $openInvoices->where('status', 'unpaid')->count(),
+        ];
 
-        return view('payment-management::index', compact('transactions', 'invoiceIntegrationEnabled'));
+        return view('payment-management::index', compact('transactions', 'invoiceIntegrationEnabled', 'openInvoices', 'collectionTotals', 'filters'));
+    }
+
+    public function exportCollections(Request $request): StreamedResponse
+    {
+        $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
+        $filters = $request->validate([
+            'from' => ['nullable', 'date_format:Y-m-d'],
+            'to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:from'],
+            'gateway' => ['nullable', 'string', 'max:64'],
+            'status' => ['nullable', 'in:initiated,settled,failed,refunded'],
+        ]);
+        $hasInvoices = $this->invoiceIntegrationEnabled();
+        $query = DB::table('payment_transactions');
+        if ($hasInvoices) {
+            $query->leftJoin('fee_invoices', 'fee_invoices.id', '=', 'payment_transactions.invoice_id')
+                ->addSelect('fee_invoices.invoice_number', 'fee_invoices.payer_name');
+        } else {
+            $query->selectRaw('NULL as invoice_number, NULL as payer_name');
+        }
+        $query->when($actor && $actor->hasRole('branch_manager'), fn ($q) => $q->where('payment_transactions.branch_id', $actor->branch_id))
+            ->when($filters['from'] ?? null, fn ($q, $v) => $q->whereDate('payment_transactions.settled_at', '>=', $v))
+            ->when($filters['to'] ?? null, fn ($q, $v) => $q->whereDate('payment_transactions.settled_at', '<=', $v))
+            ->when($filters['gateway'] ?? null, fn ($q, $v) => $q->where('payment_transactions.gateway_slug', $v))
+            ->when($filters['status'] ?? null, fn ($q, $v) => $q->where('payment_transactions.status', $v))
+            ->addSelect([
+                'payment_transactions.transaction_ref', 'payment_transactions.gateway_slug',
+                'payment_transactions.amount', 'payment_transactions.currency',
+                'payment_transactions.status', 'payment_transactions.external_reference',
+                'payment_transactions.settled_at', 'payment_transactions.branch_id',
+            ]);
+
+        return response()->streamDownload(function () use ($query): void {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, ['Transaction Ref', 'Invoice', 'Payer', 'Gateway', 'Amount', 'Currency', 'Status', 'External Reference', 'Settled At', 'Branch ID']);
+            $query->orderByDesc('payment_transactions.settled_at')->chunk(500, function ($rows) use ($out): void {
+                $safe = static function ($value): string {
+                    $value = (string) $value;
+                    return in_array(substr($value, 0, 1), ['=', '+', '-', '@', "\t", "\r"], true) ? "'".$value : $value;
+                };
+                foreach ($rows as $row) {
+                    fputcsv($out, [
+                        $safe($row->transaction_ref), $safe($row->invoice_number), $safe($row->payer_name),
+                        $row->gateway_slug, $row->amount, $row->currency, $row->status,
+                        $safe($row->external_reference), $row->settled_at, $row->branch_id,
+                    ]);
+                }
+            });
+            fclose($out);
+        }, 'payment-collections-'.now()->format('Ymd-His').'.csv', ['Content-Type' => 'text/csv; charset=UTF-8', 'Cache-Control' => 'no-store, private']);
     }
 
     public function recordOffline(Request $request): RedirectResponse

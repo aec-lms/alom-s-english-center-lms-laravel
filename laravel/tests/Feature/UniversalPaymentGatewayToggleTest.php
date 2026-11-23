@@ -72,7 +72,7 @@ class UniversalPaymentGatewayToggleTest extends TestCase
         ]);
     }
 
-    public function test_bangladesh_merchant_plugins_fail_closed_until_provider_adapters_are_verified(): void
+    public function test_bkash_online_checkout_is_ready_while_nagad_and_rocket_remain_manual_until_merchant_profiles_are_supplied(): void
     {
         $this->markSystemInstalled();
         $this->activatePlugins(['universal-payment', 'gateway-bkash', 'gateway-nagad', 'gateway-rocket']);
@@ -81,18 +81,23 @@ class UniversalPaymentGatewayToggleTest extends TestCase
             'enabled_gateways' => 'bkash,nagad,rocket',
         ]);
         app(PluginManager::class)->saveSettings('gateway-bkash', [
+            'enabled' => '1',
             'app_key' => 'sandbox-app-key',
             'app_secret' => 'sandbox-app-secret',
             'username' => 'sandbox-user',
             'password' => 'sandbox-password',
         ]);
+        app(PluginManager::class)->saveSettings('gateway-nagad', ['enabled' => '1']);
+        app(PluginManager::class)->saveSettings('gateway-rocket', ['enabled' => '1']);
 
         $statuses = app(\Plugins\Modules\UniversalPayment\Services\UniversalPaymentOrchestrator::class)->gatewayStatus();
 
-        foreach (['gateway-bkash', 'gateway-nagad', 'gateway-rocket'] as $slug) {
-            $this->assertSame('processor_adapter_required', $statuses[$slug]['status']);
-            $this->assertFalse($statuses[$slug]['available']);
-        }
+        $this->assertSame('ready', $statuses['gateway-bkash']['status']);
+        $this->assertTrue($statuses['gateway-bkash']['available']);
+        $this->assertSame('manual_review', $statuses['gateway-nagad']['status']);
+        $this->assertTrue($statuses['gateway-nagad']['available']);
+        $this->assertSame('manual_review', $statuses['gateway-rocket']['status']);
+        $this->assertTrue($statuses['gateway-rocket']['available']);
         $this->assertSame([], $statuses['gateway-bkash']['missing_credentials']);
     }
 
