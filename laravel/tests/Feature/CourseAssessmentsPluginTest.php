@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -247,4 +248,84 @@ class CourseAssessmentsPluginTest extends TestCase
             ->assertForbidden();
     }
 
+
+    public function test_revoked_student_role_immediately_blocks_all_web_attempt_endpoints(): void
+    {
+        $this->markSystemInstalled();
+        // Rate-limit counters can be shared across repeated feature-test requests;
+        // this regression isolates authorization outcomes from throttle responses.
+        $this->withoutMiddleware(ThrottleRequests::class);
+        $this->activatePlugins(['course-assessments']);
+        $student = $this->createUserWithRole('student');
+        $set = $this->createSet(['max_attempts' => 2]);
+        $this->createQuestion($set);
+
+        $start = $this->actingAs($student)->post(route('plugins.course-assessments.student.start', $set));
+        $start->assertRedirect();
+        $attemptId = (int) basename(parse_url($start->headers->get('Location'), PHP_URL_PATH));
+        $token = $student->createToken('revoked-course-assessment-role')->plainTextToken;
+        $questionId = (int) DB::table('course_assessment_attempt_questions')
+            ->where('attempt_id', $attemptId)
+            ->value('id');
+
+        $studentRoleId = DB::table('roles')->where('slug', 'student')->value('id');
+        $this->assertNotNull($studentRoleId);
+        DB::table('role_user')
+            ->where('user_id', $student->id)
+            ->where('role_id', $studentRoleId)
+            ->delete();
+
+        // Refresh the authenticated model so this regression proves persisted-role
+        // authorization rather than relying on a previously loaded role relation.
+        $revokedStudent = $student->fresh();
+
+        $this->actingAs($revokedStudent)
+            ->get(route('plugins.course-assessments.student.index'))
+            ->assertForbidden();
+        $this->actingAs($revokedStudent)
+            ->get(route('plugins.course-assessments.student.take', $attemptId))
+            ->assertForbidden();
+        $this->actingAs($revokedStudent)
+            ->putJson(route('plugins.course-assessments.student.answer', [$attemptId, $questionId]), [
+                'selected_option' => 1,
+            ])->assertForbidden();
+        $this->actingAs($revokedStudent)
+            ->post(route('plugins.course-assessments.student.submit', $attemptId))
+            ->assertForbidden();
+        $this->actingAs($revokedStudent)
+            ->get(route('plugins.course-assessments.student.history'))
+            ->assertForbidden();
+
+        // The same revoked identity must lose access through both supported API prefixes.
+        foreach (['api/v1', 'api/mobile'] as $prefix) {
+            $base = '/' . $prefix . '/my-learning/assessments';
+            app('auth')->forgetGuards();
+            $this->withToken($token)->getJson($base)->assertForbidden();
+            app('auth')->forgetGuards();
+            $this->withToken($token)->getJson($base . '/history')->assertForbidden();
+            app('auth')->forgetGuards();
+            $this->withToken($token)->postJson($base . '/' . $set . '/start')->assertForbidden();
+            app('auth')->forgetGuards();
+            $this->withToken($token)->getJson($base . '/attempts/' . $attemptId)->assertForbidden();
+            app('auth')->forgetGuards();
+            $this->withToken($token)->putJson($base . '/attempts/' . $attemptId . '/questions/' . $questionId, [
+                'selected_option' => 1,
+            ])->assertForbidden();
+            app('auth')->forgetGuards();
+            $this->withToken($token)->postJson($base . '/attempts/' . $attemptId . '/submit')->assertForbidden();
+        }
+
+        $this->assertDatabaseHas('course_assessment_attempts', [
+            'id' => $attemptId,
+            'student_id' => $student->id,
+            'status' => 'in_progress',
+            'submitted_at' => null,
+            'auto_score' => 0,
+        ]);
+        $this->assertDatabaseHas('course_assessment_attempt_questions', [
+            'attempt_id' => $attemptId,
+            'id' => $questionId,
+            'selected_option' => null,
+        ]);
+    }
 }
