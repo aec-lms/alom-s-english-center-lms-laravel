@@ -51,11 +51,12 @@ class DashboardController extends Controller
         $widgetDefinitions = $this->widgetDefinitions($actor);
         $widgets = $this->widgetsFor($actor?->id, $widgetDefinitions, $actor);
         $widgetAnalytics = $this->widgetAnalytics($actor?->id);
+        $roleDefaultWidgets = $this->roleDefaultWidgets($actor, $widgetDefinitions);
         $widgetSizes = $this->widgetSizes($actor?->id, $widgetDefinitions);
         $setupIncomplete = !$isBranchManager && SystemSetting::query()->where('key', 'setup.wizard.completed')->value('value') !== '1';
         $motionSettings = $this->motionSettings();
 
-        return view('admin.dashboard', compact('metrics', 'recentAudits', 'widgets', 'widgetDefinitions', 'widgetSizes', 'widgetAnalytics', 'setupIncomplete', 'isBranchManager', 'motionSettings'));
+        return view('admin.dashboard', compact('metrics', 'recentAudits', 'widgets', 'widgetDefinitions', 'widgetSizes', 'widgetAnalytics', 'roleDefaultWidgets', 'setupIncomplete', 'isBranchManager', 'motionSettings'));
     }
 
     public function saveWidgets(Request $request): RedirectResponse
@@ -289,48 +290,40 @@ class DashboardController extends Controller
 
     private function widgetsFor(int|string|null $userId, array $definitions, $actor = null): array
     {
-        $defaults = array_keys(array_filter($definitions, fn (array $definition): bool => $definition['default']));
-        if ($actor) {
-            $roleHints = [];
-            foreach (['teacher', 'student', 'guardian', 'branch_manager'] as $role) {
-                if ($actor->hasRole($role)) { $roleHints[] = $role; break; }
-            }
-            if ($roleHints !== []) {
-                $role = $roleHints[0];
-                $needles = match ($role) {
-                    'teacher' => ['teacher', 'course', 'class', 'assessment', 'live'],
-                    'student' => ['student', 'course', 'learning', 'assessment'],
-                    'guardian' => ['guardian', 'student', 'attendance', 'payment'],
-                    'branch_manager' => ['users'],
-                };
-                $roleDefaults = array_values(array_filter(array_keys($definitions), function (string $key) use ($needles): bool {
-                    foreach ($needles as $needle) if (str_contains(strtolower($key), $needle)) return true;
-                    return false;
-                }));
-                if ($roleDefaults !== []) $defaults = $roleDefaults;
-            }
-        }
-        if (!$userId) {
-            return $defaults;
-        }
+        $defaults = $this->roleDefaultWidgets($actor, $definitions);
+        if (!$userId) return $defaults;
 
         $value = SystemSetting::query()->where('key', $this->preferenceKey($userId))->value('value');
-        if (!is_string($value) || $value === '') {
-            return $defaults;
-        }
-
-        try {
-            $stored = json_decode($value, true, 512, JSON_THROW_ON_ERROR);
-        } catch (\JsonException) {
-            return $defaults;
-        }
-
-        if (!is_array($stored)) {
-            return $defaults;
-        }
+        if (!is_string($value) || $value === '') return $defaults;
+        try { $stored = json_decode($value, true, 512, JSON_THROW_ON_ERROR); } catch (\\JsonException) { return $defaults; }
+        if (!is_array($stored)) return $defaults;
 
         $allowedWidgets = array_keys($definitions);
         return array_values(array_unique(array_filter($stored, fn ($widget) => is_string($widget) && in_array($widget, $allowedWidgets, true))));
+    }
+
+    private function roleDefaultWidgets($actor, array $definitions): array
+    {
+        $defaults = array_keys(array_filter($definitions, fn (array $definition): bool => $definition['default']));
+        if (!$actor) return $defaults;
+
+        $role = null;
+        foreach (['branch_manager', 'teacher', 'student', 'guardian'] as $candidate) {
+            if ($actor->hasRole($candidate)) { $role = $candidate; break; }
+        }
+        if ($role === null) return $defaults;
+
+        $needles = match ($role) {
+            'branch_manager' => ['users'],
+            'teacher' => ['teacher', 'course', 'class', 'assessment', 'live'],
+            'student' => ['student', 'course', 'learning', 'assessment'],
+            'guardian' => ['guardian', 'student', 'attendance', 'payment'],
+        };
+        $matches = array_values(array_filter(array_keys($definitions), function (string $key) use ($needles): bool {
+            foreach ($needles as $needle) if (str_contains(strtolower($key), $needle)) return true;
+            return false;
+        }));
+        return $matches !== [] ? $matches : $defaults;
     }
 
     private function widgetAnalytics(int|string|null $userId): array
