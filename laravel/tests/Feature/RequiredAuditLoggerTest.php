@@ -72,4 +72,19 @@ class RequiredAuditLoggerTest extends TestCase
             AuditLog::flushEventListeners();
         }
     }
+    public function test_optional_logging_remains_best_effort_when_a_model_event_vetoes_persistence(): void
+    {
+        AuditLog::saving(static fn (): bool => false);
+
+        try {
+            app(AuditLogger::class)->log('bootstrap.optional_vetoed');
+
+            $this->assertDatabaseMissing('audit_logs', [
+                'action' => 'bootstrap.optional_vetoed',
+            ]);
+        } finally {
+            AuditLog::flushEventListeners();
+        }
+    }
+
 }
