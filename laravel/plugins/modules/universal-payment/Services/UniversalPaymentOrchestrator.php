@@ -36,14 +36,14 @@ class UniversalPaymentOrchestrator
                 }
             }
 
-            $available = $methodEnabled && $pluginEnabled && $missing === [] && $definition['checkout_ready'];
+            $available = $methodEnabled && $pluginEnabled && $missing === [] && ($definition['checkout_ready'] || $definition['manual']);
             $status = !$methodEnabled
                 ? 'disabled_in_universal_payment'
                 : (!$pluginEnabled
                     ? 'disabled'
                     : ($missing !== []
                         ? 'not_configured'
-                        : (!$definition['checkout_ready'] ? 'processor_adapter_required' : 'ready')));
+                        : ($definition['manual'] ? 'manual_review' : (!$definition['checkout_ready'] ? 'processor_adapter_required' : 'ready'))));
 
             $statuses[$slug] = [
                 'label' => $definition['label'],
@@ -64,6 +64,7 @@ class UniversalPaymentOrchestrator
                 'disabled_in_universal_payment' => 'Gateway is disabled in Universal Payment settings.',
                 'disabled' => 'Gateway plugin is not enabled.',
                 'processor_adapter_required' => 'The gateway plugin has no verified checkout adapter yet.',
+                'manual_review' => 'This method accepts receipts and requires authorized staff verification.',
                 default => 'Missing credentials: ' . implode(', ', $status['missing_credentials']),
             };
             throw new RuntimeException($status['label'] . ' is unavailable. ' . $reason);
