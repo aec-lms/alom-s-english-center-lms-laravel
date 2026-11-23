@@ -42,7 +42,7 @@ class FeeController extends Controller
         $totals = (clone $base)->selectRaw('COUNT(*) as invoice_count')
             ->selectRaw('COALESCE(SUM(net_amount),0) as billed')
             ->selectRaw('COALESCE(SUM(paid_amount),0) as collected')
-            ->selectRaw('COALESCE(SUM(GREATEST(net_amount-paid_amount,0)),0) as outstanding')
+            ->selectRaw('COALESCE(SUM(net_amount-paid_amount),0) as outstanding')
             ->first();
         $overdueCount = (clone $base)->whereIn('status',['unpaid','partial'])->whereDate('due_date','<',now()->toDateString())->count();
         $categories = FeeCategory::query()->orderBy('name')->get();
