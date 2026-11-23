@@ -59,17 +59,30 @@ class DeviceSessionController extends Controller
             __('You cannot revoke the session currently being used to administer the LMS.')
         );
 
-        $revoked = DB::table('device_sessions')
-            ->where('id', $deviceSession->id)
-            ->whereNull('revoked_at')
-            ->update([
-                'revoked_at' => now(),
-                'revoke_reason' => 'Signed out by administrator '.$request->user()->getAuthIdentifier(),
-                'updated_at' => now(),
-            ]);
+        $revoked = DB::transaction(function () use ($deviceSession, $request): int {
+            $revoked = DB::table('device_sessions')
+                ->where('id', $deviceSession->id)
+                ->whereNull('revoked_at')
+                ->update([
+                    'revoked_at' => now(),
+                    'revoke_reason' => 'Signed out by administrator '.$request->user()->getAuthIdentifier(),
+                    'updated_at' => now(),
+                ]);
+
+            if ($revoked > 0) {
+                $this->audit->logRequired(
+                    'security.device_session_revoked',
+                    'device_session',
+                    (string) $deviceSession->id,
+                    [],
+                    (int) $request->user()->getAuthIdentifier(),
+                );
+            }
+
+            return $revoked;
+        });
 
         if ($revoked > 0) {
-            $this->audit->log('security.device_session_revoked', 'device_session', (string) $deviceSession->id);
             return back()->with('success', __('The selected session has been revoked.'));
         }
 
