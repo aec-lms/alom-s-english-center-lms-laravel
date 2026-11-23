@@ -494,9 +494,7 @@ class CourseController extends Controller
 
     private function parseSyllabusLines(string $raw): array
     {
-        $lines = array_values(array_filter(array_map('trim', preg_split('/\r
-|\r|
-/', $raw) ?: [])));
+        $lines = array_values(array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', $raw) ?: [])));
         $modules = [];
         foreach ($lines as $idx => $line) {
             $modules[] = [
