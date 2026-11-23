@@ -91,6 +91,7 @@ class HrController extends Controller
             'staff_profile_id' => ['required', 'integer', 'exists:staff_profiles,id'],
             'attendance_date' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
             'status' => ['required', 'in:present,absent,late,leave'],
+            'leave_paid' => ['nullable', 'boolean'],
             'check_in_at' => ['nullable', 'date'],
             'check_out_at' => ['nullable', 'date', 'after_or_equal:check_in_at'],
             'remarks' => ['nullable', 'string', 'max:255'],
@@ -99,6 +100,7 @@ class HrController extends Controller
             $member = StaffProfile::query()->whereKey($validated['staff_profile_id'])->lockForUpdate()->firstOrFail();
             if ($actor && $actor->hasRole('branch_manager') && (int) $member->branch_id !== (int) $actor->branch_id) abort(403, 'Branch isolation violation.');
             $record = StaffAttendanceRecord::query()->where('staff_profile_id', $member->id)->whereDate('attendance_date', $validated['attendance_date'])->lockForUpdate()->first() ?? new StaffAttendanceRecord();
+            $validated['leave_paid'] = $validated['status'] === 'leave' ? (bool) ($validated['leave_paid'] ?? true) : true;
             $record->fill($validated + ['branch_id' => $member->branch_id, 'source' => 'admin', 'marked_by' => $actor?->id]);
             $record->save();
             return $record;
