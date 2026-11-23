@@ -359,7 +359,7 @@ class PluginCenterController extends Controller
                     PluginRecord::query()->where('slug', $slug)->where('is_core', false)->delete();
                     $item->delete();
 
-                    app(\\App\\Core\\Security\\AuditLogger::class)->logRequired(
+                    app(\App\Core\Security\AuditLogger::class)->logRequired(
                         'plugin.archive_permanently_deleted',
                         'plugin',
                         $slug,
@@ -367,7 +367,7 @@ class PluginCenterController extends Controller
                         auth()->id(),
                     );
                 });
-            } catch (\\Throwable $e) {
+            } catch (\Throwable $e) {
                 // Filesystem deletion and the database transaction cannot be one
                 // atomic resource. Restore the verified archive if the DB/audit
                 // transaction fails, and retain the private snapshot if recovery
@@ -376,7 +376,7 @@ class PluginCenterController extends Controller
                 try {
                     $archiveIsIntact = is_dir($archivePath)
                         && $this->directoryChecksums($archivePath) === $sourceChecksums;
-                } catch (\\Throwable) {
+                } catch (\Throwable) {
                     $archiveIsIntact = false;
                 }
 
@@ -393,7 +393,7 @@ class PluginCenterController extends Controller
                             throw new RuntimeException('Restored recycle-bin archive failed checksum verification.');
                         }
                         File::deleteDirectory($backupPath);
-                    } catch (\\Throwable $recoveryError) {
+                    } catch (\Throwable $recoveryError) {
                         report($recoveryError);
                         throw new RuntimeException(
                             "Permanent deletion failed and the archive could not be restored. The verified private recovery snapshot remains at {$backupPath}.",
