@@ -392,7 +392,7 @@ class UniversalPaymentController extends Controller
                 && hash_equals(strtolower((string) $invoice->payer_email), strtolower((string) auth()->user()->email));
             abort_unless($isInvoiceOwner, 403, 'You can only pay an invoice issued to your account.');
             abort_unless(
-                in_array($validated['gateway'], ['cash', 'bank_transfer', 'bank_cash', 'bkash', 'nagad', 'rocket'], true),
+                in_array($validated['gateway'], ['cash', 'bank_transfer', 'bank_cash', 'offline', 'cheque', 'bkash', 'nagad', 'rocket'], true),
                 422,
                 'Fee invoices accept manual bank, cash, bKash, Nagad or Rocket receipts here. Use the dedicated payment gateway checkout for automatic online gateways.'
             );
@@ -814,7 +814,7 @@ class UniversalPaymentController extends Controller
         $enabledRaw = $this->plugins->getSetting(
             'universal-payment',
             'enabled_gateways',
-            'sslcommerz,bkash,nagad,rocket,card,paypal,cash,bank_transfer,bank_cash'
+            'sslcommerz,stripe,paypal,bkash,nagad,rocket,card,cash,bank_transfer,bank_cash,offline,cheque'
         );
         $enabled = array_filter(array_map('trim', explode(',', (string) $enabledRaw)));
 
