@@ -258,6 +258,9 @@
                         @endforeach
                     </select>
                     <input name="title" required placeholder="Live Session Title *" class="sm:col-span-2 rounded-lg border border-slate-300 px-3 py-2">
+                    <select name="teacher_user_id" required class="rounded-lg border border-slate-300 px-3 py-2 bg-white"><option value="">Select assigned teacher *</option>@foreach ($teacherAssignments as $assignment)<option value="{{ $assignment->teacher_user_id }}" data-course-id="{{ $assignment->course_id }}">{{ $assignment->teacher_name }} — {{ $courses->getCollection()->firstWhere('id', $assignment->course_id)?->title ?? 'Course' }}</option>@endforeach</select>
+                    <input name="teacher_rate_per_class" type="number" min="0" step="0.01" value="0" placeholder="Teacher pay / class" class="rounded-lg border border-slate-300 px-3 py-2">
+                    <input name="student_fee_per_class" type="number" min="0" step="0.01" value="0" placeholder="Student fee / class (0 = off)" class="rounded-lg border border-slate-300 px-3 py-2">
                     <input name="instructor_name" value="Engr. Mahbubul Alom" placeholder="Instructor Name" class="rounded-lg border border-slate-300 px-3 py-2">
                     <select name="platform" required class="rounded-lg border border-slate-300 px-3 py-2 bg-white">
                         <option value="zoom">Zoom</option>
@@ -289,10 +292,19 @@
                             </form>
                         </div>
 
+                        @if (in_array($live->status, ['upcoming', 'live'], true) && $live->teacher_user_id)
+                            <form method="POST" action="{{ route('plugins.courses.live.complete', $live) }}" onsubmit="return confirm('Complete this class and create teacher payable / student invoices from the configured per-class rates?')">
+                                @csrf
+                                <button type="submit" class="rounded-lg bg-emerald-700 text-white px-3 py-2 font-bold">Complete Class &amp; Settle</button>
+                            </form>
+                        @endif
                         <form method="POST" action="{{ route('plugins.courses.live.update', $live) }}" class="grid sm:grid-cols-3 gap-2 pt-2 border-t border-slate-100">
                             @csrf
                             @method('PUT')
                             <input name="title" required value="{{ $live->title }}" class="rounded-lg border border-slate-300 px-3 py-1.5">
+                            <select name="teacher_user_id" required class="rounded-lg border border-slate-300 px-3 py-1.5 bg-white">@foreach ($teacherAssignments->where('course_id', $live->course_id) as $assignment)<option value="{{ $assignment->teacher_user_id }}" @selected((int) $live->teacher_user_id === (int) $assignment->teacher_user_id)>{{ $assignment->teacher_name }}</option>@endforeach</select>
+                            <input name="teacher_rate_per_class" type="number" min="0" step="0.01" value="{{ $live->teacher_rate_per_class ?? 0 }}" placeholder="Teacher pay / class" class="rounded-lg border border-slate-300 px-3 py-1.5">
+                            <input name="student_fee_per_class" type="number" min="0" step="0.01" value="{{ $live->student_fee_per_class ?? 0 }}" placeholder="Student fee / class" class="rounded-lg border border-slate-300 px-3 py-1.5">
                             <input name="instructor_name" value="{{ $live->instructor_name }}" class="rounded-lg border border-slate-300 px-3 py-1.5">
                             <select name="status" class="rounded-lg border border-slate-300 px-3 py-1.5 bg-white">
                                 @foreach (['upcoming' => 'Upcoming', 'live' => 'LIVE NOW', 'completed' => 'Completed', 'cancelled' => 'Cancelled'] as $st => $lbl)
@@ -317,6 +329,23 @@
                     <p class="text-xs text-slate-400">No live classes scheduled yet.</p>
                 @endforelse
             </div>
+        </div>
+        <div class="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+            <h2 class="text-sm font-bold text-slate-900">Teacher Class Payments</h2>
+            @forelse ($teacherClassPayments as $payment)
+                <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 py-2 text-xs">
+                    <div><strong>{{ $payment->teacher_name }}</strong> · {{ $payment->class_title }} · ৳{{ number_format((float) $payment->amount, 2) }} · <span class="uppercase">{{ $payment->status }}</span></div>
+                    @if ($payment->status === 'pending')
+                        <form method="POST" action="{{ route('plugins.courses.teacher-class-payments.paid', $payment->id) }}" class="flex gap-2">
+                            @csrf
+                            <input name="payment_reference" maxlength="100" placeholder="Payment reference" class="rounded border border-slate-300 px-2 py-1">
+                            <button class="rounded bg-slate-800 text-white px-3 py-1 font-bold">Mark Paid</button>
+                        </form>
+                    @endif
+                </div>
+            @empty
+                <p class="text-xs text-slate-400">No class-based teacher payments recorded.</p>
+            @endforelse
         </div>
     </section>
 </div>
