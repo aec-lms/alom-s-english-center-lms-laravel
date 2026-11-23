@@ -17,7 +17,10 @@ class DashboardCustomizationTest extends TestCase
         $this->actingAs($admin)->get(route('admin.dashboard'))
             ->assertOk()
             ->assertSee('Customize Dashboard')
-            ->assertSee('System Information');
+            ->assertSee('System Information')
+            ->assertSee('aec-edupro-dashboard', false)
+            ->assertSee('aec-dashboard-welcome', false)
+            ->assertSee('Welcome back');
 
         $this->actingAs($admin)->post(route('admin.dashboard.widgets'), [
             'widgets' => ['users', 'system_info'],

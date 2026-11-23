@@ -6,7 +6,7 @@
         fn (array $definition, string $key): array => [$key => $definition['label']]
     )->all();
 @endphp
-<div class="space-y-6">
+<div class="aec-edupro-dashboard space-y-6">
     @if($setupIncomplete)
         <section class="rounded-2xl border border-amber-300 bg-amber-50 p-5 text-amber-950" role="status">
             <div class="flex flex-wrap items-center justify-between gap-3">
@@ -17,6 +17,23 @@
             </div>
         </section>
     @endif
+    <section class="aec-dashboard-welcome relative isolate overflow-hidden rounded-3xl border border-blue-900/20 px-5 py-5 text-white shadow-lg sm:px-7 sm:py-6" aria-labelledby="aec-dashboard-welcome-title">
+        <div class="absolute inset-0 -z-10 bg-gradient-to-r from-[#10275d] via-[#1555a7] to-[#087f9b]"></div>
+        <div class="pointer-events-none absolute -right-10 -top-16 -z-10 h-56 w-56 rounded-full bg-cyan-300/25 blur-3xl"></div>
+        <div class="pointer-events-none absolute -bottom-20 left-1/3 -z-10 h-44 w-72 rounded-full bg-blue-300/20 blur-3xl"></div>
+        <div class="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+            <div class="max-w-3xl">
+                <span class="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[.18em] text-cyan-100">AEC LMS · Admin Workspace</span>
+                <h2 id="aec-dashboard-welcome-title" class="mt-3 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">Welcome back, {{ auth()->user()?->name ?? 'Administrator' }}</h2>
+                <p class="mt-1.5 max-w-2xl text-sm leading-relaxed text-blue-100">Your institution operations, platform health and learning services — together in one workspace.</p>
+            </div>
+            <div class="hidden shrink-0 rounded-2xl border border-white/20 bg-slate-950/15 px-5 py-3 text-right backdrop-blur-sm sm:block">
+                <div class="text-[10px] font-bold uppercase tracking-[.16em] text-cyan-100">Workspace</div>
+                <div class="mt-1 text-lg font-extrabold text-white">Overview</div>
+                <div class="text-xs text-blue-100">Live, permission-aware data</div>
+            </div>
+        </div>
+    </section>
     <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
             <h1 class="text-2xl font-extrabold text-slate-900">Dashboard</h1>
@@ -90,6 +107,33 @@
     </div>
 
     <style>
+    .aec-dashboard-welcome { isolation:isolate; background:#10275d; }
+    #dashboard-widgets [data-dashboard-widget] {
+        position:relative;
+        min-width:0;
+        overflow:hidden;
+        border-radius:1.15rem;
+        border-color:var(--aec-border);
+        background-color:var(--aec-surface);
+        box-shadow:0 10px 28px rgba(15,23,42,.055);
+        transition:box-shadow 220ms ease,border-color 220ms ease;
+    }
+    #dashboard-widgets [data-dashboard-widget]::before {
+        content:"";
+        position:absolute;
+        inset:0 0 auto;
+        height:3px;
+        background:linear-gradient(90deg,#2563eb,#14b8a6,#8b5cf6);
+        opacity:.8;
+        pointer-events:none;
+    }
+    #dashboard-widgets[data-motion-enabled="true"][data-motion-hover="true"] [data-dashboard-widget]:hover {
+        border-color:rgba(37,99,235,.34);
+        box-shadow:0 16px 36px rgba(15,23,42,.10);
+    }
+    @media (prefers-reduced-motion: reduce) {
+        #dashboard-widgets [data-dashboard-widget] { transition:none !important; }
+    }
     #dashboard-widgets [data-dashboard-widget][data-size="small"] { min-height: 7rem; }
     @media (min-width: 768px) {
         #dashboard-widgets [data-dashboard-widget][data-size="small"] { grid-column: span 1; }
