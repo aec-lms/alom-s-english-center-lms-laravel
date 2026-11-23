@@ -53,7 +53,7 @@
     <section class="bg-white rounded-2xl border border-slate-200 p-5 overflow-x-auto">
         <h2 class="font-bold text-lg mb-3">Invoices & Outstanding Balances</h2>
         <table class="w-full text-xs text-left">
-            <thead class="text-slate-500 border-b"><tr><th class="py-2">Invoice #</th><th>Payer / Student</th><th>Net</th><th>Paid</th><th>Status</th><th>Due Date</th></tr></thead>
+            <thead class="text-slate-500 border-b"><tr><th class="py-2">Invoice #</th><th>Payer / Student</th><th>Net</th><th>Paid</th><th>Status</th><th>Due Date</th><th>Actions</th></tr></thead>
             <tbody class="divide-y">
                 @forelse ($invoices as $inv)
                     <tr>
@@ -63,9 +63,15 @@
                         <td>{{ $inv->currency }} {{ number_format((float) $inv->paid_amount, 2) }}</td>
                         <td class="uppercase font-semibold">{{ $inv->status }}</td>
                         <td>{{ $inv->due_date?->toDateString() ?? '—' }}</td>
+                        <td class="space-y-1">
+                            @if(in_array($inv->status, ['unpaid', 'partial']))
+                                <form method="POST" action="{{ route('plugins.fees.invoices.remind', $inv) }}">@csrf<button class="text-sky-700 underline">Send reminder</button></form>
+                                <details><summary class="cursor-pointer text-amber-700 underline">Apply waiver</summary><form method="POST" action="{{ route('plugins.fees.invoices.waive', $inv) }}" class="mt-2 space-y-1">@csrf<input name="amount" type="number" min="0.01" max="{{ max(0, (float) $inv->net_amount - (float) $inv->paid_amount) }}" step="0.01" placeholder="Waiver amount" required class="w-28 rounded border p-1"><input name="reason" maxlength="255" placeholder="Reason" required class="w-36 rounded border p-1"><button class="text-amber-800 underline">Confirm waiver</button></form></details>
+                            @endif
+                        </td>
                     </tr>
                 @empty
-                    <tr><td colspan="6" class="py-4 text-slate-400">No invoices issued yet.</td></tr>
+                    <tr><td colspan="7" class="py-4 text-slate-400">No invoices issued yet.</td></tr>
                 @endforelse
             </tbody>
         </table>
