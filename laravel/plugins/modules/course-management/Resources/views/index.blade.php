@@ -315,7 +315,7 @@
                             <input name="student_fee_per_class" type="number" min="0" step="0.01" value="{{ $live->student_fee_per_class ?? 0 }}" placeholder="Student fee / class" class="rounded-lg border border-slate-300 px-3 py-1.5">
                             <input name="instructor_name" value="{{ $live->instructor_name }}" class="rounded-lg border border-slate-300 px-3 py-1.5">
                             <select name="status" class="rounded-lg border border-slate-300 px-3 py-1.5 bg-white">
-                                @foreach (['upcoming' => 'Upcoming', 'live' => 'LIVE NOW', 'completed' => 'Completed', 'cancelled' => 'Cancelled'] as $st => $lbl)
+                                @foreach (['upcoming' => 'Upcoming', 'live' => 'LIVE NOW', 'cancelled' => 'Cancelled'] as $st => $lbl)
                                     <option value="{{ $st }}" @selected($live->status === $st)>{{ $lbl }}</option>
                                 @endforeach
                             </select>
