@@ -19,8 +19,8 @@
     @endif
     <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
-            <h1 class="text-2xl font-extrabold text-slate-900">Core System Overview</h1>
-            <p class="text-xs text-slate-500">Your dashboard layout is saved per administrator account.</p>
+            <h1 class="text-2xl font-extrabold text-slate-900">Dashboard</h1>
+            <p class="text-xs text-slate-500">Manage your LMS operations, users, plugins and system health from one workspace.</p>
         </div>
         @can('core.settings.manage')
             <details class="relative">
@@ -267,4 +267,58 @@
     });
 })();
 </script>
+
+<style>
+/* Dashboard-only reference skin; preserve global appearance preferences elsewhere. */
+body:has(#dashboard-widgets) { background:#1b2533 !important; color:#e8eef7 !important; }
+body:has(#dashboard-widgets) main { background:#1b2533 !important; }
+body:has(#dashboard-widgets) main > header { background:#263244 !important; border-color:#354256 !important; }
+body:has(#dashboard-widgets) main > header .text-slate-900 { color:#f8fafc !important; }
+body:has(#dashboard-widgets) main > header .text-slate-500 { color:#aebbd0 !important; }
+body:has(#dashboard-widgets) main > header a:not(.bg-blue-600) { background:#303d51 !important; border-color:#45536a !important; color:#e8eef7 !important; }
+body:has(#dashboard-widgets) main > header span { background:#303d51 !important; color:#e8eef7 !important; }
+#dashboard-widgets { align-items:stretch; gap:1rem; }
+#dashboard-widgets [data-dashboard-widget] {
+ min-width:0; color:#e8eef7 !important; background:#263244 !important;
+ border:1px solid #3a485d !important; border-radius:12px !important;
+ box-shadow:0 8px 22px rgba(5,12,24,.12); padding:1.15rem !important;
+}
+#dashboard-widgets [data-dashboard-widget] h1,
+#dashboard-widgets [data-dashboard-widget] h2,
+#dashboard-widgets [data-dashboard-widget] h3,
+#dashboard-widgets [data-dashboard-widget] strong,
+#dashboard-widgets [data-dashboard-widget] .text-slate-900 { color:#f8fafc !important; }
+#dashboard-widgets [data-dashboard-widget] .text-slate-700,
+#dashboard-widgets [data-dashboard-widget] .text-slate-600 { color:#d5deeb !important; }
+#dashboard-widgets [data-dashboard-widget] .text-slate-500,
+#dashboard-widgets [data-dashboard-widget] .text-slate-400 { color:#9eacc1 !important; }
+#dashboard-widgets [data-dashboard-widget] .border-slate-200,
+#dashboard-widgets [data-dashboard-widget] .border-slate-300,
+#dashboard-widgets [data-dashboard-widget] table tbody tr { border-color:#3b4a60 !important; }
+#dashboard-widgets [data-dashboard-widget] table thead { color:#aebbd0 !important; border-color:#3b4a60 !important; }
+#dashboard-widgets [data-dashboard-widget] a.bg-blue-600,
+#dashboard-widgets [data-dashboard-widget] button.bg-blue-600 { background:#20a89c !important; color:white !important; }
+#dashboard-widgets [data-dashboard-widget] input,
+#dashboard-widgets [data-dashboard-widget] select { background:#202c3c !important; border-color:#43536b !important; color:#e8eef7 !important; }
+#dashboard-widgets [data-dashboard-widget][data-size=small] { min-height:8rem; }
+#dashboard-widgets [data-dashboard-widget][data-size=medium] { min-height:10rem; }
+#dashboard-widgets [data-dashboard-widget][data-size=large] { min-height:14rem; }
+@media (min-width:768px) {
+ #dashboard-widgets [data-dashboard-widget][data-size=small] { grid-column:span 1; }
+ #dashboard-widgets [data-dashboard-widget][data-size=medium] { grid-column:span 2; }
+ #dashboard-widgets [data-dashboard-widget][data-size=large] { grid-column:span 4; }
+}
+@media (max-width:767px) {
+ #dashboard-widgets [data-dashboard-widget] { grid-column:1 / -1 !important; }
+ body:has(#dashboard-widgets) main { padding:1rem !important; }
+ body:has(#dashboard-widgets) main > header { margin:-1rem -1rem 1rem !important; padding:1rem !important; }
+}
+#dashboard-widgets [data-dashboard-widget] { transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease; }
+#dashboard-widgets [data-dashboard-widget]:hover { transform:translateY(-2px); border-color:#52647e !important; box-shadow:0 14px 30px rgba(5,12,24,.22); }
+@media (prefers-reduced-motion:reduce) {
+ #dashboard-widgets [data-dashboard-widget] { transition:none !important; }
+ #dashboard-widgets [data-dashboard-widget]:hover { transform:none; }
+}
+</style>
+
 @endsection
