@@ -391,12 +391,20 @@ class UniversalPaymentController extends Controller
                 && filled($invoice->payer_email)
                 && hash_equals(strtolower((string) $invoice->payer_email), strtolower((string) auth()->user()->email));
             abort_unless($isInvoiceOwner, 403, 'You can only pay an invoice issued to your account.');
+            $manualInvoiceMethods = ['cash', 'bank_transfer', 'bank_cash', 'offline', 'cheque', 'nagad', 'rocket'];
+            $onlineInvoiceMethods = ['sslcommerz', 'bkash', 'card'];
             abort_unless(
-                in_array($validated['gateway'], ['cash', 'bank_transfer', 'bank_cash', 'offline', 'cheque', 'bkash', 'nagad', 'rocket'], true),
+                in_array($validated['gateway'], $manualInvoiceMethods, true)
+                    || in_array($validated['gateway'], $onlineInvoiceMethods, true),
                 422,
-                'Fee invoices accept manual bank, cash, bKash, Nagad or Rocket receipts here. Use the dedicated payment gateway checkout for automatic online gateways.'
+                'Choose a supported manual receipt method or a configured online gateway.'
             );
-            abort_if(trim((string) ($validated['external_trx_id'] ?? '')) === '', 422, 'Enter the bank transaction ID or cash receipt reference.');
+            if (in_array($validated['gateway'], $manualInvoiceMethods, true)) {
+                abort_if(trim((string) ($validated['external_trx_id'] ?? '')) === '', 422, 'Enter the bank transaction ID or cash receipt reference.');
+            }
+            if ($validated['gateway'] === 'card') {
+                $this->assertGatewayEnabled('sslcommerz');
+            }
             abort_if(
                 UniversalPaymentTransaction::query()
                     ->where('fee_invoice_id', $invoice->id)
@@ -457,10 +465,12 @@ class UniversalPaymentController extends Controller
                     'payer_name' => $validated['payer_name'],
                     'payer_contact' => $validated['payer_contact'],
                     'item_title' => 'Invoice ' . $lockedInvoice->invoice_number,
-                    'gateway' => $validated['gateway'],
+                    'gateway' => $validated['gateway'] === 'card' ? 'sslcommerz' : $validated['gateway'],
                     'currency' => (string) ($lockedInvoice->currency ?: 'BDT'),
                     'amount' => $balance,
-                    'external_trx_id' => trim((string) $validated['external_trx_id']),
+                    'external_trx_id' => in_array($validated['gateway'], ['sslcommerz', 'bkash', 'card'], true)
+                        ? null
+                        : trim((string) $validated['external_trx_id']),
                     'user_id' => auth()->id(),
                     'branch_id' => $lockedInvoice->branch_id ?? null,
                     'fee_invoice_id' => $lockedInvoice->id,
@@ -531,6 +541,40 @@ class UniversalPaymentController extends Controller
                     'status' => 'pending',
                 ]);
             });
+        }
+
+        if ($invoice !== null && in_array($validated['gateway'], ['sslcommerz', 'bkash', 'card'], true)) {
+            try {
+                $gatewaySlug = $validated['gateway'] === 'card' ? 'gateway-sslcommerz' : 'gateway-' . $validated['gateway'];
+                abort_unless($this->gatewayRegistry->supportsStorefront($gatewaySlug), 422, 'The selected gateway has no verified invoice checkout adapter yet.');
+                $checkout = $this->gatewayRegistry->initiate($gatewaySlug, [
+                    'universal_transaction' => $tx,
+                    'storefront_item' => (object) ['title' => $tx->item_title],
+                    'user' => auth()->user(),
+                    'payer_contact' => $validated['payer_contact'],
+                    'context' => ['purpose' => 'fee_invoice'],
+                ]);
+                $checkoutUrl = (string) ($checkout['redirect_url'] ?? '');
+                abort_unless($checkoutUrl !== '' && strtolower((string) parse_url($checkoutUrl, PHP_URL_SCHEME)) === 'https', 502, 'The selected gateway did not return a secure checkout URL.');
+                return redirect()->away($checkoutUrl);
+            } catch (\\Throwable $exception) {
+                report($exception);
+                $ambiguous = $exception instanceof \\Illuminate\\Http\\Client\\ConnectionException;
+                DB::transaction(function () use ($tx, $ambiguous): void {
+                    $locked = UniversalPaymentTransaction::query()->whereKey($tx->id)->lockForUpdate()->first();
+                    if ($locked && $locked->status === 'pending') {
+                        $locked->update([
+                            'status' => $ambiguous ? 'risk_review' : 'failed',
+                            'notes' => $ambiguous
+                                ? 'Online invoice checkout initialization outcome is unknown; reconcile with the provider before retrying.'
+                                : 'Online invoice checkout could not be initialized.',
+                        ]);
+                    }
+                });
+                return back()->withErrors(['payment' => $ambiguous
+                    ? 'The payment session outcome is unknown. Contact support before retrying.'
+                    : 'Unable to start online invoice checkout. Check gateway configuration and try again.'])->withInput();
+            }
         }
 
         if ($invoice !== null) {
