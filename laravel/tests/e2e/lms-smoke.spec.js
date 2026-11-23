@@ -22,7 +22,7 @@ test('admin can sign in and open Recycle Bin', async ({ page }) => {
   await page.locator('#login-password-input').fill('E2E-Strong-Password-2026!');
   await page.getByRole('button', { name: /sign in/i }).click();
   await expect(page).toHaveURL(/\/admin(?:\/|$)/);
-  await expect(page.getByRole('heading', { name: 'Core System Overview' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
   const response = await page.goto('/admin/recycle-bin');
   expect(response.status()).toBe(200);
   await expect(page.getByRole('heading', { name: 'Admin Recycle Bin' })).toBeVisible();
