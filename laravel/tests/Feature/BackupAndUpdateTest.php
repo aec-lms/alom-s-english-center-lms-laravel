@@ -45,7 +45,73 @@ class BackupAndUpdateTest extends TestCase
         $record->delete();
     }
 
-    public function test_encrypted_backup_creation_and_integrity_verification(): void
+
+    public function test_backup_creation_rolls_back_record_and_removes_archive_when_required_audit_fails(): void
+    {
+        $this->markSystemInstalled();
+        $backupDir = storage_path('app/test-backup-audit-' . bin2hex(random_bytes(5)));
+        config(['lms.backup_path' => $backupDir]);
+        mkdir($backupDir, 0700, true);
+
+        AuditLog::creating(static function (): void {
+            throw new RuntimeException('forced backup audit failure');
+        });
+
+        try {
+            try {
+                app(BackupService::class)->createEncryptedBackup(null, false);
+                $this->fail('Backup creation must fail closed when its required audit cannot be persisted.');
+            } catch (RuntimeException $exception) {
+                $this->assertSame('forced backup audit failure', $exception->getMessage());
+            }
+
+            $this->assertSame(0, BackupRecord::query()->count());
+            $this->assertSame([], array_values(array_diff(scandir($backupDir) ?: [], ['.', '..'])));
+        } finally {
+            AuditLog::flushEventListeners();
+            @rmdir($backupDir);
+        }
+    }
+
+    public function test_backup_restore_rolls_back_database_when_required_audit_fails(): void
+    {
+        $this->markSystemInstalled();
+        $prefix = 'restore-audit-' . bin2hex(random_bytes(4)) . '-';
+        $timestamp = now();
+        $record = app(BackupService::class)->createEncryptedBackup(null, false);
+
+        DB::table('users')->insert([
+            'name' => 'Must survive failed restore',
+            'email' => $prefix . 'sentinel@aec.test',
+            'password' => password_hash('AuditRollback!2026', PASSWORD_BCRYPT),
+            'is_active' => true,
+            'created_at' => $timestamp,
+            'updated_at' => $timestamp,
+        ]);
+
+        AuditLog::creating(static function (): void {
+            throw new RuntimeException('forced backup restore audit failure');
+        });
+
+        try {
+            try {
+                app(BackupService::class)->restoreEncryptedBackup($record);
+                $this->fail('Backup restore must fail closed when its required audit cannot be persisted.');
+            } catch (RuntimeException $exception) {
+                $this->assertSame('forced backup restore audit failure', $exception->getMessage());
+            }
+
+            $this->assertDatabaseHas('users', [
+                'email' => $prefix . 'sentinel@aec.test',
+                'name' => 'Must survive failed restore',
+            ]);
+        } finally {
+            AuditLog::flushEventListeners();
+            @unlink($record->storage_path);
+            $record->delete();
+        }
+    }
+\n    public function test_encrypted_backup_creation_and_integrity_verification(): void
     {
         $this->markSystemInstalled();
         $backups = app(BackupService::class);
