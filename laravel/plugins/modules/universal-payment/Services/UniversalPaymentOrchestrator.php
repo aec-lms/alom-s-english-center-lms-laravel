@@ -26,7 +26,7 @@ class UniversalPaymentOrchestrator
         $statuses = [];
 
         foreach ($this->gateways->definitions() as $slug => $definition) {
-            $method = substr($slug, strlen('gateway-'));
+            $method = str_replace('-', '_', substr($slug, strlen('gateway-')));
             $methodEnabled = in_array($method, $enabledMethods, true);
             $pluginEnabled = $this->plugins->isEnabled($slug);
             $missing = [];
