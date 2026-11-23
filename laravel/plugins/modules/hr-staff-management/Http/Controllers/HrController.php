@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use Plugins\Modules\HrStaffManagement\Models\StaffPayroll;
 use Plugins\Modules\HrStaffManagement\Models\StaffProfile;
+use Plugins\Modules\HrStaffManagement\Models\StaffAttendanceRecord;
 
 class HrController extends Controller
 {
@@ -30,6 +31,12 @@ class HrController extends Controller
                 ->get()
             : collect();
 
+        $attendanceRecords = Schema::hasTable('staff_attendance_records')
+            ? StaffAttendanceRecord::query()->with('staff')
+                ->when($actor && $actor->hasRole('branch_manager') && $actor->branch_id !== null, fn ($q) => $q->where('branch_id', $actor->branch_id))
+                ->orderByDesc('attendance_date')->limit(40)->get()
+            : collect();
+
         $payrolls = Schema::hasTable('staff_payrolls')
             ? StaffPayroll::query()
                 ->with('staff')
@@ -39,7 +46,7 @@ class HrController extends Controller
                 ->get()
             : collect();
 
-        return view('hr-staff-management::index', compact('staff', 'payrolls'));
+        return view('hr-staff-management::index', compact('staff', 'payrolls', 'attendanceRecords'));
     }
 
     public function storeStaff(Request $request): RedirectResponse
@@ -72,6 +79,35 @@ class HrController extends Controller
         $this->audit->log('hr.staff_created', 'staff_profile', (string) $member->id);
 
         return back()->with('status', "Staff member '{$member->full_name}' added.");
+    }
+
+    public function recordAttendance(Request $request): RedirectResponse
+    {
+        $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
+        abort_unless(Schema::hasTable('staff_attendance_records'), 409, 'Staff attendance is not installed.');
+        $validated = $request->validate([
+            'staff_profile_id' => ['required', 'integer', 'exists:staff_profiles,id'],
+            'attendance_date' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
+            'status' => ['required', 'in:present,absent,late,leave'],
+            'check_in_at' => ['nullable', 'date'],
+            'check_out_at' => ['nullable', 'date', 'after_or_equal:check_in_at'],
+            'remarks' => ['nullable', 'string', 'max:255'],
+        ]);
+        $record = DB::transaction(function () use ($validated, $actor) {
+            $member = StaffProfile::query()->whereKey($validated['staff_profile_id'])->lockForUpdate()->firstOrFail();
+            if ($actor && $actor->hasRole('branch_manager') && (int) $member->branch_id !== (int) $actor->branch_id) abort(403, 'Branch isolation violation.');
+            $record = StaffAttendanceRecord::query()->where('staff_profile_id', $member->id)->whereDate('attendance_date', $validated['attendance_date'])->lockForUpdate()->first() ?? new StaffAttendanceRecord();
+            $record->fill($validated + ['branch_id' => $member->branch_id, 'source' => 'admin', 'marked_by' => $actor?->id]);
+            $record->save();
+            return $record;
+        });
+        $this->audit->log('hr.staff_attendance_recorded', 'staff_attendance', (string) $record->id, [
+            'staff_profile_id' => $record->staff_profile_id,
+            'attendance_date' => $record->attendance_date?->toDateString(),
+            'status' => $record->status,
+        ]);
+        return back()->with('status', 'Staff attendance saved.');
     }
 
     public function recordPayroll(Request $request): RedirectResponse
