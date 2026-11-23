@@ -13,6 +13,6 @@ class AutomationChannel extends Model
 
     protected function casts(): array
     {
-        return ['configuration' => 'array', 'connected_at' => 'datetime'];
+        return ['credentials_encrypted' => 'encrypted', 'configuration' => 'array', 'connected_at' => 'datetime'];
     }
 }
