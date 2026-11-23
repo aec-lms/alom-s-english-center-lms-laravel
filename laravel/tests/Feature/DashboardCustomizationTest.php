@@ -38,6 +38,20 @@ class DashboardCustomizationTest extends TestCase
             ->assertDontSee('data-dashboard-widget="backups"', false);
     }
 
+    public function test_admin_dashboard_uses_edupro_inspired_hero_and_dashboard_only_visual_skin(): void
+    {
+        $this->markSystemInstalled();
+        $admin = $this->createUserWithRole('admin', null, 'dashboard-edupro-design@aec.test');
+
+        $this->actingAs($admin)->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertSee('aec-edupro-hero', false)
+            ->assertSee('aec-dashboard-welcome', false)
+            ->assertSee('EDUPRO-INSPIRED ADMIN DASHBOARD SKIN')
+            ->assertSee('linear-gradient(112deg,#12345b 0%,#155b78 52%,#176f78 100%)', false)
+            ->assertSee('data-dashboard-widget="users"', false);
+    }
+
     public function test_dashboard_widget_preferences_are_isolated_per_admin(): void
     {
         $this->markSystemInstalled();
