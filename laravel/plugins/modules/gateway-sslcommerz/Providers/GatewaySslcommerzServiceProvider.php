@@ -24,7 +24,7 @@ class GatewaySslcommerzServiceProvider extends BasePluginServiceProvider
             $registry->register('gateway-sslcommerz', 'SSLCOMMERZ', ['store_id', 'store_password'],
                 function (array $input): array {
                     if (isset($input['universal_transaction'])) {
-                        $url = app(\\Plugins\\Modules\\UniversalPayment\\Services\\StorefrontPaymentGatewayService::class)
+                        $url = app(\Plugins\Modules\UniversalPayment\Services\StorefrontPaymentGatewayService::class)
                             ->initiateSslcommerz(
                                 $input['universal_transaction'],
                                 $input['storefront_item'],
