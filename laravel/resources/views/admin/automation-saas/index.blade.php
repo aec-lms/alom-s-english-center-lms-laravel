@@ -76,6 +76,24 @@
                     </div>
                     @if($tenant->owner_user_id === auth()->id() || $isPlatformAdmin)
                         <div class="mt-4 grid gap-3 lg:grid-cols-2">
+                            <form method="POST" action="{{ route('admin.automation-saas.contacts.store', $tenant) }}" class="rounded-lg border border-slate-200 p-3 space-y-2">@csrf
+                                <h3 class="text-xs font-bold text-slate-700">Add CRM contact</h3>
+                                <input name="name" maxlength="160" aria-label="Contact name" placeholder="Contact name" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs">
+                                <input name="email" type="email" maxlength="190" aria-label="Contact email" placeholder="Email address" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs">
+                                <input name="phone" maxlength="32" aria-label="Contact phone" placeholder="Phone number" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs">
+                                <select name="source" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs"><option value="manual">Manual</option><option value="website">Website</option><option value="import">Import</option><option value="api">API</option></select>
+                                <button class="rounded-lg bg-slate-800 px-3 py-2 text-xs font-bold text-white">Save contact</button>
+                            </form>
+                            <form method="POST" action="{{ route('admin.automation-saas.campaigns.store', $tenant) }}" class="rounded-lg border border-slate-200 p-3 space-y-2">@csrf
+                                <h3 class="text-xs font-bold text-slate-700">Create campaign draft</h3>
+                                <input name="name" required maxlength="160" aria-label="Campaign name" placeholder="Campaign name" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs">
+                                <select name="channel" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs"><option value="whatsapp">WhatsApp</option><option value="messenger">Messenger</option><option value="instagram">Instagram</option><option value="telegram">Telegram</option><option value="email">Email</option><option value="sms">SMS</option></select>
+                                <textarea name="message_template" required maxlength="10000" rows="3" aria-label="Campaign message" placeholder="Message template" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs"></textarea>
+                                <label class="block text-xs text-slate-500">Schedule (optional)<input type="datetime-local" name="scheduled_at" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs"></label>
+                                <button class="rounded-lg bg-violet-700 px-3 py-2 text-xs font-bold text-white">Save campaign draft</button>
+                            </form>
+                        </div>
+                        <div class="mt-3 grid gap-3 lg:grid-cols-2">
                             <form method="POST" action="{{ route('admin.automation-saas.agents.store', $tenant) }}" class="flex flex-wrap gap-2">@csrf<input name="name" required maxlength="120" aria-label="AI agent name" placeholder="New AI agent name" class="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-xs"><button class="rounded-lg border border-violet-300 px-3 py-2 text-xs font-bold text-violet-700">Add agent</button></form>
                             <form method="POST" action="{{ route('admin.automation-saas.workflows.store', $tenant) }}" class="flex flex-wrap gap-2">@csrf<input name="name" required maxlength="160" aria-label="Workflow name" placeholder="New workflow name" class="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-xs"><select name="trigger_event" aria-label="Workflow trigger" class="rounded-lg border border-slate-300 px-2 py-2 text-xs"><option value="contact.created">Contact created</option><option value="conversation.opened">Conversation opened</option><option value="message.received">Message received</option><option value="form.submitted">Form submitted</option><option value="order.created">Order created</option></select><button class="rounded-lg border border-emerald-300 px-3 py-2 text-xs font-bold text-emerald-700">Add workflow</button></form>
                         </div>
