@@ -149,6 +149,10 @@ class StorefrontPaymentGatewayService
             'validation_status' => strtoupper((string) $data['status']),
         ];
 
+        if ($transaction->fee_invoice_id !== null) {
+            return $this->settleVerifiedGatewayPayment($transaction, $validationId, $providerDetails);
+        }
+
         $notes = json_decode((string) $transaction->notes, true);
         $purpose = is_array($notes) ? ($notes['purpose'] ?? null) : null;
         if (in_array($purpose, ['course_cart', 'course_gift', 'course_gift_voucher'], true)) {
