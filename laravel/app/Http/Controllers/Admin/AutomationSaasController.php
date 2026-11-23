@@ -27,7 +27,7 @@ class AutomationSaasController extends Controller
         $actor = $request->user();
         $tenants = SaasTenant::query()
             ->when(!$actor->hasRole('admin'), fn ($query) => $query->where('owner_user_id', $actor->id))
-            ->with(['branding', 'owner', 'workflows'])
+            ->with(['branding', 'owner', 'workflows', 'conversations.contact', 'conversations.messages'])
             ->withCount(['agents', 'channels', 'contacts', 'conversations', 'campaigns', 'workflows'])
             ->latest()
             ->paginate(20);
