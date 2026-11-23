@@ -49,12 +49,13 @@ class DashboardController extends Controller
         ];
         $recentAudits = $isBranchManager ? collect() : AuditLog::query()->with('user')->latest()->limit(10)->get();
         $widgetDefinitions = $this->widgetDefinitions($actor);
-        $widgets = $this->widgetsFor($actor?->id, $widgetDefinitions);
+        $widgets = $this->widgetsFor($actor?->id, $widgetDefinitions, $actor);
+        $widgetAnalytics = $this->widgetAnalytics($actor?->id);
         $widgetSizes = $this->widgetSizes($actor?->id, $widgetDefinitions);
         $setupIncomplete = !$isBranchManager && SystemSetting::query()->where('key', 'setup.wizard.completed')->value('value') !== '1';
         $motionSettings = $this->motionSettings();
 
-        return view('admin.dashboard', compact('metrics', 'recentAudits', 'widgets', 'widgetDefinitions', 'widgetSizes', 'setupIncomplete', 'isBranchManager', 'motionSettings'));
+        return view('admin.dashboard', compact('metrics', 'recentAudits', 'widgets', 'widgetDefinitions', 'widgetSizes', 'widgetAnalytics', 'setupIncomplete', 'isBranchManager', 'motionSettings'));
     }
 
     public function saveWidgets(Request $request): RedirectResponse
@@ -286,9 +287,29 @@ class DashboardController extends Controller
         return $definitions;
     }
 
-    private function widgetsFor(int|string|null $userId, array $definitions): array
+    private function widgetsFor(int|string|null $userId, array $definitions, $actor = null): array
     {
         $defaults = array_keys(array_filter($definitions, fn (array $definition): bool => $definition['default']));
+        if ($actor) {
+            $roleHints = [];
+            foreach (['teacher', 'student', 'guardian', 'branch_manager'] as $role) {
+                if ($actor->hasRole($role)) { $roleHints[] = $role; break; }
+            }
+            if ($roleHints !== []) {
+                $role = $roleHints[0];
+                $needles = match ($role) {
+                    'teacher' => ['teacher', 'course', 'class', 'assessment', 'live'],
+                    'student' => ['student', 'course', 'learning', 'assessment'],
+                    'guardian' => ['guardian', 'student', 'attendance', 'payment'],
+                    'branch_manager' => ['users'],
+                };
+                $roleDefaults = array_values(array_filter(array_keys($definitions), function (string $key) use ($needles): bool {
+                    foreach ($needles as $needle) if (str_contains(strtolower($key), $needle)) return true;
+                    return false;
+                }));
+                if ($roleDefaults !== []) $defaults = $roleDefaults;
+            }
+        }
         if (!$userId) {
             return $defaults;
         }
@@ -310,6 +331,16 @@ class DashboardController extends Controller
 
         $allowedWidgets = array_keys($definitions);
         return array_values(array_unique(array_filter($stored, fn ($widget) => is_string($widget) && in_array($widget, $allowedWidgets, true))));
+    }
+
+    private function widgetAnalytics(int|string|null $userId): array
+    {
+        if (!$userId) return [];
+        $value = SystemSetting::query()->where('key', 'admin.dashboard.analytics.user.' . $userId)->value('value');
+        if (!is_string($value) || $value === '') return [];
+        try { $data = json_decode($value, true, 512, JSON_THROW_ON_ERROR); } catch (\\JsonException) { return []; }
+        if (!is_array($data)) return [];
+        return array_map(static fn ($count): int => max(0, (int) $count), $data);
     }
 
     private function widgetSizes(int|string|null $userId, array $definitions): array
