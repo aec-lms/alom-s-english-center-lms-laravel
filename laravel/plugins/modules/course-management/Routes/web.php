@@ -7,6 +7,7 @@ use Plugins\Modules\CourseManagement\Http\Controllers\CourseController;
 use Plugins\Modules\CourseManagement\Http\Controllers\CourseTeacherAssignmentController;
 use Plugins\Modules\CourseManagement\Http\Controllers\LessonContentProtectionController;
 use Plugins\Modules\CourseManagement\Http\Controllers\LiveClassAccessController;
+use Plugins\Modules\CourseManagement\Http\Controllers\ClassSessionSettlementController;
 use Plugins\Modules\CourseManagement\Http\Controllers\LearningInteractionController;
 
 Route::middleware(['web', 'installed', 'auth', 'plugin:course-management', 'permission:courses.manage'])
