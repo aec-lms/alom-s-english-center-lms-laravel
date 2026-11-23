@@ -295,7 +295,7 @@ class DashboardController extends Controller
 
         $value = SystemSetting::query()->where('key', $this->preferenceKey($userId))->value('value');
         if (!is_string($value) || $value === '') return $defaults;
-        try { $stored = json_decode($value, true, 512, JSON_THROW_ON_ERROR); } catch (\\JsonException) { return $defaults; }
+        try { $stored = json_decode($value, true, 512, JSON_THROW_ON_ERROR); } catch (\JsonException) { return $defaults; }
         if (!is_array($stored)) return $defaults;
 
         $allowedWidgets = array_keys($definitions);
