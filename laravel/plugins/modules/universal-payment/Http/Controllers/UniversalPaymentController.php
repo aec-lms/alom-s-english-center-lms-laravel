@@ -629,6 +629,9 @@ class UniversalPaymentController extends Controller
         try {
             $transaction = app(\Plugins\Modules\GatewayBkash\Services\BkashGatewayService::class)
                 ->verifyUniversalCallback((string) $request->query('paymentID', ''));
+            if ($transaction->fee_invoice_id !== null) {
+                return redirect('/student/dashboard')->with('status', 'bKash payment verified and your fee invoice has been settled.');
+            }
             $slug = $this->storefrontSlugFor($transaction);
             return $slug
                 ? redirect('/ebooks/' . rawurlencode($slug))->with('status', 'bKash payment verified. Your e-book is now available.')
@@ -643,6 +646,9 @@ class UniversalPaymentController extends Controller
     {
         try {
             $transaction = $this->storefrontGateway->verifySslcommerz($request->all());
+            if ($transaction->fee_invoice_id !== null) {
+                return redirect('/student/dashboard')->with('status', 'SSLCOMMERZ payment verified and your fee invoice has been settled.');
+            }
             $checkoutNotes = json_decode((string) $transaction->notes, true);
             if (is_array($checkoutNotes) && in_array($checkoutNotes['purpose'] ?? null, ['course_cart', 'course_gift', 'course_gift_voucher'], true)) {
                 $message = match ($checkoutNotes['purpose']) {
