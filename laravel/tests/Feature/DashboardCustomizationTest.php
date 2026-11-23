@@ -47,7 +47,7 @@ class DashboardCustomizationTest extends TestCase
             ->assertOk()
             ->assertSee('aec-edupro-hero', false)
             ->assertSee('aec-dashboard-welcome', false)
-            ->assertSee('EDUPRO-INSPIRED ADMIN DASHBOARD SKIN')
+            ->assertSee('body:has(#dashboard-widgets) #admin-sidebar', false)
             ->assertSee('linear-gradient(112deg,#12345b 0%,#155b78 52%,#176f78 100%)', false)
             ->assertSee('data-dashboard-widget="users"', false);
     }
