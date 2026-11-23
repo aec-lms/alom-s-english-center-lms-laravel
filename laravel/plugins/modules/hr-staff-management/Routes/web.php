@@ -12,6 +12,7 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:hr-staff-management', 'pe
         Route::get('/', [HrController::class, 'index'])->name('index');
         Route::post('/staff', [HrController::class, 'storeStaff'])->name('staff.store');
         Route::post('/attendance', [HrController::class, 'recordAttendance'])->name('attendance.store');
+        Route::get('/attendance/export.csv', [HrController::class, 'exportAttendance'])->name('attendance.export');
         Route::post('/payrolls', [HrController::class, 'recordPayroll'])->name('payrolls.store');
         Route::post('/payrolls/{payroll}/mark-paid', [HrController::class, 'markPayrollPaid'])->name('payrolls.mark_paid');
     });
