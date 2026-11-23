@@ -405,6 +405,13 @@ class UniversalPaymentController extends Controller
             if ($validated['gateway'] === 'card') {
                 $this->assertGatewayEnabled('sslcommerz');
             }
+            if (in_array($validated['gateway'], $onlineInvoiceMethods, true)) {
+                abort_unless(
+                    $this->plugins->isEnabled('payment-management') && Schema::hasTable('payment_transactions'),
+                    503,
+                    'Payment Management must be enabled before online invoice checkout can be accepted.'
+                );
+            }
             abort_if(
                 UniversalPaymentTransaction::query()
                     ->where('fee_invoice_id', $invoice->id)
