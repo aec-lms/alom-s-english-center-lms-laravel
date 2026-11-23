@@ -6,6 +6,8 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\AutomationAiAgent;
+use App\Models\AutomationContact;
+use App\Models\AutomationCampaign;
 use App\Models\AutomationWorkflow;
 use App\Models\SaasTenant;
 use Illuminate\Http\RedirectResponse;
@@ -80,6 +82,42 @@ class AutomationSaasController extends Controller
         ]);
 
         return redirect()->route('admin.automation-saas.index')->with('success', 'AI agent draft created. Add an AI provider key to activate it.');
+    }
+
+    public function storeContact(Request $request, SaasTenant $tenant): RedirectResponse
+    {
+        abort_unless($request->user()->hasRole('admin') || (int) $tenant->owner_user_id === (int) $request->user()->id, 404);
+
+        $data = $request->validate([
+            'name' => ['nullable', 'string', 'max:160'],
+            'email' => ['nullable', 'email:rfc', 'max:190', Rule::unique('automation_contacts', 'email')->where('tenant_id', $tenant->id)],
+            'phone' => ['nullable', 'string', 'max:32', 'regex:/^[+0-9() .-]+$/'],
+            'source' => ['required', Rule::in(['manual', 'website', 'import', 'api'])],
+        ]);
+        if (empty($data['email']) && empty($data['phone'])) {
+            return back()->withErrors(['email' => 'Provide an email address or phone number.'])->withInput();
+        }
+        $tenant->contacts()->create($data);
+        return back()->with('success', 'CRM contact added to this workspace.');
+    }
+
+    public function storeCampaign(Request $request, SaasTenant $tenant): RedirectResponse
+    {
+        abort_unless($request->user()->hasRole('admin') || (int) $tenant->owner_user_id === (int) $request->user()->id, 404);
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:160'],
+            'channel' => ['required', Rule::in(['whatsapp', 'messenger', 'instagram', 'telegram', 'email', 'sms'])],
+            'message_template' => ['required', 'string', 'max:10000'],
+            'scheduled_at' => ['nullable', 'date', 'after:now'],
+        ]);
+        $tenant->campaigns()->create($data + [
+            'status' => 'draft',
+            'audience_count' => 0,
+            'sent_count' => 0,
+            'failed_count' => 0,
+        ]);
+        return back()->with('success', 'Campaign draft saved. No messages are sent until a verified provider and consent-based audience are configured.');
     }
 
     public function publishWorkflow(Request $request, SaasTenant $tenant, AutomationWorkflow $workflow): RedirectResponse
