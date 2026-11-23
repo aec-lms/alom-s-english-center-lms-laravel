@@ -450,6 +450,7 @@ class CourseController extends Controller
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $liveClass->course?->branch_id) {
             abort(403, 'Branch isolation violation.');
         }
+        abort_if(DB::table('class_session_records')->where('live_class_id', $liveClass->id)->exists(), 409, 'A completed class with settlement history cannot be deleted.');
         $title = $liveClass->title;
         $id = (string) $liveClass->id;
         $liveClass->delete();
