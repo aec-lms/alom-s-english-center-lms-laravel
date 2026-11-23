@@ -20,6 +20,11 @@
             <input name="remarks" maxlength="255" placeholder="Remarks (optional)" class="md:col-span-4 rounded-lg border border-slate-300 px-3 py-2">
             <button type="submit" class="md:col-span-2 px-4 py-2 rounded-lg bg-[#0284C7] text-white font-bold">Save Attendance</button>
         </form>
+        <form method="GET" action="{{ route('plugins.hr.attendance.export') }}" class="flex flex-wrap items-center gap-2 text-xs">
+            <label for="staff-attendance-month" class="font-semibold text-slate-600">Monthly attendance export</label>
+            <input id="staff-attendance-month" type="month" name="month" value="{{ now()->format('Y-m') }}" required class="rounded-lg border border-slate-300 px-3 py-2">
+            <button type="submit" class="rounded-lg bg-slate-800 px-3 py-2 font-bold text-white">Export CSV</button>
+        </form>
         <div class="space-y-2">@forelse ($attendanceRecords as $record)<div class="flex items-center justify-between border-b border-slate-100 py-2 text-xs"><span class="font-semibold text-slate-800">{{ $record->staff?->full_name ?? 'Staff #'.$record->staff_profile_id }}</span><span class="text-slate-500">{{ $record->attendance_date?->format('Y-m-d') }} · {{ ucfirst($record->status) }}{{ $record->status === 'leave' ? ($record->leave_paid ? ' (paid)' : ' (unpaid)') : '' }} · {{ $record->check_in_at?->format('H:i') ?? '—' }} / {{ $record->check_out_at?->format('H:i') ?? '—' }}</span></div>@empty<p class="text-slate-400 text-xs">No staff attendance recorded yet.</p>@endforelse</div>
     </div>
 
