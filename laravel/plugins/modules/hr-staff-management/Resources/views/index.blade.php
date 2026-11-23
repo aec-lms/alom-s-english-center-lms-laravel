@@ -14,13 +14,13 @@
             @csrf
             <select name="staff_profile_id" required class="md:col-span-2 rounded-lg border border-slate-300 px-3 py-2 bg-white"><option value="">Select staff member...</option>@foreach ($staff as $member)<option value="{{ $member->id }}">{{ $member->full_name }} ({{ $member->employee_code }})</option>@endforeach</select>
             <input type="date" name="attendance_date" required max="{{ now()->toDateString() }}" value="{{ now()->toDateString() }}" class="rounded-lg border border-slate-300 px-3 py-2">
-            <select name="status" required class="rounded-lg border border-slate-300 px-3 py-2 bg-white"><option value="present">Present</option><option value="late">Late</option><option value="absent">Absent</option><option value="leave">Leave</option></select>
+            <select name="status" required class="rounded-lg border border-slate-300 px-3 py-2 bg-white"><option value="present">Present</option><option value="late">Late</option><option value="absent">Absent</option><option value="leave">Leave</option></select>\n            <label class="flex items-center gap-2 text-slate-600"><input type="checkbox" name="leave_paid" value="1" checked> Paid leave</label>
             <input type="datetime-local" name="check_in_at" aria-label="Check in" class="rounded-lg border border-slate-300 px-3 py-2">
             <input type="datetime-local" name="check_out_at" aria-label="Check out" class="rounded-lg border border-slate-300 px-3 py-2">
             <input name="remarks" maxlength="255" placeholder="Remarks (optional)" class="md:col-span-4 rounded-lg border border-slate-300 px-3 py-2">
             <button type="submit" class="md:col-span-2 px-4 py-2 rounded-lg bg-[#0284C7] text-white font-bold">Save Attendance</button>
         </form>
-        <div class="space-y-2">@forelse ($attendanceRecords as $record)<div class="flex items-center justify-between border-b border-slate-100 py-2 text-xs"><span class="font-semibold text-slate-800">{{ $record->staff?->full_name ?? 'Staff #'.$record->staff_profile_id }}</span><span class="text-slate-500">{{ $record->attendance_date?->format('Y-m-d') }} · {{ ucfirst($record->status) }} · {{ $record->check_in_at?->format('H:i') ?? '—' }} / {{ $record->check_out_at?->format('H:i') ?? '—' }}</span></div>@empty<p class="text-slate-400 text-xs">No staff attendance recorded yet.</p>@endforelse</div>
+        <div class="space-y-2">@forelse ($attendanceRecords as $record)<div class="flex items-center justify-between border-b border-slate-100 py-2 text-xs"><span class="font-semibold text-slate-800">{{ $record->staff?->full_name ?? 'Staff #'.$record->staff_profile_id }}</span><span class="text-slate-500">{{ $record->attendance_date?->format('Y-m-d') }} · {{ ucfirst($record->status) }}{{ $record->status === 'leave' ? ($record->leave_paid ? ' (paid)' : ' (unpaid)') : '' }} · {{ $record->check_in_at?->format('H:i') ?? '—' }} / {{ $record->check_out_at?->format('H:i') ?? '—' }}</span></div>@empty<p class="text-slate-400 text-xs">No staff attendance recorded yet.</p>@endforelse</div>
     </div>
 
     <div class="grid md:grid-cols-2 gap-6">
@@ -52,7 +52,7 @@
                 <input name="payroll_month" required value="{{ now()->format('Y-m') }}" placeholder="YYYY-MM" class="rounded-lg border border-slate-300 px-3 py-2 font-mono">
                 <div class="grid grid-cols-2 gap-3">
                     <input name="bonus" type="number" step="0.01" min="0" value="0" placeholder="Bonus" class="rounded-lg border border-slate-300 px-3 py-2">
-                    <input name="deductions" type="number" step="0.01" min="0" value="0" placeholder="Deductions" class="rounded-lg border border-slate-300 px-3 py-2">
+                    <input name="deductions" type="number" step="0.01" min="0" value="0" placeholder="Additional deductions" class="rounded-lg border border-slate-300 px-3 py-2">\n                    <input name="late_deduction_per_day" type="number" step="0.01" min="0" value="0" placeholder="Late penalty per day" class="rounded-lg border border-slate-300 px-3 py-2">
                 </div>
                 <button type="submit" class="px-4 py-2 rounded-lg bg-emerald-600 text-white font-bold">Record Payroll</button>
             </form>
