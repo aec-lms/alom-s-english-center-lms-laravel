@@ -41,7 +41,7 @@ class BkashGatewayService
     private function accessToken(): string
     {
         $credentials = $this->credentials();
-        $cacheKey = 'payment.gateway-bkash.token.' . hash('sha256', $credentials['app_key'] . '|' . $this->baseUrl());
+        $cacheKey = 'payment.gateway-bkash.token.' . hash('sha256', implode('|', $credentials) . '|' . $this->baseUrl());
         $cached = Cache::get($cacheKey);
         if (is_string($cached) && $cached !== '') {
             return $cached;
