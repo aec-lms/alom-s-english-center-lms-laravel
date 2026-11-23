@@ -4,6 +4,20 @@
 <div class="space-y-6 max-w-6xl">
     <h1 class="text-2xl font-extrabold text-slate-900">Fees, Invoices &amp; Scholarships</h1>
 
+    <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div class="rounded-xl border bg-white p-4"><div class="text-xs text-slate-500">Invoices</div><div class="mt-1 text-xl font-bold">{{ (int)($totals->invoice_count ?? 0) }}</div></div>
+        <div class="rounded-xl border bg-white p-4"><div class="text-xs text-slate-500">Total billed</div><div class="mt-1 text-xl font-bold">৳{{ number_format((float)($totals->billed ?? 0),2) }}</div></div>
+        <div class="rounded-xl border bg-white p-4"><div class="text-xs text-slate-500">Collected</div><div class="mt-1 text-xl font-bold text-emerald-700">৳{{ number_format((float)($totals->collected ?? 0),2) }}</div></div>
+        <div class="rounded-xl border bg-white p-4"><div class="text-xs text-slate-500">Outstanding / overdue</div><div class="mt-1 text-xl font-bold text-amber-700">৳{{ number_format((float)($totals->outstanding ?? 0),2) }}</div><div class="text-xs text-slate-500">{{ $overdueCount }} overdue invoices</div></div>
+    </div>
+    <form method="GET" class="flex flex-wrap items-end gap-3 rounded-xl border bg-white p-4">
+        <label class="text-xs font-semibold">Search<input name="q" value="{{ $filters['q']??'' }}" placeholder="Invoice / payer" class="mt-1 block rounded border-slate-300"></label>
+        <label class="text-xs font-semibold">Status<select name="status" class="mt-1 block rounded border-slate-300"><option value="">All</option>@foreach(['unpaid','partial','paid','overdue'] as $status)<option value="{{ $status }}" @selected(($filters['status']??'')===$status)>{{ ucfirst($status) }}</option>@endforeach</select></label>
+        <label class="text-xs font-semibold">From<input type="date" name="from" value="{{ $filters['from']??'' }}" class="mt-1 block rounded border-slate-300"></label>
+        <label class="text-xs font-semibold">To<input type="date" name="to" value="{{ $filters['to']??'' }}" class="mt-1 block rounded border-slate-300"></label>
+        <button class="rounded bg-slate-800 px-4 py-2 text-xs font-bold text-white">Filter report</button>
+        <a href="{{ route('plugins.fees.index') }}" class="text-xs underline">Clear</a>
+    </form>
     <section class="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
         <h2 class="font-bold text-lg">Create Fee Invoice</h2>
         @if($errors->any())<div class="rounded bg-red-50 text-red-700 p-3 text-sm">{{ $errors->first() }}</div>@endif
@@ -37,7 +51,7 @@
     </section>
 
     <section class="bg-white rounded-2xl border border-slate-200 p-5 overflow-x-auto">
-        <h2 class="font-bold text-lg mb-3">Invoices</h2>
+        <h2 class="font-bold text-lg mb-3">Invoices & Outstanding Balances</h2>
         <table class="w-full text-xs text-left">
             <thead class="text-slate-500 border-b"><tr><th class="py-2">Invoice #</th><th>Payer / Student</th><th>Net</th><th>Paid</th><th>Status</th><th>Due Date</th></tr></thead>
             <tbody class="divide-y">
