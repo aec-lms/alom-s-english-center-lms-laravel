@@ -33,7 +33,7 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:course-management', 'perm
         // Live Classes CRUD
         Route::post('/live-classes', [CourseController::class, 'storeLiveClass'])->name('live.store');
         Route::put('/live-classes/{liveClass}', [CourseController::class, 'updateLiveClass'])->name('live.update');
-        Route::delete('/live-classes/{liveClass}', [CourseController::class, 'destroyLiveClass'])->name('live.destroy');
+        Route::delete('/live-classes/{liveClass}', [CourseController::class, 'destroyLiveClass'])->name('live.destroy');\n        Route::post('/live-classes/{liveClass}/complete-session', [ClassSessionSettlementController::class, 'complete'])->name('live.complete');\n        Route::post('/teacher-class-payments/{payment}/mark-paid', [ClassSessionSettlementController::class, 'markTeacherPaid'])->whereNumber('payment')->name('teacher-class-payments.paid');
     });
 
 Route::middleware(['web', 'installed', 'auth', 'plugin:course-management'])
