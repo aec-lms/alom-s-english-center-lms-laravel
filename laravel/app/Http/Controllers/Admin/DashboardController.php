@@ -49,11 +49,14 @@ class DashboardController extends Controller
         ];
         $recentAudits = $isBranchManager ? collect() : AuditLog::query()->with('user')->latest()->limit(10)->get();
         $widgetDefinitions = $this->widgetDefinitions($actor);
-        $widgets = $this->widgetsFor($actor?->id, $widgetDefinitions);
+        $widgets = $this->widgetsFor($actor?->id, $widgetDefinitions, $actor);
+        $widgetAnalytics = $this->widgetAnalytics($actor?->id);
+        $roleDefaultWidgets = $this->roleDefaultWidgets($actor, $widgetDefinitions);
+        $widgetSizes = $this->widgetSizes($actor?->id, $widgetDefinitions);
         $setupIncomplete = !$isBranchManager && SystemSetting::query()->where('key', 'setup.wizard.completed')->value('value') !== '1';
         $motionSettings = $this->motionSettings();
 
-        return view('admin.dashboard', compact('metrics', 'recentAudits', 'widgets', 'widgetDefinitions', 'setupIncomplete', 'isBranchManager', 'motionSettings'));
+        return view('admin.dashboard', compact('metrics', 'recentAudits', 'widgets', 'widgetDefinitions', 'widgetSizes', 'widgetAnalytics', 'roleDefaultWidgets', 'setupIncomplete', 'isBranchManager', 'motionSettings'));
     }
 
     public function saveWidgets(Request $request): RedirectResponse
@@ -68,12 +71,23 @@ class DashboardController extends Controller
         $validated = $request->validate([
             'widgets' => ['present', 'array', 'max:20'],
             'widgets.*' => ['required', 'string', 'distinct', 'in:' . implode(',', $allowedWidgets)],
+            'sizes' => ['sometimes', 'array', 'max:20'],
+            'sizes.*' => ['sometimes', 'in:small,medium,large'],
         ]);
 
         $widgets = array_values(array_unique(array_filter(
             $validated['widgets'],
             fn ($widget) => in_array($widget, $allowedWidgets, true)
         )));
+        $sizes = [];
+        foreach (($validated['sizes'] ?? []) as $widget => $size) {
+            if (in_array($widget, $allowedWidgets, true)) $sizes[$widget] = $size;
+        }
+        SystemSetting::query()->updateOrCreate(
+            ['key' => $this->sizePreferenceKey(auth()->id())],
+            ['value' => json_encode($sizes, JSON_THROW_ON_ERROR), 'updated_by' => auth()->id(), 'is_encrypted' => false],
+        );
+
         SystemSetting::query()->updateOrCreate(
             ['key' => $this->preferenceKey(auth()->id())],
             ['value' => json_encode($widgets, JSON_THROW_ON_ERROR), 'updated_by' => auth()->id(), 'is_encrypted' => false],
@@ -89,6 +103,51 @@ class DashboardController extends Controller
         ]);
 
         return redirect()->route('admin.dashboard')->with('status', 'Dashboard layout saved for your account.');
+    }
+
+    public function refresh(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $actor = $request->user();
+        $isBranchManager = $actor->hasRole('branch_manager');
+        if ($isBranchManager) {
+            $this->ensureAssignedBranch($actor);
+        }
+
+        return response()->json([
+            'metrics' => [
+                'users' => $isBranchManager ? $this->branchUserCount((int) $actor->branch_id) : User::query()->count(),
+                'plugins_total' => $isBranchManager ? 0 : PluginRecord::query()->count(),
+                'plugins_enabled' => $isBranchManager ? 0 : PluginRecord::query()->where('is_enabled', true)->count(),
+                'backups' => $isBranchManager ? 0 : BackupRecord::query()->count(),
+            ],
+            'refreshed_at' => now()->toIso8601String(),
+        ])->header('Cache-Control', 'no-store, private');
+    }
+
+    public function trackWidget(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $actor = $request->user();
+        $definitions = $this->widgetDefinitions($actor);
+        $validated = $request->validate([
+            'widget' => ['required', 'string', 'in:' . implode(',', array_keys($definitions))],
+        ]);
+        $key = 'admin.dashboard.analytics.user.' . $actor->id;
+        DB::transaction(function () use ($key, $validated, $actor): void {
+            $setting = SystemSetting::query()->where('key', $key)->lockForUpdate()->first();
+            $analytics = [];
+            if ($setting && is_string($setting->value)) {
+                try { $analytics = json_decode($setting->value, true, 512, JSON_THROW_ON_ERROR); } catch (\JsonException) { $analytics = []; }
+            }
+            if (!is_array($analytics)) $analytics = [];
+            $widget = $validated['widget'];
+            $analytics[$widget] = min(1000000000, (int) ($analytics[$widget] ?? 0) + 1);
+            SystemSetting::query()->updateOrCreate(
+                ['key' => $key],
+                ['value' => json_encode($analytics, JSON_THROW_ON_ERROR), 'updated_by' => $actor->id, 'is_encrypted' => false],
+            );
+        });
+
+        return response()->json(['tracked' => true], 202)->header('Cache-Control', 'no-store, private');
     }
 
     public function saveMotionSettings(Request $request): RedirectResponse
@@ -229,30 +288,72 @@ class DashboardController extends Controller
         return $definitions;
     }
 
-    private function widgetsFor(int|string|null $userId, array $definitions): array
+    private function widgetsFor(int|string|null $userId, array $definitions, $actor = null): array
     {
-        $defaults = array_keys(array_filter($definitions, fn (array $definition): bool => $definition['default']));
-        if (!$userId) {
-            return $defaults;
-        }
+        $defaults = $this->roleDefaultWidgets($actor, $definitions);
+        if (!$userId) return $defaults;
 
         $value = SystemSetting::query()->where('key', $this->preferenceKey($userId))->value('value');
-        if (!is_string($value) || $value === '') {
-            return $defaults;
-        }
-
-        try {
-            $stored = json_decode($value, true, 512, JSON_THROW_ON_ERROR);
-        } catch (\JsonException) {
-            return $defaults;
-        }
-
-        if (!is_array($stored)) {
-            return $defaults;
-        }
+        if (!is_string($value) || $value === '') return $defaults;
+        try { $stored = json_decode($value, true, 512, JSON_THROW_ON_ERROR); } catch (\JsonException) { return $defaults; }
+        if (!is_array($stored)) return $defaults;
 
         $allowedWidgets = array_keys($definitions);
         return array_values(array_unique(array_filter($stored, fn ($widget) => is_string($widget) && in_array($widget, $allowedWidgets, true))));
+    }
+
+    private function roleDefaultWidgets($actor, array $definitions): array
+    {
+        $defaults = array_keys(array_filter($definitions, fn (array $definition): bool => $definition['default']));
+        if (!$actor) return $defaults;
+
+        $role = null;
+        foreach (['branch_manager', 'teacher', 'student', 'guardian'] as $candidate) {
+            if ($actor->hasRole($candidate)) { $role = $candidate; break; }
+        }
+        if ($role === null) return $defaults;
+
+        $needles = match ($role) {
+            'branch_manager' => ['users'],
+            'teacher' => ['teacher', 'course', 'class', 'assessment', 'live'],
+            'student' => ['student', 'course', 'learning', 'assessment'],
+            'guardian' => ['guardian', 'student', 'attendance', 'payment'],
+        };
+        $matches = array_values(array_filter(array_keys($definitions), function (string $key) use ($needles): bool {
+            foreach ($needles as $needle) if (str_contains(strtolower($key), $needle)) return true;
+            return false;
+        }));
+        return $matches !== [] ? $matches : $defaults;
+    }
+
+    private function widgetAnalytics(int|string|null $userId): array
+    {
+        if (!$userId) return [];
+        $value = SystemSetting::query()->where('key', 'admin.dashboard.analytics.user.' . $userId)->value('value');
+        if (!is_string($value) || $value === '') return [];
+        try { $data = json_decode($value, true, 512, JSON_THROW_ON_ERROR); } catch (\JsonException) { return []; }
+        if (!is_array($data)) return [];
+        return array_map(static fn ($count): int => max(0, (int) $count), $data);
+    }
+
+    private function widgetSizes(int|string|null $userId, array $definitions): array
+    {
+        $sizes = [];
+        foreach ($definitions as $key => $definition) $sizes[$key] = 'medium';
+        if (!$userId) return $sizes;
+        $value = SystemSetting::query()->where('key', $this->sizePreferenceKey($userId))->value('value');
+        if (!is_string($value) || $value === '') return $sizes;
+        try { $stored = json_decode($value, true, 512, JSON_THROW_ON_ERROR); } catch (\JsonException) { return $sizes; }
+        if (!is_array($stored)) return $sizes;
+        foreach ($stored as $key => $size) {
+            if (array_key_exists($key, $sizes) && in_array($size, ['small', 'medium', 'large'], true)) $sizes[$key] = $size;
+        }
+        return $sizes;
+    }
+
+    private function sizePreferenceKey(int|string $userId): string
+    {
+        return 'admin.dashboard.widget_sizes.user.' . $userId;
     }
 
     private function preferenceKey(int|string $userId): string
