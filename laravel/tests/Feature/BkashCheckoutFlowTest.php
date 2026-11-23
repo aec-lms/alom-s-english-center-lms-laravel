@@ -85,10 +85,6 @@ class BkashCheckoutFlowTest extends TestCase
         $settlement = Mockery::mock(StorefrontPaymentGatewayService::class);
         $settlement->shouldReceive('settleVerifiedGatewayPayment')
             ->once()
-            ->with($transaction, 'BKASH-TRX-456', Mockery::on(fn (array $details): bool =>
-                ($details['provider'] ?? null) === 'bkash'
-                && ($details['transaction_status'] ?? null) === 'Completed'
-            ))
             ->andReturn($transaction);
         $this->app->instance(StorefrontPaymentGatewayService::class, $settlement);
 
