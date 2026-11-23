@@ -17,7 +17,7 @@ class GatewayNagadServiceProvider extends BasePluginServiceProvider
         $this->app->afterResolving(PaymentGatewayRegistry::class, function (PaymentGatewayRegistry $registry): void {
             $registry->register('gateway-nagad', 'Nagad Merchant Gateway', ["api_key","api_secret","username","password"], function (array $input): array {
                 throw new \RuntimeException('Nagad checkout requires the merchant-specific official API profile and verified signing/callback adapter.');
-            }, false);
+            }, false, true);
         });
     }
 
