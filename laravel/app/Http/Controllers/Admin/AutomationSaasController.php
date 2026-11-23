@@ -38,6 +38,26 @@ class AutomationSaasController extends Controller
         ]);
     }
 
+    private function enforcePlanLimit(SaasTenant $tenant, string $resource): void
+    {
+        $limits = [
+            'starter' => ['agents' => 1, 'channels' => 1, 'contacts' => 500, 'campaigns' => 2, 'workflows' => 3],
+            'growth' => ['agents' => 5, 'channels' => 5, 'contacts' => 5000, 'campaigns' => 20, 'workflows' => 25],
+            'business' => ['agents' => 25, 'channels' => 25, 'contacts' => 50000, 'campaigns' => 200, 'workflows' => 250],
+            'enterprise' => ['agents' => 1000, 'channels' => 1000, 'contacts' => 1000000, 'campaigns' => 10000, 'workflows' => 10000],
+        ];
+        $limit = $limits[$tenant->plan_key][$resource] ?? 0;
+        $count = match ($resource) {
+            'agents' => $tenant->agents()->count(),
+            'channels' => $tenant->channels()->count(),
+            'contacts' => $tenant->contacts()->count(),
+            'campaigns' => $tenant->campaigns()->count(),
+            'workflows' => $tenant->workflows()->count(),
+            default => 0,
+        };
+        abort_if($count >= $limit, 403, 'Your '.$tenant->plan_key.' plan limit for '.$resource.' has been reached. Upgrade the workspace plan to continue.');
+    }
+
     public function storeTenant(Request $request): RedirectResponse
     {
         $data = $request->validate([
@@ -61,7 +81,8 @@ class AutomationSaasController extends Controller
 
     public function storeAgent(Request $request, SaasTenant $tenant): RedirectResponse
     {
-        abort_unless($request->user()->hasRole('admin') || $tenant->owner_user_id === $request->user()->id, 404);
+        $this->authorizeTenant($request, $tenant);
+        $this->enforcePlanLimit($tenant, 'agents');
 
         $data = $request->validate([
             'name' => ['required', 'string', 'max:120'],
@@ -88,7 +109,8 @@ class AutomationSaasController extends Controller
 
     public function storeContact(Request $request, SaasTenant $tenant): RedirectResponse
     {
-        abort_unless($request->user()->hasRole('admin') || (int) $tenant->owner_user_id === (int) $request->user()->id, 404);
+        $this->authorizeTenant($request, $tenant);
+        $this->enforcePlanLimit($tenant, 'contacts');
 
         $data = $request->validate([
             'name' => ['nullable', 'string', 'max:160'],
@@ -105,7 +127,8 @@ class AutomationSaasController extends Controller
 
     public function storeCampaign(Request $request, SaasTenant $tenant): RedirectResponse
     {
-        abort_unless($request->user()->hasRole('admin') || (int) $tenant->owner_user_id === (int) $request->user()->id, 404);
+        $this->authorizeTenant($request, $tenant);
+        $this->enforcePlanLimit($tenant, 'campaigns');
 
         $data = $request->validate([
             'name' => ['required', 'string', 'max:160'],
@@ -131,6 +154,7 @@ class AutomationSaasController extends Controller
     public function storeChannel(Request $request, SaasTenant $tenant): RedirectResponse
     {
         $this->authorizeTenant($request, $tenant);
+        $this->enforcePlanLimit($tenant, 'channels');
         $data = $request->validate([
             'provider' => ['required', Rule::in(['whatsapp', 'messenger', 'instagram', 'telegram', 'website_chat', 'email', 'sms'])],
             'name' => ['required', 'string', 'max:120'],
@@ -228,7 +252,8 @@ class AutomationSaasController extends Controller
 
     public function storeWorkflow(Request $request, SaasTenant $tenant): RedirectResponse
     {
-        abort_unless($request->user()->hasRole('admin') || $tenant->owner_user_id === $request->user()->id, 404);
+        $this->authorizeTenant($request, $tenant);
+        $this->enforcePlanLimit($tenant, 'workflows');
 
         $data = $request->validate([
             'name' => ['required', 'string', 'max:160'],
