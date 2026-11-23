@@ -136,8 +136,8 @@ class PluginRecycleBinAdminAcceptanceTest extends TestCase
             $backupId = 'archive-' . (int) $archive->id . '-' . substr(hash('sha256', $slug), 0, 12);
             $backupPath = storage_path('app/plugin-permanent-delete-backups/' . $backupId);
 
-            $audit = \\Mockery::mock(AuditLogger::class);
-            $audit->shouldReceive('logRequired')->once()->andThrow(new \\RuntimeException('audit persistence unavailable'));
+            $audit = \Mockery::mock(AuditLogger::class);
+            $audit->shouldReceive('logRequired')->once()->andThrow(new \RuntimeException('audit persistence unavailable'));
             $this->app->instance(AuditLogger::class, $audit);
 
             $this->actingAs($admin)
