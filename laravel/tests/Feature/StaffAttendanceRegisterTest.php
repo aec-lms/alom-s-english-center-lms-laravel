@@ -62,5 +62,34 @@ final class StaffAttendanceRegisterTest extends TestCase
             ...$payload, 'staff_profile_id' => $foreign->id,
         ])->assertForbidden();
         $this->assertDatabaseMissing('staff_attendance_records', ['staff_profile_id' => $foreign->id]);
+
+        $this->actingAs($manager)->post('/admin/hr/attendance', [
+            'staff_profile_id' => $own->id,
+            'attendance_date' => now()->subDay()->toDateString(),
+            'status' => 'leave',
+            'leave_paid' => 0,
+        ])->assertSessionHasNoErrors();
+
+        $this->actingAs($manager)->post('/admin/hr/payrolls', [
+            'staff_profile_id' => $own->id,
+            'payroll_month' => now()->format('Y-m'),
+            'late_deduction_per_day' => 100,
+        ])->assertSessionHasNoErrors();
+
+        $payroll = \Plugins\Modules\HrStaffManagement\Models\StaffPayroll::query()
+            ->where('staff_profile_id', $own->id)->where('payroll_month', now()->format('Y-m'))->firstOrFail();
+        $this->assertSame(1, (int) $payroll->late_days);
+        $this->assertSame(1, (int) $payroll->unpaid_leave_days);
+        $this->assertSame('600.00', $payroll->attendance_deduction);
+        $this->assertSame('100.00', $payroll->late_deduction);
+        $this->assertSame('17300.00', $payroll->net_paid);
+
+        $this->actingAs($manager)->post('/admin/hr/payrolls', [
+            'staff_profile_id' => $own->id,
+            'payroll_month' => now()->format('Y-m'),
+        ])->assertStatus(409);
+        $this->assertSame(1, \Plugins\Modules\HrStaffManagement\Models\StaffPayroll::query()
+            ->where('staff_profile_id', $own->id)->where('payroll_month', now()->format('Y-m'))->count());
+
     }
 }
