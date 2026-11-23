@@ -57,6 +57,11 @@
             <form method="POST" action="{{ route('admin.dashboard.widgets') }}" class="absolute right-0 z-20 mt-2 w-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
                 @csrf
                 <h2 class="mb-1 text-sm font-bold text-slate-900">Arrange dashboard widgets</h2>
+                <label class="mb-3 grid gap-1 text-xs font-semibold text-slate-600">Dashboard preset
+                    <select id="dashboard-preset" class="rounded-lg border border-slate-300 px-2 py-2 text-sm">
+                        <option value="role">Role default</option><option value="overview">Executive overview</option><option value="operations">Operations &amp; security</option><option value="teaching">Teaching &amp; learning</option><option value="finance">Finance &amp; records</option>
+                    </select>
+                </label>
                 <p class="mb-3 text-[11px] text-slate-500">Drag rows or use the arrows. Uncheck widgets you want to hide. Reset restores the original default selection.</p>
                 <ol id="dashboard-widget-order" class="space-y-2">
                     @foreach ($widgetLabels as $key => $label)
@@ -66,6 +71,7 @@
                                 <label class="flex min-w-0 flex-1 items-center gap-2 text-sm text-slate-700">
                                     <input type="checkbox" name="widgets[]" value="{{ $key }}" @checked(in_array($key, $widgets, true)) class="rounded border-slate-300">
                                     <span>{{ $label }}</span>
+                                    <span class="ml-auto text-[10px] text-slate-400" title="Views in this account">Views: {{ number_format($widgetAnalytics[$key] ?? 0) }}</span>
                                 </label>
                                 <label class="text-[10px] text-slate-500">Size<select name="sizes[{{ $key }}]" class="ml-1 rounded border border-slate-200 px-1 py-1 text-xs"><option value="small" @selected(($widgetSizes[$key] ?? "medium") === "small")>Small</option><option value="medium" @selected(($widgetSizes[$key] ?? "medium") === "medium")>Medium</option><option value="large" @selected(($widgetSizes[$key] ?? "medium") === "large")>Large</option></select></label>
                                 <button type="button" data-move="up" aria-label="Move {{ $label }} up" class="rounded border px-2 py-1 text-xs">↑</button>
@@ -231,6 +237,22 @@
         const row = button.closest('[data-widget-row]');
         if (button.dataset.move === 'up' && row.previousElementSibling) list.insertBefore(row, row.previousElementSibling);
         if (button.dataset.move === 'down' && row.nextElementSibling) list.insertBefore(row.nextElementSibling, row);
+    });
+    document.getElementById('dashboard-preset')?.addEventListener('change', event => {
+        const preset = event.target.value;
+        const rules = {
+            overview: ['users', 'plugins', 'backups', 'audit_trail', 'system_info'],
+            operations: ['audit_trail', 'system_info', 'backups'],
+            teaching: ['teacher', 'student', 'course', 'class', 'assessment', 'learning', 'live'],
+            finance: ['payment', 'finance', 'revenue', 'invoice', 'fee', 'transaction']
+        };
+        rows().forEach(row => {
+            const key = row.querySelector('input[type=checkbox]').value.toLowerCase();
+            const enabled = preset === 'role'
+                ? row.dataset.defaultEnabled === 'true'
+                : (rules[preset] || []).some(term => preset === 'overview' || preset === 'operations' ? term === key : key.includes(term));
+            row.querySelector('input[type=checkbox]').checked = enabled;
+        });
     });
     document.getElementById('dashboard-reset-order')?.addEventListener('click', () => {
         rows().forEach(row => {
