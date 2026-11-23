@@ -112,7 +112,9 @@ class BackupAndUpdateTest extends TestCase
             $record->delete();
         }
     }
-\n    public function test_encrypted_backup_creation_and_integrity_verification(): void
+
+
+    public function test_encrypted_backup_creation_and_integrity_verification(): void
     {
         $this->markSystemInstalled();
         $backups = app(BackupService::class);
