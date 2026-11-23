@@ -11,19 +11,11 @@ class SaasTenantDomain extends Model
 {
     protected $table = 'saas_tenant_domains';
 
-    protected $fillable = [
-        'tenant_id',
-        'domain',
-        'is_primary',
-        'verified_at',
-    ];
+    protected $fillable = ['tenant_id', 'domain', 'is_primary', 'verified_at'];
 
     protected function casts(): array
     {
-        return [
-            'is_primary' => 'boolean',
-            'verified_at' => 'datetime',
-        ];
+        return ['is_primary' => 'boolean', 'verified_at' => 'datetime'];
     }
 
     public function tenant(): BelongsTo
