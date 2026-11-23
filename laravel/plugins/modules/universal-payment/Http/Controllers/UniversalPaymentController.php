@@ -122,6 +122,14 @@ class UniversalPaymentController extends Controller
                 app(\Plugins\Modules\UniversalPayment\Services\ExternalTransactionReferenceRegistry::class)
                     ->claim($transaction->gateway, (string) $transaction->external_trx_id, (int) $transaction->id);
 
+                $this->audit->logRequired(
+                    'universal_payment.recorded',
+                    'universal_payment',
+                    $transaction->reference,
+                    ['amount' => $transaction->amount, 'gateway' => $transaction->gateway],
+                    $actor?->id
+                );
+
                 return $transaction;
             });
         } catch (\Throwable $exception) {
@@ -130,8 +138,6 @@ class UniversalPaymentController extends Controller
             }
             throw $exception;
         }
-
-        $this->audit->log('universal_payment.recorded', 'universal_payment', $tx->reference, ['amount' => $tx->amount, 'gateway' => $tx->gateway]);
 
         return back()->with('status', "Transaction '{$tx->reference}' recorded ({$tx->gateway} · {$tx->status}).");
     }
@@ -352,10 +358,16 @@ class UniversalPaymentController extends Controller
                 }
             }
 
+            $this->audit->logRequired(
+                'universal_payment.status_updated',
+                'universal_payment',
+                (string) $lockedTransaction->reference,
+                ['status' => $validated['status']],
+                $actor?->id
+            );
+
             return $lockedTransaction->fresh();
         });
-
-        $this->audit->log('universal_payment.status_updated', 'universal_payment', $transaction->reference, ['status' => $validated['status']]);
 
         return back()->with('status', "Transaction '{$transaction->reference}' marked {$validated['status']}.");
     }
