@@ -11,6 +11,7 @@ use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\DeviceSessionController;
 use App\Http\Controllers\Admin\BackupController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\AutomationSaasController;
 use App\Http\Controllers\Admin\SetupWizardController;
 use App\Http\Controllers\Admin\RolePermissionController;
 use App\Http\Controllers\Admin\AdminMenuController;
@@ -117,6 +118,13 @@ Route::middleware('installed')->group(function (): void {
         Route::prefix('site-navigation')->name('site-navigation.')->middleware(['permission:core.settings.manage', 'central.admin'])->group(function (): void {
             Route::get('/', [SiteNavigationController::class, 'index'])->name('index');
             Route::post('/', [SiteNavigationController::class, 'update'])->name('update');
+        });
+
+        Route::prefix('automation-saas')->name('automation-saas.')->middleware(['permission:core.settings.manage', 'central.admin'])->group(function (): void {
+            Route::get('/', [AutomationSaasController::class, 'index'])->name('index');
+            Route::post('/tenants', [AutomationSaasController::class, 'storeTenant'])->name('tenants.store');
+            Route::post('/tenants/{tenant}/agents', [AutomationSaasController::class, 'storeAgent'])->name('agents.store');
+            Route::post('/tenants/{tenant}/workflows', [AutomationSaasController::class, 'storeWorkflow'])->name('workflows.store');
         });
 
         Route::prefix('plugins')->name('plugins.')->middleware(['permission:core.plugins.manage', 'central.admin'])->group(function (): void {
