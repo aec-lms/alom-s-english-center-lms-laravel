@@ -156,4 +156,22 @@ class DashboardCustomizationTest extends TestCase
     }
 
 
+
+    public function test_dashboard_customizer_exposes_presets_and_widget_size_controls(): void
+    {
+        $this->markSystemInstalled();
+        $admin = $this->createUserWithRole('admin', null, 'dashboard-presets@aec.test');
+
+        $this->actingAs($admin)->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertSee('Executive overview')
+            ->assertSee('Operations &amp; security')
+            ->assertSee('Teaching &amp; learning')
+            ->assertSee('Finance &amp; records')
+            ->assertSee('name="sizes[users]"', false)
+            ->assertSee('data-analytics-url', false)
+            ->assertSee('data-refresh-url', false);
+    }
+
+
 }
