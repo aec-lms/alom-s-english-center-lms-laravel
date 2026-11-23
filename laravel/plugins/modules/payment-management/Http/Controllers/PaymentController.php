@@ -49,12 +49,13 @@ class PaymentController extends Controller
                 ->when($actor && $actor->hasRole('branch_manager'), fn ($q) => $q->where('branch_id', $actor->branch_id))
                 ->orderBy('due_date')->limit(500)->get()
             : collect();
-        $settledQuery = PaymentTransaction::query()->where('status', 'settled')->whereNotNull('settled_at')
-            ->when($actor && $actor->hasRole('branch_manager'), fn ($q) => $q->where('branch_id', $actor->branch_id))
+        $settledBase = PaymentTransaction::query()->where('status', 'settled')->whereNotNull('settled_at')
+            ->when($actor && $actor->hasRole('branch_manager'), fn ($q) => $q->where('branch_id', $actor->branch_id));
+        $settledQuery = (clone $settledBase)
             ->when($filters['from'] ?? null, fn ($q, $v) => $q->whereDate('settled_at', '>=', $v))
             ->when($filters['to'] ?? null, fn ($q, $v) => $q->whereDate('settled_at', '<=', $v));
         $collectionTotals = [
-            'today' => round((float) (clone $settledQuery)->whereDate('settled_at', now()->toDateString())->sum('amount'), 2),
+            'today' => round((float) (clone $settledBase)->whereDate('settled_at', now()->toDateString())->sum('amount'), 2),
             'period' => round((float) (clone $settledQuery)->sum('amount'), 2),
             'outstanding' => round((float) $openInvoices->sum(fn ($invoice) => max(0, (float) $invoice->net_amount - (float) $invoice->paid_amount)), 2),
             'overdue' => $openInvoices->filter(fn ($invoice) => $invoice->due_date && $invoice->due_date->isPast())->count(),
