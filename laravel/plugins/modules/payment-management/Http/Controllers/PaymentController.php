@@ -34,8 +34,19 @@ class PaymentController extends Controller
             ->when($actor && $actor->hasRole('branch_manager'), fn ($q) => $q->where('branch_id', $actor->branch_id))
             ->latest()
             ->paginate(25);
+        $openInvoices = $invoiceIntegrationEnabled
+            ? FeeInvoice::query()->whereIn('status', ['unpaid', 'partial'])
+                ->when($actor && $actor->hasRole('branch_manager'), fn ($q) => $q->where('branch_id', $actor->branch_id))
+                ->orderBy('due_date')->limit(500)->get()
+            : collect();
+        $collectionTotals = [
+            'outstanding' => round((float) $openInvoices->sum(fn ($invoice) => max(0, (float) $invoice->net_amount - (float) $invoice->paid_amount)), 2),
+            'overdue' => $openInvoices->filter(fn ($invoice) => $invoice->due_date && $invoice->due_date->isPast())->count(),
+            'partial' => $openInvoices->where('status', 'partial')->count(),
+            'unpaid' => $openInvoices->where('status', 'unpaid')->count(),
+        ];
 
-        return view('payment-management::index', compact('transactions', 'invoiceIntegrationEnabled'));
+        return view('payment-management::index', compact('transactions', 'invoiceIntegrationEnabled', 'openInvoices', 'collectionTotals'));
     }
 
     public function recordOffline(Request $request): RedirectResponse
