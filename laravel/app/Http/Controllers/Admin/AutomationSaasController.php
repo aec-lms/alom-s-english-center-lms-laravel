@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace App\\Http\\Controllers\\Admin;
+namespace App\Http\Controllers\Admin;
 
-use App\\Http\\Controllers\\Controller;
-use App\\Models\\AutomationAiAgent;
-use App\\Models\\AutomationWorkflow;
-use App\\Models\\SaasTenant;
-use Illuminate\\Http\\RedirectResponse;
-use Illuminate\\Http\\Request;
-use Illuminate\\View\\View;
-use Illuminate\\Support\\Str;
-use Illuminate\\Validation\\Rule;
+use App\Http\Controllers\Controller;
+use App\Models\AutomationAiAgent;
+use App\Models\AutomationWorkflow;
+use App\Models\SaasTenant;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\View\View;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class AutomationSaasController extends Controller
 {
