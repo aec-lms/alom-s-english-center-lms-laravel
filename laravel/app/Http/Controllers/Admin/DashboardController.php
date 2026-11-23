@@ -91,6 +91,51 @@ class DashboardController extends Controller
         return redirect()->route('admin.dashboard')->with('status', 'Dashboard layout saved for your account.');
     }
 
+    public function refresh(Request $request): \\Illuminate\\Http\\JsonResponse
+    {
+        $actor = $request->user();
+        $isBranchManager = $actor->hasRole('branch_manager');
+        if ($isBranchManager) {
+            $this->ensureAssignedBranch($actor);
+        }
+
+        return response()->json([
+            'metrics' => [
+                'users' => $isBranchManager ? $this->branchUserCount((int) $actor->branch_id) : User::query()->count(),
+                'plugins_total' => $isBranchManager ? 0 : PluginRecord::query()->count(),
+                'plugins_enabled' => $isBranchManager ? 0 : PluginRecord::query()->where('is_enabled', true)->count(),
+                'backups' => $isBranchManager ? 0 : BackupRecord::query()->count(),
+            ],
+            'refreshed_at' => now()->toIso8601String(),
+        ])->header('Cache-Control', 'no-store, private');
+    }
+
+    public function trackWidget(Request $request): \\Illuminate\\Http\\JsonResponse
+    {
+        $actor = $request->user();
+        $definitions = $this->widgetDefinitions($actor);
+        $validated = $request->validate([
+            'widget' => ['required', 'string', 'in:' . implode(',', array_keys($definitions))],
+        ]);
+        $key = 'admin.dashboard.analytics.user.' . $actor->id;
+        DB::transaction(function () use ($key, $validated, $actor): void {
+            $setting = SystemSetting::query()->where('key', $key)->lockForUpdate()->first();
+            $analytics = [];
+            if ($setting && is_string($setting->value)) {
+                try { $analytics = json_decode($setting->value, true, 512, JSON_THROW_ON_ERROR); } catch (\\JsonException) { $analytics = []; }
+            }
+            if (!is_array($analytics)) $analytics = [];
+            $widget = $validated['widget'];
+            $analytics[$widget] = min(1000000000, (int) ($analytics[$widget] ?? 0) + 1);
+            SystemSetting::query()->updateOrCreate(
+                ['key' => $key],
+                ['value' => json_encode($analytics, JSON_THROW_ON_ERROR), 'updated_by' => $actor->id, 'is_encrypted' => false],
+            );
+        });
+
+        return response()->json(['tracked' => true], 202)->header('Cache-Control', 'no-store, private');
+    }
+
     public function saveMotionSettings(Request $request): RedirectResponse
     {
         $validated = $request->validate([
