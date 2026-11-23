@@ -36,7 +36,7 @@ class GatewaySslcommerzServiceProvider extends BasePluginServiceProvider
                     }
                     $session = app(SslcommerzGatewayService::class)->initiateHostedCheckout($input['invoice']);
                     return ['gateway' => 'gateway-sslcommerz', 'transaction_ref' => $session['transaction']->transaction_ref, 'redirect_url' => $session['hosted_endpoint']];
-                }
+                }, true
             );
         });
     }
