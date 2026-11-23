@@ -25,7 +25,7 @@ class SaasTenant extends Model
         return $this->belongsTo(User::class, 'owner_user_id');
     }
 
-    public function branding(): HasOne
+    public function domains(): HasMany\n    {\n        return $this->hasMany(SaasTenantDomain::class, 'tenant_id');\n    }\n\n    public function branding(): HasOne
     {
         return $this->hasOne(SaasTenantBranding::class, 'tenant_id');
     }
