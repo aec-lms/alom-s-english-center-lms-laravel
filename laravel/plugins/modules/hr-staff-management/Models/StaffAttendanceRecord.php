@@ -13,11 +13,12 @@ class StaffAttendanceRecord extends Model
 
     protected $fillable = [
         'staff_profile_id', 'branch_id', 'attendance_date', 'status',
-        'check_in_at', 'check_out_at', 'source', 'remarks', 'marked_by',
+        'check_in_at', 'check_out_at', 'source', 'remarks', 'marked_by', 'leave_paid',
     ];
 
     protected $casts = [
         'attendance_date' => 'date',
+        'leave_paid' => 'boolean',
         'check_in_at' => 'datetime',
         'check_out_at' => 'datetime',
     ];
