@@ -159,7 +159,9 @@
                 </section>
             @else
                 @if (!empty($widgetDefinitions[$widget]['view']))
-                    @include($widgetDefinitions[$widget]['view'], ['metrics' => $metrics, 'actor' => auth()->user()])
+                    <div data-dashboard-widget="{{ $widget }}" data-size="{{ $widgetSizes[$widget] ?? 'medium' }}">
+                        @include($widgetDefinitions[$widget]['view'], ['metrics' => $metrics, 'actor' => auth()->user()])
+                    </div>
                 @endif
             @endif
         @endforeach
