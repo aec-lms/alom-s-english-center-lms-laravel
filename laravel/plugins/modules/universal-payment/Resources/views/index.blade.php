@@ -11,6 +11,9 @@
         'paypal' => 'PayPal International',
         'cash' => 'Cash Desk',
         'bank_transfer' => 'Bank Transfer',
+        'bank_cash' => 'Bank Deposit / Cash at Bank',
+        'offline' => 'Other Offline Payment',
+        'cheque' => 'Cheque Payment',
     ];
 @endphp
 <div class="space-y-6 max-w-6xl">
@@ -56,7 +59,7 @@
             <button class="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold">Save Gateway Settings</button>
         </form>
 
-        <form method="POST" action="{{ route('plugins.universal_payment.store') }}" class="bg-white rounded-2xl border border-slate-200 p-6 space-y-4 text-xs">
+        <form method="POST" enctype="multipart/form-data" action="{{ route('plugins.universal_payment.store') }}" class="bg-white rounded-2xl border border-slate-200 p-6 space-y-4 text-xs">
             @csrf
             <h2 class="text-sm font-bold text-slate-900">2. Record / Collect Payment</h2>
             <div class="grid grid-cols-2 gap-3">
@@ -87,6 +90,10 @@
                 <div>
                     <label class="font-semibold text-slate-700 block mb-1">External TrxID / Receipt Reference *</label>
                     <input name="external_trx_id" required class="w-full rounded-xl border border-slate-300 px-3 py-2 font-mono">
+                </div>
+                <div class="col-span-2">
+                    <label class="font-semibold text-slate-700 block mb-1">Receipt / Deposit Slip (optional)</label>
+                    <input type="file" name="proof_file" accept=".pdf,.jpg,.jpeg,.png" class="w-full rounded-xl border border-slate-300 px-3 py-2">
                 </div>
                 <div class="col-span-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-900">
                     Manual payment records always start as pending. An authorized reviewer must verify the receipt before the payment is treated as settled.
