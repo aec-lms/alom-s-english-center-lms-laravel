@@ -391,24 +391,27 @@ class UniversalPaymentController extends Controller
                 && filled($invoice->payer_email)
                 && hash_equals(strtolower((string) $invoice->payer_email), strtolower((string) auth()->user()->email));
             abort_unless($isInvoiceOwner, 403, 'You can only pay an invoice issued to your account.');
-            $manualInvoiceMethods = ['cash', 'bank_transfer', 'bank_cash', 'offline', 'cheque', 'bkash_manual', 'nagad', 'rocket'];
+            $manualInvoiceMethods = ['cash', 'bank_transfer', 'bank_cash', 'offline', 'cheque', 'bkash', 'bkash_manual', 'nagad', 'rocket'];
             $onlineInvoiceMethods = ['sslcommerz', 'bkash', 'card'];
-            abort_unless(
-                in_array($validated['gateway'], $manualInvoiceMethods, true)
-                    || in_array($validated['gateway'], $onlineInvoiceMethods, true),
-                422,
-                'Choose a supported manual receipt method or a configured online gateway.'
-            );
-            if (in_array($validated['gateway'], $manualInvoiceMethods, true)) {
+            $isOnlineInvoice = in_array($validated['gateway'], ['sslcommerz', 'card'], true)
+                || ($validated['gateway'] === 'bkash' && !filled($validated['external_trx_id'] ?? null));
+            $isManualInvoice = in_array($validated['gateway'], $manualInvoiceMethods, true) && !$isOnlineInvoice;
+            abort_unless($isManualInvoice || $isOnlineInvoice, 422, 'Choose a supported manual receipt method or a configured online gateway.');
+            if ($isManualInvoice) {
                 abort_if(trim((string) ($validated['external_trx_id'] ?? '')) === '', 422, 'Enter the bank transaction ID or cash receipt reference.');
+                abort_unless(
+                    (string) $this->plugins->getSetting('universal-payment', 'allow_offline_payments', '1') === '1',
+                    422,
+                    'Manual receipts are disabled by the administrator.'
+                );
             }
             if ($validated['gateway'] === 'card') {
                 $this->assertGatewayEnabled('sslcommerz');
             }
-            if (in_array($validated['gateway'], $onlineInvoiceMethods, true)) {
+            if ($isOnlineInvoice) {
                 abort_unless(
                     $this->plugins->isEnabled('payment-management') && Schema::hasTable('payment_transactions'),
-                    503,
+                    422,
                     'Payment Management must be enabled before online invoice checkout can be accepted.'
                 );
             }
@@ -448,7 +451,7 @@ class UniversalPaymentController extends Controller
         }
 
         if ($invoice !== null) {
-            $tx = DB::transaction(function () use ($invoice, $validated): UniversalPaymentTransaction {
+            $tx = DB::transaction(function () use ($invoice, $validated, $isOnlineInvoice): UniversalPaymentTransaction {
                 $lockedInvoice = DB::table('fee_invoices')->where('id', $invoice->id)->lockForUpdate()->first();
                 abort_unless($lockedInvoice !== null, 404, 'The fee invoice no longer exists.');
                 $isStillOwner = filled($lockedInvoice->payer_email)
@@ -475,9 +478,7 @@ class UniversalPaymentController extends Controller
                     'gateway' => $validated['gateway'] === 'card' ? 'sslcommerz' : $validated['gateway'],
                     'currency' => (string) ($lockedInvoice->currency ?: 'BDT'),
                     'amount' => $balance,
-                    'external_trx_id' => in_array($validated['gateway'], ['sslcommerz', 'bkash', 'card'], true)
-                        ? null
-                        : trim((string) $validated['external_trx_id']),
+                    'external_trx_id' => $isOnlineInvoice ? null : trim((string) $validated['external_trx_id']),
                     'user_id' => auth()->id(),
                     'branch_id' => $lockedInvoice->branch_id ?? null,
                     'fee_invoice_id' => $lockedInvoice->id,
@@ -552,7 +553,7 @@ class UniversalPaymentController extends Controller
             });
         }
 
-        if ($invoice !== null && in_array($validated['gateway'], ['sslcommerz', 'bkash', 'card'], true)) {
+        if ($invoice !== null && $isOnlineInvoice) {
             try {
                 $gatewaySlug = $validated['gateway'] === 'card' ? 'gateway-sslcommerz' : 'gateway-' . $validated['gateway'];
                 abort_unless($this->gatewayRegistry->supportsStorefront($gatewaySlug), 422, 'The selected gateway has no verified invoice checkout adapter yet.');
@@ -890,7 +891,7 @@ class UniversalPaymentController extends Controller
 
         // Keep the legacy bank_cash/offline identifiers subject to the same
         // global offline-payment kill switch as the new manual payment plugins.
-        if (in_array($gateway, ['cash', 'bank_transfer', 'bank_cash', 'offline', 'cheque', 'bkash_manual', 'nagad', 'rocket'], true)) {
+        if (in_array($gateway, ['cash', 'bank_transfer', 'bank_cash', 'offline', 'cheque', 'bkash', 'bkash_manual', 'nagad', 'rocket'], true)) {
             abort_unless(
                 (string) $this->plugins->getSetting('universal-payment', 'allow_offline_payments', '1') === '1',
                 422,
