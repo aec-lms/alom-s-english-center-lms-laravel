@@ -108,4 +108,70 @@ class DashboardCustomizationTest extends TestCase
             ->assertSee('prefers-reduced-motion: reduce', false);
     }
 
+
+    public function test_dashboard_refresh_returns_private_live_metrics_for_authorized_admin(): void
+    {
+        $this->markSystemInstalled();
+        $admin = $this->createUserWithRole('admin', null, 'dashboard-refresh@aec.test');
+
+        $this->actingAs($admin)->getJson(route('admin.dashboard.refresh'))
+            ->assertOk()
+            ->assertJsonStructure(['metrics' => ['users', 'plugins_total', 'plugins_enabled', 'backups'], 'refreshed_at'])
+            ->assertHeader('Cache-Control', 'no-store, private');
+    }
+
+    public function test_dashboard_widget_analytics_are_tracked_per_user_and_reject_unknown_widgets(): void
+    {
+        $this->markSystemInstalled();
+        $admin = $this->createUserWithRole('admin', null, 'dashboard-analytics@aec.test');
+
+        $this->actingAs($admin)->postJson(route('admin.dashboard.widget-analytics'), ['widget' => 'users'])
+            ->assertStatus(202)->assertJson(['tracked' => true]);
+        $this->assertSame(['users' => 1], json_decode(
+            SystemSetting::query()->where('key', 'admin.dashboard.analytics.user.' . $admin->id)->value('value'),
+            true
+        ));
+
+        $this->actingAs($admin)->postJson(route('admin.dashboard.widget-analytics'), ['widget' => 'arbitrary'])
+            ->assertUnprocessable();
+    }
+
+    public function test_admin_can_save_validated_widget_sizes_with_personal_layout(): void
+    {
+        $this->markSystemInstalled();
+        $admin = $this->createUserWithRole('admin', null, 'dashboard-sizes@aec.test');
+
+        $this->actingAs($admin)->post(route('admin.dashboard.widgets'), [
+            'widgets' => ['users', 'system_info'],
+            'sizes' => ['users' => 'small', 'system_info' => 'large'],
+        ])->assertRedirect(route('admin.dashboard'));
+
+        $this->assertSame(
+            ['users' => 'small', 'system_info' => 'large'],
+            json_decode(SystemSetting::query()->where('key', 'admin.dashboard.widget_sizes.user.' . $admin->id)->value('value'), true)
+        );
+        $this->actingAs($admin)->get(route('admin.dashboard'))->assertOk()
+            ->assertSee('data-size="small"', false)
+            ->assertSee('data-size="large"', false);
+    }
+
+
+
+    public function test_dashboard_customizer_exposes_presets_and_widget_size_controls(): void
+    {
+        $this->markSystemInstalled();
+        $admin = $this->createUserWithRole('admin', null, 'dashboard-presets@aec.test');
+
+        $this->actingAs($admin)->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertSee('Executive overview')
+            ->assertSee('Operations &amp; security', false)
+            ->assertSee('Teaching &amp; learning', false)
+            ->assertSee('Finance &amp; records', false)
+            ->assertSee('name="sizes[users]"', false)
+            ->assertSee('data-analytics-url', false)
+            ->assertSee('data-refresh-url', false);
+    }
+
+
 }
