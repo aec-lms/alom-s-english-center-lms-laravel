@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Plugins\Modules\UniversalPayment\Http\Controllers;
 
 use App\Core\Plugins\PluginManager;
+use App\Core\Payments\PaymentGatewayRegistry;
 use App\Core\Security\AuditLogger;
 use App\Http\Controllers\Controller;
 use App\Models\User;
@@ -26,6 +27,7 @@ class UniversalPaymentController extends Controller
         private readonly PluginManager $plugins,
         private readonly AuditLogger $audit,
         private readonly StorefrontPaymentGatewayService $storefrontGateway,
+        private readonly PaymentGatewayRegistry $gatewayRegistry,
     ) {}
 
     public function index(Request $request): View
