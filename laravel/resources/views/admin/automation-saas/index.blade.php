@@ -97,6 +97,42 @@
                             <form method="POST" action="{{ route('admin.automation-saas.agents.store', $tenant) }}" class="flex flex-wrap gap-2">@csrf<input name="name" required maxlength="120" aria-label="AI agent name" placeholder="New AI agent name" class="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-xs"><button class="rounded-lg border border-violet-300 px-3 py-2 text-xs font-bold text-violet-700">Add agent</button></form>
                             <form method="POST" action="{{ route('admin.automation-saas.workflows.store', $tenant) }}" class="flex flex-wrap gap-2">@csrf<input name="name" required maxlength="160" aria-label="Workflow name" placeholder="New workflow name" class="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-xs"><select name="trigger_event" aria-label="Workflow trigger" class="rounded-lg border border-slate-300 px-2 py-2 text-xs"><option value="contact.created">Contact created</option><option value="conversation.opened">Conversation opened</option><option value="message.received">Message received</option><option value="form.submitted">Form submitted</option><option value="order.created">Order created</option></select><button class="rounded-lg border border-emerald-300 px-3 py-2 text-xs font-bold text-emerald-700">Add workflow</button></form>
                         </div>
+                        <div class="mt-4 grid gap-3 lg:grid-cols-2">
+                            <form method="POST" action="{{ route('admin.automation-saas.channels.store', $tenant) }}" class="rounded-lg border border-slate-200 p-3 space-y-2">@csrf
+                                <h3 class="text-xs font-bold text-slate-700">Connect a channel</h3>
+                                <input name="name" required maxlength="120" placeholder="Channel display name" aria-label="Channel display name" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs">
+                                <select name="provider" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs"><option value="whatsapp">WhatsApp</option><option value="messenger">Messenger</option><option value="instagram">Instagram</option><option value="telegram">Telegram</option><option value="website_chat">Website Chat</option><option value="email">Email</option><option value="sms">SMS</option></select>
+                                <input name="access_token" type="password" autocomplete="new-password" maxlength="8192" placeholder="Provider access token (optional)" aria-label="Provider access token" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs">
+                                <button class="rounded-lg bg-slate-800 px-3 py-2 text-xs font-bold text-white">Save encrypted channel</button>
+                                <p class="text-xs text-slate-500">Saved disconnected until a provider handshake confirms it.</p>
+                            </form>
+                            <form method="POST" action="{{ route('admin.automation-saas.webhooks.store', $tenant) }}" class="rounded-lg border border-slate-200 p-3 space-y-2">@csrf
+                                <h3 class="text-xs font-bold text-slate-700">Register outbound webhook</h3>
+                                <input name="name" required maxlength="120" placeholder="Webhook name" aria-label="Webhook name" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs">
+                                <select name="event_name" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs"><option value="contact.created">Contact created</option><option value="conversation.opened">Conversation opened</option><option value="message.received">Message received</option><option value="campaign.completed">Campaign completed</option><option value="workflow.completed">Workflow completed</option></select>
+                                <input name="target_url" type="url" required placeholder="https://your-domain.com/webhook" aria-label="Webhook HTTPS URL" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs">
+                                <button class="rounded-lg bg-slate-800 px-3 py-2 text-xs font-bold text-white">Register webhook</button>
+                                <p class="text-xs text-slate-500">HTTPS only. Signing secret is shown once after creation.</p>
+                            </form>
+                        </div>
+                        @if(session('webhook_secret'))
+                            <div class="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900"><strong>Copy this webhook signing secret now:</strong><code class="mt-1 block break-all">{{ session('webhook_secret') }}</code></div>
+                        @endif
+                        @if($tenant->conversations->isNotEmpty())
+                            <div class="mt-4 space-y-3">
+                                <h3 class="text-xs font-bold uppercase tracking-wide text-slate-500">Shared Inbox</h3>
+                                @foreach($tenant->conversations->sortByDesc('last_message_at')->take(10) as $conversation)
+                                    <div class="rounded-lg border border-slate-200 p-3">
+                                        <div class="flex flex-wrap items-center justify-between gap-2"><strong class="text-sm">{{ $conversation->contact?->name ?: $conversation->contact?->email ?: 'Unknown contact' }}</strong><span class="text-xs text-slate-500">{{ ucfirst($conversation->status) }} · {{ ucfirst($conversation->priority) }}</span></div>
+                                        <div class="mt-2 max-h-32 space-y-1 overflow-y-auto">@foreach($conversation->messages->sortBy('created_at')->take(20) as $message)<div class="text-xs {{ $message->direction === 'outbound' ? 'text-violet-700' : 'text-slate-600' }}"><span class="font-semibold">{{ $message->direction === 'outbound' ? 'Team' : 'Contact' }}:</span> {{ $message->body }}</div>@endforeach</div>
+                                        <div class="mt-3 grid gap-2 md:grid-cols-2">
+                                            <form method="POST" action="{{ route('admin.automation-saas.conversations.replies.store', [$tenant, $conversation]) }}" class="flex gap-2">@csrf<input name="body" required maxlength="10000" placeholder="Write a reply..." aria-label="Conversation reply" class="min-w-0 flex-1 rounded border border-slate-300 px-2 py-1.5 text-xs"><button class="rounded bg-violet-700 px-3 py-1.5 text-xs font-bold text-white">Save reply</button></form>
+                                            <form method="POST" action="{{ route('admin.automation-saas.conversations.update', [$tenant, $conversation]) }}" class="flex gap-2">@csrf @method('PATCH')<select name="status" class="min-w-0 flex-1 rounded border border-slate-300 px-2 py-1.5 text-xs"><option value="open" @selected($conversation->status === 'open')>Open</option><option value="pending" @selected($conversation->status === 'pending')>Pending</option><option value="resolved" @selected($conversation->status === 'resolved')>Resolved</option><option value="closed" @selected($conversation->status === 'closed')>Closed</option></select><select name="priority" class="min-w-0 flex-1 rounded border border-slate-300 px-2 py-1.5 text-xs"><option value="low">Low</option><option value="normal" selected>Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select><button class="rounded border px-2 py-1.5 text-xs">Update</button></form>
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+                        @endif
                         @if($tenant->workflows->isNotEmpty())
                             <div class="mt-4 space-y-3">
                                 <h3 class="text-xs font-bold uppercase tracking-wide text-slate-500">Workflow builder · JSON graph editor</h3>
