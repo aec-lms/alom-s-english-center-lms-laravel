@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Plugins\Modules\HrStaffManagement\Models\StaffPayroll;
 use Plugins\Modules\HrStaffManagement\Models\StaffProfile;
 use Plugins\Modules\HrStaffManagement\Models\StaffAttendanceRecord;
@@ -80,6 +81,53 @@ class HrController extends Controller
         $this->audit->log('hr.staff_created', 'staff_profile', (string) $member->id);
 
         return back()->with('status', "Staff member '{$member->full_name}' added.");
+    }
+
+    public function exportAttendance(Request $request): StreamedResponse
+    {
+        $actor = $request->user();
+        $this->ensureAssignedBranch($actor);
+        abort_unless(Schema::hasTable('staff_attendance_records'), 409, 'Staff attendance is not installed.');
+        $filters = $request->validate([
+            'month' => ['required', 'regex:/^\\d{4}-(0[1-9]|1[0-2])$/'],
+        ]);
+        $start = \\Carbon\\CarbonImmutable::createFromFormat('!Y-m', $filters['month'])->startOfMonth();
+        $end = $start->endOfMonth();
+        $query = DB::table('staff_attendance_records')
+            ->join('staff_profiles', 'staff_profiles.id', '=', 'staff_attendance_records.staff_profile_id')
+            ->leftJoin('users as marker', 'marker.id', '=', 'staff_attendance_records.marked_by')
+            ->whereBetween('staff_attendance_records.attendance_date', [$start->toDateString(), $end->toDateString()])
+            ->when($actor && $actor->hasRole('branch_manager'), fn ($q) => $q->where('staff_attendance_records.branch_id', $actor->branch_id))
+            ->select([
+                'staff_attendance_records.attendance_date',
+                'staff_profiles.employee_code',
+                'staff_profiles.full_name',
+                'staff_profiles.department',
+                'staff_profiles.designation',
+                'staff_attendance_records.status',
+                'staff_attendance_records.leave_paid',
+                'staff_attendance_records.check_in_at',
+                'staff_attendance_records.check_out_at',
+                'staff_attendance_records.remarks',
+                'marker.name as marked_by',
+            ]);
+
+        return response()->streamDownload(function () use ($query): void {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, ['Date', 'Employee Code', 'Staff Name', 'Department', 'Designation', 'Status', 'Leave Paid', 'Check In', 'Check Out', 'Remarks', 'Marked By']);
+            $query->orderBy('staff_attendance_records.attendance_date')->chunk(500, function ($items) use ($out): void {
+                foreach ($items as $item) {
+                    $safe = static fn ($value): string => preg_match('/^[=+@\\\\-\\t\\r]/', (string) $value) ? "'".(string) $value : (string) $value;
+                    fputcsv($out, [
+                        $item->attendance_date, $safe($item->employee_code), $safe($item->full_name),
+                        $safe($item->department), $safe($item->designation), $item->status,
+                        $item->status === 'leave' ? ($item->leave_paid ? 'Paid' : 'Unpaid') : '',
+                        $item->check_in_at, $item->check_out_at, $safe($item->remarks), $safe($item->marked_by),
+                    ]);
+                }
+            });
+            fclose($out);
+        }, 'staff-attendance-'.$filters['month'].'.csv', ['Content-Type' => 'text/csv; charset=UTF-8', 'Cache-Control' => 'no-store, private']);
     }
 
     public function recordAttendance(Request $request): RedirectResponse
