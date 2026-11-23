@@ -8,6 +8,8 @@
     @if($invoiceIntegrationEnabled)
     <section class="space-y-4">
         <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <div class="rounded-xl border bg-white p-4"><div class="text-xs text-slate-500">Collected today</div><div class="mt-1 text-xl font-bold text-emerald-700">৳{{ number_format($collectionTotals['today'],2) }}</div></div>
+            <div class="rounded-xl border bg-white p-4"><div class="text-xs text-slate-500">Collected in selected period</div><div class="mt-1 text-xl font-bold">৳{{ number_format($collectionTotals['period'],2) }}</div></div>
             <div class="rounded-xl border bg-white p-4"><div class="text-xs text-slate-500">Outstanding balance</div><div class="mt-1 text-xl font-bold">৳{{ number_format($collectionTotals['outstanding'],2) }}</div></div>
             <div class="rounded-xl border bg-white p-4"><div class="text-xs text-slate-500">Overdue invoices</div><div class="mt-1 text-xl font-bold">{{ $collectionTotals['overdue'] }}</div></div>
             <div class="rounded-xl border bg-white p-4"><div class="text-xs text-slate-500">Partially paid</div><div class="mt-1 text-xl font-bold">{{ $collectionTotals['partial'] }}</div></div>
@@ -25,9 +27,17 @@
         </div>
     </section>
     @endif
+    <form method="GET" class="flex flex-wrap items-end gap-3 rounded-xl border bg-white p-4 text-xs">
+        <label>From<input type="date" name="from" value="{{ $filters['from'] ?? '' }}" class="mt-1 block rounded border-slate-300"></label>
+        <label>To<input type="date" name="to" value="{{ $filters['to'] ?? '' }}" class="mt-1 block rounded border-slate-300"></label>
+        <label>Gateway<select name="gateway" class="mt-1 block rounded border-slate-300"><option value="">All gateways</option>@foreach(['offline','gateway-sslcommerz','gateway-stripe','gateway-paypal','gateway-bkash','gateway-nagad'] as $gateway)<option value="{{ $gateway }}" @selected(($filters['gateway'] ?? '') === $gateway)>{{ $gateway }}</option>@endforeach</select></label>
+        <label>Status<select name="status" class="mt-1 block rounded border-slate-300"><option value="">All statuses</option>@foreach(['initiated','settled','failed','refunded'] as $status)<option value="{{ $status }}" @selected(($filters['status'] ?? '') === $status)>{{ ucfirst($status) }}</option>@endforeach</select></label>
+        <button class="rounded bg-slate-800 px-4 py-2 font-bold text-white">Filter collections</button>
+        <a href="{{ route('plugins.payments.collections.export', request()->query()) }}" class="rounded bg-emerald-700 px-4 py-2 font-bold text-white">Export CSV</a>
+    </form>
     <div class="bg-white rounded-2xl border border-slate-200 p-5">
         <table class="w-full text-xs text-left">
-            <thead class="text-slate-500 border-b"><tr><th class="py-2">Transaction Ref</th><th>Invoice</th><th>Gateway</th><th>Amount</th><th>Status</th><th>Settled At</th></tr></thead>
+            <thead class="text-slate-500 border-b"><tr><th class="py-2">Transaction Ref</th><th>Invoice</th><th>Gateway</th><th>Amount</th><th>Status</th><th>Settled At</th><th>Refund</th></tr></thead>
             <tbody class="divide-y">
                 @forelse ($transactions as $tx)
                     <tr>
@@ -37,9 +47,19 @@
                         <td>{{ $tx->currency }} {{ $tx->amount }}</td>
                         <td class="uppercase font-semibold">{{ $tx->status }}</td>
                         <td>{{ $tx->settled_at?->toDateTimeString() ?? '—' }}</td>
+                        <td>
+                            @if($tx->status === 'settled' && $tx->gateway_slug === 'offline')
+                                <form method="POST" action="{{ route('plugins.payments.refund', $tx) }}" class="flex gap-1">
+                                    @csrf
+                                    <input name="amount" type="number" min="0.01" max="{{ $tx->amount }}" step="0.01" required placeholder="Amount" class="w-20 rounded border p-1">
+                                    <input name="reason" required maxlength="255" placeholder="Reason" class="w-24 rounded border p-1">
+                                    <button class="text-rose-700 underline">Refund</button>
+                                </form>
+                            @endif
+                        </td>
                     </tr>
                 @empty
-                    <tr><td colspan="6" class="py-4 text-slate-400">No payment transactions recorded yet.</td></tr>
+                    <tr><td colspan="7" class="py-4 text-slate-400">No payment transactions recorded yet.</td></tr>
                 @endforelse
             </tbody>
         </table>
