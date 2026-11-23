@@ -98,6 +98,20 @@
                             <form method="POST" action="{{ route('admin.automation-saas.workflows.store', $tenant) }}" class="flex flex-wrap gap-2">@csrf<input name="name" required maxlength="160" aria-label="Workflow name" placeholder="New workflow name" class="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-xs"><select name="trigger_event" aria-label="Workflow trigger" class="rounded-lg border border-slate-300 px-2 py-2 text-xs"><option value="contact.created">Contact created</option><option value="conversation.opened">Conversation opened</option><option value="message.received">Message received</option><option value="form.submitted">Form submitted</option><option value="order.created">Order created</option></select><button class="rounded-lg border border-emerald-300 px-3 py-2 text-xs font-bold text-emerald-700">Add workflow</button></form>
                         </div>
                         <div class="mt-4 grid gap-3 lg:grid-cols-2">
+                            <form method="POST" action="{{ route('admin.automation-saas.branding.update', $tenant) }}" class="rounded-lg border border-slate-200 p-3 space-y-2">@csrf @method('PUT')
+                                <h3 class="text-xs font-bold text-slate-700">White-label brand settings</h3>
+                                <input name="brand_name" required maxlength="160" value="{{ $tenant->branding?->brand_name ?: $tenant->name }}" aria-label="Brand name" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs">
+                                <div class="grid grid-cols-2 gap-2"><label class="text-xs">Primary color<input type="color" name="primary_color" value="{{ $tenant->branding?->primary_color ?: '#2563eb' }}" class="mt-1 h-9 w-full"></label><label class="text-xs">Accent color<input type="color" name="accent_color" value="{{ $tenant->branding?->accent_color ?: '#7c3aed' }}" class="mt-1 h-9 w-full"></label></div>
+                                <button class="rounded-lg bg-violet-700 px-3 py-2 text-xs font-bold text-white">Save branding</button>
+                            </form>
+                            <form method="POST" action="{{ route('admin.automation-saas.domains.store', $tenant) }}" class="rounded-lg border border-slate-200 p-3 space-y-2">@csrf
+                                <h3 class="text-xs font-bold text-slate-700">Custom domain</h3>
+                                <input name="domain" type="text" required maxlength="253" placeholder="chat.yourbrand.com" aria-label="Custom domain" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs">
+                                <button class="rounded-lg bg-slate-800 px-3 py-2 text-xs font-bold text-white">Add domain</button>
+                                <div class="text-xs text-slate-500">@forelse($tenant->domains as $domain)<div>{{ $domain->domain }} · {{ $domain->verified_at ? 'Verified' : 'Pending DNS verification' }}</div>@empty No custom domains registered @endforelse</div>
+                            </form>
+                        </div>
+                        <div class="mt-4 grid gap-3 lg:grid-cols-2">
                             <form method="POST" action="{{ route('admin.automation-saas.channels.store', $tenant) }}" class="rounded-lg border border-slate-200 p-3 space-y-2">@csrf
                                 <h3 class="text-xs font-bold text-slate-700">Connect a channel</h3>
                                 <input name="name" required maxlength="120" placeholder="Channel display name" aria-label="Channel display name" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs">
