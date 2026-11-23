@@ -39,11 +39,11 @@ class CourseController extends Controller
         $cmsPosts = Schema::hasTable('cms_posts')
             ? DB::table('cms_posts')->orderByDesc('id')->limit(100)->get()
             : collect();
-        $liveClasses = Schema::hasTable('live_classes')
+        $teacherAssignments = Schema::hasTable('course_teacher_assignments')\n            ? DB::table('course_teacher_assignments')->join('users', 'users.id', '=', 'course_teacher_assignments.teacher_user_id')\n                ->select('course_teacher_assignments.course_id', 'course_teacher_assignments.teacher_user_id', 'users.name as teacher_name')\n                ->orderBy('users.name')->get()\n            : collect();\n        $teacherClassPayments = Schema::hasTable('teacher_class_payments')\n            ? DB::table('teacher_class_payments')->join('users', 'users.id', '=', 'teacher_class_payments.teacher_user_id')\n                ->join('class_session_records', 'class_session_records.id', '=', 'teacher_class_payments.session_record_id')\n                ->join('live_classes', 'live_classes.id', '=', 'class_session_records.live_class_id')\n                ->when($isBranchManager, fn ($q) => $q->where('teacher_class_payments.branch_id', $actor->branch_id))\n                ->select('teacher_class_payments.*', 'users.name as teacher_name', 'live_classes.title as class_title')\n                ->latest('teacher_class_payments.id')->limit(50)->get()\n            : collect();\n        $liveClasses = Schema::hasTable('live_classes')
             ? LiveClass::query()->with('course')->when($isBranchManager, fn ($q) => $q->whereHas('course', fn ($courseQuery) => $courseQuery->where('branch_id', $actor->branch_id)))->latest('starts_at')->get()
             : collect();
 
-        return view('course-management::index', compact('courses', 'categories', 'cmsCategories', 'cmsPosts', 'liveClasses'));
+        return view('course-management::index', compact('courses', 'categories', 'cmsCategories', 'cmsPosts', 'liveClasses', 'teacherAssignments', 'teacherClassPayments'));
     }
 
     public function store(Request $request): RedirectResponse
@@ -359,7 +359,13 @@ class CourseController extends Controller
         $this->ensureAssignedBranch($actor);
         $validated = $request->validate([
             'course_id' => ['required', 'integer', 'exists:courses,id'],
+            'teacher_user_id' => ['required', 'integer', 'exists:users,id'],
+            'teacher_rate_per_class' => ['nullable', 'numeric', 'min:0', 'max:10000000'],
+            'student_fee_per_class' => ['nullable', 'numeric', 'min:0', 'max:10000000'],
             'title' => ['required', 'string', 'max:180'],
+            'teacher_user_id' => ['required', 'integer', 'exists:users,id'],
+            'teacher_rate_per_class' => ['nullable', 'numeric', 'min:0', 'max:10000000'],
+            'student_fee_per_class' => ['nullable', 'numeric', 'min:0', 'max:10000000'],
             'instructor_name' => ['nullable', 'string', 'max:120'],
             'platform' => ['required', 'in:zoom,google_meet,teams'],
             'meeting_url' => ['required', 'url', 'max:255'],
@@ -372,8 +378,12 @@ class CourseController extends Controller
             abort(403, 'Branch isolation violation.');
         }
 
+        abort_unless(DB::table('course_teacher_assignments')->where('course_id', $course->id)->where('teacher_user_id', $validated['teacher_user_id'])->exists(), 422, 'Assign this teacher to the selected course first.');
         $live = LiveClass::query()->create([
             'course_id' => $validated['course_id'],
+            'teacher_user_id' => $validated['teacher_user_id'],
+            'teacher_rate_per_class' => round((float) ($validated['teacher_rate_per_class'] ?? 0), 2),
+            'student_fee_per_class' => round((float) ($validated['student_fee_per_class'] ?? 0), 2),
             'title' => $validated['title'],
             'instructor_name' => ($validated['instructor_name'] ?? '') ?: "Engr. Mahbubul Alom",
             'platform' => $validated['platform'],
@@ -406,7 +416,11 @@ class CourseController extends Controller
             'capacity' => ['nullable', 'integer', 'min:1', 'max:2000'],
         ]);
 
+        abort_unless(DB::table('course_teacher_assignments')->where('course_id', $liveClass->course_id)->where('teacher_user_id', $validated['teacher_user_id'])->exists(), 422, 'Assign this teacher to the course first.');
         $validated['capacity'] = (int) ($validated['capacity'] ?? $liveClass->capacity ?? 300);
+        $validated['teacher_rate_per_class'] = round((float) ($validated['teacher_rate_per_class'] ?? 0), 2);
+        $validated['student_fee_per_class'] = round((float) ($validated['student_fee_per_class'] ?? 0), 2);
+        abort_if(DB::table('class_session_records')->where('live_class_id', $liveClass->id)->exists(), 409, 'Settlement settings cannot be changed after a class has been completed.');
         $liveClass->update($validated);
 
         $this->audit->log('live_class.updated', 'live_class', (string) $liveClass->id, ['status' => $liveClass->status]);
