@@ -408,10 +408,10 @@ class UniversalPaymentController extends Controller
             abort_if(
                 UniversalPaymentTransaction::query()
                     ->where('fee_invoice_id', $invoice->id)
-                    ->where('status', 'pending')
+                    ->whereIn('status', ['pending', 'risk_review'])
                     ->exists(),
                 409,
-                'A payment receipt for this invoice is already awaiting verification.'
+                'A payment for this invoice is pending or requires provider reconciliation.'
             );
             $invoiceBalance = max(0, (float) $invoice->net_amount - (float) $invoice->paid_amount);
             abort_if($invoiceBalance <= 0, 422, 'This invoice has no outstanding balance.');
@@ -451,10 +451,10 @@ class UniversalPaymentController extends Controller
                 abort_if(
                     UniversalPaymentTransaction::query()
                         ->where('fee_invoice_id', $lockedInvoice->id)
-                        ->where('status', 'pending')
+                        ->whereIn('status', ['pending', 'risk_review'])
                         ->exists(),
                     409,
-                    'A payment receipt for this invoice is already awaiting verification.'
+                    'A payment for this invoice is pending or requires provider reconciliation.'
                 );
 
                 $balance = round((float) $lockedInvoice->net_amount - (float) $lockedInvoice->paid_amount, 2);
