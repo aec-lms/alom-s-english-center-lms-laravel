@@ -93,6 +93,12 @@ Route::middleware('installed')->group(function (): void {
         Route::post('/dashboard/widgets', [DashboardController::class, 'saveWidgets'])
             ->name('dashboard.widgets')
             ->middleware('permission:core.dashboard.view');
+        Route::get('/dashboard/refresh', [DashboardController::class, 'refresh'])
+            ->name('dashboard.refresh')
+            ->middleware(['permission:core.dashboard.view', 'throttle:60,1']);
+        Route::post('/dashboard/widget-analytics', [DashboardController::class, 'trackWidget'])
+            ->name('dashboard.widget-analytics')
+            ->middleware(['permission:core.dashboard.view', 'throttle:30,1']);
         Route::post('/dashboard/motion', [DashboardController::class, 'saveMotionSettings'])
             ->name('dashboard.motion')
             ->middleware(['permission:core.settings.manage', 'central.admin']);
