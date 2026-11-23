@@ -14,7 +14,8 @@
             @csrf
             <select name="staff_profile_id" required class="md:col-span-2 rounded-lg border border-slate-300 px-3 py-2 bg-white"><option value="">Select staff member...</option>@foreach ($staff as $member)<option value="{{ $member->id }}">{{ $member->full_name }} ({{ $member->employee_code }})</option>@endforeach</select>
             <input type="date" name="attendance_date" required max="{{ now()->toDateString() }}" value="{{ now()->toDateString() }}" class="rounded-lg border border-slate-300 px-3 py-2">
-            <select name="status" required class="rounded-lg border border-slate-300 px-3 py-2 bg-white"><option value="present">Present</option><option value="late">Late</option><option value="absent">Absent</option><option value="leave">Leave</option></select>\n            <label class="flex items-center gap-2 text-slate-600"><input type="hidden" name="leave_paid" value="0"><input type="checkbox" name="leave_paid" value="1" checked> Paid leave</label>
+            <select name="status" required class="rounded-lg border border-slate-300 px-3 py-2 bg-white"><option value="present">Present</option><option value="late">Late</option><option value="absent">Absent</option><option value="leave">Leave</option></select>
+            <label class="flex items-center gap-2 text-slate-600"><input type="hidden" name="leave_paid" value="0"><input type="checkbox" name="leave_paid" value="1" checked> Paid leave</label>
             <input type="datetime-local" name="check_in_at" aria-label="Check in" class="rounded-lg border border-slate-300 px-3 py-2">
             <input type="datetime-local" name="check_out_at" aria-label="Check out" class="rounded-lg border border-slate-300 px-3 py-2">
             <input name="remarks" maxlength="255" placeholder="Remarks (optional)" class="md:col-span-4 rounded-lg border border-slate-300 px-3 py-2">
@@ -57,7 +58,8 @@
                 <input name="payroll_month" required value="{{ now()->format('Y-m') }}" placeholder="YYYY-MM" class="rounded-lg border border-slate-300 px-3 py-2 font-mono">
                 <div class="grid grid-cols-2 gap-3">
                     <input name="bonus" type="number" step="0.01" min="0" value="0" placeholder="Bonus" class="rounded-lg border border-slate-300 px-3 py-2">
-                    <input name="deductions" type="number" step="0.01" min="0" value="0" placeholder="Additional deductions" class="rounded-lg border border-slate-300 px-3 py-2">\n                    <input name="late_deduction_per_day" type="number" step="0.01" min="0" value="0" placeholder="Late penalty per day" class="rounded-lg border border-slate-300 px-3 py-2">
+                    <input name="deductions" type="number" step="0.01" min="0" value="0" placeholder="Additional deductions" class="rounded-lg border border-slate-300 px-3 py-2">
+                    <input name="late_deduction_per_day" type="number" step="0.01" min="0" value="0" placeholder="Late penalty per day" class="rounded-lg border border-slate-300 px-3 py-2">
                 </div>
                 <button type="submit" class="px-4 py-2 rounded-lg bg-emerald-600 text-white font-bold">Record Payroll</button>
             </form>
@@ -70,7 +72,8 @@
             <div class="border border-slate-200 rounded-xl p-4 flex items-center justify-between gap-3">
                 <div>
                     <div class="font-bold text-sm text-slate-900">{{ $pay->staff?->full_name ?? 'Staff #' . $pay->staff_profile_id }}</div>
-                    <div class="text-slate-500 font-mono">Month {{ $pay->payroll_month }} &middot; Gross ৳{{ $pay->gross_salary }} + Bonus ৳{{ $pay->bonus }} &minus; Ded ৳{{ $pay->deductions }}</div>\n                    <div class="text-[11px] text-slate-500">Attendance: {{ $pay->present_days ?? 0 }} present · {{ $pay->late_days ?? 0 }} late · {{ $pay->absent_days ?? 0 }} absent · {{ $pay->paid_leave_days ?? 0 }} paid leave · {{ $pay->unpaid_leave_days ?? 0 }} unpaid leave</div>
+                    <div class="text-slate-500 font-mono">Month {{ $pay->payroll_month }} &middot; Gross ৳{{ $pay->gross_salary }} + Bonus ৳{{ $pay->bonus }} &minus; Ded ৳{{ $pay->deductions }}</div>
+                    <div class="text-[11px] text-slate-500">Attendance: {{ $pay->present_days ?? 0 }} present · {{ $pay->late_days ?? 0 }} late · {{ $pay->absent_days ?? 0 }} absent · {{ $pay->paid_leave_days ?? 0 }} paid leave · {{ $pay->unpaid_leave_days ?? 0 }} unpaid leave</div>
                 </div>
                 <div class="text-right">
                     <div class="font-extrabold text-emerald-700 text-sm">৳{{ $pay->net_paid }}</div>
