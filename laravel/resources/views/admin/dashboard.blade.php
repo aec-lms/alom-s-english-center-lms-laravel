@@ -90,9 +90,12 @@
     </div>
 
     <style>
-    #dashboard-widgets [data-dashboard-widget][data-size="large"] { grid-column: span 1; }
-    @media (min-width: 768px) { #dashboard-widgets [data-dashboard-widget][data-size="large"] { grid-column: span 2; } }
     #dashboard-widgets [data-dashboard-widget][data-size="small"] { min-height: 7rem; }
+    @media (min-width: 768px) {
+        #dashboard-widgets [data-dashboard-widget][data-size="small"] { grid-column: span 1; }
+        #dashboard-widgets [data-dashboard-widget][data-size="medium"] { grid-column: span 2; }
+        #dashboard-widgets [data-dashboard-widget][data-size="large"] { grid-column: span 4; }
+    }
     #dashboard-widgets[data-motion-enabled="true"] [data-dashboard-widget] { animation: aec-dashboard-enter var(--aec-motion-duration, 620ms) cubic-bezier(.2,.8,.2,1) both; }
     #dashboard-widgets[data-motion-enabled="true"][data-motion-preset="subtle"] [data-dashboard-widget] { animation-name: aec-dashboard-fade; }
     #dashboard-widgets[data-motion-enabled="true"][data-motion-preset="dynamic"] [data-dashboard-widget] { animation-name: aec-dashboard-rise; }
@@ -116,7 +119,7 @@
         #dashboard-widgets[data-motion-enabled="true"][data-motion-loading]::before { animation:none !important; transition:none !important; transform:none !important; }
     }
 </style>
-<div id="dashboard-widgets" class="grid grid-cols-1 gap-4 md:grid-cols-2" data-refresh-url="{{ route('admin.dashboard.refresh') }}" data-analytics-url="{{ route('admin.dashboard.widget-analytics') }}" data-motion-enabled="{{ $motionSettings['enabled'] ? 'true' : 'false' }}" data-motion-preset="{{ $motionSettings['preset'] }}" data-motion-speed="{{ $motionSettings['speed'] }}" data-motion-intensity="{{ $motionSettings['intensity'] }}" data-motion-loading="{{ $motionSettings['loading'] }}" data-motion-counters="{{ $motionSettings['counters'] ? 'true' : 'false' }}" data-motion-hover="{{ $motionSettings['hover'] ? 'true' : 'false' }}">
+<div id="dashboard-widgets" class="grid grid-cols-1 gap-4 md:grid-cols-4" data-refresh-url="{{ route('admin.dashboard.refresh') }}" data-analytics-url="{{ route('admin.dashboard.widget-analytics') }}" data-motion-enabled="{{ $motionSettings['enabled'] ? 'true' : 'false' }}" data-motion-preset="{{ $motionSettings['preset'] }}" data-motion-speed="{{ $motionSettings['speed'] }}" data-motion-intensity="{{ $motionSettings['intensity'] }}" data-motion-loading="{{ $motionSettings['loading'] }}" data-motion-counters="{{ $motionSettings['counters'] ? 'true' : 'false' }}" data-motion-hover="{{ $motionSettings['hover'] ? 'true' : 'false' }}">
         @foreach ($widgets as $widget)
             @if ($widget === 'users')
                 <section data-dashboard-widget="users" data-size="{{ $widgetSizes['users'] ?? 'medium' }}" class="rounded-2xl border border-slate-200 bg-white p-5">
