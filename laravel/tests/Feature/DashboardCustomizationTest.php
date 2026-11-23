@@ -165,9 +165,9 @@ class DashboardCustomizationTest extends TestCase
         $this->actingAs($admin)->get(route('admin.dashboard'))
             ->assertOk()
             ->assertSee('Executive overview')
-            ->assertSee('Operations &amp; security')
-            ->assertSee('Teaching &amp; learning')
-            ->assertSee('Finance &amp; records')
+            ->assertSee('Operations &amp; security', false)
+            ->assertSee('Teaching &amp; learning', false)
+            ->assertSee('Finance &amp; records', false)
             ->assertSee('name="sizes[users]"', false)
             ->assertSee('data-analytics-url', false)
             ->assertSee('data-refresh-url', false);
