@@ -173,7 +173,7 @@ class BackupService
                 $jsonLinesStream = $zip->getStream('database.jsonl');
                 if (is_resource($jsonLinesStream)) {
                     try {
-                        $this->restoreDatabaseJsonLines($jsonLinesStream, $backup, $actorId, $magic === "AECBK02\\n" ? 2 : 1);
+                        $this->restoreDatabaseJsonLines($jsonLinesStream, $backup, $actorId, $magic === "AECBK02\n" ? 2 : 1);
                     } finally {
                         fclose($jsonLinesStream);
                     }
@@ -182,7 +182,7 @@ class BackupService
                     $dbRaw = $zip->getFromName('database.json');
                     if ($dbRaw === false) throw new RuntimeException('Backup archive missing database.json or database.jsonl.');
                     $dbSnapshot = json_decode($dbRaw, true, 512, JSON_THROW_ON_ERROR);
-                    $this->restoreLegacyDatabaseSnapshot($dbSnapshot, $backup, $actorId, $magic === "AECBK02\\n" ? 2 : 1);
+                    $this->restoreLegacyDatabaseSnapshot($dbSnapshot, $backup, $actorId, $magic === "AECBK02\n" ? 2 : 1);
                     unset($dbRaw, $dbSnapshot);
                 }
 
