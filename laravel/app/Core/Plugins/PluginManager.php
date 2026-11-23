@@ -165,7 +165,7 @@ class PluginManager
                     }
                 }
 
-                $this->audit->log('plugin.installed', 'plugin', $manifest->slug, ['version' => $manifest->version], $actorId);
+                $this->audit->logRequired('plugin.installed', 'plugin', $manifest->slug, ['version' => $manifest->version], $actorId);
 
                 return $record;
             });
@@ -256,7 +256,7 @@ class PluginManager
                     hash('sha256', json_encode($manifest->toArray(), JSON_THROW_ON_ERROR))
                 );
 
-                $this->audit->log('plugin.updated', 'plugin', $manifest->slug, [
+                $this->audit->logRequired('plugin.updated', 'plugin', $manifest->slug, [
                     'from_version' => $fromVersion,
                     'to_version' => $manifest->version,
                 ], $actorId);
@@ -459,7 +459,7 @@ class PluginManager
                 $provider->onEnable();
             }
 
-            $this->audit->log('plugin.enabled', 'plugin', $slug, [], $actorId);
+            $this->audit->logRequired('plugin.enabled', 'plugin', $slug, [], $actorId);
 
             return $record->fresh();
         });
@@ -477,7 +477,7 @@ class PluginManager
                 $locked = PluginRecord::query()->where('slug', $slug)->lockForUpdate()->first();
                 if ($locked && $locked->is_installed) {
                     $locked->update(['is_enabled' => false]);
-                    $this->audit->log('plugin.enable_rolled_back', 'plugin', $slug, [
+                    $this->audit->logRequired('plugin.enable_rolled_back', 'plugin', $slug, [
                         'reason' => $exception->getMessage(),
                     ], $actorId);
                 }
@@ -513,7 +513,7 @@ class PluginManager
                 $this->resolvePluginInstance($this->discoverManifests()[$slug])?->onDisable();
             }
             $record->update(['is_enabled' => false]);
-            $this->audit->log('plugin.disabled', 'plugin', $slug, [], $actorId);
+            $this->audit->logRequired('plugin.disabled', 'plugin', $slug, [], $actorId);
 
             return $record->fresh();
         });
@@ -548,7 +548,7 @@ class PluginManager
             }
 
             $record->update(['is_installed' => false, 'is_enabled' => false]);
-            $this->audit->log('plugin.uninstalled', 'plugin', $slug, ['purge_requested' => $confirmedPurgePluginData], $actorId);
+            $this->audit->logRequired('plugin.uninstalled', 'plugin', $slug, ['purge_requested' => $confirmedPurgePluginData], $actorId);
 
             return $record->fresh();
         });
