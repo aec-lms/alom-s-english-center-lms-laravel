@@ -75,26 +75,34 @@ class PaymentController extends Controller
             'gateway' => ['nullable', 'string', 'max:64'],
             'status' => ['nullable', 'in:initiated,settled,failed,refunded'],
         ]);
-        $query = DB::table('payment_transactions')
-            ->leftJoin('fee_invoices', 'fee_invoices.id', '=', 'payment_transactions.invoice_id')
-            ->when($actor && $actor->hasRole('branch_manager'), fn ($q) => $q->where('payment_transactions.branch_id', $actor->branch_id))
+        $hasInvoices = $this->invoiceIntegrationEnabled();
+        $query = DB::table('payment_transactions');
+        if ($hasInvoices) {
+            $query->leftJoin('fee_invoices', 'fee_invoices.id', '=', 'payment_transactions.invoice_id')
+                ->addSelect('fee_invoices.invoice_number', 'fee_invoices.payer_name');
+        } else {
+            $query->selectRaw('NULL as invoice_number, NULL as payer_name');
+        }
+        $query->when($actor && $actor->hasRole('branch_manager'), fn ($q) => $q->where('payment_transactions.branch_id', $actor->branch_id))
             ->when($filters['from'] ?? null, fn ($q, $v) => $q->whereDate('payment_transactions.settled_at', '>=', $v))
             ->when($filters['to'] ?? null, fn ($q, $v) => $q->whereDate('payment_transactions.settled_at', '<=', $v))
             ->when($filters['gateway'] ?? null, fn ($q, $v) => $q->where('payment_transactions.gateway_slug', $v))
             ->when($filters['status'] ?? null, fn ($q, $v) => $q->where('payment_transactions.status', $v))
-            ->select([
+            ->addSelect([
                 'payment_transactions.transaction_ref', 'payment_transactions.gateway_slug',
                 'payment_transactions.amount', 'payment_transactions.currency',
                 'payment_transactions.status', 'payment_transactions.external_reference',
-                'payment_transactions.settled_at', 'fee_invoices.invoice_number',
-                'fee_invoices.payer_name', 'payment_transactions.branch_id',
+                'payment_transactions.settled_at', 'payment_transactions.branch_id',
             ]);
 
         return response()->streamDownload(function () use ($query): void {
             $out = fopen('php://output', 'w');
             fputcsv($out, ['Transaction Ref', 'Invoice', 'Payer', 'Gateway', 'Amount', 'Currency', 'Status', 'External Reference', 'Settled At', 'Branch ID']);
             $query->orderByDesc('payment_transactions.settled_at')->chunk(500, function ($rows) use ($out): void {
-                $safe = static fn ($value): string => preg_match('/^[=+@\\\\-\\t\\r]/', (string) $value) ? "'".(string) $value : (string) $value;
+                $safe = static function ($value): string {
+                    $value = (string) $value;
+                    return in_array(substr($value, 0, 1), ['=', '+', '-', '@', "\t", "\r"], true) ? "'".$value : $value;
+                };
                 foreach ($rows as $row) {
                     fputcsv($out, [
                         $safe($row->transaction_ref), $safe($row->invoice_number), $safe($row->payer_name),
