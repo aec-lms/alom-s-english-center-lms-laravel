@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\\Services\\Automation;
+namespace App\Services\Automation;
 
 use InvalidArgumentException;
 
