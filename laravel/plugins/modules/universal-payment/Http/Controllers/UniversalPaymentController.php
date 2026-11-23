@@ -871,6 +871,16 @@ class UniversalPaymentController extends Controller
             );
         }
 
+        if (in_array($gateway, ['bkash', 'nagad', 'rocket'], true)) {
+            $pluginSlug = 'gateway-' . $gateway;
+            abort_unless(
+                $this->plugins->isEnabled($pluginSlug)
+                    && (string) $this->plugins->getSetting($pluginSlug, 'enabled', '0') === '1',
+                422,
+                'The selected mobile-wallet gateway plugin is not installed and enabled.'
+            );
+        }
+
         // Keep the legacy bank_cash/offline identifiers subject to the same
         // global offline-payment kill switch as the new manual payment plugins.
         if (in_array($gateway, ['cash', 'bank_transfer', 'bank_cash', 'offline', 'cheque'], true)) {
