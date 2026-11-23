@@ -30,7 +30,7 @@ class UniversalPaymentOrchestrator
             $methodEnabled = in_array($method, $enabledMethods, true);
             $pluginEnabled = $this->plugins->isEnabled($slug);
             $missing = [];
-            foreach ($definition['credentials'] as $key) {
+            foreach ($definition['manual'] ? [] : $definition['credentials'] as $key) {
                 if (($this->plugins->getSetting($slug, $key, '') ?? '') === '') {
                     $missing[] = $key;
                 }
