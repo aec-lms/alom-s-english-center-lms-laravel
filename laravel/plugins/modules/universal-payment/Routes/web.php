@@ -11,6 +11,10 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:universal-payment'])
     ->name('plugins.universal_payment.checkout');
 
 Route::middleware(['web', 'installed', 'plugin:universal-payment'])
+    ->get('/universal-payment/bkash/callback', [UniversalPaymentController::class, 'bkashCallback'])
+    ->name('plugins.universal_payment.bkash.callback');
+
+Route::middleware(['web', 'installed', 'plugin:universal-payment'])
     ->prefix('universal-payment/sslcommerz')
     ->name('plugins.universal_payment.sslcommerz.')
     ->group(function (): void {
