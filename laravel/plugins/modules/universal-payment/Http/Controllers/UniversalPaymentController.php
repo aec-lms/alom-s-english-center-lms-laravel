@@ -477,8 +477,10 @@ class UniversalPaymentController extends Controller
                     'status' => 'pending',
                 ]);
 
-                app(\Plugins\Modules\UniversalPayment\Services\ExternalTransactionReferenceRegistry::class)
-                    ->claim((string) $transaction->gateway, (string) $transaction->external_trx_id, (int) $transaction->id);
+                if (filled($transaction->external_trx_id)) {
+                    app(\Plugins\Modules\UniversalPayment\Services\ExternalTransactionReferenceRegistry::class)
+                        ->claim((string) $transaction->gateway, (string) $transaction->external_trx_id, (int) $transaction->id);
+                }
 
                 return $transaction;
             });
@@ -557,9 +559,9 @@ class UniversalPaymentController extends Controller
                 $checkoutUrl = (string) ($checkout['redirect_url'] ?? '');
                 abort_unless($checkoutUrl !== '' && strtolower((string) parse_url($checkoutUrl, PHP_URL_SCHEME)) === 'https', 502, 'The selected gateway did not return a secure checkout URL.');
                 return redirect()->away($checkoutUrl);
-            } catch (\\Throwable $exception) {
+            } catch (\Throwable $exception) {
                 report($exception);
-                $ambiguous = $exception instanceof \\Illuminate\\Http\\Client\\ConnectionException;
+                $ambiguous = $exception instanceof \Illuminate\Http\Client\ConnectionException;
                 DB::transaction(function () use ($tx, $ambiguous): void {
                     $locked = UniversalPaymentTransaction::query()->whereKey($tx->id)->lockForUpdate()->first();
                     if ($locked && $locked->status === 'pending') {
