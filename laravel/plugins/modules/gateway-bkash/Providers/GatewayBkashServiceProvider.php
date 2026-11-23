@@ -6,9 +6,15 @@ namespace Plugins\Modules\GatewayBkash\Providers;
 
 use App\Core\Payments\PaymentGatewayRegistry;
 use App\Core\Plugins\BasePluginServiceProvider;
+use Plugins\Modules\GatewayBkash\Services\BkashGatewayService;
 
 class GatewayBkashServiceProvider extends BasePluginServiceProvider
 {
+    public function register(): void
+    {
+        $this->app->singleton(BkashGatewayService::class);
+    }
+
     public function slug(): string { return 'gateway-bkash'; }
 
     public function boot(): void
