@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace App\\Models;
+namespace App\Models;
 
-use Illuminate\\Database\\Eloquent\\Model;
+use Illuminate\Database\Eloquent\Model;
 
 class AutomationWorkflow extends Model
 {
     protected $table = 'automation_workflows';
-    protected $fillable = ['tenant_id', 'name', 'trigger_event', 'definition', 'status', 'version'];
+    protected $fillable = ['tenant_id', 'tenant_id', 'name', 'trigger_event', 'definition', 'status', 'version'];
 
     protected function casts(): array
     {
