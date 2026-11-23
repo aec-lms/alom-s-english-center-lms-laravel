@@ -69,6 +69,7 @@
     ],
     "optional_dependencies": [
         "fees-management",
-        "payment-management"
+        "payment-management",
+        "universal-payment"
     ]
 }
