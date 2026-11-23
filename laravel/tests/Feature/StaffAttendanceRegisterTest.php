@@ -91,5 +91,26 @@ final class StaffAttendanceRegisterTest extends TestCase
         $this->assertSame(1, \Plugins\Modules\HrStaffManagement\Models\StaffPayroll::query()
             ->where('staff_profile_id', $own->id)->where('payroll_month', now()->format('Y-m'))->count());
 
+        // The database constraint protects against concurrent requests that both
+        // pass the controller's friendly duplicate check.
+        try {
+            \Plugins\Modules\HrStaffManagement\Models\StaffPayroll::query()->create([
+                'staff_profile_id' => $own->id,
+                'branch_id' => $branchA,
+                'payroll_month' => now()->format('Y-m'),
+                'gross_salary' => 18000,
+                'bonus' => 0,
+                'deductions' => 0,
+                'net_paid' => 18000,
+                'status' => 'pending',
+            ]);
+            $this->fail('The database should reject a second payroll for the same staff member and month.');
+        } catch (\Illuminate\Database\QueryException $exception) {
+            $this->assertNotSame('', $exception->getMessage());
+        }
+
+        $this->assertSame(1, \Plugins\Modules\HrStaffManagement\Models\StaffPayroll::query()
+            ->where('staff_profile_id', $own->id)->where('payroll_month', now()->format('Y-m'))->count());
+
     }
 }
