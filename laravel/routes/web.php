@@ -120,10 +120,12 @@ Route::middleware('installed')->group(function (): void {
             Route::post('/', [SiteNavigationController::class, 'update'])->name('update');
         });
 
-        Route::prefix('automation-saas')->name('automation-saas.')->middleware(['permission:core.settings.manage', 'central.admin'])->group(function (): void {
+        Route::prefix('automation-saas')->name('automation-saas.')->middleware('permission:core.settings.manage')->group(function (): void {
             Route::get('/', [AutomationSaasController::class, 'index'])->name('index');
             Route::post('/tenants', [AutomationSaasController::class, 'storeTenant'])->name('tenants.store');
             Route::post('/tenants/{tenant}/agents', [AutomationSaasController::class, 'storeAgent'])->name('agents.store');
+            Route::post('/tenants/{tenant}/contacts', [AutomationSaasController::class, 'storeContact'])->name('contacts.store');
+            Route::post('/tenants/{tenant}/campaigns', [AutomationSaasController::class, 'storeCampaign'])->name('campaigns.store');
             Route::post('/tenants/{tenant}/workflows', [AutomationSaasController::class, 'storeWorkflow'])->name('workflows.store');
             Route::post('/tenants/{tenant}/workflows/{workflow}/publish', [AutomationSaasController::class, 'publishWorkflow'])->name('workflows.publish');
         });
