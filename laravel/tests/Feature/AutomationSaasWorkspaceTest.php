@@ -139,7 +139,7 @@ class AutomationSaasWorkspaceTest extends TestCase
             'status' => 'disconnected',
             'credentials_encrypted' => 'test-access-token',
         ]);
-        $stored = \\Illuminate\\Support\\Facades\\DB::table('automation_channels')->where('id', $channel->id)->value('credentials_encrypted');
+        $stored = \Illuminate\Support\Facades\DB::table('automation_channels')->where('id', $channel->id)->value('credentials_encrypted');
 
         $this->assertNotSame('test-access-token', $stored);
         $this->assertSame('test-access-token', $channel->fresh()->credentials_encrypted);
