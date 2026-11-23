@@ -15,9 +15,16 @@ class GatewayBkashServiceProvider extends BasePluginServiceProvider
     {
         parent::boot();
         $this->app->afterResolving(PaymentGatewayRegistry::class, function (PaymentGatewayRegistry $registry): void {
-            $registry->register('gateway-bkash', 'bKash Merchant Gateway', ["app_key","app_secret","username","password"], function (array $input): array {
-                throw new \RuntimeException('bKash token authentication is available, but checkout/callback settlement is not enabled until the complete merchant Tokenized Checkout flow is implemented and UAT verified.');
-            }, false);
+            $registry->register('gateway-bkash', 'bKash Merchant Gateway', ['app_key', 'app_secret', 'username', 'password'],
+                function (array $input): array {
+                    return app(BkashGatewayService::class)->initiateUniversalCheckout(
+                        $input['universal_transaction'],
+                        $input['storefront_item'],
+                        $input['user'],
+                        (string) ($input['payer_contact'] ?? '')
+                    );
+                }, true
+            );
         });
     }
 
