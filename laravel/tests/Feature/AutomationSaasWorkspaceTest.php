@@ -191,4 +191,43 @@ class AutomationSaasWorkspaceTest extends TestCase
         $this->assertDatabaseCount('automation_webhook_deliveries', 0);
         Queue::assertNothingPushed();
     }
+    public function test_workspace_owner_can_customize_brand_and_register_pending_domain(): void
+    {
+        $this->markSystemInstalled();
+        $admin = $this->createUserWithRole('admin', null, 'saas-brand-owner@aec.test');
+        $tenant = $this->tenant($admin, 'brand-workspace');
+
+        $this->actingAs($admin)->put(route('admin.automation-saas.branding.update', $tenant), [
+            'brand_name' => 'Bright Academy',
+            'primary_color' => '#112233',
+            'accent_color' => '#445566',
+        ])->assertRedirect();
+
+        $this->actingAs($admin)->post(route('admin.automation-saas.domains.store', $tenant), [
+            'domain' => 'chat.brightacademy.example',
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('saas_tenant_branding', [
+            'tenant_id' => $tenant->id,
+            'brand_name' => 'Bright Academy',
+            'primary_color' => '#112233',
+        ]);
+        $this->assertDatabaseHas('saas_tenant_domains', [
+            'tenant_id' => $tenant->id,
+            'domain' => 'chat.brightacademy.example',
+            'verified_at' => null,
+        ]);
+    }
+
+    public function test_custom_domain_rejects_invalid_hostnames(): void
+    {
+        $this->markSystemInstalled();
+        $admin = $this->createUserWithRole('admin', null, 'saas-domain-invalid@aec.test');
+        $tenant = $this->tenant($admin, 'invalid-domain-workspace');
+
+        $this->actingAs($admin)->post(route('admin.automation-saas.domains.store', $tenant), [
+            'domain' => 'https://localhost/path',
+        ])->assertSessionHasErrors('domain');
+    }
+
 }
