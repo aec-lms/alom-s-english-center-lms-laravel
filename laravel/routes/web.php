@@ -126,6 +126,8 @@ Route::middleware('installed')->group(function (): void {
             Route::post('/tenants/{tenant}/agents', [AutomationSaasController::class, 'storeAgent'])->name('agents.store');
             Route::post('/tenants/{tenant}/contacts', [AutomationSaasController::class, 'storeContact'])->name('contacts.store');
             Route::post('/tenants/{tenant}/campaigns', [AutomationSaasController::class, 'storeCampaign'])->name('campaigns.store');
+            Route::put('/tenants/{tenant}/branding', [AutomationSaasController::class, 'updateBranding'])->name('branding.update');
+            Route::post('/tenants/{tenant}/domains', [AutomationSaasController::class, 'storeDomain'])->name('domains.store');
             Route::post('/tenants/{tenant}/channels', [AutomationSaasController::class, 'storeChannel'])->name('channels.store');
             Route::post('/tenants/{tenant}/webhooks', [AutomationSaasController::class, 'storeWebhook'])->name('webhooks.store');
             Route::post('/tenants/{tenant}/conversations/{conversation}/assign', [AutomationSaasController::class, 'assignConversation'])->name('conversations.assign');
