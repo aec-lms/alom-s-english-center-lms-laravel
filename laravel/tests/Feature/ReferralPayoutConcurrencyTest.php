@@ -496,7 +496,7 @@ final class ReferralPayoutConcurrencyTest extends TestCase
             'payer_name' => $buyer->name,
             'payer_contact' => '01700000000',
             'item_title' => 'Referral Course Cart Order',
-            'gateway' => 'offline',
+            'gateway' => 'sslcommerz',
             'currency' => 'BDT',
             'amount' => 1000,
             'external_trx_id' => 'COURSE-CART-VERIFIED-' . strtoupper(bin2hex(random_bytes(4))),
@@ -531,6 +531,8 @@ final class ReferralPayoutConcurrencyTest extends TestCase
             'notes' => json_encode([
                 'purpose' => 'course_cart',
                 'course_cart_order_id' => $orderId,
+                'provider' => 'sslcommerz',
+                'settlement' => 'completed',
             ], JSON_THROW_ON_ERROR),
         ]);
 

@@ -743,6 +743,45 @@ class PaymentSettlementStateMachineTest extends TestCase
         $this->assertDatabaseMissing('commerce_entitlements', ['user_id' => $buyer->id, 'order_item_id' => $orderItemId]);
     }
 
+    public function test_refund_rolls_back_when_required_audit_cannot_be_persisted(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['payment-management']);
+        $admin = $this->createUserWithRole('admin');
+        $transaction = PaymentTransaction::query()->create([
+            'transaction_ref' => 'REFUND-AUDIT-FAIL-' . $admin->id,
+            'invoice_id' => null,
+            'gateway_slug' => 'offline',
+            'amount' => 1000,
+            'currency' => 'BDT',
+            'status' => 'settled',
+            'metadata' => [],
+        ]);
+
+        AuditLog::creating(static function (): void {
+            throw new RuntimeException('forced payment refund audit failure');
+        });
+
+        try {
+            $this->actingAs($admin)->post('/admin/payments/' . $transaction->id . '/refund', [
+                'amount' => 1000,
+                'reason' => 'Audit rollback verification',
+            ])->assertSessionHasErrors('refund');
+
+            $this->assertDatabaseCount('payment_refunds', 0);
+            $this->assertDatabaseHas('payment_transactions', [
+                'id' => $transaction->id,
+                'status' => 'settled',
+            ]);
+            $this->assertDatabaseMissing('audit_logs', [
+                'action' => 'payment.refunded',
+                'entity_id' => (string) $transaction->id,
+            ]);
+        } finally {
+            AuditLog::flushEventListeners();
+        }
+    }
+
     public function test_late_verified_callback_cannot_resettle_a_refunded_transaction(): void
     {
         $this->markSystemInstalled();
