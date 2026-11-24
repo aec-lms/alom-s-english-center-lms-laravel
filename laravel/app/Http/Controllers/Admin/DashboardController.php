@@ -361,6 +361,13 @@ class DashboardController extends Controller
                     continue;
                 }
 
+                // Academic widgets expose institution-wide aggregates. Keep them
+                // unavailable to branch managers until each module supplies a
+                // branch-aware dashboard contract and matching isolation tests.
+                if ($actor && $actor->hasRole('branch_manager')) {
+                    continue;
+                }
+
                 $definitions[$widget['key']] = [
                     'label' => $widget['label'],
                     'view' => $manifest->slug . '::' . $widget['view'],
