@@ -27,5 +27,14 @@
             "order": 100,
             "permission": "exams.manage"
         }
+    ],
+    "dashboard_widgets": [
+        {
+            "key": "exam-performance",
+            "label": "Exam Performance",
+            "view": "dashboard.exam-performance",
+            "permission": "exams.manage",
+            "default": false
+        }
     ]
 }
