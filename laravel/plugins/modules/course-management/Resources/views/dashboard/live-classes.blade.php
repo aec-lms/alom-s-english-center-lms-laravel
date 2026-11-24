@@ -1,8 +1,11 @@
 @php
     $upcomingClasses = collect();
+    $requiredLiveClassColumns = ['course_id', 'title', 'starts_at', 'status'];
     $hasLiveClassTables = \Illuminate\Support\Facades\Schema::hasTable('live_classes')
         && \Illuminate\Support\Facades\Schema::hasTable('courses')
-        && \Illuminate\Support\Facades\Schema::hasColumn('live_classes', 'starts_at');
+        && \Illuminate\Support\Facades\Schema::hasColumn('courses', 'id')
+        && \Illuminate\Support\Facades\Schema::hasColumn('courses', 'title')
+        && collect($requiredLiveClassColumns)->every(fn (string $column): bool => \Illuminate\Support\Facades\Schema::hasColumn('live_classes', $column));
     if ($hasLiveClassTables) {
         $classQuery = \Illuminate\Support\Facades\DB::table('live_classes as lc')
             ->join('courses as c', 'c.id', '=', 'lc.course_id');
@@ -20,7 +23,8 @@
             ->orderBy('lc.starts_at')
             ->limit(6)
             ->get(['lc.id', 'lc.title', 'lc.starts_at', 'lc.status', 'c.title as course_title']);
-        if (\Illuminate\Support\Facades\Schema::hasTable('live_class_participants')) {
+        if (\Illuminate\Support\Facades\Schema::hasTable('live_class_participants')
+            && collect(['live_class_id', 'left_at', 'last_seen_at'])->every(fn (string $column): bool => \Illuminate\Support\Facades\Schema::hasColumn('live_class_participants', $column))) {
             $participantCounts = \Illuminate\Support\Facades\DB::table('live_class_participants')
                 ->whereNull('left_at')
                 ->where('last_seen_at', '>=', now()->subMinutes(5))
