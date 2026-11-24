@@ -399,11 +399,11 @@ final class ReferralIncomeRedTeamHardeningTest extends TestCase
             'payer_name' => $buyer->name,
             'payer_contact' => '01700000000',
             'item_title' => 'Course Cart Order #' . $orderId,
-            'gateway' => 'offline',
+            'gateway' => 'sslcommerz',
             'currency' => 'BDT',
             'amount' => 1000,
             'external_trx_id' => 'REF-COURSE-CART-VERIFIED-' . $orderId,
-            'status' => 'verified',
+            'status' => 'pending',
             'notes' => json_encode([
                 'purpose' => 'course_cart',
                 'course_cart_order_id' => $orderId,
@@ -414,6 +414,17 @@ final class ReferralIncomeRedTeamHardeningTest extends TestCase
         ]);
         DB::table('course_cart_orders')->where('id', $orderId)->update([
             'payment_transaction_id' => $payment->id,
+            'updated_at' => now(),
+        ]);
+
+        $this->assertNull(
+            $service->recordSettledPurchase($buyer, 'course_cart_order', $orderId, 1000, 'BDT'),
+            'A paid-looking order must not earn commission while its linked provider payment is still pending.'
+        );
+
+        DB::table('universal_payment_transactions')->where('id', $payment->id)->update([
+            'status' => 'verified',
+            'verified_at' => now(),
             'updated_at' => now(),
         ]);
 
@@ -609,6 +620,26 @@ final class ReferralIncomeRedTeamHardeningTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+
+        // A missing Universal Payment invoice binding must fail closed before
+        // any referral reversal ledger row or commission mutation is written.
+        DB::table('universal_payment_transactions')->where('id', $transaction->id)
+            ->update(['fee_invoice_id' => null]);
+        try {
+            $service->reverseSettledPurchase($buyer, 'course_cart_order', $orderId, $refundOneId, 200, 'BDT');
+            $this->fail('A course-cart refund must reject a missing original-payment invoice binding.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('verified Universal Payment transaction', $exception->getMessage());
+        }
+        $this->assertDatabaseCount('referral_commission_reversals', 0);
+        $this->assertDatabaseHas('referral_commissions', [
+            'id' => $commissionId,
+            'commission_amount' => 50,
+            'status' => 'pending',
+        ]);
+
+        DB::table('universal_payment_transactions')->where('id', $transaction->id)
+            ->update(['fee_invoice_id' => $order->invoice_id]);
 
         $firstReversal = $service->reverseSettledPurchase($buyer, 'course_cart_order', $orderId, $refundOneId, 200, 'BDT');
         $firstRetry = $service->reverseSettledPurchase($buyer, 'course_cart_order', $orderId, $refundOneId, 200, 'BDT');
