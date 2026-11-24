@@ -33,23 +33,24 @@
             if ($lessonCount === 0 || $enrollmentCount === 0) {
                 continue;
             }
-            $completedPairs = collect();
-            if ($studentIds->isNotEmpty()) {
-                $completedPairs = \Illuminate\Support\Facades\DB::table('student_activity_events')
-                    ->whereIn('user_id', $studentIds)
-                    ->where('event_type', 'lesson_completed')
-                    ->where('subject_type', 'lesson')
-                    ->whereIn('subject_id', $lessonIds)
-                    ->get(['user_id', 'subject_id'])
-                    ->map(fn ($event) => $event->user_id . ':' . $event->subject_id)
-                    ->unique();
-            }
+            $completedPairsQuery = \Illuminate\Support\Facades\DB::table('student_activity_events')
+                ->select('user_id', 'subject_id')
+                ->whereIn('user_id', $studentIds)
+                ->where('event_type', 'lesson_completed')
+                ->where('subject_type', 'lesson')
+                ->whereIn('subject_id', $lessonIds)
+                ->distinct();
+            // Count distinct learner/lesson pairs in SQL instead of loading every
+            // matching activity event into PHP memory (duplicate events are common).
+            $completedLessonCount = \Illuminate\Support\Facades\DB::query()
+                ->fromSub($completedPairsQuery, 'completed_lesson_pairs')
+                ->count();
             $denominator = $lessonCount * $enrollmentCount;
             $progressCourses->push((object) [
                 'title' => $course->title,
                 'enrollments' => $enrollmentCount,
-                'completed_lessons' => $completedPairs->count(),
-                'progress' => min(100, (int) round(($completedPairs->count() / $denominator) * 100)),
+                'completed_lessons' => $completedLessonCount,
+                'progress' => min(100, (int) round(($completedLessonCount / $denominator) * 100)),
             ]);
         }
         $progressCourses = $progressCourses->sortByDesc('progress')->take(5)->values();
