@@ -35,6 +35,7 @@ class DashboardCustomizationTest extends TestCase
             ->assertSee('Analytics Overview')
             ->assertSee('Recent Activities')
             ->assertSee('Quick Actions')
+            ->assertSee('Module Dashboards')
             ->assertSee('data-live-metric="students"', false)
             ->assertSee('data-live-metric="teachers"', false)
             ->assertSee('data-live-metric="courses"', false)
