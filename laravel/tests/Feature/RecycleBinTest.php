@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Models\AuditLog;
 use Illuminate\Support\Facades\DB;
 use Plugins\Modules\StudentManagement\Models\Student;
 use Plugins\Modules\TeacherManagement\Models\Teacher;
@@ -70,6 +71,39 @@ class RecycleBinTest extends TestCase
         ]);
     }
 
+
+    public function test_student_restore_rolls_back_when_required_audit_fails(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['student-management']);
+        $admin = $this->createUserWithRole('admin');
+        $learner = $this->createUserWithRole('student');
+        $student = Student::query()->create([
+            'user_id' => $learner->id,
+            'student_code' => 'RECYCLE-AUDIT-FAIL-' . $learner->id,
+            'admission_date' => now()->toDateString(),
+            'status' => 'active',
+        ]);
+        $student->delete();
+
+        AuditLog::creating(static function (): void {
+            throw new RuntimeException('forced recycle-bin audit failure');
+        });
+
+        try {
+            $this->actingAs($admin)->post('/admin/recycle-bin/students/' . $student->id . '/restore')
+                ->assertStatus(500);
+
+            $this->assertSoftDeleted('students', ['id' => $student->id]);
+            $this->assertDatabaseHas('users', ['id' => $learner->id, 'is_active' => true]);
+            $this->assertDatabaseMissing('audit_logs', [
+                'action' => 'recycle_bin.student_restored',
+                'entity_id' => (string) $student->id,
+            ]);
+        } finally {
+            AuditLog::flushEventListeners();
+        }
+    }
 
     public function test_teacher_restore_does_not_reactivate_account_after_later_security_deactivation(): void
     {
