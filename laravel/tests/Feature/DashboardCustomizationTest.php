@@ -22,6 +22,11 @@ class DashboardCustomizationTest extends TestCase
             ->assertSee('aec-admin-dashboard-page', false)
             ->assertSee('aria-current="page"', false)
             ->assertSee('aec-dashboard-welcome', false)
+            ->assertSee('aec-dashboard-welcome__date', false)
+            ->assertSee('aec-dashboard-kpi--users', false)
+            ->assertSee('body.aec-admin-dashboard-page #admin-sidebar', false)
+            ->assertDontSee('body:has(#dashboard-widgets)', false)
+            ->assertSee('Manage Users')
             ->assertSee('Welcome back');
 
         $this->actingAs($admin)->post(route('admin.dashboard.widgets'), [
