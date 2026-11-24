@@ -692,6 +692,9 @@ final class CourseAssessmentGradingBranchIsolationTest extends TestCase
             throw new RuntimeException('forced assessment audit persistence failure');
         });
 
+        // Let the injected persistence exception escape Laravel's HTTP exception handler.
+        $this->withoutExceptionHandling();
+
         try {
             $caught = null;
             try {
