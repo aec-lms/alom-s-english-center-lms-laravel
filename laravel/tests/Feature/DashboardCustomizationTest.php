@@ -27,7 +27,19 @@ class DashboardCustomizationTest extends TestCase
             ->assertSee('body.aec-admin-dashboard-page #admin-sidebar', false)
             ->assertDontSee('body:has(#dashboard-widgets)', false)
             ->assertSee('Manage Users')
-            ->assertSee('Welcome back');
+            ->assertSee('Welcome Back')
+            ->assertSee('Total Students')
+            ->assertSee('Total Teachers')
+            ->assertSee('Total Courses')
+            ->assertSee('Total Batches')
+            ->assertSee('Analytics Overview')
+            ->assertSee('Recent Activities')
+            ->assertSee('Quick Actions')
+            ->assertSee('data-live-metric="students"', false)
+            ->assertSee('data-live-metric="teachers"', false)
+            ->assertSee('data-live-metric="courses"', false)
+            ->assertSee('data-live-metric="batches"', false)
+            ->assertSee('aec-dashboard-panel', false);
 
         $this->actingAs($admin)->post(route('admin.dashboard.widgets'), [
             'widgets' => ['users', 'system_info'],
@@ -138,7 +150,7 @@ class DashboardCustomizationTest extends TestCase
 
         $this->actingAs($admin)->getJson(route('admin.dashboard.refresh'))
             ->assertOk()
-            ->assertJsonStructure(['metrics' => ['users', 'plugins_total', 'plugins_enabled', 'backups'], 'refreshed_at'])
+            ->assertJsonStructure(['metrics' => ['users', 'students', 'teachers', 'courses', 'batches', 'plugins_total', 'plugins_enabled', 'backups'], 'refreshed_at'])
             ->assertHeader('Cache-Control', 'no-store, private');
     }
 
