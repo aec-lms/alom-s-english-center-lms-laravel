@@ -137,4 +137,62 @@ class DashboardPluginWidgetsTest extends TestCase
             ->assertDontSee('Exam Performance')
             ->assertSee('Registered Accounts');
     }
+    public function test_course_progress_counts_unique_learner_lesson_pairs_not_duplicate_events(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['course-management', 'student-tracking']);
+        $admin = $this->createUserWithRole('admin');
+        $permissionIds = DB::table('permissions')->whereIn('slug', [
+            'courses.manage', 'student-tracking.view',
+        ])->pluck('id');
+        $this->assertCount(2, $permissionIds);
+        $admin->roles()->first()->permissions()->syncWithoutDetaching($permissionIds);
+
+        $now = now();
+        $courseId = DB::table('courses')->insertGetId([
+            'code' => 'PROGRESS-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'title' => 'Progress Fixture Course',
+            'slug' => 'progress-fixture-' . bin2hex(random_bytes(3)),
+            'price' => 0,
+            'status' => 'published',
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+        $lessonOne = DB::table('course_lessons')->insertGetId([
+            'course_id' => $courseId, 'title' => 'Lesson One', 'sort_order' => 1,
+            'created_at' => $now, 'updated_at' => $now,
+        ]);
+        DB::table('course_lessons')->insert([
+            'course_id' => $courseId, 'title' => 'Lesson Two', 'sort_order' => 2,
+            'created_at' => $now, 'updated_at' => $now,
+        ]);
+        $student = $this->createUserWithRole('student');
+        DB::table('enrollments')->insert([
+            'user_id' => $student->id, 'course_id' => $courseId, 'branch_id' => null,
+            'status' => 'active', 'created_at' => $now, 'updated_at' => $now,
+        ]);
+        DB::table('student_activity_events')->insert([
+            [
+                'user_id' => $student->id, 'event_type' => 'lesson_completed',
+                'subject_type' => 'lesson', 'subject_id' => (string) $lessonOne,
+                'occurred_at' => $now, 'created_at' => $now, 'updated_at' => $now,
+            ],
+            [
+                'user_id' => $student->id, 'event_type' => 'lesson_completed',
+                'subject_type' => 'lesson', 'subject_id' => (string) $lessonOne,
+                'occurred_at' => $now, 'created_at' => $now, 'updated_at' => $now,
+            ],
+        ]);
+
+        $this->actingAs($admin)->post('/admin/dashboard/widgets', [
+            'widgets' => ['course-management.live-classes', 'student-tracking.course-progress'],
+        ])->assertRedirect('/admin');
+
+        $this->actingAs($admin)->get('/admin')
+            ->assertOk()
+            ->assertSee('Progress Fixture Course')
+            ->assertSee('50%')
+            ->assertSee('1 completed lesson records');
+    }
+
 }
