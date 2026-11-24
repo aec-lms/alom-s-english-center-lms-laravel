@@ -1,16 +1,16 @@
 @php
     $progressCourses = collect();
-    $schema = \\Illuminate\\Support\\Facades\\Schema::class;
+    $schema = \Illuminate\Support\Facades\Schema::class;
     if ($schema::hasTable('courses') && $schema::hasTable('course_lessons') && $schema::hasTable('enrollments') && $schema::hasTable('student_activity_events')) {
-        $courses = \\Illuminate\\Support\\Facades\\DB::table('courses')
+        $courses = \Illuminate\Support\Facades\DB::table('courses')
             ->where('status', 'published')
             ->whereNull('deleted_at')
             ->orderBy('title')
             ->limit(8)
             ->get(['id', 'title']);
         foreach ($courses as $course) {
-            $lessonIds = \\Illuminate\\Support\\Facades\\DB::table('course_lessons')->where('course_id', $course->id)->pluck('id')->map(fn ($id) => (string) $id);
-            $studentIds = \\Illuminate\\Support\\Facades\\DB::table('enrollments')->where('course_id', $course->id)->whereIn('status', ['active', 'completed'])->distinct()->pluck('user_id');
+            $lessonIds = \Illuminate\Support\Facades\DB::table('course_lessons')->where('course_id', $course->id)->pluck('id')->map(fn ($id) => (string) $id);
+            $studentIds = \Illuminate\Support\Facades\DB::table('enrollments')->where('course_id', $course->id)->whereIn('status', ['active', 'completed'])->distinct()->pluck('user_id');
             $lessonCount = $lessonIds->count();
             $enrollmentCount = $studentIds->count();
             if ($lessonCount === 0 || $enrollmentCount === 0) {
@@ -18,7 +18,7 @@
             }
             $completedPairs = collect();
             if ($studentIds->isNotEmpty()) {
-                $completedPairs = \\Illuminate\\Support\\Facades\\DB::table('student_activity_events')
+                $completedPairs = \Illuminate\Support\Facades\DB::table('student_activity_events')
                     ->whereIn('user_id', $studentIds)
                     ->where('event_type', 'lesson_completed')
                     ->where('subject_type', 'lesson')
