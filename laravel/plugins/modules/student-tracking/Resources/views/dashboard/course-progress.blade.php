@@ -2,10 +2,12 @@
     $progressCourses = collect();
     $schema = \Illuminate\Support\Facades\Schema::class;
     if ($schema::hasTable('courses') && $schema::hasTable('course_lessons') && $schema::hasTable('enrollments') && $schema::hasTable('student_activity_events')) {
-        $courses = \Illuminate\Support\Facades\DB::table('courses')
-            ->where('status', 'published')
-            ->whereNull('deleted_at')
-            ->orderBy('title')
+        $courseQuery = \Illuminate\Support\Facades\DB::table('courses')
+            ->where('status', 'published');
+        if ($schema::hasColumn('courses', 'deleted_at')) {
+            $courseQuery->whereNull('deleted_at');
+        }
+        $courses = $courseQuery->orderBy('title')
             ->limit(8)
             ->get(['id', 'title']);
         foreach ($courses as $course) {
