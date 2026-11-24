@@ -34,8 +34,9 @@ class DashboardCustomizationTest extends TestCase
             ->assertOk()
             ->assertSee('Registered Accounts')
             ->assertSee('System Information')
-            ->assertDontSee('data-dashboard-widget="audit_trail"', false)
-            ->assertDontSee('data-dashboard-widget="backups"', false);
+            // Assert rendered widget elements, not CSS selectors that may style hidden widgets.
+            ->assertDontSee('<section data-dashboard-widget="audit_trail"', false)
+            ->assertDontSee('<section data-dashboard-widget="backups"', false);
     }
 
     public function test_admin_dashboard_uses_edupro_inspired_hero_and_dashboard_only_visual_skin(): void
