@@ -22,7 +22,7 @@ class DashboardCustomizationTest extends TestCase
             ->assertSee('aec-admin-dashboard-page', false)
             ->assertSee('aria-current="page"', false)
             ->assertSee('aec-dashboard-welcome', false)
-            ->assertSee('aec-dashboard-welcome__date', false)
+            ->assertSee('aec-dashboard-welcome__mission', false)
             ->assertSee('aec-dashboard-kpi--users', false)
             ->assertSee('body.aec-admin-dashboard-page #admin-sidebar', false)
             ->assertDontSee('body:has(#dashboard-widgets)', false)
@@ -39,7 +39,9 @@ class DashboardCustomizationTest extends TestCase
             ->assertSee('data-live-metric="teachers"', false)
             ->assertSee('data-live-metric="courses"', false)
             ->assertSee('data-live-metric="batches"', false)
-            ->assertSee('aec-dashboard-panel', false);
+            ->assertSee('aec-dashboard-panel', false)
+            ->assertSee('data-refresh-url=', false)
+            ->assertDontSee('<div id="dashboard-widgets"<div', false);
 
         $this->actingAs($admin)->post(route('admin.dashboard.widgets'), [
             'widgets' => ['users', 'system_info'],
