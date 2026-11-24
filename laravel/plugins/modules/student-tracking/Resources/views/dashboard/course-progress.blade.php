@@ -1,7 +1,17 @@
 @php
     $progressCourses = collect();
     $schema = \Illuminate\Support\Facades\Schema::class;
-    if ($schema::hasTable('courses') && $schema::hasTable('course_lessons') && $schema::hasTable('enrollments') && $schema::hasTable('student_activity_events')) {
+    $requiredColumns = [
+        'courses' => ['id', 'title', 'status'],
+        'course_lessons' => ['id', 'course_id'],
+        'enrollments' => ['id', 'course_id', 'user_id', 'status'],
+        'student_activity_events' => ['user_id', 'event_type', 'subject_type', 'subject_id'],
+    ];
+    $hasProgressSchema = collect($requiredColumns)->every(
+        fn (array $columns, string $table): bool => $schema::hasTable($table)
+            && collect($columns)->every(fn (string $column): bool => $schema::hasColumn($table, $column))
+    );
+    if ($hasProgressSchema) {
         $courseQuery = \Illuminate\Support\Facades\DB::table('courses as c')
             ->leftJoin('enrollments as e', function ($join): void {
                 $join->on('e.course_id', '=', 'c.id')->whereIn('e.status', ['active', 'completed']);
