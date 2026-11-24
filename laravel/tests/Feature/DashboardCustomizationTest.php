@@ -49,6 +49,17 @@ class DashboardCustomizationTest extends TestCase
             ->assertDontSee('<section data-dashboard-widget="backups"', false);
     }
 
+    public function test_admin_dashboard_visual_skin_is_not_applied_to_other_admin_pages(): void
+    {
+        $this->markSystemInstalled();
+        $admin = $this->createUserWithRole('admin', null, 'dashboard-scope-admin@aec.test');
+
+        $this->actingAs($admin)->get(route('admin.plugins.index'))
+            ->assertOk()
+            ->assertDontSee('aec-admin-dashboard-page', false)
+            ->assertDontSee('aec-dashboard-welcome', false);
+    }
+
     public function test_dashboard_widget_preferences_are_isolated_per_admin(): void
     {
         $this->markSystemInstalled();
