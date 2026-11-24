@@ -169,7 +169,7 @@ Before recommending merge, the primary owner must verify and record all of the f
 
 ## 2026-11-24 live GitHub reconciliation (supersedes stale PR status rows above)
 
-**Snapshot:** 2026-11-24; default branch main; current main HEAD 50ce3c8aff0292d0fd78924bb3b123a9d872fbd6. This appendix records the 23 currently open PRs from live GitHub metadata. PR author is recorded as the proposed task owner only where no more specific owner is registered; shared-file ownership decisions below remain authoritative. A green workflow does not replace fresh independent approval, current-main reconciliation, visual acceptance or external staging evidence.
+**Snapshot:** 2026-11-24; default branch main; current main HEAD 50ce3c8aff0292d0fd78924bb3b123a9d872fbd6. The live audit covered 23 application PRs; this reconciliation document was then opened as PR #470, bringing the total open count to 24. PR author is recorded as the proposed task owner only where no more specific owner is registered; shared-file ownership decisions below remain authoritative. A green workflow does not replace fresh independent approval, current-main reconciliation, visual acceptance or external staging evidence.
 
 | PR | Bounded scope | Proposed primary owner | Current head (short SHA) | Exact-head validation | Merge/review gate | Dependencies / overlap |
 |---|---|---|---|---|---|---|
@@ -196,6 +196,7 @@ Before recommending merge, the primary owner must verify and record all of the f
 | [#399](../pull/399) | Assessment grader account/role/profile/branch revalidation | Alomsenglishcenter | cc6bd2b | SQLite + MySQL 8 + Browser E2E + Composer Audit + CodeQL passed | CHANGES_REQUESTED: required grading audit must be persisted with logRequired() inside grading transaction | Keep teacher-profile → linked-account → role lock order; add audit-failure rollback regression |
 | [#357](../pull/357) | Preserve disabled teacher state across profile lifecycle operations | mdlalchandakand-cell | 22c086e | SQLite + MySQL 8 + Browser E2E + Composer Audit + CodeQL passed | GitHub mergeable=false; 24 commits behind main; CHANGES_REQUESTED | RecycleBinController overlaps #461; AuditLogger overlaps #381 |
 | [#381](../pull/381) | Learning Rewards: XP, streaks, badges, attendance rewards and privacy leaderboard | mdlalchandakand-cell | 7029114 | SQLite + MySQL 8 + Browser E2E + Composer Audit + CodeQL passed | GitHub mergeable=false; stale base; CHANGES_REQUESTED | AuditLogger overlaps #357; registry/course-content files overlap #378/#386; portal view overlaps #445 |
+| [#470](../pull/470) | Reconcile active PR ownership, exact-head CI and merge gates in this register | aec-lms | 6804d7e (before this self-reference update) | Documentation-only; workflow checks not yet returned | Independent review requested; do not merge before current register diff is reviewed | Governance record for the 23 application PRs above; no code ownership reassignment |
 
 ### Live ownership decisions and sequencing
 
@@ -212,7 +213,7 @@ Before recommending merge, the primary owner must verify and record all of the f
 
 ### Reconciliation log — 2026-11-24
 
-- Recorded all 23 currently open PRs and their exact head SHAs/owners.
+- Recorded all 23 application PRs and their exact head SHAs/owners; this governance update is PR #470 (24th open PR).
 - Attendance test-clock fix from #469 propagated to #460–#468; all nine affected Laravel workflows were still running at snapshot time.
 - Dashboard hidden-widget tests in #465/#467 now assert actual rendered section markup rather than matching CSS selectors.
 - Requested independent review on #469; reviewer request is pending.
