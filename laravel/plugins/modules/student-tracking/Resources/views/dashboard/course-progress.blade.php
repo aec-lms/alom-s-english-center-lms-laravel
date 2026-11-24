@@ -2,14 +2,19 @@
     $progressCourses = collect();
     $schema = \Illuminate\Support\Facades\Schema::class;
     if ($schema::hasTable('courses') && $schema::hasTable('course_lessons') && $schema::hasTable('enrollments') && $schema::hasTable('student_activity_events')) {
-        $courseQuery = \Illuminate\Support\Facades\DB::table('courses')
-            ->where('status', 'published');
+        $courseQuery = \Illuminate\Support\Facades\DB::table('courses as c')
+            ->leftJoin('enrollments as e', function ($join): void {
+                $join->on('e.course_id', '=', 'c.id')->whereIn('e.status', ['active', 'completed']);
+            })
+            ->where('c.status', 'published');
         if ($schema::hasColumn('courses', 'deleted_at')) {
-            $courseQuery->whereNull('deleted_at');
+            $courseQuery->whereNull('c.deleted_at');
         }
-        $courses = $courseQuery->orderBy('title')
+        $courses = $courseQuery->select(['c.id', 'c.title'])
+            ->groupBy('c.id', 'c.title')
+            ->orderByRaw('COUNT(DISTINCT e.id) DESC')
             ->limit(8)
-            ->get(['id', 'title']);
+            ->get();
         foreach ($courses as $course) {
             $lessonIds = \Illuminate\Support\Facades\DB::table('course_lessons')->where('course_id', $course->id)->pluck('id')->map(fn ($id) => (string) $id);
             $studentIds = \Illuminate\Support\Facades\DB::table('enrollments')->where('course_id', $course->id)->whereIn('status', ['active', 'completed'])->distinct()->pluck('user_id');
