@@ -43,6 +43,9 @@ class TeacherAttendanceRegisterTest extends TestCase
         $teacherUser=$this->createUserWithRole('teacher',$branch,'teacher-punch@aec.test');
         $teacher=Teacher::query()->create(['user_id'=>$teacherUser->id,'branch_id'=>$branch,'employee_code'=>'TATT-002','is_active'=>true]);
 
+        // Pin the first punch to a stable daytime hour so the 8-hour shift
+        // remains on the same attendance date regardless of CI runner time.
+        $this->travelTo(now()->startOfDay()->addHours(9));
         $this->actingAs($teacherUser)->post('/attendance/teacher/punch')->assertRedirect()->assertSessionHasNoErrors();
         $this->assertDatabaseHas('teacher_attendance_records',['teacher_id'=>$teacher->id,'status'=>'present','source'=>'self']);
         $this->travel(8)->hours();
