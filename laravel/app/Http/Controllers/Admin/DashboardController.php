@@ -37,17 +37,28 @@ class DashboardController extends Controller
             $this->ensureAssignedBranch($actor);
         }
 
+        $branchId = $isBranchManager ? (int) $actor->branch_id : null;
         $metrics = [
             'users' => $isBranchManager
                 ? $this->branchUserCount((int) $actor->branch_id)
                 : User::query()->count(),
+            'students' => $this->tableCount('students', $branchId),
+            'teachers' => $this->tableCount('teachers', $branchId),
+            'courses' => $this->tableCount('courses', $branchId),
+            'batches' => $this->tableCount('batches', $branchId),
             'plugins_total' => $isBranchManager ? 0 : PluginRecord::query()->count(),
             'plugins_enabled' => $isBranchManager ? 0 : PluginRecord::query()->where('is_enabled', true)->count(),
             'backups' => $isBranchManager ? 0 : BackupRecord::query()->count(),
             'core_version' => (string) config('lms.core_version', '2.0.0'),
             'php_version' => PHP_VERSION,
         ];
-        $recentAudits = $isBranchManager ? collect() : AuditLog::query()->with('user')->latest()->limit(10)->get();
+        $dashboardAnalytics = [
+            'labels' => $this->recentMonthLabels(),
+            'students' => $this->monthlyTableCounts('students', $branchId),
+            'courses' => $this->monthlyTableCounts('courses', $branchId),
+            'batches' => $this->monthlyTableCounts('batches', $branchId),
+        ];
+        $recentAudits = $isBranchManager ? collect() : AuditLog::query()->with('user')->latest()->limit(8)->get();
         $widgetDefinitions = $this->widgetDefinitions($actor);
         $widgets = $this->widgetsFor($actor?->id, $widgetDefinitions, $actor);
         $widgetAnalytics = $this->widgetAnalytics($actor?->id);
@@ -56,7 +67,7 @@ class DashboardController extends Controller
         $setupIncomplete = !$isBranchManager && SystemSetting::query()->where('key', 'setup.wizard.completed')->value('value') !== '1';
         $motionSettings = $this->motionSettings();
 
-        return view('admin.dashboard', compact('metrics', 'recentAudits', 'widgets', 'widgetDefinitions', 'widgetSizes', 'widgetAnalytics', 'roleDefaultWidgets', 'setupIncomplete', 'isBranchManager', 'motionSettings'));
+        return view('admin.dashboard', compact('metrics', 'dashboardAnalytics', 'recentAudits', 'widgets', 'widgetDefinitions', 'widgetSizes', 'widgetAnalytics', 'roleDefaultWidgets', 'setupIncomplete', 'isBranchManager', 'motionSettings'));
     }
 
     public function saveWidgets(Request $request): RedirectResponse
@@ -116,6 +127,10 @@ class DashboardController extends Controller
         return response()->json([
             'metrics' => [
                 'users' => $isBranchManager ? $this->branchUserCount((int) $actor->branch_id) : User::query()->count(),
+                'students' => $this->tableCount('students', $isBranchManager ? (int) $actor->branch_id : null),
+                'teachers' => $this->tableCount('teachers', $isBranchManager ? (int) $actor->branch_id : null),
+                'courses' => $this->tableCount('courses', $isBranchManager ? (int) $actor->branch_id : null),
+                'batches' => $this->tableCount('batches', $isBranchManager ? (int) $actor->branch_id : null),
                 'plugins_total' => $isBranchManager ? 0 : PluginRecord::query()->count(),
                 'plugins_enabled' => $isBranchManager ? 0 : PluginRecord::query()->where('is_enabled', true)->count(),
                 'backups' => $isBranchManager ? 0 : BackupRecord::query()->count(),
@@ -207,6 +222,75 @@ class DashboardController extends Controller
         }
 
         return array_replace(self::MOTION_DEFAULTS, array_intersect_key($stored, self::MOTION_DEFAULTS));
+    }
+
+    /**
+     * Count optional plugin tables without assuming that a module is installed.
+     * Branch managers only see records from tables that expose branch ownership.
+     */
+    private function tableCount(string $table, ?int $branchId = null): int
+    {
+        if (!Schema::hasTable($table)) {
+            return 0;
+        }
+
+        if ($branchId !== null && !Schema::hasColumn($table, 'branch_id')) {
+            return 0;
+        }
+
+        $query = DB::table($table);
+        if (Schema::hasColumn($table, 'deleted_at')) {
+            $query->whereNull('deleted_at');
+        }
+        if ($branchId !== null) {
+            $query->where('branch_id', $branchId);
+        }
+
+        return $query->count();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function recentMonthLabels(): array
+    {
+        return collect(range(5, 0))
+            ->map(fn (int $months): string => now()->startOfMonth()->subMonths($months)->format('M'))
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Six-month counts are derived from real created_at timestamps; missing
+     * or branch-unscoped module tables safely return zeroes.
+     *
+     * @return array<int, int>
+     */
+    private function monthlyTableCounts(string $table, ?int $branchId = null): array
+    {
+        if (!Schema::hasTable($table) || !Schema::hasColumn($table, 'created_at')) {
+            return array_fill(0, 6, 0);
+        }
+
+        if ($branchId !== null && !Schema::hasColumn($table, 'branch_id')) {
+            return array_fill(0, 6, 0);
+        }
+
+        $counts = [];
+        foreach (range(5, 0) as $monthsAgo) {
+            $month = now()->startOfMonth()->subMonths($monthsAgo);
+            $query = DB::table($table)
+                ->whereBetween('created_at', [$month->copy()->startOfMonth(), $month->copy()->endOfMonth()]);
+            if (Schema::hasColumn($table, 'deleted_at')) {
+                $query->whereNull('deleted_at');
+            }
+            if ($branchId !== null) {
+                $query->where('branch_id', $branchId);
+            }
+            $counts[] = $query->count();
+        }
+
+        return $counts;
     }
 
     private function branchUserCount(int $branchId): int
