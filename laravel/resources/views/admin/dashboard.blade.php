@@ -90,110 +90,177 @@
         </details>
     </div>
 
-    <section class="aec-dashboard-welcome relative isolate overflow-hidden rounded-3xl border border-blue-900/20 px-5 py-5 text-white shadow-lg sm:px-7 sm:py-6" aria-labelledby="aec-dashboard-welcome-title">
-        <div class="absolute inset-0 -z-10 bg-gradient-to-r from-[#10275d] via-[#1555a7] to-[#087f9b]"></div>
-        <div class="pointer-events-none absolute -right-10 -top-16 -z-10 h-56 w-56 rounded-full bg-cyan-300/25 blur-3xl"></div>
-        <div class="pointer-events-none absolute -bottom-20 left-1/3 -z-10 h-44 w-72 rounded-full bg-blue-300/20 blur-3xl"></div>
-        <div class="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+    <section class="aec-dashboard-welcome relative isolate overflow-hidden rounded-3xl border border-blue-900/20 px-5 py-6 text-white shadow-lg sm:px-7 sm:py-7" aria-labelledby="aec-dashboard-welcome-title">
+        <div class="aec-dashboard-welcome__gradient" aria-hidden="true"></div>
+        <div class="aec-dashboard-welcome__glow aec-dashboard-welcome__glow--one" aria-hidden="true"></div>
+        <div class="aec-dashboard-welcome__glow aec-dashboard-welcome__glow--two" aria-hidden="true"></div>
+        <div class="relative z-10 flex flex-col items-start justify-between gap-5 lg:flex-row lg:items-center">
             <div class="max-w-3xl">
-                <span class="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[.18em] text-cyan-100">AEC LMS · Admin Workspace</span>
+                <span class="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[.18em] text-cyan-100">
+                    <span class="h-1.5 w-1.5 rounded-full bg-emerald-300 shadow-[0_0_0_4px_rgba(110,231,183,.12)]" aria-hidden="true"></span>
+                    AEC LMS · Admin Workspace
+                </span>
                 <h2 id="aec-dashboard-welcome-title" class="mt-3 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">Welcome back, {{ auth()->user()?->name ?? 'Administrator' }}</h2>
                 <p class="mt-1.5 max-w-2xl text-sm leading-relaxed text-blue-100">Your institution operations, platform health and learning services — together in one workspace.</p>
+                @can('core.users.manage')
+                    <a href="{{ route('admin.users.index') }}" class="aec-dashboard-welcome__action mt-5 inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white px-4 py-2.5 text-xs font-extrabold text-blue-900 shadow-lg shadow-blue-950/15 transition hover:-translate-y-0.5 hover:bg-cyan-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-blue-800">
+                        Manage Users <span aria-hidden="true">→</span>
+                    </a>
+                @endcan
             </div>
-            <div class="hidden shrink-0 rounded-2xl border border-white/20 bg-slate-950/15 px-5 py-3 text-right backdrop-blur-sm sm:block">
-                <div class="text-[10px] font-bold uppercase tracking-[.16em] text-cyan-100">Workspace</div>
-                <div class="mt-1 text-lg font-extrabold text-white">Overview</div>
-                <div class="text-xs text-blue-100">Live, permission-aware data</div>
+            <div class="aec-dashboard-welcome__date shrink-0 rounded-2xl border border-white/20 bg-slate-950/15 px-5 py-3 backdrop-blur-sm">
+                <div class="text-[10px] font-bold uppercase tracking-[.16em] text-cyan-100">Today</div>
+                <div class="mt-1 text-base font-extrabold text-white">{{ now()->translatedFormat('l, d F Y') }}</div>
+                <div class="mt-1 text-xs text-blue-100">Live institutional overview</div>
             </div>
         </div>
     </section>
     <style>
-    body.aec-admin-dashboard-page { background:linear-gradient(180deg,#f8fafc 0%,#f1f5f9 100%) !important; }
-    body.aec-admin-dashboard-page aside {
-        background:linear-gradient(180deg,#081638 0%,#101f49 100%) !important;
+    body.aec-admin-dashboard-page { background:linear-gradient(180deg,#f8fbff 0%,#f1f5fb 100%) !important; }
+    body.aec-admin-dashboard-page main { max-width:none; }
+    body.aec-admin-dashboard-page #admin-sidebar {
+        background:linear-gradient(180deg,#0b1d42 0%,#102b59 58%,#0b1b3b 100%) !important;
         border-right-color:rgba(148,163,184,.16) !important;
+        box-shadow:12px 0 36px rgba(15,23,42,.08);
     }
-    body.aec-admin-dashboard-page aside > div:first-child {
-        background:transparent !important;
+    body.aec-admin-dashboard-page #admin-sidebar > div:first-child {
+        background:linear-gradient(145deg,rgba(24,57,105,.82),rgba(12,32,68,.4)) !important;
         border-bottom-color:rgba(148,163,184,.16) !important;
     }
-    body.aec-admin-dashboard-page header {
-        background:rgba(255,255,255,.94) !important;
-        border-bottom-color:#e2e8f0 !important;
-        box-shadow:0 8px 24px rgba(15,23,42,.045) !important;
+    body.aec-admin-dashboard-page #admin-sidebar nav a {
+        display:flex; align-items:center; min-height:40px; margin-block:3px;
+        border:1px solid transparent; border-radius:11px; color:#c6d4e9 !important;
+        transition:background-color 180ms ease,border-color 180ms ease,color 180ms ease,transform 180ms ease;
     }
-    .aec-dashboard-welcome { isolation:isolate; background:#10275d; }
+    body.aec-admin-dashboard-page #admin-sidebar nav a:hover {
+        background:rgba(96,165,250,.12) !important; border-color:rgba(96,165,250,.18) !important;
+        color:#fff !important; transform:translateX(2px);
+    }
+    body.aec-admin-dashboard-page #admin-sidebar nav a[aria-current="page"] {
+        background:linear-gradient(105deg,#2563eb,#4f6fe8) !important;
+        border-color:rgba(191,219,254,.24) !important; color:#fff !important;
+        box-shadow:0 8px 20px rgba(30,64,175,.28);
+    }
+    body.aec-admin-dashboard-page #admin-sidebar nav > div { color:#8fa6c7 !important; letter-spacing:.15em; }
+    body.aec-admin-dashboard-page main > header {
+        background:rgba(255,255,255,.94) !important; border-bottom-color:#e4ebf5 !important;
+        box-shadow:0 8px 24px rgba(15,23,42,.045) !important; color:#0f172a !important;
+    }
+    body.aec-admin-dashboard-page main > header .text-slate-900 { color:#0f172a !important; }
+    body.aec-admin-dashboard-page main > header .text-slate-500,
+    body.aec-admin-dashboard-page main > header .text-slate-400 { color:#64748b !important; }
+    body.aec-admin-dashboard-page main > header a:not(.bg-blue-600) {
+        background:#fff !important; border-color:#e2e8f0 !important; color:#334155 !important;
+    }
+    .aec-dashboard-welcome { isolation:isolate; min-height:178px; background:#10275d; }
+    .aec-dashboard-welcome__gradient {
+        position:absolute; inset:0; z-index:-2;
+        background:linear-gradient(112deg,#102957 0%,#1555a7 48%,#087f9b 100%);
+    }
+    .aec-dashboard-welcome__glow { position:absolute; z-index:-1; pointer-events:none; border-radius:999px; filter:blur(2px); }
+    .aec-dashboard-welcome__glow--one {
+        width:270px; height:270px; right:7%; top:-190px;
+        background:rgba(103,232,249,.18); box-shadow:0 0 90px rgba(103,232,249,.18);
+    }
+    .aec-dashboard-welcome__glow--two { width:190px; height:190px; right:28%; bottom:-150px; background:rgba(96,165,250,.18); }
+    .aec-dashboard-welcome__date { min-width:220px; text-align:right; }
+    .aec-dashboard-welcome__action { text-decoration:none; }
+    #dashboard-widgets { align-items:stretch; gap:1rem; }
     #dashboard-widgets [data-dashboard-widget] {
-        position:relative;
-        min-width:0;
-        overflow:hidden;
-        border-radius:1.15rem;
-        border-color:var(--aec-border);
-        background-color:var(--aec-surface);
+        position:relative; min-width:0; overflow:hidden;
+        border:1px solid #e3eaf4 !important; border-radius:1.15rem !important;
+        background:#fff !important; color:#17243a !important;
         box-shadow:0 10px 28px rgba(15,23,42,.055);
-        transition:box-shadow 220ms ease,border-color 220ms ease;
+        transition:transform 200ms ease,box-shadow 200ms ease,border-color 200ms ease;
     }
     #dashboard-widgets [data-dashboard-widget]::before {
-        content:"";
-        position:absolute;
-        inset:0 0 auto;
-        height:3px;
-        background:linear-gradient(90deg,#2563eb,#14b8a6,#8b5cf6);
-        opacity:.8;
+        content:""; position:absolute; inset:0 0 auto; height:3px;
+        background:linear-gradient(90deg,#2563eb,#14b8a6,#8b5cf6); opacity:.8; pointer-events:none;
+    }
+    #dashboard-widgets [data-dashboard-widget] h1,
+    #dashboard-widgets [data-dashboard-widget] h2,
+    #dashboard-widgets [data-dashboard-widget] h3,
+    #dashboard-widgets [data-dashboard-widget] strong,
+    #dashboard-widgets [data-dashboard-widget] .text-slate-900 { color:#17243a !important; }
+    #dashboard-widgets [data-dashboard-widget] .text-slate-700,
+    #dashboard-widgets [data-dashboard-widget] .text-slate-600 { color:#475569 !important; }
+    #dashboard-widgets [data-dashboard-widget] .text-slate-500,
+    #dashboard-widgets [data-dashboard-widget] .text-slate-400 { color:#64748b !important; }
+    #dashboard-widgets [data-dashboard-widget] .border-slate-200,
+    #dashboard-widgets [data-dashboard-widget] .border-slate-300 { border-color:#e2e8f0 !important; }
+    #dashboard-widgets [data-dashboard-widget="users"] {
+        border-color:rgba(37,99,235,.22) !important;
+        background:linear-gradient(135deg,#2563eb 0%,#1d4ed8 58%,#1e40af 100%) !important; color:#fff !important;
+    }
+    #dashboard-widgets [data-dashboard-widget="plugins"] {
+        border-color:rgba(13,148,136,.22) !important;
+        background:linear-gradient(135deg,#0f9b8e 0%,#0f766e 100%) !important; color:#fff !important;
+    }
+    #dashboard-widgets [data-dashboard-widget="backups"] {
+        border-color:rgba(124,58,237,.22) !important;
+        background:linear-gradient(135deg,#7655c9 0%,#5540a3 100%) !important; color:#fff !important;
+    }
+    #dashboard-widgets [data-dashboard-widget="users"]::after,
+    #dashboard-widgets [data-dashboard-widget="plugins"]::after,
+    #dashboard-widgets [data-dashboard-widget="backups"]::after {
+        content:""; position:absolute; width:145px; height:145px; right:-70px; top:-82px;
+        border:1px solid rgba(255,255,255,.16); border-radius:50%;
+        box-shadow:0 0 0 18px rgba(255,255,255,.035),0 0 0 38px rgba(255,255,255,.025);
         pointer-events:none;
     }
+    #dashboard-widgets [data-dashboard-widget="users"] .text-xs,
+    #dashboard-widgets [data-dashboard-widget="plugins"] .text-xs,
+    #dashboard-widgets [data-dashboard-widget="backups"] .text-xs,
+    #dashboard-widgets [data-dashboard-widget="plugins"] .text-slate-500,
+    #dashboard-widgets [data-dashboard-widget="users"] .text-slate-500,
+    #dashboard-widgets [data-dashboard-widget="backups"] .text-slate-500 { color:rgba(255,255,255,.82) !important; }
+    #dashboard-widgets [data-dashboard-widget="users"] .text-2xl,
+    #dashboard-widgets [data-dashboard-widget="plugins"] .text-2xl,
+    #dashboard-widgets [data-dashboard-widget="backups"] .text-2xl { color:#fff !important; font-size:2rem; letter-spacing:-.04em; }
+    #dashboard-widgets [data-dashboard-widget="plugins"] h2 { color:#fff !important; }
+    #dashboard-widgets [data-dashboard-widget][data-size="small"] { min-height:7.5rem; }
+    #dashboard-widgets [data-dashboard-widget][data-size="medium"] { min-height:10rem; }
+    #dashboard-widgets [data-dashboard-widget][data-size="large"] { min-height:14rem; }
     #dashboard-widgets[data-motion-enabled="true"][data-motion-hover="true"] [data-dashboard-widget]:hover {
-        border-color:rgba(37,99,235,.34);
-        box-shadow:0 16px 36px rgba(15,23,42,.10);
+        transform:translateY(-3px); border-color:rgba(37,99,235,.34) !important;
+        box-shadow:0 16px 36px rgba(15,23,42,.11);
     }
-    @media (prefers-reduced-motion: reduce) {
-        #dashboard-widgets [data-dashboard-widget] { transition:none !important; }
+    @media (min-width:768px) {
+        #dashboard-widgets [data-dashboard-widget][data-size="small"] { grid-column:span 1; }
+        #dashboard-widgets [data-dashboard-widget][data-size="medium"] { grid-column:span 2; }
+        #dashboard-widgets [data-dashboard-widget][data-size="large"] { grid-column:span 4; }
     }
-    #dashboard-widgets [data-dashboard-widget][data-size="small"] { min-height: 7rem; }
-    @media (min-width: 768px) {
-        #dashboard-widgets [data-dashboard-widget][data-size="small"] { grid-column: span 1; }
-        #dashboard-widgets [data-dashboard-widget][data-size="medium"] { grid-column: span 2; }
-        #dashboard-widgets [data-dashboard-widget][data-size="large"] { grid-column: span 4; }
+    @media (max-width:767px) {
+        .aec-dashboard-welcome { min-height:0; padding:1.25rem; }
+        .aec-dashboard-welcome__date { min-width:0; width:100%; text-align:left; }
+        #dashboard-widgets [data-dashboard-widget] { grid-column:1 / -1 !important; }
+        body.aec-admin-dashboard-page main { padding:1rem !important; }
+        body.aec-admin-dashboard-page main > header { margin:-1rem -1rem 1rem !important; padding:1rem !important; }
     }
-    #dashboard-widgets[data-motion-enabled="true"] [data-dashboard-widget] { animation: aec-dashboard-enter var(--aec-motion-duration, 620ms) cubic-bezier(.2,.8,.2,1) both; }
-    #dashboard-widgets[data-motion-enabled="true"][data-motion-preset="subtle"] [data-dashboard-widget] { animation-name: aec-dashboard-fade; }
-    #dashboard-widgets[data-motion-enabled="true"][data-motion-preset="dynamic"] [data-dashboard-widget] { animation-name: aec-dashboard-rise; }
-    #dashboard-widgets[data-motion-enabled="true"][data-motion-intensity="low"] [data-dashboard-widget] { animation-duration: 420ms; }
-    #dashboard-widgets[data-motion-enabled="true"][data-motion-intensity="high"] [data-dashboard-widget] { animation-duration: 820ms; }
-    #dashboard-widgets[data-motion-enabled="true"][data-motion-speed="slow"] { --aec-motion-duration: 900ms; }
-    #dashboard-widgets[data-motion-enabled="true"][data-motion-speed="fast"] { --aec-motion-duration: 360ms; }
-    #dashboard-widgets[data-motion-enabled="true"][data-motion-speed="normal"] { --aec-motion-duration: 620ms; }
-    #dashboard-widgets[data-motion-enabled="true"][data-motion-hover="true"] [data-dashboard-widget] { transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease; }
-    #dashboard-widgets[data-motion-enabled="true"][data-motion-hover="true"] [data-dashboard-widget]:hover { transform: translateY(-3px); box-shadow: 0 16px 36px rgba(15,23,42,.09); border-color: rgba(100,116,139,.38); }
-    #dashboard-widgets[data-motion-enabled="true"][data-motion-loading="shimmer"]::before { content:""; display:block; height:3px; border-radius:999px; background:linear-gradient(90deg,transparent,#60a5fa,#a78bfa,transparent); background-size:200% 100%; animation:aec-dashboard-shimmer 1.6s ease-in-out 1; }
-    #dashboard-widgets[data-motion-enabled="true"][data-motion-loading="minimal"]::before { content:""; display:block; height:2px; border-radius:999px; background:var(--aec-primary); transform-origin:left; animation:aec-dashboard-progress 650ms ease-out 1 both; }
-    @keyframes aec-dashboard-enter { from { opacity:0; transform:translateY(14px) scale(.99); } to { opacity:1; transform:translateY(0) scale(1); } }
-    @keyframes aec-dashboard-fade { from { opacity:0; } to { opacity:1; } }
-    @keyframes aec-dashboard-rise { from { opacity:0; transform:translateY(24px) scale(.985); } to { opacity:1; transform:translateY(0) scale(1); } }
-    @keyframes aec-dashboard-shimmer { from { background-position:100% 0; opacity:.5; } to { background-position:-100% 0; opacity:1; } }
-    @keyframes aec-dashboard-progress { from { transform:scaleX(.15); opacity:.45; } to { transform:scaleX(1); opacity:1; } }
-    @media (prefers-reduced-motion: reduce) {
-        #dashboard-widgets[data-motion-enabled="true"] [data-dashboard-widget],
-        #dashboard-widgets[data-motion-enabled="true"][data-motion-hover="true"] [data-dashboard-widget],
-        #dashboard-widgets[data-motion-enabled="true"][data-motion-loading]::before { animation:none !important; transition:none !important; transform:none !important; }
+    @media (prefers-reduced-motion:reduce) {
+        #dashboard-widgets [data-dashboard-widget],
+        #dashboard-widgets [data-dashboard-widget]:hover,
+        body.aec-admin-dashboard-page #admin-sidebar nav a { transition:none !important; transform:none !important; }
     }
 </style>
-<div id="dashboard-widgets" class="grid grid-cols-1 gap-4 md:grid-cols-4" data-refresh-url="{{ route('admin.dashboard.refresh') }}" data-analytics-url="{{ route('admin.dashboard.widget-analytics') }}" data-motion-enabled="{{ $motionSettings['enabled'] ? 'true' : 'false' }}" data-motion-preset="{{ $motionSettings['preset'] }}" data-motion-speed="{{ $motionSettings['speed'] }}" data-motion-intensity="{{ $motionSettings['intensity'] }}" data-motion-loading="{{ $motionSettings['loading'] }}" data-motion-counters="{{ $motionSettings['counters'] ? 'true' : 'false' }}" data-motion-hover="{{ $motionSettings['hover'] ? 'true' : 'false' }}">
+<div id="dashboard-widgets"<div id="dashboard-widgets" class="grid grid-cols-1 gap-4 md:grid-cols-4" data-refresh-url="{{ route('admin.dashboard.refresh') }}" data-analytics-url="{{ route('admin.dashboard.widget-analytics') }}" data-motion-enabled="{{ $motionSettings['enabled'] ? 'true' : 'false' }}" data-motion-preset="{{ $motionSettings['preset'] }}" data-motion-speed="{{ $motionSettings['speed'] }}" data-motion-intensity="{{ $motionSettings['intensity'] }}" data-motion-loading="{{ $motionSettings['loading'] }}" data-motion-counters="{{ $motionSettings['counters'] ? 'true' : 'false' }}" data-motion-hover="{{ $motionSettings['hover'] ? 'true' : 'false' }}">
         @foreach ($widgets as $widget)
             @if ($widget === 'users')
-                <section data-dashboard-widget="users" data-size="{{ $widgetSizes['users'] ?? 'medium' }}" class="rounded-2xl border border-slate-200 bg-white p-5">
-                    <div class="text-xs text-slate-500">Registered Accounts</div>
-                    <div class="mt-1 text-2xl font-extrabold"><span data-count-to="{{ $metrics['users'] }}" data-live-metric="users">{{ $metrics['users'] }}</span></div>
+                <section data-dashboard-widget="users" data-size="{{ $widgetSizes['users'] ?? 'medium' }}" class="aec-dashboard-kpi aec-dashboard-kpi--users rounded-2xl border p-5">
+                    <div class="text-xs font-bold uppercase tracking-[.12em] text-slate-500">Registered Accounts</div>
+                    <div class="mt-2 text-2xl font-extrabold tabular-nums"><span data-count-to="{{ $metrics['users'] }}" data-live-metric="users">{{ number_format($metrics['users']) }}</span></div>
+                    <p class="mt-1 text-[11px] font-medium text-slate-500">All platform user accounts</p>
                 </section>
             @elseif ($widget === 'plugins')
-                <section data-dashboard-widget="plugins" data-size="{{ $widgetSizes['plugins'] ?? 'medium' }}" class="rounded-2xl border border-slate-200 bg-white p-5">
+                <section data-dashboard-widget="plugins" data-size="{{ $widgetSizes['plugins'] ?? 'medium' }}" class="aec-dashboard-kpi aec-dashboard-kpi--plugins rounded-2xl border p-5">
                     <div class="flex flex-wrap items-center justify-between gap-2"><h2 class="text-sm font-bold text-slate-900">Plugin Overview</h2><span class="text-xs text-slate-500"><span data-live-metric="plugins_total">{{ $metrics['plugins_total'] }}</span> discovered</span></div>
                     <div class="mt-2 text-2xl font-extrabold text-emerald-700"><span data-count-to="{{ $metrics['plugins_enabled'] }}" data-live-metric="plugins_enabled">{{ $metrics['plugins_enabled'] }}</span> <span class="text-sm font-medium text-slate-500">active</span></div>
                 </section>
             @elseif ($widget === 'backups')
-                <section data-dashboard-widget="backups" data-size="{{ $widgetSizes['backups'] ?? 'medium' }}" class="rounded-2xl border border-slate-200 bg-white p-5">
-                    <div class="text-xs text-slate-500">Encrypted Backups</div>
-                    <div class="mt-1 text-2xl font-extrabold"><span data-count-to="{{ $metrics['backups'] }}" data-live-metric="backups">{{ $metrics['backups'] }}</span></div>
+                <section data-dashboard-widget="backups" data-size="{{ $widgetSizes['backups'] ?? 'medium' }}" class="aec-dashboard-kpi aec-dashboard-kpi--backups rounded-2xl border p-5">
+                    <div class="text-xs font-bold uppercase tracking-[.12em] text-slate-500">Encrypted Backups</div>
+                    <div class="mt-2 text-2xl font-extrabold tabular-nums"><span data-count-to="{{ $metrics['backups'] }}" data-live-metric="backups">{{ number_format($metrics['backups']) }}</span></div>
+                    <p class="mt-1 text-[11px] font-medium text-slate-500">Stored backup archives</p>
                 </section>
             @elseif ($widget === 'system_info')
                 <section data-dashboard-widget="system_info" data-size="{{ $widgetSizes['system_info'] ?? 'medium' }}" class="rounded-2xl border border-slate-200 bg-white p-5">
@@ -326,58 +393,5 @@
     });
 })();
 </script>
-
-<style>
-/* Dashboard-only reference skin; preserve global appearance preferences elsewhere. */
-body:has(#dashboard-widgets) { background:#1b2533 !important; color:#e8eef7 !important; }
-body:has(#dashboard-widgets) main { background:#1b2533 !important; }
-body:has(#dashboard-widgets) main > header { background:#263244 !important; border-color:#354256 !important; }
-body:has(#dashboard-widgets) main > header .text-slate-900 { color:#f8fafc !important; }
-body:has(#dashboard-widgets) main > header .text-slate-500 { color:#aebbd0 !important; }
-body:has(#dashboard-widgets) main > header a:not(.bg-blue-600) { background:#303d51 !important; border-color:#45536a !important; color:#e8eef7 !important; }
-body:has(#dashboard-widgets) main > header span { background:#303d51 !important; color:#e8eef7 !important; }
-#dashboard-widgets { align-items:stretch; gap:1rem; }
-#dashboard-widgets [data-dashboard-widget] {
- min-width:0; color:#e8eef7 !important; background:#263244 !important;
- border:1px solid #3a485d !important; border-radius:12px !important;
- box-shadow:0 8px 22px rgba(5,12,24,.12); padding:1.15rem !important;
-}
-#dashboard-widgets [data-dashboard-widget] h1,
-#dashboard-widgets [data-dashboard-widget] h2,
-#dashboard-widgets [data-dashboard-widget] h3,
-#dashboard-widgets [data-dashboard-widget] strong,
-#dashboard-widgets [data-dashboard-widget] .text-slate-900 { color:#f8fafc !important; }
-#dashboard-widgets [data-dashboard-widget] .text-slate-700,
-#dashboard-widgets [data-dashboard-widget] .text-slate-600 { color:#d5deeb !important; }
-#dashboard-widgets [data-dashboard-widget] .text-slate-500,
-#dashboard-widgets [data-dashboard-widget] .text-slate-400 { color:#9eacc1 !important; }
-#dashboard-widgets [data-dashboard-widget] .border-slate-200,
-#dashboard-widgets [data-dashboard-widget] .border-slate-300,
-#dashboard-widgets [data-dashboard-widget] table tbody tr { border-color:#3b4a60 !important; }
-#dashboard-widgets [data-dashboard-widget] table thead { color:#aebbd0 !important; border-color:#3b4a60 !important; }
-#dashboard-widgets [data-dashboard-widget] a.bg-blue-600,
-#dashboard-widgets [data-dashboard-widget] button.bg-blue-600 { background:#20a89c !important; color:white !important; }
-#dashboard-widgets [data-dashboard-widget] input,
-#dashboard-widgets [data-dashboard-widget] select { background:#202c3c !important; border-color:#43536b !important; color:#e8eef7 !important; }
-#dashboard-widgets [data-dashboard-widget][data-size=small] { min-height:8rem; }
-#dashboard-widgets [data-dashboard-widget][data-size=medium] { min-height:10rem; }
-#dashboard-widgets [data-dashboard-widget][data-size=large] { min-height:14rem; }
-@media (min-width:768px) {
- #dashboard-widgets [data-dashboard-widget][data-size=small] { grid-column:span 1; }
- #dashboard-widgets [data-dashboard-widget][data-size=medium] { grid-column:span 2; }
- #dashboard-widgets [data-dashboard-widget][data-size=large] { grid-column:span 4; }
-}
-@media (max-width:767px) {
- #dashboard-widgets [data-dashboard-widget] { grid-column:1 / -1 !important; }
- body:has(#dashboard-widgets) main { padding:1rem !important; }
- body:has(#dashboard-widgets) main > header { margin:-1rem -1rem 1rem !important; padding:1rem !important; }
-}
-#dashboard-widgets [data-dashboard-widget] { transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease; }
-#dashboard-widgets [data-dashboard-widget]:hover { transform:translateY(-2px); border-color:#52647e !important; box-shadow:0 14px 30px rgba(5,12,24,.22); }
-@media (prefers-reduced-motion:reduce) {
- #dashboard-widgets [data-dashboard-widget] { transition:none !important; }
- #dashboard-widgets [data-dashboard-widget]:hover { transform:none; }
-}
-</style>
 
 @endsection
