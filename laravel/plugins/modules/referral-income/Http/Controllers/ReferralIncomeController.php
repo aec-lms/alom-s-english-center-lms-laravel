@@ -101,11 +101,6 @@ class ReferralIncomeController extends Controller
         return view('referral-income::admin', compact('commissions', 'payouts', 'rules', 'recoveries'));
     }
 
-    private function assertAuditAvailable(): void
-    {
-        abort_unless(Schema::hasTable('audit_logs'), 503, 'Audit logging is unavailable; no referral finance changes were applied.');
-    }
-
     public function updateRules(Request $request): RedirectResponse
     {
         $data = $request->validate([
@@ -116,7 +111,6 @@ class ReferralIncomeController extends Controller
         ]);
 
         DB::transaction(function () use ($request, $data): void {
-            $this->assertAuditAvailable();
 
             foreach (['student', 'teacher'] as $type) {
                 $rule = DB::table('referral_income_rules')
@@ -140,7 +134,7 @@ class ReferralIncomeController extends Controller
                     'updated_at' => now(),
                 ]);
 
-                $this->audit->log('referral_income.rules_updated', 'referral_income_rule', $type, [
+                $this->audit->logRequired('referral_income.rules_updated', 'referral_income_rule', $type, [
                     'before' => $before,
                     'after' => $after,
                 ], (int) $request->user()->id);
@@ -158,7 +152,6 @@ class ReferralIncomeController extends Controller
         ]);
 
         DB::transaction(function () use ($request, $commission, $data): void {
-            $this->assertAuditAvailable();
             $record = DB::table('referral_commissions')->where('id', $commission)->lockForUpdate()->first();
             abort_unless($record !== null && $record->status === 'pending', 422, 'Only pending commissions can be reviewed.');
             abort_unless(
@@ -174,7 +167,7 @@ class ReferralIncomeController extends Controller
                 'updated_at' => now(),
             ]);
 
-            $this->audit->log('referral_income.commission_reviewed', 'referral_commission', (string) $commission, [
+            $this->audit->logRequired('referral_income.commission_reviewed', 'referral_commission', (string) $commission, [
                 'from' => 'pending',
                 'to' => $data['status'],
                 'reason' => isset($data['admin_note']) ? trim($data['admin_note']) : null,
@@ -192,7 +185,6 @@ class ReferralIncomeController extends Controller
         ]);
 
         DB::transaction(function () use ($request, $reversal, $data): void {
-            $this->assertAuditAvailable();
             $record = DB::table('referral_commission_reversals')
                 ->where('id', $reversal)
                 ->lockForUpdate()
@@ -209,7 +201,7 @@ class ReferralIncomeController extends Controller
                 'updated_at' => now(),
             ]);
 
-            $this->audit->log('referral_income.recovery_reviewed', 'referral_commission_reversal', (string) $reversal, [
+            $this->audit->logRequired('referral_income.recovery_reviewed', 'referral_commission_reversal', (string) $reversal, [
                 'from' => 'recovery_due',
                 'to' => $data['status'],
                 'reason' => isset($data['admin_note']) ? trim($data['admin_note']) : null,
@@ -223,7 +215,6 @@ class ReferralIncomeController extends Controller
     {
         $data = $request->validate(['status' => ['required', 'in:approved,rejected,paid'], 'admin_note' => ['required_if:status,rejected,paid', 'nullable', 'string', 'max:1000']]);
         DB::transaction(function () use ($request, $payout, $data): void {
-            $this->assertAuditAvailable();
             $record = DB::table('referral_payout_requests')->where('id', $payout)->lockForUpdate()->first();
             $validTransition = $record !== null
                 && (($record->status === 'pending' && in_array($data['status'], ['approved', 'rejected'], true))
@@ -261,7 +252,7 @@ class ReferralIncomeController extends Controller
                     ->update(['status' => 'payout_approved', 'updated_at' => now()]);
             }
 
-            $this->audit->log('referral_income.payout_reviewed', 'referral_payout_request', (string) $payout, [
+            $this->audit->logRequired('referral_income.payout_reviewed', 'referral_payout_request', (string) $payout, [
                 'from' => $record->status,
                 'to' => $data['status'],
                 'amount' => (string) $record->amount,

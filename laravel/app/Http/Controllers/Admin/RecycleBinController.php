@@ -160,7 +160,7 @@ class RecycleBinController extends Controller
                 $user->forceFill(['is_active' => false])->save();
             }
 
-            $this->audit->log('recycle_bin.student_restored', 'student', (string) $student->id, [
+            $this->audit->logRequired('recycle_bin.student_restored', 'student', (string) $student->id, [
                 'student_code' => $student->student_code,
                 'account_reactivated' => false,
             ], $request->user()->id);
@@ -198,7 +198,7 @@ class RecycleBinController extends Controller
                 $user->forceFill(['is_active' => false])->save();
             }
 
-            $this->audit->log('recycle_bin.teacher_restored', 'teacher', (string) $teacher->id, [
+            $this->audit->logRequired('recycle_bin.teacher_restored', 'teacher', (string) $teacher->id, [
                 'employee_code' => $teacher->employee_code,
                 'account_reactivated' => false,
             ], $request->user()->id);
@@ -216,7 +216,7 @@ class RecycleBinController extends Controller
             $record = Course::withTrashed()->lockForUpdate()->findOrFail($recordId);
             abort_unless($record->trashed(), 409, 'This record is not in the Recycle Bin.');
             $record->restore();
-            $this->audit->log('recycle_bin.course_restored', 'course', (string) $record->id, [
+            $this->audit->logRequired('recycle_bin.course_restored', 'course', (string) $record->id, [
                 'title' => $record->title,
             ], $request->user()->id);
         });
@@ -233,7 +233,7 @@ class RecycleBinController extends Controller
             $record = Exam::withTrashed()->lockForUpdate()->findOrFail($recordId);
             abort_unless($record->trashed(), 409, 'This record is not in the Recycle Bin.');
             $record->restore();
-            $this->audit->log('recycle_bin.exam_restored', 'exam', (string) $record->id, [
+            $this->audit->logRequired('recycle_bin.exam_restored', 'exam', (string) $record->id, [
                 'title' => $record->title,
             ], $request->user()->id);
         });
@@ -250,7 +250,7 @@ class RecycleBinController extends Controller
             $record = StudyBatch::withTrashed()->lockForUpdate()->findOrFail($recordId);
             abort_unless($record->trashed(), 409, 'This record is not in the Recycle Bin.');
             $record->restore();
-            $this->audit->log('recycle_bin.batch_restored', 'batch', (string) $record->id, [
+            $this->audit->logRequired('recycle_bin.batch_restored', 'batch', (string) $record->id, [
                 'name' => $record->name,
             ], $request->user()->id);
         });
@@ -267,7 +267,7 @@ class RecycleBinController extends Controller
             $record = AcademicClass::withTrashed()->lockForUpdate()->findOrFail($recordId);
             abort_unless($record->trashed(), 409, 'This record is not in the Recycle Bin.');
             $record->restore();
-            $this->audit->log('recycle_bin.class_restored', 'class', (string) $record->id, [
+            $this->audit->logRequired('recycle_bin.class_restored', 'class', (string) $record->id, [
                 'name' => $record->name,
             ], $request->user()->id);
         });
@@ -284,7 +284,7 @@ class RecycleBinController extends Controller
             $record = CourseCategory::withTrashed()->lockForUpdate()->findOrFail($recordId);
             abort_unless($record->trashed(), 409, 'This category is not in the Recycle Bin.');
             $record->restore();
-            $this->audit->log('recycle_bin.course_category_restored', 'course_category', (string) $record->id, [
+            $this->audit->logRequired('recycle_bin.course_category_restored', 'course_category', (string) $record->id, [
                 'name' => $record->name,
             ], $request->user()->id);
         });
@@ -301,7 +301,7 @@ class RecycleBinController extends Controller
             $record = LiveClass::withTrashed()->lockForUpdate()->findOrFail($recordId);
             abort_unless($record->trashed(), 409, 'This live class is not in the Recycle Bin.');
             $record->restore();
-            $this->audit->log('recycle_bin.live_class_restored', 'live_class', (string) $record->id, [
+            $this->audit->logRequired('recycle_bin.live_class_restored', 'live_class', (string) $record->id, [
                 'title' => $record->title,
             ], $request->user()->id);
         });
@@ -400,7 +400,7 @@ class RecycleBinController extends Controller
                 throw new \RuntimeException('The record could not be permanently deleted.');
             }
 
-            $this->audit->log('recycle_bin.permanently_deleted', $entityType, (string) $recordId, [
+            $this->audit->logRequired('recycle_bin.permanently_deleted', $entityType, (string) $recordId, [
                 'recycle_bin_type' => $type,
                 'record_label' => (string) $recordLabel,
                 'permanent' => true,
@@ -436,7 +436,7 @@ class RecycleBinController extends Controller
             $record = $modelClass::withTrashed()->lockForUpdate()->findOrFail($recordId);
             abort_unless($record->trashed(), 409, 'This record is not in the Recycle Bin.');
             $record->restore();
-            $this->audit->log($event, $entityType, (string) $record->id, [
+            $this->audit->logRequired($event, $entityType, (string) $record->id, [
                 $displayColumn => $record->getAttribute($displayColumn),
             ], $request->user()->id);
         });

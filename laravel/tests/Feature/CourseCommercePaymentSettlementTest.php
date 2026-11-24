@@ -9,6 +9,7 @@ use Plugins\Modules\CourseManagement\Services\CourseCommercePaymentSettlementSer
 use Plugins\Modules\MarketingManagement\Models\PromoCoupon;
 use Plugins\Modules\MarketingManagement\Services\CourseCouponService;
 use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
+use Plugins\Modules\ReferralIncome\Services\ReferralIncomeService;
 use Tests\TestCase;
 
 class CourseCommercePaymentSettlementTest extends TestCase
@@ -17,12 +18,15 @@ class CourseCommercePaymentSettlementTest extends TestCase
     {
         parent::setUp();
         $this->markSystemInstalled();
-        $this->activatePlugins(['course-management', 'fees-management', 'marketing-management', 'universal-payment']);
+        $this->activatePlugins(['course-management', 'fees-management', 'marketing-management', 'universal-payment', 'referral-income', 'student-management', 'payment-management', 'commerce-cart']);
     }
 
     public function test_verified_course_cart_payment_activates_enrollment_and_is_idempotent(): void
     {
         $student = $this->createUserWithRole('student');
+        $referrer = $this->createUserWithRole('student');
+        $referral = app(ReferralIncomeService::class);
+        $referral->applyCode($student, $referral->createOrGetCode($referrer));
         $courseId = DB::table('courses')->insertGetId([
             'code' => 'SETTLE-001',
             'title' => 'Settlement Test Course',
@@ -96,6 +100,272 @@ class CourseCommercePaymentSettlementTest extends TestCase
         $this->assertDatabaseHas('enrollments', ['user_id' => $student->id, 'course_id' => $courseId, 'status' => 'active']);
         $this->assertSame(1, DB::table('enrollments')->where('user_id', $student->id)->where('course_id', $courseId)->count());
         $this->assertSame(1, DB::table('fee_invoices')->where('payer_email', $student->email)->count());
+        $this->assertDatabaseHas('referral_commissions', [
+            'referred_user_id' => $student->id,
+            'referrer_user_id' => $referrer->id,
+            'source_type' => 'course_cart_order',
+            'source_id' => (string) $orderId,
+            'status' => 'pending',
+        ]);
+        $this->assertSame('verified', DB::table('universal_payment_transactions')->where('id', $transaction->id)->value('status'));
+    }
+
+    public function test_referral_commission_requires_locked_gateway_payable_invoice_and_buyer_binding(): void
+    {
+        $student = $this->createUserWithRole('student');
+        $referrer = $this->createUserWithRole('student');
+        $intruder = $this->createUserWithRole('student');
+        $referral = app(ReferralIncomeService::class);
+        $referral->applyCode($student, $referral->createOrGetCode($referrer));
+
+        $courseId = DB::table('courses')->insertGetId([
+            'code' => 'REF-BIND-' . strtoupper(bin2hex(random_bytes(3))),
+            'title' => 'Referral Payment Binding Course',
+            'slug' => 'referral-payment-binding-' . strtolower(bin2hex(random_bytes(3))),
+            'price' => 1250,
+            'status' => 'published',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $cartId = DB::table('course_carts')->insertGetId([
+            'user_id' => $student->id,
+            'status' => 'checkout_pending',
+            'currency' => 'BDT',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $walletId = DB::table('course_gift_wallets')->insertGetId([
+            'user_id' => $student->id,
+            'currency' => 'BDT',
+            'balance' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $walletReservation = 'REF-WALLET-' . strtoupper(bin2hex(random_bytes(4)));
+        DB::table('course_gift_wallet_transactions')->insert([
+            'wallet_id' => $walletId,
+            'user_id' => $student->id,
+            'voucher_id' => null,
+            'type' => 'debit',
+            'status' => 'reserved',
+            'reference' => $walletReservation,
+            'amount' => 250,
+            'metadata' => json_encode(['purpose' => 'course_cart_wallet_credit'], JSON_THROW_ON_ERROR),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $orderId = DB::table('course_cart_orders')->insertGetId([
+            'cart_id' => $cartId,
+            'user_id' => $student->id,
+            'branch_id' => null,
+            'subtotal_amount' => 1250,
+            'discount_amount' => 0,
+            'net_amount' => 1250,
+            'wallet_credit_amount' => 250,
+            'wallet_reservation_key' => $walletReservation,
+            'currency' => 'BDT',
+            'status' => 'awaiting_payment',
+            'expires_at' => now()->addMinutes(30),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('course_cart_order_items')->insert([
+            'order_id' => $orderId,
+            'course_id' => $courseId,
+            'course_title' => 'Referral Payment Binding Course',
+            'unit_price' => 1250,
+            'position' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // The order total is 1,250 BDT, but the provider must collect only
+        // 1,000 BDT because 250 BDT is covered by the reserved wallet credit.
+        $transaction = $this->transaction($student->id, 1000, [
+            'purpose' => 'course_cart',
+            'course_cart_order_id' => $orderId,
+        ]);
+        DB::table('course_cart_orders')->where('id', $orderId)
+            ->update(['payment_transaction_id' => $transaction->id]);
+
+        $settled = app(CourseCommercePaymentSettlementService::class)
+            ->settle($transaction, 'BANK-REF-BIND-001', ['validation_status' => 'VALID']);
+        $invoiceId = (int) DB::table('course_cart_orders')->where('id', $orderId)->value('invoice_id');
+
+        $this->assertDatabaseHas('universal_payment_transactions', [
+            'id' => $transaction->id,
+            'status' => 'verified',
+            'fee_invoice_id' => $invoiceId,
+            'amount' => 1000,
+            'currency' => 'BDT',
+        ]);
+        $this->assertDatabaseHas('course_gift_wallet_transactions', [
+            'reference' => $walletReservation,
+            'status' => 'completed',
+            'amount' => 250,
+        ]);
+        $this->assertDatabaseHas('referral_commissions', [
+            'referred_user_id' => $student->id,
+            'referrer_user_id' => $referrer->id,
+            'source_type' => 'course_cart_order',
+            'source_id' => (string) $orderId,
+            'eligible_amount' => 1250,
+            'currency' => 'BDT',
+        ]);
+
+        // Remove the first valid commission so each tampered proof is evaluated
+        // independently by the real resolver rather than idempotently returning
+        // a previously recorded ledger entry.
+        DB::table('referral_commissions')
+            ->where('referred_user_id', $student->id)
+            ->where('source_type', 'course_cart_order')
+            ->where('source_id', (string) $orderId)
+            ->delete();
+
+        $assertRejected = function (string $case) use ($referral, $student, $orderId): void {
+            $this->assertNull(
+                $referral->recordSettledPurchase($student, 'course_cart_order', (string) $orderId, 1250, 'BDT'),
+                $case
+            );
+            $this->assertSame(
+                0,
+                DB::table('referral_commissions')
+                    ->where('referred_user_id', $student->id)
+                    ->where('source_type', 'course_cart_order')
+                    ->where('source_id', (string) $orderId)
+                    ->count(),
+                $case
+            );
+        };
+
+        $validTransaction = [
+            'user_id' => $student->id,
+            'fee_invoice_id' => $invoiceId,
+            'amount' => 1000,
+            'currency' => 'BDT',
+            'status' => 'verified',
+            'notes' => json_encode([
+                'purpose' => 'course_cart',
+                'course_cart_order_id' => $orderId,
+                'provider' => 'sslcommerz',
+                'settlement' => 'completed',
+            ], JSON_THROW_ON_ERROR),
+        ];
+
+        DB::table('universal_payment_transactions')->where('id', $settled->id)->update([
+            'fee_invoice_id' => null,
+        ]);
+        $assertRejected('A null provider invoice binding must not create a referral commission.');
+
+        DB::table('universal_payment_transactions')->where('id', $settled->id)->update([
+            'fee_invoice_id' => $invoiceId + 999,
+        ]);
+        $assertRejected('A provider transaction bound to another invoice must be rejected.');
+
+        DB::table('universal_payment_transactions')->where('id', $settled->id)->update([
+            'fee_invoice_id' => $invoiceId,
+            'amount' => 1250,
+        ]);
+        $assertRejected('Provider amount must equal gateway payable after wallet credit, not gross invoice total.');
+
+        DB::table('universal_payment_transactions')->where('id', $settled->id)->update([
+            'amount' => 1000,
+            'currency' => 'USD',
+        ]);
+        $assertRejected('Provider currency must match the order and invoice currency.');
+
+        DB::table('universal_payment_transactions')->where('id', $settled->id)->update([
+            'currency' => 'BDT',
+            'status' => 'risk_review',
+        ]);
+        $assertRejected('A transaction in risk review is not proof of a settled purchase.');
+
+        DB::table('universal_payment_transactions')->where('id', $settled->id)->update([
+            'status' => 'pending',
+        ]);
+        $assertRejected('A pending transaction is not proof of a settled purchase.');
+
+        DB::table('universal_payment_transactions')->where('id', $settled->id)->update([
+            'status' => 'verified',
+            'user_id' => $intruder->id,
+        ]);
+        $assertRejected('A payment linked to a different buyer must not create this buyer referral.');
+
+        DB::table('universal_payment_transactions')->where('id', $settled->id)->update([
+            'user_id' => $student->id,
+            'notes' => json_encode([
+                'purpose' => 'course_cart',
+                'course_cart_order_id' => $orderId + 1,
+            ], JSON_THROW_ON_ERROR),
+        ]);
+        $assertRejected('A verified payment referencing another course-cart order must be rejected.');
+
+        DB::table('universal_payment_transactions')->where('id', $settled->id)->update($validTransaction);
+        DB::table('fee_invoices')->where('id', $invoiceId)->update(['paid_amount' => 1000]);
+        $assertRejected('A partially paid invoice must not create a full-purchase referral commission.');
+
+        DB::table('fee_invoices')->where('id', $invoiceId)->update(['paid_amount' => 0]);
+        $assertRejected('A zero-paid invoice must not create a referral commission.');
+
+        DB::table('fee_invoices')->where('id', $invoiceId)->update(['paid_amount' => 1250]);
+
+        // The MySQL branch verifies that the provider-row lock is part of the commission proof.
+        if (DB::connection()->getDriverName() === 'mysql') {
+            $primaryName = DB::getDefaultConnection();
+            $primary = DB::connection($primaryName);
+            $secondaryName = 'referral_payment_binding_' . bin2hex(random_bytes(3));
+            config(['database.connections.' . $secondaryName => config('database.connections.' . $primaryName)]);
+            DB::purge($secondaryName);
+            $secondary = DB::connection($secondaryName);
+            $secondary->statement('SET SESSION innodb_lock_wait_timeout = 1');
+            $primary->beginTransaction();
+
+            try {
+                // The resolver must lock the exact provider transaction before
+                // inserting a commission, so a concurrent status/refund writer wins first.
+                $primary->table('universal_payment_transactions')
+                    ->where('id', $settled->id)
+                    ->lockForUpdate()
+                    ->first();
+
+                DB::setDefaultConnection($secondaryName);
+                try {
+                    $referral->recordSettledPurchase($student, 'course_cart_order', (string) $orderId, 1250, 'BDT');
+                    $this->fail('Referral commission insertion must wait for the locked provider payment row.');
+                } catch (\Illuminate\Database\QueryException $exception) {
+                    $this->assertSame(1205, (int) ($exception->errorInfo[1] ?? 0), $exception->getMessage());
+                }
+
+                $this->assertSame(0, $secondary->table('referral_commissions')
+                    ->where('referred_user_id', $student->id)
+                    ->where('source_type', 'course_cart_order')
+                    ->where('source_id', (string) $orderId)
+                    ->count());
+
+                DB::setDefaultConnection($primaryName);
+                $primary->commit();
+
+                DB::setDefaultConnection($secondaryName);
+                $commissionId = $referral->recordSettledPurchase($student, 'course_cart_order', (string) $orderId, 1250, 'BDT');
+                $replayedId = $referral->recordSettledPurchase($student, 'course_cart_order', (string) $orderId, 1250, 'BDT');
+            } catch (\Throwable $exception) {
+                if ($primary->transactionLevel() > 0) {
+                    $primary->rollBack();
+                }
+                throw $exception;
+            } finally {
+                DB::setDefaultConnection($primaryName);
+                DB::purge($secondaryName);
+            }
+        } else {
+            $commissionId = $referral->recordSettledPurchase($student, 'course_cart_order', (string) $orderId, 1250, 'BDT');
+            $replayedId = $referral->recordSettledPurchase($student, 'course_cart_order', (string) $orderId, 1250, 'BDT');
+        }
+
+        $this->assertNotNull($commissionId);
+        $this->assertSame((int) $commissionId, (int) $replayedId);
+        $this->assertDatabaseCount('referral_commissions', 1);
     }
 
     public function test_verified_course_gift_payment_creates_invoice_and_marks_gift_paid_once(): void
