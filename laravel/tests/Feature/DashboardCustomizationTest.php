@@ -124,9 +124,9 @@ class DashboardCustomizationTest extends TestCase
 
         $response = $this->actingAs($admin)->get(route('admin.dashboard'))->assertOk();
         $html = $response->getContent();
-        $auditPosition = strpos($html, 'data-dashboard-widget="audit_trail"');
-        $systemPosition = strpos($html, 'data-dashboard-widget="system_info"');
-        $usersPosition = strpos($html, 'data-dashboard-widget="users"');
+        $auditPosition = strpos($html, '<section data-dashboard-widget="audit_trail"');
+        $systemPosition = strpos($html, '<section data-dashboard-widget="system_info"');
+        $usersPosition = strpos($html, '<section data-dashboard-widget="users"');
         $this->assertNotFalse($auditPosition);
         $this->assertNotFalse($systemPosition);
         $this->assertNotFalse($usersPosition);
