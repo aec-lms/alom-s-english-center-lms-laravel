@@ -399,7 +399,7 @@
                 <section data-dashboard-widget="users" data-size="{{ $widgetSizes['users'] ?? 'medium' }}" class="aec-dashboard-kpi aec-dashboard-kpi--users rounded-2xl border p-5">
                     <div class="text-xs font-bold uppercase tracking-[.12em] text-slate-500">Registered Accounts</div>
                     <div class="mt-2 text-2xl font-extrabold tabular-nums"><span data-count-to="{{ $metrics['users'] }}" data-live-metric="users">{{ number_format($metrics['users']) }}</span></div>
-                    <p class="mt-1 text-[11px] font-medium text-slate-500">All platform user accounts</p>
+                    <p class="mt-1 text-[11px] font-medium text-slate-500">{{ $isBranchManager ? "Accounts in your assigned branch" : "All platform user accounts" }}</p>
                 </section>
             @elseif ($widget === 'plugins')
                 <section data-dashboard-widget="plugins" data-size="{{ $widgetSizes['plugins'] ?? 'medium' }}" class="aec-dashboard-kpi aec-dashboard-kpi--plugins rounded-2xl border p-5">
