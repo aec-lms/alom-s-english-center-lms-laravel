@@ -274,12 +274,18 @@ class PaymentController extends Controller
 
                     $this->suspendCommerceAccessAfterRefund($invoice, $newPaid);
                 }
+
+                $this->audit->logRequired(
+                    'payment.refunded',
+                    'payment_transaction',
+                    (string) $lockedTx->id,
+                    ['amount' => $refundAmount],
+                    $actor?->id
+                );
             });
         } catch (\Throwable $e) {
             return back()->withErrors(['refund' => $e->getMessage()]);
         }
-
-        $this->audit->log('payment.refunded', 'payment_transaction', (string) $transaction->id, ['amount' => $validated['amount']], $actor?->id);
 
         return back()->with('status', "Refund recorded for {$transaction->transaction_ref}.");
     }
