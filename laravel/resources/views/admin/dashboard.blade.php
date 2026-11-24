@@ -158,7 +158,7 @@
                 <span class="inline-flex items-center gap-2"><i class="h-2.5 w-2.5 rounded-full bg-emerald-500"></i>Courses</span>
                 <span class="inline-flex items-center gap-2"><i class="h-2.5 w-2.5 rounded-full bg-violet-600"></i>Batches</span>
             </div>
-            <div class="mt-4 grid h-44 grid-cols-6 items-end gap-3 border-b border-slate-200 px-1">
+            <div class="mt-4 grid h-44 grid-cols-6 items-end gap-3 border-b border-slate-200 px-1" role="img" aria-label="Six month comparison of student, course and batch records. A detailed data table follows for assistive technology.">
                 @foreach ($dashboardAnalytics['labels'] as $index => $month)
                     <div class="flex h-full flex-col items-center justify-end gap-2">
                         <div class="flex h-full w-full items-end justify-center gap-1">
@@ -170,6 +170,22 @@
                         <span class="pb-2 text-[10px] font-semibold text-slate-500">{{ $month }}</span>
                     </div>
                 @endforeach
+            </div>
+            <div class="sr-only">
+                <table>
+                    <caption>Monthly dashboard analytics for students, courses and batches</caption>
+                    <thead><tr><th scope="col">Month</th><th scope="col">Students</th><th scope="col">Courses</th><th scope="col">Batches</th></tr></thead>
+                    <tbody>
+                        @foreach ($dashboardAnalytics['labels'] as $index => $month)
+                            <tr>
+                                <th scope="row">{{ $month }}</th>
+                                <td>{{ number_format($dashboardAnalytics['students'][$index] ?? 0) }}</td>
+                                <td>{{ number_format($dashboardAnalytics['courses'][$index] ?? 0) }}</td>
+                                <td>{{ number_format($dashboardAnalytics['batches'][$index] ?? 0) }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
             </div>
             <p class="mt-3 text-[10px] text-slate-400">Counts use available module records and their creation dates. Missing modules are shown as zero.</p>
         </article>
