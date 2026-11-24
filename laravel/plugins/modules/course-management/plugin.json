@@ -49,5 +49,14 @@
         "universal-payment",
         "referral-income",
         "email-notifications"
+    ],
+    "dashboard_widgets": [
+        {
+            "key": "live-classes",
+            "label": "Live & Upcoming Classes",
+            "view": "dashboard.live-classes",
+            "permission": "courses.manage",
+            "default": false
+        }
     ]
 }
