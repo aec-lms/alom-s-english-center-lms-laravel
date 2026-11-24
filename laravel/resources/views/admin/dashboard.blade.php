@@ -234,6 +234,12 @@
         background:linear-gradient(145deg,rgba(24,57,105,.82),rgba(12,32,68,.4)) !important;
         border-bottom-color:rgba(148,163,184,.16) !important;
     }
+    body.aec-admin-dashboard-page #admin-sidebar > div:first-child > div:first-child {
+        flex-direction:column; justify-content:center; gap:.75rem; text-align:center;
+    }
+    body.aec-admin-dashboard-page #admin-sidebar > div:first-child img {
+        height:3.75rem; max-width:10rem; margin-inline:auto;
+    }
     body.aec-admin-dashboard-page #admin-sidebar nav a {
         display:flex; align-items:center; min-height:40px; margin-block:3px;
         border:1px solid transparent; border-radius:11px; color:#c6d4e9 !important;
@@ -426,9 +432,11 @@
 <script>
 (() => {
     const dashboard = document.getElementById('dashboard-widgets');
+    const dashboardRoot = document.querySelector('.aec-edupro-dashboard');
+    const liveScope = dashboardRoot || dashboard;
     if (dashboard?.dataset.motionEnabled === 'true' && dashboard.dataset.motionCounters === 'true' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
         const duration = dashboard.dataset.motionSpeed === 'fast' ? 520 : dashboard.dataset.motionSpeed === 'slow' ? 1250 : 850;
-        dashboard.querySelectorAll('[data-count-to]').forEach((node, index) => {
+        liveScope.querySelectorAll('[data-count-to]').forEach((node, index) => {
             const target = Number(node.dataset.countTo);
             if (!Number.isFinite(target) || target < 0 || target > 1000000000) return;
             const start = performance.now() + index * 90;
@@ -449,7 +457,7 @@
                 if (!response.ok) return;
                 const payload = await response.json();
                 Object.entries(payload.metrics || {}).forEach(([metric, value]) => {
-                    dashboard.querySelectorAll('[data-live-metric="' + metric + '"]').forEach(node => { node.textContent = Number(value).toLocaleString(); });
+                    liveScope.querySelectorAll('[data-live-metric="' + metric + '"]').forEach(node => { node.textContent = Number(value).toLocaleString(); });
                 });
                 dashboard.querySelectorAll('[data-refresh-status]').forEach(node => node.textContent = 'Updated ' + new Date(payload.refreshed_at).toLocaleTimeString());
             } catch (_) { /* Preserve the last successful snapshot while offline. */ }
