@@ -279,10 +279,6 @@
     .aec-dashboard-action span { font-size:1.45rem; }
     .aec-dashboard-action strong { color:#17336f; font-size:.7rem; }
 
-    .aec-dashboard-welcome__gradient {
-        position:absolute; inset:0; z-index:-2;
-        background:linear-gradient(112deg,#102957 0%,#1555a7 48%,#087f9b 100%);
-    }
     .aec-dashboard-welcome__glow { position:absolute; z-index:-1; pointer-events:none; border-radius:999px; filter:blur(2px); }
     .aec-dashboard-welcome__glow--one {
         width:270px; height:270px; right:7%; top:-190px;
@@ -360,6 +356,7 @@
         .aec-dashboard-welcome { min-height:0; padding:1.25rem; }
         .aec-dashboard-stat { min-height:100px; }
         .aec-dashboard-welcome__date { min-width:0; width:100%; text-align:left; }
+        .aec-dashboard-panel { padding:.9rem; }
         #dashboard-widgets [data-dashboard-widget] { grid-column:1 / -1 !important; }
         body.aec-admin-dashboard-page main { padding:1rem !important; }
         body.aec-admin-dashboard-page main > header { margin:-1rem -1rem 1rem !important; padding:1rem !important; }
