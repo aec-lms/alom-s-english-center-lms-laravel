@@ -4,7 +4,7 @@
 
 Governance: [Issue #285 — Official Team Instructions](https://github.com/aec-lms/alom-s-english-center-lms-laravel/issues/285)
 
-**Last reconciled:** 2026-11-20  
+**Last reconciled:** 2026-11-24  
 **Default branch:** `main`  
 **Register maintainer:** Repository maintainers (one accountable owner must be named per work item).
 
@@ -72,7 +72,6 @@ The rows below were refreshed against the repository's open pull requests and ex
 ## Confirmed shared-file ownership decisions
 
 The following boundaries were confirmed from exact changed-file lists and patch comparisons, then posted to affected PR conversations on 2026-11-19. A PR author must coordinate a handoff before changing another owner's canonical shared files.
-
 | Shared area / files | One canonical owner | Other PR / contributor boundary |
 |---|---|---|
 | Phonetics course access baseline: `phonetics/Resources/views/learning/practice.blade.php`, `tests/Feature/AlomBrandingLoaderPhoneticsPluginTest.php` | #288 | #292 owns recording backend/admin-specific files; recording UI/test changes to the shared files are proposed to #288 owner for sequenced integration |
@@ -147,7 +146,6 @@ This standard applies to every current and future PR, issue, plugin, admin panel
 - **#295** current register head is `36da65c641f3d1cd6813c83772b28e8e257e6625`; Browser E2E and Composer Security Audit passed; Laravel job remains in progress. No independent review recorded.
 
 All statuses above are point-in-time observations and must be refreshed against the exact head before merge.
-
 
 ### 2026-11-19 — merge authorization and owner notification rule
 
