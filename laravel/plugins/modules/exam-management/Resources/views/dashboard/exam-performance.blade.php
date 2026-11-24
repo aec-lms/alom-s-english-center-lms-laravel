@@ -4,9 +4,11 @@
         $attempts = \Illuminate\Support\Facades\DB::table('exam_attempts as ea')
             ->join('exams as e', 'e.id', '=', 'ea.exam_id')
             ->whereNotNull('ea.submitted_at')
-            ->whereNull('e.deleted_at')
-            ->where('e.is_published', true)
-            ->where('ea.submitted_at', '>=', now()->subDays(30));
+            ->where('e.is_published', true);
+        if (\Illuminate\Support\Facades\Schema::hasColumn('exams', 'deleted_at')) {
+            $attempts->whereNull('e.deleted_at');
+        }
+        $attempts->where('ea.submitted_at', '>=', now()->subDays(30));
         $examSummary['attempts'] = (clone $attempts)->count();
         $examSummary['average'] = (clone $attempts)->selectRaw('AVG(CASE WHEN ea.total_marks > 0 THEN (ea.score_obtained / ea.total_marks) * 100 ELSE NULL END) as average_score')->value('average_score');
         $examSummary['pass_rate'] = (clone $attempts)->selectRaw('AVG(CASE WHEN ea.passed = 1 THEN 100 ELSE 0 END) as pass_rate')->value('pass_rate');
