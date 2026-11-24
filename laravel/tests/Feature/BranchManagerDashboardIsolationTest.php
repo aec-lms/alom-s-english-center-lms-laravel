@@ -80,6 +80,8 @@ class BranchManagerDashboardIsolationTest extends TestCase
 
         $response = $this->actingAs($manager)->get('/admin')->assertOk();
         $response->assertSee('Registered Accounts')
+            ->assertSee('Accounts in your assigned branch')
+            ->assertDontSee('All platform user accounts')
             ->assertDontSee('Plugin Overview')
             ->assertDontSee('Encrypted Backups')
             ->assertDontSee('Recent Security Audit Trail')
