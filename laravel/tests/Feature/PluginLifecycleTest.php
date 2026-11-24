@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Core\Plugins\PluginManager;
 use App\Providers\PluginServiceProvider;
 use App\Core\Versioning\VersionConstraint;
+use App\Models\AuditLog;
 use App\Models\PluginRecord;
 use App\Models\PluginSetting;
 use Illuminate\Support\Facades\DB;
@@ -862,5 +863,44 @@ PHP;
             PluginRecord::query()->where('slug', $slug)->delete();
         }
     }
+
+    public function test_plugin_disable_rolls_back_when_required_audit_fails(): void
+    {
+        $this->markSystemInstalled();
+        $admin = $this->createUserWithRole('admin');
+        $slug = 'required-audit-disable-probe';
+        $record = PluginRecord::query()->create([
+            'slug' => $slug,
+            'name' => 'Required Audit Disable Probe',
+            'version' => '1.0.0',
+            'is_installed' => true,
+            'is_enabled' => true,
+        ]);
+
+        AuditLog::creating(static function (): void {
+            throw new RuntimeException('forced plugin lifecycle audit failure');
+        });
+
+        try {
+            $caught = null;
+            try {
+                app(PluginManager::class)->disable($slug, $admin->id);
+            } catch (RuntimeException $exception) {
+                $caught = $exception;
+            }
+
+            $this->assertInstanceOf(RuntimeException::class, $caught);
+            $this->assertSame('forced plugin lifecycle audit failure', $caught->getMessage());
+            $this->assertTrue($record->fresh()->is_enabled);
+            $this->assertDatabaseMissing('audit_logs', [
+                'action' => 'plugin.disabled',
+                'entity_type' => 'plugin',
+                'entity_id' => $slug,
+            ]);
+        } finally {
+            AuditLog::flushEventListeners();
+        }
+    }
+
 
 }
