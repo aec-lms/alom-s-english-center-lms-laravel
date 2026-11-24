@@ -33,6 +33,8 @@ class DashboardCustomizationTest extends TestCase
             ->assertSee('Total Courses')
             ->assertSee('Total Batches')
             ->assertSee('Analytics Overview')
+            ->assertSee('Monthly dashboard analytics for students, courses and batches')
+            ->assertSee('A detailed data table follows for assistive technology.');
             ->assertSee('Recent Activities')
             ->assertSee('Quick Actions')
             ->assertSee('Module Dashboards')
