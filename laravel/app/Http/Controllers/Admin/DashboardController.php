@@ -301,7 +301,13 @@ class DashboardController extends Controller
             && Schema::hasTable('students')
             && Schema::hasColumn('students', 'user_id')
             && Schema::hasColumn('students', 'branch_id')) {
-            $studentUserIds = DB::table('students')->whereNotNull('user_id')->whereNotNull('branch_id')->distinct()->pluck('user_id');
+            // Keep student-profile deduplication in SQL: plucking every student ID
+            // into PHP creates unbounded memory use on large multi-branch installs.
+            $studentUserIds = DB::table('students')
+                ->select('user_id')
+                ->whereNotNull('user_id')
+                ->whereNotNull('branch_id')
+                ->distinct();
             $branchStudentCount = DB::table('students')
                 ->where('branch_id', $branchId)
                 ->whereNotNull('user_id')
