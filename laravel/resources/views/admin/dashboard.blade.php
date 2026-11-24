@@ -373,6 +373,10 @@
         body.aec-admin-dashboard-page #admin-sidebar nav a { transition:none !important; transform:none !important; }
     }
 </style>
+<div class="mb-3 flex flex-wrap items-end justify-between gap-2">
+    <div><h2 class="text-base font-extrabold text-slate-900">Module Dashboards</h2><p class="text-xs text-slate-500">Live widgets provided by your enabled LMS modules</p></div>
+    <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Permission-aware modules</span>
+</div>
 <div id="dashboard-widgets" class="grid grid-cols-1 gap-4 md:grid-cols-4" data-refresh-url="{{ route('admin.dashboard.refresh') }}" data-analytics-url="{{ route('admin.dashboard.widget-analytics') }}" data-motion-enabled="{{ $motionSettings['enabled'] ? 'true' : 'false' }}" data-motion-preset="{{ $motionSettings['preset'] }}" data-motion-speed="{{ $motionSettings['speed'] }}" data-motion-intensity="{{ $motionSettings['intensity'] }}" data-motion-loading="{{ $motionSettings['loading'] }}" data-motion-counters="{{ $motionSettings['counters'] ? 'true' : 'false' }}" data-motion-hover="{{ $motionSettings['hover'] ? 'true' : 'false' }}">
         @foreach ($widgets as $widget)
             @if ($widget === 'users')
