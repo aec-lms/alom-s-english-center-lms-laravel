@@ -1,7 +1,7 @@
 @php
-    $examSummary = ['attempts' => 0, 'average' => null, 'pass_rate' => null, 'exams' => collect()];
-    if (\\Illuminate\\Support\\Facades\\Schema::hasTable('exam_attempts') && \\Illuminate\\Support\\Facades\\Schema::hasTable('exams')) {
-        $attempts = \\Illuminate\\Support\\Facades\\DB::table('exam_attempts as ea')
+    $examSummary = ['attempts' => 0, 'average' => null, 'pass_rate' => null];
+    if (\Illuminate\Support\Facades\Schema::hasTable('exam_attempts') && \Illuminate\Support\Facades\Schema::hasTable('exams')) {
+        $attempts = \Illuminate\Support\Facades\DB::table('exam_attempts as ea')
             ->join('exams as e', 'e.id', '=', 'ea.exam_id')
             ->whereNotNull('ea.submitted_at')
             ->whereNull('e.deleted_at')
@@ -10,25 +10,7 @@
         $examSummary['attempts'] = (clone $attempts)->count();
         $examSummary['average'] = (clone $attempts)->selectRaw('AVG(CASE WHEN ea.total_marks > 0 THEN (ea.score_obtained / ea.total_marks) * 100 ELSE NULL END) as average_score')->value('average_score');
         $examSummary['pass_rate'] = (clone $attempts)->selectRaw('AVG(CASE WHEN ea.passed = 1 THEN 100 ELSE 0 END) as pass_rate')->value('pass_rate');
-        $examSummary['exams'] = \\Illuminate\\Support\\Facades\\DB::table('exam_attempts as ea')
-            ->join('exams as e', 'e.id', '=', 'ea.exam_id')
-            ->whereNotNull('ea.submitted_at')
-            ->whereNull('e.deleted_at')
-            ->where('e.is_published', true)
-            ->where('ea.submitted_at', '>=', now()->subDays(30))
-            ->groupBy('e.id', 'e.title')
-            ->orderByRaw('COUNT(ea.id) DESC')
-            ->limit(5)
-            ->get(['e.title'])
-            ->map(function ($exam) {
-                $exam->attempts = \\Illuminate\\Support\\Facades\\DB::table('exam_attempts as ea')
-                    ->join('exams as e', 'e.id', '=', 'ea.exam_id')
-                    ->where('e.title', $exam->title)
-                    ->whereNotNull('ea.submitted_at')
-                    ->where('ea.submitted_at', '>=', now()->subDays(30))
-                    ->count();
-                return $exam;
-            });
+
     }
 @endphp
 <section class="rounded-2xl border border-slate-200 bg-white p-5">
