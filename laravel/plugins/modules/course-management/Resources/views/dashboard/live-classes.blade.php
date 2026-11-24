@@ -4,9 +4,15 @@
         && \Illuminate\Support\Facades\Schema::hasTable('courses')
         && \Illuminate\Support\Facades\Schema::hasColumn('live_classes', 'starts_at');
     if ($hasLiveClassTables) {
-        $upcomingClasses = \Illuminate\Support\Facades\DB::table('live_classes as lc')
-            ->join('courses as c', 'c.id', '=', 'lc.course_id')
-                ->whereIn('lc.status', ['upcoming', 'live'])
+        $classQuery = \Illuminate\Support\Facades\DB::table('live_classes as lc')
+            ->join('courses as c', 'c.id', '=', 'lc.course_id');
+        if (\Illuminate\Support\Facades\Schema::hasColumn('live_classes', 'deleted_at')) {
+            $classQuery->whereNull('lc.deleted_at');
+        }
+        if (\Illuminate\Support\Facades\Schema::hasColumn('courses', 'deleted_at')) {
+            $classQuery->whereNull('c.deleted_at');
+        }
+        $upcomingClasses = $classQuery->whereIn('lc.status', ['upcoming', 'live'])
             ->where(function ($query): void {
                 $query->where('lc.starts_at', '>=', now())->orWhere('lc.status', 'live');
             })
@@ -17,6 +23,7 @@
         if (\Illuminate\Support\Facades\Schema::hasTable('live_class_participants')) {
             $participantCounts = \Illuminate\Support\Facades\DB::table('live_class_participants')
                 ->whereNull('left_at')
+                ->where('last_seen_at', '>=', now()->subMinutes(5))
                 ->whereIn('live_class_id', $upcomingClasses->pluck('id'))
                 ->select('live_class_id')
                 ->selectRaw('COUNT(*) as active_count')
