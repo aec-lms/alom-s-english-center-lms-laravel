@@ -115,7 +115,7 @@ class DashboardPluginWidgetsTest extends TestCase
     public function test_branch_manager_never_receives_global_plugin_dashboard_widgets(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['branch-management', 'student-management']);
+        $this->activatePlugins(['branch-management', 'student-management', 'course-management', 'student-tracking', 'exam-management']);
         $branchId = DB::table('branches')->insertGetId([
             'code' => 'WIDGET-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
             'name' => 'Widget Scope Branch',
@@ -124,14 +124,17 @@ class DashboardPluginWidgetsTest extends TestCase
             'updated_at' => now(),
         ]);
         $manager = $this->createUserWithRole('branch_manager', $branchId);
-        $permissionIds = DB::table('permissions')->whereIn('slug', ['core.dashboard.view', 'branches.manage', 'students.manage'])->pluck('id');
-        $this->assertCount(3, $permissionIds);
+        $permissionIds = DB::table('permissions')->whereIn('slug', ['core.dashboard.view', 'branches.manage', 'students.manage', 'courses.manage', 'student-tracking.view', 'exams.manage'])->pluck('id');
+        $this->assertCount(6, $permissionIds);
         $manager->roles()->first()->permissions()->syncWithoutDetaching($permissionIds);
 
         $this->actingAs($manager)->get('/admin')
             ->assertOk()
             ->assertDontSee('Student Management')
             ->assertDontSee('Plugin Overview')
+            ->assertDontSee('Live & Upcoming Classes')
+            ->assertDontSee('Course Learning Progress')
+            ->assertDontSee('Exam Performance')
             ->assertSee('Registered Accounts');
     }
 }
