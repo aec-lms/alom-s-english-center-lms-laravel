@@ -1,6 +1,12 @@
 @php
     $examSummary = ['attempts' => 0, 'average' => null, 'pass_rate' => null];
-    if (\Illuminate\Support\Facades\Schema::hasTable('exam_attempts') && \Illuminate\Support\Facades\Schema::hasTable('exams')) {
+    $requiredAttemptColumns = ['exam_id', 'submitted_at', 'total_marks', 'score_obtained', 'passed'];
+    $hasExamSchema = \Illuminate\Support\Facades\Schema::hasTable('exam_attempts')
+        && \Illuminate\Support\Facades\Schema::hasTable('exams')
+        && \Illuminate\Support\Facades\Schema::hasColumn('exams', 'id')
+        && \Illuminate\Support\Facades\Schema::hasColumn('exams', 'is_published')
+        && collect($requiredAttemptColumns)->every(fn (string $column): bool => \Illuminate\Support\Facades\Schema::hasColumn('exam_attempts', $column));
+    if ($hasExamSchema) {
         $attempts = \Illuminate\Support\Facades\DB::table('exam_attempts as ea')
             ->join('exams as e', 'e.id', '=', 'ea.exam_id')
             ->whereNotNull('ea.submitted_at')
