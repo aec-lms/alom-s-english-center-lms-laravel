@@ -90,31 +90,138 @@
         </details>
     </div>
 
-    <section class="aec-dashboard-welcome relative isolate overflow-hidden rounded-3xl border border-blue-900/20 px-5 py-6 text-white shadow-lg sm:px-7 sm:py-7" aria-labelledby="aec-dashboard-welcome-title">
+    <section class="aec-dashboard-welcome relative isolate overflow-hidden rounded-3xl px-6 py-7 text-white shadow-xl sm:px-8 sm:py-9" aria-labelledby="aec-dashboard-welcome-title">
         <div class="aec-dashboard-welcome__gradient" aria-hidden="true"></div>
+        <div class="aec-dashboard-welcome__ribbon aec-dashboard-welcome__ribbon--one" aria-hidden="true"></div>
+        <div class="aec-dashboard-welcome__ribbon aec-dashboard-welcome__ribbon--two" aria-hidden="true"></div>
         <div class="aec-dashboard-welcome__glow aec-dashboard-welcome__glow--one" aria-hidden="true"></div>
         <div class="aec-dashboard-welcome__glow aec-dashboard-welcome__glow--two" aria-hidden="true"></div>
-        <div class="relative z-10 flex flex-col items-start justify-between gap-5 lg:flex-row lg:items-center">
-            <div class="max-w-3xl">
-                <span class="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[.18em] text-cyan-100">
-                    <span class="h-1.5 w-1.5 rounded-full bg-emerald-300 shadow-[0_0_0_4px_rgba(110,231,183,.12)]" aria-hidden="true"></span>
-                    AEC LMS · Admin Workspace
+        <div class="relative z-10 grid items-center gap-7 lg:grid-cols-[1.2fr_.8fr]">
+            <div class="max-w-2xl">
+                <span class="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[.2em] text-cyan-100">
+                    <span class="h-1.5 w-1.5 rounded-full bg-emerald-300" aria-hidden="true"></span>
+                    {{ config('app.name', 'Alom’s English Center') }} · LMS Workspace
                 </span>
-                <h2 id="aec-dashboard-welcome-title" class="mt-3 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">Welcome back, {{ auth()->user()?->name ?? 'Administrator' }}</h2>
-                <p class="mt-1.5 max-w-2xl text-sm leading-relaxed text-blue-100">Your institution operations, platform health and learning services — together in one workspace.</p>
-                @can('core.users.manage')
-                    <a href="{{ route('admin.users.index') }}" class="aec-dashboard-welcome__action mt-5 inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white px-4 py-2.5 text-xs font-extrabold text-blue-900 shadow-lg shadow-blue-950/15 transition hover:-translate-y-0.5 hover:bg-cyan-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-blue-800">
-                        Manage Users <span aria-hidden="true">→</span>
-                    </a>
-                @endcan
+                <h2 id="aec-dashboard-welcome-title" class="mt-4 text-3xl font-black tracking-tight text-white sm:text-4xl">Welcome Back, {{ auth()->user()?->name ?? 'Admin' }}! <span aria-hidden="true">👋</span></h2>
+                <p class="mt-2 text-base font-semibold text-blue-100 sm:text-lg">Your institution. Your learners. One connected workspace.</p>
+                <p class="mt-1 text-sm italic text-cyan-100">Dream Big… <span class="font-extrabold text-amber-300">Learn Better.</span></p>
+                <a href="#aec-dashboard-overview" class="mt-5 inline-flex items-center gap-3 rounded-full bg-amber-400 px-5 py-3 text-sm font-extrabold text-blue-950 shadow-lg shadow-blue-950/25 transition hover:-translate-y-0.5 hover:bg-yellow-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
+                    View Dashboard <span aria-hidden="true">→</span>
+                </a>
             </div>
-            <div class="aec-dashboard-welcome__date shrink-0 rounded-2xl border border-white/20 bg-slate-950/15 px-5 py-3 backdrop-blur-sm">
-                <div class="text-[10px] font-bold uppercase tracking-[.16em] text-cyan-100">Today</div>
-                <div class="mt-1 text-base font-extrabold text-white">{{ now()->translatedFormat('l, d F Y') }}</div>
-                <div class="mt-1 text-xs text-blue-100">Live institutional overview</div>
+            <div class="aec-dashboard-welcome__mission relative hidden min-h-36 items-center justify-center rounded-2xl border border-white/15 bg-slate-950/15 p-6 text-center backdrop-blur-sm sm:flex">
+                <div>
+                    <div class="text-4xl font-black leading-none text-amber-300" aria-hidden="true">“</div>
+                    <p class="font-serif text-3xl font-bold italic leading-tight text-white">Your Success<br><span class="text-amber-300">Our Mission</span></p>
+                    <div class="mx-auto mt-3 h-1 w-32 -rotate-6 rounded-full bg-amber-400"></div>
+                </div>
             </div>
         </div>
+        <div class="relative z-10 mt-6 flex flex-wrap items-center justify-between gap-2 border-t border-white/15 pt-4 text-xs text-blue-100">
+            <span>{{ now()->translatedFormat('l, d F Y') }}</span>
+            <span class="rounded-full bg-emerald-400/15 px-3 py-1 font-bold text-emerald-200">● System workspace</span>
+        </div>
     </section>
+
+    <section id="aec-dashboard-overview" class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Institution overview">
+        @foreach ([
+            ['key' => 'students', 'label' => 'Total Students', 'icon' => '♟', 'tone' => 'blue', 'caption' => 'Student records'],
+            ['key' => 'teachers', 'label' => 'Total Teachers', 'icon' => '♙', 'tone' => 'green', 'caption' => 'Teacher records'],
+            ['key' => 'courses', 'label' => 'Total Courses', 'icon' => '▤', 'tone' => 'violet', 'caption' => 'Course catalogue'],
+            ['key' => 'batches', 'label' => 'Total Batches', 'icon' => '▱', 'tone' => 'orange', 'caption' => 'Learning groups'],
+        ] as $stat)
+            <article class="aec-dashboard-stat aec-dashboard-stat--{{ $stat['tone'] }} relative overflow-hidden rounded-2xl p-4 text-white shadow-lg">
+                <div class="relative z-10 flex items-center gap-4">
+                    <div class="aec-dashboard-stat__icon flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-3xl" aria-hidden="true">{{ $stat['icon'] }}</div>
+                    <div class="min-w-0">
+                        <p class="text-xs font-bold text-white/85">{{ $stat['label'] }}</p>
+                        <p class="mt-0.5 text-3xl font-black tracking-tight tabular-nums"><span data-live-metric="{{ $stat['key'] }}" data-count-to="{{ $metrics[$stat['key']] }}">{{ number_format($metrics[$stat['key']]) }}</span></p>
+                        <p class="mt-0.5 text-[10px] font-medium text-white/75">{{ $stat['caption'] }}</p>
+                    </div>
+                </div>
+                <span class="aec-dashboard-stat__wave" aria-hidden="true"></span>
+            </article>
+        @endforeach
+    </section>
+
+    <section class="grid grid-cols-1 gap-4 xl:grid-cols-12" aria-label="Dashboard analytics and activity">
+        <article class="aec-dashboard-panel xl:col-span-7">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center gap-2"><span class="text-2xl" aria-hidden="true">📊</span><div><h2 class="text-base font-extrabold text-slate-900">Analytics Overview</h2><p class="text-xs text-slate-500">New records created over the last six months</p></div></div>
+                <span class="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">Last 6 Months</span>
+            </div>
+            @php
+                $trendMax = max(1, max(array_merge($dashboardAnalytics['students'], $dashboardAnalytics['courses'], $dashboardAnalytics['batches'])));
+            @endphp
+            <div class="mt-5 flex flex-wrap items-center gap-4 text-[11px] font-semibold text-slate-600">
+                <span class="inline-flex items-center gap-2"><i class="h-2.5 w-2.5 rounded-full bg-blue-600"></i>Students</span>
+                <span class="inline-flex items-center gap-2"><i class="h-2.5 w-2.5 rounded-full bg-emerald-500"></i>Courses</span>
+                <span class="inline-flex items-center gap-2"><i class="h-2.5 w-2.5 rounded-full bg-violet-600"></i>Batches</span>
+            </div>
+            <div class="mt-4 grid h-44 grid-cols-6 items-end gap-3 border-b border-slate-200 px-1">
+                @foreach ($dashboardAnalytics['labels'] as $index => $month)
+                    <div class="flex h-full flex-col items-center justify-end gap-2">
+                        <div class="flex h-full w-full items-end justify-center gap-1">
+                            @foreach (['students' => 'bg-blue-600', 'courses' => 'bg-emerald-500', 'batches' => 'bg-violet-600'] as $series => $color)
+                                @php $value = $dashboardAnalytics[$series][$index] ?? 0; @endphp
+                                <div class="aec-dashboard-chart-bar {{ $color }} w-3 rounded-t-md sm:w-5" style="height:{{ max(4, (int) round(($value / $trendMax) * 100)) }}%" title="{{ ucfirst($series) }}: {{ number_format($value) }}" role="img" aria-label="{{ $month }} {{ $series }}: {{ number_format($value) }}"></div>
+                            @endforeach
+                        </div>
+                        <span class="pb-2 text-[10px] font-semibold text-slate-500">{{ $month }}</span>
+                    </div>
+                @endforeach
+            </div>
+            <p class="mt-3 text-[10px] text-slate-400">Counts use available module records and their creation dates. Missing modules are shown as zero.</p>
+        </article>
+
+        <article class="aec-dashboard-panel xl:col-span-5">
+            <div class="flex items-center justify-between gap-3">
+                <div class="flex items-center gap-2"><span class="text-2xl" aria-hidden="true">⚡</span><div><h2 class="text-base font-extrabold text-slate-900">Recent Activities</h2><p class="text-xs text-slate-500">Latest recorded platform events</p></div></div>
+                @if (\Illuminate\Support\Facades\Route::has('admin.audit.index'))
+                    <a href="{{ route('admin.audit.index') }}" class="text-xs font-bold text-blue-700 hover:text-blue-900">View all →</a>
+                @endif
+            </div>
+            <div class="mt-4 space-y-3">
+                @forelse ($recentAudits as $log)
+                    <div class="flex min-w-0 items-start gap-3 border-b border-slate-100 pb-3 last:border-0 last:pb-0">
+                        <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-50 text-sm text-blue-700" aria-hidden="true">✓</span>
+                        <div class="min-w-0 flex-1">
+                            <p class="break-words text-xs font-bold text-slate-800">{{ \Illuminate\Support\Str::headline($log->action) }}</p>
+                            <p class="mt-0.5 truncate text-[10px] text-slate-500">{{ $log->user?->name ?? 'System' }} · {{ $log->entity_type }}</p>
+                        </div>
+                        <time class="shrink-0 text-[10px] text-slate-400" datetime="{{ optional($log->created_at)->toIso8601String() }}">{{ optional($log->created_at)->diffForHumans() }}</time>
+                    </div>
+                @empty
+                    <div class="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-xs text-slate-500">Activity will appear here as authorized platform actions are recorded.</div>
+                @endforelse
+            </div>
+        </article>
+    </section>
+
+    <section class="aec-dashboard-panel" aria-label="Quick actions">
+        <div class="mb-4 flex items-center gap-2"><span class="text-2xl" aria-hidden="true">🚀</span><div><h2 class="text-base font-extrabold text-slate-900">Quick Actions</h2><p class="text-xs text-slate-500">Shortcuts to the management areas available to your account</p></div></div>
+        <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+            @if (auth()->user()?->hasPermission('core.users.manage') && \Illuminate\Support\Facades\Route::has('admin.users.index'))
+                <a href="{{ route('admin.users.index') }}" class="aec-dashboard-action"><span>👥</span><strong>Manage Users</strong></a>
+            @endif
+            @if (\Illuminate\Support\Facades\Route::has('admin.plugins.index'))
+                <a href="{{ route('admin.plugins.index') }}" class="aec-dashboard-action"><span>🧩</span><strong>Plugin Center</strong></a>
+            @endif
+            @if (auth()->user()?->hasPermission('core.settings.manage') && \Illuminate\Support\Facades\Route::has('admin.setup-wizard.index'))
+                <a href="{{ route('admin.setup-wizard.index') }}" class="aec-dashboard-action"><span>⚙️</span><strong>Setup Wizard</strong></a>
+            @endif
+            @if (\Illuminate\Support\Facades\Route::has('admin.backups.index'))
+                <a href="{{ route('admin.backups.index') }}" class="aec-dashboard-action"><span>🗄️</span><strong>Backups</strong></a>
+            @endif
+            @if (\Illuminate\Support\Facades\Route::has('admin.audit.index'))
+                <a href="{{ route('admin.audit.index') }}" class="aec-dashboard-action"><span>📋</span><strong>Audit Logs</strong></a>
+            @endif
+            @if (\Illuminate\Support\Facades\Route::has('admin.appearance.index'))
+                <a href="{{ route('admin.appearance.index') }}" class="aec-dashboard-action"><span>🎨</span><strong>Appearance</strong></a>
+            @endif
+        </div>
+    </section>
+
     <style>
     body.aec-admin-dashboard-page { background:linear-gradient(180deg,#f8fbff 0%,#f1f5fb 100%) !important; }
     body.aec-admin-dashboard-page main { max-width:none; }
@@ -152,7 +259,26 @@
     body.aec-admin-dashboard-page main > header a:not(.bg-blue-600) {
         background:#fff !important; border-color:#e2e8f0 !important; color:#334155 !important;
     }
-    .aec-dashboard-welcome { isolation:isolate; min-height:178px; background:#10275d; }
+    .aec-dashboard-welcome { isolation:isolate; min-height:270px; background:#071d63; }
+    .aec-dashboard-welcome__gradient { position:absolute; inset:0; z-index:-3; background:radial-gradient(ellipse at 78% 35%,rgba(0,196,255,.55),transparent 32%),radial-gradient(ellipse at 15% 120%,rgba(127,56,255,.55),transparent 38%),linear-gradient(112deg,#071846 0%,#123a9a 48%,#075d9a 100%); }
+    .aec-dashboard-welcome__ribbon { position:absolute; z-index:-2; pointer-events:none; width:75%; height:130%; top:-15%; border:1px solid rgba(100,220,255,.22); border-radius:50%; transform:rotate(-18deg); }
+    .aec-dashboard-welcome__ribbon--one { right:-18%; box-shadow:0 0 0 18px rgba(80,170,255,.04),0 0 0 38px rgba(80,170,255,.035); }
+    .aec-dashboard-welcome__ribbon--two { right:-30%; top:-45%; border-color:rgba(255,255,255,.16); transform:rotate(-32deg); }
+    .aec-dashboard-welcome__mission { background:linear-gradient(145deg,rgba(8,25,73,.55),rgba(13,77,150,.25)); }
+    .aec-dashboard-stat { min-height:112px; isolation:isolate; }
+    .aec-dashboard-stat--blue { background:linear-gradient(120deg,#0878ef,#0750cb 70%,#0284c7); }
+    .aec-dashboard-stat--green { background:linear-gradient(120deg,#0bb77b,#07865f 70%,#047857); }
+    .aec-dashboard-stat--violet { background:linear-gradient(120deg,#8b32f2,#6d20c8 70%,#581c87); }
+    .aec-dashboard-stat--orange { background:linear-gradient(120deg,#ff9b13,#ed6b00 70%,#c2410c); }
+    .aec-dashboard-stat__icon { background:rgba(255,255,255,.17); box-shadow:inset 0 0 0 1px rgba(255,255,255,.18),0 8px 24px rgba(0,0,0,.12); }
+    .aec-dashboard-stat__wave { position:absolute; z-index:-1; width:180px; height:90px; right:-35px; bottom:-35px; border:1px solid rgba(255,255,255,.24); border-radius:50%; transform:rotate(-22deg); box-shadow:0 0 0 12px rgba(255,255,255,.05),0 0 0 26px rgba(255,255,255,.035); }
+    .aec-dashboard-panel { min-width:0; border:1px solid #e4eaf5; border-radius:1.25rem; background:rgba(255,255,255,.96); padding:1.15rem; box-shadow:0 10px 28px rgba(23,37,84,.07); }
+    .aec-dashboard-chart-bar { min-height:3px; box-shadow:0 2px 8px rgba(37,99,235,.14); }
+    .aec-dashboard-action { display:flex; min-height:82px; flex-direction:column; align-items:center; justify-content:center; gap:.4rem; border:1px solid #e4eaf5; border-radius:1rem; background:linear-gradient(145deg,#f8fbff,#eef4ff); padding:.7rem; text-align:center; text-decoration:none; transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease; }
+    .aec-dashboard-action:hover { transform:translateY(-2px); border-color:#93c5fd; box-shadow:0 8px 20px rgba(37,99,235,.1); }
+    .aec-dashboard-action span { font-size:1.45rem; }
+    .aec-dashboard-action strong { color:#17336f; font-size:.7rem; }
+
     .aec-dashboard-welcome__gradient {
         position:absolute; inset:0; z-index:-2;
         background:linear-gradient(112deg,#102957 0%,#1555a7 48%,#087f9b 100%);
@@ -232,6 +358,7 @@
     }
     @media (max-width:767px) {
         .aec-dashboard-welcome { min-height:0; padding:1.25rem; }
+        .aec-dashboard-stat { min-height:100px; }
         .aec-dashboard-welcome__date { min-width:0; width:100%; text-align:left; }
         #dashboard-widgets [data-dashboard-widget] { grid-column:1 / -1 !important; }
         body.aec-admin-dashboard-page main { padding:1rem !important; }
@@ -243,7 +370,7 @@
         body.aec-admin-dashboard-page #admin-sidebar nav a { transition:none !important; transform:none !important; }
     }
 </style>
-<div id="dashboard-widgets"<div id="dashboard-widgets" class="grid grid-cols-1 gap-4 md:grid-cols-4" data-refresh-url="{{ route('admin.dashboard.refresh') }}" data-analytics-url="{{ route('admin.dashboard.widget-analytics') }}" data-motion-enabled="{{ $motionSettings['enabled'] ? 'true' : 'false' }}" data-motion-preset="{{ $motionSettings['preset'] }}" data-motion-speed="{{ $motionSettings['speed'] }}" data-motion-intensity="{{ $motionSettings['intensity'] }}" data-motion-loading="{{ $motionSettings['loading'] }}" data-motion-counters="{{ $motionSettings['counters'] ? 'true' : 'false' }}" data-motion-hover="{{ $motionSettings['hover'] ? 'true' : 'false' }}">
+<div id="dashboard-widgets" class="grid grid-cols-1 gap-4 md:grid-cols-4" data-refresh-url="{{ route('admin.dashboard.refresh') }}" data-analytics-url="{{ route('admin.dashboard.widget-analytics') }}" data-motion-enabled="{{ $motionSettings['enabled'] ? 'true' : 'false' }}" data-motion-preset="{{ $motionSettings['preset'] }}" data-motion-speed="{{ $motionSettings['speed'] }}" data-motion-intensity="{{ $motionSettings['intensity'] }}" data-motion-loading="{{ $motionSettings['loading'] }}" data-motion-counters="{{ $motionSettings['counters'] ? 'true' : 'false' }}" data-motion-hover="{{ $motionSettings['hover'] ? 'true' : 'false' }}">
         @foreach ($widgets as $widget)
             @if ($widget === 'users')
                 <section data-dashboard-widget="users" data-size="{{ $widgetSizes['users'] ?? 'medium' }}" class="aec-dashboard-kpi aec-dashboard-kpi--users rounded-2xl border p-5">
