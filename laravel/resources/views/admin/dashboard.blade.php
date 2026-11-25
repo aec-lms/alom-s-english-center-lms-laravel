@@ -222,43 +222,39 @@
     </section>
 
     @php
-        $academicQuickActions = array_values(array_filter([
+        $academicQuickActions = [
             ['permission' => 'students.manage', 'route' => 'plugins.students.index', 'label' => 'Add Student', 'icon' => '👥'],
             ['permission' => 'teachers.manage', 'route' => 'plugins.teachers.index', 'label' => 'Add Teacher', 'icon' => '👨‍🏫'],
             ['permission' => 'batches.manage', 'route' => 'plugins.batches.index', 'label' => 'Create Batch', 'icon' => '🗓️'],
             ['permission' => 'courses.manage', 'route' => 'plugins.courses.index', 'label' => 'Add Course', 'icon' => '📚'],
             ['permission' => 'exams.manage', 'route' => 'plugins.exams.index', 'label' => 'Exam Management', 'icon' => '📝'],
             ['permission' => 'certificates.manage', 'route' => 'plugins.certificates.index', 'label' => 'Certificates', 'icon' => '🏅'],
-        ], static fn (array $action): bool => auth()->user()?->hasPermission($action['permission']) === true
-            && \Illuminate\Support\Facades\Route::has($action['route'])));
+        ];
+        $systemQuickActions = [
+            ['permission' => 'core.users.manage', 'route' => 'admin.users.index', 'label' => 'Manage Users', 'icon' => '👥'],
+            ['permission' => null, 'route' => 'admin.plugins.index', 'label' => 'Plugin Center', 'icon' => '🧩'],
+            ['permission' => 'core.settings.manage', 'route' => 'admin.setup-wizard.index', 'label' => 'Setup Wizard', 'icon' => '⚙️'],
+            ['permission' => null, 'route' => 'admin.backups.index', 'label' => 'Backups', 'icon' => '🗄️'],
+            ['permission' => null, 'route' => 'admin.audit.index', 'label' => 'Audit Logs', 'icon' => '📋'],
+            ['permission' => null, 'route' => 'admin.appearance.index', 'label' => 'Appearance', 'icon' => '🎨'],
+        ];
+        $quickActions = [];
+        foreach (array_merge($academicQuickActions, $systemQuickActions) as $action) {
+            if (count($quickActions) >= 6) break;
+            if (($action['permission'] === null || auth()->user()?->hasPermission($action['permission']) === true)
+                && \\Illuminate\\Support\\Facades\\Route::has($action['route'])) {
+                $quickActions[] = $action;
+            }
+        }
     @endphp
     <section class="aec-dashboard-panel" aria-label="Quick actions">
-        <div class="mb-4 flex items-center gap-2"><span class="text-2xl" aria-hidden="true">🚀</span><div><h2 class="text-base font-extrabold text-slate-900">Quick Actions</h2><p class="text-xs text-slate-500">Shortcuts to the academic areas available to your account</p></div></div>
+        <div class="mb-4 flex items-center gap-2"><span class="text-2xl" aria-hidden="true">🚀</span><div><h2 class="text-base font-extrabold text-slate-900">Quick Actions</h2><p class="text-xs text-slate-500">Shortcuts to the academic and system areas available to your account</p></div></div>
         <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
-            @if ($academicQuickActions !== [])
-                @foreach ($academicQuickActions as $action)
-                    <a href="{{ route($action['route']) }}" class="aec-dashboard-action"><span aria-hidden="true">{{ $action['icon'] }}</span><strong>{{ $action['label'] }}</strong></a>
-                @endforeach
-            @else
-                @if (auth()->user()?->hasPermission('core.users.manage') && \Illuminate\Support\Facades\Route::has('admin.users.index'))
-                    <a href="{{ route('admin.users.index') }}" class="aec-dashboard-action"><span>👥</span><strong>Manage Users</strong></a>
-                @endif
-                @if (\Illuminate\Support\Facades\Route::has('admin.plugins.index'))
-                    <a href="{{ route('admin.plugins.index') }}" class="aec-dashboard-action"><span>🧩</span><strong>Plugin Center</strong></a>
-                @endif
-                @if (auth()->user()?->hasPermission('core.settings.manage') && \Illuminate\Support\Facades\Route::has('admin.setup-wizard.index'))
-                    <a href="{{ route('admin.setup-wizard.index') }}" class="aec-dashboard-action"><span>⚙️</span><strong>Setup Wizard</strong></a>
-                @endif
-                @if (\Illuminate\Support\Facades\Route::has('admin.backups.index'))
-                    <a href="{{ route('admin.backups.index') }}" class="aec-dashboard-action"><span>🗄️</span><strong>Backups</strong></a>
-                @endif
-                @if (\Illuminate\Support\Facades\Route::has('admin.audit.index'))
-                    <a href="{{ route('admin.audit.index') }}" class="aec-dashboard-action"><span>📋</span><strong>Audit Logs</strong></a>
-                @endif
-                @if (\Illuminate\Support\Facades\Route::has('admin.appearance.index'))
-                    <a href="{{ route('admin.appearance.index') }}" class="aec-dashboard-action"><span>🎨</span><strong>Appearance</strong></a>
-                @endif
-            @endif
+            @forelse ($quickActions as $action)
+                <a href="{{ route($action['route']) }}" class="aec-dashboard-action"><span aria-hidden="true">{{ $action['icon'] }}</span><strong>{{ $action['label'] }}</strong></a>
+            @empty
+                <p class="col-span-full rounded-xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">No shortcuts are available for your current permissions.</p>
+            @endforelse
         </div>
     </section>
     <style>
