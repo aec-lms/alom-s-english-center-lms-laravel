@@ -2,7 +2,12 @@
     "name": "aec-lms/aec-lms-laravel",
     "type": "project",
     "description": "AEC LMS — Laravel 12 Plugin-Driven Learning Management System",
-    "keywords": ["laravel", "lms", "education", "plugins"],
+    "keywords": [
+        "laravel",
+        "lms",
+        "education",
+        "plugins"
+    ],
     "license": "proprietary",
     "require": {
         "php": "^8.3",
@@ -62,8 +67,26 @@
             "Plugins\\Modules\\HrStaffManagement\\": "plugins/modules/hr-staff-management/",
             "Plugins\\Modules\\EmailNotifications\\": "plugins/modules/email-notifications/",
             "Plugins\\Modules\\MarketingManagement\\": "plugins/modules/marketing-management/",
+            "Plugins\\Modules\\AlBrandingLoader\\": "plugins/modules/al-branding-loader/",
+            "Plugins\\Modules\\AssignmentManagement\\": "plugins/modules/assignment-management/",
+            "Plugins\\Modules\\BoardQuestionSolver\\": "plugins/modules/board-question-solver/",
             "Plugins\\Modules\\CommerceCart\\": "plugins/modules/commerce-cart/",
-            "Plugins\\Modules\\FlashSale\\": "plugins/modules/flash-sale/"
+            "Plugins\\Modules\\CourseAssessments\\": "plugins/modules/course-assessments/",
+            "Plugins\\Modules\\CourseBundles\\": "plugins/modules/course-bundles/",
+            "Plugins\\Modules\\CourseContentStudio\\": "plugins/modules/course-content-studio/",
+            "Plugins\\Modules\\CourseWishlist\\": "plugins/modules/course-wishlist/",
+            "Plugins\\Modules\\ExpenseManagement\\": "plugins/modules/expense-management/",
+            "Plugins\\Modules\\FlashSale\\": "plugins/modules/flash-sale/",
+            "Plugins\\Modules\\GuardianPortal\\": "plugins/modules/guardian-portal/",
+            "Plugins\\Modules\\LearnAndEarn\\": "plugins/modules/learn-and-earn/",
+            "Plugins\\Modules\\MediaLibrary\\": "plugins/modules/media-library/",
+            "Plugins\\Modules\\Phonetics\\": "plugins/modules/phonetics/",
+            "Plugins\\Modules\\PushNotifications\\": "plugins/modules/push-notifications/",
+            "Plugins\\Modules\\QuizContest\\": "plugins/modules/quiz-contest/",
+            "Plugins\\Modules\\ReferralIncome\\": "plugins/modules/referral-income/",
+            "Plugins\\Modules\\StudentTracing\\": "plugins/modules/student-tracing/",
+            "Plugins\\Modules\\StudentTracking\\": "plugins/modules/student-tracking/",
+            "Plugins\\Modules\\SupportCenter\\": "plugins/modules/support-center/"
         }
     },
     "autoload-dev": {

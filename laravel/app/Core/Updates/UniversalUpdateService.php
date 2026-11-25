@@ -12,6 +12,7 @@ use App\Models\PluginRecord;
 use App\Models\SystemSetting;
 use App\Models\UpdateLog;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -77,12 +78,7 @@ class UniversalUpdateService
                 throw new RuntimeException('Update archive exceeds the allowed uncompressed size.');
             }
 
-            $attributes = (int) ($stat['external_attributes'] ?? 0);
-            $fileType = ($attributes >> 16) & 0xF000;
-            if ($fileType === 0xA000) {
-                $zip->close();
-                throw new RuntimeException("Symlink entry rejected in update ZIP: {$entryName}");
-            }
+            $this->assertRegularZipEntry($zip, $i, $entryName);
         }
 
         $manifestRaw = $zip->getFromName('update-manifest.json');
@@ -298,11 +294,19 @@ class UniversalUpdateService
     public function saveRemoteFeedUrl(string $url, ?int $actorId = null): void
     {
         $parts = $this->assertSafeRemoteFeedUrl($url, false);
-        SystemSetting::query()->updateOrCreate(
-            ['key' => 'lms_update_feed_url'],
-            ['value' => trim($url), 'is_encrypted' => false, 'updated_by' => $actorId]
-        );
-        $this->audit->log('update.feed_configured', 'system_setting', 'lms_update_feed_url', ['host' => $parts['host']], $actorId);
+        DB::transaction(function () use ($url, $actorId, $parts): void {
+            SystemSetting::query()->updateOrCreate(
+                ['key' => 'lms_update_feed_url'],
+                ['value' => trim($url), 'is_encrypted' => false, 'updated_by' => $actorId]
+            );
+            $this->audit->logRequired(
+                'update.feed_configured',
+                'system_setting',
+                'lms_update_feed_url',
+                ['host' => $parts['host']],
+                $actorId,
+            );
+        });
     }
 
     public function checkRemoteFeed(): array
@@ -403,34 +407,91 @@ class UniversalUpdateService
 
     private function extractToStaging(string $packagePath, string $stagingDir): void
     {
-        if (!is_dir($stagingDir)) {
-            mkdir($stagingDir, 0755, true);
+        if (is_link($stagingDir) || (!is_dir($stagingDir) && !mkdir($stagingDir, 0700, true) && !is_dir($stagingDir))) {
+            throw new RuntimeException('Unable to create a private update staging directory.');
         }
+
         $zip = new ZipArchive();
         if ($zip->open($packagePath) !== true) {
             throw new RuntimeException('Unable to open signed update ZIP for staging.');
         }
 
-        for ($i = 0; $i < $zip->numFiles; $i++) {
-            $entry = (string) $zip->getNameIndex($i);
-            $this->assertSafeZipEntryPath($entry);
-            $dest = $stagingDir . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $entry);
-            if (str_ends_with($entry, '/')) {
-                if (!is_dir($dest)) {
-                    mkdir($dest, 0755, true);
+        $totalBytes = 0;
+        try {
+            for ($i = 0; $i < $zip->numFiles; $i++) {
+                $entry = (string) $zip->getNameIndex($i);
+                $this->assertSafeZipEntryPath($entry);
+                $this->assertRegularZipEntry($zip, $i, $entry);
+                $stat = $zip->statIndex($i);
+                $expectedSize = (int) ($stat['size'] ?? -1);
+                $totalBytes += max(0, $expectedSize);
+                if ($expectedSize < 0 || $expectedSize > 268435456 || $totalBytes > 1073741824) {
+                    throw new RuntimeException('Update ZIP entry exceeds the allowed extraction size.');
                 }
-                continue;
+
+                $dest = $stagingDir . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $entry);
+                if (str_ends_with($entry, '/')) {
+                    if (file_exists($dest) && !is_dir($dest)) {
+                        throw new RuntimeException("Update ZIP directory conflicts with a file: {$entry}");
+                    }
+                    if (!is_dir($dest) && !mkdir($dest, 0700, true) && !is_dir($dest)) {
+                        throw new RuntimeException('Unable to create update staging subdirectory.');
+                    }
+                    continue;
+                }
+
+                $parent = dirname($dest);
+                if (!is_dir($parent) && !mkdir($parent, 0700, true) && !is_dir($parent)) {
+                    throw new RuntimeException('Unable to create update staging subdirectory.');
+                }
+
+                $input = $zip->getStream($entry);
+                if ($input === false) {
+                    throw new RuntimeException("Unable to stream update ZIP entry: {$entry}");
+                }
+                $output = fopen($dest, 'xb');
+                if ($output === false) {
+                    fclose($input);
+                    throw new RuntimeException("Unable to create staged update file: {$entry}");
+                }
+
+                try {
+                    $copied = stream_copy_to_stream($input, $output, $expectedSize + 1);
+                    if ($copied !== $expectedSize || !fflush($output)) {
+                        throw new RuntimeException("Update ZIP entry was not extracted completely: {$entry}");
+                    }
+                } catch (\Throwable $exception) {
+                    fclose($input);
+                    fclose($output);
+                    @unlink($dest);
+                    throw $exception;
+                }
+                fclose($input);
+                fclose($output);
+                @chmod($dest, 0600);
             }
-            $parent = dirname($dest);
-            if (!is_dir($parent)) {
-                mkdir($parent, 0755, true);
-            }
-            $contents = $zip->getFromIndex($i);
-            if ($contents !== false) {
-                file_put_contents($dest, $contents);
-            }
+        } finally {
+            $zip->close();
         }
-        $zip->close();
+    }
+
+    /**
+     * Read Unix file type from the ZIP central directory, not statIndex metadata.
+     * Only regular files and directories are accepted; symlinks and special files fail closed.
+     */
+    private function assertRegularZipEntry(ZipArchive $zip, int $index, string $entryName): void
+    {
+        $operatingSystem = 0;
+        $attributes = 0;
+        if (!$zip->getExternalAttributesIndex($index, $operatingSystem, $attributes)
+            || $operatingSystem !== ZipArchive::OPSYS_UNIX) {
+            return;
+        }
+
+        $fileType = (((int) $attributes) >> 16) & 0170000;
+        if ($fileType !== 0 && !in_array($fileType, [0100000, 0040000], true)) {
+            throw new RuntimeException("Symlink or special file entry rejected in update ZIP: {$entryName}");
+        }
     }
 
     private function resolveTargetDirectory(string $targetType, string $targetSlug): ?string

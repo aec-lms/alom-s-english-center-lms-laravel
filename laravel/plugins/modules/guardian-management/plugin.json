@@ -26,5 +26,14 @@
             "order": 100,
             "permission": "guardians.manage"
         }
+    ],
+    "dashboard_widgets": [
+        {
+            "key": "overview",
+            "label": "Guardian Management",
+            "view": "dashboard.widget",
+            "permission": "guardians.manage",
+            "default": false
+        }
     ]
 }

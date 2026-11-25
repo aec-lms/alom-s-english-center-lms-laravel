@@ -15,6 +15,7 @@ final class PluginCategoryRegistry
     private const LABELS = [
         'academic-learning' => 'Academic & Learning',
         'student-lifecycle' => 'Student & People Lifecycle',
+        'payments' => 'Payment Systems',
         'finance-commerce' => 'Finance & Commerce',
         'communication-support' => 'Communication & Support',
         'content-cms' => 'Content & Website CMS',
@@ -38,10 +39,14 @@ final class PluginCategoryRegistry
             'admission-management', 'guardian-management', 'guardian-portal',
             'student-management', 'student-tracing', 'student-tracking', 'teacher-management',
         ],
+        'payments' => [
+            'gateway-bank-transfer', 'gateway-bkash', 'gateway-cash', 'gateway-card', 'gateway-nagad', 'gateway-paypal',
+            'gateway-rocket', 'gateway-sslcommerz', 'gateway-stripe',
+            'payment-management', 'universal-payment',
+        ],
         'finance-commerce' => [
             'commerce-cart', 'course-bundles', 'expense-management', 'fees-management',
-            'gateway-card', 'gateway-paypal', 'gateway-sslcommerz', 'gateway-stripe',
-            'payment-management', 'referral-income', 'storefront-catalog', 'universal-payment',
+            'referral-income', 'storefront-catalog',
         ],
         'communication-support' => [
             'email-notifications', 'notice-board', 'notification-center',
@@ -66,7 +71,7 @@ final class PluginCategoryRegistry
         'academic' => 'academic-learning',
         'education' => 'academic-learning',
         'finance' => 'finance-commerce',
-        'payment-gateway' => 'finance-commerce',
+        'payment-gateway' => 'payments',
         'commerce' => 'finance-commerce',
         'communication' => 'communication-support',
         'communications' => 'communication-support',

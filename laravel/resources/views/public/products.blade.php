@@ -15,6 +15,18 @@
                 </p>
             </div>
 
+            <form method="GET" action="{{ route('public.products') }}" class="max-w-2xl mx-auto flex gap-2 rounded-2xl bg-white p-3 shadow-sm border border-slate-200">
+                <label class="sr-only" for="product-search">{{ __('Search products') }}</label>
+                <input id="product-search" type="search" name="q" value="{{ $searchTerm }}" maxlength="100" placeholder="{{ __('Search books, study kits or categories') }}" class="min-w-0 flex-1 rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
+                <button type="submit" class="rounded-xl bg-[#0077CC] px-5 py-3 text-sm font-bold text-white hover:bg-[#0060A8]">{{ __('Search') }}</button>
+            </form>
+
+            @if ($products->isEmpty())
+                <section class="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
+                    <h2 class="text-lg font-bold text-slate-800">{{ __('No products found') }}</h2>
+                    <p class="mt-2 text-sm text-slate-500">{{ __('Try another product name or category.') }}</p>
+                </section>
+            @else
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 @foreach ($products as $prod)
                     <article class="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-xs hover:shadow-xl hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between">
@@ -50,6 +62,7 @@
                     </article>
                 @endforeach
             </div>
+            @endif
         </div>
     </main>
 

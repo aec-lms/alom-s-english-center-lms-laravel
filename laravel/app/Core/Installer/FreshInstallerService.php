@@ -524,6 +524,14 @@ class FreshInstallerService
             SystemSetting::query()->updateOrCreate(['key' => 'finance.default_currency'], ['value' => $currency]);
             SystemSetting::query()->updateOrCreate(['key' => 'legacy_records_imported'], ['value' => 'false']);
 
+            $this->audit->logRequired(
+                'core.installed',
+                'system',
+                'fresh_install',
+                ['legacy_records_imported' => false],
+                $admin->id
+            );
+
             return $admin;
         });
 
@@ -563,8 +571,6 @@ class FreshInstallerService
         // The installed marker is authoritative. Remove the diagnostic progress
         // marker only after the final marker is atomically in place.
         @unlink($lockPath . '.in-progress');
-
-        $this->audit->log('core.installed', 'system', 'fresh_install', ['legacy_records_imported' => false], $admin->id);
 
         // Never return generated encryption/signing secrets to the installer UI.
         return ['admin_id' => $admin->id, 'lock_path' => $lockPath];

@@ -9,10 +9,13 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
 use Plugins\Modules\CourseManagement\Services\CourseCommercePaymentSettlementService;
+use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
+use Plugins\Modules\PaymentManagement\Services\PaymentSettlementService;
 use RuntimeException;
 
 class StorefrontPaymentGatewayService
 {
+    private const TERMINAL_PAYMENT_STATUSES = ['failed', 'cancelled', 'refunded', 'reversed', 'rejected', 'chargeback'];
     public function __construct(private readonly PluginManager $plugins) {}
 
     public function initiateSslcommerz(UniversalPaymentTransaction $transaction, object $item, object $user, string $payerContact, array $context = []): string
@@ -97,6 +100,9 @@ class StorefrontPaymentGatewayService
             ->firstOrFail();
 
         if ($transaction->status === 'verified') return $transaction;
+        if (in_array($transaction->status, self::TERMINAL_PAYMENT_STATUSES, true)) {
+            throw new RuntimeException('A terminal payment cannot be re-verified or used to restore access.');
+        }
 
         $storeId = (string) $this->plugins->getSetting('gateway-sslcommerz', 'store_id', '');
         $storePassword = (string) $this->plugins->getSetting('gateway-sslcommerz', 'store_password', '');
@@ -143,6 +149,10 @@ class StorefrontPaymentGatewayService
             'validation_status' => strtoupper((string) $data['status']),
         ];
 
+        if ($transaction->fee_invoice_id !== null) {
+            return $this->settleVerifiedGatewayPayment($transaction, $validationId, $providerDetails);
+        }
+
         $notes = json_decode((string) $transaction->notes, true);
         $purpose = is_array($notes) ? ($notes['purpose'] ?? null) : null;
         if (in_array($purpose, ['course_cart', 'course_gift', 'course_gift_voucher'], true)) {
@@ -175,11 +185,88 @@ class StorefrontPaymentGatewayService
     }
 
  
+    public function settleVerifiedGatewayPayment(UniversalPaymentTransaction $transaction, string $externalReference, array $providerDetails = []): UniversalPaymentTransaction
+    {
+        if ($transaction->fee_invoice_id !== null) {
+            return DB::transaction(function () use ($transaction, $externalReference, $providerDetails): UniversalPaymentTransaction {
+                $locked = UniversalPaymentTransaction::query()->whereKey($transaction->id)->lockForUpdate()->firstOrFail();
+                if ($locked->status === 'verified') return $locked;
+                if (in_array($locked->status, self::TERMINAL_PAYMENT_STATUSES, true)) {
+                    throw new RuntimeException('A terminal payment cannot be settled.');
+                }
+
+                $invoice = DB::table('fee_invoices')->where('id', $locked->fee_invoice_id)->lockForUpdate()->first();
+                if (!$invoice) throw new RuntimeException('The fee invoice linked to this payment no longer exists.');
+                $remaining = round((float) $invoice->net_amount - (float) $invoice->paid_amount, 2);
+                if ($remaining <= 0 || (float) $locked->amount > $remaining + 0.01) {
+                    throw new RuntimeException('The payment amount exceeds the remaining invoice balance.');
+                }
+
+                app(ExternalTransactionReferenceRegistry::class)->claim(
+                    (string) $locked->gateway,
+                    $externalReference,
+                    (int) $locked->id
+                );
+
+                if (!app(PluginManager::class)->isEnabled('payment-management')) {
+                    throw new RuntimeException('Payment Management must be enabled for automatic invoice settlement.');
+                }
+
+                $payment = PaymentTransaction::query()->create([
+                    'transaction_ref' => 'UPAY-' . strtoupper(bin2hex(random_bytes(10))),
+                    'invoice_id' => $invoice->id,
+                    'branch_id' => $invoice->branch_id ?? null,
+                    'gateway_slug' => 'gateway-' . str_replace('_', '-', (string) $locked->gateway),
+                    'amount' => $locked->amount,
+                    'currency' => strtoupper((string) $locked->currency),
+                    'status' => 'initiated',
+                    'metadata' => [
+                        'source' => 'universal-payment',
+                        'universal_payment_transaction_id' => (int) $locked->id,
+                        'provider_details' => $providerDetails,
+                    ],
+                ]);
+
+                app(PaymentSettlementService::class)->settleTransaction(
+                    $payment,
+                    $externalReference,
+                    array_merge(['source' => 'universal-payment'], $providerDetails)
+                );
+
+                $notes = json_decode((string) $locked->notes, true);
+                $locked->update([
+                    'external_trx_id' => $externalReference,
+                    'status' => 'verified',
+                    'verified_at' => now(),
+                    'notes' => json_encode(array_merge(is_array($notes) ? $notes : [], $providerDetails), JSON_THROW_ON_ERROR),
+                ]);
+
+                return $locked->fresh();
+            });
+        }
+
+        $notes = json_decode((string) $transaction->notes, true);
+        $purpose = is_array($notes) ? ($notes['purpose'] ?? null) : null;
+
+        if (in_array($purpose, ['course_cart', 'course_gift', 'course_gift_voucher'], true)) {
+            return app(CourseCommercePaymentSettlementService::class)->settle($transaction, $externalReference, $providerDetails);
+        }
+
+        if ($transaction->learn_earn_exam_id) {
+            return $this->grantExamAccess($transaction, $externalReference, $providerDetails);
+        }
+
+        return $this->grantEbookAccess($transaction, $externalReference, $providerDetails);
+    }
+
     private function grantExamAccess(UniversalPaymentTransaction $transaction, string $externalReference, array $providerDetails): UniversalPaymentTransaction
     {
         return DB::transaction(function () use ($transaction, $externalReference, $providerDetails): UniversalPaymentTransaction {
             $locked = UniversalPaymentTransaction::query()->whereKey($transaction->id)->lockForUpdate()->firstOrFail();
             if ($locked->status === 'verified') return $locked;
+            if (in_array($locked->status, self::TERMINAL_PAYMENT_STATUSES, true)) {
+                throw new RuntimeException('A terminal payment cannot be re-verified or used to restore access.');
+            }
 
             if (!$locked->learn_earn_exam_id || !$locked->user_id) {
                 throw new RuntimeException('This payment is not linked to a registered paid-exam student.');
@@ -246,6 +333,9 @@ class StorefrontPaymentGatewayService
         return DB::transaction(function () use ($transaction, $externalReference, $providerDetails): UniversalPaymentTransaction {
             $locked = UniversalPaymentTransaction::query()->whereKey($transaction->id)->lockForUpdate()->firstOrFail();
             if ($locked->status === 'verified') return $locked;
+            if (in_array($locked->status, self::TERMINAL_PAYMENT_STATUSES, true)) {
+                throw new RuntimeException('A terminal payment cannot be re-verified or used to restore access.');
+            }
 
             if (!$locked->storefront_item_id || !$locked->user_id) {
                 throw new RuntimeException('This payment is not linked to a registered e-book buyer.');

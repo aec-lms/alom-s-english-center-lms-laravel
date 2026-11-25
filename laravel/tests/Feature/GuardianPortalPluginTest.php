@@ -160,6 +160,62 @@ class GuardianPortalPluginTest extends TestCase
             ->assertNotFound();
     }
 
+    public function test_shared_guardian_dashboard_uses_the_same_branch_safe_child_scope_as_full_portal(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['branch-management', 'guardian-portal', 'guardian-management', 'student-management']);
+
+        $branchA = DB::table('branches')->insertGetId([
+            'code' => 'GSH-A-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'name' => 'Guardian Shared Branch A',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $branchB = DB::table('branches')->insertGetId([
+            'code' => 'GSH-B-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)),
+            'name' => 'Guardian Shared Branch B',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $guardianUser = $this->createUserWithRole('guardian');
+        $guardianId = DB::table('guardians')->insertGetId([
+            'user_id' => $guardianUser->id,
+            'branch_id' => $branchA,
+            'relationship' => 'Parent',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $sameBranchUser = $this->createUserWithRole('student');
+        $globalStudentUser = $this->createUserWithRole('student');
+        $foreignBranchUser = $this->createUserWithRole('student');
+        $sameBranchStudent = $this->createStudent($sameBranchUser->id, 'GSH-SAME', $branchA);
+        $globalStudent = $this->createStudent($globalStudentUser->id, 'GSH-GLOBAL', null);
+        $foreignBranchStudent = $this->createStudent($foreignBranchUser->id, 'GSH-FOREIGN', $branchB);
+
+        DB::table('guardian_student')->insert([
+            ['guardian_id' => $guardianId, 'student_id' => $sameBranchStudent, 'is_primary' => true, 'created_at' => now(), 'updated_at' => now()],
+            ['guardian_id' => $guardianId, 'student_id' => $globalStudent, 'is_primary' => false, 'created_at' => now(), 'updated_at' => now()],
+            ['guardian_id' => $guardianId, 'student_id' => $foreignBranchStudent, 'is_primary' => false, 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        $this->actingAs($guardianUser)->get('/dashboard')
+            ->assertOk()
+            ->assertSee('GSH-SAME')
+            ->assertSee('GSH-GLOBAL')
+            ->assertDontSee('GSH-FOREIGN')
+            ->assertViewHas('metrics', fn (array $metrics): bool => $metrics['linked_students'] === 2);
+
+        $this->actingAs($guardianUser)->get('/guardian-portal')
+            ->assertOk()
+            ->assertSee('GSH-SAME')
+            ->assertSee('GSH-GLOBAL')
+            ->assertDontSee('GSH-FOREIGN');
+    }
+
     private function createStudent(int $userId, string $code, ?int $branchId = null): int
     {
         return DB::table('students')->insertGetId([

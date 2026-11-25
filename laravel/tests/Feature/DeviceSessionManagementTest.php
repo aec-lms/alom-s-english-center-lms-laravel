@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Models\AuditLog;
 use App\Models\DeviceSession;
+use RuntimeException;
 use Tests\TestCase;
 
 class DeviceSessionManagementTest extends TestCase
@@ -127,4 +129,32 @@ class DeviceSessionManagementTest extends TestCase
 
         $this->assertNull($session->fresh()->revoked_at);
     }
+
+    public function test_session_revocation_rolls_back_when_required_audit_write_fails(): void
+    {
+        $this->markSystemInstalled();
+        $admin = $this->createUserWithRole('admin');
+        $student = $this->createUserWithRole('student');
+        $session = DeviceSession::query()->create([
+            'user_id' => $student->id,
+            'session_hash' => hash('sha256', 'audit-failure-session'),
+            'device_name' => 'Audit failure browser',
+            'logged_in_at' => now()->subHour(),
+            'last_seen_at' => now(),
+        ]);
+
+        AuditLog::creating(static function (): void {
+            throw new RuntimeException('forced session audit failure');
+        });
+
+        try {
+            $this->actingAs($admin)
+                ->patch(route('admin.security.sessions.revoke', $session))
+                ->assertStatus(500);
+            $this->assertNull($session->fresh()->revoked_at);
+        } finally {
+            AuditLog::flushEventListeners();
+        }
+    }
+
 }

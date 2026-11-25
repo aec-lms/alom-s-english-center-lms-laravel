@@ -1,10 +1,10 @@
 {
     "slug": "universal-payment",
     "name": "Universal Payment Gateway Plugin",
-    "version": "2.3.1",
+    "version": "2.4.0",
     "author": "AEC Core Team",
     "category": "finance",
-    "description": "Credential-free payment orchestrator that discovers independently installed and configured gateway plugins, provides a unified gateway status and checkout selection layer, and leaves cash/bank-transfer reconciliation in the LMS ledger. Provider credentials belong only to their dedicated plugins.",
+    "description": "Payment Core and gateway-plugin registry for online checkout, hosted-provider callbacks, canonical invoice settlement, offline/manual receipts, bank transfers and card acquiring adapters. Provider credentials remain isolated in each gateway plugin; manual receipts require authorized review.",
     "core_compatibility": "^2.0",
     "dependencies": [],
     "provider": "Plugins\\Modules\\UniversalPayment\\Providers\\UniversalPaymentServiceProvider",
@@ -58,6 +58,12 @@
         "payment-management",
         "referral-income",
         "marketing-management",
-        "course-management"
+        "course-management",
+        "gateway-bkash",
+        "gateway-nagad",
+        "gateway-rocket",
+        "gateway-card",
+        "gateway-cash",
+        "gateway-bank-transfer"
     ]
 }

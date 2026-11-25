@@ -300,9 +300,19 @@ class CourseBundleController extends Controller
             ? DB::table('fee_invoices')->where('id', $record->invoice_id)->first()
             : null;
         $this->syncOrderPaymentStatus($record, $invoice);
-        $paymentReady = $this->plugins->isEnabled('universal-payment') && Schema::hasTable('universal_payment_transactions');
+        $paymentPluginAvailable = $this->plugins->isEnabled('universal-payment')
+            && Schema::hasTable('universal_payment_transactions');
+        $enabledGateways = array_filter(array_map('trim', explode(',', (string) $this->plugins->getSetting(
+            'universal-payment',
+            'enabled_gateways',
+            'sslcommerz,bkash,nagad,rocket,card,bank_cash'
+        ))));
+        $offlinePaymentsEnabled = (string) $this->plugins->getSetting('universal-payment', 'allow_offline_payments', '1') === '1';
+        $paymentReady = $paymentPluginAvailable
+            && $offlinePaymentsEnabled
+            && in_array('bank_cash', $enabledGateways, true);
 
-        return view('course-bundles::order-show', compact('record', 'invoice', 'paymentReady'));
+        return view('course-bundles::order-show', compact('record', 'invoice', 'paymentReady', 'paymentPluginAvailable'));
     }
 
     private function syncOrderPaymentStatus(CourseBundleOrder $order, $invoice): void

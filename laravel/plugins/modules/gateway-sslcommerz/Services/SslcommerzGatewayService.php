@@ -20,7 +20,7 @@ class SslcommerzGatewayService
         private readonly PaymentSettlementService $settlement,
     ) {}
 
-    public function initiateHostedCheckout(FeeInvoice $invoice): array
+    public function initiateHostedCheckout(FeeInvoice $invoice, ?float $requestedAmount = null): array
     {
         $storeId = (string) $this->plugins->getSetting('gateway-sslcommerz', 'store_id', '');
         $storePass = (string) $this->plugins->getSetting('gateway-sslcommerz', 'store_password', '');
@@ -45,7 +45,8 @@ class SslcommerzGatewayService
         }
 
         $remaining = round((float) $invoice->net_amount - (float) $invoice->paid_amount, 2);
-        if ($remaining < 10 || $remaining > 500000) {
+        $chargeAmount = round($requestedAmount ?? $remaining, 2);
+        if ($remaining < 10 || $remaining > 500000 || $chargeAmount < 10 || $chargeAmount > $remaining) {
             throw new RuntimeException('SSLCOMMERZ checkout amount must be between 10.00 and 500000.00.');
         }
 
@@ -54,7 +55,7 @@ class SslcommerzGatewayService
             'invoice_id' => $invoice->id,
             'branch_id' => $invoice->branch_id,
             'gateway_slug' => 'gateway-sslcommerz',
-            'amount' => $remaining,
+            'amount' => $chargeAmount,
             'currency' => strtoupper((string) $invoice->currency),
             'status' => 'initiated',
             'metadata' => ['channel' => 'sslcommerz_hosted'],
@@ -67,7 +68,7 @@ class SslcommerzGatewayService
         $payload = [
             'store_id' => $storeId,
             'store_passwd' => $storePass,
-            'total_amount' => number_format($remaining, 2, '.', ''),
+            'total_amount' => number_format($chargeAmount, 2, '.', ''),
             'currency' => strtoupper((string) $invoice->currency),
             'tran_id' => $tx->transaction_ref,
             'success_url' => url('/payments/sslcommerz/success'),

@@ -66,10 +66,10 @@ class ReportController extends Controller
                 fputcsv($handle, [
                     $log->id,
                     $log->user_id,
-                    $log->action,
-                    $log->entity_type,
-                    $log->entity_id,
-                    $log->ip_address,
+                    $this->sanitizeCsvCell((string) $log->action),
+                    $this->sanitizeCsvCell((string) $log->entity_type),
+                    $this->sanitizeCsvCell((string) $log->entity_id),
+                    $this->sanitizeCsvCell((string) $log->ip_address),
                     $log->created_at?->toIso8601String(),
                 ]);
             }
@@ -100,6 +100,19 @@ class ReportController extends Controller
         }
 
         return $users->pluck('id');
+    }
+
+    /**
+     * Prevent spreadsheet applications from interpreting untrusted audit data
+     * as a formula when administrators open an exported CSV.
+     */
+    private function sanitizeCsvCell(string $value): string
+    {
+        if ($value !== '' && in_array($value[0], ['=', '+', '-', '@', "\t", "\r"], true)) {
+            return "'" . $value;
+        }
+
+        return $value;
     }
 
     private function ensureAssignedBranch($actor): void

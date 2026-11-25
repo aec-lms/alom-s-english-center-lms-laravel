@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Plugins\Modules\UniversalPayment\Http\Controllers;
 
 use App\Core\Plugins\PluginManager;
+use App\Core\Payments\PaymentGatewayRegistry;
 use App\Core\Security\AuditLogger;
 use App\Http\Controllers\Controller;
 use App\Models\User;
@@ -26,13 +27,14 @@ class UniversalPaymentController extends Controller
         private readonly PluginManager $plugins,
         private readonly AuditLogger $audit,
         private readonly StorefrontPaymentGatewayService $storefrontGateway,
+        private readonly PaymentGatewayRegistry $gatewayRegistry,
     ) {}
 
     public function index(Request $request): View
     {
         $actor = $request->user();
         $this->ensureAssignedBranch($actor);
-        $enabledRaw = $this->plugins->getSetting('universal-payment', 'enabled_gateways', 'sslcommerz,bkash,nagad,rocket,card,bank_cash');
+        $enabledRaw = $this->plugins->getSetting('universal-payment', 'enabled_gateways', 'sslcommerz,stripe,paypal,bkash,bkash_manual,nagad,rocket,card,cash,bank_transfer,bank_cash,offline,cheque');
         $config = [
             'default_currency' => $this->plugins->getSetting('universal-payment', 'default_currency', (string) config('lms.default_currency', 'BDT')),
             'enabled_gateways' => array_filter(array_map('trim', explode(',', (string) $enabledRaw))),
@@ -56,7 +58,7 @@ class UniversalPaymentController extends Controller
         $validated = $request->validate([
             'default_currency' => ['required', 'string', 'regex:/^[A-Z]{3}$/'],
             'gateways' => ['nullable', 'array'],
-            'gateways.*' => ['string', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,bank_cash'],
+            'gateways.*' => ['string', 'in:sslcommerz,stripe,paypal,bkash,bkash_manual,nagad,rocket,card,cash,bank_transfer,bank_cash,offline,cheque'],
             'allow_offline_payments' => ['nullable', 'boolean'],
         ]);
 
@@ -79,7 +81,7 @@ class UniversalPaymentController extends Controller
             'payer_name' => ['required', 'string', 'max:160'],
             'payer_contact' => ['nullable', 'string', 'max:120'],
             'item_title' => ['required', 'string', 'max:200'],
-            'gateway' => ['required', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,bank_cash'],
+            'gateway' => ['required', 'in:sslcommerz,stripe,paypal,bkash,bkash_manual,nagad,rocket,card,cash,bank_transfer,bank_cash,offline,cheque'],
             'amount' => ['required', 'numeric', 'min:1'],
             'external_trx_id' => ['required', 'string', 'max:120'],
             'proof_file' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
@@ -88,7 +90,7 @@ class UniversalPaymentController extends Controller
         $this->assertGatewayEnabled($validated['gateway']);
 
         if ($request->hasFile('proof_file')) {
-            abort_unless(in_array($validated['gateway'], ['bank_cash', 'offline'], true), 422, 'Receipt evidence is accepted only for manual bank/cash payments.');
+            abort_unless(in_array($validated['gateway'], ['cash', 'bank_transfer', 'bank_cash', 'offline', 'cheque', 'bkash', 'bkash_manual', 'nagad', 'rocket'], true), 422, 'Receipt evidence is accepted only for manual wallet, bank or cash payments.');
             abort_unless(Schema::hasColumn('universal_payment_transactions', 'proof_path')
                 && Schema::hasColumn('universal_payment_transactions', 'proof_mime')
                 && Schema::hasColumn('universal_payment_transactions', 'proof_size'), 503, 'Receipt evidence storage is not available until the payment migration is applied.');
@@ -120,6 +122,14 @@ class UniversalPaymentController extends Controller
                 app(\Plugins\Modules\UniversalPayment\Services\ExternalTransactionReferenceRegistry::class)
                     ->claim($transaction->gateway, (string) $transaction->external_trx_id, (int) $transaction->id);
 
+                $this->audit->logRequired(
+                    'universal_payment.recorded',
+                    'universal_payment',
+                    $transaction->reference,
+                    ['amount' => $transaction->amount, 'gateway' => $transaction->gateway],
+                    $actor?->id
+                );
+
                 return $transaction;
             });
         } catch (\Throwable $exception) {
@@ -128,8 +138,6 @@ class UniversalPaymentController extends Controller
             }
             throw $exception;
         }
-
-        $this->audit->log('universal_payment.recorded', 'universal_payment', $tx->reference, ['amount' => $tx->amount, 'gateway' => $tx->gateway]);
 
         return back()->with('status', "Transaction '{$tx->reference}' recorded ({$tx->gateway} · {$tx->status}).");
     }
@@ -188,7 +196,7 @@ class UniversalPaymentController extends Controller
             }
 
             abort_unless($lockedTransaction->status === 'pending'
-                && in_array($lockedTransaction->gateway, ['bank_cash', 'offline', 'bkash', 'nagad', 'rocket'], true),
+                && in_array($lockedTransaction->gateway, ['cash', 'bank_transfer', 'bank_cash', 'offline', 'cheque', 'bkash', 'bkash_manual', 'nagad', 'rocket'], true),
                 422,
                 'Only pending manual receipts can be reviewed.'
             );
@@ -350,10 +358,16 @@ class UniversalPaymentController extends Controller
                 }
             }
 
+            $this->audit->logRequired(
+                'universal_payment.status_updated',
+                'universal_payment',
+                (string) $lockedTransaction->reference,
+                ['status' => $validated['status']],
+                $actor?->id
+            );
+
             return $lockedTransaction->fresh();
         });
-
-        $this->audit->log('universal_payment.status_updated', 'universal_payment', $transaction->reference, ['status' => $validated['status']]);
 
         return back()->with('status', "Transaction '{$transaction->reference}' marked {$validated['status']}.");
     }
@@ -364,7 +378,7 @@ class UniversalPaymentController extends Controller
             'payer_name' => ['required', 'string', 'max:160'],
             'payer_contact' => ['required', 'string', 'max:120'],
             'item_title' => ['required', 'string', 'max:200'],
-            'gateway' => ['required', 'in:sslcommerz,bkash,nagad,rocket,card,paypal,bank_cash'],
+            'gateway' => ['required', 'in:sslcommerz,stripe,paypal,bkash,bkash_manual,nagad,rocket,card,cash,bank_transfer,bank_cash,offline,cheque'],
             'external_trx_id' => ['nullable', 'string', 'max:120'],
             'storefront_item_id' => ['nullable', 'integer'],
             'fee_invoice_id' => ['nullable', 'integer'],
@@ -389,19 +403,37 @@ class UniversalPaymentController extends Controller
                 && filled($invoice->payer_email)
                 && hash_equals(strtolower((string) $invoice->payer_email), strtolower((string) auth()->user()->email));
             abort_unless($isInvoiceOwner, 403, 'You can only pay an invoice issued to your account.');
-            abort_unless(
-                in_array($validated['gateway'], ['bank_cash', 'bkash', 'nagad', 'rocket'], true),
-                422,
-                'Fee invoices accept manual bank, cash, bKash, Nagad or Rocket receipts here. Use the dedicated payment gateway checkout for automatic online gateways.'
-            );
-            abort_if(trim((string) ($validated['external_trx_id'] ?? '')) === '', 422, 'Enter the bank transaction ID or cash receipt reference.');
+            $manualInvoiceMethods = ['cash', 'bank_transfer', 'bank_cash', 'offline', 'cheque', 'bkash', 'bkash_manual', 'nagad', 'rocket'];
+            $onlineInvoiceMethods = ['sslcommerz', 'bkash', 'card'];
+            $isOnlineInvoice = in_array($validated['gateway'], ['sslcommerz', 'card'], true)
+                || ($validated['gateway'] === 'bkash' && !filled($validated['external_trx_id'] ?? null));
+            $isManualInvoice = in_array($validated['gateway'], $manualInvoiceMethods, true) && !$isOnlineInvoice;
+            abort_unless($isManualInvoice || $isOnlineInvoice, 422, 'Choose a supported manual receipt method or a configured online gateway.');
+            if ($isManualInvoice) {
+                abort_if(trim((string) ($validated['external_trx_id'] ?? '')) === '', 422, 'Enter the bank transaction ID or cash receipt reference.');
+                abort_unless(
+                    (string) $this->plugins->getSetting('universal-payment', 'allow_offline_payments', '1') === '1',
+                    422,
+                    'Manual receipts are disabled by the administrator.'
+                );
+            }
+            if ($validated['gateway'] === 'card') {
+                $this->assertGatewayEnabled('sslcommerz');
+            }
+            if ($isOnlineInvoice) {
+                abort_unless(
+                    $this->plugins->isEnabled('payment-management') && Schema::hasTable('payment_transactions'),
+                    422,
+                    'Payment Management must be enabled before online invoice checkout can be accepted.'
+                );
+            }
             abort_if(
                 UniversalPaymentTransaction::query()
                     ->where('fee_invoice_id', $invoice->id)
-                    ->where('status', 'pending')
+                    ->whereIn('status', ['pending', 'risk_review'])
                     ->exists(),
                 409,
-                'A payment receipt for this invoice is already awaiting verification.'
+                'A payment for this invoice is pending or requires provider reconciliation.'
             );
             $invoiceBalance = max(0, (float) $invoice->net_amount - (float) $invoice->paid_amount);
             abort_if($invoiceBalance <= 0, 422, 'This invoice has no outstanding balance.');
@@ -420,8 +452,9 @@ class UniversalPaymentController extends Controller
         abort_unless($invoice !== null || $storefrontItem !== null, 422, 'Choose an invoice or paid e-book to continue checkout.');
         abort_if($invoice !== null && $storefrontItem !== null, 422, 'Choose one checkout item at a time.');
 
-        if ($storefrontItem !== null && $validated['gateway'] !== 'sslcommerz') {
-            return back()->withErrors(['gateway' => 'Choose SSLCOMMERZ for secure automatic e-book checkout.'])->withInput();
+        $manualMethods = ['cash', 'bank_transfer', 'bank_cash', 'offline', 'cheque'];
+        if ($storefrontItem !== null && in_array($validated['gateway'], $manualMethods, true)) {
+            return back()->withErrors(['gateway' => 'Manual payment methods are available for invoice/receipt submission; e-book checkout requires a verified online gateway.'])->withInput();
         }
 
         if ($storefrontItem !== null && DB::table('storefront_item_access')
@@ -430,7 +463,7 @@ class UniversalPaymentController extends Controller
         }
 
         if ($invoice !== null) {
-            $tx = DB::transaction(function () use ($invoice, $validated): UniversalPaymentTransaction {
+            $tx = DB::transaction(function () use ($invoice, $validated, $isOnlineInvoice): UniversalPaymentTransaction {
                 $lockedInvoice = DB::table('fee_invoices')->where('id', $invoice->id)->lockForUpdate()->first();
                 abort_unless($lockedInvoice !== null, 404, 'The fee invoice no longer exists.');
                 $isStillOwner = filled($lockedInvoice->payer_email)
@@ -440,10 +473,10 @@ class UniversalPaymentController extends Controller
                 abort_if(
                     UniversalPaymentTransaction::query()
                         ->where('fee_invoice_id', $lockedInvoice->id)
-                        ->where('status', 'pending')
+                        ->whereIn('status', ['pending', 'risk_review'])
                         ->exists(),
                     409,
-                    'A payment receipt for this invoice is already awaiting verification.'
+                    'A payment for this invoice is pending or requires provider reconciliation.'
                 );
 
                 $balance = round((float) $lockedInvoice->net_amount - (float) $lockedInvoice->paid_amount, 2);
@@ -454,18 +487,20 @@ class UniversalPaymentController extends Controller
                     'payer_name' => $validated['payer_name'],
                     'payer_contact' => $validated['payer_contact'],
                     'item_title' => 'Invoice ' . $lockedInvoice->invoice_number,
-                    'gateway' => $validated['gateway'],
+                    'gateway' => $validated['gateway'] === 'card' ? 'sslcommerz' : $validated['gateway'],
                     'currency' => (string) ($lockedInvoice->currency ?: 'BDT'),
                     'amount' => $balance,
-                    'external_trx_id' => trim((string) $validated['external_trx_id']),
+                    'external_trx_id' => $isOnlineInvoice ? null : trim((string) $validated['external_trx_id']),
                     'user_id' => auth()->id(),
                     'branch_id' => $lockedInvoice->branch_id ?? null,
                     'fee_invoice_id' => $lockedInvoice->id,
                     'status' => 'pending',
                 ]);
 
-                app(\Plugins\Modules\UniversalPayment\Services\ExternalTransactionReferenceRegistry::class)
-                    ->claim((string) $transaction->gateway, (string) $transaction->external_trx_id, (int) $transaction->id);
+                if (filled($transaction->external_trx_id)) {
+                    app(\Plugins\Modules\UniversalPayment\Services\ExternalTransactionReferenceRegistry::class)
+                        ->claim((string) $transaction->gateway, (string) $transaction->external_trx_id, (int) $transaction->id);
+                }
 
                 return $transaction;
             });
@@ -519,7 +554,7 @@ class UniversalPaymentController extends Controller
                     'payer_name' => auth()->user()->name,
                     'payer_contact' => $validated['payer_contact'],
                     'item_title' => $lockedItem->title,
-                    'gateway' => $validated['gateway'],
+                    'gateway' => $validated['gateway'] === 'card' ? 'sslcommerz' : $validated['gateway'],
                     'currency' => $this->plugins->getSetting('universal-payment', 'default_currency', 'BDT') ?: 'BDT',
                     'amount' => (float) $lockedItem->price,
                     'external_trx_id' => null,
@@ -530,13 +565,61 @@ class UniversalPaymentController extends Controller
             });
         }
 
+        if ($invoice !== null && $isOnlineInvoice) {
+            try {
+                $gatewaySlug = $validated['gateway'] === 'card' ? 'gateway-sslcommerz' : 'gateway-' . $validated['gateway'];
+                abort_unless($this->gatewayRegistry->supportsStorefront($gatewaySlug), 422, 'The selected gateway has no verified invoice checkout adapter yet.');
+                $checkout = $this->gatewayRegistry->initiate($gatewaySlug, [
+                    'universal_transaction' => $tx,
+                    'storefront_item' => (object) ['title' => $tx->item_title],
+                    'user' => auth()->user(),
+                    'payer_contact' => $validated['payer_contact'],
+                    'context' => ['purpose' => 'fee_invoice'],
+                ]);
+                $checkoutUrl = (string) ($checkout['redirect_url'] ?? '');
+                abort_unless($checkoutUrl !== '' && strtolower((string) parse_url($checkoutUrl, PHP_URL_SCHEME)) === 'https', 502, 'The selected gateway did not return a secure checkout URL.');
+                return redirect()->away($checkoutUrl);
+            } catch (\Throwable $exception) {
+                report($exception);
+                $ambiguous = $exception instanceof \Illuminate\Http\Client\ConnectionException;
+                DB::transaction(function () use ($tx, $ambiguous): void {
+                    $locked = UniversalPaymentTransaction::query()->whereKey($tx->id)->lockForUpdate()->first();
+                    if ($locked && $locked->status === 'pending') {
+                        $locked->update([
+                            'status' => $ambiguous ? 'risk_review' : 'failed',
+                            'notes' => $ambiguous
+                                ? 'Online invoice checkout initialization outcome is unknown; reconcile with the provider before retrying.'
+                                : 'Online invoice checkout could not be initialized.',
+                        ]);
+                    }
+                });
+                return back()->withErrors(['payment' => $ambiguous
+                    ? 'The payment session outcome is unknown. Contact support before retrying.'
+                    : 'Unable to start online invoice checkout. Check gateway configuration and try again.'])->withInput();
+            }
+        }
+
         if ($invoice !== null) {
             return back()->with('status', "Invoice payment submitted! Reference: {$tx->reference}. Access will be updated after payment verification.");
         }
 
         if ($storefrontItem !== null) {
             try {
-                $checkoutUrl = $this->storefrontGateway->initiateSslcommerz($tx, $storefrontItem, auth()->user(), $validated['payer_contact']);
+                $gatewaySlug = $validated['gateway'] === 'card' ? 'gateway-sslcommerz' : 'gateway-' . str_replace('_', '-', $validated['gateway']);
+                if ($validated['gateway'] === 'card') {
+                    $this->assertGatewayEnabled('sslcommerz');
+                }
+                $this->assertGatewayEnabled($validated['gateway']);
+                abort_unless($this->gatewayRegistry->supportsStorefront($gatewaySlug), 422, 'The selected gateway has no verified e-book storefront adapter yet.');
+                $checkout = $this->gatewayRegistry->initiate($gatewaySlug, [
+                    'universal_transaction' => $tx,
+                    'storefront_item' => $storefrontItem,
+                    'user' => auth()->user(),
+                    'payer_contact' => $validated['payer_contact'],
+                    'context' => ['purpose' => 'ebook'],
+                ]);
+                $checkoutUrl = (string) ($checkout['redirect_url'] ?? '');
+                abort_unless($checkoutUrl !== '' && strtolower((string) parse_url($checkoutUrl, PHP_URL_SCHEME)) === 'https', 502, 'The selected payment gateway did not return a secure checkout URL.');
                 return redirect()->away($checkoutUrl);
             } catch (\Throwable $exception) {
                 report($exception);
@@ -561,10 +644,31 @@ class UniversalPaymentController extends Controller
 
         return back()->with('status', "Payment submitted! Reference: {$tx->reference}. Access will be enabled after verification.");
     }
+    public function bkashCallback(Request $request): RedirectResponse
+    {
+        try {
+            $transaction = app(\Plugins\Modules\GatewayBkash\Services\BkashGatewayService::class)
+                ->verifyUniversalCallback((string) $request->query('paymentID', ''));
+            if ($transaction->fee_invoice_id !== null) {
+                return redirect('/student/dashboard')->with('status', 'bKash payment verified and your fee invoice has been settled.');
+            }
+            $slug = $this->storefrontSlugFor($transaction);
+            return $slug
+                ? redirect('/ebooks/' . rawurlencode($slug))->with('status', 'bKash payment verified. Your e-book is now available.')
+                : redirect('/ebooks')->with('status', 'bKash payment verified. Contact support if your purchase is not visible.');
+        } catch (\Throwable $exception) {
+            report($exception);
+            return redirect('/ebooks')->withErrors(['payment' => 'bKash payment could not yet be verified. No download access has been granted; contact support before retrying.']);
+        }
+    }
+
     public function sslcommerzSuccess(Request $request): RedirectResponse
     {
         try {
             $transaction = $this->storefrontGateway->verifySslcommerz($request->all());
+            if ($transaction->fee_invoice_id !== null) {
+                return redirect('/student/dashboard')->with('status', 'SSLCOMMERZ payment verified and your fee invoice has been settled.');
+            }
             $checkoutNotes = json_decode((string) $transaction->notes, true);
             if (is_array($checkoutNotes) && in_array($checkoutNotes['purpose'] ?? null, ['course_cart', 'course_gift', 'course_gift_voucher'], true)) {
                 $message = match ($checkoutNotes['purpose']) {
@@ -777,18 +881,40 @@ class UniversalPaymentController extends Controller
 
     private function assertGatewayEnabled(string $gateway): void
     {
-        if (in_array($gateway, ['bank_cash', 'offline'], true)) {
+        if (in_array($gateway, ['cash', 'bank_transfer', 'cheque'], true)) {
+            $pluginSlug = $gateway === 'cash' ? 'gateway-cash' : 'gateway-bank-transfer';
+            abort_unless(
+                $this->plugins->isEnabled($pluginSlug)
+                    && (string) $this->plugins->getSetting($pluginSlug, 'enabled', '0') === '1',
+                422,
+                'The selected manual payment plugin is not installed, enabled, and configured.'
+            );
+        }
+
+        if (in_array($gateway, ['bkash', 'bkash_manual', 'nagad', 'rocket'], true)) {
+            $pluginSlug = $gateway === 'bkash_manual' ? 'gateway-bkash' : 'gateway-' . $gateway;
+            abort_unless(
+                $this->plugins->isEnabled($pluginSlug)
+                    && (string) $this->plugins->getSetting($pluginSlug, 'enabled', '0') === '1',
+                422,
+                'The selected mobile-wallet gateway plugin is not installed and enabled.'
+            );
+        }
+
+        // Keep the legacy bank_cash/offline identifiers subject to the same
+        // global offline-payment kill switch as the new manual payment plugins.
+        if (in_array($gateway, ['cash', 'bank_transfer', 'bank_cash', 'offline', 'cheque', 'bkash', 'bkash_manual', 'nagad', 'rocket'], true)) {
             abort_unless(
                 (string) $this->plugins->getSetting('universal-payment', 'allow_offline_payments', '1') === '1',
                 422,
-                'Cash and bank transfer payments are disabled by the administrator.'
+                'Manual cash and bank payments are disabled by the administrator.'
             );
         }
 
         $enabledRaw = $this->plugins->getSetting(
             'universal-payment',
             'enabled_gateways',
-            'sslcommerz,bkash,nagad,rocket,card,bank_cash'
+            'sslcommerz,stripe,paypal,bkash,bkash_manual,nagad,rocket,card,cash,bank_transfer,bank_cash,offline,cheque'
         );
         $enabled = array_filter(array_map('trim', explode(',', (string) $enabledRaw)));
 

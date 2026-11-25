@@ -7,6 +7,8 @@ use Plugins\Modules\CourseManagement\Http\Controllers\CourseController;
 use Plugins\Modules\CourseManagement\Http\Controllers\CourseTeacherAssignmentController;
 use Plugins\Modules\CourseManagement\Http\Controllers\LessonContentProtectionController;
 use Plugins\Modules\CourseManagement\Http\Controllers\LiveClassAccessController;
+use Plugins\Modules\CourseManagement\Http\Controllers\ClassSessionSettlementController;
+use Plugins\Modules\CourseManagement\Http\Controllers\LearningInteractionController;
 
 Route::middleware(['web', 'installed', 'auth', 'plugin:course-management', 'permission:courses.manage'])
     ->prefix('admin/courses')
@@ -33,6 +35,8 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:course-management', 'perm
         Route::post('/live-classes', [CourseController::class, 'storeLiveClass'])->name('live.store');
         Route::put('/live-classes/{liveClass}', [CourseController::class, 'updateLiveClass'])->name('live.update');
         Route::delete('/live-classes/{liveClass}', [CourseController::class, 'destroyLiveClass'])->name('live.destroy');
+        Route::post('/live-classes/{liveClass}/complete-session', [ClassSessionSettlementController::class, 'complete'])->name('live.complete');
+        Route::post('/teacher-class-payments/{payment}/mark-paid', [ClassSessionSettlementController::class, 'markTeacherPaid'])->whereNumber('payment')->name('teacher-class-payments.paid');
     });
 
 Route::middleware(['web', 'installed', 'auth', 'plugin:course-management'])
@@ -70,6 +74,13 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:course-management', 'perm
         Route::get('/', [\Plugins\Modules\CourseManagement\Http\Controllers\EnrollmentController::class, 'index'])->name('index');
         Route::patch('/{enrollment}/status', [\Plugins\Modules\CourseManagement\Http\Controllers\EnrollmentController::class, 'updateStatus'])->name('status');
     });
+
+Route::middleware(['web', 'installed', 'auth', 'plugin:course-management'])->group(function (): void {
+    Route::get('/live-classes/{liveClass}/instructor', [LearningInteractionController::class, 'instructorLiveClass'])
+        ->whereNumber('liveClass')->middleware('throttle:60,1')->name('plugins.live-classes.instructor');
+    Route::post('/learning-interactions/live-classes/{liveClass}/announcements', [LearningInteractionController::class, 'postInstructorAnnouncement'])
+        ->whereNumber('liveClass')->middleware('throttle:10,1')->name('plugins.learning-interactions.live.announcements.store');
+});
 
 Route::middleware(['web', 'installed', 'auth', 'plugin:course-management'])
     ->prefix('learning-interactions')

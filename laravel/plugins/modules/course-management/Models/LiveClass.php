@@ -13,18 +13,16 @@ class LiveClass extends Model
 {
     use SoftDeletes;
 
-    protected $casts = ['starts_at' => 'datetime'];
+    protected $casts = [
+        'starts_at' => 'datetime',
+        'teacher_rate_per_class' => 'decimal:2',
+        'student_fee_per_class' => 'decimal:2',
+    ];
 
     protected $fillable = [
-        'course_id',
-        'title',
-        'instructor_name',
-        'platform',
-        'meeting_url',
-        'recording_url',
-        'starts_at',
-        'capacity',
-        'status',
+        'course_id', 'teacher_user_id', 'teacher_rate_per_class', 'student_fee_per_class',
+        'title', 'instructor_name', 'platform', 'meeting_url', 'recording_url',
+        'starts_at', 'capacity', 'status',
     ];
 
     public function participants(): HasMany
