@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use App\Core\Plugins\PluginManager;
 use App\Core\Security\AuditLogger;
+use RuntimeException;
 use App\Models\PluginArchive;
 use Illuminate\Support\Facades\File;
 use Tests\TestCase;
@@ -256,6 +257,277 @@ class PluginRecycleBinAdminAcceptanceTest extends TestCase
         } finally {
             File::deleteDirectory($modulePath);
             if ($archivePath && is_dir($archivePath)) File::deleteDirectory($archivePath);
+        }
+    }
+
+
+    public function test_partial_recycle_metadata_write_restores_package_and_previous_lifecycle_state(): void
+    {
+        $this->markSystemInstalled();
+        $slug = 'partial-metadata-probe-' . strtolower(substr(bin2hex(random_bytes(4)), 0, 8));
+        $modulePath = $this->createProbePlugin($slug);
+        $archivePath = null;
+
+        try {
+            $manager = app(PluginManager::class);
+            $manager->syncCatalog();
+            $manager->install($slug);
+            $this->assertTrue($manager->isInstalled($slug));
+            $this->assertTrue($manager->isEnabled($slug));
+
+            // Simulate a short write through the same handle-based writer used in production.
+            $manager = \Mockery::mock(PluginManager::class, [app(\App\Core\Security\AuditLogger::class)])->makePartial();
+            $manager->shouldAllowMockingProtectedMethods()
+                ->shouldReceive('writeAllBytesToHandle')->once()->andReturn(1);
+
+            try {
+                $manager->deleteToRecycleBin($slug);
+                $this->fail('A partial recycle-bin metadata write must abort plugin deletion.');
+            } catch (\RuntimeException $exception) {
+                $this->assertStringContainsString('original package checksum was verified and its previous lifecycle state was restored where possible', $exception->getMessage());
+            }
+
+            $this->assertDirectoryExists($modulePath);
+            $this->assertTrue($manager->isInstalled($slug));
+            $this->assertTrue($manager->isEnabled($slug));
+            $this->assertFalse(collect($manager->recycledPlugins())->contains(fn (array $item): bool => ($item['slug'] ?? null) === $slug));
+        } finally {
+            File::deleteDirectory($modulePath);
+            if ($archivePath && is_dir($archivePath)) {
+                File::deleteDirectory($archivePath);
+            }
+        }
+    }
+
+
+    public function test_failed_archive_rollback_reports_the_actual_retained_archive_path(): void
+    {
+        $this->markSystemInstalled();
+        $slug = 'rollback-failure-probe-' . strtolower(substr(bin2hex(random_bytes(4)), 0, 8));
+        $modulePath = $this->createProbePlugin($slug);
+        $archivePath = null;
+
+        try {
+            $manager = app(PluginManager::class);
+            $manager->syncCatalog();
+            $manager->install($slug);
+
+            $manager = \Mockery::mock(PluginManager::class, [app(\App\Core\Security\AuditLogger::class)])->makePartial();
+            $manager->shouldAllowMockingProtectedMethods()
+                ->shouldReceive('writeAllBytesToHandle')->once()->andReturn(1);
+            $moveCalls = 0;
+            $file = File::partialMock();
+            $file->shouldReceive('moveDirectory')->twice()->andReturnUsing(
+                function (string $from, string $to) use (&$moveCalls): bool {
+                    $moveCalls++;
+                    return $moveCalls === 1 ? rename($from, $to) : false;
+                }
+            );
+
+            try {
+                $manager->deleteToRecycleBin($slug);
+                $this->fail('Metadata write failure with failed rollback must report retained archive.');
+            } catch (\RuntimeException $exception) {
+                $this->assertStringContainsString('without a committed metadata index', $exception->getMessage());
+                $this->assertStringContainsString('plugin-recycle-bin', $exception->getMessage());
+            }
+
+            $archives = glob(storage_path('app/plugin-recycle-bin/' . $slug . '-*')) ?: [];
+            $this->assertCount(1, $archives);
+            $archivePath = $archives[0];
+            $this->assertDirectoryExists($archivePath);
+            $this->assertDirectoryDoesNotExist($modulePath);
+            $this->assertFalse($manager->isInstalled($slug));
+            $this->assertFalse($manager->isEnabled($slug));
+            $this->assertSame([], array_values(array_filter(
+                $manager->recycledPlugins(),
+                fn (array $item): bool => ($item['slug'] ?? null) === $slug
+            )));
+        } finally {
+            File::deleteDirectory($modulePath);
+            if ($archivePath && is_dir($archivePath)) {
+                File::deleteDirectory($archivePath);
+            }
+        }
+    }
+
+    public function test_checksum_mismatch_after_archive_rollback_never_reinstalls_plugin(): void
+    {
+        $this->markSystemInstalled();
+        $slug = 'rollback-checksum-probe-' . strtolower(substr(bin2hex(random_bytes(4)), 0, 8));
+        $modulePath = $this->createProbePlugin($slug);
+
+        try {
+            $manager = app(PluginManager::class);
+            $manager->syncCatalog();
+            $manager->install($slug);
+
+            $manager = \Mockery::mock(PluginManager::class, [app(\App\Core\Security\AuditLogger::class)])->makePartial();
+            $manager->shouldAllowMockingProtectedMethods()
+                ->shouldReceive('writeAllBytesToHandle')->once()->andReturn(1);
+            $moveCalls = 0;
+            $file = File::partialMock();
+            $file->shouldReceive('moveDirectory')->twice()->andReturnUsing(
+                function (string $from, string $to) use (&$moveCalls): bool {
+                    $moveCalls++;
+                    if (!rename($from, $to)) {
+                        return false;
+                    }
+                    if ($moveCalls === 2) {
+                        file_put_contents($to . '/plugin.json', "\n/* checksum mismatch during rollback */", FILE_APPEND);
+                    }
+                    return true;
+                }
+            );
+
+            try {
+                $manager->deleteToRecycleBin($slug);
+                $this->fail('A checksum mismatch during rollback must fail closed.');
+            } catch (\RuntimeException $exception) {
+                $this->assertStringContainsString('failed checksum verification', $exception->getMessage());
+                $this->assertStringContainsString($modulePath, $exception->getMessage());
+            }
+
+            $this->assertDirectoryExists($modulePath);
+            $this->assertFalse($manager->isInstalled($slug));
+            $this->assertFalse($manager->isEnabled($slug));
+        } finally {
+            File::deleteDirectory($modulePath);
+        }
+    }
+
+    public function test_delete_audit_failure_restores_package_and_previous_lifecycle_state(): void
+    {
+        $this->markSystemInstalled();
+        $slug = 'delete-audit-failure-' . strtolower(substr(bin2hex(random_bytes(4)), 0, 8));
+        $modulePath = $this->createProbePlugin($slug);
+
+        try {
+            $realManager = app(PluginManager::class);
+            $realManager->syncCatalog();
+            $realManager->install($slug);
+
+            $audit = \Mockery::mock(AuditLogger::class);
+            $audit->shouldReceive('log')->zeroOrMoreTimes()->andReturnUsing(
+                static function (string $action): void {
+                    if ($action === 'plugin.deleted_to_recycle_bin') {
+                        throw new RuntimeException('audit storage unavailable');
+                    }
+                }
+            );
+            $manager = new PluginManager($audit);
+
+            try {
+                $manager->deleteToRecycleBin($slug);
+                $this->fail('A recycle-bin delete must fail when its required audit cannot be persisted.');
+            } catch (RuntimeException $exception) {
+                $this->assertStringContainsString('required audit could not be committed', $exception->getMessage());
+            }
+
+            $this->assertDirectoryExists($modulePath);
+            $this->assertTrue($realManager->isInstalled($slug));
+            $this->assertTrue($realManager->isEnabled($slug));
+            $this->assertFalse(collect($realManager->recycledPlugins())->contains(fn (array $item): bool => ($item['slug'] ?? null) === $slug));
+        } finally {
+            File::deleteDirectory($modulePath);
+        }
+    }
+
+    public function test_restore_audit_failure_keeps_archive_metadata_and_returns_package_to_recycle_bin(): void
+    {
+        $this->markSystemInstalled();
+        $slug = 'restore-audit-failure-' . strtolower(substr(bin2hex(random_bytes(4)), 0, 8));
+        $modulePath = $this->createProbePlugin($slug);
+        $archivePath = null;
+
+        try {
+            $realManager = app(PluginManager::class);
+            $realManager->syncCatalog();
+            $realManager->install($slug);
+            $realManager->deleteToRecycleBin($slug);
+            $archive = collect($realManager->recycledPlugins())->firstWhere('slug', $slug);
+            $this->assertNotNull($archive);
+            $archiveName = $archive['archive'];
+            $archivePath = storage_path('app/plugin-recycle-bin/' . $archiveName);
+            $metadataPath = $archivePath . '.json';
+
+            $audit = \Mockery::mock(AuditLogger::class);
+            $audit->shouldReceive('log')->zeroOrMoreTimes()->andReturnUsing(
+                static function (string $action): void {
+                    if ($action === 'plugin.restored_from_recycle_bin') {
+                        throw new RuntimeException('audit storage unavailable');
+                    }
+                }
+            );
+            $manager = new PluginManager($audit);
+
+            try {
+                $manager->restoreFromRecycleBin($archiveName);
+                $this->fail('A restore must fail when its required audit cannot be persisted.');
+            } catch (RuntimeException $exception) {
+                $this->assertStringContainsString('audit storage unavailable', $exception->getMessage());
+            }
+
+            $this->assertDirectoryDoesNotExist($modulePath);
+            $this->assertDirectoryExists($archivePath);
+            $this->assertFileExists($metadataPath);
+            $this->assertFalse($realManager->isInstalled($slug));
+            $this->assertTrue(collect($realManager->recycledPlugins())->contains(fn (array $item): bool => ($item['slug'] ?? null) === $slug));
+        } finally {
+            File::deleteDirectory($modulePath);
+            if ($archivePath && is_dir($archivePath)) File::deleteDirectory($archivePath);
+            if ($archivePath && is_file($archivePath . '.json')) @unlink($archivePath . '.json');
+        }
+    }
+
+    public function test_permanent_delete_audit_failure_preserves_archive_and_verified_recovery_snapshot(): void
+    {
+        $this->markSystemInstalled();
+        $slug = 'permanent-audit-failure-' . strtolower(substr(bin2hex(random_bytes(4)), 0, 8));
+        $modulePath = $this->createProbePlugin($slug);
+        $archivePath = null;
+        $backupPath = null;
+
+        try {
+            $realManager = app(PluginManager::class);
+            $realManager->syncCatalog();
+            $realManager->install($slug);
+            $realManager->deleteToRecycleBin($slug);
+            $archive = collect($realManager->recycledPlugins())->firstWhere('slug', $slug);
+            $this->assertNotNull($archive);
+            $archiveName = $archive['archive'];
+            $archivePath = storage_path('app/plugin-recycle-bin/' . $archiveName);
+            $backupPath = storage_path('app/plugin-permanent-delete-backups/' . $archiveName);
+
+            $audit = \Mockery::mock(AuditLogger::class);
+            $audit->shouldReceive('log')->zeroOrMoreTimes()->andReturnUsing(
+                static function (string $action): void {
+                    if ($action === 'plugin.permanent_delete_started') {
+                        throw new RuntimeException('audit storage unavailable');
+                    }
+                }
+            );
+            $manager = new PluginManager($audit);
+
+            try {
+                $manager->permanentlyDeleteFromRecycleBin($archiveName);
+                $this->fail('A permanent delete must fail when its required audit cannot be persisted.');
+            } catch (RuntimeException $exception) {
+                $this->assertStringContainsString('audit storage unavailable', $exception->getMessage());
+            }
+
+            $this->assertDirectoryExists($archivePath);
+            $this->assertDirectoryExists($backupPath);
+            $this->assertFileExists($archivePath . '.json');
+            $this->assertSame(
+                hash_file('sha256', $archivePath . '/plugin.json'),
+                hash_file('sha256', $backupPath . '/plugin.json')
+            );
+        } finally {
+            File::deleteDirectory($modulePath);
+            if ($archivePath && is_dir($archivePath)) File::deleteDirectory($archivePath);
+            if ($archivePath && is_file($archivePath . '.json')) @unlink($archivePath . '.json');
+            if ($backupPath && is_dir($backupPath)) File::deleteDirectory($backupPath);
         }
     }
 
