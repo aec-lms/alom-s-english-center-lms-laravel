@@ -242,7 +242,7 @@
         foreach (array_merge($academicQuickActions, $systemQuickActions) as $action) {
             if (count($quickActions) >= 6) break;
             if (($action['permission'] === null || auth()->user()?->hasPermission($action['permission']) === true)
-                && \\Illuminate\\Support\\Facades\\Route::has($action['route'])) {
+                && \Illuminate\Support\Facades\Route::has($action['route'])) {
                 $quickActions[] = $action;
             }
         }
