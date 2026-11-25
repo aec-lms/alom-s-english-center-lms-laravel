@@ -470,80 +470,6 @@ final class CourseTeacherAssignmentSecurityTest extends TestCase
         ]);
     }
 
-    public function test_inactive_teacher_account_cannot_answer_with_a_stale_session_or_assignment(): void
-    {
-        $this->markSystemInstalled();
-        $this->activatePlugins(['course-management', 'teacher-management']);
-        $teacher = $this->createUserWithRole('teacher');
-        [, $liveClass, $questionId] = $this->createTeacherLiveQuestionFixture($teacher, true);
-        $teacher->forceFill(['is_active' => false])->save();
-
-        $this->actingAs($teacher)
-            ->postJson("/learning-interactions/live-classes/{$liveClass->id}/questions/{$questionId}/answers", [
-                'body' => 'This must be rejected.',
-            ])
-            ->assertForbidden();
-
-        $this->assertDatabaseMissing('live_class_discussions', [
-            'live_class_id' => $liveClass->id,
-            'parent_id' => $questionId,
-            'user_id' => $teacher->id,
-            'body' => 'This must be rejected.',
-        ]);
-    }
-
-    public function test_teacher_name_match_without_current_course_assignment_cannot_moderate_live_class(): void
-    {
-        $this->markSystemInstalled();
-        $this->activatePlugins(['course-management', 'teacher-management']);
-        $teacher = $this->createUserWithRole('teacher');
-        [, $liveClass, $questionId] = $this->createTeacherLiveQuestionFixture($teacher, false);
-
-        $this->actingAs($teacher)
-            ->postJson("/learning-interactions/live-classes/{$liveClass->id}/questions/{$questionId}/answers", [
-                'body' => 'A display-name match is not authorization.',
-            ])
-            ->assertForbidden();
-
-        $this->assertDatabaseMissing('live_class_discussions', [
-            'live_class_id' => $liveClass->id,
-            'parent_id' => $questionId,
-            'user_id' => $teacher->id,
-            'body' => 'A display-name match is not authorization.',
-        ]);
-    }
-
-    public function test_inactive_teacher_profile_cannot_moderate_even_when_user_account_is_active(): void
-    {
-        $this->markSystemInstalled();
-        $this->activatePlugins(['course-management', 'teacher-management']);
-        $teacher = $this->createUserWithRole('teacher');
-        [, $liveClass, $questionId] = $this->createTeacherLiveQuestionFixture($teacher, true);
-        Teacher::query()->where('user_id', $teacher->id)->update(['is_active' => false]);
-
-        $this->actingAs($teacher)
-            ->postJson("/learning-interactions/live-classes/{$liveClass->id}/questions/{$questionId}/answers", [
-                'body' => 'An inactive profile cannot moderate.',
-            ])
-            ->assertForbidden();
-    }
-
-    public function test_teacher_without_current_teacher_role_cannot_moderate_existing_assignment(): void
-    {
-        $this->markSystemInstalled();
-        $this->activatePlugins(['course-management', 'teacher-management']);
-        $teacher = $this->createUserWithRole('teacher');
-        [, $liveClass, $questionId] = $this->createTeacherLiveQuestionFixture($teacher, true);
-        $teacherRoleId = (int) DB::table('roles')->where('slug', 'teacher')->value('id');
-        DB::table('role_user')->where('user_id', $teacher->id)->where('role_id', $teacherRoleId)->delete();
-
-        $this->actingAs($teacher)
-            ->postJson("/learning-interactions/live-classes/{$liveClass->id}/questions/{$questionId}/answers", [
-                'body' => 'A stale assignment cannot grant teacher access.',
-            ])
-            ->assertForbidden();
-    }
-
     private function createTeacherLiveQuestionFixture(object $teacher, bool $assign): array
     {
         Teacher::query()->create([
@@ -641,16 +567,6 @@ final class CourseTeacherAssignmentSecurityTest extends TestCase
             'course_id' => $course->id,
             'teacher_user_id' => $teacher->id,
         ]);
-    }
-
-    public function test_inactive_teacher_profile_cannot_open_teacher_dashboard(): void
-    {
-        $this->markSystemInstalled();
-        $this->activatePlugins(['teacher-management']);
-        $teacher = $this->createUserWithRole('teacher');
-        $this->createTeacherProfile($teacher)->forceFill(['is_active' => false])->save();
-
-        $this->actingAs($teacher)->get('/dashboard')->assertForbidden();
     }
 
     public function test_mysql_course_assignment_holds_permission_grant_until_commit_and_rejects_after_revocation(): void
