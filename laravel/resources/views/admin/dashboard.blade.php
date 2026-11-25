@@ -152,24 +152,31 @@
             </div>
             @php
                 $trendMax = max(1, max(array_merge($dashboardAnalytics['students'], $dashboardAnalytics['courses'], $dashboardAnalytics['batches'])));
+                $chartSeries = ['students' => '#2563eb', 'courses' => '#10b981', 'batches' => '#7c3aed'];
+                $chartX = fn (int $index): int => 48 + ($index * 100);
+                $chartY = fn (int $value): int => 150 - (int) round(($value / $trendMax) * 120);
+                $chartPoints = [];
+                foreach ($chartSeries as $series => $color) {
+                    $chartPoints[$series] = collect($dashboardAnalytics[$series])->map(
+                        fn ($value, $index): string => $chartX((int) $index) . ',' . $chartY((int) $value)
+                    )->implode(' ');
+                }
             @endphp
-            <div class="mt-5 flex flex-wrap items-center gap-4 text-[11px] font-semibold text-slate-600">
-                <span class="inline-flex items-center gap-2"><i class="h-2.5 w-2.5 rounded-full bg-blue-600"></i>Students</span>
-                <span class="inline-flex items-center gap-2"><i class="h-2.5 w-2.5 rounded-full bg-emerald-500"></i>Courses</span>
-                <span class="inline-flex items-center gap-2"><i class="h-2.5 w-2.5 rounded-full bg-violet-600"></i>Batches</span>
-            </div>
-            <div class="mt-4 grid h-44 grid-cols-6 items-end gap-3 border-b border-slate-200 px-1" role="img" aria-label="Six month comparison of student, course and batch records. A detailed data table follows for assistive technology.">
-                @foreach ($dashboardAnalytics['labels'] as $index => $month)
-                    <div class="flex h-full flex-col items-center justify-end gap-2">
-                        <div class="flex h-full w-full items-end justify-center gap-1">
-                            @foreach (['students' => 'bg-blue-600', 'courses' => 'bg-emerald-500', 'batches' => 'bg-violet-600'] as $series => $color)
-                                @php $value = $dashboardAnalytics[$series][$index] ?? 0; @endphp
-                                <div class="aec-dashboard-chart-bar {{ $color }} w-3 rounded-t-md sm:w-5" style="height:{{ max(4, (int) round(($value / $trendMax) * 100)) }}%" title="{{ ucfirst($series) }}: {{ number_format($value) }}" role="img" aria-label="{{ $month }} {{ $series }}: {{ number_format($value) }}"></div>
-                            @endforeach
-                        </div>
-                        <span class="pb-2 text-[10px] font-semibold text-slate-500">{{ $month }}</span>
-                    </div>
-                @endforeach
+            <div class="mt-4">
+                <svg viewBox="0 0 600 190" class="h-44 w-full overflow-visible" role="img" aria-label="Six month line chart comparing student, course and batch record creation. A detailed data table follows for assistive technology.">
+                    @foreach (range(0, 4) as $grid)
+                        <line x1="40" y1="{{ 30 + ($grid * 30) }}" x2="580" y2="{{ 30 + ($grid * 30) }}" stroke="#e2e8f0" stroke-width="1" />
+                    @endforeach
+                    @foreach ($chartSeries as $series => $color)
+                        <polyline points="{{ $chartPoints[$series] }}" fill="none" stroke="{{ $color }}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+                        @foreach ($dashboardAnalytics[$series] as $index => $value)
+                            <circle cx="{{ $chartX((int) $index) }}" cy="{{ $chartY((int) $value) }}" r="5" fill="#ffffff" stroke="{{ $color }}" stroke-width="3" />
+                        @endforeach
+                    @endforeach
+                    @foreach ($dashboardAnalytics['labels'] as $index => $month)
+                        <text x="{{ $chartX((int) $index) }}" y="180" text-anchor="middle" fill="#64748b" font-size="12" font-weight="600">{{ $month }}</text>
+                    @endforeach
+                </svg>
             </div>
             <div class="sr-only">
                 <table>
