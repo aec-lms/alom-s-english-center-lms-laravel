@@ -80,16 +80,23 @@ class BranchManagerDashboardIsolationTest extends TestCase
 
         $response = $this->actingAs($manager)->get('/admin')->assertOk();
         $response->assertSee('Registered Accounts')
+            ->assertSee('Accounts in your assigned branch')
+            ->assertDontSee('All platform user accounts')
             ->assertDontSee('Plugin Overview')
             ->assertDontSee('Encrypted Backups')
             ->assertDontSee('Recent Security Audit Trail')
             ->assertDontSee('System Information');
 
-        preg_match('/data-dashboard-widget="users".*?<div class="mt-1 text-2xl font-extrabold">(?:<span[^>]*>)?(\\d+)(?:<\\/span>)?<\\/div>/s', $response->getContent(), $matches);
+        preg_match('/<section data-dashboard-widget="users"[^>]*>.*?<span[^>]*data-live-metric="users"[^>]*>(\\d+)<\\/span>/s', $response->getContent(), $matches);
         $this->assertSame('2', $matches[1] ?? null, 'Dashboard count must include only accounts from the assigned branch.');
 
+        $refresh = $this->actingAs($manager)->getJson('/admin/dashboard/refresh')->assertOk();
+        $this->assertSame(2, $refresh->json('metrics.users'), 'Live refresh must preserve branch-scoped account counts.');
+        $this->assertSame(1, $refresh->json('metrics.students'), 'Live refresh must preserve branch-scoped student counts.');
+        $this->assertSame('no-store, private', $refresh->headers->get('Cache-Control'));
+
         $responseB = $this->actingAs($managerB)->get('/admin')->assertOk();
-        preg_match('/data-dashboard-widget="users".*?<div class="mt-1 text-2xl font-extrabold">(?:<span[^>]*>)?(\\d+)(?:<\\/span>)?<\\/div>/s', $responseB->getContent(), $matchesB);
+        preg_match('/<section data-dashboard-widget="users"[^>]*>.*?<span[^>]*data-live-metric="users"[^>]*>(\\d+)<\\/span>/s', $responseB->getContent(), $matchesB);
         $this->assertSame('2', $matchesB[1] ?? null, 'Branch B must count its student profile, not a student whose account branch is stale.');
 
         $this->actingAs($manager)->get('/admin/reports')->assertOk()->assertViewHas('metrics', function (array $metrics): bool {

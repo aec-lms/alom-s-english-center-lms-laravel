@@ -6,7 +6,7 @@
         fn (array $definition, string $key): array => [$key => $definition['label']]
     )->all();
 @endphp
-<div class="space-y-6">
+<div class="aec-edupro-dashboard space-y-6">
     @if($setupIncomplete)
         <section class="rounded-2xl border border-amber-300 bg-amber-50 p-5 text-amber-950" role="status">
             <div class="flex flex-wrap items-center justify-between gap-3">
@@ -17,6 +17,7 @@
             </div>
         </section>
     @endif
+
     <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
             <h1 class="text-2xl font-extrabold text-slate-900">Dashboard</h1>
@@ -89,52 +90,346 @@
         </details>
     </div>
 
+    <section class="aec-dashboard-welcome relative isolate overflow-hidden rounded-3xl px-6 py-7 text-white shadow-xl sm:px-8 sm:py-9" aria-labelledby="aec-dashboard-welcome-title">
+        <div class="aec-dashboard-welcome__gradient" aria-hidden="true"></div>
+        <div class="aec-dashboard-welcome__ribbon aec-dashboard-welcome__ribbon--one" aria-hidden="true"></div>
+        <div class="aec-dashboard-welcome__ribbon aec-dashboard-welcome__ribbon--two" aria-hidden="true"></div>
+        <div class="aec-dashboard-welcome__glow aec-dashboard-welcome__glow--one" aria-hidden="true"></div>
+        <div class="aec-dashboard-welcome__glow aec-dashboard-welcome__glow--two" aria-hidden="true"></div>
+        <div class="relative z-10 grid items-center gap-7 lg:grid-cols-[1.2fr_.8fr]">
+            <div class="max-w-2xl">
+                <span class="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[.2em] text-cyan-100">
+                    <span class="h-1.5 w-1.5 rounded-full bg-emerald-300" aria-hidden="true"></span>
+                    {{ config('app.name', 'Alom’s English Center') }} · LMS Workspace
+                </span>
+                <h2 id="aec-dashboard-welcome-title" class="mt-4 text-3xl font-black tracking-tight text-white sm:text-4xl">Welcome Back, {{ auth()->user()?->name ?? 'Admin' }}! <span aria-hidden="true">👋</span></h2>
+                <p class="mt-2 text-base font-semibold text-blue-100 sm:text-lg">Your institution. Your learners. One connected workspace.</p>
+                <p class="mt-1 text-sm italic text-cyan-100">Dream Big… <span class="font-extrabold text-amber-300">Learn Better.</span></p>
+                <a href="#aec-dashboard-overview" class="mt-5 inline-flex items-center gap-3 rounded-full bg-amber-400 px-5 py-3 text-sm font-extrabold text-blue-950 shadow-lg shadow-blue-950/25 transition hover:-translate-y-0.5 hover:bg-yellow-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
+                    View Dashboard <span aria-hidden="true">→</span>
+                </a>
+            </div>
+            <div class="aec-dashboard-welcome__mission relative hidden min-h-36 items-center justify-center rounded-2xl border border-white/15 bg-slate-950/15 p-6 text-center backdrop-blur-sm sm:flex">
+                <div>
+                    <div class="text-4xl font-black leading-none text-amber-300" aria-hidden="true">“</div>
+                    <p class="font-serif text-3xl font-bold italic leading-tight text-white">Your Success<br><span class="text-amber-300">Our Mission</span></p>
+                    <div class="mx-auto mt-3 h-1 w-32 -rotate-6 rounded-full bg-amber-400"></div>
+                </div>
+            </div>
+        </div>
+        <div class="relative z-10 mt-6 flex flex-wrap items-center justify-between gap-2 border-t border-white/15 pt-4 text-xs text-blue-100">
+            <span>{{ now()->translatedFormat('l, d F Y') }}</span>
+            <span class="rounded-full bg-emerald-400/15 px-3 py-1 font-bold text-emerald-200">● System workspace</span>
+        </div>
+    </section>
+
+    <section id="aec-dashboard-overview" class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Institution overview">
+        @foreach ([
+            ['key' => 'students', 'label' => 'Total Students', 'icon' => '♟', 'tone' => 'blue', 'caption' => 'Student records'],
+            ['key' => 'teachers', 'label' => 'Total Teachers', 'icon' => '♙', 'tone' => 'green', 'caption' => 'Teacher records'],
+            ['key' => 'courses', 'label' => 'Total Courses', 'icon' => '▤', 'tone' => 'violet', 'caption' => 'Course catalogue'],
+            ['key' => 'batches', 'label' => 'Total Batches', 'icon' => '▱', 'tone' => 'orange', 'caption' => 'Learning groups'],
+        ] as $stat)
+            <article class="aec-dashboard-stat aec-dashboard-stat--{{ $stat['tone'] }} relative overflow-hidden rounded-2xl p-4 text-white shadow-lg">
+                <div class="relative z-10 flex items-center gap-4">
+                    <div class="aec-dashboard-stat__icon flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-3xl" aria-hidden="true">{{ $stat['icon'] }}</div>
+                    <div class="min-w-0">
+                        <p class="text-xs font-bold text-white/85">{{ $stat['label'] }}</p>
+                        <p class="mt-0.5 text-3xl font-black tracking-tight tabular-nums"><span data-live-metric="{{ $stat['key'] }}" data-count-to="{{ $metrics[$stat['key']] }}">{{ number_format($metrics[$stat['key']]) }}</span></p>
+                        <p class="mt-0.5 text-[10px] font-medium text-white/75">{{ $stat['caption'] }}</p>
+                    </div>
+                </div>
+                <span class="aec-dashboard-stat__wave" aria-hidden="true"></span>
+            </article>
+        @endforeach
+    </section>
+
+    <section class="grid grid-cols-1 gap-4 xl:grid-cols-12" aria-label="Dashboard analytics and activity">
+        <article class="aec-dashboard-panel xl:col-span-7">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center gap-2"><span class="text-2xl" aria-hidden="true">📊</span><div><h2 class="text-base font-extrabold text-slate-900">Analytics Overview</h2><p class="text-xs text-slate-500">New records created over the last six months</p></div></div>
+                <span class="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">Last 6 Months</span>
+            </div>
+            @php
+                $trendMax = max(1, max(array_merge($dashboardAnalytics['students'], $dashboardAnalytics['courses'], $dashboardAnalytics['batches'])));
+                $chartSeries = ['students' => '#2563eb', 'courses' => '#10b981', 'batches' => '#7c3aed'];
+                $chartX = fn (int $index): int => 48 + ($index * 100);
+                $chartY = fn (int $value): int => 150 - (int) round(($value / $trendMax) * 120);
+                $chartPoints = [];
+                foreach ($chartSeries as $series => $color) {
+                    $chartPoints[$series] = collect($dashboardAnalytics[$series])->map(
+                        fn ($value, $index): string => $chartX((int) $index) . ',' . $chartY((int) $value)
+                    )->implode(' ');
+                }
+            @endphp
+            <div class="mt-4">
+                <svg viewBox="0 0 600 190" class="h-44 w-full overflow-visible" role="img" aria-label="Six month line chart comparing student, course and batch record creation. A detailed data table follows for assistive technology.">
+                    @foreach (range(0, 4) as $grid)
+                        <line x1="40" y1="{{ 30 + ($grid * 30) }}" x2="580" y2="{{ 30 + ($grid * 30) }}" stroke="#e2e8f0" stroke-width="1" />
+                    @endforeach
+                    @foreach ($chartSeries as $series => $color)
+                        <polyline points="{{ $chartPoints[$series] }}" fill="none" stroke="{{ $color }}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+                        @foreach ($dashboardAnalytics[$series] as $index => $value)
+                            <circle cx="{{ $chartX((int) $index) }}" cy="{{ $chartY((int) $value) }}" r="5" fill="#ffffff" stroke="{{ $color }}" stroke-width="3" />
+                        @endforeach
+                    @endforeach
+                    @foreach ($dashboardAnalytics['labels'] as $index => $month)
+                        <text x="{{ $chartX((int) $index) }}" y="180" text-anchor="middle" fill="#64748b" font-size="12" font-weight="600">{{ $month }}</text>
+                    @endforeach
+                </svg>
+            </div>
+            <div class="sr-only">
+                <table>
+                    <caption>Monthly dashboard analytics for students, courses and batches</caption>
+                    <thead><tr><th scope="col">Month</th><th scope="col">Students</th><th scope="col">Courses</th><th scope="col">Batches</th></tr></thead>
+                    <tbody>
+                        @foreach ($dashboardAnalytics['labels'] as $index => $month)
+                            <tr>
+                                <th scope="row">{{ $month }}</th>
+                                <td>{{ number_format($dashboardAnalytics['students'][$index] ?? 0) }}</td>
+                                <td>{{ number_format($dashboardAnalytics['courses'][$index] ?? 0) }}</td>
+                                <td>{{ number_format($dashboardAnalytics['batches'][$index] ?? 0) }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+            <p class="mt-3 text-[10px] text-slate-400">Counts use available module records and their creation dates. Missing modules are shown as zero.</p>
+        </article>
+
+        <article class="aec-dashboard-panel xl:col-span-5">
+            <div class="flex items-center justify-between gap-3">
+                <div class="flex items-center gap-2"><span class="text-2xl" aria-hidden="true">⚡</span><div><h2 class="text-base font-extrabold text-slate-900">Recent Activities</h2><p class="text-xs text-slate-500">Latest recorded platform events</p></div></div>
+                @if (\Illuminate\Support\Facades\Route::has('admin.audit.index'))
+                    <a href="{{ route('admin.audit.index') }}" class="text-xs font-bold text-blue-700 hover:text-blue-900">View all →</a>
+                @endif
+            </div>
+            <div class="mt-4 space-y-3">
+                @forelse ($recentAudits as $log)
+                    <div class="flex min-w-0 items-start gap-3 border-b border-slate-100 pb-3 last:border-0 last:pb-0">
+                        <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-50 text-sm text-blue-700" aria-hidden="true">✓</span>
+                        <div class="min-w-0 flex-1">
+                            <p class="break-words text-xs font-bold text-slate-800">{{ \Illuminate\Support\Str::headline($log->action) }}</p>
+                            <p class="mt-0.5 truncate text-[10px] text-slate-500">{{ $log->user?->name ?? 'System' }} · {{ $log->entity_type }}</p>
+                        </div>
+                        <time class="shrink-0 text-[10px] text-slate-400" datetime="{{ optional($log->created_at)->toIso8601String() }}">{{ optional($log->created_at)->diffForHumans() }}</time>
+                    </div>
+                @empty
+                    <div class="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-xs text-slate-500">Activity will appear here as authorized platform actions are recorded.</div>
+                @endforelse
+            </div>
+        </article>
+    </section>
+
+    @php
+        $academicQuickActions = [
+            ['permission' => 'students.manage', 'route' => 'plugins.students.index', 'label' => 'Add Student', 'icon' => '👥'],
+            ['permission' => 'teachers.manage', 'route' => 'plugins.teachers.index', 'label' => 'Add Teacher', 'icon' => '👨‍🏫'],
+            ['permission' => 'batches.manage', 'route' => 'plugins.batches.index', 'label' => 'Create Batch', 'icon' => '🗓️'],
+            ['permission' => 'courses.manage', 'route' => 'plugins.courses.index', 'label' => 'Add Course', 'icon' => '📚'],
+            ['permission' => 'exams.manage', 'route' => 'plugins.exams.index', 'label' => 'Exam Management', 'icon' => '📝'],
+            ['permission' => 'certificates.manage', 'route' => 'plugins.certificates.index', 'label' => 'Certificates', 'icon' => '🏅'],
+        ];
+        $systemQuickActions = [
+            ['permission' => 'core.users.manage', 'route' => 'admin.users.index', 'label' => 'Manage Users', 'icon' => '👥'],
+            ['permission' => null, 'route' => 'admin.plugins.index', 'label' => 'Plugin Center', 'icon' => '🧩'],
+            ['permission' => 'core.settings.manage', 'route' => 'admin.setup-wizard.index', 'label' => 'Setup Wizard', 'icon' => '⚙️'],
+            ['permission' => null, 'route' => 'admin.backups.index', 'label' => 'Backups', 'icon' => '🗄️'],
+            ['permission' => null, 'route' => 'admin.audit.index', 'label' => 'Audit Logs', 'icon' => '📋'],
+            ['permission' => null, 'route' => 'admin.appearance.index', 'label' => 'Appearance', 'icon' => '🎨'],
+        ];
+        $quickActions = [];
+        foreach (array_merge($academicQuickActions, $systemQuickActions) as $action) {
+            if (count($quickActions) >= 6) break;
+            if (($action['permission'] === null || auth()->user()?->hasPermission($action['permission']) === true)
+                && \Illuminate\Support\Facades\Route::has($action['route'])) {
+                $quickActions[] = $action;
+            }
+        }
+    @endphp
+    <section class="aec-dashboard-panel" aria-label="Quick actions">
+        <div class="mb-4 flex items-center gap-2"><span class="text-2xl" aria-hidden="true">🚀</span><div><h2 class="text-base font-extrabold text-slate-900">Quick Actions</h2><p class="text-xs text-slate-500">Shortcuts to the academic and system areas available to your account</p></div></div>
+        <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+            @forelse ($quickActions as $action)
+                <a href="{{ route($action['route']) }}" class="aec-dashboard-action"><span aria-hidden="true">{{ $action['icon'] }}</span><strong>{{ $action['label'] }}</strong></a>
+            @empty
+                <p class="col-span-full rounded-xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">No shortcuts are available for your current permissions.</p>
+            @endforelse
+        </div>
+    </section>
     <style>
-    #dashboard-widgets [data-dashboard-widget][data-size="small"] { min-height: 7rem; }
-    @media (min-width: 768px) {
-        #dashboard-widgets [data-dashboard-widget][data-size="small"] { grid-column: span 1; }
-        #dashboard-widgets [data-dashboard-widget][data-size="medium"] { grid-column: span 2; }
-        #dashboard-widgets [data-dashboard-widget][data-size="large"] { grid-column: span 4; }
+    body.aec-admin-dashboard-page { background:linear-gradient(180deg,#f8fbff 0%,#f1f5fb 100%) !important; }
+    body.aec-admin-dashboard-page main { max-width:none; }
+    body.aec-admin-dashboard-page #admin-sidebar {
+        background:linear-gradient(180deg,#0b1d42 0%,#102b59 58%,#0b1b3b 100%) !important;
+        border-right-color:rgba(148,163,184,.16) !important;
+        box-shadow:12px 0 36px rgba(15,23,42,.08);
     }
-    #dashboard-widgets[data-motion-enabled="true"] [data-dashboard-widget] { animation: aec-dashboard-enter var(--aec-motion-duration, 620ms) cubic-bezier(.2,.8,.2,1) both; }
-    #dashboard-widgets[data-motion-enabled="true"][data-motion-preset="subtle"] [data-dashboard-widget] { animation-name: aec-dashboard-fade; }
-    #dashboard-widgets[data-motion-enabled="true"][data-motion-preset="dynamic"] [data-dashboard-widget] { animation-name: aec-dashboard-rise; }
-    #dashboard-widgets[data-motion-enabled="true"][data-motion-intensity="low"] [data-dashboard-widget] { animation-duration: 420ms; }
-    #dashboard-widgets[data-motion-enabled="true"][data-motion-intensity="high"] [data-dashboard-widget] { animation-duration: 820ms; }
-    #dashboard-widgets[data-motion-enabled="true"][data-motion-speed="slow"] { --aec-motion-duration: 900ms; }
-    #dashboard-widgets[data-motion-enabled="true"][data-motion-speed="fast"] { --aec-motion-duration: 360ms; }
-    #dashboard-widgets[data-motion-enabled="true"][data-motion-speed="normal"] { --aec-motion-duration: 620ms; }
-    #dashboard-widgets[data-motion-enabled="true"][data-motion-hover="true"] [data-dashboard-widget] { transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease; }
-    #dashboard-widgets[data-motion-enabled="true"][data-motion-hover="true"] [data-dashboard-widget]:hover { transform: translateY(-3px); box-shadow: 0 16px 36px rgba(15,23,42,.09); border-color: rgba(100,116,139,.38); }
-    #dashboard-widgets[data-motion-enabled="true"][data-motion-loading="shimmer"]::before { content:""; display:block; height:3px; border-radius:999px; background:linear-gradient(90deg,transparent,#60a5fa,#a78bfa,transparent); background-size:200% 100%; animation:aec-dashboard-shimmer 1.6s ease-in-out 1; }
-    #dashboard-widgets[data-motion-enabled="true"][data-motion-loading="minimal"]::before { content:""; display:block; height:2px; border-radius:999px; background:var(--aec-primary); transform-origin:left; animation:aec-dashboard-progress 650ms ease-out 1 both; }
-    @keyframes aec-dashboard-enter { from { opacity:0; transform:translateY(14px) scale(.99); } to { opacity:1; transform:translateY(0) scale(1); } }
-    @keyframes aec-dashboard-fade { from { opacity:0; } to { opacity:1; } }
-    @keyframes aec-dashboard-rise { from { opacity:0; transform:translateY(24px) scale(.985); } to { opacity:1; transform:translateY(0) scale(1); } }
-    @keyframes aec-dashboard-shimmer { from { background-position:100% 0; opacity:.5; } to { background-position:-100% 0; opacity:1; } }
-    @keyframes aec-dashboard-progress { from { transform:scaleX(.15); opacity:.45; } to { transform:scaleX(1); opacity:1; } }
-    @media (prefers-reduced-motion: reduce) {
-        #dashboard-widgets[data-motion-enabled="true"] [data-dashboard-widget],
-        #dashboard-widgets[data-motion-enabled="true"][data-motion-hover="true"] [data-dashboard-widget],
-        #dashboard-widgets[data-motion-enabled="true"][data-motion-loading]::before { animation:none !important; transition:none !important; transform:none !important; }
+    body.aec-admin-dashboard-page #admin-sidebar > div:first-child {
+        background:linear-gradient(145deg,rgba(24,57,105,.82),rgba(12,32,68,.4)) !important;
+        border-bottom-color:rgba(148,163,184,.16) !important;
+    }
+    body.aec-admin-dashboard-page #admin-sidebar > div:first-child > div:first-child {
+        flex-direction:column; justify-content:center; gap:.75rem; text-align:center;
+    }
+    body.aec-admin-dashboard-page #admin-sidebar > div:first-child img {
+        height:3.75rem; max-width:10rem; margin-inline:auto;
+    }
+    body.aec-admin-dashboard-page #admin-sidebar nav a {
+        display:flex; align-items:center; min-height:40px; margin-block:3px;
+        border:1px solid transparent; border-radius:11px; color:#c6d4e9 !important;
+        transition:background-color 180ms ease,border-color 180ms ease,color 180ms ease,transform 180ms ease;
+    }
+    body.aec-admin-dashboard-page #admin-sidebar nav a:hover {
+        background:rgba(96,165,250,.12) !important; border-color:rgba(96,165,250,.18) !important;
+        color:#fff !important; transform:translateX(2px);
+    }
+    body.aec-admin-dashboard-page #admin-sidebar nav a[aria-current="page"] {
+        background:linear-gradient(105deg,#2563eb,#4f6fe8) !important;
+        border-color:rgba(191,219,254,.24) !important; color:#fff !important;
+        box-shadow:0 8px 20px rgba(30,64,175,.28);
+    }
+    body.aec-admin-dashboard-page #admin-sidebar nav > div { color:#8fa6c7 !important; letter-spacing:.15em; }
+    body.aec-admin-dashboard-page main > header {
+        background:rgba(255,255,255,.94) !important; border-bottom-color:#e4ebf5 !important;
+        box-shadow:0 8px 24px rgba(15,23,42,.045) !important; color:#0f172a !important;
+    }
+    body.aec-admin-dashboard-page main > header .text-slate-900 { color:#0f172a !important; }
+    body.aec-admin-dashboard-page main > header .text-slate-500,
+    body.aec-admin-dashboard-page main > header .text-slate-400 { color:#64748b !important; }
+    body.aec-admin-dashboard-page main > header a:not(.bg-blue-600) {
+        background:#fff !important; border-color:#e2e8f0 !important; color:#334155 !important;
+    }
+    .aec-dashboard-welcome { isolation:isolate; min-height:270px; background:#071d63; }
+    .aec-dashboard-welcome__gradient { position:absolute; inset:0; z-index:-3; background:radial-gradient(ellipse at 78% 35%,rgba(0,196,255,.55),transparent 32%),radial-gradient(ellipse at 15% 120%,rgba(127,56,255,.55),transparent 38%),linear-gradient(112deg,#071846 0%,#123a9a 48%,#075d9a 100%); }
+    .aec-dashboard-welcome__ribbon { position:absolute; z-index:-2; pointer-events:none; width:75%; height:130%; top:-15%; border:1px solid rgba(100,220,255,.22); border-radius:50%; transform:rotate(-18deg); }
+    .aec-dashboard-welcome__ribbon--one { right:-18%; box-shadow:0 0 0 18px rgba(80,170,255,.04),0 0 0 38px rgba(80,170,255,.035); }
+    .aec-dashboard-welcome__ribbon--two { right:-30%; top:-45%; border-color:rgba(255,255,255,.16); transform:rotate(-32deg); }
+    .aec-dashboard-welcome__mission { background:linear-gradient(145deg,rgba(8,25,73,.55),rgba(13,77,150,.25)); }
+    .aec-dashboard-stat { min-height:112px; isolation:isolate; }
+    .aec-dashboard-stat--blue { background:linear-gradient(120deg,#0878ef,#0750cb 70%,#0284c7); }
+    .aec-dashboard-stat--green { background:linear-gradient(120deg,#0bb77b,#07865f 70%,#047857); }
+    .aec-dashboard-stat--violet { background:linear-gradient(120deg,#8b32f2,#6d20c8 70%,#581c87); }
+    .aec-dashboard-stat--orange { background:linear-gradient(120deg,#ff9b13,#ed6b00 70%,#c2410c); }
+    .aec-dashboard-stat__icon { background:rgba(255,255,255,.17); box-shadow:inset 0 0 0 1px rgba(255,255,255,.18),0 8px 24px rgba(0,0,0,.12); }
+    .aec-dashboard-stat__wave { position:absolute; z-index:-1; width:180px; height:90px; right:-35px; bottom:-35px; border:1px solid rgba(255,255,255,.24); border-radius:50%; transform:rotate(-22deg); box-shadow:0 0 0 12px rgba(255,255,255,.05),0 0 0 26px rgba(255,255,255,.035); }
+    .aec-dashboard-panel { min-width:0; border:1px solid #e4eaf5; border-radius:1.25rem; background:rgba(255,255,255,.96); padding:1.15rem; box-shadow:0 10px 28px rgba(23,37,84,.07); }
+    .aec-dashboard-chart-bar { min-height:3px; box-shadow:0 2px 8px rgba(37,99,235,.14); }
+    .aec-dashboard-action { display:flex; min-height:82px; flex-direction:column; align-items:center; justify-content:center; gap:.4rem; border:1px solid #e4eaf5; border-radius:1rem; background:linear-gradient(145deg,#f8fbff,#eef4ff); padding:.7rem; text-align:center; text-decoration:none; transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease; }
+    .aec-dashboard-action:hover { transform:translateY(-2px); border-color:#93c5fd; box-shadow:0 8px 20px rgba(37,99,235,.1); }
+    .aec-dashboard-action span { font-size:1.45rem; }
+    .aec-dashboard-action strong { color:#17336f; font-size:.7rem; }
+
+    .aec-dashboard-welcome__glow { position:absolute; z-index:-1; pointer-events:none; border-radius:999px; filter:blur(2px); }
+    .aec-dashboard-welcome__glow--one {
+        width:270px; height:270px; right:7%; top:-190px;
+        background:rgba(103,232,249,.18); box-shadow:0 0 90px rgba(103,232,249,.18);
+    }
+    .aec-dashboard-welcome__glow--two { width:190px; height:190px; right:28%; bottom:-150px; background:rgba(96,165,250,.18); }
+    .aec-dashboard-welcome__date { min-width:220px; text-align:right; }
+    .aec-dashboard-welcome__action { text-decoration:none; }
+    #dashboard-widgets { align-items:stretch; gap:1rem; }
+    #dashboard-widgets [data-dashboard-widget] {
+        position:relative; min-width:0; overflow:hidden;
+        border:1px solid #e3eaf4 !important; border-radius:1.15rem !important;
+        background:#fff !important; color:#17243a !important;
+        box-shadow:0 10px 28px rgba(15,23,42,.055);
+        transition:transform 200ms ease,box-shadow 200ms ease,border-color 200ms ease;
+    }
+    #dashboard-widgets [data-dashboard-widget]::before {
+        content:""; position:absolute; inset:0 0 auto; height:3px;
+        background:linear-gradient(90deg,#2563eb,#14b8a6,#8b5cf6); opacity:.8; pointer-events:none;
+    }
+    #dashboard-widgets [data-dashboard-widget] h1,
+    #dashboard-widgets [data-dashboard-widget] h2,
+    #dashboard-widgets [data-dashboard-widget] h3,
+    #dashboard-widgets [data-dashboard-widget] strong,
+    #dashboard-widgets [data-dashboard-widget] .text-slate-900 { color:#17243a !important; }
+    #dashboard-widgets [data-dashboard-widget] .text-slate-700,
+    #dashboard-widgets [data-dashboard-widget] .text-slate-600 { color:#475569 !important; }
+    #dashboard-widgets [data-dashboard-widget] .text-slate-500,
+    #dashboard-widgets [data-dashboard-widget] .text-slate-400 { color:#64748b !important; }
+    #dashboard-widgets [data-dashboard-widget] .border-slate-200,
+    #dashboard-widgets [data-dashboard-widget] .border-slate-300 { border-color:#e2e8f0 !important; }
+    #dashboard-widgets [data-dashboard-widget="users"] {
+        border-color:rgba(37,99,235,.22) !important;
+        background:linear-gradient(135deg,#2563eb 0%,#1d4ed8 58%,#1e40af 100%) !important; color:#fff !important;
+    }
+    #dashboard-widgets [data-dashboard-widget="plugins"] {
+        border-color:rgba(13,148,136,.22) !important;
+        background:linear-gradient(135deg,#0f9b8e 0%,#0f766e 100%) !important; color:#fff !important;
+    }
+    #dashboard-widgets [data-dashboard-widget="backups"] {
+        border-color:rgba(124,58,237,.22) !important;
+        background:linear-gradient(135deg,#7655c9 0%,#5540a3 100%) !important; color:#fff !important;
+    }
+    #dashboard-widgets [data-dashboard-widget="users"]::after,
+    #dashboard-widgets [data-dashboard-widget="plugins"]::after,
+    #dashboard-widgets [data-dashboard-widget="backups"]::after {
+        content:""; position:absolute; width:145px; height:145px; right:-70px; top:-82px;
+        border:1px solid rgba(255,255,255,.16); border-radius:50%;
+        box-shadow:0 0 0 18px rgba(255,255,255,.035),0 0 0 38px rgba(255,255,255,.025);
+        pointer-events:none;
+    }
+    #dashboard-widgets [data-dashboard-widget="users"] .text-xs,
+    #dashboard-widgets [data-dashboard-widget="plugins"] .text-xs,
+    #dashboard-widgets [data-dashboard-widget="backups"] .text-xs,
+    #dashboard-widgets [data-dashboard-widget="plugins"] .text-slate-500,
+    #dashboard-widgets [data-dashboard-widget="users"] .text-slate-500,
+    #dashboard-widgets [data-dashboard-widget="backups"] .text-slate-500 { color:rgba(255,255,255,.82) !important; }
+    #dashboard-widgets [data-dashboard-widget="users"] .text-2xl,
+    #dashboard-widgets [data-dashboard-widget="plugins"] .text-2xl,
+    #dashboard-widgets [data-dashboard-widget="backups"] .text-2xl { color:#fff !important; font-size:2rem; letter-spacing:-.04em; }
+    #dashboard-widgets [data-dashboard-widget="plugins"] h2 { color:#fff !important; }
+    #dashboard-widgets [data-dashboard-widget][data-size="small"] { min-height:7.5rem; }
+    #dashboard-widgets [data-dashboard-widget][data-size="medium"] { min-height:10rem; }
+    #dashboard-widgets [data-dashboard-widget][data-size="large"] { min-height:14rem; }
+    #dashboard-widgets[data-motion-enabled="true"][data-motion-hover="true"] [data-dashboard-widget]:hover {
+        transform:translateY(-3px); border-color:rgba(37,99,235,.34) !important;
+        box-shadow:0 16px 36px rgba(15,23,42,.11);
+    }
+    @media (min-width:768px) {
+        #dashboard-widgets [data-dashboard-widget][data-size="small"] { grid-column:span 1; }
+        #dashboard-widgets [data-dashboard-widget][data-size="medium"] { grid-column:span 2; }
+        #dashboard-widgets [data-dashboard-widget][data-size="large"] { grid-column:span 4; }
+    }
+    @media (max-width:767px) {
+        .aec-dashboard-welcome { min-height:0; padding:1.25rem; }
+        .aec-dashboard-stat { min-height:100px; }
+        .aec-dashboard-welcome__date { min-width:0; width:100%; text-align:left; }
+        .aec-dashboard-panel { padding:.9rem; }
+        #dashboard-widgets [data-dashboard-widget] { grid-column:1 / -1 !important; }
+        body.aec-admin-dashboard-page main { padding:1rem !important; }
+        body.aec-admin-dashboard-page main > header { margin:-1rem -1rem 1rem !important; padding:1rem !important; }
+    }
+    @media (prefers-reduced-motion:reduce) {
+        #dashboard-widgets [data-dashboard-widget],
+        #dashboard-widgets [data-dashboard-widget]:hover,
+        body.aec-admin-dashboard-page #admin-sidebar nav a { transition:none !important; transform:none !important; }
     }
 </style>
+<div class="mb-3 flex flex-wrap items-end justify-between gap-2">
+    <div><h2 class="text-base font-extrabold text-slate-900">Module Dashboards</h2><p class="text-xs text-slate-500">Live widgets provided by your enabled LMS modules</p></div>
+    <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Permission-aware modules</span>
+</div>
 <div id="dashboard-widgets" class="grid grid-cols-1 gap-4 md:grid-cols-4" data-refresh-url="{{ route('admin.dashboard.refresh') }}" data-analytics-url="{{ route('admin.dashboard.widget-analytics') }}" data-motion-enabled="{{ $motionSettings['enabled'] ? 'true' : 'false' }}" data-motion-preset="{{ $motionSettings['preset'] }}" data-motion-speed="{{ $motionSettings['speed'] }}" data-motion-intensity="{{ $motionSettings['intensity'] }}" data-motion-loading="{{ $motionSettings['loading'] }}" data-motion-counters="{{ $motionSettings['counters'] ? 'true' : 'false' }}" data-motion-hover="{{ $motionSettings['hover'] ? 'true' : 'false' }}">
         @foreach ($widgets as $widget)
             @if ($widget === 'users')
-                <section data-dashboard-widget="users" data-size="{{ $widgetSizes['users'] ?? 'medium' }}" class="rounded-2xl border border-slate-200 bg-white p-5">
-                    <div class="text-xs text-slate-500">Registered Accounts</div>
-                    <div class="mt-1 text-2xl font-extrabold"><span data-count-to="{{ $metrics['users'] }}" data-live-metric="users">{{ $metrics['users'] }}</span></div>
+                <section data-dashboard-widget="users" data-size="{{ $widgetSizes['users'] ?? 'medium' }}" class="aec-dashboard-kpi aec-dashboard-kpi--users rounded-2xl border p-5">
+                    <div class="text-xs font-bold uppercase tracking-[.12em] text-slate-500">Registered Accounts</div>
+                    <div class="mt-2 text-2xl font-extrabold tabular-nums"><span data-count-to="{{ $metrics['users'] }}" data-live-metric="users">{{ number_format($metrics['users']) }}</span></div>
+                    <p class="mt-1 text-[11px] font-medium text-slate-500">{{ $isBranchManager ? "Accounts in your assigned branch" : "All platform user accounts" }}</p>
                 </section>
             @elseif ($widget === 'plugins')
-                <section data-dashboard-widget="plugins" data-size="{{ $widgetSizes['plugins'] ?? 'medium' }}" class="rounded-2xl border border-slate-200 bg-white p-5">
+                <section data-dashboard-widget="plugins" data-size="{{ $widgetSizes['plugins'] ?? 'medium' }}" class="aec-dashboard-kpi aec-dashboard-kpi--plugins rounded-2xl border p-5">
                     <div class="flex flex-wrap items-center justify-between gap-2"><h2 class="text-sm font-bold text-slate-900">Plugin Overview</h2><span class="text-xs text-slate-500"><span data-live-metric="plugins_total">{{ $metrics['plugins_total'] }}</span> discovered</span></div>
                     <div class="mt-2 text-2xl font-extrabold text-emerald-700"><span data-count-to="{{ $metrics['plugins_enabled'] }}" data-live-metric="plugins_enabled">{{ $metrics['plugins_enabled'] }}</span> <span class="text-sm font-medium text-slate-500">active</span></div>
                 </section>
             @elseif ($widget === 'backups')
-                <section data-dashboard-widget="backups" data-size="{{ $widgetSizes['backups'] ?? 'medium' }}" class="rounded-2xl border border-slate-200 bg-white p-5">
-                    <div class="text-xs text-slate-500">Encrypted Backups</div>
-                    <div class="mt-1 text-2xl font-extrabold"><span data-count-to="{{ $metrics['backups'] }}" data-live-metric="backups">{{ $metrics['backups'] }}</span></div>
+                <section data-dashboard-widget="backups" data-size="{{ $widgetSizes['backups'] ?? 'medium' }}" class="aec-dashboard-kpi aec-dashboard-kpi--backups rounded-2xl border p-5">
+                    <div class="text-xs font-bold uppercase tracking-[.12em] text-slate-500">Encrypted Backups</div>
+                    <div class="mt-2 text-2xl font-extrabold tabular-nums"><span data-count-to="{{ $metrics['backups'] }}" data-live-metric="backups">{{ number_format($metrics['backups']) }}</span></div>
+                    <p class="mt-1 text-[11px] font-medium text-slate-500">Stored backup archives</p>
                 </section>
             @elseif ($widget === 'system_info')
                 <section data-dashboard-widget="system_info" data-size="{{ $widgetSizes['system_info'] ?? 'medium' }}" class="rounded-2xl border border-slate-200 bg-white p-5">
@@ -176,9 +471,11 @@
 <script>
 (() => {
     const dashboard = document.getElementById('dashboard-widgets');
+    const dashboardRoot = document.querySelector('.aec-edupro-dashboard');
+    const liveScope = dashboardRoot || dashboard;
     if (dashboard?.dataset.motionEnabled === 'true' && dashboard.dataset.motionCounters === 'true' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
         const duration = dashboard.dataset.motionSpeed === 'fast' ? 520 : dashboard.dataset.motionSpeed === 'slow' ? 1250 : 850;
-        dashboard.querySelectorAll('[data-count-to]').forEach((node, index) => {
+        liveScope.querySelectorAll('[data-count-to]').forEach((node, index) => {
             const target = Number(node.dataset.countTo);
             if (!Number.isFinite(target) || target < 0 || target > 1000000000) return;
             const start = performance.now() + index * 90;
@@ -199,7 +496,7 @@
                 if (!response.ok) return;
                 const payload = await response.json();
                 Object.entries(payload.metrics || {}).forEach(([metric, value]) => {
-                    dashboard.querySelectorAll('[data-live-metric="' + metric + '"]').forEach(node => { node.textContent = Number(value).toLocaleString(); });
+                    liveScope.querySelectorAll('[data-live-metric="' + metric + '"]').forEach(node => { node.textContent = Number(value).toLocaleString(); });
                 });
                 dashboard.querySelectorAll('[data-refresh-status]').forEach(node => node.textContent = 'Updated ' + new Date(payload.refreshed_at).toLocaleTimeString());
             } catch (_) { /* Preserve the last successful snapshot while offline. */ }
@@ -267,58 +564,5 @@
     });
 })();
 </script>
-
-<style>
-/* Dashboard-only reference skin; preserve global appearance preferences elsewhere. */
-body:has(#dashboard-widgets) { background:#1b2533 !important; color:#e8eef7 !important; }
-body:has(#dashboard-widgets) main { background:#1b2533 !important; }
-body:has(#dashboard-widgets) main > header { background:#263244 !important; border-color:#354256 !important; }
-body:has(#dashboard-widgets) main > header .text-slate-900 { color:#f8fafc !important; }
-body:has(#dashboard-widgets) main > header .text-slate-500 { color:#aebbd0 !important; }
-body:has(#dashboard-widgets) main > header a:not(.bg-blue-600) { background:#303d51 !important; border-color:#45536a !important; color:#e8eef7 !important; }
-body:has(#dashboard-widgets) main > header span { background:#303d51 !important; color:#e8eef7 !important; }
-#dashboard-widgets { align-items:stretch; gap:1rem; }
-#dashboard-widgets [data-dashboard-widget] {
- min-width:0; color:#e8eef7 !important; background:#263244 !important;
- border:1px solid #3a485d !important; border-radius:12px !important;
- box-shadow:0 8px 22px rgba(5,12,24,.12); padding:1.15rem !important;
-}
-#dashboard-widgets [data-dashboard-widget] h1,
-#dashboard-widgets [data-dashboard-widget] h2,
-#dashboard-widgets [data-dashboard-widget] h3,
-#dashboard-widgets [data-dashboard-widget] strong,
-#dashboard-widgets [data-dashboard-widget] .text-slate-900 { color:#f8fafc !important; }
-#dashboard-widgets [data-dashboard-widget] .text-slate-700,
-#dashboard-widgets [data-dashboard-widget] .text-slate-600 { color:#d5deeb !important; }
-#dashboard-widgets [data-dashboard-widget] .text-slate-500,
-#dashboard-widgets [data-dashboard-widget] .text-slate-400 { color:#9eacc1 !important; }
-#dashboard-widgets [data-dashboard-widget] .border-slate-200,
-#dashboard-widgets [data-dashboard-widget] .border-slate-300,
-#dashboard-widgets [data-dashboard-widget] table tbody tr { border-color:#3b4a60 !important; }
-#dashboard-widgets [data-dashboard-widget] table thead { color:#aebbd0 !important; border-color:#3b4a60 !important; }
-#dashboard-widgets [data-dashboard-widget] a.bg-blue-600,
-#dashboard-widgets [data-dashboard-widget] button.bg-blue-600 { background:#20a89c !important; color:white !important; }
-#dashboard-widgets [data-dashboard-widget] input,
-#dashboard-widgets [data-dashboard-widget] select { background:#202c3c !important; border-color:#43536b !important; color:#e8eef7 !important; }
-#dashboard-widgets [data-dashboard-widget][data-size=small] { min-height:8rem; }
-#dashboard-widgets [data-dashboard-widget][data-size=medium] { min-height:10rem; }
-#dashboard-widgets [data-dashboard-widget][data-size=large] { min-height:14rem; }
-@media (min-width:768px) {
- #dashboard-widgets [data-dashboard-widget][data-size=small] { grid-column:span 1; }
- #dashboard-widgets [data-dashboard-widget][data-size=medium] { grid-column:span 2; }
- #dashboard-widgets [data-dashboard-widget][data-size=large] { grid-column:span 4; }
-}
-@media (max-width:767px) {
- #dashboard-widgets [data-dashboard-widget] { grid-column:1 / -1 !important; }
- body:has(#dashboard-widgets) main { padding:1rem !important; }
- body:has(#dashboard-widgets) main > header { margin:-1rem -1rem 1rem !important; padding:1rem !important; }
-}
-#dashboard-widgets [data-dashboard-widget] { transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease; }
-#dashboard-widgets [data-dashboard-widget]:hover { transform:translateY(-2px); border-color:#52647e !important; box-shadow:0 14px 30px rgba(5,12,24,.22); }
-@media (prefers-reduced-motion:reduce) {
- #dashboard-widgets [data-dashboard-widget] { transition:none !important; }
- #dashboard-widgets [data-dashboard-widget]:hover { transform:none; }
-}
-</style>
 
 @endsection

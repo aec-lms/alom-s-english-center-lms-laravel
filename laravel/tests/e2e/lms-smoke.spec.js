@@ -22,7 +22,7 @@ test('admin can sign in and open Recycle Bin', async ({ page }) => {
   await page.locator('#login-password-input').fill('E2E-Strong-Password-2026!');
   await page.getByRole('button', { name: /sign in/i }).click();
   await expect(page).toHaveURL(/\/admin(?:\/|$)/);
-  await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   const response = await page.goto('/admin/recycle-bin');
   expect(response.status()).toBe(200);
   await expect(page.getByRole('heading', { name: 'Admin Recycle Bin' })).toBeVisible();
@@ -55,4 +55,32 @@ test('admin can reorder dashboard widgets and save the layout', async ({ page })
   await page.getByRole('button', { name: 'Save layout' }).click();
   await expect(page.locator('[data-dashboard-widget]').first()).toHaveAttribute('data-dashboard-widget', 'system_info');
   await expect(page.getByRole('heading', { name: 'System Information' })).toBeVisible();
+});
+
+test('admin dashboard stays responsive at desktop, tablet and mobile widths', async ({ page }) => {
+  await page.goto('/login');
+  await page.getByPlaceholder('Email Address').fill('e2e-admin@aec.test');
+  await page.locator('#login-password-input').fill('E2E-Strong-Password-2026!');
+  await page.getByRole('button', { name: /sign in/i }).click();
+  await expect(page).toHaveURL(/\/admin(?:\/|$)/);
+
+  const viewports = [
+    { name: 'desktop', width: 1440, height: 900 },
+    { name: 'tablet', width: 900, height: 1024 },
+    { name: 'mobile', width: 390, height: 844 },
+  ];
+
+  for (const viewport of viewports) {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
+    const hasHorizontalOverflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth
+    );
+    expect(hasHorizontalOverflow, `dashboard horizontal overflow at ${viewport.name} width`).toBe(false);
+    await page.screenshot({
+      path: `test-results/admin-dashboard-${viewport.name}.png`,
+      fullPage: true,
+      animations: 'disabled',
+    });
+  }
 });

@@ -17,7 +17,34 @@ class DashboardCustomizationTest extends TestCase
         $this->actingAs($admin)->get(route('admin.dashboard'))
             ->assertOk()
             ->assertSee('Customize Dashboard')
-            ->assertSee('System Information');
+            ->assertSee('System Information')
+            ->assertSee('aec-edupro-dashboard', false)
+            ->assertSee('aec-admin-dashboard-page', false)
+            ->assertSee('aria-current="page"', false)
+            ->assertSee('aec-dashboard-welcome', false)
+            ->assertSee('aec-dashboard-welcome__mission', false)
+            ->assertSee('aec-dashboard-kpi--users', false)
+            ->assertSee('body.aec-admin-dashboard-page #admin-sidebar', false)
+            ->assertDontSee('body:has(#dashboard-widgets)', false)
+            ->assertSee('Manage Users')
+            ->assertSee('Welcome Back')
+            ->assertSee('Total Students')
+            ->assertSee('Total Teachers')
+            ->assertSee('Total Courses')
+            ->assertSee('Total Batches')
+            ->assertSee('Analytics Overview')
+            ->assertSee('Monthly dashboard analytics for students, courses and batches')
+            ->assertSee('A detailed data table follows for assistive technology.')
+            ->assertSee('Recent Activities')
+            ->assertSee('Quick Actions')
+            ->assertSee('Module Dashboards')
+            ->assertSee('data-live-metric="students"', false)
+            ->assertSee('data-live-metric="teachers"', false)
+            ->assertSee('data-live-metric="courses"', false)
+            ->assertSee('data-live-metric="batches"', false)
+            ->assertSee('aec-dashboard-panel', false)
+            ->assertSee('data-refresh-url=', false)
+            ->assertDontSee('<div id="dashboard-widgets"<div', false);
 
         $this->actingAs($admin)->post(route('admin.dashboard.widgets'), [
             'widgets' => ['users', 'system_info'],
@@ -34,8 +61,20 @@ class DashboardCustomizationTest extends TestCase
             ->assertOk()
             ->assertSee('Registered Accounts')
             ->assertSee('System Information')
-            ->assertDontSee('data-dashboard-widget="audit_trail"', false)
-            ->assertDontSee('data-dashboard-widget="backups"', false);
+            // Assert rendered widget elements, not CSS selectors that may style hidden widgets.
+            ->assertDontSee('<section data-dashboard-widget="audit_trail"', false)
+            ->assertDontSee('<section data-dashboard-widget="backups"', false);
+    }
+
+    public function test_admin_dashboard_visual_skin_is_not_applied_to_other_admin_pages(): void
+    {
+        $this->markSystemInstalled();
+        $admin = $this->createUserWithRole('admin', null, 'dashboard-scope-admin@aec.test');
+
+        $this->actingAs($admin)->get(route('admin.plugins.index'))
+            ->assertOk()
+            ->assertDontSee('aec-admin-dashboard-page', false)
+            ->assertDontSee('aec-dashboard-welcome', false);
     }
 
     public function test_dashboard_widget_preferences_are_isolated_per_admin(): void
@@ -87,9 +126,9 @@ class DashboardCustomizationTest extends TestCase
 
         $response = $this->actingAs($admin)->get(route('admin.dashboard'))->assertOk();
         $html = $response->getContent();
-        $auditPosition = strpos($html, 'data-dashboard-widget="audit_trail"');
-        $systemPosition = strpos($html, 'data-dashboard-widget="system_info"');
-        $usersPosition = strpos($html, 'data-dashboard-widget="users"');
+        $auditPosition = strpos($html, '<section data-dashboard-widget="audit_trail"');
+        $systemPosition = strpos($html, '<section data-dashboard-widget="system_info"');
+        $usersPosition = strpos($html, '<section data-dashboard-widget="users"');
         $this->assertNotFalse($auditPosition);
         $this->assertNotFalse($systemPosition);
         $this->assertNotFalse($usersPosition);
@@ -116,7 +155,7 @@ class DashboardCustomizationTest extends TestCase
 
         $this->actingAs($admin)->getJson(route('admin.dashboard.refresh'))
             ->assertOk()
-            ->assertJsonStructure(['metrics' => ['users', 'plugins_total', 'plugins_enabled', 'backups'], 'refreshed_at'])
+            ->assertJsonStructure(['metrics' => ['users', 'students', 'teachers', 'courses', 'batches', 'plugins_total', 'plugins_enabled', 'backups'], 'refreshed_at'])
             ->assertHeader('Cache-Control', 'no-store, private');
     }
 

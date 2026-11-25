@@ -29,5 +29,14 @@
             "order": 92,
             "permission": "student-tracking.view"
         }
+    ],
+    "dashboard_widgets": [
+        {
+            "key": "course-progress",
+            "label": "Course Learning Progress",
+            "view": "dashboard.course-progress",
+            "permission": "student-tracking.view",
+            "default": true
+        }
     ]
 }
