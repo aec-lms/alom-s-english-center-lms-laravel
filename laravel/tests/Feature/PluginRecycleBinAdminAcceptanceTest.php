@@ -408,7 +408,7 @@ class PluginRecycleBinAdminAcceptanceTest extends TestCase
             $realManager->install($slug);
 
             $audit = \Mockery::mock(AuditLogger::class);
-            $audit->shouldReceive('log')->zeroOrMoreTimes()->andReturnUsing(
+            $audit->shouldReceive('logRequired')->zeroOrMoreTimes()->andReturnUsing(
                 static function (string $action): void {
                     if ($action === 'plugin.deleted_to_recycle_bin') {
                         throw new RuntimeException('audit storage unavailable');
@@ -452,7 +452,7 @@ class PluginRecycleBinAdminAcceptanceTest extends TestCase
             $metadataPath = $archivePath . '.json';
 
             $audit = \Mockery::mock(AuditLogger::class);
-            $audit->shouldReceive('log')->zeroOrMoreTimes()->andReturnUsing(
+            $audit->shouldReceive('logRequired')->zeroOrMoreTimes()->andReturnUsing(
                 static function (string $action): void {
                     if ($action === 'plugin.restored_from_recycle_bin') {
                         throw new RuntimeException('audit storage unavailable');
@@ -500,7 +500,7 @@ class PluginRecycleBinAdminAcceptanceTest extends TestCase
             $backupPath = storage_path('app/plugin-permanent-delete-backups/' . $archiveName);
 
             $audit = \Mockery::mock(AuditLogger::class);
-            $audit->shouldReceive('log')->zeroOrMoreTimes()->andReturnUsing(
+            $audit->shouldReceive('logRequired')->zeroOrMoreTimes()->andReturnUsing(
                 static function (string $action): void {
                     if ($action === 'plugin.permanent_delete_started') {
                         throw new RuntimeException('audit storage unavailable');
