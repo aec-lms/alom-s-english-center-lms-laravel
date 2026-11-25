@@ -188,6 +188,24 @@ final class CourseAssessmentGradingBranchIsolationTest extends TestCase
         $this->actingAs($mismatchedTeacher)->patch(route('plugins.course-assessments.grading.update', $mismatchedAttempt), [
             'scores' => [$mismatchedQuestion => 3],
         ])->assertForbidden();
+
+        // A missing account branch must not inherit a non-null profile branch.
+        $partiallyAssignedTeacher = $this->createTeacher(null, $branchB);
+        $partialAttempt = $this->createPendingAttempt($courseB, $branchB, 'Partial Teacher Branch Identity');
+        $this->assignTeacher((int) $partiallyAssignedTeacher->id, $courseB);
+        $this->actingAs($partiallyAssignedTeacher)
+            ->get(route('plugins.course-assessments.grading.index'))
+            ->assertForbidden();
+        $partialQuestion = (int) DB::table('course_assessment_attempt_questions')->where('attempt_id', $partialAttempt)->value('id');
+        $this->actingAs($partiallyAssignedTeacher)->patch(route('plugins.course-assessments.grading.update', $partialAttempt), [
+            'scores' => [$partialQuestion => 2],
+        ])->assertForbidden();
+        $this->assertDatabaseHas('course_assessment_attempts', [
+            'id' => $partialAttempt,
+            'status' => 'pending_review',
+            'manual_score' => 0,
+            'graded_by' => null,
+        ]);
     }
 
     public function test_grading_rechecks_locked_account_branch_active_state_and_current_role(): void
