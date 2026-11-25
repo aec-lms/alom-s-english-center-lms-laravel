@@ -34,7 +34,7 @@
             "label": "Exam Performance",
             "view": "dashboard.exam-performance",
             "permission": "exams.manage",
-            "default": false
+            "default": true
         }
     ]
 }
