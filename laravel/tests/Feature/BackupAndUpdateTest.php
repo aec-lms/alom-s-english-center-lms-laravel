@@ -472,4 +472,208 @@ class BackupAndUpdateTest extends TestCase
         }
     }
 
+
+    public function test_legacy_update_rollback_restore_preserves_update_and_audit_history(): void
+    {
+        $this->markSystemInstalled();
+        $timestamp = now();
+
+        $updateId = DB::table('update_logs')->insertGetId([
+            'target_type' => 'core',
+            'target_slug' => 'aec-lms-core',
+            'from_version' => '2.0.0',
+            'to_version' => '2.0.1',
+            'package_checksum' => str_repeat('b', 64),
+            'status' => 'applied',
+            'backup_reference' => 'legacy-rollback-fixture',
+            'notes' => 'legacy rollback history fixture',
+            'executed_by' => null,
+            'created_at' => $timestamp,
+            'updated_at' => $timestamp,
+        ]);
+        $auditId = DB::table('audit_logs')->insertGetId([
+            'user_id' => null,
+            'action' => 'update.applied',
+            'entity_type' => 'core',
+            'entity_id' => 'aec-lms-core',
+            'ip_address' => null,
+            'metadata' => json_encode(['to' => '2.0.1'], JSON_THROW_ON_ERROR),
+            'created_at' => $timestamp,
+            'updated_at' => $timestamp,
+        ]);
+
+        $restore = new \ReflectionMethod(BackupService::class, 'restoreLegacyDatabaseSnapshot');
+        $restore->setAccessible(true);
+        $restore->invoke(app(BackupService::class), [
+            'tables' => ['update_logs' => [], 'audit_logs' => []],
+        ], null, null, 1, true);
+
+        $this->assertDatabaseHas('update_logs', ['id' => $updateId, 'status' => 'applied']);
+        $this->assertDatabaseHas('audit_logs', ['id' => $auditId, 'action' => 'update.applied']);
+    }
+
+    public function test_update_rollback_restore_preserves_update_and_audit_history(): void
+    {
+        $this->markSystemInstalled();
+        $backup = app(BackupService::class)->createEncryptedBackup(null, false);
+        $timestamp = now();
+
+        $targetDir = storage_path('framework/testing/update-rollback-' . bin2hex(random_bytes(5)));
+        $targetFile = $targetDir . DIRECTORY_SEPARATOR . 'payload.txt';
+        $snapshotDir = storage_path('app/update-snapshots/rollback-test-' . bin2hex(random_bytes(5)));
+        mkdir($targetDir, 0700, true);
+        mkdir($snapshotDir . DIRECTORY_SEPARATOR . 'files', 0700, true);
+        file_put_contents($targetFile, 'new version');
+        file_put_contents($snapshotDir . DIRECTORY_SEPARATOR . 'files' . DIRECTORY_SEPARATOR . 'payload.txt', 'previous version');
+        file_put_contents($snapshotDir . DIRECTORY_SEPARATOR . 'snapshot.json', json_encode([
+            'target_dir' => $targetDir,
+            'entries' => [['path' => 'payload.txt', 'existed' => true]],
+        ], JSON_THROW_ON_ERROR));
+
+        $updateId = DB::table('update_logs')->insertGetId([
+            'target_type' => 'core',
+            'target_slug' => 'aec-lms-core',
+            'from_version' => '2.0.0',
+            'to_version' => '2.0.1',
+            'package_checksum' => str_repeat('a', 64),
+            'status' => 'applied',
+            'backup_reference' => $backup->filename,
+            'notes' => json_encode(['snapshot_path' => $snapshotDir], JSON_THROW_ON_ERROR),
+            'executed_by' => null,
+            'created_at' => $timestamp,
+            'updated_at' => $timestamp,
+        ]);
+        $auditId = DB::table('audit_logs')->insertGetId([
+            'user_id' => null,
+            'action' => 'update.applied',
+            'entity_type' => 'core',
+            'entity_id' => 'aec-lms-core',
+            'ip_address' => null,
+            'metadata' => json_encode(['to' => '2.0.1'], JSON_THROW_ON_ERROR),
+            'created_at' => $timestamp,
+            'updated_at' => $timestamp,
+        ]);
+
+        try {
+            app(UniversalUpdateService::class)->rollbackUpdate(\App\Models\UpdateLog::query()->findOrFail($updateId));
+
+            $this->assertDatabaseHas('update_logs', ['id' => $updateId, 'status' => 'rolled_back']);
+            $this->assertDatabaseHas('audit_logs', ['id' => $auditId, 'action' => 'update.applied']);
+            $this->assertDatabaseHas('audit_logs', [
+                'action' => 'update.rolled_back',
+                'entity_type' => 'core',
+                'entity_id' => 'aec-lms-core',
+            ]);
+            $this->assertSame('previous version', file_get_contents($targetFile));
+        } finally {
+            @unlink($targetFile);
+            \Illuminate\Support\Facades\File::deleteDirectory($targetDir);
+            \Illuminate\Support\Facades\File::deleteDirectory($snapshotDir);
+            @unlink($backup->storage_path);
+            $backup->delete();
+        }
+    }
+
+    public function test_private_backup_restore_rejects_unix_symlinks_using_external_attributes(): void
+    {
+        $zipPath = tempnam(sys_get_temp_dir(), 'aec_private_restore_');
+        $this->assertNotFalse($zipPath);
+        $zip = new ZipArchive();
+        $this->assertTrue($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true);
+        $this->assertTrue($zip->addFromString('private-files/student-documents/linked.txt', 'outside-target'));
+        $this->assertTrue($zip->setExternalAttributesName(
+            'private-files/student-documents/linked.txt',
+            ZipArchive::OPSYS_UNIX,
+            0120777 << 16
+        ));
+        $this->assertTrue($zip->close());
+
+        $archive = new ZipArchive();
+        $this->assertTrue($archive->open($zipPath) === true);
+        $stage = new \ReflectionMethod(BackupService::class, 'stagePrivateFiles');
+        $stage->setAccessible(true);
+
+        try {
+            $this->expectException(RuntimeException::class);
+            $this->expectExceptionMessage('Symlink entry rejected in backup');
+            $stage->invoke(app(BackupService::class), $archive, ['includes_files' => true]);
+        } finally {
+            $archive->close();
+            @unlink($zipPath);
+        }
+    }
+
+    public function test_private_backup_restore_streams_large_file_entries_to_private_staging(): void
+    {
+        $zipPath = tempnam(sys_get_temp_dir(), 'aec_private_stream_');
+        $this->assertNotFalse($zipPath);
+        $zip = new ZipArchive();
+        $this->assertTrue($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true);
+        $payload = str_repeat('streamed-private-content-', 120000);
+        $this->assertTrue($zip->addFromString('private-files/student-documents/large.txt', $payload));
+        $this->assertTrue($zip->close());
+
+        $archive = new ZipArchive();
+        $this->assertTrue($archive->open($zipPath) === true);
+        $stage = new \ReflectionMethod(BackupService::class, 'stagePrivateFiles');
+        $stage->setAccessible(true);
+        $stagingPath = null;
+
+        try {
+            $stagingPath = $stage->invoke(app(BackupService::class), $archive, ['includes_files' => true]);
+            $this->assertIsString($stagingPath);
+            $this->assertSame(
+                hash('sha256', $payload),
+                hash_file('sha256', $stagingPath . '/student-documents/large.txt')
+            );
+        } finally {
+            $archive->close();
+            if (is_string($stagingPath) && is_dir($stagingPath)) {
+                \Illuminate\Support\Facades\File::deleteDirectory($stagingPath);
+            }
+            @unlink($zipPath);
+        }
+    }
+
+    public function test_private_backup_restore_rejects_a_symlinked_staging_root_before_writing_files(): void
+    {
+        $zipPath = tempnam(sys_get_temp_dir(), 'aec_restore_root_link_');
+        $outside = sys_get_temp_dir() . '/aec_restore_outside_' . bin2hex(random_bytes(5));
+        $stagingRoot = storage_path('app/restore-staging');
+        $this->assertNotFalse($zipPath);
+        mkdir($outside, 0700, true);
+        if (is_link($stagingRoot)) {
+            unlink($stagingRoot);
+        } elseif (is_dir($stagingRoot)) {
+            \Illuminate\Support\Facades\File::deleteDirectory($stagingRoot);
+        }
+
+        $zip = new ZipArchive();
+        $this->assertTrue($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === true);
+        $this->assertTrue($zip->addFromString('private-files/student-documents/should-not-escape.txt', 'sensitive'));
+        $this->assertTrue($zip->close());
+        $archive = new ZipArchive();
+        $this->assertTrue($archive->open($zipPath) === true);
+        $stage = new \ReflectionMethod(BackupService::class, 'stagePrivateFiles');
+        $stage->setAccessible(true);
+
+        try {
+            $this->assertTrue(symlink($outside, $stagingRoot));
+            try {
+                $stage->invoke(app(BackupService::class), $archive, ['includes_files' => true]);
+                $this->fail('A symlinked restore staging root must be rejected.');
+            } catch (\RuntimeException $exception) {
+                $this->assertSame('Private restore staging root must not be a symbolic link.', $exception->getMessage());
+            }
+            $this->assertSame([], array_values(array_diff(scandir($outside) ?: [], ['.', '..'])));
+        } finally {
+            $archive->close();
+            if (is_link($stagingRoot)) {
+                unlink($stagingRoot);
+            }
+            @rmdir($outside);
+            @unlink($zipPath);
+        }
+    }
+
 }
