@@ -36,7 +36,7 @@
             "label": "Course Learning Progress",
             "view": "dashboard.course-progress",
             "permission": "student-tracking.view",
-            "default": false
+            "default": true
         }
     ]
 }
