@@ -10,6 +10,7 @@ Route::middleware(['web', 'installed', 'auth', 'plugin:payment-management', 'per
     ->name('plugins.payments.')
     ->group(function (): void {
         Route::get('/', [PaymentController::class, 'index'])->name('index');
+        Route::get('/collections/export.csv', [PaymentController::class, 'exportCollections'])->name('collections.export');
         Route::post('/offline', [PaymentController::class, 'recordOffline'])->name('offline');
         Route::post('/{transaction}/refund', [PaymentController::class, 'refund'])->name('refund');
     });

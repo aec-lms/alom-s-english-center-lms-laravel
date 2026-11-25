@@ -42,6 +42,7 @@
     "optional_dependencies": [
         "fees-management",
         "payment-management",
-        "student-management"
+        "student-management",
+        "universal-payment"
     ]
 }

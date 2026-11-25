@@ -17,12 +17,16 @@ use RuntimeException;
 
 class CourseCommercePaymentSettlementService
 {
+    private const TERMINAL_PAYMENT_STATUSES = ['failed', 'cancelled', 'refunded', 'reversed', 'rejected', 'chargeback'];
     public function __construct(private readonly PluginManager $plugins) {}
 
     public function settle(UniversalPaymentTransaction $transaction, string $validationId, array $providerDetails): UniversalPaymentTransaction
     {
         return DB::transaction(function () use ($transaction, $validationId, $providerDetails): UniversalPaymentTransaction {
             $locked = UniversalPaymentTransaction::query()->whereKey($transaction->id)->lockForUpdate()->firstOrFail();
+            if (in_array($locked->status, self::TERMINAL_PAYMENT_STATUSES, true)) {
+                throw new RuntimeException('A terminal course-commerce payment cannot be settled again.');
+            }
             if ($locked->status === 'refunded') {
                 throw new RuntimeException('A refunded course-commerce transaction cannot be settled again.');
             }
@@ -74,6 +78,31 @@ class CourseCommercePaymentSettlementService
                     'settlement' => 'completed',
                 ]), JSON_THROW_ON_ERROR),
             ]);
+
+            // Referral commission recording must observe the committed-in-transaction
+            // verified provider state, not the pending state that existed while the
+            // cart order and invoice were being fulfilled above.
+            if ($purpose === 'course_cart' && $this->plugins->isEnabled('referral-income')) {
+                $orderId = (int) ($notes['course_cart_order_id'] ?? 0);
+                $order = DB::table('course_cart_orders')
+                    ->where('id', $orderId)
+                    ->where('user_id', (int) $locked->user_id)
+                    ->where('status', 'paid')
+                    ->first();
+
+                if (!$order) {
+                    throw new RuntimeException('Verified course-cart payment has no matching paid order for referral reconciliation.');
+                }
+
+                $buyer = User::query()->whereKey((int) $locked->user_id)->firstOrFail();
+                app(ReferralIncomeService::class)->recordSettledPurchase(
+                    $buyer,
+                    'course_cart_order',
+                    (string) $order->id,
+                    (float) $order->net_amount,
+                    (string) $order->currency
+                );
+            }
 
             return $locked->fresh();
         }, 3);
@@ -133,6 +162,14 @@ class CourseCommercePaymentSettlementService
             'CART'
         );
 
+        // Bind the provider transaction to the invoice generated from this paid order.
+        if (Schema::hasColumn('universal_payment_transactions', 'fee_invoice_id')) {
+            DB::table('universal_payment_transactions')
+                ->where('id', $transaction->id)
+                ->where('user_id', $transaction->user_id)
+                ->update(['fee_invoice_id' => $invoice->id, 'updated_at' => now()]);
+        }
+
         foreach ($items as $item) {
             $existing = DB::table('enrollments')->where('user_id', $transaction->user_id)
                 ->where('course_id', $item->course_id)->whereIn('status', ['pending', 'active', 'completed'])->exists();
@@ -176,18 +213,6 @@ class CourseCommercePaymentSettlementService
             'updated_at' => now(),
         ]);
 
-        if ($this->plugins->isEnabled('referral-income')) {
-            $buyer = User::query()->find((int) $transaction->user_id);
-            if ($buyer) {
-                app(ReferralIncomeService::class)->recordSettledPurchase(
-                    $buyer,
-                    'course_cart_order',
-                    (string) $orderId,
-                    (float) $order->net_amount,
-                    (string) $order->currency
-                );
-            }
-        }
     }
 
     private function settleGift(UniversalPaymentTransaction $transaction, array $notes): void

@@ -39,11 +39,25 @@ class CourseController extends Controller
         $cmsPosts = Schema::hasTable('cms_posts')
             ? DB::table('cms_posts')->orderByDesc('id')->limit(100)->get()
             : collect();
+        $teacherAssignments = Schema::hasTable('course_teacher_assignments')
+            ? DB::table('course_teacher_assignments')->join('users', 'users.id', '=', 'course_teacher_assignments.teacher_user_id')
+                ->when($isBranchManager, fn ($q) => $q->where('users.branch_id', $actor->branch_id))
+                ->select('course_teacher_assignments.course_id', 'course_teacher_assignments.teacher_user_id', 'users.name as teacher_name')
+                ->orderBy('users.name')->get()
+            : collect();
+        $teacherClassPayments = Schema::hasTable('teacher_class_payments')
+            ? DB::table('teacher_class_payments')->join('users', 'users.id', '=', 'teacher_class_payments.teacher_user_id')
+                ->join('class_session_records', 'class_session_records.id', '=', 'teacher_class_payments.session_record_id')
+                ->join('live_classes', 'live_classes.id', '=', 'class_session_records.live_class_id')
+                ->when($isBranchManager, fn ($q) => $q->where('teacher_class_payments.branch_id', $actor->branch_id))
+                ->select('teacher_class_payments.*', 'users.name as teacher_name', 'live_classes.title as class_title')
+                ->latest('teacher_class_payments.id')->limit(50)->get()
+            : collect();
         $liveClasses = Schema::hasTable('live_classes')
             ? LiveClass::query()->with('course')->when($isBranchManager, fn ($q) => $q->whereHas('course', fn ($courseQuery) => $courseQuery->where('branch_id', $actor->branch_id)))->latest('starts_at')->get()
             : collect();
 
-        return view('course-management::index', compact('courses', 'categories', 'cmsCategories', 'cmsPosts', 'liveClasses'));
+        return view('course-management::index', compact('courses', 'categories', 'cmsCategories', 'cmsPosts', 'liveClasses', 'teacherAssignments', 'teacherClassPayments'));
     }
 
     public function store(Request $request): RedirectResponse
@@ -359,7 +373,13 @@ class CourseController extends Controller
         $this->ensureAssignedBranch($actor);
         $validated = $request->validate([
             'course_id' => ['required', 'integer', 'exists:courses,id'],
+            'teacher_user_id' => ['required', 'integer', 'exists:users,id'],
+            'teacher_rate_per_class' => ['nullable', 'numeric', 'min:0', 'max:10000000'],
+            'student_fee_per_class' => ['nullable', 'numeric', 'min:0', 'max:10000000'],
             'title' => ['required', 'string', 'max:180'],
+            'teacher_user_id' => ['required', 'integer', 'exists:users,id'],
+            'teacher_rate_per_class' => ['nullable', 'numeric', 'min:0', 'max:10000000'],
+            'student_fee_per_class' => ['nullable', 'numeric', 'min:0', 'max:10000000'],
             'instructor_name' => ['nullable', 'string', 'max:120'],
             'platform' => ['required', 'in:zoom,google_meet,teams'],
             'meeting_url' => ['required', 'url', 'max:255'],
@@ -372,8 +392,12 @@ class CourseController extends Controller
             abort(403, 'Branch isolation violation.');
         }
 
+        abort_unless(DB::table('course_teacher_assignments')->where('course_id', $course->id)->where('teacher_user_id', $validated['teacher_user_id'])->exists(), 422, 'Assign this teacher to the selected course first.');
         $live = LiveClass::query()->create([
             'course_id' => $validated['course_id'],
+            'teacher_user_id' => $validated['teacher_user_id'],
+            'teacher_rate_per_class' => round((float) ($validated['teacher_rate_per_class'] ?? 0), 2),
+            'student_fee_per_class' => round((float) ($validated['student_fee_per_class'] ?? 0), 2),
             'title' => $validated['title'],
             'instructor_name' => ($validated['instructor_name'] ?? '') ?: "Engr. Mahbubul Alom",
             'platform' => $validated['platform'],
@@ -402,11 +426,16 @@ class CourseController extends Controller
             'meeting_url' => ['required', 'url', 'max:255'],
             'recording_url' => ['nullable', 'url', 'max:255'],
             'starts_at' => ['required', 'date'],
-            'status' => ['required', 'in:upcoming,live,completed,cancelled'],
+            'status' => ['required', 'in:upcoming,live,cancelled'],
             'capacity' => ['nullable', 'integer', 'min:1', 'max:2000'],
         ]);
 
+        abort_unless(DB::table('course_teacher_assignments')->where('course_id', $liveClass->course_id)->where('teacher_user_id', $validated['teacher_user_id'])->exists(), 422, 'Assign this teacher to the course first.');
+        abort_if(DB::table('class_session_records')->where('live_class_id', $liveClass->id)->exists(), 409, 'Completed class records are immutable.');
         $validated['capacity'] = (int) ($validated['capacity'] ?? $liveClass->capacity ?? 300);
+        $validated['teacher_rate_per_class'] = round((float) ($validated['teacher_rate_per_class'] ?? 0), 2);
+        $validated['student_fee_per_class'] = round((float) ($validated['student_fee_per_class'] ?? 0), 2);
+        abort_if(DB::table('class_session_records')->where('live_class_id', $liveClass->id)->exists(), 409, 'Settlement settings cannot be changed after a class has been completed.');
         $liveClass->update($validated);
 
         $this->audit->log('live_class.updated', 'live_class', (string) $liveClass->id, ['status' => $liveClass->status]);
@@ -421,6 +450,7 @@ class CourseController extends Controller
         if ($actor && $actor->hasRole('branch_manager') && (int) $actor->branch_id !== (int) $liveClass->course?->branch_id) {
             abort(403, 'Branch isolation violation.');
         }
+        abort_if(DB::table('class_session_records')->where('live_class_id', $liveClass->id)->exists(), 409, 'A completed class with settlement history cannot be deleted.');
         $title = $liveClass->title;
         $id = (string) $liveClass->id;
         $liveClass->delete();

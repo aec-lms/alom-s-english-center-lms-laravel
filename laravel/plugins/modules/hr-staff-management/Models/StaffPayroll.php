@@ -22,6 +22,8 @@ class StaffPayroll extends Model
         'status',
         'paid_at',
         'payment_reference',
+        'present_days', 'late_days', 'absent_days', 'paid_leave_days', 'unpaid_leave_days',
+        'attendance_deduction', 'late_deduction', 'late_deduction_per_day',
     ];
 
     protected $casts = [
@@ -30,6 +32,9 @@ class StaffPayroll extends Model
         'deductions' => 'decimal:2',
         'net_paid' => 'decimal:2',
         'paid_at' => 'datetime',
+        'attendance_deduction' => 'decimal:2',
+        'late_deduction' => 'decimal:2',
+        'late_deduction_per_day' => 'decimal:2',
     ];
 
     public function staff(): BelongsTo

@@ -125,6 +125,37 @@ class ThemePackageManagerTest extends TestCase
         }
     }
 
+
+    public function test_theme_upgrade_keeps_previous_version_and_admin_can_rollback(): void
+    {
+        if (!class_exists(ZipArchive::class)) $this->markTestSkipped('PHP ZIP extension is required.');
+        $this->markSystemInstalled();
+        $admin=$this->createUserWithRole('admin');
+        $first=$this->makeThemeZip([
+            'slug'=>'versioned-ocean','name'=>'Versioned Ocean','version'=>'1.0.0',
+            'author'=>'AEC','description'=>'First version','colors'=>['primary'=>'#123456'],'design'=>[],
+        ]);
+        $second=$this->makeThemeZip([
+            'slug'=>'versioned-ocean','name'=>'Versioned Ocean','version'=>'1.1.0',
+            'author'=>'AEC','description'=>'Second version','colors'=>['primary'=>'#075985'],'design'=>[],
+        ]);
+
+        try {
+            $this->actingAs($admin)->post(route('admin.appearance.themes.upload'),['theme_zip'=>$first])->assertRedirect()->assertSessionHas('status');
+            $this->actingAs($admin)->post(route('admin.appearance.themes.upload'),['theme_zip'=>$second])->assertRedirect()->assertSessionHas('status');
+            $this->assertSame('1.1.0',app(\App\Core\Appearance\ThemePackageManager::class)->manifest('versioned-ocean')['version']);
+            $this->assertTrue(app(\App\Core\Appearance\ThemePackageManager::class)->hasRollback('versioned-ocean'));
+
+            $this->actingAs($admin)->post(route('admin.appearance.themes.rollback','versioned-ocean'))
+                ->assertRedirect()->assertSessionHas('status');
+            $this->assertSame('1.0.0',app(\App\Core\Appearance\ThemePackageManager::class)->manifest('versioned-ocean')['version']);
+            $this->assertDatabaseHas('system_settings',['key'=>'appearance.themes.installed']);
+        } finally {
+            @unlink($first->getRealPath());
+            @unlink($second->getRealPath());
+        }
+    }
+
     private function makeThemeZip(array $manifest,array $extra=[]): UploadedFile
     {
         $path=tempnam(sys_get_temp_dir(),'aec-theme-');

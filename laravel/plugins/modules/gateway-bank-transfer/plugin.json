@@ -1,0 +1,48 @@
+{
+    "slug": "gateway-bank-transfer",
+    "name": "Bank Transfer Payment Method",
+    "version": "1.0.0",
+    "author": "Alom's English Center",
+    "category": "payment-gateway",
+    "description": "Installable manual bank-transfer payment method. Admin controls activation and bank transfer instructions; all submissions remain pending until an authorized reviewer verifies the receipt.",
+    "core_compatibility": "^2.0",
+    "dependencies": [],
+    "provider": "Plugins\\Modules\\GatewayBankTransfer\\Providers\\GatewayBankTransferServiceProvider",
+    "permissions": [
+        {
+            "slug": "payments.bank_transfer.manage",
+            "name": "Manage Bank Transfer Payment Method"
+        }
+    ],
+    "settings_schema": [
+        {
+            "key": "enabled",
+            "label": "Enable this payment method",
+            "type": "select",
+            "secret": false,
+            "default": "0",
+            "options": {
+                "0": "Disabled",
+                "1": "Enabled"
+            }
+        },
+        {
+            "key": "display_name",
+            "label": "Checkout display name",
+            "type": "text",
+            "secret": false,
+            "default": "Bank Transfer Payment Method"
+        },
+        {
+            "key": "instructions",
+            "label": "Bank name, account details and transfer instructions",
+            "type": "text",
+            "secret": false
+        }
+    ],
+    "optional_dependencies": [
+        "universal-payment",
+        "payment-management",
+        "fees-management"
+    ]
+}

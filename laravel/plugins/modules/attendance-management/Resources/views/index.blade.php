@@ -6,6 +6,8 @@
         <h1 class="text-2xl font-extrabold text-slate-900">Attendance & Progress Tracking</h1>
         <p class="text-sm text-slate-500 mt-1">Select a batch and mark the whole class. Changes to saved attendance require a reason.</p>
         <a href="{{ route('plugins.attendance.audit') }}" class="mt-3 inline-flex rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">View attendance audit history →</a>
+        <a href="{{ route('plugins.attendance.reports') }}" class="mt-3 ml-2 inline-flex rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700">Student reports →</a>
+        <a href="{{ route('plugins.attendance.teachers.index') }}" class="mt-3 ml-2 inline-flex rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700">Teacher attendance →</a>
     </div>
     <div id="attendance-sync-status" role="status" aria-live="polite" class="rounded-lg bg-slate-100 px-4 py-3 text-sm text-slate-700">Online sync ready. Pending offline entries are saved on this device.</div>
     @if (!$attendanceReady)

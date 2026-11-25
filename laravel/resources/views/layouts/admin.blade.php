@@ -123,6 +123,9 @@
         <nav class="flex-1 p-3 space-y-1 text-sm overflow-y-auto">
             <div class="px-3 pt-1 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">{{ __('Protected Core') }}</div>
             <a href="{{ route('admin.dashboard') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">{{ __('Dashboard') }}</a>
+            @if (auth()->user()?->hasRole('admin') && auth()->user()?->hasPermission('core.settings.manage'))
+                <a href="{{ route('admin.automation-saas.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">AI Automation SaaS</a>
+            @endif
             <a href="{{ route('admin.plugins.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">{{ __('Plugin Center') }}</a>
             @if (auth()->user()?->hasPermission('core.users.manage'))
                 <a href="{{ route('admin.users.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 transition-colors">{{ __('Users & Roles') }}</a>

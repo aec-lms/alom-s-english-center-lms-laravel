@@ -42,7 +42,7 @@ class PaypalGatewayService
         return (string) $response->json('access_token');
     }
 
-    public function createOrder(FeeInvoice $invoice, ?string $idempotencyKey = null): array
+    public function createOrder(FeeInvoice $invoice, ?string $idempotencyKey = null, ?float $requestedAmount = null): array
     {
         if ($idempotencyKey) {
             $existing = PaymentTransaction::query()
@@ -60,14 +60,15 @@ class PaypalGatewayService
         }
 
         $remaining = round((float) $invoice->net_amount - (float) $invoice->paid_amount, 2);
-        if ($remaining <= 0) throw new RuntimeException('Invoice is already fully settled.');
+        $chargeAmount = round($requestedAmount ?? $remaining, 2);
+        if ($remaining <= 0 || $chargeAmount < 1 || $chargeAmount > $remaining) throw new RuntimeException('Payment amount must be positive and cannot exceed the invoice balance.');
 
         $tx = PaymentTransaction::query()->create([
             'transaction_ref' => 'PYPL-' . strtoupper(bin2hex(random_bytes(6))),
             'invoice_id' => $invoice->id,
             'branch_id' => $invoice->branch_id,
             'gateway_slug' => 'gateway-paypal',
-            'amount' => $remaining,
+            'amount' => $chargeAmount,
             'currency' => strtoupper($invoice->currency),
             'status' => 'initiated',
             'metadata' => ['idempotency_key' => $idempotencyKey],
@@ -87,7 +88,7 @@ class PaypalGatewayService
                         'description' => 'AEC LMS invoice ' . $invoice->invoice_number,
                         'amount' => [
                             'currency_code' => strtoupper($invoice->currency),
-                            'value' => number_format($remaining, 2, '.', ''),
+                            'value' => number_format($chargeAmount, 2, '.', ''),
                         ],
                     ]],
                     'application_context' => [
