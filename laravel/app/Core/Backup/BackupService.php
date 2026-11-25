@@ -222,11 +222,11 @@ class BackupService
                 }
 
                 $relative = substr($name, strlen('private-files/'));
-                $normalized = str_replace('\\\\', '/', $relative);
+                $normalized = str_replace('\\', '/', $relative);
                 $segments = explode('/', $normalized);
                 if ($relative === ''
-                    || str_contains($relative, "\\0")
-                    || str_contains($relative, '\\\\')
+                    || str_contains($relative, chr(0))
+                    || str_contains($relative, '\\')
                     || str_starts_with($normalized, '/')
                     || preg_match('/^[a-zA-Z]:/', $normalized) === 1
                     || in_array('..', $segments, true)
@@ -293,7 +293,7 @@ class BackupService
             }
             $stagingDir ??= $this->createPrivateStorageChild('restore-staging');
             return $stagingDir;
-        } catch (\\Throwable $exception) {
+        } catch (\Throwable $exception) {
             if (is_string($stagingDir)) {
                 $this->deleteDirectoryTree($stagingDir);
             }
@@ -425,9 +425,9 @@ class BackupService
             return;
         }
         $directory = $resolvedDirectory;
-        $iterator = new \\RecursiveIteratorIterator(
-            new \\RecursiveDirectoryIterator($directory, \\FilesystemIterator::SKIP_DOTS),
-            \\RecursiveIteratorIterator::CHILD_FIRST
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST
         );
         foreach ($iterator as $item) {
             if ($item->isDir() && !$item->isLink()) {
