@@ -128,7 +128,7 @@ class BackupService
             && hash_equals(strtolower((string) $backup->checksum_sha256), strtolower($checksum));
     }
 
-    public function restoreEncryptedBackup(BackupRecord $backup, ?int $actorId = null): void
+    public function restoreEncryptedBackup(BackupRecord $backup, ?int $actorId = null, bool $preserveAuditHistory = false): void
     {
         if (!$this->verifyBackupIntegrity($backup)) {
             throw new RuntimeException('Backup integrity checksum verification failed.');
@@ -173,7 +173,7 @@ class BackupService
                 $jsonLinesStream = $zip->getStream('database.jsonl');
                 if (is_resource($jsonLinesStream)) {
                     try {
-                        $this->restoreDatabaseJsonLines($jsonLinesStream, $backup, $actorId, $magic === "AECBK02\n" ? 2 : 1);
+                        $this->restoreDatabaseJsonLines($jsonLinesStream, $backup, $actorId, $magic === "AECBK02\n" ? 2 : 1, $preserveAuditHistory);
                     } finally {
                         fclose($jsonLinesStream);
                     }
@@ -182,7 +182,7 @@ class BackupService
                     $dbRaw = $zip->getFromName('database.json');
                     if ($dbRaw === false) throw new RuntimeException('Backup archive missing database.json or database.jsonl.');
                     $dbSnapshot = json_decode($dbRaw, true, 512, JSON_THROW_ON_ERROR);
-                    $this->restoreLegacyDatabaseSnapshot($dbSnapshot, $backup, $actorId, $magic === "AECBK02\n" ? 2 : 1);
+                    $this->restoreLegacyDatabaseSnapshot($dbSnapshot, $backup, $actorId, $magic === "AECBK02\n" ? 2 : 1, $preserveAuditHistory);
                     unset($dbRaw, $dbSnapshot);
                 }
 
@@ -203,90 +203,117 @@ class BackupService
     private function stagePrivateFiles(ZipArchive $zip, array $manifest): ?string
     {
         $includesFiles = (bool) ($manifest['includes_files'] ?? false);
-        $stagingDir = storage_path('app/restore-staging/' . Str::uuid()->toString());
+        $stagingDir = null;
         $seen = [];
         $totalBytes = 0;
         $fileCount = 0;
 
-        for ($i = 0; $i < $zip->numFiles; $i++) {
-            $name = (string) $zip->getNameIndex($i);
-            if ($name === 'database.json' || $name === 'database.jsonl' || $name === 'manifest.json') {
-                continue;
+        try {
+            for ($i = 0; $i < $zip->numFiles; $i++) {
+                $name = (string) $zip->getNameIndex($i);
+                if (in_array($name, ['database.json', 'database.jsonl', 'manifest.json'], true)) {
+                    continue;
+                }
+                if (!str_starts_with($name, 'private-files/')) {
+                    throw new RuntimeException("Unexpected entry in backup archive: {$name}");
+                }
+                if (!$includesFiles) {
+                    throw new RuntimeException('Backup archive contains private files but its manifest says files were excluded.');
+                }
+
+                $relative = substr($name, strlen('private-files/'));
+                $normalized = str_replace('\\\\', '/', $relative);
+                $segments = explode('/', $normalized);
+                if ($relative === ''
+                    || str_contains($relative, "\\0")
+                    || str_contains($relative, '\\\\')
+                    || str_starts_with($normalized, '/')
+                    || preg_match('/^[a-zA-Z]:/', $normalized) === 1
+                    || in_array('..', $segments, true)
+                    || in_array('.', $segments, true)
+                ) {
+                    throw new RuntimeException("Unsafe private file path in backup: {$name}");
+                }
+                if (isset($seen[$normalized])) {
+                    throw new RuntimeException("Duplicate private file in backup: {$name}");
+                }
+                $seen[$normalized] = true;
+
+                $opsys = 0;
+                $externalAttributes = 0;
+                if ($zip->getExternalAttributesIndex($i, $opsys, $externalAttributes) && $opsys === ZipArchive::OPSYS_UNIX) {
+                    $fileType = ($externalAttributes >> 16) & 0170000;
+                    if ($fileType === 0120000) {
+                        throw new RuntimeException("Symlink entry rejected in backup: {$name}");
+                    }
+                    if ($fileType !== 0 && !in_array($fileType, [0100000, 0040000], true)) {
+                        throw new RuntimeException("Special file entry rejected in backup: {$name}");
+                    }
+                }
+
+                $stat = $zip->statIndex($i);
+                $size = (int) ($stat['size'] ?? 0);
+                $totalBytes += $size;
+                if (++$fileCount > 5000 || $size > 268435456 || $totalBytes > 1073741824) {
+                    throw new RuntimeException('Private files in backup exceed the allowed size or file count.');
+                }
+                if (str_ends_with($normalized, '/')) {
+                    continue;
+                }
+
+                $stagingDir ??= $this->createPrivateStorageChild('restore-staging');
+                $destination = $stagingDir . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $normalized);
+                $parent = dirname($destination);
+                if (!is_dir($parent) && !mkdir($parent, 0700, true) && !is_dir($parent)) {
+                    throw new RuntimeException('Unable to create private restore staging directory.');
+                }
+                $input = $zip->getStream($name);
+                if (!is_resource($input)) {
+                    throw new RuntimeException("Unable to open private file from backup: {$name}");
+                }
+                $output = @fopen($destination, 'xb');
+                if ($output === false) {
+                    fclose($input);
+                    throw new RuntimeException("Unable to create staged private file from backup: {$name}");
+                }
+                try {
+                    $copied = stream_copy_to_stream($input, $output, $size + 1);
+                    if ($copied !== $size || !fflush($output)) {
+                        throw new RuntimeException("Unable to stage private file completely from backup: {$name}");
+                    }
+                } finally {
+                    fclose($input);
+                    fclose($output);
+                }
+                @chmod($destination, 0600);
             }
-            if (!str_starts_with($name, 'private-files/')) {
-                throw new RuntimeException("Unexpected entry in backup archive: {$name}");
-            }
+
             if (!$includesFiles) {
-                throw new RuntimeException('Backup archive contains private files but its manifest says files were excluded.');
+                return null;
             }
-
-            $relative = substr($name, strlen('private-files/'));
-            $normalized = str_replace('\\', '/', $relative);
-            $segments = explode('/', $normalized);
-            if ($relative === ''
-                || str_contains($relative, "\0")
-                || str_contains($relative, '\\')
-                || str_starts_with($normalized, '/')
-                || preg_match('/^[a-zA-Z]:/', $normalized) === 1
-                || in_array('..', $segments, true)
-                || in_array('.', $segments, true)
-            ) {
-                throw new RuntimeException("Unsafe private file path in backup: {$name}");
+            $stagingDir ??= $this->createPrivateStorageChild('restore-staging');
+            return $stagingDir;
+        } catch (\\Throwable $exception) {
+            if (is_string($stagingDir)) {
+                $this->deleteDirectoryTree($stagingDir);
             }
-
-            if (isset($seen[$normalized])) {
-                throw new RuntimeException("Duplicate private file in backup: {$name}");
-            }
-            $seen[$normalized] = true;
-
-            $stat = $zip->statIndex($i);
-            $attributes = (int) ($stat['external_attributes'] ?? 0);
-            if ((($attributes >> 16) & 0xF000) === 0xA000) {
-                throw new RuntimeException("Symlink entry rejected in backup: {$name}");
-            }
-
-            $size = (int) ($stat['size'] ?? 0);
-            $totalBytes += $size;
-            if (++$fileCount > 5000 || $size > 268435456 || $totalBytes > 1073741824) {
-                throw new RuntimeException('Private files in backup exceed the allowed size or file count.');
-            }
-
-            if (str_ends_with($normalized, '/')) {
-                continue;
-            }
-
-            $contents = $zip->getFromIndex($i);
-            if ($contents === false || strlen($contents) !== $size) {
-                throw new RuntimeException("Unable to read private file from backup: {$name}");
-            }
-
-            $destination = $stagingDir . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $normalized);
-            $parent = dirname($destination);
-            if (!is_dir($parent) && !mkdir($parent, 0700, true) && !is_dir($parent)) {
-                throw new RuntimeException('Unable to create private restore staging directory.');
-            }
-            if (file_put_contents($destination, $contents, LOCK_EX) === false) {
-                throw new RuntimeException("Unable to stage private file from backup: {$name}");
-            }
-            @chmod($destination, 0600);
+            throw $exception;
         }
-
-        if (!$includesFiles) {
-            return null;
-        }
-
-        if (!is_dir($stagingDir) && !mkdir($stagingDir, 0700, true) && !is_dir($stagingDir)) {
-            throw new RuntimeException('Unable to create private restore staging directory.');
-        }
-
-        return $stagingDir;
     }
-
     /**
      * Merge staged private files into the private storage root without following symlinks.
      */
     private function restoreStagedPrivateFiles(string $stagingDir): void
     {
+
+        $storageRoot = realpath(storage_path('app'));
+        $restoreRoot = $storageRoot !== false ? realpath($storageRoot . DIRECTORY_SEPARATOR . 'restore-staging') : false;
+        $resolvedStaging = realpath($stagingDir);
+        if ($storageRoot === false || $restoreRoot === false || is_link($stagingDir)
+            || $resolvedStaging === false || dirname($resolvedStaging) !== $restoreRoot) {
+            throw new RuntimeException('Private restore staging directory is outside its isolated storage root.');
+        }
+        $stagingDir = $resolvedStaging;
         $privateDir = (string) config('lms.private_storage_path');
         if ($privateDir === '' || is_link($privateDir)) {
             throw new RuntimeException('Private storage path is invalid or is a symbolic link.');
@@ -348,14 +375,59 @@ class BackupService
         }
     }
 
+    private function createPrivateStorageChild(string $rootName): string
+    {
+        if ($rootName !== 'restore-staging') {
+            throw new RuntimeException('Invalid private restore directory.');
+        }
+        $storagePath = storage_path('app');
+        $storageRoot = realpath($storagePath);
+        if ($storageRoot === false || is_link($storagePath)) {
+            throw new RuntimeException('Private restore storage root is unavailable or redirected.');
+        }
+        $root = $storageRoot . DIRECTORY_SEPARATOR . $rootName;
+        if (is_link($root)) {
+            throw new RuntimeException('Private restore staging root must not be a symbolic link.');
+        }
+        if (!is_dir($root) && !@mkdir($root, 0700) && !is_dir($root)) {
+            throw new RuntimeException('Unable to create private restore staging root.');
+        }
+        if (!@chmod($root, 0700)) {
+            throw new RuntimeException('Unable to restrict private restore staging root permissions.');
+        }
+        $resolvedRoot = realpath($root);
+        $rootStat = $resolvedRoot !== false ? @stat($resolvedRoot) : false;
+        if ($resolvedRoot === false || dirname($resolvedRoot) !== $storageRoot || $rootStat === false
+            || (($rootStat['mode'] & 0170000) !== 0040000) || (($rootStat['mode'] & 0077) !== 0)) {
+            throw new RuntimeException('Private restore staging root must be a private real directory under storage/app.');
+        }
+        $child = $resolvedRoot . DIRECTORY_SEPARATOR . Str::uuid()->toString();
+        if (!@mkdir($child, 0700)) {
+            throw new RuntimeException('Unable to create isolated private restore staging directory.');
+        }
+        $resolvedChild = realpath($child);
+        $childStat = $resolvedChild !== false ? @stat($resolvedChild) : false;
+        if ($resolvedChild === false || dirname($resolvedChild) !== $resolvedRoot || is_link($child)
+            || $childStat === false || (($childStat['mode'] & 0170000) !== 0040000)
+            || (($childStat['mode'] & 0077) !== 0)) {
+            throw new RuntimeException('Private restore staging directory failed its filesystem safety checks.');
+        }
+        return $resolvedChild;
+    }
+
     private function deleteDirectoryTree(string $directory): void
     {
-        if (!is_dir($directory) || is_link($directory)) {
+        $storageRoot = realpath(storage_path('app'));
+        $restoreRoot = $storageRoot !== false ? realpath($storageRoot . DIRECTORY_SEPARATOR . 'restore-staging') : false;
+        $resolvedDirectory = realpath($directory);
+        if (!is_dir($directory) || is_link($directory) || $restoreRoot === false
+            || $resolvedDirectory === false || dirname($resolvedDirectory) !== $restoreRoot) {
             return;
         }
-        $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::CHILD_FIRST
+        $directory = $resolvedDirectory;
+        $iterator = new \\RecursiveIteratorIterator(
+            new \\RecursiveDirectoryIterator($directory, \\FilesystemIterator::SKIP_DOTS),
+            \\RecursiveIteratorIterator::CHILD_FIRST
         );
         foreach ($iterator as $item) {
             if ($item->isDir() && !$item->isLink()) {
@@ -627,7 +699,7 @@ class BackupService
      *
      * @param resource $stream
      */
-    private function restoreDatabaseJsonLines($stream, BackupRecord $backup, ?int $actorId, int $backupFormat): void
+    private function restoreDatabaseJsonLines($stream, BackupRecord $backup, ?int $actorId, int $backupFormat, bool $preserveAuditHistory = false): void
     {
         $headerLine = fgets($stream);
         if ($headerLine === false) throw new RuntimeException('Streamed database snapshot is empty.');
@@ -644,10 +716,13 @@ class BackupService
             $tables[] = $table;
         }
 
+        $preservedTables = $preserveAuditHistory ? ['update_logs', 'audit_logs'] : [];
+        $restoreTables = array_values(array_diff($tables, $preservedTables));
+
         Schema::disableForeignKeyConstraints();
         try {
-            DB::transaction(function () use ($stream, $tables, $backup, $actorId, $backupFormat): void {
-                foreach ($tables as $table) DB::table($table)->delete();
+            DB::transaction(function () use ($stream, $restoreTables, $preservedTables, $backup, $actorId, $backupFormat): void {
+                foreach ($restoreTables as $table) DB::table($table)->delete();
                 $currentTable = null;
                 $batch = [];
                 $batchSize = DB::connection()->getDriverName() === 'sqlite' ? 50 : 500;
@@ -656,7 +731,13 @@ class BackupService
                     $record = json_decode($line, true, 512, JSON_THROW_ON_ERROR);
                     $table = $record['table'] ?? null;
                     $row = $record['row'] ?? null;
-                    if (!is_string($table) || !in_array($table, $tables, true) || !is_array($row) || $row === []) {
+                    if (!is_string($table) || !is_array($row) || $row === []) {
+                        throw new RuntimeException('Streamed database snapshot contains an invalid row.');
+                    }
+                    if (in_array($table, $preservedTables, true)) {
+                        continue;
+                    }
+                    if (!in_array($table, $restoreTables, true)) {
                         throw new RuntimeException('Streamed database snapshot contains an invalid row.');
                     }
                     if ($currentTable !== null && $table !== $currentTable) {
@@ -684,13 +765,16 @@ class BackupService
     }
 
     /** Restore original full-JSON archives created before the streaming format. */
-    private function restoreLegacyDatabaseSnapshot(array $dbSnapshot, BackupRecord $backup, ?int $actorId, int $backupFormat): void
+    private function restoreLegacyDatabaseSnapshot(array $dbSnapshot, BackupRecord $backup, ?int $actorId, int $backupFormat, bool $preserveAuditHistory = false): void
     {
+        $preservedTables = $preserveAuditHistory ? ['update_logs', 'audit_logs'] : [];
         Schema::disableForeignKeyConstraints();
         try {
-            DB::transaction(function () use ($dbSnapshot, $backup, $actorId, $backupFormat): void {
+            DB::transaction(function () use ($dbSnapshot, $backup, $actorId, $backupFormat, $preservedTables): void {
                 foreach ((array) ($dbSnapshot['tables'] ?? []) as $table => $rows) {
-                    if (!is_string($table) || !Schema::hasTable($table) || in_array($table, ['migrations', 'backups'], true)) continue;
+                    if (!is_string($table) || !Schema::hasTable($table)
+                        || in_array($table, ['migrations', 'backups'], true)
+                        || in_array($table, $preservedTables, true)) continue;
                     DB::table($table)->delete();
                     foreach (array_chunk((array) $rows, DB::connection()->getDriverName() === 'sqlite' ? 50 : 200) as $chunk) {
                         if ($chunk !== []) DB::table($table)->insert($chunk);
