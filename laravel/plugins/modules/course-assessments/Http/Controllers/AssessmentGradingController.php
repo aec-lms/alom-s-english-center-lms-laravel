@@ -32,7 +32,7 @@ class AssessmentGradingController extends Controller
                 $branchId = (int) ($actor->branch_id ?? 0);
                 $q->whereHas('assessmentSet', function ($setQuery) use ($branchId): void {
                     $setQuery->where('branch_id', $branchId);
-                    if (Schema::hasTable('courses')) {
+                    if (Schema::hasTable('courses') && Schema::hasColumn('courses', 'branch_id')) {
                         $setQuery->where(function ($courseScope) use ($branchId): void {
                             $courseScope->whereNull('course_id')
                                 ->orWhereIn('course_id', function ($courseQuery) use ($branchId): void {
@@ -42,6 +42,7 @@ class AssessmentGradingController extends Controller
                                 });
                         });
                     } else {
+                        // Without a branch-aware course schema, only standalone assessments are safe to expose.
                         $setQuery->whereNull('course_id');
                     }
                 });
@@ -51,7 +52,13 @@ class AssessmentGradingController extends Controller
                 $profile = $this->teacherProfile($actor, false);
                 abort_unless($profile && (bool) $profile->is_active, 403, 'An active teacher profile is required.');
                 $this->assertTeacherBranchConsistency($account, $profile);
-                abort_unless(Schema::hasTable('course_teacher_assignments') && Schema::hasTable('courses'), 403, 'Teacher course assignments are required.');
+                abort_unless(
+                    Schema::hasTable('course_teacher_assignments')
+                        && Schema::hasTable('courses')
+                        && Schema::hasColumn('courses', 'branch_id'),
+                    403,
+                    'Branch-aware teacher course assignments are required.'
+                );
 
                 $branchId = $profile->branch_id === null ? null : (int) $profile->branch_id;
                 abort_unless($branchId !== null, 403, 'Unassigned teachers cannot grade course assessments.');
@@ -99,7 +106,11 @@ class AssessmentGradingController extends Controller
             $set = AssessmentSet::query()->whereKey($locked->assessment_set_id)->lockForUpdate()->firstOrFail();
             $course = null;
             if ($set->course_id !== null) {
-                abort_unless(Schema::hasTable('courses'), 403, 'Course records are unavailable.');
+                abort_unless(
+                    Schema::hasTable('courses') && Schema::hasColumn('courses', 'branch_id'),
+                    403,
+                    'Branch-aware course records are unavailable.'
+                );
                 $course = DB::table('courses')->where('id', $set->course_id)->lockForUpdate()->first();
                 abort_unless($course, 404, 'The linked course no longer exists.');
                 abort_unless($set->branch_id === null
