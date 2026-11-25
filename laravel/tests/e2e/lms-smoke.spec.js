@@ -62,7 +62,7 @@ test('admin dashboard stays responsive at desktop, tablet and mobile widths', as
   await page.getByPlaceholder('Email Address').fill('e2e-admin@aec.test');
   await page.locator('#login-password-input').fill('E2E-Strong-Password-2026!');
   await page.getByRole('button', { name: /sign in/i }).click();
-  await expect(page).toHaveURL(/\\/admin(?:\\/|$)/);
+  await expect(page).toHaveURL(/\/admin(?:\/|$)/);
 
   const viewports = [
     { name: 'desktop', width: 1440, height: 900 },
