@@ -30,7 +30,7 @@
             <p class="mt-1 max-w-2xl text-sm text-slate-500">Create landing pages with reusable content blocks. No HTML or coding required.</p>
             <p data-block-status role="status" aria-live="polite" aria-atomic="true" class="mt-2 text-xs text-slate-500">Use drag-and-drop or the Up and Down controls to reorder blocks.</p>
         </div>
-        <a href="{{ route('home') }}" target="_blank" rel="noopener" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700">View Website ↗</a>
+        <div class="flex flex-wrap gap-2"><a href="{{ route('plugins.page_builder.reusable.index') }}" class="rounded-xl border border-violet-200 bg-white px-4 py-2.5 text-sm font-semibold text-violet-700">Reusable Blocks</a><a href="{{ route('home') }}" target="_blank" rel="noopener" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700">View Website ↗</a></div>
     </header>
 
     @if (session('status'))
@@ -77,7 +77,16 @@
                 <div class="border-t border-slate-100 pt-4">
                     <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
                         <div><h3 class="font-bold text-slate-900">Page content</h3><p class="text-xs text-slate-500">Add headings, text, images, buttons and spacing.</p></div>
-                        <button type="button" data-add-block class="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white">＋ Add block</button>
+                        <div class="flex flex-wrap gap-2">
+                            <select data-reusable-select class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs" aria-label="Choose reusable block">
+                                <option value="">Insert reusable block…</option>
+                                @foreach(($reusableBlocks ?? []) as $saved)
+                                    <option value="{{ $saved['id'] }}">{{ $saved['title'] }}</option>
+                                @endforeach
+                            </select>
+                            <button type="button" data-insert-reusable class="rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs font-bold text-violet-700">Insert</button>
+                            <button type="button" data-add-block class="rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white">＋ Add block</button>
+                        </div>
                     </div>
                     <div data-block-list class="space-y-3">
                         <div data-block draggable="true" class="rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -154,7 +163,7 @@
                             @endforeach
                         </div>
                         <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
-                            <div class="flex flex-wrap items-center gap-3"><button type="button" data-add-block class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700">＋ Add block</button><label class="flex items-center gap-2 text-xs font-semibold"><input type="checkbox" name="is_published" value="1" @checked($page->is_published)> Published</label></div>
+                            <div class="flex flex-wrap items-center gap-3"><select data-reusable-select class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs" aria-label="Choose reusable block"><option value="">Insert reusable block…</option>@foreach(($reusableBlocks ?? []) as $saved)<option value="{{ $saved['id'] }}">{{ $saved['title'] }}</option>@endforeach</select><button type="button" data-insert-reusable class="rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs font-bold text-violet-700">Insert</button><button type="button" data-add-block class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700">＋ Add block</button><label class="flex items-center gap-2 text-xs font-semibold"><input type="checkbox" name="is_published" value="1" @checked($page->is_published)> Published</label></div>
                             <button type="submit" class="rounded-lg bg-slate-900 px-4 py-2.5 text-xs font-bold text-white">Save changes</button>
                         </div>
                     </form>
@@ -203,10 +212,13 @@
 </template>
 <script>
 (function () {
+    const reusableLibrary = @json(($reusableBlocks ?? []), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT);
     const template = document.getElementById('page-block-template');
     document.querySelectorAll('[data-block-list]').forEach((list) => {
         const form = list.closest('form');
         const addButton = form?.querySelector('[data-add-block]');
+        const insertButton = form?.querySelector('[data-insert-reusable]');
+        const reusableSelect = form?.querySelector('[data-reusable-select]');
         const status = document.querySelector('[data-block-status]');
         const announce = (message) => { if (status) status.textContent = message; };
         const sync = (block) => {
@@ -302,6 +314,25 @@
             renumber();
         });
 
+        insertButton?.addEventListener('click', () => {
+            const id = reusableSelect?.value;
+            const saved = reusableLibrary.find((item) => item.id === id);
+            if (!saved) return;
+            const fragment = template.content.cloneNode(true);
+            const block = fragment.querySelector('[data-block]');
+            const typeSelect = block.querySelector('[data-block-type]');
+            if (!['heading', 'text', 'button'].includes(saved.type)) return;
+            typeSelect.value = saved.type;
+            const contentInput = block.querySelector('[data-field="content"] textarea');
+            if (contentInput) contentInput.value = saved.content || '';
+            const urlInput = block.querySelector('[data-field="url"] input');
+            if (urlInput) urlInput.value = saved.url || '';
+            list.appendChild(fragment);
+            renumber();
+            sync(block);
+            announce('Reusable block inserted. ' + list.querySelectorAll('[data-block]').length + ' blocks on this page.');
+            if (reusableSelect) reusableSelect.value = '';
+        });
         addButton?.addEventListener('click', () => {
             const fragment = template.content.cloneNode(true);
             const block = fragment.querySelector('[data-block]');

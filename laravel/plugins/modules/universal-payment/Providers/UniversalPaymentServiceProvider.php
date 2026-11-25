@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Plugins\Modules\UniversalPayment\Providers;
 
+use App\Core\Payments\PaymentGatewayRegistry;
 use App\Core\Plugins\BasePluginServiceProvider;
 use Plugins\Modules\UniversalPayment\Services\UniversalPaymentOrchestrator;
 
@@ -13,6 +14,7 @@ class UniversalPaymentServiceProvider extends BasePluginServiceProvider
 
     public function register(): void
     {
+        $this->app->singleton(PaymentGatewayRegistry::class);
         $this->app->singleton(UniversalPaymentOrchestrator::class);
     }
 

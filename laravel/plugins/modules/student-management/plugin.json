@@ -26,5 +26,14 @@
     ],
     "optional_dependencies": [
         "branch-management"
+    ],
+    "dashboard_widgets": [
+        {
+            "key": "overview",
+            "label": "Student Management",
+            "view": "dashboard.widget",
+            "permission": "students.manage",
+            "default": false
+        }
     ]
 }

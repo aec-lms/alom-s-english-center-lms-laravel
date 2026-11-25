@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Core\Plugins\PluginManager;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Plugins\Modules\StudentManagement\Models\Student;
 use Plugins\Modules\UniversalPayment\Models\UniversalPaymentTransaction;
@@ -106,7 +107,9 @@ class UniversalPaymentInvoiceSettlementTest extends TestCase
     public function test_configured_bkash_and_nagad_manual_invoice_receipts_can_be_verified(): void
     {
         $this->markSystemInstalled();
-        $this->activatePlugins(['student-management', 'fees-management', 'universal-payment']);
+        $this->activatePlugins(['student-management', 'fees-management', 'universal-payment', 'gateway-bkash', 'gateway-nagad']);
+        app(PluginManager::class)->saveSettings('gateway-bkash', ['enabled' => '1']);
+        app(PluginManager::class)->saveSettings('gateway-nagad', ['enabled' => '1']);
         $studentUser = $this->createUserWithRole('student');
         $admin = $this->createUserWithRole('admin');
 
@@ -597,6 +600,50 @@ class UniversalPaymentInvoiceSettlementTest extends TestCase
             'id' => $transaction->id,
             'status' => 'pending',
         ]);
+    }
+
+
+    public function test_terminal_sslcommerz_transactions_reject_replayed_success_callbacks(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['universal-payment']);
+
+        foreach (['failed', 'cancelled', 'refunded', 'reversed', 'rejected', 'chargeback'] as $index => $status) {
+            $transaction = UniversalPaymentTransaction::query()->create([
+                'reference' => 'UPAY-TERMINAL-REPLAY-' . $index,
+                'payer_name' => 'Terminal Callback Buyer',
+                'payer_contact' => '01712345678',
+                'item_title' => 'Paid e-book',
+                'gateway' => 'sslcommerz',
+                'currency' => 'BDT',
+                'amount' => 500,
+                'status' => $status,
+            ]);
+
+            try {
+                app(\Plugins\Modules\UniversalPayment\Services\StorefrontPaymentGatewayService::class)
+                    ->verifySslcommerz([
+                        'tran_id' => $transaction->reference,
+                        'val_id' => 'REPLAY-VALIDATION-' . $index,
+                    ]);
+                $this->fail("A {$status} payment must reject a replayed success callback.");
+            } catch (\RuntimeException $exception) {
+                $this->assertSame(
+                    'A terminal payment cannot be re-verified or used to restore access.',
+                    $exception->getMessage()
+                );
+            }
+
+            $this->post('/universal-payment/sslcommerz/ipn', [
+                'tran_id' => $transaction->reference,
+                'val_id' => 'ROUTE-REPLAY-' . $index,
+            ])->assertStatus(422)->assertJson(['status' => 'pending_validation']);
+
+            $this->assertDatabaseHas('universal_payment_transactions', [
+                'id' => $transaction->id,
+                'status' => $status,
+            ]);
+        }
     }
 
 }

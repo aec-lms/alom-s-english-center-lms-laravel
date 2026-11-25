@@ -10,12 +10,9 @@ use Tests\TestCase;
 
 class PluginCategoryRegistryTest extends TestCase
 {
-    public function test_all_sixty_current_plugin_slugs_have_one_canonical_category(): void
+    public function test_all_current_plugin_slugs_have_one_canonical_category(): void
     {
         $slugs = PluginCategoryRegistry::knownSlugs();
-
-        $this->assertCount(60, $slugs);
-        $this->assertCount(60, array_unique($slugs));
 
         $manifestSlugs = [];
         foreach (File::directories(base_path('plugins/modules')) as $directory) {
@@ -24,6 +21,9 @@ class PluginCategoryRegistryTest extends TestCase
             $manifest = json_decode(File::get($manifestPath), true, 512, JSON_THROW_ON_ERROR);
             $manifestSlugs[] = (string) ($manifest['slug'] ?? basename($directory));
         }
+
+        $this->assertCount(count($manifestSlugs), $slugs);
+        $this->assertCount(count($manifestSlugs), array_unique($slugs));
         sort($manifestSlugs);
         $registeredSlugs = $slugs;
         sort($registeredSlugs);
@@ -58,7 +58,8 @@ class PluginCategoryRegistryTest extends TestCase
     public function test_legacy_categories_and_unknown_future_plugins_fall_back_safely(): void
     {
         $this->assertSame('academic-learning', PluginCategoryRegistry::keyFor('future-academic-plugin', 'education'));
-        $this->assertSame('finance-commerce', PluginCategoryRegistry::keyFor('future-finance-plugin', 'payment-gateway'));
+        $this->assertSame('finance-commerce', PluginCategoryRegistry::keyFor('future-finance-plugin', 'finance'));
+        $this->assertSame('payments', PluginCategoryRegistry::keyFor('future-payment-plugin', 'payment-gateway'));
         $this->assertSame('communication-support', PluginCategoryRegistry::keyFor('future-messaging-plugin', 'communications'));
         $this->assertSame('content-cms', PluginCategoryRegistry::keyFor('future-site-plugin', 'website'));
         $this->assertSame('platform-branding', PluginCategoryRegistry::keyFor('future-theme-plugin', 'appearance'));
@@ -66,7 +67,7 @@ class PluginCategoryRegistryTest extends TestCase
         $this->assertSame('Other', PluginCategoryRegistry::labelFor('future-unknown-plugin', 'unclassified'));
     }
 
-    public function test_plugin_center_groups_catalog_cards_by_canonical_category(): void
+    public function test_plugin_center_groups_payment_gateways_under_a_dedicated_payment_section(): void
     {
         $this->markSystemInstalled();
         $admin = $this->createUserWithRole('admin');
@@ -76,17 +77,30 @@ class PluginCategoryRegistryTest extends TestCase
         $response->assertSee('Academic & Learning')
             ->assertSee('Student & People Lifecycle')
             ->assertSee('Finance & Commerce')
+            ->assertSee('Payment Systems')
+            ->assertSee('bKash Merchant Gateway')
+            ->assertSee('Nagad Merchant Gateway')
+            ->assertSee('DBBL Rocket Merchant Gateway')
+            ->assertSee('SSLCOMMERZ Hosted Checkout Gateway')
+            ->assertSee('Stripe Payment Gateway')
+            ->assertSee('PayPal Payment Gateway')
+            ->assertSee('Visa / Mastercard Tokenized Card Gateway')
             ->assertSee('Content & Website CMS')
             ->assertSee('Platform Branding')
             ->assertSee('Course & Academic Management')
-            ->assertSee('Universal Payment Gateway Plugin');
+            ->assertSee('Universal Payment Gateway Plugin')
+            ->assertSee('Cash Desk Payment Method')
+            ->assertSee('Bank Transfer Payment Method');
     }
 
     public function test_category_resolution_does_not_rewrite_manifest_category_values(): void
     {
         $this->assertSame('academic-learning', PluginCategoryRegistry::keyFor('course-management', 'academic'));
-        $this->assertSame('finance-commerce', PluginCategoryRegistry::keyFor('universal-payment', 'finance'));
+        $this->assertSame('payments', PluginCategoryRegistry::keyFor('universal-payment', 'finance'));
+        $this->assertSame('payments', PluginCategoryRegistry::keyFor('gateway-cash'));
+        $this->assertSame('payments', PluginCategoryRegistry::keyFor('gateway-bank-transfer'));
         $this->assertSame('Academic & Learning', PluginCategoryRegistry::labelFor('course-management', 'academic'));
-        $this->assertSame('Finance & Commerce', PluginCategoryRegistry::labelFor('universal-payment', 'finance'));
+        $this->assertSame('Payment Systems', PluginCategoryRegistry::labelFor('universal-payment', 'finance'));
+        $this->assertSame('Payment Systems', PluginCategoryRegistry::labelFor('gateway-sslcommerz', 'payment-gateway'));
     }
 }

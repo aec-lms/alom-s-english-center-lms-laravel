@@ -3,9 +3,41 @@
 @section('content')
 <div class="space-y-6 max-w-5xl">
     <h1 class="text-2xl font-extrabold text-slate-900">Payment Ledger & Reconciliation</h1>
+    @if(session('status'))<div role="status" class="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{{ session('status') }}</div>@endif
+    @if($errors->any())<div role="alert" class="rounded-lg bg-red-50 p-3 text-sm text-red-700">{{ $errors->first() }}</div>@endif
+    @if($invoiceIntegrationEnabled)
+    <section class="space-y-4">
+        <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <div class="rounded-xl border bg-white p-4"><div class="text-xs text-slate-500">Collected today</div><div class="mt-1 text-xl font-bold text-emerald-700">৳{{ number_format($collectionTotals['today'],2) }}</div></div>
+            <div class="rounded-xl border bg-white p-4"><div class="text-xs text-slate-500">Collected in selected period</div><div class="mt-1 text-xl font-bold">৳{{ number_format($collectionTotals['period'],2) }}</div></div>
+            <div class="rounded-xl border bg-white p-4"><div class="text-xs text-slate-500">Outstanding balance</div><div class="mt-1 text-xl font-bold">৳{{ number_format($collectionTotals['outstanding'],2) }}</div></div>
+            <div class="rounded-xl border bg-white p-4"><div class="text-xs text-slate-500">Overdue invoices</div><div class="mt-1 text-xl font-bold">{{ $collectionTotals['overdue'] }}</div></div>
+            <div class="rounded-xl border bg-white p-4"><div class="text-xs text-slate-500">Partially paid</div><div class="mt-1 text-xl font-bold">{{ $collectionTotals['partial'] }}</div></div>
+            <div class="rounded-xl border bg-white p-4"><div class="text-xs text-slate-500">Unpaid</div><div class="mt-1 text-xl font-bold">{{ $collectionTotals['unpaid'] }}</div></div>
+        </div>
+        <div class="overflow-x-auto rounded-2xl border bg-white p-5">
+            <h2 class="mb-3 text-lg font-bold">Collect advance / due / installment</h2>
+            <p class="mb-3 text-xs text-slate-500">Record cash, bank or other offline collections. Partial amounts are accepted and every receipt is settled against the invoice balance.</p>
+            <table class="w-full text-left text-xs"><thead class="border-b text-slate-500"><tr><th class="py-2">Invoice</th><th>Payer</th><th>Net</th><th>Paid</th><th>Due</th><th>Due date</th><th>Collection</th></tr></thead><tbody class="divide-y">
+            @forelse($openInvoices as $invoice)
+                @php($remaining = max(0, (float)$invoice->net_amount - (float)$invoice->paid_amount))
+                <tr><td class="py-3 font-mono">{{ $invoice->invoice_number }}</td><td>{{ $invoice->payer_name ?: 'Student #'.$invoice->student_id }}</td><td>৳{{ number_format((float)$invoice->net_amount,2) }}</td><td>৳{{ number_format((float)$invoice->paid_amount,2) }}</td><td class="font-bold text-amber-700">৳{{ number_format($remaining,2) }}</td><td>{{ $invoice->due_date?->format('d M Y') ?? '—' }}</td><td><form method="POST" action="{{ route('plugins.payments.offline') }}" class="flex min-w-64 gap-2">@csrf<input type="hidden" name="invoice_id" value="{{ $invoice->id }}"><input type="number" name="amount" min="1" max="{{ $remaining }}" step="0.01" required placeholder="Amount" aria-label="Payment amount" class="w-28 rounded border-slate-300 text-xs"><input name="receipt_note" maxlength="160" placeholder="Cash / bank receipt" aria-label="Receipt note" class="w-32 rounded border-slate-300 text-xs"><button class="rounded bg-emerald-700 px-3 py-2 text-xs font-bold text-white">Collect</button></form></td></tr>
+            @empty<tr><td colspan="7" class="py-5 text-center text-slate-400">No outstanding invoices.</td></tr>@endforelse
+            </tbody></table>
+        </div>
+    </section>
+    @endif
+    <form method="GET" class="flex flex-wrap items-end gap-3 rounded-xl border bg-white p-4 text-xs">
+        <label>From<input type="date" name="from" value="{{ $filters['from'] ?? '' }}" class="mt-1 block rounded border-slate-300"></label>
+        <label>To<input type="date" name="to" value="{{ $filters['to'] ?? '' }}" class="mt-1 block rounded border-slate-300"></label>
+        <label>Gateway<select name="gateway" class="mt-1 block rounded border-slate-300"><option value="">All gateways</option>@foreach(['offline','gateway-sslcommerz','gateway-stripe','gateway-paypal','gateway-bkash','gateway-nagad'] as $gateway)<option value="{{ $gateway }}" @selected(($filters['gateway'] ?? '') === $gateway)>{{ $gateway }}</option>@endforeach</select></label>
+        <label>Status<select name="status" class="mt-1 block rounded border-slate-300"><option value="">All statuses</option>@foreach(['initiated','settled','failed','refunded'] as $status)<option value="{{ $status }}" @selected(($filters['status'] ?? '') === $status)>{{ ucfirst($status) }}</option>@endforeach</select></label>
+        <button class="rounded bg-slate-800 px-4 py-2 font-bold text-white">Filter collections</button>
+        <a href="{{ route('plugins.payments.collections.export', request()->query()) }}" class="rounded bg-emerald-700 px-4 py-2 font-bold text-white">Export CSV</a>
+    </form>
     <div class="bg-white rounded-2xl border border-slate-200 p-5">
         <table class="w-full text-xs text-left">
-            <thead class="text-slate-500 border-b"><tr><th class="py-2">Transaction Ref</th><th>Invoice</th><th>Gateway</th><th>Amount</th><th>Status</th><th>Settled At</th></tr></thead>
+            <thead class="text-slate-500 border-b"><tr><th class="py-2">Transaction Ref</th><th>Invoice</th><th>Gateway</th><th>Amount</th><th>Status</th><th>Settled At</th><th>Refund</th></tr></thead>
             <tbody class="divide-y">
                 @forelse ($transactions as $tx)
                     <tr>
@@ -15,9 +47,19 @@
                         <td>{{ $tx->currency }} {{ $tx->amount }}</td>
                         <td class="uppercase font-semibold">{{ $tx->status }}</td>
                         <td>{{ $tx->settled_at?->toDateTimeString() ?? '—' }}</td>
+                        <td>
+                            @if($tx->status === 'settled' && $tx->gateway_slug === 'offline')
+                                <form method="POST" action="{{ route('plugins.payments.refund', $tx) }}" class="flex gap-1">
+                                    @csrf
+                                    <input name="amount" type="number" min="0.01" max="{{ $tx->amount }}" step="0.01" required placeholder="Amount" class="w-20 rounded border p-1">
+                                    <input name="reason" required maxlength="255" placeholder="Reason" class="w-24 rounded border p-1">
+                                    <button class="text-rose-700 underline">Refund</button>
+                                </form>
+                            @endif
+                        </td>
                     </tr>
                 @empty
-                    <tr><td colspan="6" class="py-4 text-slate-400">No payment transactions recorded yet.</td></tr>
+                    <tr><td colspan="7" class="py-4 text-slate-400">No payment transactions recorded yet.</td></tr>
                 @endforelse
             </tbody>
         </table>

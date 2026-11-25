@@ -1,0 +1,95 @@
+{
+    "slug": "gateway-nagad",
+    "name": "Nagad Merchant Gateway",
+    "version": "1.1.0",
+    "author": "Alom's English Center",
+    "category": "payment-gateway",
+    "description": "Admin-managed Nagad merchant credential vault with encrypted API/signing keys and environment selection. Checkout adapter is enabled only after matching the merchant's official integration profile and sandbox verification.",
+    "core_compatibility": "^2.0",
+    "dependencies": [],
+    "provider": "Plugins\\Modules\\GatewayNagad\\Providers\\GatewayNagadServiceProvider",
+    "permissions": [
+        {
+            "slug": "payments.nagad.manage",
+            "name": "Manage Nagad Merchant Gateway"
+        }
+    ],
+    "settings_schema": [
+        {
+            "key": "enabled",
+            "label": "Enable Nagad Checkout",
+            "type": "select",
+            "secret": false,
+            "default": "0",
+            "options": {
+                "0": "Disabled",
+                "1": "Enabled"
+            }
+        },
+        {
+            "key": "sandbox_mode",
+            "label": "Nagad Environment",
+            "type": "select",
+            "secret": false,
+            "default": "1",
+            "options": {
+                "0": "Live",
+                "1": "Sandbox"
+            },
+            "help": "Keep Sandbox selected until your assigned Nagad sandbox profile has passed end-to-end verification."
+        },
+        {
+            "key": "merchant_id",
+            "label": "Merchant ID (if issued)",
+            "type": "text",
+            "secret": false,
+            "help": "Merchant ID supplied in your Nagad merchant onboarding pack."
+        },
+        {
+            "key": "api_key",
+            "label": "API Key / Client ID (if issued)",
+            "type": "password",
+            "secret": true,
+            "help": "Client/API key if your assigned Nagad integration profile uses one. Encrypted at rest."
+        },
+        {
+            "key": "api_secret",
+            "label": "API Secret (if issued)",
+            "type": "password",
+            "secret": true,
+            "help": "API secret if issued. Encrypted at rest."
+        },
+        {
+            "key": "username",
+            "label": "API Username (if issued)",
+            "type": "password",
+            "secret": true,
+            "help": "Merchant API username if supplied by Nagad. Encrypted at rest."
+        },
+        {
+            "key": "password",
+            "label": "API Password (if issued)",
+            "type": "password",
+            "secret": true,
+            "help": "Merchant API password if supplied by Nagad. Encrypted at rest."
+        },
+        {
+            "key": "signing_private_key",
+            "label": "Signing Private Key (if required by provider)",
+            "type": "password",
+            "secret": true,
+            "help": "Merchant signing private key or PEM content if required by your assigned API profile. Encrypted at rest."
+        },
+        {
+            "key": "provider_public_key",
+            "label": "Provider Public Key / Certificate (if required)",
+            "type": "password",
+            "secret": true,
+            "help": "Nagad/PG public key or certificate used to verify signed responses. Encrypted at rest."
+        }
+    ],
+    "optional_dependencies": [
+        "fees-management",
+        "payment-management"
+    ]
+}

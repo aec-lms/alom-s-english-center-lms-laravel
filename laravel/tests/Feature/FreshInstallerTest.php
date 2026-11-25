@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Core\Installer\FreshInstallerService;
+use App\Models\AuditLog;
 use App\Models\SystemSetting;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -114,6 +115,12 @@ class FreshInstallerTest extends TestCase
             $admin = User::query()->where('email', 'fresh-admin@aec.test')->firstOrFail();
             $this->assertTrue(Hash::check('FreshStrongPassword!2026', $admin->password));
             $this->assertTrue($admin->hasRole('admin'));
+            $this->assertDatabaseHas('audit_logs', [
+                'action' => 'core.installed',
+                'entity_type' => 'system',
+                'entity_id' => 'fresh_install',
+                'user_id' => $admin->id,
+            ]);
             $this->assertSame('false', SystemSetting::query()->where('key', 'legacy_records_imported')->value('value'));
             $this->assertSame('US', SystemSetting::query()->where('key', 'institution.country_code')->value('value'));
             $this->assertSame('en', SystemSetting::query()->where('key', 'localization.locale')->value('value'));
@@ -151,6 +158,88 @@ class FreshInstallerTest extends TestCase
         }
     }
 
+
+    public function test_fresh_install_rolls_back_admin_and_settings_when_required_audit_fails(): void
+    {
+        $originalDefault = config('database.default');
+        $originalAppKey = config('app.key');
+        $originalSigningKey = config('lms.plugin_signing_key');
+        $originalBackupKey = config('lms.backup_encryption_key');
+        $root = sys_get_temp_dir() . '/aec-installer-audit-failure-' . bin2hex(random_bytes(8));
+        mkdir($root, 0700, true);
+
+        $lockPath = $root . '/installed.lock';
+        $envPath = $root . '/.env';
+        $privatePath = $root . '/private';
+        $backupPath = $root . '/backups';
+        file_put_contents($envPath, "APP_KEY=\n");
+
+        config([
+            'database.connections.installer_audit_failure_test' => [
+                'driver' => 'sqlite',
+                'database' => ':memory:',
+                'prefix' => '',
+                'foreign_key_constraints' => true,
+            ],
+            'database.default' => 'installer_audit_failure_test',
+            'lms.install_lock_path' => $lockPath,
+            'lms.env_path' => $envPath,
+            'lms.private_storage_path' => $privatePath,
+            'lms.backup_path' => $backupPath,
+        ]);
+        DB::purge('installer_audit_failure_test');
+        DB::setDefaultConnection('installer_audit_failure_test');
+
+        AuditLog::creating(static function (AuditLog $entry): void {
+            if ($entry->action === 'core.installed') {
+                throw new RuntimeException('forced fresh install audit failure');
+            }
+        });
+
+        try {
+            $caught = null;
+            try {
+                app(FreshInstallerService::class)->installFresh([
+                    'app_name' => 'AEC Audit Failure Test',
+                    'app_url' => 'https://aec-audit-failure.test',
+                    'admin_name' => 'Audit Failure Admin',
+                    'admin_email' => 'audit-failure-admin@aec.test',
+                    'admin_password' => 'AuditFailureStrongPassword!2026',
+                    'country_code' => 'BD',
+                    'locale' => 'en',
+                    'timezone' => 'Asia/Dhaka',
+                    'currency' => 'BDT',
+                ]);
+            } catch (RuntimeException $exception) {
+                $caught = $exception;
+            }
+            $this->assertInstanceOf(RuntimeException::class, $caught);
+            $this->assertSame('forced fresh install audit failure', $caught->getMessage());
+
+            $this->assertDatabaseMissing('users', ['email' => 'audit-failure-admin@aec.test']);
+            $this->assertDatabaseMissing('system_settings', ['key' => 'site_name']);
+            $this->assertDatabaseMissing('audit_logs', ['action' => 'core.installed']);
+            $this->assertFileDoesNotExist($lockPath, 'A failed audited install must never create the installed marker.');
+        } finally {
+            AuditLog::flushEventListeners();
+            DB::disconnect('installer_audit_failure_test');
+            DB::setDefaultConnection($originalDefault);
+            config([
+                'database.default' => $originalDefault,
+                'app.key' => $originalAppKey,
+                'lms.plugin_signing_key' => $originalSigningKey,
+                'lms.backup_encryption_key' => $originalBackupKey,
+            ]);
+
+            foreach ([$lockPath, $lockPath . '.mutex', $lockPath . '.in-progress', $envPath] as $file) {
+                @unlink($file);
+            }
+            foreach ([$privatePath, $backupPath] as $directory) {
+                @rmdir($directory);
+            }
+            @rmdir($root);
+        }
+    }
 
     public function test_failed_migration_releases_mutex_and_allows_a_clean_retry(): void
     {

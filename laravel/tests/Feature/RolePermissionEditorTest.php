@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Models\AuditLog;
 use App\Models\Permission;
 use App\Models\Role;
+use App\Models\User;
+use RuntimeException;
 use Tests\TestCase;
 
 class RolePermissionEditorTest extends TestCase
@@ -118,4 +121,50 @@ class RolePermissionEditorTest extends TestCase
             'permissions' => [],
         ])->assertForbidden();
     }
+
+    public function test_role_creation_rolls_back_when_required_audit_write_fails(): void
+    {
+        $this->markSystemInstalled();
+        $admin = $this->createUserWithRole('admin');
+
+        AuditLog::creating(static function (): void {
+            throw new RuntimeException('forced role audit failure');
+        });
+
+        try {
+            $this->actingAs($admin)->post(route('admin.roles.store'), [
+                'name' => 'Audit Protected Role',
+                'slug' => 'audit_protected_role',
+            ])->assertStatus(500);
+
+            $this->assertDatabaseMissing('roles', ['slug' => 'audit_protected_role']);
+        } finally {
+            AuditLog::flushEventListeners();
+        }
+    }
+
+    public function test_user_creation_rolls_back_when_required_audit_write_fails(): void
+    {
+        $this->markSystemInstalled();
+        $admin = $this->createUserWithRole('admin');
+        $studentRole = Role::query()->where('slug', 'student')->firstOrFail();
+
+        AuditLog::creating(static function (): void {
+            throw new RuntimeException('forced user audit failure');
+        });
+
+        try {
+            $this->actingAs($admin)->post(route('admin.users.store'), [
+                'name' => 'Audit Protected User',
+                'email' => 'audit-protected-user@aec.test',
+                'password' => 'StrongPassword!2026',
+                'role_id' => $studentRole->id,
+            ])->assertStatus(500);
+
+            $this->assertDatabaseMissing('users', ['email' => 'audit-protected-user@aec.test']);
+        } finally {
+            AuditLog::flushEventListeners();
+        }
+    }
+
 }

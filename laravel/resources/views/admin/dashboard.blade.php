@@ -2,16 +2,9 @@
 @section('title', 'Dashboard — AEC LMS')
 @section('content')
 @php
-    $widgetLabels = [
-        'users' => 'Registered Accounts',
-        'plugins' => 'Plugin Overview',
-        'backups' => 'Encrypted Backups',
-        'audit_trail' => 'Security Audit Trail',
-        'system_info' => 'System Information',
-    ];
-    if (auth()->user()?->hasRole('branch_manager')) {
-        $widgetLabels = array_intersect_key($widgetLabels, ['users' => true]);
-    }
+    $widgetLabels = collect($widgetDefinitions)->mapWithKeys(
+        fn (array $definition, string $key): array => [$key => $definition['label']]
+    )->all();
 @endphp
 <div class="space-y-6">
     @if($setupIncomplete)
@@ -26,8 +19,8 @@
     @endif
     <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
-            <h1 class="text-2xl font-extrabold text-slate-900">Core System Overview</h1>
-            <p class="text-xs text-slate-500">Your dashboard layout is saved per administrator account.</p>
+            <h1 class="text-2xl font-extrabold text-slate-900">Dashboard</h1>
+            <p class="text-xs text-slate-500">Manage your LMS operations, users, plugins and system health from one workspace.</p>
         </div>
         @can('core.settings.manage')
             <details class="relative">
@@ -64,16 +57,23 @@
             <form method="POST" action="{{ route('admin.dashboard.widgets') }}" class="absolute right-0 z-20 mt-2 w-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
                 @csrf
                 <h2 class="mb-1 text-sm font-bold text-slate-900">Arrange dashboard widgets</h2>
-                <p class="mb-3 text-[11px] text-slate-500">Drag rows or use the arrows. Uncheck widgets you want to hide.</p>
+                <label class="mb-3 grid gap-1 text-xs font-semibold text-slate-600">Dashboard preset
+                    <select id="dashboard-preset" class="rounded-lg border border-slate-300 px-2 py-2 text-sm">
+                        <option value="role">Role default</option><option value="overview">Executive overview</option><option value="operations">Operations &amp; security</option><option value="teaching">Teaching &amp; learning</option><option value="finance">Finance &amp; records</option>
+                    </select>
+                </label>
+                <p class="mb-3 text-[11px] text-slate-500">Drag rows or use the arrows. Uncheck widgets you want to hide. Reset restores the original default selection.</p>
                 <ol id="dashboard-widget-order" class="space-y-2">
                     @foreach ($widgetLabels as $key => $label)
                         @if (!$isBranchManager || $key === 'users')
-                            <li draggable="true" data-widget-row class="flex items-center gap-2 rounded-lg border border-slate-200 p-2 cursor-move">
+                            <li draggable="true" data-widget-row data-default-enabled="{{ in_array($key, $roleDefaultWidgets, true) ? 'true' : 'false' }}" class="flex items-center gap-2 rounded-lg border border-slate-200 p-2 cursor-move">
                                 <span aria-hidden="true" class="text-slate-400">⠿</span>
                                 <label class="flex min-w-0 flex-1 items-center gap-2 text-sm text-slate-700">
                                     <input type="checkbox" name="widgets[]" value="{{ $key }}" @checked(in_array($key, $widgets, true)) class="rounded border-slate-300">
                                     <span>{{ $label }}</span>
+                                    <span class="ml-auto text-[10px] text-slate-400" title="Views in this account">Views: {{ number_format($widgetAnalytics[$key] ?? 0) }}</span>
                                 </label>
+                                <label class="text-[10px] text-slate-500">Size<select name="sizes[{{ $key }}]" class="ml-1 rounded border border-slate-200 px-1 py-1 text-xs"><option value="small" @selected(($widgetSizes[$key] ?? "medium") === "small")>Small</option><option value="medium" @selected(($widgetSizes[$key] ?? "medium") === "medium")>Medium</option><option value="large" @selected(($widgetSizes[$key] ?? "medium") === "large")>Large</option></select></label>
                                 <button type="button" data-move="up" aria-label="Move {{ $label }} up" class="rounded border px-2 py-1 text-xs">↑</button>
                                 <button type="button" data-move="down" aria-label="Move {{ $label }} down" class="rounded border px-2 py-1 text-xs">↓</button>
                             </li>
@@ -90,6 +90,12 @@
     </div>
 
     <style>
+    #dashboard-widgets [data-dashboard-widget][data-size="small"] { min-height: 7rem; }
+    @media (min-width: 768px) {
+        #dashboard-widgets [data-dashboard-widget][data-size="small"] { grid-column: span 1; }
+        #dashboard-widgets [data-dashboard-widget][data-size="medium"] { grid-column: span 2; }
+        #dashboard-widgets [data-dashboard-widget][data-size="large"] { grid-column: span 4; }
+    }
     #dashboard-widgets[data-motion-enabled="true"] [data-dashboard-widget] { animation: aec-dashboard-enter var(--aec-motion-duration, 620ms) cubic-bezier(.2,.8,.2,1) both; }
     #dashboard-widgets[data-motion-enabled="true"][data-motion-preset="subtle"] [data-dashboard-widget] { animation-name: aec-dashboard-fade; }
     #dashboard-widgets[data-motion-enabled="true"][data-motion-preset="dynamic"] [data-dashboard-widget] { animation-name: aec-dashboard-rise; }
@@ -113,25 +119,25 @@
         #dashboard-widgets[data-motion-enabled="true"][data-motion-loading]::before { animation:none !important; transition:none !important; transform:none !important; }
     }
 </style>
-<div id="dashboard-widgets" class="grid gap-4" data-motion-enabled="{{ $motionSettings['enabled'] ? 'true' : 'false' }}" data-motion-preset="{{ $motionSettings['preset'] }}" data-motion-speed="{{ $motionSettings['speed'] }}" data-motion-intensity="{{ $motionSettings['intensity'] }}" data-motion-loading="{{ $motionSettings['loading'] }}" data-motion-counters="{{ $motionSettings['counters'] ? 'true' : 'false' }}" data-motion-hover="{{ $motionSettings['hover'] ? 'true' : 'false' }}">
+<div id="dashboard-widgets" class="grid grid-cols-1 gap-4 md:grid-cols-4" data-refresh-url="{{ route('admin.dashboard.refresh') }}" data-analytics-url="{{ route('admin.dashboard.widget-analytics') }}" data-motion-enabled="{{ $motionSettings['enabled'] ? 'true' : 'false' }}" data-motion-preset="{{ $motionSettings['preset'] }}" data-motion-speed="{{ $motionSettings['speed'] }}" data-motion-intensity="{{ $motionSettings['intensity'] }}" data-motion-loading="{{ $motionSettings['loading'] }}" data-motion-counters="{{ $motionSettings['counters'] ? 'true' : 'false' }}" data-motion-hover="{{ $motionSettings['hover'] ? 'true' : 'false' }}">
         @foreach ($widgets as $widget)
             @if ($widget === 'users')
-                <section data-dashboard-widget="users" class="rounded-2xl border border-slate-200 bg-white p-5">
+                <section data-dashboard-widget="users" data-size="{{ $widgetSizes['users'] ?? 'medium' }}" class="rounded-2xl border border-slate-200 bg-white p-5">
                     <div class="text-xs text-slate-500">Registered Accounts</div>
-                    <div class="mt-1 text-2xl font-extrabold"><span data-count-to="{{ $metrics['users'] }}">{{ $metrics['users'] }}</span></div>
+                    <div class="mt-1 text-2xl font-extrabold"><span data-count-to="{{ $metrics['users'] }}" data-live-metric="users">{{ $metrics['users'] }}</span></div>
                 </section>
             @elseif ($widget === 'plugins')
-                <section data-dashboard-widget="plugins" class="rounded-2xl border border-slate-200 bg-white p-5">
-                    <div class="flex flex-wrap items-center justify-between gap-2"><h2 class="text-sm font-bold text-slate-900">Plugin Overview</h2><span class="text-xs text-slate-500">{{ $metrics['plugins_total'] }} discovered</span></div>
-                    <div class="mt-2 text-2xl font-extrabold text-emerald-700"><span data-count-to="{{ $metrics['plugins_enabled'] }}">{{ $metrics['plugins_enabled'] }}</span> <span class="text-sm font-medium text-slate-500">active</span></div>
+                <section data-dashboard-widget="plugins" data-size="{{ $widgetSizes['plugins'] ?? 'medium' }}" class="rounded-2xl border border-slate-200 bg-white p-5">
+                    <div class="flex flex-wrap items-center justify-between gap-2"><h2 class="text-sm font-bold text-slate-900">Plugin Overview</h2><span class="text-xs text-slate-500"><span data-live-metric="plugins_total">{{ $metrics['plugins_total'] }}</span> discovered</span></div>
+                    <div class="mt-2 text-2xl font-extrabold text-emerald-700"><span data-count-to="{{ $metrics['plugins_enabled'] }}" data-live-metric="plugins_enabled">{{ $metrics['plugins_enabled'] }}</span> <span class="text-sm font-medium text-slate-500">active</span></div>
                 </section>
             @elseif ($widget === 'backups')
-                <section data-dashboard-widget="backups" class="rounded-2xl border border-slate-200 bg-white p-5">
+                <section data-dashboard-widget="backups" data-size="{{ $widgetSizes['backups'] ?? 'medium' }}" class="rounded-2xl border border-slate-200 bg-white p-5">
                     <div class="text-xs text-slate-500">Encrypted Backups</div>
-                    <div class="mt-1 text-2xl font-extrabold"><span data-count-to="{{ $metrics['backups'] }}">{{ $metrics['backups'] }}</span></div>
+                    <div class="mt-1 text-2xl font-extrabold"><span data-count-to="{{ $metrics['backups'] }}" data-live-metric="backups">{{ $metrics['backups'] }}</span></div>
                 </section>
             @elseif ($widget === 'system_info')
-                <section data-dashboard-widget="system_info" class="rounded-2xl border border-slate-200 bg-white p-5">
+                <section data-dashboard-widget="system_info" data-size="{{ $widgetSizes['system_info'] ?? 'medium' }}" class="rounded-2xl border border-slate-200 bg-white p-5">
                     <h2 class="mb-3 text-sm font-bold text-slate-900">System Information</h2>
                     <div class="grid gap-3 text-sm sm:grid-cols-2">
                         <div><span class="text-slate-500">Core version:</span> <strong>{{ $metrics['core_version'] }}</strong></div>
@@ -139,7 +145,7 @@
                     </div>
                 </section>
             @elseif ($widget === 'audit_trail')
-                <section data-dashboard-widget="audit_trail" class="rounded-2xl border border-slate-200 bg-white p-5">
+                <section data-dashboard-widget="audit_trail" data-size="{{ $widgetSizes['audit_trail'] ?? 'medium' }}" class="rounded-2xl border border-slate-200 bg-white p-5">
                     <h2 class="mb-3 text-sm font-bold text-slate-900">Recent Security Audit Trail</h2>
                     <div class="overflow-x-auto">
                         <table class="w-full text-left text-xs">
@@ -154,6 +160,12 @@
                         </table>
                     </div>
                 </section>
+            @else
+                @if (!empty($widgetDefinitions[$widget]['view']))
+                    <div data-dashboard-widget="{{ $widget }}" data-size="{{ $widgetSizes[$widget] ?? 'medium' }}">
+                        @include($widgetDefinitions[$widget]['view'], ['metrics' => $metrics, 'actor' => auth()->user()])
+                    </div>
+                @endif
             @endif
         @endforeach
         @if (count($widgets) === 0)
@@ -178,6 +190,30 @@
             };
             node.textContent = '0';
             requestAnimationFrame(tick);
+        });
+    }
+    if (dashboard?.dataset.refreshUrl) {
+        const refresh = async () => {
+            try {
+                const response = await fetch(dashboard.dataset.refreshUrl, { headers: { 'Accept': 'application/json' }, credentials: 'same-origin', cache: 'no-store' });
+                if (!response.ok) return;
+                const payload = await response.json();
+                Object.entries(payload.metrics || {}).forEach(([metric, value]) => {
+                    dashboard.querySelectorAll('[data-live-metric="' + metric + '"]').forEach(node => { node.textContent = Number(value).toLocaleString(); });
+                });
+                dashboard.querySelectorAll('[data-refresh-status]').forEach(node => node.textContent = 'Updated ' + new Date(payload.refreshed_at).toLocaleTimeString());
+            } catch (_) { /* Preserve the last successful snapshot while offline. */ }
+        };
+        window.setInterval(refresh, 60000);
+        dashboard.querySelectorAll('[data-dashboard-widget]').forEach(widget => {
+            const widgetKey = widget.dataset.dashboardWidget;
+            const token = document.querySelector('meta[name="csrf-token"]')?.content;
+            if (!widgetKey || !token || !dashboard.dataset.analyticsUrl) return;
+            fetch(dashboard.dataset.analyticsUrl, {
+                method: 'POST', credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': token },
+                body: JSON.stringify({ widget: widgetKey })
+            }).catch(() => {});
         });
     }
     const list = document.getElementById('dashboard-widget-order');
@@ -207,12 +243,82 @@
         if (button.dataset.move === 'up' && row.previousElementSibling) list.insertBefore(row, row.previousElementSibling);
         if (button.dataset.move === 'down' && row.nextElementSibling) list.insertBefore(row.nextElementSibling, row);
     });
+    document.getElementById('dashboard-preset')?.addEventListener('change', event => {
+        const preset = event.target.value;
+        const rules = {
+            overview: ['users', 'plugins', 'backups', 'audit_trail', 'system_info'],
+            operations: ['audit_trail', 'system_info', 'backups'],
+            teaching: ['teacher', 'student', 'course', 'class', 'assessment', 'learning', 'live'],
+            finance: ['payment', 'finance', 'revenue', 'invoice', 'fee', 'transaction']
+        };
+        rows().forEach(row => {
+            const key = row.querySelector('input[type=checkbox]').value.toLowerCase();
+            const enabled = preset === 'role'
+                ? row.dataset.defaultEnabled === 'true'
+                : (rules[preset] || []).some(term => preset === 'overview' || preset === 'operations' ? term === key : key.includes(term));
+            row.querySelector('input[type=checkbox]').checked = enabled;
+        });
+    });
     document.getElementById('dashboard-reset-order')?.addEventListener('click', () => {
         rows().forEach(row => {
             list.appendChild(row);
-            row.querySelector('input[type=checkbox]').checked = true;
+            row.querySelector('input[type=checkbox]').checked = row.dataset.defaultEnabled === 'true';
         });
     });
 })();
 </script>
+
+<style>
+/* Dashboard-only reference skin; preserve global appearance preferences elsewhere. */
+body:has(#dashboard-widgets) { background:#1b2533 !important; color:#e8eef7 !important; }
+body:has(#dashboard-widgets) main { background:#1b2533 !important; }
+body:has(#dashboard-widgets) main > header { background:#263244 !important; border-color:#354256 !important; }
+body:has(#dashboard-widgets) main > header .text-slate-900 { color:#f8fafc !important; }
+body:has(#dashboard-widgets) main > header .text-slate-500 { color:#aebbd0 !important; }
+body:has(#dashboard-widgets) main > header a:not(.bg-blue-600) { background:#303d51 !important; border-color:#45536a !important; color:#e8eef7 !important; }
+body:has(#dashboard-widgets) main > header span { background:#303d51 !important; color:#e8eef7 !important; }
+#dashboard-widgets { align-items:stretch; gap:1rem; }
+#dashboard-widgets [data-dashboard-widget] {
+ min-width:0; color:#e8eef7 !important; background:#263244 !important;
+ border:1px solid #3a485d !important; border-radius:12px !important;
+ box-shadow:0 8px 22px rgba(5,12,24,.12); padding:1.15rem !important;
+}
+#dashboard-widgets [data-dashboard-widget] h1,
+#dashboard-widgets [data-dashboard-widget] h2,
+#dashboard-widgets [data-dashboard-widget] h3,
+#dashboard-widgets [data-dashboard-widget] strong,
+#dashboard-widgets [data-dashboard-widget] .text-slate-900 { color:#f8fafc !important; }
+#dashboard-widgets [data-dashboard-widget] .text-slate-700,
+#dashboard-widgets [data-dashboard-widget] .text-slate-600 { color:#d5deeb !important; }
+#dashboard-widgets [data-dashboard-widget] .text-slate-500,
+#dashboard-widgets [data-dashboard-widget] .text-slate-400 { color:#9eacc1 !important; }
+#dashboard-widgets [data-dashboard-widget] .border-slate-200,
+#dashboard-widgets [data-dashboard-widget] .border-slate-300,
+#dashboard-widgets [data-dashboard-widget] table tbody tr { border-color:#3b4a60 !important; }
+#dashboard-widgets [data-dashboard-widget] table thead { color:#aebbd0 !important; border-color:#3b4a60 !important; }
+#dashboard-widgets [data-dashboard-widget] a.bg-blue-600,
+#dashboard-widgets [data-dashboard-widget] button.bg-blue-600 { background:#20a89c !important; color:white !important; }
+#dashboard-widgets [data-dashboard-widget] input,
+#dashboard-widgets [data-dashboard-widget] select { background:#202c3c !important; border-color:#43536b !important; color:#e8eef7 !important; }
+#dashboard-widgets [data-dashboard-widget][data-size=small] { min-height:8rem; }
+#dashboard-widgets [data-dashboard-widget][data-size=medium] { min-height:10rem; }
+#dashboard-widgets [data-dashboard-widget][data-size=large] { min-height:14rem; }
+@media (min-width:768px) {
+ #dashboard-widgets [data-dashboard-widget][data-size=small] { grid-column:span 1; }
+ #dashboard-widgets [data-dashboard-widget][data-size=medium] { grid-column:span 2; }
+ #dashboard-widgets [data-dashboard-widget][data-size=large] { grid-column:span 4; }
+}
+@media (max-width:767px) {
+ #dashboard-widgets [data-dashboard-widget] { grid-column:1 / -1 !important; }
+ body:has(#dashboard-widgets) main { padding:1rem !important; }
+ body:has(#dashboard-widgets) main > header { margin:-1rem -1rem 1rem !important; padding:1rem !important; }
+}
+#dashboard-widgets [data-dashboard-widget] { transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease; }
+#dashboard-widgets [data-dashboard-widget]:hover { transform:translateY(-2px); border-color:#52647e !important; box-shadow:0 14px 30px rgba(5,12,24,.22); }
+@media (prefers-reduced-motion:reduce) {
+ #dashboard-widgets [data-dashboard-widget] { transition:none !important; }
+ #dashboard-widgets [data-dashboard-widget]:hover { transform:none; }
+}
+</style>
+
 @endsection

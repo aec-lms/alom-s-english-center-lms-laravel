@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Models\AuditLog;
 use Plugins\Modules\FeesManagement\Models\FeeInvoice;
 use Illuminate\Support\Facades\DB;
 use Plugins\Modules\PaymentManagement\Models\PaymentTransaction;
@@ -742,6 +743,45 @@ class PaymentSettlementStateMachineTest extends TestCase
         $this->assertDatabaseMissing('commerce_entitlements', ['user_id' => $buyer->id, 'order_item_id' => $orderItemId]);
     }
 
+    public function test_refund_rolls_back_when_required_audit_cannot_be_persisted(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['payment-management']);
+        $admin = $this->createUserWithRole('admin');
+        $transaction = PaymentTransaction::query()->create([
+            'transaction_ref' => 'REFUND-AUDIT-FAIL-' . $admin->id,
+            'invoice_id' => null,
+            'gateway_slug' => 'offline',
+            'amount' => 1000,
+            'currency' => 'BDT',
+            'status' => 'settled',
+            'metadata' => [],
+        ]);
+
+        AuditLog::creating(static function (): void {
+            throw new RuntimeException('forced payment refund audit failure');
+        });
+
+        try {
+            $this->actingAs($admin)->post('/admin/payments/' . $transaction->id . '/refund', [
+                'amount' => 1000,
+                'reason' => 'Audit rollback verification',
+            ])->assertSessionHasErrors('refund');
+
+            $this->assertDatabaseCount('payment_refunds', 0);
+            $this->assertDatabaseHas('payment_transactions', [
+                'id' => $transaction->id,
+                'status' => 'settled',
+            ]);
+            $this->assertDatabaseMissing('audit_logs', [
+                'action' => 'payment.refunded',
+                'entity_id' => (string) $transaction->id,
+            ]);
+        } finally {
+            AuditLog::flushEventListeners();
+        }
+    }
+
     public function test_late_verified_callback_cannot_resettle_a_refunded_transaction(): void
     {
         $this->markSystemInstalled();
@@ -985,6 +1025,63 @@ class PaymentSettlementStateMachineTest extends TestCase
             'commerce_order_item_id' => null,
         ]);
         $this->assertDatabaseHas('fee_invoices', ['id' => $invoice->id, 'status' => 'unpaid', 'paid_amount' => 0]);
+    }
+
+
+    public function test_payment_settlement_rolls_back_invoice_and_transaction_when_required_audit_fails(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['fees-management', 'payment-management']);
+
+        $invoice = FeeInvoice::query()->create([
+            'invoice_number' => 'AUDIT-FAIL-SETTLEMENT-' . strtoupper(uniqid()),
+            'payer_name' => 'Audit Failure Student',
+            'payer_email' => 'audit.failure@aec.test',
+            'subtotal_amount' => 750,
+            'discount_amount' => 0,
+            'net_amount' => 750,
+            'paid_amount' => 0,
+            'currency' => 'BDT',
+            'status' => 'unpaid',
+        ]);
+        $transaction = PaymentTransaction::query()->create([
+            'transaction_ref' => 'AUDIT-FAIL-TXN-' . strtoupper(uniqid()),
+            'invoice_id' => $invoice->id,
+            'gateway_slug' => 'offline',
+            'amount' => 750,
+            'currency' => 'BDT',
+            'status' => 'initiated',
+            'metadata' => [],
+        ]);
+
+        AuditLog::creating(static function (): void {
+            throw new RuntimeException('forced payment settlement audit failure');
+        });
+
+        try {
+            try {
+                app(PaymentSettlementService::class)->settleTransaction(
+                    $transaction,
+                    'AUDIT-FAIL-PROVIDER-REFERENCE',
+                );
+                $this->fail('Settlement must fail closed when its required audit record cannot be persisted.');
+            } catch (RuntimeException $exception) {
+                $this->assertSame('forced payment settlement audit failure', $exception->getMessage());
+            }
+
+            $this->assertDatabaseHas('payment_transactions', [
+                'id' => $transaction->id,
+                'status' => 'initiated',
+                'external_reference' => null,
+            ]);
+            $this->assertDatabaseHas('fee_invoices', [
+                'id' => $invoice->id,
+                'paid_amount' => 0,
+                'status' => 'unpaid',
+            ]);
+        } finally {
+            AuditLog::flushEventListeners();
+        }
     }
 
 }

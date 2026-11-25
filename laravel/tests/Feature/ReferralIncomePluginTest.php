@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Models\AuditLog;
 use App\Models\Permission;
 use App\Models\Role;
 use Illuminate\Support\Facades\DB;
@@ -56,6 +57,39 @@ class ReferralIncomePluginTest extends TestCase
             'status' => 'pending',
         ]);
         $this->assertDatabaseCount('referral_commissions', 1);
+    }
+
+    public function test_referral_rule_changes_roll_back_when_required_audit_fails(): void
+    {
+        $this->markSystemInstalled();
+        $this->activatePlugins(['referral-income']);
+        $admin = $this->createUserWithRole('admin');
+        $before = DB::table('referral_income_rules')
+            ->orderBy('referrer_type')
+            ->get(['referrer_type', 'commission_percent', 'minimum_payout'])
+            ->toArray();
+
+        AuditLog::creating(static function (): void {
+            throw new \RuntimeException('forced referral finance audit failure');
+        });
+
+        try {
+            $this->actingAs($admin)->put('/admin/referral-income/rules', [
+                'student_commission_percent' => 12,
+                'teacher_commission_percent' => 15,
+                'student_minimum_payout' => 200,
+                'teacher_minimum_payout' => 300,
+            ])->assertStatus(500);
+
+            $after = DB::table('referral_income_rules')
+                ->orderBy('referrer_type')
+                ->get(['referrer_type', 'commission_percent', 'minimum_payout'])
+                ->toArray();
+            $this->assertEquals($before, $after);
+            $this->assertDatabaseMissing('audit_logs', ['action' => 'referral_income.rules_updated']);
+        } finally {
+            AuditLog::flushEventListeners();
+        }
     }
 
     public function test_teacher_referral_uses_teacher_rate_and_rejects_self_or_second_attribution(): void

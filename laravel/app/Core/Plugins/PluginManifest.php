@@ -25,6 +25,7 @@ final class PluginManifest
         public readonly bool $isCore = false,
         public readonly array $adminMenu = [],
         public readonly string $icon = 'puzzle',
+        public readonly array $dashboardWidgets = [],
     ) {}
 
     public static function fromDirectory(string $directory): self
@@ -88,7 +89,73 @@ final class PluginManifest
             isCore: (bool) ($data['is_core'] ?? false),
             adminMenu: array_values(array_filter((array) ($data['admin_menu'] ?? []), 'is_array')),
             icon: PluginIconRegistry::resolve($data['slug'], (string) ($data['category'] ?? 'general'), isset($data['icon']) && is_string($data['icon']) ? $data['icon'] : null),
+            dashboardWidgets: self::validatedDashboardWidgets($data, $directory),
         );
+    }
+
+    /** @return list<array{key:string,label:string,view:string,permission:?string,default:bool}> */
+    private static function validatedDashboardWidgets(array $data, string $directory): array
+    {
+        $widgets = $data['dashboard_widgets'] ?? [];
+        if (!is_array($widgets) || !array_is_list($widgets)) {
+            throw new InvalidArgumentException('Plugin dashboard_widgets must be a JSON array.');
+        }
+
+        if (count($widgets) > 20) {
+            throw new InvalidArgumentException('A plugin may register at most 20 dashboard widgets.');
+        }
+
+        $validated = [];
+        $keys = [];
+        foreach ($widgets as $widget) {
+            if (!is_array($widget)) {
+                throw new InvalidArgumentException('Each plugin dashboard widget must be a JSON object.');
+            }
+
+            $key = $widget['key'] ?? null;
+            $label = $widget['label'] ?? null;
+            $view = $widget['view'] ?? null;
+            $permission = $widget['permission'] ?? null;
+            $default = $widget['default'] ?? false;
+
+            if (!is_string($key) || preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/', $key) !== 1 || in_array($key, $keys, true)) {
+                throw new InvalidArgumentException('Plugin dashboard widget keys must be unique kebab-case identifiers.');
+            }
+            if (!is_string($label) || trim($label) === '' || mb_strlen($label) > 80) {
+                throw new InvalidArgumentException('Plugin dashboard widget labels must contain 1 to 80 characters.');
+            }
+            if (!is_string($view) || preg_match('/^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*$/', $view) !== 1) {
+                throw new InvalidArgumentException('Plugin dashboard widget views must be safe dotted view names.');
+            }
+            if ($permission !== null && (!is_string($permission) || preg_match('/^[a-z0-9]+(?:[._-][a-z0-9]+)*$/', $permission) !== 1)) {
+                throw new InvalidArgumentException('Plugin dashboard widget permissions must be valid permission slugs.');
+            }
+            if (!is_bool($default)) {
+                throw new InvalidArgumentException('Plugin dashboard widget default must be a boolean.');
+            }
+
+            $viewsRoot = rtrim($directory, DIRECTORY_SEPARATOR)
+                . DIRECTORY_SEPARATOR . 'Resources' . DIRECTORY_SEPARATOR . 'views';
+            $viewPath = $viewsRoot . DIRECTORY_SEPARATOR
+                . str_replace('.', DIRECTORY_SEPARATOR, $view) . '.blade.php';
+            $realViewsRoot = realpath($viewsRoot);
+            $realViewPath = realpath($viewPath);
+            if ($realViewsRoot === false || $realViewPath === false || !is_file($realViewPath)
+                || !str_starts_with($realViewPath, $realViewsRoot . DIRECTORY_SEPARATOR)) {
+                throw new InvalidArgumentException("Plugin dashboard widget view '{$view}' must resolve to a file inside the plugin's views directory.");
+            }
+
+            $keys[] = $key;
+            $validated[] = [
+                'key' => $data['slug'] . '.' . $key,
+                'label' => trim($label),
+                'view' => $view,
+                'permission' => $permission,
+                'default' => $default,
+            ];
+        }
+
+        return $validated;
     }
 
     /** @return list<string> */
@@ -135,6 +202,7 @@ final class PluginManifest
             'is_core' => $this->isCore,
             'admin_menu' => $this->adminMenu,
             'icon' => $this->icon,
+            'dashboard_widgets' => $this->dashboardWidgets,
         ];
     }
 }
