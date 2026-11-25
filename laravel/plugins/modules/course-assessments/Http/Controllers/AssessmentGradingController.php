@@ -203,7 +203,8 @@ class AssessmentGradingController extends Controller
             ? (int) $profile->branch_id
             : null;
 
-        if ($accountBranchId !== null && $profileBranchId !== null) {
+        if (Schema::hasColumn('users', 'branch_id') && Schema::hasColumn('teachers', 'branch_id')) {
+            // A null account branch must not silently inherit a non-null profile branch (or vice versa).
             abort_unless(
                 $accountBranchId === $profileBranchId,
                 403,
