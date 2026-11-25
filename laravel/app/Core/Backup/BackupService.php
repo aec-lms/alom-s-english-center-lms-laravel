@@ -37,7 +37,13 @@ class BackupService
         if ($jsonlPath === false) {
             throw new RuntimeException('Unable to allocate temporary database snapshot file.');
         }
-        $tableNames = $this->exportDatabaseJsonLines($jsonlPath);
+        @chmod($jsonlPath, 0600);
+        try {
+            $tableNames = $this->exportDatabaseJsonLines($jsonlPath);
+        } catch (\Throwable $exception) {
+            @unlink($jsonlPath);
+            throw $exception;
+        }
         $zip = new ZipArchive();
         if ($zip->open($archivePath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
             @unlink($jsonlPath);
