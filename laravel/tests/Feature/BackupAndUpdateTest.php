@@ -502,14 +502,25 @@ class BackupAndUpdateTest extends TestCase
             'updated_at' => $timestamp,
         ]);
 
+        $backup = BackupRecord::query()->create([
+            'filename' => 'legacy-rollback-history-fixture.zip.enc',
+            'storage_path' => storage_path('app/backups/legacy-rollback-history-fixture.zip.enc'),
+            'checksum_sha256' => hash('sha256', 'legacy-rollback-history-fixture'),
+            'is_encrypted' => true,
+            'includes_files' => false,
+            'size_bytes' => 1,
+            'core_version' => (string) config('lms.core_version', '2.0.0'),
+            'metadata' => ['tables' => ['update_logs', 'audit_logs']],
+        ]);
         $restore = new \ReflectionMethod(BackupService::class, 'restoreLegacyDatabaseSnapshot');
         $restore->setAccessible(true);
         $restore->invoke(app(BackupService::class), [
             'tables' => ['update_logs' => [], 'audit_logs' => []],
-        ], null, null, 1, true);
+        ], $backup, null, 1, true);
 
         $this->assertDatabaseHas('update_logs', ['id' => $updateId, 'status' => 'applied']);
         $this->assertDatabaseHas('audit_logs', ['id' => $auditId, 'action' => 'update.applied']);
+        $backup->delete();
     }
 
     public function test_update_rollback_restore_preserves_update_and_audit_history(): void
