@@ -56,7 +56,7 @@
             "label": "Live & Upcoming Classes",
             "view": "dashboard.live-classes",
             "permission": "courses.manage",
-            "default": false
+            "default": true
         }
     ]
 }
