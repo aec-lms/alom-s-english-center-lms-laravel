@@ -92,7 +92,10 @@ class DashboardPluginWidgetsTest extends TestCase
             ->assertOk()
             ->assertSee('Live & Upcoming Classes')
             ->assertSee('Course Learning Progress')
-            ->assertSee('Exam Performance');
+            ->assertSee('Exam Performance')
+            ->assertSee('data-dashboard-widget="course-management.live-classes"', false)
+            ->assertSee('data-dashboard-widget="student-tracking.course-progress"', false)
+            ->assertSee('data-dashboard-widget="exam-management.exam-performance"', false);
 
         $this->actingAs($admin)->post('/admin/dashboard/widgets', [
             'widgets' => [
