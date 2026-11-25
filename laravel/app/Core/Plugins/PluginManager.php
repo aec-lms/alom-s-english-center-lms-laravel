@@ -591,16 +591,7 @@ class PluginManager
         $wasEnabled = (bool) ($record?->is_enabled);
 
         // Validate the destination before changing the plugin's lifecycle state.
-        $trashRoot = storage_path('app/plugin-recycle-bin');
-        if (is_link($trashRoot)) {
-            throw new RuntimeException('Plugin recycle-bin directory cannot be a symbolic link.');
-        }
-        File::ensureDirectoryExists($trashRoot);
-        $resolvedTrashRoot = realpath($trashRoot);
-        if (!$resolvedTrashRoot || !is_dir($resolvedTrashRoot)) {
-            throw new RuntimeException('Plugin recycle-bin directory is missing or unsafe.');
-        }
-        $trashRoot = $resolvedTrashRoot;
+        $trashRoot = $this->resolvePrivatePluginStorageRoot('plugin-recycle-bin');
 
         if ($wasInstalled) {
             $this->uninstall($slug, false, $actorId);
@@ -654,31 +645,71 @@ class PluginManager
             'files_sha256' => $packageChecksums,
         ];
         $metadataPath = $trashRoot . DIRECTORY_SEPARATOR . $archiveName . '.json';
-        if (file_exists($metadataPath) || is_link($metadataPath)) {
+        $metadataWritten = false;
+        try {
+            $this->writeVerifiedPrivateJson($trashRoot, $archiveName . '.json', $metadata);
+            $metadataWritten = true;
+            // Recycle-bin deletion is destructive and must have durable audit evidence.
+            $this->logRequiredAudit('plugin.deleted_to_recycle_bin', 'plugin', $slug, [
+                'archive' => $archiveName,
+                'business_data_preserved' => true,
+            ], $actorId);
+        } catch (Throwable $writeError) {
+            // If the required audit write failed after metadata creation, remove only
+            // the metadata file created by this invocation before verified rollback.
+            if ($metadataWritten && is_file($metadataPath) && !is_link($metadataPath)) {
+                @unlink($metadataPath);
+            }
+            // The exclusive writer owns cleanup of any partial file it created.
+            // Never unlink a pre-existing destination that caused O_EXCL to fail.
+
+            // A failed move can still have completed partially. Determine the
+            // actual on-disk disposition instead of trusting its boolean result.
             File::moveDirectory($destination, $source);
-            throw new RuntimeException('Recycle-bin metadata destination already exists; the plugin package was returned.');
-        }
-        $written = File::put($metadataPath, json_encode($metadata, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
-        if ($written === false) {
-            File::moveDirectory($destination, $source);
-            if ($wasInstalled) {
+            $sourceExists = is_dir($source) && !is_link($source);
+            $destinationExists = is_dir($destination) && !is_link($destination);
+            $sourceIntegrityMatches = false;
+            if ($sourceExists) {
+                try {
+                    $sourceIntegrityMatches = $packageChecksums === $this->pluginDirectoryChecksums($source);
+                } catch (Throwable) {
+                    $sourceIntegrityMatches = false;
+                }
+            }
+
+            $restored = $sourceExists && !$destinationExists && $sourceIntegrityMatches;
+            if ($restored && $wasInstalled) {
                 try {
                     $this->install($slug, $actorId);
                     if (!$wasEnabled) {
                         $this->disable($slug, $actorId);
                     }
                 } catch (Throwable) {
-                    PluginRecord::query()->where('slug', $slug)->update(['is_installed' => false, 'is_enabled' => false]);
+                    PluginRecord::query()->where('slug', $slug)->update([
+                        'is_installed' => false,
+                        'is_enabled' => false,
+                    ]);
                 }
             }
-            throw new RuntimeException('Plugin recycle-bin metadata could not be written; the package was returned to its original location.');
-        }
-        @chmod($metadataPath, 0600);
-        $this->audit->log('plugin.deleted_to_recycle_bin', 'plugin', $slug, [
-            'archive' => $archiveName,
-            'business_data_preserved' => true,
-        ], $actorId);
 
+            if ($restored) {
+                $message = 'Plugin recycle-bin metadata or required audit could not be committed; the original package checksum was verified and its previous lifecycle state was restored where possible.';
+            } elseif ($sourceExists && !$sourceIntegrityMatches) {
+                // Do not reinstall or enable a package whose checksum changed
+                // during recovery. Keep the record disabled for operator review.
+                PluginRecord::query()->where('slug', $slug)->update([
+                    'is_installed' => false,
+                    'is_enabled' => false,
+                ]);
+                $message = 'Plugin recycle-bin metadata or required audit could not be committed. The package is at ' . $source . ' but failed checksum verification; it remains uninstalled and disabled and requires manual integrity review.';
+            } elseif ($destinationExists) {
+                $message = 'Plugin recycle-bin metadata or required audit could not be committed. The package remains at ' . $destination . ' without a committed metadata index; preserve it for manual recovery.';
+            } else {
+                $message = 'Plugin recycle-bin metadata or required audit could not be committed and the package location is uncertain (source: ' . $source . ', archive: ' . $destination . '). Do not reinstall, delete, or modify either path; preserve storage/app and contact the maintainer for recovery.';
+            }
+
+            throw new RuntimeException($message, previous: $writeError);
+        }
         return $metadata;
     }
 
@@ -715,14 +746,12 @@ class PluginManager
             throw new RuntimeException('Invalid recycle-bin archive identifier.');
         }
 
-        $trashRootCandidate = storage_path('app/plugin-recycle-bin');
-        $trashRoot = realpath($trashRootCandidate);
-        $metadataPath = $trashRootCandidate . DIRECTORY_SEPARATOR . $archiveName . '.json';
-        $sourceCandidate = $trashRootCandidate . DIRECTORY_SEPARATOR . $archiveName;
+        $trashRoot = $this->resolvePrivatePluginStorageRoot('plugin-recycle-bin');
+        $metadataPath = $trashRoot . DIRECTORY_SEPARATOR . $archiveName . '.json';
+        $sourceCandidate = $trashRoot . DIRECTORY_SEPARATOR . $archiveName;
         $metadataRealPath = realpath($metadataPath);
         $source = realpath($sourceCandidate);
-        if (!$trashRoot || is_link($trashRootCandidate)
-            || is_link($metadataPath) || !$metadataRealPath || dirname($metadataRealPath) !== $trashRoot
+        if (is_link($metadataPath) || !$metadataRealPath || dirname($metadataRealPath) !== $trashRoot
             || is_link($sourceCandidate) || !$source || dirname($source) !== $trashRoot || !is_dir($source)) {
             throw new RuntimeException('Recycled plugin package is missing or outside the protected recycle-bin directory.');
         }
@@ -765,11 +794,16 @@ class PluginManager
                     $this->disable($slug, $actorId);
                 }
             }
-            @unlink($metadataPath);
-            $this->audit->log('plugin.restored_from_recycle_bin', 'plugin', $slug, [
+            // Keep the archive index until the required audit row is durable.
+            // If audit persistence fails, the catch below restores the package to
+            // the recycle bin while the original metadata remains discoverable.
+            $this->logRequiredAudit('plugin.restored_from_recycle_bin', 'plugin', $slug, [
                 'archive' => $archiveName,
                 'business_data_preserved' => true,
             ], $actorId);
+            if (is_file($metadataPath) && !is_link($metadataPath)) {
+                @unlink($metadataPath);
+            }
             return $record;
         } catch (Throwable $e) {
             // If installation succeeded but restoring the previous enabled state failed,
@@ -796,14 +830,12 @@ class PluginManager
         if (preg_match('/^[a-z0-9][a-z0-9-]{1,79}-[0-9]{14}-[a-f0-9]{10}$/', $archiveName) !== 1) {
             throw new RuntimeException('Invalid recycle-bin archive identifier.');
         }
-        $trashRootCandidate = storage_path('app/plugin-recycle-bin');
-        $trashRoot = realpath($trashRootCandidate);
-        $metadataPath = $trashRootCandidate . DIRECTORY_SEPARATOR . $archiveName . '.json';
-        $sourceCandidate = $trashRootCandidate . DIRECTORY_SEPARATOR . $archiveName;
+        $trashRoot = $this->resolvePrivatePluginStorageRoot('plugin-recycle-bin');
+        $metadataPath = $trashRoot . DIRECTORY_SEPARATOR . $archiveName . '.json';
+        $sourceCandidate = $trashRoot . DIRECTORY_SEPARATOR . $archiveName;
         $metadataRealPath = realpath($metadataPath);
         $source = realpath($sourceCandidate);
-        if (!$trashRoot || is_link($trashRootCandidate)
-            || is_link($metadataPath) || !$metadataRealPath || dirname($metadataRealPath) !== $trashRoot
+        if (is_link($metadataPath) || !$metadataRealPath || dirname($metadataRealPath) !== $trashRoot
             || is_link($sourceCandidate) || !$source || dirname($source) !== $trashRoot || !is_dir($source)) {
             throw new RuntimeException('Recycled plugin package is missing or outside the protected recycle-bin directory.');
         }
@@ -818,16 +850,7 @@ class PluginManager
         }
 
         // Keep a private, integrity-checked recovery snapshot before permanent removal.
-        $backupRoot = storage_path('app/plugin-permanent-delete-backups');
-        if (is_link($backupRoot)) {
-            throw new RuntimeException('Permanent-delete recovery directory cannot be a symbolic link.');
-        }
-        File::ensureDirectoryExists($backupRoot);
-        $resolvedBackupRoot = realpath($backupRoot);
-        if (!$resolvedBackupRoot || !is_dir($resolvedBackupRoot)) {
-            throw new RuntimeException('Permanent-delete recovery directory is missing or unsafe.');
-        }
-        @chmod($resolvedBackupRoot, 0700);
+        $resolvedBackupRoot = $this->resolvePrivatePluginStorageRoot('plugin-permanent-delete-backups');
         $backupPath = $resolvedBackupRoot . DIRECTORY_SEPARATOR . $archiveName;
         if (is_link($backupPath) || (file_exists($backupPath) && !is_dir($backupPath))) {
             throw new RuntimeException('Permanent-delete recovery snapshot path is unsafe.');
@@ -850,15 +873,47 @@ class PluginManager
             }
         }
 
+        // Persist the destructive-operation intent before removing the only
+        // indexed archive copy. The verified private snapshot is the recovery source.
+        $this->logRequiredAudit('plugin.permanent_delete_started', 'plugin', $slug, [
+            'archive' => $archiveName,
+            'private_backup_id' => $archiveName,
+            'package_sha256' => hash('sha256', json_encode($sourceChecksums, JSON_THROW_ON_ERROR)),
+        ], $actorId);
+
         if (!File::deleteDirectory($source)) {
             throw new RuntimeException('Private backup was created, but the recycle-bin package could not be removed.');
         }
-        @unlink($metadataPath);
+        // Keep metadata if finalization fails so operators retain the archive identity.
+        if (!@unlink($metadataPath)) {
+            if (!File::copyDirectory($backupPath, $source)
+                || $sourceChecksums !== $this->pluginDirectoryChecksums($source)) {
+                throw new RuntimeException('Permanent delete finalization failed; the verified private recovery snapshot remains at ' . $backupPath . ' and the recycle-bin source requires manual recovery.');
+            }
+            throw new RuntimeException('Permanent delete finalization failed; the package was restored from its verified private snapshot.');
+        }
         $this->audit->log('plugin.permanently_deleted', 'plugin', $slug, [
             'package_files_removed_from_recycle_bin' => true,
             'private_backup_id' => $archiveName,
             'database_records_preserved' => true,
         ], $actorId);
+    }
+
+    /**
+     * Require durable audit storage for destructive plugin lifecycle transitions.
+     * This compatibility shim preserves the fail-closed contract while PR #370's
+     * shared AuditLogger::logRequired API is integrated into the mainline.
+     */
+    private function logRequiredAudit(
+        string $action,
+        string $entityType,
+        string $entityId,
+        array $metadata,
+        ?int $actorId,
+    ): void {
+        // Use the shared required-audit contract so a failed or vetoed insert
+        // aborts the destructive lifecycle transition.
+        $this->audit->logRequired($action, $entityType, $entityId, $metadata, $actorId);
     }
 
     /** @return array<string, string> */
@@ -971,6 +1026,206 @@ class PluginManager
     }
 
     /** Reset only plugin configuration to manifest defaults; business data is never touched. */
+    /**
+     * Write JSON only inside a private child of storage/app and verify the exact
+     * bytes before a destructive plugin operation is allowed to continue.
+     *
+     * @param array<string, mixed> $payload
+     */
+    /**
+     * Write every byte to an already exclusively-created file handle.
+     * A short write is returned to the caller and treated as a hard failure.
+     *
+     * @param resource $handle
+     */
+    protected function writeAllBytesToHandle($handle, string $contents): int
+    {
+        $length = strlen($contents);
+        $offset = 0;
+        while ($offset < $length) {
+            $written = fwrite($handle, substr($contents, $offset));
+            if ($written === false || $written === 0) {
+                break;
+            }
+            $offset += $written;
+        }
+
+        return $offset;
+    }
+
+    /**
+     * Exclusively create and verify JSON inside a private child of storage/app.
+     * x+b maps to O_CREAT|O_EXCL: an existing file or symlink is never opened
+     * or truncated, eliminating the check-then-open overwrite race.
+     *
+     * @param array<string, mixed> $payload
+     */
+
+    private function resolvePrivatePluginStorageRoot(string $directoryName): string
+    {
+        if (!in_array($directoryName, ['plugin-recycle-bin', 'plugin-permanent-delete-backups'], true)) {
+            throw new RuntimeException('Invalid private plugin storage directory.');
+        }
+
+        $storagePath = storage_path('app');
+        $storageRoot = realpath($storagePath);
+        if ($storageRoot === false || is_link($storagePath)) {
+            throw new RuntimeException('Private plugin storage root is unavailable or redirected.');
+        }
+
+        $candidate = $storageRoot . DIRECTORY_SEPARATOR . $directoryName;
+        if (is_link($candidate)) {
+            throw new RuntimeException('Private plugin storage directory cannot be a symbolic link.');
+        }
+        if (!is_dir($candidate) && !@mkdir($candidate, 0700) && !is_dir($candidate)) {
+            throw new RuntimeException('Unable to create private plugin storage directory.');
+        }
+        if (!@chmod($candidate, 0700)) {
+            throw new RuntimeException('Unable to restrict private plugin storage directory permissions.');
+        }
+
+        $resolved = realpath($candidate);
+        $stat = $resolved !== false ? @stat($resolved) : false;
+        if ($resolved === false || dirname($resolved) !== $storageRoot || $stat === false
+            || (($stat['mode'] & 0170000) !== 0040000) || (($stat['mode'] & 0077) !== 0)) {
+            throw new RuntimeException('Plugin private storage directory must be a private real directory directly under storage/app.');
+        }
+
+        return $resolved;
+    }
+
+    private function writeVerifiedPrivateJson(string $root, string $filename, array $payload): string
+    {
+        $storagePath = storage_path('app');
+        $storageRoot = realpath($storagePath);
+        if (is_link($storagePath) || $storageRoot === false || is_link($root)) {
+            throw new RuntimeException('Private plugin backup directory cannot be redirected through a symbolic link.');
+        }
+
+        File::ensureDirectoryExists($root);
+        if (!@chmod($root, 0700)) {
+            throw new RuntimeException('Unable to restrict private plugin backup directory permissions.');
+        }
+        $realRoot = realpath($root);
+        $rootStat = $realRoot !== false ? @stat($realRoot) : false;
+        if ($realRoot === false
+            || dirname($realRoot) !== $storageRoot
+            || !is_dir($realRoot)
+            || $rootStat === false
+            || (($rootStat['mode'] & 0170000) !== 0040000)
+            || (($rootStat['mode'] & 0077) !== 0)
+        ) {
+            throw new RuntimeException('Private plugin backup directory must be a private real directory directly under storage/app.');
+        }
+
+        if (basename($filename) !== $filename || $filename === ''
+            || str_contains($filename, chr(0))
+        ) {
+            throw new RuntimeException('Invalid private plugin backup filename.');
+        }
+
+        $path = $realRoot . DIRECTORY_SEPARATOR . $filename;
+        $contents = json_encode($payload, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR);
+        $previousUmask = umask(0077);
+        try {
+            $handle = @fopen($path, 'x+b');
+        } finally {
+            umask($previousUmask);
+        }
+        if ($handle === false) {
+            throw new RuntimeException('Private plugin backup destination already exists or could not be created exclusively.');
+        }
+
+        $keepFile = false;
+        $createdStat = @fstat($handle);
+        try {
+            // The exclusive create inherits owner-only permissions from umask(0077).
+            // Do not chmod by pathname: a swapped symlink could redirect chmod
+            // to an unrelated file even though the open handle remains safe.
+            $pathStat = @lstat($path);
+            if ($createdStat === false
+                || $pathStat === false
+                || (($createdStat['mode'] & 0170000) !== 0100000)
+                || (($pathStat['mode'] & 0170000) !== 0100000)
+                || (($createdStat['mode'] & 0077) !== 0)
+                || (($pathStat['mode'] & 0077) !== 0)
+                || $createdStat['dev'] !== $pathStat['dev']
+                || $createdStat['ino'] !== $pathStat['ino']
+                || ($createdStat['nlink'] ?? 1) !== 1
+            ) {
+                throw new RuntimeException('Private plugin backup file is not a newly created owner-only regular, non-linked file.');
+            }
+
+            $written = $this->writeAllBytesToHandle($handle, $contents);
+            if ($written !== strlen($contents)) {
+                throw new RuntimeException('Private plugin backup write was incomplete.');
+            }
+            if (!fflush($handle)) {
+                throw new RuntimeException('Private plugin backup could not be flushed to storage.');
+            }
+            if (function_exists('fsync') && !@fsync($handle)) {
+                throw new RuntimeException('Private plugin backup could not be synchronized to storage.');
+            }
+
+            clearstatcache(true, $path);
+            $openedStat = @fstat($handle);
+            $verifiedPathStat = @lstat($path);
+            if ($openedStat === false
+                || $verifiedPathStat === false
+                || (($openedStat['mode'] & 0170000) !== 0100000)
+                || (($verifiedPathStat['mode'] & 0170000) !== 0100000)
+                || $openedStat['dev'] !== $verifiedPathStat['dev']
+                || $openedStat['ino'] !== $verifiedPathStat['ino']
+                || ($openedStat['nlink'] ?? 1) !== 1
+                || (($openedStat['mode'] & 0077) !== 0)
+                || (($verifiedPathStat['mode'] & 0077) !== 0)
+            ) {
+                throw new RuntimeException('Private plugin backup file changed or is not owner-only.');
+            }
+
+            if (rewind($handle) === false) {
+                throw new RuntimeException('Private plugin backup could not be read back for verification.');
+            }
+            $readBack = stream_get_contents($handle);
+            if ($readBack === false || !hash_equals(hash('sha256', $contents), hash('sha256', $readBack))) {
+                throw new RuntimeException('Private plugin backup integrity verification failed.');
+            }
+
+            clearstatcache(true, $path);
+            $finalOpenedStat = @fstat($handle);
+            $finalPathStat = @lstat($path);
+            if ($finalOpenedStat === false
+                || $finalPathStat === false
+                || $finalOpenedStat['dev'] !== $finalPathStat['dev']
+                || $finalOpenedStat['ino'] !== $finalPathStat['ino']
+                || (($finalPathStat['mode'] & 0170000) !== 0100000)
+                || ($finalPathStat['nlink'] ?? 1) !== 1
+                || (($finalPathStat['mode'] & 0077) !== 0)
+            ) {
+                throw new RuntimeException('Private plugin backup path changed during integrity verification.');
+            }
+
+            $keepFile = true;
+            return $path;
+        } finally {
+            if (is_resource($handle)) {
+                fclose($handle);
+            }
+            if (!$keepFile && $createdStat !== false) {
+                clearstatcache(true, $path);
+                $currentPathStat = @lstat($path);
+                if ($currentPathStat !== false
+                    && $currentPathStat['dev'] === $createdStat['dev']
+                    && $currentPathStat['ino'] === $createdStat['ino']
+                    && (($currentPathStat['mode'] & 0170000) === 0100000)
+                    && ($currentPathStat['nlink'] ?? 1) === 1
+                ) {
+                    @unlink($path);
+                }
+            }
+        }
+    }
+
     public function resetSettingsToDefaults(string $slug, ?int $actorId = null): void
     {
         $manifest = $this->discoverManifests()[$slug] ?? throw new RuntimeException("Unknown plugin: {$slug}");
@@ -1002,15 +1257,11 @@ class PluginManager
 
             $backupId = $slug . '-' . now()->format('YmdHis') . '-' . bin2hex(random_bytes(5));
             $backupRoot = storage_path('app/plugin-setting-backups');
-            File::ensureDirectoryExists($backupRoot);
-            @chmod($backupRoot, 0700);
-            $backupPath = $backupRoot . DIRECTORY_SEPARATOR . $backupId . '.json';
-            File::put($backupPath, json_encode([
+            $this->writeVerifiedPrivateJson($backupRoot, $backupId . '.json', [
                 'plugin_slug' => $slug,
                 'created_at' => now()->toIso8601String(),
                 'settings' => $backupRows,
-            ], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
-            @chmod($backupPath, 0600);
+            ]);
 
             PluginSetting::query()->where('plugin_slug', $slug)->delete();
 
